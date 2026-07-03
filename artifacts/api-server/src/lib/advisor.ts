@@ -12,6 +12,11 @@ import { computeCashSignal } from "./cashSignal";
 import { logger } from "./logger";
 import { VOICE_SYSTEM } from "./advisorVoice";
 import {
+  buildHouseholdFacts,
+  formatDebtSliceForPrompt,
+  type HouseholdFacts,
+} from "./householdFacts";
+import {
   buildSituationalContext,
   formatTimingForPrompt,
 } from "./situationalContext";
@@ -104,6 +109,9 @@ export interface HouseholdContext {
   } | null;
   debts: DebtSummary[];
   recentSignificantTxns: RecentTxn[];
+  /** Cross-tile debt-payoff picture (target debt, months-to-freedom, safe
+   *  extra) so the chat/nudge brain always knows the North Star. */
+  payoff: HouseholdFacts | null;
 }
 
 function fmtISO(d: Date): string {
@@ -317,6 +325,9 @@ export async function buildHouseholdContext(
 
   const daysIntoMonth = now.getDate();
 
+  // Cross-tile debt-payoff picture (never throws; all-zeros fallback).
+  const payoff = await buildHouseholdFacts(householdId, householdOwnerId);
+
   return {
     monthLabel: label,
     monthStart,
@@ -332,6 +343,7 @@ export async function buildHouseholdContext(
     cashSignal,
     debts,
     recentSignificantTxns,
+    payoff,
   };
 }
 
@@ -388,6 +400,14 @@ function formatContextForPrompt(ctx: HouseholdContext): string {
       lines.push(
         `  ${d.name}: $${d.balance.toFixed(2)} balance, ${(d.apr * 100).toFixed(2)}% APR, $${d.minPayment.toFixed(2)} min payment, $${d.paidThisMonth.toFixed(2)} paid this month`,
       );
+    }
+  }
+
+  if (ctx.payoff) {
+    const debtSlice = formatDebtSliceForPrompt(ctx.payoff);
+    if (debtSlice) {
+      lines.push("");
+      lines.push(debtSlice);
     }
   }
 

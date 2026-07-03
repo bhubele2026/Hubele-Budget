@@ -221,7 +221,7 @@ export default function ForecastOverviewPage() {
                   data={bigBills.map((b) => ({
                     value: Math.abs(b.amount),
                     label: `${b.label}: ${formatCurrency(Math.abs(b.amount))}`,
-                    color: "hsl(var(--frost-blue-ink))",
+                    color: "hsl(var(--chart-1))",
                   }))}
                   height={56}
                 />

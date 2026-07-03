@@ -77,6 +77,7 @@ import { HealthScore } from "@/components/health-score";
 import { SavingsGoal } from "@/components/savings-goal";
 import { DrillCard } from "@/components/drill-card";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
+import { SectionHeader, Callout } from "@/components/stat";
 import { SpenderSpotlight } from "@/components/spender-spotlight";
 import { WallOfShame } from "@/components/wall-of-shame";
 import { SubscriptionInsightsSection } from "@/components/subscription-insights";
@@ -920,12 +921,12 @@ export default function CommandCenterPage() {
   }, [netMonth, income, spend, lowPoint, weekView]);
 
   const nudgeMsg = nudge?.enabled && nudge.message ? nudge.message : null;
-  const sevColor =
+  const nudgeTone =
     nudge?.severity === "alert"
-      ? "text-[hsl(var(--negative))]"
+      ? "danger"
       : nudge?.severity === "warn"
-        ? "text-warning"
-        : "text-primary";
+        ? "warning"
+        : "info";
 
   // Daily check-in streak — consecutive days the app was opened.
   useEffect(() => {
@@ -977,9 +978,11 @@ export default function CommandCenterPage() {
 
       {/* ── At-a-glance StatTile row — the "how are we spending, right now"
              focal readouts (week + month, navigable) plus cash & net. ─────── */}
-      <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-        {greeting}, {who} — here&rsquo;s where things stand
-      </div>
+      <SectionHeader
+        eyebrow={`${greeting}, ${who}`}
+        title="Where things stand"
+        sub="How you’re spending, right now — this week, this month, cash and net."
+      />
       <StatTileRow>
         {/* A) This week (Sun–Sat) discretionary spend, ◀ ▶ to cycle weeks.
             The whole tile is a drill target (opens the txn list behind the
@@ -1128,19 +1131,15 @@ export default function CommandCenterPage() {
       </Link>
 
       {/* ── Advisor nudge + sync (kept, debt copy stripped) ─────────────── */}
-      <Card>
-        <CardContent className="p-4 flex flex-row items-center gap-3">
-          <div className="flex items-start gap-2 min-w-0 flex-1">
-            <Sparkles className={cn("w-4 h-4 mt-0.5 shrink-0", sevColor)} />
-            <p className={cn("text-sm font-medium leading-snug line-clamp-2", sevColor)}>
-              {nudgeMsg ?? "Pull a sync and I'll tell you how you're really doing."}
-            </p>
-          </div>
-          <div className="shrink-0">
-            <SyncButton />
-          </div>
-        </CardContent>
-      </Card>
+      <Callout
+        tone={nudgeTone}
+        icon={<Sparkles className="h-4 w-4" />}
+        action={<SyncButton />}
+      >
+        <span className="line-clamp-2">
+          {nudgeMsg ?? "Pull a sync and I'll tell you how you're really doing."}
+        </span>
+      </Callout>
 
       {/* ── The four insight buckets — going well / could improve / cancel /
              paying-for-but-not-budgeted. Numbers computed here from data the
@@ -1168,7 +1167,7 @@ export default function CommandCenterPage() {
           data-testid="cc-damage-toggle"
         >
           <span className="flex items-center gap-2">
-            <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               The Damage
             </span>
             <span className="text-xs text-muted-foreground">
@@ -1306,7 +1305,7 @@ export default function CommandCenterPage() {
         {/* Daily spend heat */}
         <Card>
           <CardContent className="p-5">
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mb-3">
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
               Daily spend · last 14 days
             </div>
             <HeatStrip data={dailyHeat.vals} labels={dailyHeat.labels} height={28} />
@@ -1321,7 +1320,7 @@ export default function CommandCenterPage() {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-baseline justify-between mb-1">
-            <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               Where your cash is headed
             </span>
             <span className="text-[11px] text-muted-foreground">
@@ -1405,7 +1404,7 @@ export default function CommandCenterPage() {
                 {persona.emoji}
               </div>
               <div className="min-w-0">
-                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                   Your money type this month
                 </div>
                 <div className="text-lg font-bold tracking-tight">{persona.label}</div>
@@ -1425,7 +1424,7 @@ export default function CommandCenterPage() {
         {biggestSplurge ? (
           <Card>
             <CardContent className="p-5">
-              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Biggest splurge this month
               </div>
               <div className="mt-1.5 flex items-center justify-between gap-3">
@@ -1460,7 +1459,7 @@ export default function CommandCenterPage() {
           <Card>
             <CardContent className="p-5">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                   Vs last month · same point
                 </div>
                 <PillBadge tone={momCompare.pctChange > 0 ? "danger" : "good"}>
@@ -1517,7 +1516,7 @@ export default function CommandCenterPage() {
         {(dash?.recentTransactions?.length ?? 0) > 0 ? (
           <Card>
             <CardContent className="p-5">
-              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mb-2">
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
                 Latest activity
               </div>
               <div className="divide-y divide-border">
@@ -1560,7 +1559,7 @@ export default function CommandCenterPage() {
         {(dash?.upcomingBills?.length ?? 0) > 0 ? (
           <Card>
             <CardContent className="p-5">
-              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mb-2">
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
                 What&apos;s coming
               </div>
               <div className="divide-y divide-border">

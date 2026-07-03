@@ -154,7 +154,7 @@ export default function BillsOverviewPage() {
                   data={topBills.map((b) => ({
                     value: b.monthly,
                     label: `${b.name}: ${formatCurrency(b.monthly)}`,
-                    color: "hsl(var(--frost-blue-ink))",
+                    color: "hsl(var(--chart-1))",
                   }))}
                   height={72}
                 />
@@ -186,7 +186,7 @@ export default function BillsOverviewPage() {
           </div>
           <StackBar
             segments={[
-              { label: "Recurring bills", value: bills, color: "hsl(var(--frost-blue-ink))" },
+              { label: "Recurring bills", value: bills, color: "hsl(var(--chart-1))" },
               { label: "Debt minimums", value: debtMin, color: "hsl(var(--negative))" },
               { label: "One-off", value: oneOff, color: "hsl(var(--warning))" },
             ]}

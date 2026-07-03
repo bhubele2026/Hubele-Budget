@@ -27,7 +27,7 @@ import {
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
 import { BillsHealthCheck } from "@/components/bills-health-check";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
-import { RingMeter } from "@/components/stat";
+import { RingMeter, SectionHeader } from "@/components/stat";
 import { TrendingUp, Receipt, Landmark, Scale, Sparkles } from "lucide-react";
 import { formatBillRowAmount } from "@/lib/billsRowAmount";
 import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
@@ -480,7 +480,20 @@ export default function BillsPage() {
   );
 
   // #70 — pull all transactions to compute actual income/spend this month.
-  const { data: allTxns } = useListTransactions({ limit: 5000 });
+  // (Final wrapper · perf) Scope the actuals pull to the SELECTED month instead
+  // of the banned unbounded limit:5000 all-history fetch — actualThisMonth only
+  // sums this month. Bounded window + small limit; same computed result.
+  const _actualsFrom = currentMonth;
+  const _actualsTo = (() => {
+    const [y, mo] = currentMonth.split("-").map(Number);
+    const last = new Date(y, mo, 0); // day 0 of next month = last day of this one
+    return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
+  })();
+  const { data: allTxns } = useListTransactions({
+    from: _actualsFrom,
+    to: _actualsTo,
+    limit: 500,
+  });
 
   // Fable 5 savings read for the analysis card up top (headline + bullets).
   const { data: billsInsight } = useGetBillsInsightsSummary(undefined, {
@@ -620,6 +633,11 @@ export default function BillsPage() {
       </div>
 
       {/* At-a-glance monthly summary — Net is the hero. */}
+      <SectionHeader
+        eyebrow="This month"
+        title="Where the money stands"
+        sub="Income in, bills out, and what's left over."
+      />
       <StatTileRow>
         <StatTile
           label="Income"
@@ -808,7 +826,7 @@ export default function BillsPage() {
                       <Lock className="w-4 h-4 text-muted-foreground" />
                     </div>
                     <div>
-                      <div className="text-base font-serif font-semibold text-muted-foreground">
+                      <div className="text-base font-display font-semibold text-muted-foreground">
                         Archived debts
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -869,7 +887,7 @@ export default function BillsPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">Net</span>
                   <span
-                    className={`text-lg font-serif font-bold tabular-nums ${net >= 0 ? "text-positive" : "text-destructive"}`}
+                    className={`text-lg font-bold tabular-nums ${net >= 0 ? "text-positive" : "text-destructive"}`}
                     data-testid="text-net-monthly"
                   >
                     {net >= 0 ? "+" : ""}
@@ -915,7 +933,7 @@ export default function BillsPage() {
               <div className="border-t pt-3 flex items-center justify-between">
                 <span className="text-sm font-semibold">Net</span>
                 <span
-                  className={`text-lg font-serif font-bold tabular-nums ${actualThisMonth.net >= 0 ? "text-positive" : "text-destructive"}`}
+                  className={`text-lg font-bold tabular-nums ${actualThisMonth.net >= 0 ? "text-positive" : "text-destructive"}`}
                   data-testid="text-actual-net"
                 >
                   {actualThisMonth.net >= 0 ? "+" : ""}
@@ -1319,7 +1337,7 @@ function BillGroupCard({
               <Icon className={`w-5 h-5 ${tint}`} />
             </div>
             <div>
-              <div className="text-base font-serif font-semibold text-foreground">
+              <div className="text-base font-display font-semibold text-foreground">
                 {title}
               </div>
               <div className="text-xs text-muted-foreground">
@@ -1328,7 +1346,7 @@ function BillGroupCard({
             </div>
           </div>
           <div
-            className={`text-base font-serif font-semibold tabular-nums ${tint}`}
+            className={`text-base font-semibold tabular-nums ${tint}`}
             data-testid={`text-group-total-${tone}`}
           >
             {sign}
@@ -1394,7 +1412,7 @@ function BillGroupCard({
                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
                           {pill.month}
                         </div>
-                        <div className="text-lg font-serif font-semibold text-foreground leading-tight">
+                        <div className="text-lg font-semibold text-foreground leading-tight">
                           {pill.day}
                         </div>
                       </>
@@ -1551,7 +1569,7 @@ function DebtMinimumsCard({
               <Lock className="w-4 h-4 text-muted-foreground" />
             </div>
             <div>
-              <div className="text-base font-serif font-semibold text-foreground">
+              <div className="text-base font-display font-semibold text-foreground">
                 Debt minimums
               </div>
               <div className="text-xs text-muted-foreground">
@@ -1560,7 +1578,7 @@ function DebtMinimumsCard({
               </div>
             </div>
           </div>
-          <div className="text-base font-serif font-semibold tabular-nums text-destructive">
+          <div className="text-base font-semibold tabular-nums text-destructive">
             −{formatCurrency(total)}
           </div>
         </div>
@@ -1615,7 +1633,7 @@ function DebtMinimumsCard({
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
                         {pill.month}
                       </div>
-                      <div className="text-lg font-serif font-semibold text-foreground leading-tight">
+                      <div className="text-lg font-semibold text-foreground leading-tight">
                         {pill.day}
                       </div>
                     </>

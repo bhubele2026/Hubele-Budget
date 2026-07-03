@@ -372,7 +372,7 @@ export function CashFlowSection({
               Locked-in monthly burn
             </div>
             <div className="mt-2 flex items-baseline gap-3">
-              <div className="text-4xl font-serif font-bold tabular-nums">
+              <div className="text-4xl font-bold tabular-nums">
                 {formatCurrency(recurringMonthly.expense)}
               </div>
               <div className="text-xs text-muted-foreground">/mo from recurring bills</div>

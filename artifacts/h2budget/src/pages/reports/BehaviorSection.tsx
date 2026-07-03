@@ -274,7 +274,7 @@ export function BehaviorSection({ from, to }: { from: string; to: string }) {
               <div className="text-xs text-muted-foreground">
                 Biggest expense this window
               </div>
-              <div className="text-2xl font-serif font-semibold tabular-nums text-[hsl(var(--negative))] mt-1">
+              <div className="text-2xl font-semibold tabular-nums text-[hsl(var(--negative))] mt-1">
                 {hallOfFame.biggestExpense
                   ? formatCurrency(hallOfFame.biggestExpense.amount)
                   : "—"}
@@ -289,7 +289,7 @@ export function BehaviorSection({ from, to }: { from: string; to: string }) {
               <div className="text-xs text-muted-foreground">
                 Biggest income this window
               </div>
-              <div className="text-2xl font-serif font-semibold tabular-nums text-[hsl(var(--positive))] mt-1">
+              <div className="text-2xl font-semibold tabular-nums text-[hsl(var(--positive))] mt-1">
                 {hallOfFame.biggestIncome
                   ? formatCurrency(hallOfFame.biggestIncome.amount)
                   : "—"}
@@ -336,7 +336,7 @@ function StreakCard({
           />
         </div>
         <div className="mt-3 flex items-baseline gap-3">
-          <div className="text-4xl font-serif font-bold tabular-nums">
+          <div className="text-4xl font-bold tabular-nums">
             {current}
           </div>
           <div className="text-xs text-muted-foreground">current {unit}</div>

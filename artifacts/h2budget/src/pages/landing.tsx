@@ -108,6 +108,14 @@ function TileShell({
         className="pointer-events-none absolute inset-x-3 top-3 bottom-[-6px] rounded-[22px] border border-[hsl(215_20%_92%)] bg-card/70 shadow-[0_12px_26px_-14px_rgba(30,41,59,0.14)] dark:border-white/5 dark:bg-white/[0.04]"
       />
       <div className="relative flex h-full flex-col rounded-[22px] border border-[hsl(215_22%_91%)] bg-card/95 p-7 shadow-[0_2px_6px_rgba(30,41,59,0.05),0_20px_44px_-16px_rgba(30,41,59,0.22)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_10px_rgba(30,41,59,0.06),0_28px_56px_-18px_rgba(30,41,59,0.28)] dark:border-white/10 sm:p-8">
+        {/* (Final wrapper) Hover flashes the tile's own hue as a soft wash. */}
+        <div
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-0 rounded-[22px] opacity-0 transition-opacity duration-300 group-hover:opacity-60 motion-reduce:!opacity-0",
+            t.tile,
+          )}
+        />
         <Link
           href={href}
           className="absolute inset-0 rounded-[22px] focus:outline-none focus:ring-2 focus:ring-primary/40"

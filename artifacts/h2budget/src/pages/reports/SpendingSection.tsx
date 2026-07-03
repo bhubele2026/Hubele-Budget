@@ -196,7 +196,7 @@ function UncategorizedBanner({
         <div className="flex items-start gap-3 min-w-0">
           <Wand2 className="w-5 h-5 text-[hsl(var(--warning))] mt-0.5 shrink-0" />
           <div className="min-w-0">
-            <div className="text-lg font-serif font-bold">
+            <div className="text-lg font-bold">
               <span className="tabular-nums">
                 {formatCurrency(facts.uncategorized.total)}
               </span>{" "}

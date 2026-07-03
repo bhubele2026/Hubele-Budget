@@ -201,7 +201,7 @@ export function ChartCard({
   return (
     <Card className="rounded-lg">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base font-serif">{title}</CardTitle>
+        <CardTitle className="text-base font-display">{title}</CardTitle>
         {caption && (
           <p className="text-xs text-muted-foreground">{caption}</p>
         )}

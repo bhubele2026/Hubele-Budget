@@ -24,11 +24,12 @@ router.get(
   requireAuth,
   async (req, res): Promise<void> => {
     const householdId = req.householdId!;
+    const householdOwnerId = req.householdOwnerId!;
     const forceRefresh =
       req.query.refresh === "true" || req.query.refresh === "1";
 
     // Deterministic facts — ground truth for every number in the captions.
-    const facts = await buildBankingInsightsFacts(householdId);
+    const facts = await buildBankingInsightsFacts(householdId, householdOwnerId);
     const factsHash = createHash("sha256")
       .update(JSON.stringify(facts.hashInput))
       .digest("hex");

@@ -23,12 +23,13 @@ router.get(
   requireAuth,
   async (req, res): Promise<void> => {
     const householdId = req.householdId!;
+    const householdOwnerId = req.householdOwnerId!;
     const monthISO =
       typeof req.query.month === "string" ? req.query.month : undefined;
     const forceRefresh =
       req.query.refresh === "true" || req.query.refresh === "1";
 
-    const facts = await buildBillsFacts(householdId, monthISO);
+    const facts = await buildBillsFacts(householdId, monthISO, householdOwnerId);
     const factsHash = createHash("sha256")
       .update(JSON.stringify(facts.hashInput))
       .digest("hex");

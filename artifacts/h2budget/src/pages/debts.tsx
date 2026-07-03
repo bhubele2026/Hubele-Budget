@@ -6,8 +6,11 @@ import {
   useListDebtBalanceHistory,
 } from "@workspace/api-client-react";
 import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react";
+import { TrendingDown, CheckCircle2, Coins } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AiInsightBar } from "@/components/ai-insight-bar";
+import { SectionHeader } from "@/components/stat";
+import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { RingStat, MoneyText } from "@/components/viz";
 import { PillBadge } from "@/components/pill-badge";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -183,6 +186,8 @@ export default function DebtsPage() {
 
   // Sort by APR descending (avalanche)
   const sortedDebts = [...(debts || [])].sort((a, b) => parseFloat(b.apr) - parseFloat(a.apr));
+  const paidOffCount = sortedDebts.filter((d) => isPaidOff(Number(d.balance))).length;
+  const activeCount = sortedDebts.length - paidOffCount;
 
   const payoffFor = (debtId: string): { date: Date | null; reason: string } => {
     const date = killById.get(debtId) ?? null;
@@ -199,12 +204,32 @@ export default function DebtsPage() {
   return (
     <div className="space-y-6">
       <DebtReauthBanner debts={debts} />
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground">Debt Avalanche</h1>
-          <p className="text-muted-foreground mt-1">Sorted by APR to minimize interest paid.</p>
-        </div>
-      </div>
+      <SectionHeader
+        eyebrow="Debt"
+        title="Debt Avalanche"
+        sub="Sorted by APR to minimize interest paid."
+      />
+
+      <StatTileRow>
+        <StatTile
+          label="Active cards"
+          value={activeCount}
+          sub="still carrying a balance"
+          icon={<TrendingDown />}
+        />
+        <StatTile
+          label="Paid off"
+          value={paidOffCount}
+          sub={paidOffCount === 1 ? "card crushed" : "cards crushed"}
+          icon={<CheckCircle2 />}
+        />
+        <StatTile
+          label="Extra / month"
+          value={formatCurrency(resolvedExtraAmount)}
+          sub="fuel on the avalanche"
+          icon={<Coins />}
+        />
+      </StatTileRow>
 
       <AiInsightBar />
 

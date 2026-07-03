@@ -24,6 +24,11 @@ import { expandItem, fmtISO } from "./cashSignal";
 import { buildDebtMinSchedule, buildAvalancheExtraRow } from "./debtMinSchedule";
 import { type SpendContext } from "./spendingFilter";
 import { computeOneOff } from "./billsOneOff";
+import {
+  buildHouseholdFacts,
+  formatDebtSliceForPrompt,
+  type HouseholdFacts,
+} from "./householdFacts";
 
 const DEFAULT_MODEL = "claude-fable-5";
 const MAX_OUTPUT_TOKENS = 600;
@@ -70,6 +75,9 @@ export interface BillsFacts {
   oneOffTotal: number;
   oneOffCount: number;
   topOneOff: { name: string; amount: number }[];
+  /** Cross-tile debt-payoff picture so savings ideas route to the highest-APR
+   *  debt (the household's North Star). Never affects any computed figure. */
+  household: HouseholdFacts;
   hashInput: unknown;
 }
 
@@ -81,6 +89,7 @@ function todayDate(): Date {
 export async function buildBillsFacts(
   householdId: string,
   monthISO?: string,
+  ownerUserId?: string,
 ): Promise<BillsFacts> {
   const today = todayDate();
   const monthMatch = /^(\d{4})-(\d{2})-01$/.exec(monthISO ?? "");
@@ -188,6 +197,9 @@ export async function buildBillsFacts(
   const { total: oneOffTotal, count: oneOffCount, top: topOneOff } =
     computeOneOff(monthTxns, ctx, activeBillNames);
 
+  // Cross-tile debt-payoff picture (never throws; all-zeros fallback).
+  const household = await buildHouseholdFacts(householdId, ownerUserId);
+
   const facts: BillsFacts = {
     monthLabel,
     income: round2(income),
@@ -199,6 +211,7 @@ export async function buildBillsFacts(
     oneOffTotal: round2(oneOffTotal),
     oneOffCount,
     topOneOff,
+    household,
     hashInput: null,
   };
   facts.hashInput = {
@@ -208,6 +221,8 @@ export async function buildBillsFacts(
     d: facts.debtMin,
     tb: topBills.map((b) => [b.name, b.monthly]),
     oo: facts.oneOffTotal,
+    // Refresh when the target debt or safe-extra changes materially.
+    dt: [household.targetDebt?.name ?? null, Math.round(household.maxSafeExtra)],
   };
   return facts;
 }
@@ -229,7 +244,8 @@ Output requirements:
 Rules:
 - Whole dollars only (no cents).
 - NEVER invent a savings amount — you may cite a bill's real cost from FACTS, but do not fabricate "you'd save $X".
-- If there's nothing worth flagging, return one honest bullet saying the bills look lean.`;
+- If there's nothing worth flagging, return one honest bullet saying the bills look lean.
+- North Star: when there's room to trim a bill or a surplus to redirect, end with a bullet that points the freed-up money at the highest-APR debt from the DEBT-PAYOFF PICTURE (echo the Directive). Never fabricate a payoff figure — use only the DEBT-PAYOFF PICTURE numbers.`;
 
 function formatFactsForPrompt(f: BillsFacts): string {
   const lines: string[] = [];
@@ -247,6 +263,11 @@ function formatFactsForPrompt(f: BillsFacts): string {
     `ONE-OFF / NON-RECURRING SPEND THIS MONTH: ${money(f.oneOffTotal)} across ${f.oneOffCount} charges`,
   );
   for (const o of f.topOneOff) lines.push(`  ${o.name}: ${money(o.amount)}`);
+  const debtSlice = formatDebtSliceForPrompt(f.household);
+  if (debtSlice) {
+    lines.push("");
+    lines.push(debtSlice);
+  }
   return lines.join("\n");
 }
 

@@ -27,6 +27,11 @@ import {
 } from "@workspace/db";
 import { logger } from "./logger";
 import { VOICE_SYSTEM } from "./advisorVoice";
+import {
+  buildHouseholdFacts,
+  formatDebtSliceForPrompt,
+  type HouseholdFacts,
+} from "./householdFacts";
 
 const DEFAULT_MODEL = "claude-fable-5";
 const MAX_OUTPUT_TOKENS = 600;
@@ -109,6 +114,10 @@ export interface DebriefFacts {
   // Number of prior locked weeks loaded for streak detection. Useful
   // for the fallback template to qualify "1st week" vs "Nth running".
   priorLockedWeeksAvailable: number;
+  // Cross-tile debt-payoff picture, attached by generateDebriefSummary so an
+  // under-budget/surplus week can point the surplus at the highest-APR debt.
+  // Optional so the pure extractFacts (unit-tested) stays DB-free.
+  household?: HouseholdFacts;
 }
 
 function normalizeDescription(desc: string): string {
@@ -321,7 +330,8 @@ Rules:
 - Use dollars to the nearest dollar (no cents) unless the cents matter (<$10 amounts).
 - NEVER invent numbers. Only narrate facts present in the FACTS block — the figures are provided; never alter them.
 - If facts are sparse, write fewer bullets — don't pad.
-- Don't repeat the headline as a bullet.`;
+- Don't repeat the headline as a bullet.
+- North Star: when the week came in UNDER plan (a surplus / positive net vs plan), add a suggestion that sends that surplus at the highest-APR debt from the DEBT-PAYOFF PICTURE (echo the Directive). Never fabricate a payoff figure — use only the DEBT-PAYOFF PICTURE numbers.`;
 
 function formatFactsForPrompt(facts: DebriefFacts): string {
   const lines: string[] = [];
@@ -377,6 +387,13 @@ function formatFactsForPrompt(facts: DebriefFacts): string {
       );
     }
     lines.push("");
+  }
+  if (facts.household) {
+    const debtSlice = formatDebtSliceForPrompt(facts.household);
+    if (debtSlice) {
+      lines.push(debtSlice);
+      lines.push("");
+    }
   }
   return lines.join("\n");
 }
@@ -542,6 +559,9 @@ export async function generateDebriefSummary(opts: {
   // Optional override — letting the lock handler pass the freshly
   // computed snapshot avoids an extra DB round-trip.
   currentSnapshot?: DebriefVarianceSnapshot;
+  // Household owner (forecast + avalanche settings are keyed by it). When
+  // omitted, buildHouseholdFacts resolves it from the households table.
+  ownerUserId?: string;
 }): Promise<DebriefAdvisorSummary> {
   const { householdId, weekStart } = opts;
 
@@ -610,6 +630,9 @@ export async function generateDebriefSummary(opts: {
   }
 
   const facts = extractFacts({ current, prior, catName, catKind });
+  // Attach the cross-tile debt-payoff picture so a surplus week can point the
+  // extra at the highest-APR debt. Never throws; only enriches the prompt.
+  facts.household = await buildHouseholdFacts(householdId, opts.ownerUserId);
 
   // -- Try the LLM, fall back on any failure --
   try {

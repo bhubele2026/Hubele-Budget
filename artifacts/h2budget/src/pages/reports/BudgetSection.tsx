@@ -222,7 +222,7 @@ export function BudgetSection({
       {flex.lines.length > 0 && (
         <Card className="rounded-lg">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-serif">Day-to-day spending</CardTitle>
+            <CardTitle className="text-base font-display">Day-to-day spending</CardTitle>
             <p className="text-xs text-muted-foreground">
               Flex categories only — the part you actually steer week to week.
             </p>
@@ -306,7 +306,7 @@ export function BudgetSection({
       {fixedLines.length > 0 && (
         <Card className="rounded-lg">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-serif">Bills & loans</CardTitle>
+            <CardTitle className="text-base font-display">Bills & loans</CardTitle>
             <p className="text-xs text-muted-foreground">
               Fixed obligations. A loan at 100% is paid — a green check, not a red bar.
             </p>
@@ -358,7 +358,7 @@ export function BudgetSection({
       {income.lines.length > 0 && (
         <Card className="rounded-lg">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-serif">Paychecks</CardTitle>
+            <CardTitle className="text-base font-display">Paychecks</CardTitle>
             <p className="text-xs text-muted-foreground">
               Money landing this month. Coming in over estimate is good, never flagged.
             </p>

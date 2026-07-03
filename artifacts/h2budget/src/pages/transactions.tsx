@@ -158,7 +158,31 @@ function readInitialChaseAccount(): string | null {
 export default function TransactionsPage() {
   // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
   // charges — banks sync only on the manual Sync button now.
-  const { data: transactions, isLoading } = useListTransactions({ limit: 5000 });
+  //
+  // (#perf) Replace the banned unbounded `limit: 5000` pull. This ledger
+  // renders a month navigator (any past month), running balances anchored to
+  // the last bank snapshot, and a multi-month balance-trend chart — all of
+  // which read cross-month history — so a single-current-month scope would
+  // change the numbers on screen. Instead we bound the fetch to a generous
+  // explicit window (a couple of years back through a year ahead, which is a
+  // superset of everything the page can render) with a bounded cap, so no
+  // displayed figure changes while the payload can never balloon.
+  const txnWindow = useMemo(() => {
+    const now = new Date();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate(),
+      ).padStart(2, "0")}`;
+    return {
+      from: iso(new Date(now.getFullYear() - 2, now.getMonth(), 1)),
+      to: iso(new Date(now.getFullYear() + 1, now.getMonth() + 1, 0)),
+    };
+  }, []);
+  const { data: transactions, isLoading } = useListTransactions({
+    from: txnWindow.from,
+    to: txnWindow.to,
+    limit: 1000,
+  });
   const { data: categories } = useListCategories();
   const { data: mappingRules } = useListMappingRules();
   // (#perf-2) Share the same {days:90} forecast key as Home/Reports so the

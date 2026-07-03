@@ -85,6 +85,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency, cn } from "@/lib/utils";
 import { useGetSettings } from "@workspace/api-client-react";
 import { FillMeter } from "@/components/stat/fill-meter";
+import { SectionHeader } from "@/components/stat";
 import { spendStatus } from "@/lib/statusThresholds";
 import { bucketSpendInWindow } from "@/lib/bucketSpend";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -251,9 +252,21 @@ export default function BudgetPage() {
   const pinMonth = usePinBudgetMonth();
   const pinLine = usePinBudgetLine();
   const updateTx = useUpdateTransaction();
-  // #90 — pull all transactions to surface uncategorized rows for inline
-  // categorization from each Budget row.
-  const { data: allTxns } = useListTransactions({ limit: 5000 });
+  // #90 — surface uncategorized rows for inline categorization from each Budget
+  // row. Every consumer of allTxns filters to the currently viewed month, so
+  // (#perf) scope the fetch to that same month window with a small cap instead
+  // of pulling the whole ledger; the downstream aggregation is identical.
+  const txnMonthStart = currentMonth;
+  const txnMonthEnd = useMemo(() => {
+    const d = new Date(currentMonth + "T00:00:00");
+    const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
+  }, [currentMonth]);
+  const { data: allTxns } = useListTransactions({
+    from: txnMonthStart,
+    to: txnMonthEnd,
+    limit: 200,
+  });
   // #176 — used both for the actuals-breakdown popover (per-row contributing
   // transactions) and for ranking which uncategorized transactions to suggest
   // for a given budget row (any rule whose pattern matches the description
@@ -892,14 +905,11 @@ export default function BudgetPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground">
-            Budget
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            A plan for every dollar this month.
-          </p>
-        </div>
+        <SectionHeader
+          eyebrow="Plan"
+          title="Budget"
+          sub="A plan for every dollar this month."
+        />
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-md border border-border">
             <Button
@@ -1130,7 +1140,7 @@ export default function BudgetPage() {
                       <ChevronUp className="w-4 h-4 text-muted-foreground" />
                     )}
                     <div>
-                      <div className="font-serif font-semibold text-lg">
+                      <div className="font-display font-semibold text-lg">
                         {group.groupName}
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -1332,7 +1342,7 @@ export default function BudgetPage() {
                   <ChevronUp className="w-4 h-4 text-muted-foreground" />
                 )}
                 <div>
-                  <div className="font-serif font-semibold text-lg">
+                  <div className="font-display font-semibold text-lg">
                     My budget
                   </div>
                   <div className="text-xs text-muted-foreground">

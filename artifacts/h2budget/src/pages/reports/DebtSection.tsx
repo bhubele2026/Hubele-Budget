@@ -166,7 +166,7 @@ export function DebtSection({
       <div className="grid lg:grid-cols-3 gap-4">
         <Card className="rounded-lg lg:col-span-1">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-serif">Debt thermometer</CardTitle>
+            <CardTitle className="text-base font-display">Debt thermometer</CardTitle>
             <p className="text-xs text-muted-foreground">
               How much of your starting total balance you've paid off since you
               began tracking.
@@ -185,7 +185,7 @@ export function DebtSection({
                 <div className="absolute inset-x-0 bottom-2 w-3 h-3 rounded-full bg-negative mx-auto shadow" />
               </div>
               <div>
-                <div className="text-4xl font-serif font-bold tabular-nums">
+                <div className="text-4xl font-bold tabular-nums">
                   {totalPaid.pct.toFixed(1)}%
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
@@ -207,7 +207,7 @@ export function DebtSection({
 
         <Card className="rounded-lg lg:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-serif">
+            <CardTitle className="text-base font-display">
               Per-debt progress rings
             </CardTitle>
             <p className="text-xs text-muted-foreground">

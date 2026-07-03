@@ -27,6 +27,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ToastAction } from "@/components/ui/toast";
 import { buildRuleAttributionSummary } from "@/lib/rule-attribution-summary";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { SectionHeader } from "@/components/stat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -506,10 +507,11 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-1">Allowances, mapping rules, connected banks, and data import.</p>
-      </div>
+      <SectionHeader
+        eyebrow="Setup"
+        title="Settings"
+        sub="Allowances, mapping rules, connected banks, and data import."
+      />
 
       <Link href="/mapping-rules">
         <Card

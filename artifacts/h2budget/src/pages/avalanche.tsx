@@ -894,7 +894,7 @@ export default function AvalanchePage() {
               Extra per month
             </div>
             <div className="flex items-baseline gap-1">
-              <span className="text-5xl font-serif font-bold tabular-nums">
+              <span className="text-[2.4rem] font-bold tabular-nums leading-none">
                 {fmtMoney(resolvedExtraAmount)}
               </span>
               <span className="text-muted-foreground text-base">/mo</span>

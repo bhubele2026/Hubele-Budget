@@ -344,6 +344,7 @@ router.post(
         householdId,
         weekStart,
         currentSnapshot: snapshot,
+        ownerUserId: req.householdOwnerId!,
       });
       await db
         .update(weeklyDebriefsTable)
@@ -416,6 +417,7 @@ router.post(
       householdId,
       weekStart,
       currentSnapshot: row.varianceSnapshot,
+      ownerUserId: req.householdOwnerId!,
     });
     await db
       .update(weeklyDebriefsTable)

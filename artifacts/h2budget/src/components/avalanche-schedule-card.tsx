@@ -226,7 +226,7 @@ export function AvalancheScheduleCard() {
                       <> through {formatDate(data.scheduleThroughDate)}</>
                     )}
                   </span>
-                  <span className="font-serif font-bold tabular-nums text-primary">
+                  <span className="font-bold tabular-nums text-primary">
                     {formatCurrency(data.totalProposed)}
                   </span>
                 </div>

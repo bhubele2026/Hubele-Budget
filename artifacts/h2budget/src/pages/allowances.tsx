@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearch } from "wouter";
-import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban, Split, Flame } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban, Split, Flame, Wallet, CalendarDays, ShoppingBag } from "lucide-react";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import { AiInsightBar } from "@/components/ai-insight-bar";
 import {
@@ -21,6 +21,7 @@ import { useToCancelList, toCancelKey } from "@/hooks/useToCancelList";
 import { KillStack } from "@/components/kill-stack";
 import { MiniBars } from "@/components/viz";
 import {
+  SectionHeader,
   RingMeter,
   StatusPill,
   FillMeter,
@@ -29,6 +30,7 @@ import {
   spendStatus,
   type TrendPoint,
 } from "@/components/stat";
+import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Collapsible,
@@ -1110,14 +1112,32 @@ export default function AllowancesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground">
-          Allowances
-        </h1>
-        <p className="text-muted-foreground">
-          Where your weekly, monthly, and unplanned spending actually goes.
-        </p>
-      </div>
+      <SectionHeader
+        eyebrow="Spending"
+        title="Allowances"
+        sub="Where your weekly, monthly, and unplanned spending actually goes."
+      />
+
+      {/* At-a-glance: spend vs plan for each allowance bucket. */}
+      <StatTileRow className="lg:grid-cols-3">
+        {BUCKETS.map((b) => {
+          const Icon =
+            b.key === "weekly"
+              ? Wallet
+              : b.key === "monthly"
+                ? CalendarDays
+                : ShoppingBag;
+          return (
+            <StatTile
+              key={b.key}
+              label={b.name}
+              value={formatCurrency(actual[b.key])}
+              sub={`of ${formatCurrency(planned[b.key])} planned`}
+              icon={<Icon />}
+            />
+          );
+        })}
+      </StatTileRow>
 
       {/* Exactly what to pay for the VIEWED week (aligned to the ◀▶ week picker),
           so "how over budget" and "which cards to pay" describe the same week. */}

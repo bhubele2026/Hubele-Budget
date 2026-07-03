@@ -37,6 +37,11 @@ import {
   type ClassifyInput,
   type MerchantClass,
 } from "./merchantClassify";
+import {
+  buildHouseholdFacts,
+  formatDebtSliceForPrompt,
+  type HouseholdFacts,
+} from "./householdFacts";
 
 const DEFAULT_MODEL = "claude-fable-5";
 const MAX_OUTPUT_TOKENS = 700;
@@ -133,6 +138,9 @@ export interface BankingInsightsFacts {
   creepingUp: { rows: BankingMoverRow[]; movers: MerchantMomEntry[]; totalIncrease: number };
   recurringToCut: { rows: BankingMoverRow[]; subs: SubFact[]; totalAnnual: number };
   newOrUnusual: { rows: BankingMoverRow[]; movers: MerchantMomEntry[] };
+  /** Cross-tile debt-payoff picture so captions route saved dollars to the
+   *  highest-APR debt (the household's North Star). Never affects any row. */
+  household: HouseholdFacts;
   /** Narration-relevant subset used for the cache hash. */
   hashInput: unknown;
 }
@@ -248,6 +256,7 @@ function momDetail(m: MerchantMomEntry, opts: { runRate?: boolean } = {}): strin
 
 export async function buildBankingInsightsFacts(
   householdId: string,
+  ownerUserId?: string,
 ): Promise<BankingInsightsFacts> {
   const today = new Date();
   const monthStart = isoDate(
@@ -440,6 +449,9 @@ export async function buildBankingInsightsFacts(
       tone: "neutral",
     }));
 
+  // Cross-tile debt-payoff picture (never throws; all-zeros fallback).
+  const household = await buildHouseholdFacts(householdId, ownerUserId);
+
   const facts: BankingInsightsFacts = {
     monthLabel,
     daysElapsed: today.getUTCDate(),
@@ -448,6 +460,7 @@ export async function buildBankingInsightsFacts(
     creepingUp: { rows: creepingUpRows, movers: creepMovers.slice(0, ROWS_PER_BUCKET), totalIncrease },
     recurringToCut: { rows: recurringToCutRows, subs, totalAnnual },
     newOrUnusual: { rows: newOrUnusualRows, movers: newMovers.slice(0, ROWS_PER_BUCKET) },
+    household,
     hashInput: null,
   };
   facts.hashInput = {
@@ -456,6 +469,8 @@ export async function buildBankingInsightsFacts(
     cu: creepingUpRows.map((r) => [r.display, r.amount]),
     rc: recurringToCutRows.map((r) => [r.display, r.amount]),
     nu: newOrUnusualRows.map((r) => [r.display, r.amount]),
+    // Refresh captions when the target debt or safe-extra changes materially.
+    dt: [household.targetDebt?.name ?? null, Math.round(household.maxSafeExtra)],
   };
   return facts;
 }
@@ -484,7 +499,8 @@ Rules:
 - Whole dollars only (no cents).
 - Be time-aware: it may be early in the month — frame partial-month numbers as "so far / on pace", never a partial period against a full one.
 - NEVER invent numbers, names, or dates — only values in the FACTS block.
-- If a bucket's facts are empty, write an honest one-liner saying it's clean / nothing to show yet.`;
+- If a bucket's facts are empty, write an honest one-liner saying it's clean / nothing to show yet.
+- North Star: when spendingLess or recurringToCut has real dollars, tie the freed-up money back to the debt payoff — name the target debt from the DEBT-PAYOFF PICTURE and point the saved dollars at it (echo the Directive). Only do this when there's real savings; never fabricate a payoff figure — use only the DEBT-PAYOFF PICTURE numbers.`;
 
 function bucketFactLines(title: string, rows: BankingMoverRow[]): string[] {
   const lines = [`${title}:`];
@@ -512,6 +528,11 @@ function formatFactsForPrompt(f: BankingInsightsFacts): string {
     lines.push(`  Total subscription burn: ${money(f.recurringToCut.totalAnnual)}/yr`);
   lines.push("");
   lines.push(...bucketFactLines("NEW OR UNUSUAL (first-seen this month)", f.newOrUnusual.rows));
+  const debtSlice = formatDebtSliceForPrompt(f.household);
+  if (debtSlice) {
+    lines.push("");
+    lines.push(debtSlice);
+  }
   return lines.join("\n");
 }
 

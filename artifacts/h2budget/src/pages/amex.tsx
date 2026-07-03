@@ -101,6 +101,7 @@ import {
 import { AmexLogo } from "@/components/brand-logos";
 import { AmexCardBand } from "@/components/amex-card-band";
 import { AiInsightBar } from "@/components/ai-insight-bar";
+import { SectionHeader } from "@/components/stat";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { currentWeekRange, type RangeMode } from "@/lib/timeRange";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
@@ -1824,10 +1825,8 @@ export default function AmexPage() {
 
       {/* Per-card weekly cards are the PRIMARY view — tap a tile to filter
           the ledger to that card (drill). */}
-      <div>
-        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mb-2">
-          Per-card · this week
-        </div>
+      <div className="space-y-2">
+        <SectionHeader eyebrow="Cards" title="Per-card · this week" />
         <AmexCardBand selected={cardFilter} onSelect={setCardFilter} />
       </div>
       <AiInsightBar />
@@ -1838,6 +1837,8 @@ export default function AmexPage() {
         color="hsl(var(--chart-1))"
         valueLabel="Ending balance"
       />
+
+      <SectionHeader eyebrow="Ledger" title="Activity" />
 
       {/* Bulk action bar */}
       {selected.size > 0 && (

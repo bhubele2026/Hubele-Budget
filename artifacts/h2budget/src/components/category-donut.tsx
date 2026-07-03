@@ -7,15 +7,11 @@ import {
 } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
+import { CHART_SERIES } from "@/lib/reportsAnalytics";
 
-const COLORS = [
-  "hsl(193 67% 43%)",
-  "hsl(197 63% 58%)",
-  "hsl(45 95% 50%)",
-  "hsl(33 94% 49%)",
-  "hsl(202 55% 32%)",
-  "hsl(193 50% 62%)",
-];
+// Match the rest of the app's charts: pull from the shared token-anchored
+// categorical palette instead of a one-off rainbow.
+const COLORS = CHART_SERIES;
 
 /** Donut of the top spend categories this month, with a legend + center total. */
 export function CategoryDonut({

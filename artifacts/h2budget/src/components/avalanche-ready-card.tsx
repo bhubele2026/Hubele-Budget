@@ -75,7 +75,7 @@ export function AvalancheReadyCard({ compact = false }: { compact?: boolean }) {
             <div className="text-xs text-muted-foreground uppercase tracking-widest">
               Max safe extra payment
             </div>
-            <div className={`text-3xl font-serif font-bold tabular-nums ${meta.accent}`}>
+            <div className={`text-3xl font-bold tabular-nums ${meta.accent}`}>
               {data.status === "no_data" ? "—" : formatCurrency(headroom)}
             </div>
           </div>
