@@ -78,6 +78,7 @@ import type {
   DuplicateTransactionCount,
   ForecastBundle,
   ForecastClosedMonth,
+  ForecastInsightsSummary,
   ForecastResolution,
   ForecastResolutionInput,
   ForecastSettings,
@@ -88,6 +89,7 @@ import type {
   GetBillsSummaryParams,
   GetForecastAvalancheScheduleParams,
   GetForecastCashSignalParams,
+  GetForecastInsightsSummaryParams,
   GetForecastParams,
   GetReportsAdvisorSummaryParams,
   GetReportsBehaviorFactsParams,
@@ -6137,6 +6139,121 @@ export function useGetBillsInsightsSummary<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetBillsInsightsSummaryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns a short Fable 5 read on the household's cash-flow forecast — a
+headline plus 2–4 bullets on the projected low point, runway, and risk
+ahead. Every number is computed server-side (computeCashSignal + runway);
+the model only writes language. Cached per household on a hash of the
+facts; `refresh=true` forces a fresh regeneration.
+
+ * @summary Fable 5 cash-flow read for the Forecast area
+ */
+export const getGetForecastInsightsSummaryUrl = (
+  params?: GetForecastInsightsSummaryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/forecast/insights-summary?${stringifiedParams}`
+    : `/api/forecast/insights-summary`;
+};
+
+export const getForecastInsightsSummary = async (
+  params?: GetForecastInsightsSummaryParams,
+  options?: RequestInit,
+): Promise<ForecastInsightsSummary> => {
+  return customFetch<ForecastInsightsSummary>(
+    getGetForecastInsightsSummaryUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetForecastInsightsSummaryQueryKey = (
+  params?: GetForecastInsightsSummaryParams,
+) => {
+  return [
+    `/api/forecast/insights-summary`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetForecastInsightsSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getForecastInsightsSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetForecastInsightsSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForecastInsightsSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetForecastInsightsSummaryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getForecastInsightsSummary>>
+  > = ({ signal }) =>
+    getForecastInsightsSummary(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastInsightsSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetForecastInsightsSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getForecastInsightsSummary>>
+>;
+export type GetForecastInsightsSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Fable 5 cash-flow read for the Forecast area
+ */
+
+export function useGetForecastInsightsSummary<
+  TData = Awaited<ReturnType<typeof getForecastInsightsSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetForecastInsightsSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForecastInsightsSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetForecastInsightsSummaryQueryOptions(
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

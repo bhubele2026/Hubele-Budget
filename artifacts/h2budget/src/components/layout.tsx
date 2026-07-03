@@ -53,7 +53,8 @@ const PRIMARY_NAV: NavItem[] = [
   { name: "Home", href: "/home", icon: Home },
   { name: "Banking", href: "/banking", icon: Landmark },
   { name: "Bills", href: "/bills", icon: CalendarDays },
-  { name: "Forecast", href: "/forecast", icon: TrendingUp },
+  // Forecast primary link lands on the section's Overview tab (Bills precedent).
+  { name: "Forecast", href: "/forecast/overview", icon: TrendingUp },
   { name: "Avalanche", href: "/avalanche", icon: Flame },
 ];
 
@@ -67,8 +68,7 @@ const MORE_NAV: NavItem[] = [
   { name: "Budget", href: "/budget", icon: PieChart },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Debts", href: "/debts", icon: Landmark },
-  { name: "Debrief", href: "/debrief", icon: CalendarCheck },
-  { name: "Review", href: "/review", icon: Inbox },
+  // Review + Debrief now live in the Forecast ribbon (FORECAST_SUBNAV), not here.
   { name: "Settings", href: "/settings", icon: SettingsIcon },
 ];
 
@@ -99,6 +99,17 @@ const BILLS_SUBNAV: NavItem[] = [
 // "More", the way out is the brand/logo → /home.
 const AVALANCHE_SUBNAV: NavItem[] = [
   { name: "Avalanche", href: "/avalanche", icon: Flame },
+];
+
+// The Forecast area ribbon — Overview (the section landing) · Review · Forecast
+// (the cash-flow curve) · Debrief. Review + Debrief are pulled OUT of "More" and
+// live here as forecast tabs. Same pattern as Banking/Bills/Avalanche: no
+// "More", escape via brand → /home.
+const FORECAST_SUBNAV: NavItem[] = [
+  { name: "Overview", href: "/forecast/overview", icon: LayoutDashboard },
+  { name: "Review", href: "/review", icon: Inbox },
+  { name: "Forecast", href: "/forecast", icon: TrendingUp },
+  { name: "Debrief", href: "/debrief", icon: CalendarCheck },
 ];
 
 const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
@@ -195,13 +206,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const inBills = location === "/bills" || location.startsWith("/bills/");
   const inAvalanche =
     location === "/avalanche" || location.startsWith("/avalanche/");
+  // Forecast area = the cash-flow curve + its two moved-in tabs (Review, Debrief).
+  const inForecast =
+    location === "/forecast" ||
+    location.startsWith("/forecast/") ||
+    location === "/review" ||
+    location.startsWith("/review/") ||
+    location === "/debrief" ||
+    location.startsWith("/debrief/");
   const areaNav = inBanking
     ? BANKING_SUBNAV
     : inBills
       ? BILLS_SUBNAV
       : inAvalanche
         ? AVALANCHE_SUBNAV
-        : PRIMARY_NAV;
+        : inForecast
+          ? FORECAST_SUBNAV
+          : PRIMARY_NAV;
   // Boundary-aware, longest-match active href — so /bills (Overview) and
   // /bills/all (Bills) never both light up (raw startsWith would).
   const activeNavHref =
@@ -217,8 +238,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       ? "brightBlue"
       : inAvalanche
         ? "snow"
-        : location === "/forecast"
-          ? "orange"
+        : inForecast
+          ? "teal"
           : null;
   // More lists everything NOT already in the current ribbon — no duplicates,
   // and it carries the other areas so you can jump between them from here too.
@@ -334,7 +355,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {/* More overflow — secondary destinations, one click away. Hidden
                 inside the Banking, Bills AND Avalanche areas: there the ribbon
                 is that section's tabs only, and you leave via the brand → Home. */}
-            {!inBanking && !inBills && !inAvalanche && (
+            {!inBanking && !inBills && !inAvalanche && !inForecast && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button

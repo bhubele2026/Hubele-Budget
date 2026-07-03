@@ -37,6 +37,7 @@ import { SignInPage, SignUpPage } from "./pages/auth";
 const CommandCenterPage = lazy(() => import("./pages/command-center"));
 const LandingPage = lazy(() => import("./pages/landing"));
 const ForecastPage = lazy(() => import("./pages/forecast"));
+const ForecastOverviewPage = lazy(() => import("./pages/forecast-overview"));
 const ReportsPage = lazy(() => import("./pages/reports"));
 const ReportsDebtPage = lazy(() => import("./pages/reports/DebtPage"));
 const ReportsCashFlowPage = lazy(() => import("./pages/reports/CashFlowPage"));
@@ -262,6 +263,7 @@ function ProtectedShell() {
             <Route path="/dashboard">
               <Redirect to="/banking" />
             </Route>
+            <Route path="/forecast/overview" component={ForecastOverviewPage} />
             <Route path="/forecast">
               <ForecastPage mode="overall" />
             </Route>

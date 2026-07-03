@@ -25,6 +25,7 @@ import weeklyDebriefRouter from "./weeklyDebrief";
 import reportsRouter from "./reports";
 import bankingRouter from "./banking";
 import billsInsightsRouter from "./billsInsights";
+import forecastInsightsRouter from "./forecastInsights";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use(weeklyDebriefRouter);
 router.use(reportsRouter);
 router.use(bankingRouter);
 router.use(billsInsightsRouter);
+router.use(forecastInsightsRouter);
 
 export default router;

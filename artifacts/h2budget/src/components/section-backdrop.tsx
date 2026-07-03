@@ -15,7 +15,8 @@ export type SectionHue =
   | "orange"
   | "blue"
   | "brightBlue"
-  | "snow";
+  | "snow"
+  | "teal";
 
 // tint = very light hue wash for the page ground; filter = recolour the gray-blue
 // mesh img toward the hue (sepia primes it, then hue-rotate/saturate). Faint
@@ -31,6 +32,9 @@ const HUE: Record<SectionHue, { tint: string; filter: string }> = {
   // Avalanche: "fresh snow on a ski hill" — near-white ground with a soft icy
   // pale-blue mesh. Bright, clean, wintry (owner's pick). Lightest hue.
   snow: { tint: "205 55% 98.5%", filter: "sepia(0.5) saturate(1.4) hue-rotate(170deg)" },
+  // Forecast: "deep horizon teal" — a cool, calm, forward-looking teal-green
+  // wash across the whole forecast area (Overview/Review/Forecast/Debrief).
+  teal: { tint: "185 45% 96.5%", filter: "sepia(0.7) saturate(2.4) hue-rotate(120deg)" },
 };
 
 export function SectionBackdrop({ hue }: { hue: SectionHue }) {

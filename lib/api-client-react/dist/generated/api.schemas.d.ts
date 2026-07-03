@@ -1855,6 +1855,23 @@ export interface BankingInsightsSummary {
     generatedAt: string;
     source: BankingInsightsSummarySource;
 }
+export type ForecastInsightsSummarySummarySource = (typeof ForecastInsightsSummarySummarySource)[keyof typeof ForecastInsightsSummarySummarySource];
+export declare const ForecastInsightsSummarySummarySource: {
+    readonly ai: "ai";
+    readonly fallback: "fallback";
+};
+export type ForecastInsightsSummarySource = (typeof ForecastInsightsSummarySource)[keyof typeof ForecastInsightsSummarySource];
+export declare const ForecastInsightsSummarySource: {
+    readonly cache: "cache";
+    readonly fresh: "fresh";
+};
+export interface ForecastInsightsSummary {
+    headline: string;
+    bullets: string[];
+    summarySource: ForecastInsightsSummarySummarySource;
+    generatedAt: string;
+    source: ForecastInsightsSummarySource;
+}
 export type BillsInsightsSummarySummarySource = (typeof BillsInsightsSummarySummarySource)[keyof typeof BillsInsightsSummarySummarySource];
 export declare const BillsInsightsSummarySummarySource: {
     readonly ai: "ai";
@@ -3107,6 +3124,17 @@ export type GetBillsInsightsSummaryParams = {
 };
 export type GetBillsInsightsSummaryRefresh = (typeof GetBillsInsightsSummaryRefresh)[keyof typeof GetBillsInsightsSummaryRefresh];
 export declare const GetBillsInsightsSummaryRefresh: {
+    readonly true: "true";
+    readonly NUMBER_1: "1";
+};
+export type GetForecastInsightsSummaryParams = {
+    /**
+     * Force a fresh Fable 5 regeneration, bypassing the cache.
+     */
+    refresh?: GetForecastInsightsSummaryRefresh;
+};
+export type GetForecastInsightsSummaryRefresh = (typeof GetForecastInsightsSummaryRefresh)[keyof typeof GetForecastInsightsSummaryRefresh];
+export declare const GetForecastInsightsSummaryRefresh: {
     readonly true: "true";
     readonly NUMBER_1: "1";
 };

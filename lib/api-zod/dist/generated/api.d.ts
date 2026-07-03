@@ -6088,6 +6088,41 @@ export declare const GetBillsInsightsSummaryResponse: zod.ZodObject<{
     oneOffCount: number;
 }>;
 /**
+ * Returns a short Fable 5 read on the household's cash-flow forecast — a
+headline plus 2–4 bullets on the projected low point, runway, and risk
+ahead. Every number is computed server-side (computeCashSignal + runway);
+the model only writes language. Cached per household on a hash of the
+facts; `refresh=true` forces a fresh regeneration.
+
+ * @summary Fable 5 cash-flow read for the Forecast area
+ */
+export declare const GetForecastInsightsSummaryQueryParams: zod.ZodObject<{
+    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
+}, "strip", zod.ZodTypeAny, {
+    refresh?: "1" | "true" | undefined;
+}, {
+    refresh?: "1" | "true" | undefined;
+}>;
+export declare const GetForecastInsightsSummaryResponse: zod.ZodObject<{
+    headline: zod.ZodString;
+    bullets: zod.ZodArray<zod.ZodString, "many">;
+    summarySource: zod.ZodEnum<["ai", "fallback"]>;
+    generatedAt: zod.ZodString;
+    source: zod.ZodEnum<["cache", "fresh"]>;
+}, "strip", zod.ZodTypeAny, {
+    source: "cache" | "fresh";
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    headline: string;
+    bullets: string[];
+}, {
+    source: "cache" | "fresh";
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    headline: string;
+    bullets: string[];
+}>;
+/**
  * Returns deterministic Spending facts (real spend, excluded buckets,
 uncategorized backlog, by-category, by-merchant, daily, day-of-week,
 monthly trends, reimbursable) for the Reports Spending tab. `from`/`to`

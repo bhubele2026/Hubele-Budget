@@ -2083,6 +2083,30 @@ export interface BankingInsightsSummary {
   source: BankingInsightsSummarySource;
 }
 
+export type ForecastInsightsSummarySummarySource =
+  (typeof ForecastInsightsSummarySummarySource)[keyof typeof ForecastInsightsSummarySummarySource];
+
+export const ForecastInsightsSummarySummarySource = {
+  ai: "ai",
+  fallback: "fallback",
+} as const;
+
+export type ForecastInsightsSummarySource =
+  (typeof ForecastInsightsSummarySource)[keyof typeof ForecastInsightsSummarySource];
+
+export const ForecastInsightsSummarySource = {
+  cache: "cache",
+  fresh: "fresh",
+} as const;
+
+export interface ForecastInsightsSummary {
+  headline: string;
+  bullets: string[];
+  summarySource: ForecastInsightsSummarySummarySource;
+  generatedAt: string;
+  source: ForecastInsightsSummarySource;
+}
+
 export type BillsInsightsSummarySummarySource =
   (typeof BillsInsightsSummarySummarySource)[keyof typeof BillsInsightsSummarySummarySource];
 
@@ -3571,6 +3595,21 @@ export type GetBillsInsightsSummaryRefresh =
   (typeof GetBillsInsightsSummaryRefresh)[keyof typeof GetBillsInsightsSummaryRefresh];
 
 export const GetBillsInsightsSummaryRefresh = {
+  true: "true",
+  NUMBER_1: "1",
+} as const;
+
+export type GetForecastInsightsSummaryParams = {
+  /**
+   * Force a fresh Fable 5 regeneration, bypassing the cache.
+   */
+  refresh?: GetForecastInsightsSummaryRefresh;
+};
+
+export type GetForecastInsightsSummaryRefresh =
+  (typeof GetForecastInsightsSummaryRefresh)[keyof typeof GetForecastInsightsSummaryRefresh];
+
+export const GetForecastInsightsSummaryRefresh = {
   true: "true",
   NUMBER_1: "1",
 } as const;

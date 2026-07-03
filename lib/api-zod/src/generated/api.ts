@@ -2937,6 +2937,30 @@ export const GetBillsInsightsSummaryResponse = zod.object({
 });
 
 /**
+ * Returns a short Fable 5 read on the household's cash-flow forecast — a
+headline plus 2–4 bullets on the projected low point, runway, and risk
+ahead. Every number is computed server-side (computeCashSignal + runway);
+the model only writes language. Cached per household on a hash of the
+facts; `refresh=true` forces a fresh regeneration.
+
+ * @summary Fable 5 cash-flow read for the Forecast area
+ */
+export const GetForecastInsightsSummaryQueryParams = zod.object({
+  refresh: zod
+    .enum(["true", "1"])
+    .optional()
+    .describe("Force a fresh Fable 5 regeneration, bypassing the cache."),
+});
+
+export const GetForecastInsightsSummaryResponse = zod.object({
+  headline: zod.string(),
+  bullets: zod.array(zod.string()),
+  summarySource: zod.enum(["ai", "fallback"]),
+  generatedAt: zod.string(),
+  source: zod.enum(["cache", "fresh"]),
+});
+
+/**
  * Returns deterministic Spending facts (real spend, excluded buckets,
 uncategorized backlog, by-category, by-merchant, daily, day-of-week,
 monthly trends, reimbursable) for the Reports Spending tab. `from`/`to`

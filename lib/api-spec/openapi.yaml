@@ -1289,6 +1289,29 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BillsInsightsSummary" }
 
+  /forecast/insights-summary:
+    get:
+      operationId: getForecastInsightsSummary
+      tags: [forecast]
+      summary: Fable 5 cash-flow read for the Forecast area
+      description: |
+        Returns a short Fable 5 read on the household's cash-flow forecast — a
+        headline plus 2–4 bullets on the projected low point, runway, and risk
+        ahead. Every number is computed server-side (computeCashSignal + runway);
+        the model only writes language. Cached per household on a hash of the
+        facts; `refresh=true` forces a fresh regeneration.
+      parameters:
+        - in: query
+          name: refresh
+          description: Force a fresh Fable 5 regeneration, bypassing the cache.
+          schema: { type: string, enum: ["true", "1"] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ForecastInsightsSummary" }
+
   /reports/spending-facts:
     get:
       operationId: getReportsSpendingFacts
@@ -4030,6 +4053,18 @@ components:
         creepingUp: { $ref: "#/components/schemas/BankingInsightsBucket" }
         recurringToCut: { $ref: "#/components/schemas/BankingInsightsBucket" }
         newOrUnusual: { $ref: "#/components/schemas/BankingInsightsBucket" }
+        summarySource: { type: string, enum: [ai, fallback] }
+        generatedAt: { type: string }
+        source: { type: string, enum: [cache, fresh] }
+
+    ForecastInsightsSummary:
+      type: object
+      required: [headline, bullets, summarySource, generatedAt, source]
+      properties:
+        headline: { type: string }
+        bullets:
+          type: array
+          items: { type: string }
         summarySource: { type: string, enum: [ai, fallback] }
         generatedAt: { type: string }
         source: { type: string, enum: [cache, fresh] }
