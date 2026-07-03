@@ -622,7 +622,11 @@ router.put("/forecast/settings", requireAuth, async (req, res): Promise<void> =>
   res.json(presentSettings(row));
 });
 
-const ALLOWED_HORIZON_DAYS = new Set([30, 90, 120, 183, 365]);
+// 7 is the "THIS WEEK" horizon the Forecast page defaults to; it was missing
+// here, so the page's default request 400'd and every projection tile fell back
+// to $0. computeCashSignal handles a 7-day window fine (the main /forecast route
+// already accepts days=7) — this is a validation whitelist fix, not a math change.
+const ALLOWED_HORIZON_DAYS = new Set([7, 30, 90, 120, 183, 365]);
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void> => {
@@ -631,7 +635,7 @@ router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void>
     const n = Number(req.query.horizonDays);
     if (!Number.isFinite(n) || !ALLOWED_HORIZON_DAYS.has(n)) {
       res.status(400).json({
-        error: "invalid horizonDays (allowed: 30, 90, 120, 183, 365)",
+        error: "invalid horizonDays (allowed: 7, 30, 90, 120, 183, 365)",
       });
       return;
     }
