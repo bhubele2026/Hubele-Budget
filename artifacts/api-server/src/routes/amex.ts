@@ -143,6 +143,32 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   for (const r of amexAcctRows) {
     if (r.accountId) amexPlaidAccountIdSet.add(r.accountId);
   }
+  // (#gold) Exclude the Delta SkyMiles charge card from the Amex ending-balance
+  // account set. It's a pay-in-full CHARGE card, not revolving Amex credit, so
+  // its (~$11.5k) balance must never inflate the anchor / chart. Mirrors
+  // reportsBalances' /delta/i exclusion and the client resolver. Filtering the
+  // account SET here covers BOTH the Plaid-liability sum and the debt-row sum.
+  if (amexPlaidAccountIdSet.size > 0) {
+    const namedRows = await db
+      .select({
+        accountId: plaidAccountsTable.accountId,
+        name: plaidAccountsTable.name,
+        officialName: plaidAccountsTable.officialName,
+      })
+      .from(plaidAccountsTable)
+      .where(
+        and(
+          eq(plaidAccountsTable.householdId, householdId),
+          inArray(plaidAccountsTable.accountId, [...amexPlaidAccountIdSet]),
+        ),
+      );
+    for (const r of namedRows) {
+      const nm = `${r.name ?? ""} ${r.officialName ?? ""}`;
+      if (r.accountId && /delta/i.test(nm)) {
+        amexPlaidAccountIdSet.delete(r.accountId);
+      }
+    }
+  }
   // (#748) Per-card scope filter. If the client passed
   // `?accountId=...` we only proceed for that single card; if the
   // requested card isn't in our Amex set we short-circuit to
