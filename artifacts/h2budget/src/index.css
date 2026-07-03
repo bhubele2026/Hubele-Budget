@@ -193,14 +193,15 @@
      rounded-sm/md/lg/xl utility via the @theme radius mapping above. */
   --radius: 0.875rem;
 
-  /* (Refreshing Summer · flat) No ambient card depth — surfaces are defined by
-     crisp borders, not shadows. Only overlays (popover/dialog/dropdown, which
-     use shadow-lg/xl) keep a clean shadow so they read above the page. */
-  --shadow-2xs: none;
-  --shadow-xs: none;
-  --shadow-sm: none;
-  --shadow: none;
-  --shadow-md: none;
+  /* (Final wrapper · depth) A soft, subtle layered elevation gives every card
+     quiet depth + life without breaking the crisp square identity. Cards rest
+     on --shadow-sm; hover lifts to --shadow-md. Overlays keep shadow-lg/xl.
+     Tuned premium, never heavy. */
+  --shadow-2xs: 0 1px 1px 0 rgba(4, 41, 63, 0.03);
+  --shadow-xs: 0 1px 2px 0 rgba(4, 41, 63, 0.04);
+  --shadow-sm: 0 1px 2px 0 rgba(4, 41, 63, 0.05), 0 2px 6px -2px rgba(4, 41, 63, 0.06);
+  --shadow: 0 1px 3px 0 rgba(4, 41, 63, 0.06), 0 3px 10px -3px rgba(4, 41, 63, 0.07);
+  --shadow-md: 0 4px 14px -3px rgba(4, 41, 63, 0.11), 0 2px 6px -2px rgba(4, 41, 63, 0.06);
   --shadow-lg: 0 8px 24px -8px rgba(4, 41, 63, 0.18);
   --shadow-xl: 0 12px 32px -10px rgba(4, 41, 63, 0.22);
   --shadow-2xl: 0 16px 40px -12px rgba(4, 41, 63, 0.28);

@@ -39,9 +39,12 @@ export function StatTile({
   const body = (
     <div
       className={cn(
-        "group relative flex h-full min-h-[124px] flex-col justify-between gap-4 rounded-2xl border border-card-border bg-card p-4 text-left shadow-sm transition-colors",
+        "group relative flex h-full min-h-[124px] flex-col justify-between gap-4 rounded-2xl border border-card-border bg-card p-4 text-left shadow-sm transition-[transform,box-shadow,border-color] duration-200",
         active && "ring-2 ring-primary/40",
-        interactive && "cursor-pointer hover:border-primary/40",
+        // (Final wrapper) Interactive tiles lift + brighten on hover and give a
+        // quiet press — tasteful, reduced-motion safe.
+        interactive &&
+          "cursor-pointer hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none motion-reduce:transition-none",
         className,
       )}
     >

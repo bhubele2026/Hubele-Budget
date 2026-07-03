@@ -9,7 +9,10 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "glass-surface rounded-2xl bg-card text-card-foreground",
+      // (Final wrapper) Quiet depth baked into every Card app-wide — a soft
+      // shadow + smooth transition so hover/press on interactive wrappers reads
+      // premium. Square identity unchanged.
+      "glass-surface rounded-2xl bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color,transform] duration-200",
       className
     )}
     {...props}
