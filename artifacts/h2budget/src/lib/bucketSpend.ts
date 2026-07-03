@@ -28,15 +28,17 @@ export type BucketTxn = {
 
 /**
  * Positive spend magnitude for an expense; 0 for income/credits.
- * Source-aware: Amex charges are stored POSITIVE (payments negative), bank/Chase
- * charges are stored NEGATIVE — mirrors the Amex page + server budget actuals so
- * a weekly/monthly/unplanned bucket counts BOTH Chase and Amex expenses.
+ * Source-aware, mirroring the SERVER convention exactly (spendingFilter.ts:68,
+ * budgetFacts.ts, bankingInsightsSummary.ts): only the manual/workbook `"amex"`
+ * source is stored POSITIVE-for-charges. Plaid-synced cards — including
+ * `plaid:amex` — store charges NEGATIVE like the bank, so they go through the
+ * bank branch. (Previously this also matched `plaid:amex`, which zeroed every
+ * real negative Amex charge → Amex bucket filings summed to $0.)
  */
 export function expenseMagnitude(t: BucketTxn): number {
   const a = Number(t.amount) || 0;
-  const isAmex =
-    t.source === "amex" || (t.source ?? "").startsWith("plaid:amex");
-  return isAmex ? (a > 0 ? a : 0) : a < 0 ? -a : 0;
+  const isManualAmex = t.source === "amex";
+  return isManualAmex ? (a > 0 ? a : 0) : a < 0 ? -a : 0;
 }
 
 /** True unless the row is a transfer / card payment / reimbursable / debt pay. */
