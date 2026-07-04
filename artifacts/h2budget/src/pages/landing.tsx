@@ -102,13 +102,13 @@ function TileShell({
           shadow support it (this looked like a doubled card only on a bare bg). */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-6 top-6 bottom-[-13px] rounded-[22px] border border-[hsl(215_20%_92%)] bg-card/40 shadow-[0_12px_26px_-14px_rgba(30,41,59,0.16)] dark:border-white/5 dark:bg-white/[0.03]"
+        className="pointer-events-none absolute inset-x-6 top-6 bottom-[-13px] rounded-[22px] border border-[hsl(215_20%_92%)] bg-card/40 shadow-[0_12px_26px_-14px_rgba(30,41,59,0.16)] dark:border-white/5 dark:bg-white/[0.03] dark:shadow-[0_12px_30px_-14px_rgba(0,0,0,0.7)]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-3 top-3 bottom-[-6px] rounded-[22px] border border-[hsl(215_20%_92%)] bg-card/70 shadow-[0_12px_26px_-14px_rgba(30,41,59,0.14)] dark:border-white/5 dark:bg-white/[0.04]"
+        className="pointer-events-none absolute inset-x-3 top-3 bottom-[-6px] rounded-[22px] border border-[hsl(215_20%_92%)] bg-card/70 shadow-[0_12px_26px_-14px_rgba(30,41,59,0.14)] dark:border-white/5 dark:bg-white/[0.04] dark:shadow-[0_12px_30px_-14px_rgba(0,0,0,0.65)]"
       />
-      <div className="relative flex h-full flex-col rounded-[22px] border border-[hsl(215_22%_91%)] bg-card/95 p-7 shadow-[0_2px_6px_rgba(30,41,59,0.05),0_20px_44px_-16px_rgba(30,41,59,0.22)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_10px_rgba(30,41,59,0.06),0_28px_56px_-18px_rgba(30,41,59,0.28)] dark:border-white/10 sm:p-8">
+      <div className="relative flex h-full flex-col rounded-[22px] border border-[hsl(215_22%_91%)] bg-card/95 p-7 shadow-[0_2px_6px_rgba(30,41,59,0.05),0_20px_44px_-16px_rgba(30,41,59,0.22)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_10px_rgba(30,41,59,0.06),0_28px_56px_-18px_rgba(30,41,59,0.28)] dark:border-white/10 dark:shadow-[0_2px_8px_rgba(0,0,0,0.5),0_24px_50px_-18px_rgba(0,0,0,0.8)] dark:hover:shadow-[0_4px_12px_rgba(0,0,0,0.55),0_32px_60px_-18px_rgba(0,0,0,0.85)] sm:p-8">
         {/* (Final wrapper) Hover flashes the tile's own hue as a soft wash. */}
         <div
           aria-hidden="true"
@@ -692,12 +692,12 @@ export default function LandingPage() {
         <div className="mb-7 flex items-start justify-between gap-4">
           <div>
             <h1
-              className="text-3xl font-bold tracking-[-0.02em] text-[hsl(215_28%_24%)] sm:text-4xl"
+              className="text-3xl font-bold tracking-[-0.02em] text-foreground sm:text-4xl"
               style={{ fontFamily: "var(--app-font-sans)" }}
             >
               Hey, {who}.
             </h1>
-            <p className="mt-1 text-base text-[hsl(215_16%_47%)]">
+            <p className="mt-1 text-base text-muted-foreground">
               Where do you want to go?
             </p>
           </div>

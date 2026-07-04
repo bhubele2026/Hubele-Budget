@@ -41,7 +41,7 @@ export function LandingBackdrop() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-gradient-to-b from-white via-[hsl(210_36%_99.3%)] to-[hsl(210_28%_98.6%)]"
+      className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-gradient-to-b from-white via-[hsl(210_36%_99.3%)] to-[hsl(210_28%_98.6%)] dark:from-[hsl(0_0%_6%)] dark:via-[hsl(0_0%_7%)] dark:to-[hsl(0_0%_8%)]"
     >
       {/* Full-page faint mesh — runs behind and around the cards so the graphic
           pervades the whole canvas (not just a top band), matching the mockup.
@@ -50,7 +50,7 @@ export function LandingBackdrop() {
         src="/landing-bg.webp"
         alt=""
         draggable={false}
-        className="absolute inset-0 h-full w-full select-none object-cover object-center opacity-[0.02]"
+        className="absolute inset-0 h-full w-full select-none object-cover object-center opacity-[0.02] dark:opacity-[0.05] dark:invert"
       />
       {/* Hero mesh — full-bleed band, height-capped so wide monitors don't
           balloon it, faded long so there's no seam. */}
@@ -58,7 +58,7 @@ export function LandingBackdrop() {
         src="/landing-bg.webp"
         alt=""
         draggable={false}
-        className="absolute inset-x-0 top-0 max-h-[360px] w-full select-none object-cover object-top"
+        className="absolute inset-x-0 top-0 max-h-[360px] w-full select-none object-cover object-top dark:opacity-[0.10] dark:invert"
         style={{
           WebkitMaskImage:
             "linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)",
@@ -72,7 +72,7 @@ export function LandingBackdrop() {
         src="/landing-bg.webp"
         alt=""
         draggable={false}
-        className="absolute inset-x-0 bottom-0 max-h-[320px] w-full -scale-y-100 select-none object-cover object-top opacity-[0.03]"
+        className="absolute inset-x-0 bottom-0 max-h-[320px] w-full -scale-y-100 select-none object-cover object-top opacity-[0.03] dark:opacity-[0.06] dark:invert"
         style={{
           WebkitMaskImage:
             "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)",

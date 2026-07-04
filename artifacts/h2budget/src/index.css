@@ -230,50 +230,50 @@
   --elevate-1: rgba(255,255,255, .035);
   --elevate-2: rgba(255,255,255, .07);
 
-  /* (Refreshing Summer · night) A deep teal-navy "ocean at dusk" canvas drawn
-     from the navy #04293F. App panel #08202e, glass cards graduate #0e2433 →
-     #091b28 behind a teal-navy hairline. Teal #2496B5 is the single accent —
-     selection, focus glow, primary actions / active nav — with sunny gold as
-     the warm hover tint. +/- money stays green / red so the accent never reads
-     as a dollar amount. */
-  --background: 220 14% 8%;      /* matte near-black panel */
-  --foreground: 210 16% 95%;     /* near-white headings */
-  --border: 220 10% 20%;         /* quiet neutral hairline */
+  /* (Matte Black · premium) A true neutral matte-black canvas — hue 0, near-zero
+     saturation — that ramps lighter from ground → card → border so cards *float*
+     off the black. Teal #2496B5 stays the single structural accent (selection,
+     focus glow, primary actions / active nav); +/- money stays green / red, and
+     the per-tile --frost-* jewel tones carry restrained "color for fun". The
+     matte neutral ground is what makes the app look like it cost millions. */
+  --background: 0 0% 7%;         /* true matte black ground */
+  --foreground: 0 0% 95%;        /* near-white headings */
+  --border: 0 0% 19%;            /* quiet neutral hairline (lifts off bg) */
 
-  --card: 220 12% 11%;           /* raised matte card */
-  --card-foreground: 210 16% 95%;
-  --card-border: 220 10% 20%;
+  --card: 0 0% 11%;              /* raised matte card — floats off ground */
+  --card-foreground: 0 0% 95%;
+  --card-border: 0 0% 19%;
 
-  --sidebar: 220 14% 8%;         /* panel */
-  --sidebar-foreground: 214 10% 62%;  /* idle nav */
-  --sidebar-border: 220 10% 18%;      /* dividers */
+  --sidebar: 0 0% 7%;            /* panel = ground */
+  --sidebar-foreground: 0 0% 72%;     /* idle nav (light) */
+  --sidebar-border: 0 0% 16%;         /* dividers */
   --sidebar-primary: 191 72% 52%;     /* teal accent */
-  --sidebar-primary-foreground: 220 20% 8%;
-  --sidebar-accent: 220 10% 15%;      /* neutral hover row */
+  --sidebar-primary-foreground: 0 0% 8%;
+  --sidebar-accent: 0 0% 14%;         /* neutral hover row */
   --sidebar-accent-foreground: 191 60% 72%;  /* teal active nav */
   --sidebar-ring: 191 72% 54%;
 
-  --popover: 220 12% 11%;
-  --popover-foreground: 210 16% 95%;
-  --popover-border: 220 10% 20%;
+  --popover: 0 0% 11%;
+  --popover-foreground: 0 0% 95%;
+  --popover-border: 0 0% 19%;
 
-  --primary: 191 70% 50%;        /* teal — the one accent */
-  --primary-foreground: 220 20% 8%;
+  --primary: 191 70% 50%;        /* teal — the one accent (hued) */
+  --primary-foreground: 0 0% 8%;
 
-  --secondary: 220 10% 18%;
-  --secondary-foreground: 210 16% 95%;
+  --secondary: 0 0% 17%;
+  --secondary-foreground: 0 0% 95%;
 
-  --muted: 220 10% 15%;
-  --muted-foreground: 214 10% 62%;    /* body */
+  --muted: 0 0% 14%;
+  --muted-foreground: 0 0% 62%;       /* body */
 
-  --accent: 220 10% 15%;         /* neutral raised row — not a second accent */
-  --accent-foreground: 210 16% 90%;
+  --accent: 0 0% 14%;            /* neutral raised row — not a second accent */
+  --accent-foreground: 0 0% 90%;
 
   --destructive: 4 74% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 220 10% 20%;
-  --ring: 191 72% 54%;           /* teal focus glow */
+  --input: 0 0% 19%;
+  --ring: 191 72% 54%;           /* teal focus glow (hued) */
 
   --positive: 152 52% 46%;       /* green */
   --positive-foreground: 220 20% 8%;
@@ -286,7 +286,7 @@
      one red so categorical charts stay readable rather than a rainbow. */
   --chart-1: 191 72% 56%;
   --chart-2: 200 35% 58%;
-  --chart-3: 214 10% 60%;
+  --chart-3: 0 0% 60%;           /* neutral series on the matte canvas */
   --chart-4: 33 72% 56%;
   --chart-5: 4 62% 60%;
 
@@ -296,24 +296,26 @@
   --card-silver: 210 10% 62%;
   --card-gold: 210 10% 62%;
 
-  /* Frosted-fintech launcher — muted dark equivalents (low-lightness tinted
-     tiles + readable ink) so /home stays soft, not neon, in dark mode. */
-  --frost-page: 215 28% 10%;
-  --frost-ink: 210 20% 78%;
-  --frost-blue: 205 45% 22%;
-  --frost-blue-ink: 205 60% 75%;
-  --frost-slate: 210 20% 22%;
-  --frost-slate-ink: 210 18% 74%;
-  --frost-indigo: 224 35% 24%;
-  --frost-indigo-ink: 226 55% 78%;
-  --frost-amber: 28 40% 22%;
-  --frost-amber-ink: 30 65% 70%;
-  --frost-green: 152 30% 22%;
-  --frost-green-ink: 152 45% 70%;
-  --frost-lav: 244 30% 26%;
-  --frost-lav-ink: 244 45% 78%;
-  --frost-rose: 350 35% 26%;
-  --frost-rose-ink: 350 55% 78%;
+  /* Per-tile jewel-tone identities on the matte-black launcher — restrained
+     premium accents (the "color for fun"), NOT neon or pastel. Tile backgrounds
+     stay low-lightness so cards read as dark; the -ink variants are pushed a
+     touch brighter/more saturated so labels + icons stay crisp on true black. */
+  --frost-page: 0 0% 7%;         /* matches the matte-black ground */
+  --frost-ink: 0 0% 78%;
+  --frost-blue: 205 48% 24%;
+  --frost-blue-ink: 205 68% 78%;
+  --frost-slate: 210 12% 26%;
+  --frost-slate-ink: 210 14% 80%;
+  --frost-indigo: 224 40% 26%;
+  --frost-indigo-ink: 226 62% 82%;
+  --frost-amber: 28 46% 24%;
+  --frost-amber-ink: 30 72% 74%;
+  --frost-green: 152 36% 24%;
+  --frost-green-ink: 152 52% 74%;
+  --frost-lav: 244 36% 28%;
+  --frost-lav-ink: 244 52% 82%;
+  --frost-rose: 350 40% 28%;
+  --frost-rose-ink: 350 62% 82%;
 
   --shadow-2xs: none;
   --shadow-xs: none;

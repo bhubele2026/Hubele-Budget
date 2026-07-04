@@ -19,20 +19,19 @@ function getSystemTheme(): "light" | "dark" {
     : "light";
 }
 
-const LIGHT_FORCE_KEY = "h2:light-default:v1";
+const DARK_FORCE_KEY = "h2:dark-default:v1";
 
 function readStoredTheme(): Theme {
-  // The frosted light launcher — mesh canvas + floating data-labels — is now the
-  // app's face. Default to light, AND do a ONE-TIME snap: anyone carrying a prior
-  // dark/system preference (including the earlier matte-black force) gets flipped
-  // to light exactly once so the app *opens* light. After that their explicit
-  // choice (including re-picking Dark) is fully respected.
-  if (typeof window === "undefined") return "light";
+  // Premium matte-black is now the app's face. Default to dark, AND do a ONE-TIME
+  // snap: anyone carrying a prior light/system preference gets flipped to dark
+  // exactly once so the app *opens* matte-black. After that their explicit choice
+  // (including re-picking Light or System) is fully respected.
+  if (typeof window === "undefined") return "dark";
   try {
-    if (!window.localStorage.getItem(LIGHT_FORCE_KEY)) {
-      window.localStorage.setItem(LIGHT_FORCE_KEY, "1");
-      window.localStorage.setItem(STORAGE_KEY, "light");
-      return "light";
+    if (!window.localStorage.getItem(DARK_FORCE_KEY)) {
+      window.localStorage.setItem(DARK_FORCE_KEY, "1");
+      window.localStorage.setItem(STORAGE_KEY, "dark");
+      return "dark";
     }
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === "light" || stored === "dark" || stored === "system") {
@@ -41,7 +40,7 @@ function readStoredTheme(): Theme {
   } catch {
     // ignore
   }
-  return "light";
+  return "dark";
 }
 
 function applyThemeClass(resolved: "light" | "dark") {
