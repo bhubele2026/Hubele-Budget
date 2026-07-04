@@ -41,7 +41,7 @@ export function LandingBackdrop() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-gradient-to-b from-white via-[hsl(var(--frost-page))] to-[hsl(var(--frost-page))]"
+      className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-gradient-to-b from-white via-[hsl(210_36%_99.3%)] to-[hsl(210_28%_98.6%)]"
     >
       {/* Full-page faint mesh — runs behind and around the cards so the graphic
           pervades the whole canvas (not just a top band), matching the mockup.
@@ -50,7 +50,7 @@ export function LandingBackdrop() {
         src="/landing-bg.webp"
         alt=""
         draggable={false}
-        className="absolute inset-0 h-full w-full select-none object-cover object-center opacity-[0.04]"
+        className="absolute inset-0 h-full w-full select-none object-cover object-center opacity-[0.02]"
       />
       {/* Hero mesh — full-bleed band, height-capped so wide monitors don't
           balloon it, faded long so there's no seam. */}
@@ -72,7 +72,7 @@ export function LandingBackdrop() {
         src="/landing-bg.webp"
         alt=""
         draggable={false}
-        className="absolute inset-x-0 bottom-0 max-h-[320px] w-full -scale-y-100 select-none object-cover object-top opacity-[0.06]"
+        className="absolute inset-x-0 bottom-0 max-h-[320px] w-full -scale-y-100 select-none object-cover object-top opacity-[0.03]"
         style={{
           WebkitMaskImage:
             "linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)",
@@ -81,7 +81,7 @@ export function LandingBackdrop() {
         }}
       />
       {/* Data-exhaust layer: ultra-faint labels in the outer gutters (lg+). */}
-      <div className="absolute inset-0 hidden select-none font-mono text-[11px] font-medium tracking-tight text-[hsl(var(--frost-ink))] opacity-[0.05] lg:block">
+      <div className="absolute inset-0 hidden select-none font-mono text-[11px] font-medium tracking-tight text-[hsl(var(--frost-ink))] opacity-[0.03] lg:block">
         {AMBIENT.map((l, i) => (
           <span key={i} className={`absolute whitespace-nowrap ${l.pos} ${l.cls ?? ""}`}>
             {l.t}
