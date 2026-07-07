@@ -1767,6 +1767,13 @@ export type SettingsPreferencesAmexCardCadence = {
  */
 export type SettingsPreferencesAmexCardNames = { [key: string]: string };
 
+/**
+ * The owner's verdict per recurring charge in the triage, keyed by the normalized merchant key -> "keep" | "cancel" | "not_sub". A verdict removes the charge from the review queue (and, for "cancel", lists it in the section's cancel bucket). Household-scoped so both partners see the same triage state. Classification metadata only — no financial math.
+ */
+export type SettingsPreferencesRecurringChargeReview = {
+  [key: string]: "keep" | "cancel" | "not_sub";
+};
+
 export interface SettingsPreferences {
   weeklyBucketLabels?: WeeklyBucketLabels;
   daysSinceTrackers?: DaysSinceTracker[];
@@ -1782,6 +1789,10 @@ export interface SettingsPreferences {
   amexExcludedTxnIds?: string[];
   /** Merchant names of auto-detected recurring subscriptions the user has dismissed from the Banking "Cancel these" / "Paying for, not in the budget" lists (they've already cancelled the sub in real life). The banking-insights UI hides these so the hit list stays actionable. */
   dismissedDetectedSubs?: string[];
+  /** ISO yyyy-mm-dd baseline for the recurring-charge triage. Set to "today" the first time the review section renders. The triage only surfaces recurring charges first seen on/after this date, so the owner reviews new subscriptions going forward rather than years of history. Household-scoped. */
+  recurringReviewSince?: string;
+  /** The owner's verdict per recurring charge in the triage, keyed by the normalized merchant key -> "keep" | "cancel" | "not_sub". A verdict removes the charge from the review queue (and, for "cancel", lists it in the section's cancel bucket). Household-scoped so both partners see the same triage state. Classification metadata only — no financial math. */
+  recurringChargeReview?: SettingsPreferencesRecurringChargeReview;
 }
 
 /**
@@ -2152,6 +2163,78 @@ export interface ForecastInsightsSummary {
   summarySource: ForecastInsightsSummarySummarySource;
   generatedAt: string;
   source: ForecastInsightsSummarySource;
+}
+
+export interface SpendingStoryLens {
+  headline: string;
+  bullets: string[];
+}
+
+export type SpendingStoryLenses = {
+  trend: SpendingStoryLens;
+  category: SpendingStoryLens;
+  merchants: SpendingStoryLens;
+  dayOfWeek: SpendingStoryLens;
+};
+
+export type SpendingStorySummarySource =
+  (typeof SpendingStorySummarySource)[keyof typeof SpendingStorySummarySource];
+
+export const SpendingStorySummarySource = {
+  ai: "ai",
+  fallback: "fallback",
+} as const;
+
+export type SpendingStorySource =
+  (typeof SpendingStorySource)[keyof typeof SpendingStorySource];
+
+export const SpendingStorySource = {
+  cache: "cache",
+  fresh: "fresh",
+} as const;
+
+export interface SpendingStory {
+  lenses: SpendingStoryLenses;
+  summarySource: SpendingStorySummarySource;
+  generatedAt: string;
+  source: SpendingStorySource;
+}
+
+export type RecurringReviewSummaryInputItemConfidence =
+  (typeof RecurringReviewSummaryInputItemConfidence)[keyof typeof RecurringReviewSummaryInputItemConfidence];
+
+export const RecurringReviewSummaryInputItemConfidence = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const;
+
+export interface RecurringReviewSummaryInputItem {
+  merchant: string;
+  annual: number;
+  monthly: number;
+  cadence: string;
+  confidence?: RecurringReviewSummaryInputItemConfidence;
+}
+
+export interface RecurringReviewSummaryInput {
+  /** The client-detected new recurring charges awaiting review. */
+  charges: RecurringReviewSummaryInputItem[];
+}
+
+export type RecurringReviewSummarySummarySource =
+  (typeof RecurringReviewSummarySummarySource)[keyof typeof RecurringReviewSummarySummarySource];
+
+export const RecurringReviewSummarySummarySource = {
+  ai: "ai",
+  fallback: "fallback",
+} as const;
+
+export interface RecurringReviewSummary {
+  headline: string;
+  bullets: string[];
+  summarySource: RecurringReviewSummarySummarySource;
+  generatedAt: string;
 }
 
 export type BillsInsightsSummarySummarySource =
@@ -3671,6 +3754,29 @@ export type GetReportsSpendingFactsParams = {
    */
   to?: string;
 };
+
+export type GetReportsSpendingStoryParams = {
+  /**
+   * Range start (YYYY-MM-DD). Defaults to 30 days ago.
+   */
+  from?: string;
+  /**
+   * Range end (YYYY-MM-DD). Defaults to today.
+   */
+  to?: string;
+  /**
+   * Force a fresh Fable 5 regeneration, bypassing the cache.
+   */
+  refresh?: GetReportsSpendingStoryRefresh;
+};
+
+export type GetReportsSpendingStoryRefresh =
+  (typeof GetReportsSpendingStoryRefresh)[keyof typeof GetReportsSpendingStoryRefresh];
+
+export const GetReportsSpendingStoryRefresh = {
+  true: "true",
+  NUMBER_1: "1",
+} as const;
 
 export type GetReportsBehaviorFactsParams = {
   /**

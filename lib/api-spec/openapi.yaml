@@ -1339,6 +1339,62 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SpendingFacts" }
 
+  /reports/spending-story:
+    get:
+      operationId: getReportsSpendingStory
+      tags: [reports]
+      summary: Fable 5 read of the household's spending, told in four lenses
+      description: |
+        Returns a short Fable 5 read of household spending (Amex + Chase
+        combined) across four lenses — trend, category mix, top merchants, and
+        day-of-week — each a headline plus 2–3 bullets. Every number is computed
+        server-side via buildSpendingFacts; the model only writes language. Backs
+        the click-to-expand analysis on the Overview spending graphics. `from`/`to`
+        are optional (default last 30 days). Cached per household on a hash of the
+        facts; `refresh=true` forces a fresh regeneration.
+      parameters:
+        - in: query
+          name: from
+          description: Range start (YYYY-MM-DD). Defaults to 30 days ago.
+          schema: { type: string }
+        - in: query
+          name: to
+          description: Range end (YYYY-MM-DD). Defaults to today.
+          schema: { type: string }
+        - in: query
+          name: refresh
+          description: Force a fresh Fable 5 regeneration, bypassing the cache.
+          schema: { type: string, enum: ["true", "1"] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpendingStory" }
+
+  /reports/recurring-review-summary:
+    post:
+      operationId: postReportsRecurringReviewSummary
+      tags: [reports]
+      summary: Fable 5 read of the recurring-charge review queue
+      description: |
+        Takes the client-detected new recurring charges (structured facts) and
+        returns a short Fable 5 read — a headline plus 2–3 bullets nudging the
+        owner on what's worth cancelling. The model only writes language; every
+        dollar figure is computed in our code and passed in. Used by the
+        subscription triage section.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecurringReviewSummaryInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecurringReviewSummary" }
+
   /reports/behavior-facts:
     get:
       operationId: getReportsBehaviorFacts
@@ -3844,6 +3900,23 @@ components:
             budget" lists (they've already cancelled the sub in real life). The
             banking-insights UI hides these so the hit list stays actionable.
           items: { type: string }
+        recurringReviewSince:
+          type: string
+          description: >-
+            ISO yyyy-mm-dd baseline for the recurring-charge triage. Set to
+            "today" the first time the review section renders. The triage only
+            surfaces recurring charges first seen on/after this date, so the
+            owner reviews new subscriptions going forward rather than years of
+            history. Household-scoped.
+        recurringChargeReview:
+          type: object
+          description: >-
+            The owner's verdict per recurring charge in the triage, keyed by the
+            normalized merchant key -> "keep" | "cancel" | "not_sub". A verdict
+            removes the charge from the review queue (and, for "cancel", lists it
+            in the section's cancel bucket). Household-scoped so both partners see
+            the same triage state. Classification metadata only — no financial math.
+          additionalProperties: { type: string, enum: [keep, cancel, not_sub] }
     UiPreferences:
       type: object
       description: Per-user (not per-household) UI preferences for the signed-in user.
@@ -4151,6 +4224,61 @@ components:
         summarySource: { type: string, enum: [ai, fallback] }
         generatedAt: { type: string }
         source: { type: string, enum: [cache, fresh] }
+
+    SpendingStoryLens:
+      type: object
+      required: [headline, bullets]
+      properties:
+        headline: { type: string }
+        bullets:
+          type: array
+          items: { type: string }
+
+    SpendingStory:
+      type: object
+      required: [lenses, summarySource, generatedAt, source]
+      properties:
+        lenses:
+          type: object
+          required: [trend, category, merchants, dayOfWeek]
+          properties:
+            trend: { $ref: "#/components/schemas/SpendingStoryLens" }
+            category: { $ref: "#/components/schemas/SpendingStoryLens" }
+            merchants: { $ref: "#/components/schemas/SpendingStoryLens" }
+            dayOfWeek: { $ref: "#/components/schemas/SpendingStoryLens" }
+        summarySource: { type: string, enum: [ai, fallback] }
+        generatedAt: { type: string }
+        source: { type: string, enum: [cache, fresh] }
+
+    RecurringReviewSummaryInputItem:
+      type: object
+      required: [merchant, annual, monthly, cadence]
+      properties:
+        merchant: { type: string }
+        annual: { type: number }
+        monthly: { type: number }
+        cadence: { type: string }
+        confidence: { type: string, enum: [high, medium, low] }
+
+    RecurringReviewSummaryInput:
+      type: object
+      required: [charges]
+      properties:
+        charges:
+          type: array
+          description: The client-detected new recurring charges awaiting review.
+          items: { $ref: "#/components/schemas/RecurringReviewSummaryInputItem" }
+
+    RecurringReviewSummary:
+      type: object
+      required: [headline, bullets, summarySource, generatedAt]
+      properties:
+        headline: { type: string }
+        bullets:
+          type: array
+          items: { type: string }
+        summarySource: { type: string, enum: [ai, fallback] }
+        generatedAt: { type: string }
 
     BillsInsightsSummary:
       type: object

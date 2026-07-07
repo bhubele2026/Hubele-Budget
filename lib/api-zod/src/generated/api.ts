@@ -2186,6 +2186,18 @@ export const GetSettingsResponse = zod.object({
           .describe(
             'Merchant names of auto-detected recurring subscriptions the user has dismissed from the Banking \"Cancel these\" \/ \"Paying for, not in the budget\" lists (they\'ve already cancelled the sub in real life). The banking-insights UI hides these so the hit list stays actionable.',
           ),
+        recurringReviewSince: zod
+          .string()
+          .optional()
+          .describe(
+            'ISO yyyy-mm-dd baseline for the recurring-charge triage. Set to \"today\" the first time the review section renders. The triage only surfaces recurring charges first seen on\/after this date, so the owner reviews new subscriptions going forward rather than years of history. Household-scoped.',
+          ),
+        recurringChargeReview: zod
+          .record(zod.string(), zod.enum(["keep", "cancel", "not_sub"]))
+          .optional()
+          .describe(
+            'The owner\'s verdict per recurring charge in the triage, keyed by the normalized merchant key -> \"keep\" | \"cancel\" | \"not_sub\". A verdict removes the charge from the review queue (and, for \"cancel\", lists it in the section\'s cancel bucket). Household-scoped so both partners see the same triage state. Classification metadata only — no financial math.',
+          ),
       }),
       zod.null(),
     ])
@@ -2255,6 +2267,18 @@ export const UpdateSettingsBody = zod.object({
           .describe(
             'Merchant names of auto-detected recurring subscriptions the user has dismissed from the Banking \"Cancel these\" \/ \"Paying for, not in the budget\" lists (they\'ve already cancelled the sub in real life). The banking-insights UI hides these so the hit list stays actionable.',
           ),
+        recurringReviewSince: zod
+          .string()
+          .optional()
+          .describe(
+            'ISO yyyy-mm-dd baseline for the recurring-charge triage. Set to \"today\" the first time the review section renders. The triage only surfaces recurring charges first seen on\/after this date, so the owner reviews new subscriptions going forward rather than years of history. Household-scoped.',
+          ),
+        recurringChargeReview: zod
+          .record(zod.string(), zod.enum(["keep", "cancel", "not_sub"]))
+          .optional()
+          .describe(
+            'The owner\'s verdict per recurring charge in the triage, keyed by the normalized merchant key -> \"keep\" | \"cancel\" | \"not_sub\". A verdict removes the charge from the review queue (and, for \"cancel\", lists it in the section\'s cancel bucket). Household-scoped so both partners see the same triage state. Classification metadata only — no financial math.',
+          ),
       }),
       zod.null(),
     ])
@@ -2323,6 +2347,18 @@ export const UpdateSettingsResponse = zod.object({
           .optional()
           .describe(
             'Merchant names of auto-detected recurring subscriptions the user has dismissed from the Banking \"Cancel these\" \/ \"Paying for, not in the budget\" lists (they\'ve already cancelled the sub in real life). The banking-insights UI hides these so the hit list stays actionable.',
+          ),
+        recurringReviewSince: zod
+          .string()
+          .optional()
+          .describe(
+            'ISO yyyy-mm-dd baseline for the recurring-charge triage. Set to \"today\" the first time the review section renders. The triage only surfaces recurring charges first seen on\/after this date, so the owner reviews new subscriptions going forward rather than years of history. Household-scoped.',
+          ),
+        recurringChargeReview: zod
+          .record(zod.string(), zod.enum(["keep", "cancel", "not_sub"]))
+          .optional()
+          .describe(
+            'The owner\'s verdict per recurring charge in the triage, keyed by the normalized merchant key -> \"keep\" | \"cancel\" | \"not_sub\". A verdict removes the charge from the review queue (and, for \"cancel\", lists it in the section\'s cancel bucket). Household-scoped so both partners see the same triage state. Classification metadata only — no financial math.',
           ),
       }),
       zod.null(),
@@ -3066,6 +3102,86 @@ export const GetReportsSpendingFactsResponse = zod.object({
     personalTotal: zod.number(),
     outstandingReimbursableTotal: zod.number(),
   }),
+});
+
+/**
+ * Returns a short Fable 5 read of household spending (Amex + Chase
+combined) across four lenses — trend, category mix, top merchants, and
+day-of-week — each a headline plus 2–3 bullets. Every number is computed
+server-side via buildSpendingFacts; the model only writes language. Backs
+the click-to-expand analysis on the Overview spending graphics. `from`/`to`
+are optional (default last 30 days). Cached per household on a hash of the
+facts; `refresh=true` forces a fresh regeneration.
+
+ * @summary Fable 5 read of the household's spending, told in four lenses
+ */
+export const GetReportsSpendingStoryQueryParams = zod.object({
+  from: zod.coerce
+    .string()
+    .optional()
+    .describe("Range start (YYYY-MM-DD). Defaults to 30 days ago."),
+  to: zod.coerce
+    .string()
+    .optional()
+    .describe("Range end (YYYY-MM-DD). Defaults to today."),
+  refresh: zod
+    .enum(["true", "1"])
+    .optional()
+    .describe("Force a fresh Fable 5 regeneration, bypassing the cache."),
+});
+
+export const GetReportsSpendingStoryResponse = zod.object({
+  lenses: zod.object({
+    trend: zod.object({
+      headline: zod.string(),
+      bullets: zod.array(zod.string()),
+    }),
+    category: zod.object({
+      headline: zod.string(),
+      bullets: zod.array(zod.string()),
+    }),
+    merchants: zod.object({
+      headline: zod.string(),
+      bullets: zod.array(zod.string()),
+    }),
+    dayOfWeek: zod.object({
+      headline: zod.string(),
+      bullets: zod.array(zod.string()),
+    }),
+  }),
+  summarySource: zod.enum(["ai", "fallback"]),
+  generatedAt: zod.string(),
+  source: zod.enum(["cache", "fresh"]),
+});
+
+/**
+ * Takes the client-detected new recurring charges (structured facts) and
+returns a short Fable 5 read — a headline plus 2–3 bullets nudging the
+owner on what's worth cancelling. The model only writes language; every
+dollar figure is computed in our code and passed in. Used by the
+subscription triage section.
+
+ * @summary Fable 5 read of the recurring-charge review queue
+ */
+export const PostReportsRecurringReviewSummaryBody = zod.object({
+  charges: zod
+    .array(
+      zod.object({
+        merchant: zod.string(),
+        annual: zod.number(),
+        monthly: zod.number(),
+        cadence: zod.string(),
+        confidence: zod.enum(["high", "medium", "low"]).optional(),
+      }),
+    )
+    .describe("The client-detected new recurring charges awaiting review."),
+});
+
+export const PostReportsRecurringReviewSummaryResponse = zod.object({
+  headline: zod.string(),
+  bullets: zod.array(zod.string()),
+  summarySource: zod.enum(["ai", "fallback"]),
+  generatedAt: zod.string(),
 });
 
 /**
