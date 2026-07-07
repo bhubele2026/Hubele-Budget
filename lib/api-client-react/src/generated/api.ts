@@ -96,6 +96,7 @@ import type {
   GetReportsBehaviorFactsParams,
   GetReportsBudgetFactsParams,
   GetReportsSpendingFactsParams,
+  GetReportsSpendingStoryParams,
   HealthStatus,
   ImportSummary,
   ImportWorkbookBody,
@@ -133,6 +134,8 @@ import type {
   RecategorizeByPatternResult,
   RecurringItem,
   RecurringItemInput,
+  RecurringReviewSummary,
+  RecurringReviewSummaryInput,
   RefreshBankInput,
   ReopenWeekParams,
   ReorderMappingRulesInput,
@@ -144,6 +147,7 @@ import type {
   Settings,
   SettingsInput,
   SpendingFacts,
+  SpendingStory,
   SuggestMerchantNameInput,
   SuggestMerchantNameResult,
   SyncMinimumsResult,
@@ -6368,6 +6372,212 @@ export function useGetReportsSpendingFacts<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Returns a short Fable 5 read of household spending (Amex + Chase
+combined) across four lenses — trend, category mix, top merchants, and
+day-of-week — each a headline plus 2–3 bullets. Every number is computed
+server-side via buildSpendingFacts; the model only writes language. Backs
+the click-to-expand analysis on the Overview spending graphics. `from`/`to`
+are optional (default last 30 days). Cached per household on a hash of the
+facts; `refresh=true` forces a fresh regeneration.
+
+ * @summary Fable 5 read of the household's spending, told in four lenses
+ */
+export const getGetReportsSpendingStoryUrl = (
+  params?: GetReportsSpendingStoryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reports/spending-story?${stringifiedParams}`
+    : `/api/reports/spending-story`;
+};
+
+export const getReportsSpendingStory = async (
+  params?: GetReportsSpendingStoryParams,
+  options?: RequestInit,
+): Promise<SpendingStory> => {
+  return customFetch<SpendingStory>(getGetReportsSpendingStoryUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReportsSpendingStoryQueryKey = (
+  params?: GetReportsSpendingStoryParams,
+) => {
+  return [`/api/reports/spending-story`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetReportsSpendingStoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReportsSpendingStory>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetReportsSpendingStoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReportsSpendingStory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetReportsSpendingStoryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReportsSpendingStory>>
+  > = ({ signal }) =>
+    getReportsSpendingStory(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReportsSpendingStory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReportsSpendingStoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReportsSpendingStory>>
+>;
+export type GetReportsSpendingStoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Fable 5 read of the household's spending, told in four lenses
+ */
+
+export function useGetReportsSpendingStory<
+  TData = Awaited<ReturnType<typeof getReportsSpendingStory>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetReportsSpendingStoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReportsSpendingStory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReportsSpendingStoryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Takes the client-detected new recurring charges (structured facts) and
+returns a short Fable 5 read — a headline plus 2–3 bullets nudging the
+owner on what's worth cancelling. The model only writes language; every
+dollar figure is computed in our code and passed in. Used by the
+subscription triage section.
+
+ * @summary Fable 5 read of the recurring-charge review queue
+ */
+export const getPostReportsRecurringReviewSummaryUrl = () => {
+  return `/api/reports/recurring-review-summary`;
+};
+
+export const postReportsRecurringReviewSummary = async (
+  recurringReviewSummaryInput: RecurringReviewSummaryInput,
+  options?: RequestInit,
+): Promise<RecurringReviewSummary> => {
+  return customFetch<RecurringReviewSummary>(
+    getPostReportsRecurringReviewSummaryUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(recurringReviewSummaryInput),
+    },
+  );
+};
+
+export const getPostReportsRecurringReviewSummaryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>,
+    TError,
+    { data: BodyType<RecurringReviewSummaryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>,
+  TError,
+  { data: BodyType<RecurringReviewSummaryInput> },
+  TContext
+> => {
+  const mutationKey = ["postReportsRecurringReviewSummary"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>,
+    { data: BodyType<RecurringReviewSummaryInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return postReportsRecurringReviewSummary(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PostReportsRecurringReviewSummaryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>
+>;
+export type PostReportsRecurringReviewSummaryMutationBody =
+  BodyType<RecurringReviewSummaryInput>;
+export type PostReportsRecurringReviewSummaryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Fable 5 read of the recurring-charge review queue
+ */
+export const usePostReportsRecurringReviewSummary = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>,
+    TError,
+    { data: BodyType<RecurringReviewSummaryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>,
+  TError,
+  { data: BodyType<RecurringReviewSummaryInput> },
+  TContext
+> => {
+  return useMutation(
+    getPostReportsRecurringReviewSummaryMutationOptions(options),
+  );
+};
 
 /**
  * Returns deterministic Behavior facts (days-since-last buckets, no-dining

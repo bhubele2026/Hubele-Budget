@@ -27,6 +27,8 @@ import bankingRouter from "./banking";
 import billsInsightsRouter from "./billsInsights";
 import forecastInsightsRouter from "./forecastInsights";
 import budgetHealthRouter from "./budgetHealth";
+import spendingStoryRouter from "./spendingStory";
+import recurringReviewSummaryRouter from "./recurringReviewSummary";
 
 const router: IRouter = Router();
 
@@ -58,5 +60,7 @@ router.use(bankingRouter);
 router.use(billsInsightsRouter);
 router.use(forecastInsightsRouter);
 router.use(budgetHealthRouter);
+router.use(spendingStoryRouter);
+router.use(recurringReviewSummaryRouter);
 
 export default router;

@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BankingInsightsSummary, BehaviorFacts, BillsInsightsSummary, BillsSummary, BudgetFacts, BudgetHealthResponse, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastInsightsSummary, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBankingInsightsSummaryParams, GetBillsInsightsSummaryParams, GetBillsSummaryParams, GetForecastAvalancheScheduleParams, GetForecastCashSignalParams, GetForecastInsightsSummaryParams, GetForecastParams, GetReportsAdvisorSummaryParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReportsAdvisorSummary, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, SuggestMerchantNameInput, SuggestMerchantNameResult, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BankingInsightsSummary, BehaviorFacts, BillsInsightsSummary, BillsSummary, BudgetFacts, BudgetHealthResponse, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastInsightsSummary, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBankingInsightsSummaryParams, GetBillsInsightsSummaryParams, GetBillsSummaryParams, GetForecastAvalancheScheduleParams, GetForecastCashSignalParams, GetForecastInsightsSummaryParams, GetForecastParams, GetReportsAdvisorSummaryParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, GetReportsSpendingStoryParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RecurringReviewSummary, RecurringReviewSummaryInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReportsAdvisorSummary, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, SpendingStory, SuggestMerchantNameInput, SuggestMerchantNameResult, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -1799,6 +1799,70 @@ export declare function useGetReportsSpendingFacts<TData = Awaited<ReturnType<ty
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * Returns a short Fable 5 read of household spending (Amex + Chase
+combined) across four lenses — trend, category mix, top merchants, and
+day-of-week — each a headline plus 2–3 bullets. Every number is computed
+server-side via buildSpendingFacts; the model only writes language. Backs
+the click-to-expand analysis on the Overview spending graphics. `from`/`to`
+are optional (default last 30 days). Cached per household on a hash of the
+facts; `refresh=true` forces a fresh regeneration.
+
+ * @summary Fable 5 read of the household's spending, told in four lenses
+ */
+export declare const getGetReportsSpendingStoryUrl: (params?: GetReportsSpendingStoryParams) => string;
+export declare const getReportsSpendingStory: (params?: GetReportsSpendingStoryParams, options?: RequestInit) => Promise<SpendingStory>;
+export declare const getGetReportsSpendingStoryQueryKey: (params?: GetReportsSpendingStoryParams) => readonly ["/api/reports/spending-story", ...GetReportsSpendingStoryParams[]];
+export declare const getGetReportsSpendingStoryQueryOptions: <TData = Awaited<ReturnType<typeof getReportsSpendingStory>>, TError = ErrorType<unknown>>(params?: GetReportsSpendingStoryParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getReportsSpendingStory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getReportsSpendingStory>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetReportsSpendingStoryQueryResult = NonNullable<Awaited<ReturnType<typeof getReportsSpendingStory>>>;
+export type GetReportsSpendingStoryQueryError = ErrorType<unknown>;
+/**
+ * @summary Fable 5 read of the household's spending, told in four lenses
+ */
+export declare function useGetReportsSpendingStory<TData = Awaited<ReturnType<typeof getReportsSpendingStory>>, TError = ErrorType<unknown>>(params?: GetReportsSpendingStoryParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getReportsSpendingStory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * Takes the client-detected new recurring charges (structured facts) and
+returns a short Fable 5 read — a headline plus 2–3 bullets nudging the
+owner on what's worth cancelling. The model only writes language; every
+dollar figure is computed in our code and passed in. Used by the
+subscription triage section.
+
+ * @summary Fable 5 read of the recurring-charge review queue
+ */
+export declare const getPostReportsRecurringReviewSummaryUrl: () => string;
+export declare const postReportsRecurringReviewSummary: (recurringReviewSummaryInput: RecurringReviewSummaryInput, options?: RequestInit) => Promise<RecurringReviewSummary>;
+export declare const getPostReportsRecurringReviewSummaryMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>, TError, {
+        data: BodyType<RecurringReviewSummaryInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>, TError, {
+    data: BodyType<RecurringReviewSummaryInput>;
+}, TContext>;
+export type PostReportsRecurringReviewSummaryMutationResult = NonNullable<Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>>;
+export type PostReportsRecurringReviewSummaryMutationBody = BodyType<RecurringReviewSummaryInput>;
+export type PostReportsRecurringReviewSummaryMutationError = ErrorType<unknown>;
+/**
+ * @summary Fable 5 read of the recurring-charge review queue
+ */
+export declare const usePostReportsRecurringReviewSummary: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>, TError, {
+        data: BodyType<RecurringReviewSummaryInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>, TError, {
+    data: BodyType<RecurringReviewSummaryInput>;
+}, TContext>;
 /**
  * Returns deterministic Behavior facts (days-since-last buckets, no-dining
 and coffee-free streaks, fun facts, hourly spending clock, day-of-week

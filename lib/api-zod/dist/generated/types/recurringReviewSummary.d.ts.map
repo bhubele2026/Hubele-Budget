@@ -1,0 +1,1 @@
+{"version":3,"file":"recurringReviewSummary.d.ts","sourceRoot":"","sources":["../../../src/generated/types/recurringReviewSummary.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,mCAAmC,EAAE,MAAM,uCAAuC,CAAC;AAEjG,MAAM,WAAW,sBAAsB;IACrC,QAAQ,EAAE,MAAM,CAAC;IACjB,OAAO,EAAE,MAAM,EAAE,CAAC;IAClB,aAAa,EAAE,mCAAmC,CAAC;IACnD,WAAW,EAAE,MAAM,CAAC;CACrB"}

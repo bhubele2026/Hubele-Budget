@@ -4251,6 +4251,8 @@ export declare const GetSettingsResponse: zod.ZodObject<{
         amexCardNames: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
         amexExcludedTxnIds: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
         dismissedDetectedSubs: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
+        recurringReviewSince: zod.ZodOptional<zod.ZodString>;
+        recurringChargeReview: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["keep", "cancel", "not_sub"]>>>;
     }, "strip", zod.ZodTypeAny, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4271,6 +4273,8 @@ export declare const GetSettingsResponse: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     }, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4291,6 +4295,8 @@ export declare const GetSettingsResponse: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     weeklyAllowanceAmount: string;
@@ -4317,6 +4323,8 @@ export declare const GetSettingsResponse: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     } | null | undefined;
 }, {
     weeklyAllowanceAmount: string;
@@ -4343,6 +4351,8 @@ export declare const GetSettingsResponse: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     } | null | undefined;
 }>;
 export declare const UpdateSettingsBody: zod.ZodObject<{
@@ -4392,6 +4402,8 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
         amexCardNames: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
         amexExcludedTxnIds: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
         dismissedDetectedSubs: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
+        recurringReviewSince: zod.ZodOptional<zod.ZodString>;
+        recurringChargeReview: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["keep", "cancel", "not_sub"]>>>;
     }, "strip", zod.ZodTypeAny, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4412,6 +4424,8 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     }, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4432,6 +4446,8 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     weeklyAllowanceAmount?: string | undefined;
@@ -4458,6 +4474,8 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     } | null | undefined;
 }, {
     weeklyAllowanceAmount?: string | undefined;
@@ -4484,6 +4502,8 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     } | null | undefined;
 }>;
 export declare const UpdateSettingsResponse: zod.ZodObject<{
@@ -4533,6 +4553,8 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
         amexCardNames: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
         amexExcludedTxnIds: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
         dismissedDetectedSubs: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
+        recurringReviewSince: zod.ZodOptional<zod.ZodString>;
+        recurringChargeReview: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["keep", "cancel", "not_sub"]>>>;
     }, "strip", zod.ZodTypeAny, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4553,6 +4575,8 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     }, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4573,6 +4597,8 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     weeklyAllowanceAmount: string;
@@ -4599,6 +4625,8 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     } | null | undefined;
 }, {
     weeklyAllowanceAmount: string;
@@ -4625,6 +4653,8 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
         amexCardNames?: Record<string, string> | undefined;
         amexExcludedTxnIds?: string[] | undefined;
         dismissedDetectedSubs?: string[] | undefined;
+        recurringReviewSince?: string | undefined;
+        recurringChargeReview?: Record<string, "keep" | "cancel" | "not_sub"> | undefined;
     } | null | undefined;
 }>;
 export declare const GetForecastQueryParams: zod.ZodObject<{
@@ -6487,6 +6517,217 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
     }[];
 }>;
 /**
+ * Returns a short Fable 5 read of household spending (Amex + Chase
+combined) across four lenses — trend, category mix, top merchants, and
+day-of-week — each a headline plus 2–3 bullets. Every number is computed
+server-side via buildSpendingFacts; the model only writes language. Backs
+the click-to-expand analysis on the Overview spending graphics. `from`/`to`
+are optional (default last 30 days). Cached per household on a hash of the
+facts; `refresh=true` forces a fresh regeneration.
+
+ * @summary Fable 5 read of the household's spending, told in four lenses
+ */
+export declare const GetReportsSpendingStoryQueryParams: zod.ZodObject<{
+    from: zod.ZodOptional<zod.ZodString>;
+    to: zod.ZodOptional<zod.ZodString>;
+    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
+}, "strip", zod.ZodTypeAny, {
+    from?: string | undefined;
+    to?: string | undefined;
+    refresh?: "1" | "true" | undefined;
+}, {
+    from?: string | undefined;
+    to?: string | undefined;
+    refresh?: "1" | "true" | undefined;
+}>;
+export declare const GetReportsSpendingStoryResponse: zod.ZodObject<{
+    lenses: zod.ZodObject<{
+        trend: zod.ZodObject<{
+            headline: zod.ZodString;
+            bullets: zod.ZodArray<zod.ZodString, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            headline: string;
+            bullets: string[];
+        }, {
+            headline: string;
+            bullets: string[];
+        }>;
+        category: zod.ZodObject<{
+            headline: zod.ZodString;
+            bullets: zod.ZodArray<zod.ZodString, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            headline: string;
+            bullets: string[];
+        }, {
+            headline: string;
+            bullets: string[];
+        }>;
+        merchants: zod.ZodObject<{
+            headline: zod.ZodString;
+            bullets: zod.ZodArray<zod.ZodString, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            headline: string;
+            bullets: string[];
+        }, {
+            headline: string;
+            bullets: string[];
+        }>;
+        dayOfWeek: zod.ZodObject<{
+            headline: zod.ZodString;
+            bullets: zod.ZodArray<zod.ZodString, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            headline: string;
+            bullets: string[];
+        }, {
+            headline: string;
+            bullets: string[];
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        category: {
+            headline: string;
+            bullets: string[];
+        };
+        dayOfWeek: {
+            headline: string;
+            bullets: string[];
+        };
+        trend: {
+            headline: string;
+            bullets: string[];
+        };
+        merchants: {
+            headline: string;
+            bullets: string[];
+        };
+    }, {
+        category: {
+            headline: string;
+            bullets: string[];
+        };
+        dayOfWeek: {
+            headline: string;
+            bullets: string[];
+        };
+        trend: {
+            headline: string;
+            bullets: string[];
+        };
+        merchants: {
+            headline: string;
+            bullets: string[];
+        };
+    }>;
+    summarySource: zod.ZodEnum<["ai", "fallback"]>;
+    generatedAt: zod.ZodString;
+    source: zod.ZodEnum<["cache", "fresh"]>;
+}, "strip", zod.ZodTypeAny, {
+    source: "cache" | "fresh";
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    lenses: {
+        category: {
+            headline: string;
+            bullets: string[];
+        };
+        dayOfWeek: {
+            headline: string;
+            bullets: string[];
+        };
+        trend: {
+            headline: string;
+            bullets: string[];
+        };
+        merchants: {
+            headline: string;
+            bullets: string[];
+        };
+    };
+}, {
+    source: "cache" | "fresh";
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    lenses: {
+        category: {
+            headline: string;
+            bullets: string[];
+        };
+        dayOfWeek: {
+            headline: string;
+            bullets: string[];
+        };
+        trend: {
+            headline: string;
+            bullets: string[];
+        };
+        merchants: {
+            headline: string;
+            bullets: string[];
+        };
+    };
+}>;
+/**
+ * Takes the client-detected new recurring charges (structured facts) and
+returns a short Fable 5 read — a headline plus 2–3 bullets nudging the
+owner on what's worth cancelling. The model only writes language; every
+dollar figure is computed in our code and passed in. Used by the
+subscription triage section.
+
+ * @summary Fable 5 read of the recurring-charge review queue
+ */
+export declare const PostReportsRecurringReviewSummaryBody: zod.ZodObject<{
+    charges: zod.ZodArray<zod.ZodObject<{
+        merchant: zod.ZodString;
+        annual: zod.ZodNumber;
+        monthly: zod.ZodNumber;
+        cadence: zod.ZodString;
+        confidence: zod.ZodOptional<zod.ZodEnum<["high", "medium", "low"]>>;
+    }, "strip", zod.ZodTypeAny, {
+        monthly: number;
+        merchant: string;
+        annual: number;
+        cadence: string;
+        confidence?: "high" | "medium" | "low" | undefined;
+    }, {
+        monthly: number;
+        merchant: string;
+        annual: number;
+        cadence: string;
+        confidence?: "high" | "medium" | "low" | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    charges: {
+        monthly: number;
+        merchant: string;
+        annual: number;
+        cadence: string;
+        confidence?: "high" | "medium" | "low" | undefined;
+    }[];
+}, {
+    charges: {
+        monthly: number;
+        merchant: string;
+        annual: number;
+        cadence: string;
+        confidence?: "high" | "medium" | "low" | undefined;
+    }[];
+}>;
+export declare const PostReportsRecurringReviewSummaryResponse: zod.ZodObject<{
+    headline: zod.ZodString;
+    bullets: zod.ZodArray<zod.ZodString, "many">;
+    summarySource: zod.ZodEnum<["ai", "fallback"]>;
+    generatedAt: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    headline: string;
+    bullets: string[];
+}, {
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    headline: string;
+    bullets: string[];
+}>;
+/**
  * Returns deterministic Behavior facts (days-since-last buckets, no-dining
 and coffee-free streaks, fun facts, hourly spending clock, day-of-week
 spend, hall of fame) for the Reports Behavior & Fun tab, on top of the
@@ -7984,8 +8225,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        brand: "blue" | "silver" | "gold";
         cadence: "weekly" | "monthly";
+        brand: "blue" | "silver" | "gold";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -8001,8 +8242,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        brand: "blue" | "silver" | "gold";
         cadence: "weekly" | "monthly";
+        brand: "blue" | "silver" | "gold";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -8026,8 +8267,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        brand: "blue" | "silver" | "gold";
         cadence: "weekly" | "monthly";
+        brand: "blue" | "silver" | "gold";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -8051,8 +8292,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        brand: "blue" | "silver" | "gold";
         cadence: "weekly" | "monthly";
+        brand: "blue" | "silver" | "gold";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -13440,6 +13681,12 @@ export declare const GetBudgetHealthResponse: zod.ZodObject<{
         body: string;
         nextAction: string;
     };
+    trend: {
+        status: string;
+        recordedOn: string;
+        score: number;
+        grade: string;
+    }[];
     score: number;
     grade: string;
     dimensions: {
@@ -13450,12 +13697,6 @@ export declare const GetBudgetHealthResponse: zod.ZodObject<{
         weight: number;
     }[];
     drivers: string[];
-    trend: {
-        status: string;
-        recordedOn: string;
-        score: number;
-        grade: string;
-    }[];
     deltas: {
         direction: string;
         vsYesterday?: number | null | undefined;
@@ -13471,6 +13712,12 @@ export declare const GetBudgetHealthResponse: zod.ZodObject<{
         body: string;
         nextAction: string;
     };
+    trend: {
+        status: string;
+        recordedOn: string;
+        score: number;
+        grade: string;
+    }[];
     score: number;
     grade: string;
     dimensions: {
@@ -13481,12 +13728,6 @@ export declare const GetBudgetHealthResponse: zod.ZodObject<{
         weight: number;
     }[];
     drivers: string[];
-    trend: {
-        status: string;
-        recordedOn: string;
-        score: number;
-        grade: string;
-    }[];
     deltas: {
         direction: string;
         vsYesterday?: number | null | undefined;

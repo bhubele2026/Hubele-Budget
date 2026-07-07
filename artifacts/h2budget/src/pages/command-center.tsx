@@ -94,6 +94,7 @@ import { MonthlyWrapped } from "@/components/monthly-wrapped";
 import { Confetti } from "@/components/confetti";
 import { PaceGauge } from "@/components/pace-gauge";
 import { SpendScoreboard } from "@/components/spend-scoreboard";
+import { SpendStorySection } from "@/components/spend-story";
 
 const MIX_COLORS = [
   "hsl(var(--chart-1))",
@@ -1085,67 +1086,35 @@ export default function CommandCenterPage() {
         />
         <StatTile
           tone={3}
-          icon={netMonth != null && netMonth < 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
-          label="Net this month"
-          value={netMonth != null ? <MoneyText amount={netMonth} colored signed /> : "—"}
-          sub={dash ? `${formatCurrency(income)} in · ${formatCurrency(spend)} out` : undefined}
-          href="/reports"
+          icon={<Zap className="w-4 h-4" />}
+          label={`Unplanned · ${monthName}`}
+          value={<MoneyText amount={unplannedView.spend} />}
+          sub={
+            unplannedView.cap > 0 ? (
+              <span
+                className={
+                  unplannedView.spend > unplannedView.cap
+                    ? "text-[hsl(var(--negative))]"
+                    : "text-[hsl(var(--positive))]"
+                }
+              >
+                {unplannedView.spend > unplannedView.cap
+                  ? `${formatCurrency(unplannedView.spend - unplannedView.cap)} over the ${formatCurrency(unplannedView.cap)} cap`
+                  : `${formatCurrency(unplannedView.cap - unplannedView.spend)} left of ${formatCurrency(unplannedView.cap)}`}
+              </span>
+            ) : (
+              "spent, no cap set"
+            )
+          }
+          href="/allowances?view=unplanned"
         />
       </StatTileRow>
 
-      {/* ── Unplanned, this month — the bucket that used to be invisible from
-             Banking. Slim strip (a 5th tile would crowd the row); same
-             over/under cap styling as the Week tile; click to drill. ─────── */}
-      <Link
-        href="/allowances?view=unplanned"
-        className="block w-full text-left"
-        data-testid="cc-unplanned-strip"
-      >
-        <Card className="transition-colors hover:border-primary/40">
-          <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              <Zap className="h-3.5 w-3.5 text-warning" />
-              Unplanned · {monthName}
-            </span>
-            <MoneyText
-              amount={unplannedView.spend}
-              className="text-base font-bold tabular-nums"
-            />
-            <span className="text-xs">
-              {unplannedView.cap > 0 ? (
-                <span
-                  className={
-                    unplannedView.spend > unplannedView.cap
-                      ? "text-[hsl(var(--negative))]"
-                      : "text-[hsl(var(--positive))]"
-                  }
-                >
-                  {unplannedView.spend > unplannedView.cap
-                    ? `${formatCurrency(unplannedView.spend - unplannedView.cap)} over the ${formatCurrency(unplannedView.cap)} cap`
-                    : `${formatCurrency(unplannedView.cap - unplannedView.spend)} left of ${formatCurrency(unplannedView.cap)}`}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">spent, no cap set</span>
-              )}
-            </span>
-            <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-              Review on Allowances
-              <ChevronRight className="h-3.5 w-3.5" />
-            </span>
-          </CardContent>
-        </Card>
-      </Link>
-
-      {/* ── Advisor nudge + sync (kept, debt copy stripped) ─────────────── */}
-      <Callout
-        tone={nudgeTone}
-        icon={<Sparkles className="h-4 w-4" />}
-        action={<SyncButton />}
-      >
-        <span className="line-clamp-2">
-          {nudgeMsg ?? "Pull a sync and I'll tell you how you're really doing."}
-        </span>
-      </Callout>
+      {/* ── Spending story — four minimal graphics (household-wide Amex + Chase)
+             that expand in place to Fable 5's read. Just the graphic; click to
+             get the analysis. Numbers are server-computed; Fable writes the
+             language. ──────────────────────────────────────────────────────── */}
+      <SpendStorySection />
 
       {/* ── The four insight buckets — going well / could improve / cancel /
              paying-for-but-not-budgeted. Numbers computed here from data the
