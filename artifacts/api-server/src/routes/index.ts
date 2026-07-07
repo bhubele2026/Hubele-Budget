@@ -26,6 +26,7 @@ import reportsRouter from "./reports";
 import bankingRouter from "./banking";
 import billsInsightsRouter from "./billsInsights";
 import forecastInsightsRouter from "./forecastInsights";
+import budgetHealthRouter from "./budgetHealth";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,6 @@ router.use(reportsRouter);
 router.use(bankingRouter);
 router.use(billsInsightsRouter);
 router.use(forecastInsightsRouter);
+router.use(budgetHealthRouter);
 
 export default router;

@@ -8,6 +8,47 @@
 export interface HealthStatus {
     status: string;
 }
+export interface BudgetHealthDimension {
+    key: string;
+    label: string;
+    score: number;
+    weight: number;
+    summary: string;
+}
+export interface BudgetHealthTrendPoint {
+    recordedOn: string;
+    score: number;
+    status: string;
+    grade: string;
+}
+export interface BudgetHealthDeltas {
+    /** @nullable */
+    vsYesterday?: number | null;
+    /** @nullable */
+    vsLastWeek?: number | null;
+    direction: string;
+}
+export interface BudgetHealthSummary {
+    generatedAt: string;
+    headline: string;
+    body: string;
+    nextAction: string;
+    source: string;
+}
+export type BudgetHealthResponseFacts = {
+    [key: string]: unknown;
+};
+export interface BudgetHealthResponse {
+    score: number;
+    status: string;
+    grade: string;
+    dimensions: BudgetHealthDimension[];
+    drivers: string[];
+    facts?: BudgetHealthResponseFacts;
+    trend: BudgetHealthTrendPoint[];
+    deltas: BudgetHealthDeltas;
+    summary: BudgetHealthSummary;
+}
 export interface VersionInfo {
     /** Per-deploy build identifier (APP_BUILD_ID env, falling back
   to the git short hash, then a shared "dev" sentinel when

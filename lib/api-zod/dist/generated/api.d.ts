@@ -13343,4 +13343,149 @@ export declare const PostAdvisorProposalCancelResponse: zod.ZodObject<{
     auditLogId?: string | undefined;
     toolName?: string | undefined;
 }>;
+/**
+ * The one "how are we doing" read. The server computes a 0-100 health
+score in code (debt-payoff weighted) from existing engines, upserts
+today's daily row (so the trend stays continuous), and returns the
+score/status/grade, weighted sub-scores, drivers, a ~30-day trend
+series, vs-yesterday/vs-last-week deltas, and a Fable 5 narrative.
+
+ * @summary Overall budget-health score, trend, and AI narrative
+ */
+export declare const GetBudgetHealthResponse: zod.ZodObject<{
+    score: zod.ZodNumber;
+    status: zod.ZodString;
+    grade: zod.ZodString;
+    dimensions: zod.ZodArray<zod.ZodObject<{
+        key: zod.ZodString;
+        label: zod.ZodString;
+        score: zod.ZodNumber;
+        weight: zod.ZodNumber;
+        summary: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        summary: string;
+        label: string;
+        score: number;
+        key: string;
+        weight: number;
+    }, {
+        summary: string;
+        label: string;
+        score: number;
+        key: string;
+        weight: number;
+    }>, "many">;
+    drivers: zod.ZodArray<zod.ZodString, "many">;
+    facts: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>;
+    trend: zod.ZodArray<zod.ZodObject<{
+        recordedOn: zod.ZodString;
+        score: zod.ZodNumber;
+        status: zod.ZodString;
+        grade: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        status: string;
+        recordedOn: string;
+        score: number;
+        grade: string;
+    }, {
+        status: string;
+        recordedOn: string;
+        score: number;
+        grade: string;
+    }>, "many">;
+    deltas: zod.ZodObject<{
+        vsYesterday: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        vsLastWeek: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        direction: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        direction: string;
+        vsYesterday?: number | null | undefined;
+        vsLastWeek?: number | null | undefined;
+    }, {
+        direction: string;
+        vsYesterday?: number | null | undefined;
+        vsLastWeek?: number | null | undefined;
+    }>;
+    summary: zod.ZodObject<{
+        generatedAt: zod.ZodString;
+        headline: zod.ZodString;
+        body: zod.ZodString;
+        nextAction: zod.ZodString;
+        source: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        source: string;
+        generatedAt: string;
+        headline: string;
+        body: string;
+        nextAction: string;
+    }, {
+        source: string;
+        generatedAt: string;
+        headline: string;
+        body: string;
+        nextAction: string;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    status: string;
+    summary: {
+        source: string;
+        generatedAt: string;
+        headline: string;
+        body: string;
+        nextAction: string;
+    };
+    score: number;
+    grade: string;
+    dimensions: {
+        summary: string;
+        label: string;
+        score: number;
+        key: string;
+        weight: number;
+    }[];
+    drivers: string[];
+    trend: {
+        status: string;
+        recordedOn: string;
+        score: number;
+        grade: string;
+    }[];
+    deltas: {
+        direction: string;
+        vsYesterday?: number | null | undefined;
+        vsLastWeek?: number | null | undefined;
+    };
+    facts?: Record<string, unknown> | undefined;
+}, {
+    status: string;
+    summary: {
+        source: string;
+        generatedAt: string;
+        headline: string;
+        body: string;
+        nextAction: string;
+    };
+    score: number;
+    grade: string;
+    dimensions: {
+        summary: string;
+        label: string;
+        score: number;
+        key: string;
+        weight: number;
+    }[];
+    drivers: string[];
+    trend: {
+        status: string;
+        recordedOn: string;
+        score: number;
+        grade: string;
+    }[];
+    deltas: {
+        direction: string;
+        vsYesterday?: number | null | undefined;
+        vsLastWeek?: number | null | undefined;
+    };
+    facts?: Record<string, unknown> | undefined;
+}>;
 //# sourceMappingURL=api.d.ts.map

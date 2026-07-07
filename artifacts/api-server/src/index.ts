@@ -12,6 +12,7 @@ import { backfillMalformedTokenSiblings } from "./lib/plaidMalformedSiblingClean
 import { backfillOrphanPlaidItems } from "./lib/plaidOrphanItemCleanup";
 import { maybeAlertOnSiblingCleanup } from "./lib/plaidMalformedSiblingCleanupAlert";
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
+import { runDailyHealthSnapshots } from "./lib/runDailyHealthSnapshots";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
@@ -493,4 +494,24 @@ app.listen(port, (err) => {
   } else {
     logger.warn("Plaid credentials missing — scheduled sync disabled");
   }
+
+  // Daily Budget Health snapshot — independent of Plaid (no billable calls),
+  // so it runs every day regardless of the auto-sync kill-switch or whether
+  // Plaid is configured. 03:52 UTC, clear of the Plaid daily sweeps above.
+  // This keeps the health trend continuous even for households that never open
+  // the app; the /budget-health read also upserts today's row opportunistically.
+  cron.schedule(
+    "52 3 * * *",
+    () => {
+      runDailyHealthSnapshots()
+        .then((summary) => {
+          logger.info(summary, "Daily budget-health snapshot sweep complete");
+        })
+        .catch((err) => {
+          logger.error({ err }, "Daily budget-health snapshot sweep failed");
+        });
+    },
+    { timezone: "UTC" },
+  );
+  logger.info("Daily budget-health snapshot scheduled");
 });

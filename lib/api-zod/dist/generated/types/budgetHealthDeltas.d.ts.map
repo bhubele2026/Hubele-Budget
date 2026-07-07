@@ -1,0 +1,1 @@
+{"version":3,"file":"budgetHealthDeltas.d.ts","sourceRoot":"","sources":["../../../src/generated/types/budgetHealthDeltas.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,kBAAkB;IACjC,gBAAgB;IAChB,WAAW,CAAC,EAAE,MAAM,GAAG,IAAI,CAAC;IAC5B,gBAAgB;IAChB,UAAU,CAAC,EAAE,MAAM,GAAG,IAAI,CAAC;IAC3B,SAAS,EAAE,MAAM,CAAC;CACnB"}
