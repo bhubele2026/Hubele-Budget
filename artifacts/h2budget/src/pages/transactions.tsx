@@ -2328,7 +2328,7 @@ export default function TransactionsPage() {
 
       {/* Sassy AI one-liner + week-over-week spend + category mix. */}
       <AiInsightBar />
-      <ChaseInsightStrip txns={transactions ?? []} categories={categories ?? []} />
+      <ChaseInsightStrip range={range} />
 
       {balanceTrend && (
         <BalanceTrendChart
