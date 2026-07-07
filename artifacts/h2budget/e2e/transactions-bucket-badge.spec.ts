@@ -197,7 +197,7 @@ test.describe("Chase Transactions Review Bucket badge (#426)", () => {
     const chip = page.getByTestId("link-bucket-pending-count");
     await expect(chip).toBeVisible();
     await expect(chip).toContainText("1");
-    await expect(chip).toContainText(/awaiting match in Review Bucket/i);
+    await expect(chip).toContainText(/Match\s+1\s+item\s+in\s+Review/i);
     await expect(page.getByTestId("text-bucket-empty")).toHaveCount(0);
     // The chip must point at the deep-link the Forecast page handles
     // for the bucket tab — task #422's whole point was a one-click jump.
@@ -330,7 +330,7 @@ test.describe("Chase Transactions Review Bucket badge (#426)", () => {
       "data-forecast-state",
       "unplanned",
     );
-    await expect(badgeUnplanned).toContainText(/Unplanned/);
+    await expect(badgeUnplanned).toContainText(/Not planned/);
     await expect(
       page.getByTestId("link-bucket-pending-count"),
     ).toHaveCount(0);
