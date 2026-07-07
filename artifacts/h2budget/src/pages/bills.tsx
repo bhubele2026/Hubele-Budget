@@ -262,7 +262,10 @@ export default function BillsPage() {
     setCurrentMonth(next);
     const params = new URLSearchParams(search);
     params.set("month", next);
-    setLocation(`/bills?${params.toString()}`, { replace: true });
+    // This page (the Bills list) is mounted at /bills/all — plain /bills is the
+    // separate Overview page. Route to /bills/all so stepping the month stays on
+    // the list instead of bouncing back to Overview.
+    setLocation(`/bills/all?${params.toString()}`, { replace: true });
   };
 
   const atFloor = currentMonth <= MIN_BILLS_MONTH;

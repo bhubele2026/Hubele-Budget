@@ -2146,7 +2146,9 @@ export const ForecastInsightsSummarySource = {
 
 export interface ForecastInsightsSummary {
   headline: string;
+  body: string;
   bullets: string[];
+  debtMoves: string[];
   summarySource: ForecastInsightsSummarySummarySource;
   generatedAt: string;
   source: ForecastInsightsSummarySource;

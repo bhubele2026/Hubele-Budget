@@ -86,6 +86,7 @@ import { formatCurrency, cn } from "@/lib/utils";
 import { useGetSettings } from "@workspace/api-client-react";
 import { FillMeter } from "@/components/stat/fill-meter";
 import { SectionHeader } from "@/components/stat";
+import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { spendStatus } from "@/lib/statusThresholds";
 import { bucketSpendInWindow } from "@/lib/bucketSpend";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -965,6 +966,44 @@ export default function BudgetPage() {
       </div>
 
       <AiInsightBar />
+
+      {/* At-a-glance hero — leads with the projected month-end (what the plan
+          says the month SHOULD end at = planned income − expenses), then the
+          budget-vs-actual read for net, income and expenses. All figures come
+          straight from the server summary (CLAUDE.md §1 — no client math). */}
+      {summary && (() => {
+        const plannedNet = parseFloat(summary.net.budget) || 0;
+        const actualNet = parseFloat(summary.net.actual) || 0;
+        const incomeActual = parseFloat(summary.income.actual) || 0;
+        const incomeBudget = parseFloat(summary.income.budget) || 0;
+        const expActual = parseFloat(summary.expenses.actual) || 0;
+        const expBudget = parseFloat(summary.expenses.budget) || 0;
+        return (
+          <StatTileRow>
+            <StatTile
+              active
+              label="Projected month-end"
+              value={formatCurrency(plannedNet)}
+              sub="Planned income − expenses"
+            />
+            <StatTile
+              label="Net so far"
+              value={<MoneyText amount={actualNet} colored />}
+              sub={`of ${formatCurrency(plannedNet)} planned`}
+            />
+            <StatTile
+              label="Income"
+              value={formatCurrency(incomeActual)}
+              sub={`of ${formatCurrency(incomeBudget)} budgeted`}
+            />
+            <StatTile
+              label="Expenses"
+              value={formatCurrency(expActual)}
+              sub={`of ${formatCurrency(expBudget)} budgeted`}
+            />
+          </StatTileRow>
+        );
+      })()}
 
       <div className="flex flex-wrap gap-2">
         <SourceBadge kind="manual" />

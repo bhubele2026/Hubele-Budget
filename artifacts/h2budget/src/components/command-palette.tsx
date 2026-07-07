@@ -38,7 +38,7 @@ const MORE: Dest[] = [
   { name: "Budget", href: "/budget", icon: PieChart },
   { name: "Bills", href: "/bills", icon: CalendarDays, keywords: "income recurring" },
   { name: "Debts", href: "/debts", icon: Landmark, keywords: "apr balance" },
-  { name: "Avalanche", href: "/avalanche", icon: Flame, keywords: "payoff plan" },
+  { name: "Future Goal", href: "/avalanche", icon: Flame, keywords: "payoff plan avalanche debt" },
   { name: "Debrief", href: "/debrief", icon: CalendarCheck, keywords: "weekly review" },
   { name: "Review", href: "/review", icon: Inbox, keywords: "inbox match" },
   { name: "Settings", href: "/settings", icon: SettingsIcon, keywords: "preferences coach" },

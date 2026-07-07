@@ -95,10 +95,16 @@ export default function ForecastOverviewPage() {
         tone={status === "ready" ? "good" : status === "tight" ? "warning" : "danger"}
         icon={<Sparkles className="h-4 w-4" />}
       >
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="text-[15px] font-bold tracking-tight leading-snug">
             {insight?.headline ?? "Reading your cash flow…"}
           </div>
+          {/* The 90-day overview paragraph. */}
+          {insight?.body ? (
+            <p className="text-[13px] font-normal text-muted-foreground leading-snug">
+              {insight.body}
+            </p>
+          ) : null}
           {insight?.bullets?.length ? (
             <ul className="space-y-1 text-[13px] font-normal text-muted-foreground">
               {insight.bullets.map((b, i) => (
@@ -108,6 +114,22 @@ export default function ForecastOverviewPage() {
                 </li>
               ))}
             </ul>
+          ) : null}
+          {/* Concrete debt moves — the North-Star action list. */}
+          {insight?.debtMoves?.length ? (
+            <div className="mt-2 rounded-md border border-[hsl(var(--positive))]/25 bg-[hsl(var(--positive))]/10 px-3 py-2">
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                What to do with debt
+              </div>
+              <ul className="mt-1 space-y-1 text-[13px]">
+                {insight.debtMoves.map((m, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[hsl(var(--positive))]" />
+                    <span className="leading-snug">{m}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
         </div>
       </Callout>
