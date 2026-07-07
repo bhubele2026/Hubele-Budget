@@ -78,6 +78,7 @@ import { SavingsGoal } from "@/components/savings-goal";
 import { DrillCard } from "@/components/drill-card";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { SectionHeader, Callout } from "@/components/stat";
+import { BudgetHealthCard } from "@/components/budget-health-card";
 import { SpenderSpotlight } from "@/components/spender-spotlight";
 import { WallOfShame } from "@/components/wall-of-shame";
 import { SubscriptionInsightsSection } from "@/components/subscription-insights";
@@ -975,6 +976,11 @@ export default function CommandCenterPage() {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <Confetti fire={celebrate} />
+
+      {/* ── Budget Health hero — the one "how are we doing" read: a
+             code-computed 0-100 score + status + trend + Fable 5 narrative,
+             debt-payoff weighted (the North Star). ──────────────────────── */}
+      <BudgetHealthCard className="mb-2" />
 
       {/* ── At-a-glance StatTile row — the "how are we spending, right now"
              focal readouts (week + month, navigable) plus cash & net. ─────── */}

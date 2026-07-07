@@ -38,6 +38,7 @@ import type {
   BillsInsightsSummary,
   BillsSummary,
   BudgetFacts,
+  BudgetHealthResponse,
   BudgetLine,
   BudgetLineInput,
   BudgetMonthDetail,
@@ -10709,3 +10710,84 @@ export const usePostAdvisorProposalCancel = <
 > => {
   return useMutation(getPostAdvisorProposalCancelMutationOptions(options));
 };
+
+/**
+ * The one "how are we doing" read. The server computes a 0-100 health
+score in code (debt-payoff weighted) from existing engines, upserts
+today's daily row (so the trend stays continuous), and returns the
+score/status/grade, weighted sub-scores, drivers, a ~30-day trend
+series, vs-yesterday/vs-last-week deltas, and a Fable 5 narrative.
+
+ * @summary Overall budget-health score, trend, and AI narrative
+ */
+export const getGetBudgetHealthUrl = () => {
+  return `/api/budget-health`;
+};
+
+export const getBudgetHealth = async (
+  options?: RequestInit,
+): Promise<BudgetHealthResponse> => {
+  return customFetch<BudgetHealthResponse>(getGetBudgetHealthUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBudgetHealthQueryKey = () => {
+  return [`/api/budget-health`] as const;
+};
+
+export const getGetBudgetHealthQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBudgetHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBudgetHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBudgetHealthQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBudgetHealth>>> = ({
+    signal,
+  }) => getBudgetHealth({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBudgetHealth>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBudgetHealthQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBudgetHealth>>
+>;
+export type GetBudgetHealthQueryError = ErrorType<void>;
+
+/**
+ * @summary Overall budget-health score, trend, and AI narrative
+ */
+
+export function useGetBudgetHealth<
+  TData = Awaited<ReturnType<typeof getBudgetHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBudgetHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBudgetHealthQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

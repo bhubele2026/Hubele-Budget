@@ -5015,3 +5015,49 @@ export const PostAdvisorProposalCancelResponse = zod.object({
   toolName: zod.string().optional(),
   auditLogId: zod.string().optional(),
 });
+
+/**
+ * The one "how are we doing" read. The server computes a 0-100 health
+score in code (debt-payoff weighted) from existing engines, upserts
+today's daily row (so the trend stays continuous), and returns the
+score/status/grade, weighted sub-scores, drivers, a ~30-day trend
+series, vs-yesterday/vs-last-week deltas, and a Fable 5 narrative.
+
+ * @summary Overall budget-health score, trend, and AI narrative
+ */
+export const GetBudgetHealthResponse = zod.object({
+  score: zod.number(),
+  status: zod.string(),
+  grade: zod.string(),
+  dimensions: zod.array(
+    zod.object({
+      key: zod.string(),
+      label: zod.string(),
+      score: zod.number(),
+      weight: zod.number(),
+      summary: zod.string(),
+    }),
+  ),
+  drivers: zod.array(zod.string()),
+  facts: zod.record(zod.string(), zod.unknown()).optional(),
+  trend: zod.array(
+    zod.object({
+      recordedOn: zod.string(),
+      score: zod.number(),
+      status: zod.string(),
+      grade: zod.string(),
+    }),
+  ),
+  deltas: zod.object({
+    vsYesterday: zod.number().nullish(),
+    vsLastWeek: zod.number().nullish(),
+    direction: zod.string(),
+  }),
+  summary: zod.object({
+    generatedAt: zod.string(),
+    headline: zod.string(),
+    body: zod.string(),
+    nextAction: zod.string(),
+    source: zod.string(),
+  }),
+});

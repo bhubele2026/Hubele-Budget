@@ -2268,6 +2268,26 @@ paths:
         "401":
           description: Unauthorized
 
+  /budget-health:
+    get:
+      operationId: getBudgetHealth
+      tags: [budget-health]
+      summary: Overall budget-health score, trend, and AI narrative
+      description: |
+        The one "how are we doing" read. The server computes a 0-100 health
+        score in code (debt-payoff weighted) from existing engines, upserts
+        today's daily row (so the trend stays continuous), and returns the
+        score/status/grade, weighted sub-scores, drivers, a ~30-day trend
+        series, vs-yesterday/vs-last-week deltas, and a Fable 5 narrative.
+      responses:
+        "200":
+          description: Budget health
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BudgetHealthResponse" }
+        "401":
+          description: Unauthorized
+
 components:
   schemas:
     HealthStatus:
@@ -2275,6 +2295,65 @@ components:
       required: [status]
       properties:
         status: { type: string }
+
+    BudgetHealthDimension:
+      type: object
+      required: [key, label, score, weight, summary]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        score: { type: number }
+        weight: { type: number }
+        summary: { type: string }
+
+    BudgetHealthTrendPoint:
+      type: object
+      required: [recordedOn, score, status, grade]
+      properties:
+        recordedOn: { type: string }
+        score: { type: number }
+        status: { type: string }
+        grade: { type: string }
+
+    BudgetHealthDeltas:
+      type: object
+      required: [direction]
+      properties:
+        vsYesterday: { type: ["number", "null"] }
+        vsLastWeek: { type: ["number", "null"] }
+        direction: { type: string }
+
+    BudgetHealthSummary:
+      type: object
+      required: [generatedAt, headline, body, nextAction, source]
+      properties:
+        generatedAt: { type: string }
+        headline: { type: string }
+        body: { type: string }
+        nextAction: { type: string }
+        source: { type: string }
+
+    BudgetHealthResponse:
+      type: object
+      required: [score, status, grade, dimensions, drivers, trend, deltas, summary]
+      properties:
+        score: { type: number }
+        status: { type: string }
+        grade: { type: string }
+        dimensions:
+          type: array
+          items: { $ref: "#/components/schemas/BudgetHealthDimension" }
+        drivers:
+          type: array
+          items: { type: string }
+        facts:
+          type: object
+          additionalProperties: true
+        trend:
+          type: array
+          items: { $ref: "#/components/schemas/BudgetHealthTrendPoint" }
+        deltas: { $ref: "#/components/schemas/BudgetHealthDeltas" }
+        summary: { $ref: "#/components/schemas/BudgetHealthSummary" }
 
     VersionInfo:
       type: object

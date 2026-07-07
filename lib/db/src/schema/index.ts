@@ -159,6 +159,41 @@ export const debtBalanceHistoryTable = pgTable(
   }),
 );
 
+// Daily household "budget health" snapshot — one row per (household, day),
+// upserted per day (copies the debt_balance_history cadence). `score` is the
+// 0-100 overall computed in code (CLAUDE.md §1 — the AI never does arithmetic);
+// `status` is the green/yellow/red band, `grade` the A-F letter. `payload`
+// holds the per-dimension sub-scores + drivers + key facts so the health card
+// can render the breakdown and the trend without re-deriving anything, and so
+// the shape can evolve without a migration.
+export const budgetHealthHistoryTable = pgTable(
+  "budget_health_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
+    recordedOn: date("recorded_on").notNull(),
+    score: integer("score").notNull().default(0),
+    status: text("status").notNull().default("red"),
+    grade: text("grade").notNull().default("F"),
+    payload: jsonb("payload"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    householdDayUq: uniqueIndex("budget_health_history_household_day_uq").on(
+      t.householdId,
+      t.recordedOn,
+    ),
+    householdDayIdx: index("budget_health_history_household_day_idx").on(
+      t.householdId,
+      t.recordedOn,
+    ),
+  }),
+);
+
 export const avalancheSettingsTable = pgTable("avalanche_settings", {
   // userId remains PK for backward compatibility with the existing
   // single-row-per-user data; one row per household owner is exactly
