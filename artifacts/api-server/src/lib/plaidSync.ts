@@ -460,6 +460,17 @@ async function reconcileVanishedPendings(opts: {
     eq(transactionsTable.pending, true),
     sql`${transactionsTable.plaidTransactionId} is not null`,
     sql`${transactionsTable.occurredOn} >= ${windowStart}`,
+    // Never sweep a pending row the user has already worked (categorized /
+    // bucketed / reviewed / manually overridden) — mirror the orphan-prune
+    // guard. A vanished pre-auth the user cared about stays put rather than
+    // taking their manual work with it.
+    sql`${transactionsTable.categoryId} is null`,
+    eq(transactionsTable.weeklyAllowance, false),
+    eq(transactionsTable.monthlyAllowance, false),
+    eq(transactionsTable.unplannedAllowance, false),
+    eq(transactionsTable.reviewed, false),
+    eq(transactionsTable.isTransferUserOverridden, false),
+    eq(transactionsTable.occurredOnUserOverridden, false),
   ];
   if (windowEnd) {
     conditions.push(sql`${transactionsTable.occurredOn} <= ${windowEnd}`);
@@ -1443,6 +1454,66 @@ export async function syncPlaidItem(
         }
       }
 
+      // Authoritative pending→posted link. When Plaid posts a charge it
+      // sends the posted row as a NEW transaction_id whose
+      // `pending_transaction_id` points at the pending row we already
+      // stored. Re-key that existing row in place — adopt the new id and
+      // refresh only Plaid-owned fields — so the user's manual work
+      // (categoryId, allowance flags, all *UserOverridden guards) is
+      // PRESERVED. This takes precedence over the fuzzy amount/date
+      // re-mint below (which misses whenever the amount changes on
+      // posting — tip, auth-hold → final — or the date shifts > 2 days),
+      // and it makes the later `removed`-array delete for the old id a
+      // no-op (the id no longer exists on any row).
+      {
+        const ptid = t.pending_transaction_id;
+        if (ptid) {
+          const [pendingMatch] = await db
+            .select({ id: transactionsTable.id })
+            .from(transactionsTable)
+            .where(
+              and(
+                eq(transactionsTable.householdId, householdId),
+                eq(transactionsTable.plaidAccountId, t.account_id),
+                eq(transactionsTable.plaidTransactionId, ptid),
+              ),
+            )
+            .limit(1);
+          if (pendingMatch) {
+            logger.info(
+              {
+                householdId,
+                itemRowId,
+                externalAcctId: t.account_id,
+                pendingTransactionId: ptid,
+                newPlaidTransactionId: t.transaction_id,
+                occurredOn: t.date,
+                amount: signedAmount,
+              },
+              "[plaid-sync] pending→posted adoption — re-keying existing pending row, preserving user edits",
+            );
+            await db
+              .update(transactionsTable)
+              .set({
+                plaidTransactionId: t.transaction_id,
+                // Honor a manual date edit, same CASE shape the upsert uses.
+                occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${t.date} END`,
+                occurredAt,
+                description,
+                amount: signedAmount,
+                pending: !!t.pending,
+                pfcPrimary: pfc?.primary ?? null,
+                pfcDetailed: pfc?.detailed ?? null,
+                // Deliberately NOT written → preserved: categoryId,
+                // weekly/monthly/unplannedAllowance, isTransfer + all
+                // *UserOverridden flags, debtId, forecastFlag, reviewed.
+              })
+              .where(eq(transactionsTable.id, pendingMatch.id));
+            continue;
+          }
+        }
+      }
+
       // (#720) Re-mint dedup on the cursor insert path. Mirror of the
       // gap-backfill guard: when Plaid re-issues an internal
       // transaction_id for the same real posting (observed after
@@ -1764,7 +1835,13 @@ export async function syncPlaidItem(
       void fmtISO; // silence unused warning if helper not needed elsewhere
     }
 
-    // Remove
+    // Remove. NEVER hard-delete a row the user has touched: mirror the
+    // orphan-prune guard. In the common pending→posted case the pending row
+    // was already re-keyed to the posted id by the adoption block above, so
+    // this delete no-ops for it. If Plaid removes an id we never adopted
+    // (adoption missed), keeping the user's categorized/allowance-flagged row
+    // is strictly better than silently destroying their work — the per-sync
+    // dedupe reconciles any transient pair onto the user-owned survivor.
     for (const r of removed) {
       await db
         .delete(transactionsTable)
@@ -1772,6 +1849,13 @@ export async function syncPlaidItem(
           and(
             eq(transactionsTable.householdId, householdId),
             eq(transactionsTable.plaidTransactionId, r.transaction_id),
+            sql`${transactionsTable.categoryId} is null`,
+            eq(transactionsTable.weeklyAllowance, false),
+            eq(transactionsTable.monthlyAllowance, false),
+            eq(transactionsTable.unplannedAllowance, false),
+            eq(transactionsTable.reviewed, false),
+            eq(transactionsTable.isTransferUserOverridden, false),
+            eq(transactionsTable.occurredOnUserOverridden, false),
           ),
         );
     }
@@ -3241,6 +3325,60 @@ export async function runGapBackfillForItem(
           pending: !!t.pending,
           forecastFlag: false,
         };
+        // Twin of the cursor-path pending→posted adoption. When Plaid's
+        // posted row references the pending row we already stored via
+        // `pending_transaction_id`, re-key that row in place and refresh
+        // only Plaid-owned fields — preserving the user's categoryId,
+        // allowance flags, and every *UserOverridden guard. Takes
+        // precedence over the fuzzy re-mint below and no-ops the later
+        // `removed` delete for the old id.
+        {
+          const ptid = t.pending_transaction_id;
+          if (ptid) {
+            const [pendingMatch] = await db
+              .select({ id: transactionsTable.id })
+              .from(transactionsTable)
+              .where(
+                and(
+                  eq(transactionsTable.householdId, householdId),
+                  eq(transactionsTable.plaidAccountId, t.account_id),
+                  eq(transactionsTable.plaidTransactionId, ptid),
+                ),
+              )
+              .limit(1);
+            if (pendingMatch) {
+              logger.info(
+                {
+                  householdId,
+                  itemRowId,
+                  externalAcctId,
+                  pendingTransactionId: ptid,
+                  newPlaidTransactionId: t.transaction_id,
+                  occurredOn: t.date,
+                  amount: signedAmount,
+                },
+                "[plaid-backfill] pending→posted adoption — re-keying existing pending row, preserving user edits",
+              );
+              await db
+                .update(transactionsTable)
+                .set({
+                  plaidTransactionId: t.transaction_id,
+                  occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${values.occurredOn} END`,
+                  occurredAt: values.occurredAt,
+                  description: values.description,
+                  amount: values.amount,
+                  pending: values.pending,
+                  pfcPrimary: values.pfcPrimary,
+                  pfcDetailed: values.pfcDetailed,
+                  // Preserved (not written): categoryId, allowance flags,
+                  // isTransfer + all *UserOverridden guards, debtId,
+                  // forecastFlag, reviewed.
+                })
+                .where(eq(transactionsTable.id, pendingMatch.id));
+              continue;
+            }
+          }
+        }
         // (#720) Belt-and-suspenders ±2-day re-mint dedup. The
         // unique constraint on `plaid_transaction_id` alone can't
         // catch the case where Plaid re-mints a transaction_id for
