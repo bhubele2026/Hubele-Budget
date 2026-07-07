@@ -18,7 +18,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToCancelList, toCancelKey } from "@/hooks/useToCancelList";
-import { KillStack } from "@/components/kill-stack";
 import { MiniBars } from "@/components/viz";
 import {
   SectionHeader,
@@ -1138,10 +1137,6 @@ export default function AllowancesPage() {
           );
         })}
       </StatTileRow>
-
-      {/* Exactly what to pay for the VIEWED week (aligned to the ◀▶ week picker),
-          so "how over budget" and "which cards to pay" describe the same week. */}
-      <KillStack emphasize weekStart={fmtISO(weekStart)} />
 
       <AiInsightBar />
 
