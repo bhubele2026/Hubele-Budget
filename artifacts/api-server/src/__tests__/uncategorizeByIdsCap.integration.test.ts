@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
-import express from "express";
 import { eq } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -29,14 +27,12 @@ vi.mock("../middlewares/requireAuth", () => ({
 import { db, transactionsTable } from "@workspace/db";
 import { uncategorizeTransactionsByIdsBodyIdsMax } from "@workspace/api-zod";
 import transactionsRouter from "../routes/transactions";
+import { createTestApp } from "./_helpers/createTestApp";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
-const app = express();
-app.use(express.json({ limit: "20mb" }));
-app.use(transactionsRouter);
-
-let server: Server;
-let baseUrl: string;
+// Server boot + `request()` client come from the shared helper (it owns the
+// beforeAll/afterAll for the listener); this file only owns household + cleanup.
+const { request: api } = createTestApp(transactionsRouter);
 
 async function cleanup(): Promise<void> {
   await db
@@ -45,43 +41,13 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
-  const _h = await createTestHousehold(TEST_USER);
-  TEST_HOUSEHOLD_ID = _h.householdId;
+  TEST_HOUSEHOLD_ID = (await createTestHousehold(TEST_USER)).householdId;
   await cleanup();
-  server = createServer(app);
-  await new Promise<void>((resolve) =>
-    server.listen(0, "127.0.0.1", resolve),
-  );
-  const addr = server.address();
-  if (!addr || typeof addr === "string") throw new Error("no server address");
-  baseUrl = `http://127.0.0.1:${addr.port}`;
 });
 
 afterAll(async () => {
   await cleanup();
-  await new Promise<void>((resolve, reject) =>
-    server.close((err) => (err ? reject(err) : resolve())),
-  );
 });
-
-async function api(
-  method: string,
-  path: string,
-  body?: unknown,
-): Promise<{ status: number; json: unknown }> {
-  const res = await fetch(`${baseUrl}${path}`, {
-    method,
-    headers: body ? { "content-type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  let json: unknown = null;
-  try {
-    json = await res.json();
-  } catch {
-    json = null;
-  }
-  return { status: res.status, json };
-}
 
 describe("POST /transactions/uncategorize-by-ids id-list cap", () => {
   it("rejects payloads with more than the documented cap of ids with a 400 and a clear error message (no silent truncation)", async () => {

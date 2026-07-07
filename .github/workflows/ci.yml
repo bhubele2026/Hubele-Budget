@@ -109,6 +109,35 @@ jobs:
       - name: API integration tests (pushes schema via pretest)
         run: pnpm --filter ./artifacts/api-server run test
 
+  # Production build gate. `typecheck` above proves the types are sound, but it
+  # never bundles — Vite/esbuild build errors (e.g. a generated export that
+  # drifted from the OpenAPI spec) first surfaced on the Replit deploy, which is
+  # exactly the "broken deploy" class this pipeline exists to block. Run the same
+  # root `build` Replit runs (typecheck + `pnpm -r run build`) so a build that
+  # would fail the deploy fails the PR instead.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      # Write CI-only pnpm settings to .npmrc BEFORE install so they also
+      # apply to pnpm's verify-deps-before-run auto-reinstall on `pnpm run`:
+      #  - strict-dep-builds=false: don't hard-fail on un-approved build
+      #    scripts (e.g. @clerk/shared); esbuild/@swc ARE built via the
+      #    onlyBuiltDependencies allowlist in pnpm-workspace.yaml.
+      #  - verify-deps-before-run=false: skip the pre-`run` auto-reinstall.
+      - run: |
+          printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc
+          pnpm install --frozen-lockfile
+      - name: Production build (same command Replit deploys)
+        run: pnpm run build
+
   # Playwright e2e needs a booted app + Clerk test credentials + browsers.
   # Opt-in until those secrets/profile exist (set repo variable E2E_ENABLED=true)
   # so a credentials gap doesn't block every PR. This is deferral, not a
