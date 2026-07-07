@@ -1,7 +1,11 @@
 import { useMemo } from "react";
-import type { Transaction } from "@workspace/api-client-react";
+import {
+  useGetReportsSpendingFacts,
+  getGetReportsSpendingFactsQueryKey,
+} from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StackBar, DeltaPill, MoneyText } from "@/components/viz";
+import { rangeDays, type DateRange } from "@/lib/timeRange";
 
 const MIX_COLORS = [
   "hsl(var(--chart-1))",
@@ -15,73 +19,80 @@ function isoOf(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** The equal-length window immediately before `range` (for "vs last …"). */
+function priorWindow(range: DateRange): { from: string; to: string } {
+  const days = rangeDays(range);
+  const start = new Date(`${range.from}T00:00:00`);
+  const priorTo = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
+  const priorFrom = new Date(
+    priorTo.getFullYear(),
+    priorTo.getMonth(),
+    priorTo.getDate() - (days - 1),
+  );
+  return { from: isoOf(priorFrom), to: isoOf(priorTo) };
+}
+
+const PERIOD_WORD: Record<DateRange["mode"], string> = {
+  wk: "week",
+  mo: "month",
+  yr: "year",
+};
+
 /**
- * Compact visual strip for the Chase page: a week-over-week spend DeltaPill +
- * a StackBar of this month's category mix. Pairs with the existing balance
- * trend chart. Self-contained — derives everything from the txn list (same
- * exclude-set the reports use), recomputes no money the server owns.
+ * Compact visual strip for the Chase page: a period-over-period spend DeltaPill
+ * + a StackBar of the window's category mix. Both are scoped to the page's date
+ * selector (`range`) and pull the server's real-spend classification
+ * (`GET /reports/spending-facts` → `isRealSpend`), so transfers, debt/loan
+ * payments, and uncategorized rows are excluded — the totals match the Spending
+ * tab exactly. This component computes no money the server owns (CLAUDE.md §1).
  */
-export function ChaseInsightStrip({
-  txns,
-  categories,
-}: {
-  txns: Transaction[];
-  categories: { id: string; name: string; excludeFromBudget?: boolean }[];
-}) {
-  const { excluded, nameById } = useMemo(() => {
-    const ex = new Set<string>();
-    const nm = new Map<string, string>();
-    for (const c of categories) {
-      nm.set(c.id, c.name);
-      if (c.excludeFromBudget) ex.add(c.id);
-    }
-    return { excluded: ex, nameById: nm };
-  }, [categories]);
+export function ChaseInsightStrip({ range }: { range: DateRange }) {
+  const prior = useMemo(() => priorWindow(range), [range]);
 
-  const isSpend = (t: Transaction) => {
-    const a = Number(t.amount) || 0;
-    if (a >= 0) return false;
-    if (t.isTransfer) return false;
-    if (t.categoryId && excluded.has(t.categoryId)) return false;
-    return true;
-  };
+  const { data: cur } = useGetReportsSpendingFacts(
+    { from: range.from, to: range.to },
+    {
+      query: {
+        queryKey: getGetReportsSpendingFactsQueryKey({ from: range.from, to: range.to }),
+        staleTime: 10 * 60_000,
+        gcTime: 30 * 60_000,
+      },
+    },
+  );
+  const { data: prev } = useGetReportsSpendingFacts(
+    { from: prior.from, to: prior.to },
+    {
+      query: {
+        queryKey: getGetReportsSpendingFactsQueryKey({ from: prior.from, to: prior.to }),
+        staleTime: 10 * 60_000,
+        gcTime: 30 * 60_000,
+      },
+    },
+  );
 
-  // This week vs last week (Sun–Sat) spend → DeltaPill.
-  const delta = useMemo(() => {
-    const now = new Date();
-    const sun = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
-    const thisStart = isoOf(sun);
-    const lastStart = isoOf(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() - 7));
-    let cur = 0;
-    let prev = 0;
-    for (const t of txns) {
-      if (!isSpend(t)) continue;
-      const amt = Math.abs(Number(t.amount) || 0);
-      if (t.occurredOn >= thisStart) cur += amt;
-      else if (t.occurredOn >= lastStart && t.occurredOn < thisStart) prev += amt;
-    }
-    const pct = prev > 0 ? ((cur - prev) / prev) * 100 : null;
-    return { cur, prev, pct };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txns, excluded]);
+  const period = PERIOD_WORD[range.mode];
+  const curTotal = cur?.realSpend.total ?? 0;
+  const prevTotal = prev?.realSpend.total ?? 0;
+  const pct = prevTotal > 0 ? ((curTotal - prevTotal) / prevTotal) * 100 : null;
 
-  // This month's category mix → StackBar.
-  const mix = useMemo(() => {
-    const ym = isoOf(new Date()).slice(0, 7);
-    const totals = new Map<string, number>();
-    for (const t of txns) {
-      if (!isSpend(t) || !t.occurredOn.startsWith(ym)) continue;
-      const name = (t.categoryId && nameById.get(t.categoryId)) || "Uncategorized";
-      totals.set(name, (totals.get(name) ?? 0) + Math.abs(Number(t.amount) || 0));
-    }
-    return Array.from(totals.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([label, value], i) => ({ label, value, color: MIX_COLORS[i % MIX_COLORS.length] }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txns, excluded, nameById]);
+  // Top 5 real categories for the window (spending-facts already excludes the
+  // uncategorized bucket from real spend; filter defensively like the Spending
+  // tab in case the server ever surfaces it as a named category).
+  const mix = useMemo(
+    () =>
+      (cur?.byCategory ?? [])
+        .filter((c) => !/uncategorized/i.test(c.name))
+        .slice(0, 5)
+        .map((c, i) => ({
+          label: c.name,
+          value: c.total,
+          color: MIX_COLORS[i % MIX_COLORS.length],
+        })),
+    [cur],
+  );
 
-  if (!mix.length && delta.cur === 0) return null;
+  // Hide the strip only once we have data and there's genuinely nothing to show.
+  if (cur && curTotal === 0 && !mix.length) return null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -89,22 +100,22 @@ export function ChaseInsightStrip({
         <CardContent className="p-5">
           <div className="flex items-center justify-between gap-2 mb-1">
             <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-              Spend this week
+              Spend this {period}
             </span>
-            {delta.pct != null && <DeltaPill value={delta.pct} invert />}
+            {pct != null && <DeltaPill value={pct} invert />}
           </div>
           <div className="text-2xl font-bold">
-            <MoneyText amount={delta.cur} />
+            <MoneyText amount={curTotal} />
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            vs <MoneyText amount={delta.prev} className="text-foreground" /> last week
+            vs <MoneyText amount={prevTotal} className="text-foreground" /> last {period}
           </div>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="p-5">
           <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mb-3">
-            This month · category mix
+            {range.label} · category mix
           </div>
           {mix.length ? (
             <StackBar segments={mix} legendMax={4} />
