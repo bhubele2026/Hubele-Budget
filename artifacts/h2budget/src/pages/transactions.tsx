@@ -61,6 +61,8 @@ import {
   RefreshCw,
   CalendarDays,
   X,
+  Check,
+  ArrowRight,
 } from "lucide-react";
 import { isBankTxn } from "@/lib/forecastMatch";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
@@ -1277,6 +1279,86 @@ export default function TransactionsPage() {
     );
   };
 
+  // The in-forecast status chip: one unambiguous per-row control. It signals the
+  // triage state (In Review / Matched / Not planned), links straight to the
+  // Forecast Review Bucket to match it, and carries an explicit "×" to remove
+  // the row from the forecast. Replaces the old teal paper-plane, which was a
+  // "Remove" button that read like a "go/advance" action. Shared by the pending
+  // and posted row blocks so they can't drift. Returns null when the row isn't
+  // in the forecast.
+  const renderForecastChip = (tx: Transaction) => {
+    if (!tx.forecastFlag) return null;
+    const r = resolutionByTxnId.get(tx.id);
+    const state =
+      r?.status === "matched"
+        ? { attr: "matched", label: "Matched", icon: Check }
+        : r?.status === "ignored_unforecasted" || r?.status === "unplanned"
+          ? { attr: "unplanned", label: "Not planned", icon: Inbox }
+          : { attr: "in-review-bucket", label: "In Review", icon: Inbox };
+    const StateIcon = state.icon;
+    return (
+      <span
+        className={`inline-flex items-center rounded-full border text-[10px] font-normal ${CHIP_BASE}`}
+        data-forecast-state={state.attr}
+        data-testid={`badge-forecast-state-${tx.id}`}
+      >
+        <Link
+          href="/forecast#bucket"
+          className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-l-full hover-elevate active-elevate-2"
+          title="Match this in the Forecast Review Bucket"
+          data-testid={`link-forecast-state-${tx.id}`}
+        >
+          <StateIcon className="w-3 h-3" /> {state.label}
+        </Link>
+        <button
+          type="button"
+          onClick={() => handleToggleForecast(tx)}
+          disabled={updateTx.isPending}
+          title="Remove from forecast"
+          aria-label="Remove from forecast"
+          className="inline-flex items-center pr-1.5 pl-0.5 py-0.5 rounded-r-full text-muted-foreground hover-elevate active-elevate-2 disabled:opacity-50"
+          data-testid={`button-remove-forecast-${tx.id}`}
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </span>
+    );
+  };
+
+  // The forecast action for a row that is NOT yet in the forecast: an upright
+  // paper-plane = "Send to Forecast". (The plane now means "send" in exactly one
+  // place; removal lives on the status chip's "×" above.) Null once the row is
+  // in the forecast, or for non-bank rows that can't be forecast at all.
+  const renderSendForecastAction = (tx: Transaction) => {
+    if (tx.forecastFlag) return null;
+    if (!canSendToForecast(tx)) return null;
+    if (!tx.categoryId) {
+      return (
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled
+          title="Categorize this transaction first to send it to Forecast"
+          data-testid={`button-send-forecast-${tx.id}`}
+        >
+          <Send className="w-4 h-4 text-muted-foreground/40" />
+        </Button>
+      );
+    }
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => handleToggleForecast(tx)}
+        disabled={updateTx.isPending}
+        title="Send to Forecast"
+        data-testid={`button-send-forecast-${tx.id}`}
+      >
+        <Send className="w-4 h-4 text-primary" />
+      </Button>
+    );
+  };
+
   const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
 
   const handleQuickCategorize = async (
@@ -2182,12 +2264,15 @@ export default function TransactionsPage() {
           <Link
             href="/forecast#bucket"
             data-testid="link-bucket-pending-count"
-            className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 text-warning px-2.5 py-0.5 text-xs hover-elevate active-elevate-2"
-            title="Open the Forecast Review Bucket"
+            className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 text-warning px-2.5 py-0.5 text-xs font-medium hover-elevate active-elevate-2"
+            title="Open the Forecast Review Bucket to match these"
           >
             <Inbox className="w-3 h-3" />
-            <span className="font-medium tabular-nums">{awaitingMatchCount}</span>
-            <span>awaiting match in Review Bucket</span>
+            <span>
+              Match <span className="tabular-nums">{awaitingMatchCount}</span>{" "}
+              {awaitingMatchCount === 1 ? "item" : "items"} in Review
+            </span>
+            <ArrowRight className="w-3 h-3" />
           </Link>
         ) : (
           <span
@@ -2384,37 +2469,7 @@ export default function TransactionsPage() {
                       cardLabel={formatTransactionSource(tx.source)}
                       testId={`row-tx-${tx.id}`}
                       rowData={{ "data-pending": "true" }}
-                      metaNode={
-                        tx.forecastFlag ? (
-                          (() => {
-                            // Single-flow restore: forecast-flagged === in the
-                            // Review pipeline. Show the real triage state
-                            // (Matched / Unplanned / In Review) — no separate
-                            // sent_to_review gate, no "Not in review" half-state.
-                            const r = resolutionByTxnId.get(tx.id);
-                            const state =
-                              r?.status === "matched"
-                                ? { attr: "matched", label: "Matched" }
-                                : r?.status === "ignored_unforecasted" ||
-                                    r?.status === "unplanned"
-                                  ? { attr: "unplanned", label: "Unplanned" }
-                                  : {
-                                      attr: "in-review-bucket",
-                                      label: "In Review",
-                                    };
-                            return (
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] font-normal ${CHIP_BASE}`}
-                                data-testid={`badge-forecast-state-${tx.id}`}
-                                data-forecast-state={state.attr}
-                              >
-                                <Inbox className="w-3 h-3 mr-1" /> {state.label}
-                              </Badge>
-                            );
-                          })()
-                        ) : null
-                      }
+                      metaNode={renderForecastChip(tx)}
                       amountNode={
                         <span
                           className={cn(
@@ -2426,41 +2481,7 @@ export default function TransactionsPage() {
                           {formatCurrency(parseSigned(tx.amount))}
                         </span>
                       }
-                      actionsNode={
-                        tx.forecastFlag ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleToggleForecast(tx)}
-                            disabled={updateTx.isPending}
-                            title="Remove from Forecast"
-                            data-testid={`button-remove-forecast-${tx.id}`}
-                          >
-                            <Send className="w-4 h-4 rotate-180 text-primary" />
-                          </Button>
-                        ) : !canSendToForecast(tx) ? null : tx.categoryId ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleToggleForecast(tx)}
-                            disabled={updateTx.isPending}
-                            title="Send to Forecast"
-                            data-testid={`button-send-forecast-${tx.id}`}
-                          >
-                            <Inbox className="w-4 h-4 text-primary" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled
-                            title="Categorize this transaction first to send it to Forecast"
-                            data-testid={`button-send-forecast-${tx.id}`}
-                          >
-                            <Send className="w-4 h-4 text-muted-foreground/40" />
-                          </Button>
-                        )
-                      }
+                      actionsNode={renderSendForecastAction(tx)}
                     />
                   );
                 })}
@@ -2526,37 +2547,7 @@ export default function TransactionsPage() {
                         "data-sent": tx.forecastFlag ? "true" : "false",
                         "data-ignored": isIgnored ? "true" : "false",
                       }}
-                      metaNode={
-                        tx.forecastFlag ? (
-                          (() => {
-                            // Single-flow restore: forecast-flagged === in the
-                            // Review pipeline. Show the real triage state
-                            // (Matched / Unplanned / In Review) — no separate
-                            // sent_to_review gate, no "Not in review" half-state.
-                            const r = resolutionByTxnId.get(tx.id);
-                            const state =
-                              r?.status === "matched"
-                                ? { attr: "matched", label: "Matched" }
-                                : r?.status === "ignored_unforecasted" ||
-                                    r?.status === "unplanned"
-                                  ? { attr: "unplanned", label: "Unplanned" }
-                                  : {
-                                      attr: "in-review-bucket",
-                                      label: "In Review",
-                                    };
-                            return (
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] font-normal ${CHIP_BASE}`}
-                                data-testid={`badge-forecast-state-${tx.id}`}
-                                data-forecast-state={state.attr}
-                              >
-                                <Inbox className="w-3 h-3 mr-1" /> {state.label}
-                              </Badge>
-                            );
-                          })()
-                        ) : null
-                      }
+                      metaNode={renderForecastChip(tx)}
                       amountNode={
                         <div className="flex flex-col items-end">
                           <InlineAmountEditor
@@ -2577,39 +2568,7 @@ export default function TransactionsPage() {
                       }
                       actionsNode={
                         <>
-                          {tx.forecastFlag ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleToggleForecast(tx)}
-                              disabled={updateTx.isPending}
-                              title="Remove from Forecast"
-                              data-testid={`button-remove-forecast-${tx.id}`}
-                            >
-                              <Send className="w-4 h-4 rotate-180 text-primary" />
-                            </Button>
-                          ) : !canSendToForecast(tx) ? null : tx.categoryId ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleToggleForecast(tx)}
-                              disabled={updateTx.isPending}
-                              title="Send to Forecast"
-                              data-testid={`button-send-forecast-${tx.id}`}
-                            >
-                              <Inbox className="w-4 h-4 text-primary" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled
-                              title="Categorize this transaction first to send it to Forecast"
-                              data-testid={`button-send-forecast-${tx.id}`}
-                            >
-                              <Send className="w-4 h-4 text-muted-foreground/40" />
-                            </Button>
-                          )}
+                          {renderSendForecastAction(tx)}
                           <Button
                             variant="ghost"
                             size="icon"
