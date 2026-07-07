@@ -4138,10 +4138,14 @@ components:
 
     ForecastInsightsSummary:
       type: object
-      required: [headline, bullets, summarySource, generatedAt, source]
+      required: [headline, body, bullets, debtMoves, summarySource, generatedAt, source]
       properties:
         headline: { type: string }
+        body: { type: string }
         bullets:
+          type: array
+          items: { type: string }
+        debtMoves:
           type: array
           items: { type: string }
         summarySource: { type: string, enum: [ai, fallback] }

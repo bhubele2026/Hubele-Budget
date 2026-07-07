@@ -2954,7 +2954,9 @@ export const GetForecastInsightsSummaryQueryParams = zod.object({
 
 export const GetForecastInsightsSummaryResponse = zod.object({
   headline: zod.string(),
+  body: zod.string(),
   bullets: zod.array(zod.string()),
+  debtMoves: zod.array(zod.string()),
   summarySource: zod.enum(["ai", "fallback"]),
   generatedAt: zod.string(),
   source: zod.enum(["cache", "fresh"]),

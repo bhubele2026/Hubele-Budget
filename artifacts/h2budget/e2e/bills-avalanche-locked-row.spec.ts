@@ -136,9 +136,9 @@ test.describe("Bills locked-row affordance + Avalanche deep-link (Task #70)", ()
     expect(url.pathname).toBe("/avalanche");
     expect(url.searchParams.get("focus")).toBe(debtPlaid.id);
 
-    // Avalanche renders and the focused row picks up the highlight ring.
+    // The Future Goal page renders and the focused row picks up the highlight ring.
     await expect(
-      page.getByRole("heading", { name: /^avalanche$/i }),
+      page.getByRole("heading", { name: /^future goal$/i }),
     ).toBeVisible({ timeout: 15_000 });
     const focusedRow = page.getByTestId(`row-debt-${debtPlaid.id}`);
     await expect(focusedRow).toBeVisible();

@@ -72,7 +72,8 @@ const PRIMARY_NAV: NavItem[] = [
   { name: "Bills", href: "/bills", icon: CalendarDays },
   // Forecast primary link lands on the section's Overview tab (Bills precedent).
   { name: "Forecast", href: "/forecast/overview", icon: TrendingUp },
-  { name: "Avalanche", href: "/avalanche", icon: Flame },
+  // Route + testids stay /avalanche; only the display label is "Future Goal".
+  { name: "Future Goal", href: "/avalanche", icon: Flame },
 ];
 
 // Secondary destinations, demoted into the More dropdown. Every route stays
@@ -115,7 +116,7 @@ const BILLS_SUBNAV: NavItem[] = [
 // tab (owner's ask: "one tab, no other"). Same pattern as Banking/Bills: no
 // "More", the way out is the brand/logo → /home.
 const AVALANCHE_SUBNAV: NavItem[] = [
-  { name: "Avalanche", href: "/avalanche", icon: Flame },
+  { name: "Future Goal", href: "/avalanche", icon: Flame },
 ];
 
 // The Forecast area ribbon — Overview (the section landing) · Review · Forecast

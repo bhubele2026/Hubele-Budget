@@ -68,7 +68,7 @@ test.describe("Bills celebratory 'Stops at payoff' row after auto-archive (Task 
     await signInAndOpen(page, email, password, "/avalanche");
 
     await expect(
-      page.getByRole("heading", { name: /^avalanche$/i }),
+      page.getByRole("heading", { name: /^future goal$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
     // Sanity: the debt row is visible before we edit it.

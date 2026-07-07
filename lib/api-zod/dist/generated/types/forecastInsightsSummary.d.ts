@@ -9,7 +9,9 @@ import type { ForecastInsightsSummarySource } from "./forecastInsightsSummarySou
 import type { ForecastInsightsSummarySummarySource } from "./forecastInsightsSummarySummarySource";
 export interface ForecastInsightsSummary {
     headline: string;
+    body: string;
     bullets: string[];
+    debtMoves: string[];
     summarySource: ForecastInsightsSummarySummarySource;
     generatedAt: string;
     source: ForecastInsightsSummarySource;

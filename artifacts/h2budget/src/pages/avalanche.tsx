@@ -609,8 +609,8 @@ export default function AvalanchePage() {
       )}
       {/* Header */}
       <SectionHeader
-        eyebrow="Debt · Avalanche"
-        title="Avalanche"
+        eyebrow="Debt · Future Goal"
+        title="Future Goal"
         sub="Pay the highest interest first. Watch the snowball cascade."
         action={
           <div className="flex gap-2 flex-wrap justify-end">

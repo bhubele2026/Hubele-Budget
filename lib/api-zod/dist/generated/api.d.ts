@@ -6105,7 +6105,9 @@ export declare const GetForecastInsightsSummaryQueryParams: zod.ZodObject<{
 }>;
 export declare const GetForecastInsightsSummaryResponse: zod.ZodObject<{
     headline: zod.ZodString;
+    body: zod.ZodString;
     bullets: zod.ZodArray<zod.ZodString, "many">;
+    debtMoves: zod.ZodArray<zod.ZodString, "many">;
     summarySource: zod.ZodEnum<["ai", "fallback"]>;
     generatedAt: zod.ZodString;
     source: zod.ZodEnum<["cache", "fresh"]>;
@@ -6115,12 +6117,16 @@ export declare const GetForecastInsightsSummaryResponse: zod.ZodObject<{
     generatedAt: string;
     headline: string;
     bullets: string[];
+    body: string;
+    debtMoves: string[];
 }, {
     source: "cache" | "fresh";
     summarySource: "ai" | "fallback";
     generatedAt: string;
     headline: string;
     bullets: string[];
+    body: string;
+    debtMoves: string[];
 }>;
 /**
  * Returns deterministic Spending facts (real spend, excluded buckets,

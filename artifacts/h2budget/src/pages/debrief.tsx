@@ -314,12 +314,17 @@ export default function DebriefPage() {
   const activeWeekStart = useMemo<string | null>(() => {
     if (queryWeek && /^\d{4}-\d{2}-\d{2}$/.test(queryWeek)) return queryWeek;
     if (!weeks.length) return null;
-    const inProgress = weeks.find((w) => w.status === "in_progress");
-    if (inProgress) return inProgress.weekStart;
+    // Land on the ACTIONABLE week — the most recent past week awaiting review,
+    // which is the one the user is meant to work and lock. Landing on the
+    // current in-progress week (the old default) dropped them on a week that
+    // can't be locked yet, which made the weekly ritual feel pointless.
     const sortedAwaiting = weeks
       .filter((w) => w.status === "awaiting_review")
       .sort((a, b) => b.weekStart.localeCompare(a.weekStart));
     if (sortedAwaiting.length) return sortedAwaiting[0].weekStart;
+    // Nothing to review → fall back to the current in-progress week, then newest.
+    const inProgress = weeks.find((w) => w.status === "in_progress");
+    if (inProgress) return inProgress.weekStart;
     const sorted = [...weeks].sort((a, b) =>
       b.weekStart.localeCompare(a.weekStart),
     );

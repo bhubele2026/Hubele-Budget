@@ -1247,7 +1247,7 @@ export default function CommandCenterPage() {
           }
         />
         <DrillCard
-          href="/forecast"
+          href="/forecast/overview"
           eyebrow={<span className="inline-flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" />Forecast</span>}
           value="Runway"
           visual={

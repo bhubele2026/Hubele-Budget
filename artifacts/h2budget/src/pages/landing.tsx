@@ -502,7 +502,7 @@ function ForecastTile() {
   return (
     <TileShell
       testid="forecast"
-      href="/forecast"
+      href="/forecast/overview"
       hue="indigo"
       icon={<LineChart className="h-6 w-6" strokeWidth={1.75} />}
       title="Forecast"
@@ -613,7 +613,7 @@ function AvalancheTile() {
       href="/avalanche"
       hue="amber"
       icon={<Flame className="h-6 w-6" strokeWidth={1.75} />}
-      title="Avalanche"
+      title="Future Goal"
       blurb="Attack the debt — manage the payoff plan and free-by date."
     >
       {/* Never show the amount owed here — payoff PROGRESS only. */}
