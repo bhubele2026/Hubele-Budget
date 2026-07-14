@@ -287,9 +287,20 @@ export async function requireAuth(
   next: NextFunction,
 ): Promise<void> {
   const auth = getAuth(req);
+  // (data-integrity fix) Key household identity on Clerk's CANONICAL stable
+  // user id (`auth.userId`, the `user_…` value), NOT a custom `sessionClaims.
+  // userId` claim. The old precedence (sessionClaims.userId first) let an
+  // unstable/rotating claim value make the same human look like a brand-new
+  // user on different sessions — and since resolveHousehold get-or-creates a
+  // household + full default seed per never-before-seen id, that spawned tens
+  // of thousands of phantom households (the July bloat). `auth.userId` is
+  // guaranteed present + stable per Clerk account, so get-or-create is now
+  // idempotent per person. Fall back to the custom claim only if auth.userId
+  // is somehow absent.
   const actualUserId =
-    (auth?.sessionClaims as { userId?: string } | undefined)?.userId ??
-    auth?.userId;
+    auth?.userId ??
+    (auth?.sessionClaims as unknown as { userId?: string } | undefined)
+      ?.userId;
   if (!actualUserId) {
     res.status(401).json({ error: "Unauthorized" });
     return;

@@ -1,3 +1,18 @@
+-- ⚠️⚠️ DANGER — DO NOT RUN AGAINST PRODUCTION. ⚠️⚠️
+-- This one-time migration turns EVERY distinct user_id (across all
+-- user-scoped tables) into its OWN household. When the requireAuth identity
+-- key churned, that meant it MANUFACTURED tens of thousands of phantom
+-- households from stray/duplicate user ids (the July 2026 bloat). It has
+-- already been applied. Re-running it — especially on prod — will re-amplify
+-- the bloat. Requires an explicit override to run at all:
+--   psql "$DATABASE_URL" -v ALLOW_BACKFILL=1 -f scripts/backfill_households.sql
+\if :{?ALLOW_BACKFILL}
+\else
+\echo '*** REFUSING: backfill_households.sql amplifies household bloat. ***'
+\echo '*** Re-run only with -v ALLOW_BACKFILL=1 against a NON-production DB. ***'
+\quit
+\endif
+
 -- (#623) Shared-household backfill — idempotent, safe to re-run.
 --
 -- Builds the households + household_members tables from the existing
