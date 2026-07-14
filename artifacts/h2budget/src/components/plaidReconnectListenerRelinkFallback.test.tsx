@@ -176,6 +176,7 @@ describe("(#370) PlaidReconnectListener 409→fresh-link fallback (no reconnect 
       expect(runSyncMock).toHaveBeenCalledWith({
         itemId: "item-9",
         silent: true,
+        force: true,
       }),
     );
   });

@@ -5409,6 +5409,12 @@ components:
       type: object
       properties:
         itemId: { type: ["string", "null"] }
+        # When true, forces a billable `/transactions/refresh` before the
+        # free cursor sync so a just-happened pending charge lands
+        # immediately. Omitted / false = cheap cursor-only sync (the
+        # default for the ordinary Sync button). Only set by the explicit
+        # "Force refresh" button and the link/reconnect/re-enable flows.
+        force: { type: boolean }
     PlaidSyncResult:
       type: object
       required: [items]

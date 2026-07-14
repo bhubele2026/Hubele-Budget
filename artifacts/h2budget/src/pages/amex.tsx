@@ -756,7 +756,10 @@ export default function AmexPage() {
     // Sync every Amex-owning Plaid item in scope so multi-card / multi-
     // item households don't get a partial refresh from a single click.
     for (const itemId of relevantPlaidItemIds) {
-      void runSync({ itemId });
+      // This is the deliberate "Refresh from Plaid" action — force a
+      // billable refresh so the live liability balance + pending charges
+      // update. (Currently unwired; keeps intent correct if bound later.)
+      void runSync({ itemId, force: true });
     }
   };
 

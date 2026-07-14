@@ -175,6 +175,12 @@ export function formatSyncErrorDetail(d: SyncErrorDetail): string {
 export type RunSyncOptions = {
   itemId?: string;
   silent?: boolean;
+  // When true, asks the backend to run a billable /transactions/refresh
+  // before the free cursor sync (immediate pending charges). Omit it for
+  // the ordinary Sync button — the backend defaults to the cheap
+  // cursor-only path. Only the explicit "Force refresh" button and the
+  // link/reconnect/re-enable flows should set this.
+  force?: boolean;
 };
 
 export function usePlaidSync() {
@@ -185,10 +191,15 @@ export function usePlaidSync() {
 
   const runSync = useCallback(
     (opts: RunSyncOptions = {}): Promise<SyncTotals> => {
-      const { itemId, silent } = opts;
+      const { itemId, silent, force } = opts;
       return new Promise<SyncTotals>((resolve) => {
         sync.mutate(
-          { data: itemId ? { itemId } : {} },
+          {
+            data: {
+              ...(itemId ? { itemId } : {}),
+              ...(force ? { force: true } : {}),
+            },
+          },
           {
             onSuccess: (res) => {
               const items = res.items ?? [];

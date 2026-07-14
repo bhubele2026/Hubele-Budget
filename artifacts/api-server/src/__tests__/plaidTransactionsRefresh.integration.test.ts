@@ -208,7 +208,7 @@ async function seedHealthyChase(): Promise<{
 }
 
 describe("(#665) /transactions/refresh on user-triggered Sync", () => {
-  it("calls /transactions/refresh before /transactions/sync when forceRefresh=true (manual Sync button)", async () => {
+  it("calls /transactions/refresh before /transactions/sync when body force=true (explicit Force-refresh button)", async () => {
     const { itemRowId, externalAcctId, accessToken } =
       await seedHealthyChase();
     nextSyncResponse = {
@@ -226,11 +226,13 @@ describe("(#665) /transactions/refresh on user-triggered Sync", () => {
       removed: [],
     };
 
-    // Default body — POST /plaid/sync defaults to force=true.
+    // POST /plaid/sync now only refreshes when force=true is passed
+    // (the explicit Force-refresh button / link+reconnect flows). A plain
+    // body takes the free cursor path — see the default-body test below.
     const resp = await fetch(`${baseUrl}/plaid/sync`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ itemId: itemRowId }),
+      body: JSON.stringify({ itemId: itemRowId, force: true }),
     });
     expect(resp.status).toBe(200);
     const body = (await resp.json()) as {
@@ -267,6 +269,24 @@ describe("(#665) /transactions/refresh on user-triggered Sync", () => {
     expect(rows.length).toBe(1);
     expect(rows[0]!.pending).toBe(true);
     expect(rows[0]!.notes).toBeNull();
+  });
+
+  it("does NOT call /transactions/refresh when force is omitted (default = free cursor sync, the plain Sync button)", async () => {
+    // This is the whole point of the July billing fix: an ordinary Sync
+    // click (no `force` in the body) must never bill a /transactions/refresh.
+    const { itemRowId } = await seedHealthyChase();
+    const resp = await fetch(`${baseUrl}/plaid/sync`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId: itemRowId }),
+    });
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as {
+      items: { refreshAttempted?: boolean }[];
+    };
+    expect(refreshCalls.length).toBe(0);
+    expect(syncCalls.length).toBe(1);
+    expect(body.items[0]!.refreshAttempted).toBe(false);
   });
 
   it("does NOT call /transactions/refresh when body force=false (cheap-sync opt-out)", async () => {

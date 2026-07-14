@@ -196,6 +196,7 @@ describe("(#370) PlaidReconnectButton 409→fresh-link fallback (no reconnect lo
       expect(runSyncMock).toHaveBeenCalledWith({
         itemId: "item-1",
         silent: true,
+        force: true,
       }),
     );
   });
@@ -252,6 +253,7 @@ describe("(#794) PlaidReconnectButton auto-recovers when the post-reconnect sync
       expect(runSyncMock).toHaveBeenCalledWith({
         itemId: "item-1",
         silent: true,
+        force: true,
       }),
     );
     // ...came back needing reauth, so the component transparently fell

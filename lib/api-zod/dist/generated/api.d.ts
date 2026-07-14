@@ -12379,10 +12379,13 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
 }>;
 export declare const SyncPlaidTransactionsBody: zod.ZodObject<{
     itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    force: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     itemId?: string | null | undefined;
+    force?: boolean | undefined;
 }, {
     itemId?: string | null | undefined;
+    force?: boolean | undefined;
 }>;
 export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
     items: zod.ZodArray<zod.ZodObject<{

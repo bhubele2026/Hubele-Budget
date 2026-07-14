@@ -2294,16 +2294,19 @@ router.post(
 
 router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
   const { itemId, force } = req.body ?? {};
-  // (#665) This endpoint is the manual "Sync" button (and the post-link
-  // first-sync trigger). Default to a /transactions/refresh before the
-  // cursor sync so newly-authorized pending charges (Venmo, mortgage,
-  // payroll, etc.) land in one click instead of waiting hours for
-  // Plaid's scheduled poll. Callers that intentionally want a cheap
-  // cursor-only sync (e.g. an internal probe) can opt out with body
-  // `{ force: false }`. Anything other than literal `false` keeps the
-  // refresh on so a fat-fingered or absent body never silently
-  // downgrades the user's manual sync.
-  const forceRefresh = force !== false;
+  // (#665, reversed) This endpoint is the manual "Sync" button (and the
+  // post-link first-sync trigger). It now defaults to the FREE
+  // /transactions/sync cursor walk ONLY — no billable /transactions/refresh
+  // — because every plain Sync click was billing Plaid a refresh per linked
+  // bank (the household saw the "Transactions Refresh" counter climb steadily
+  // in July). The cursor sync still returns everything Plaid has already
+  // ingested; it just doesn't force Plaid to re-poll the bank right now.
+  // Callers that genuinely need a fresh upstream pull — linking a bank,
+  // reconnecting one, re-enabling a rate-limited item, or the explicit
+  // "Force refresh" button — opt in with body `{ force: true }`. Only a
+  // literal `true` bills a refresh, so a fat-fingered or absent body always
+  // takes the cheap path.
+  const forceRefresh = force === true;
   try {
     // (#671 follow-up) Always prune orphan Plaid transactions for the
     // household on a manual Sync click — covers the itemId-only path
