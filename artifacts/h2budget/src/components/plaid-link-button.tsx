@@ -326,6 +326,10 @@ export function PlaidLinkButton({
         // every few seconds.
         const totals = await runSync({
           silent: true,
+          // A just-linked bank hasn't been polled yet — force one billable
+          // refresh so the user's first sync shows pending charges instead
+          // of an empty list. One-time per link.
+          force: true,
           ...(justLinkedItemId ? { itemId: justLinkedItemId } : {}),
         });
         if (cancelledRef.current) return;

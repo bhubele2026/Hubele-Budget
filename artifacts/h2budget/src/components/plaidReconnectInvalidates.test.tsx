@@ -66,7 +66,11 @@ describe("(#211) PlaidReconnectButton invalidates debt-consuming queries on reco
 
     // runSync clears the server-side error; we then need to invalidate the
     // queries that drive the banner (it reads off /debts).
-    expect(runSyncMock).toHaveBeenCalledWith({ itemId: "item-1", silent: true });
+    expect(runSyncMock).toHaveBeenCalledWith({
+      itemId: "item-1",
+      silent: true,
+      force: true,
+    });
 
     const invalidatedKeys = invalidateSpy.mock.calls.map(
       (c) => (c[0] as { queryKey: unknown }).queryKey,

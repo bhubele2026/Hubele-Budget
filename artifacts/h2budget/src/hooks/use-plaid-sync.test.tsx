@@ -87,6 +87,31 @@ function Harness() {
   );
 }
 
+// Separate harness that exercises runSync's `force` option so we can pin
+// the request body the mutation sends.
+function ForceHarness() {
+  const { runSync } = usePlaidSync();
+  return (
+    <div>
+      <button data-testid="run-sync-plain" onClick={() => void runSync()}>
+        Sync
+      </button>
+      <button
+        data-testid="run-sync-force"
+        onClick={() => void runSync({ force: true })}
+      >
+        Force
+      </button>
+      <button
+        data-testid="run-sync-item-force"
+        onClick={() => void runSync({ itemId: "row-9", force: true })}
+      >
+        Force item
+      </button>
+    </div>
+  );
+}
+
 function renderHarness() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -105,6 +130,54 @@ beforeEach(() => {
   mutateMock.mockClear();
   dispatchPlaidReconnectMock.mockClear();
   syncResponse = { items: [] };
+});
+
+// The whole point of this task: an ordinary Sync click must NOT bill a
+// Plaid /transactions/refresh. It only does so when a caller explicitly
+// opts in with { force: true } (Force-refresh button, link/reconnect
+// flows). These pin the request body the mutation actually sends.
+describe("usePlaidSync — force plumbing", () => {
+  function renderForceHarness() {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    return render(
+      <QueryClientProvider client={qc}>
+        <ForceHarness />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("omits force from the request body on a plain Sync (backend takes the free cursor path)", () => {
+    renderForceHarness();
+    fireEvent.click(screen.getByTestId("run-sync-plain"));
+    expect(mutateMock).toHaveBeenCalledTimes(1);
+    const vars = mutateMock.mock.calls[0][0] as {
+      data: { itemId?: string; force?: boolean };
+    };
+    expect(vars.data.force).toBeUndefined();
+    expect(vars.data.itemId).toBeUndefined();
+  });
+
+  it("sends force:true when runSync({ force: true }) is called", () => {
+    renderForceHarness();
+    fireEvent.click(screen.getByTestId("run-sync-force"));
+    const vars = mutateMock.mock.calls[0][0] as {
+      data: { itemId?: string; force?: boolean };
+    };
+    expect(vars.data.force).toBe(true);
+    expect(vars.data.itemId).toBeUndefined();
+  });
+
+  it("sends both itemId and force:true when scoped to one item", () => {
+    renderForceHarness();
+    fireEvent.click(screen.getByTestId("run-sync-item-force"));
+    const vars = mutateMock.mock.calls[0][0] as {
+      data: { itemId?: string; force?: boolean };
+    };
+    expect(vars.data.itemId).toBe("row-9");
+    expect(vars.data.force).toBe(true);
+  });
 });
 
 describe("usePlaidSync — empty-fleet toast", () => {

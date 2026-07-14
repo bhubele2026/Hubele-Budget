@@ -2786,6 +2786,7 @@ export interface PlaidItemDetail {
 export interface PlaidSyncInput {
     /** @nullable */
     itemId?: string | null;
+    force?: boolean;
 }
 /**
  * @nullable

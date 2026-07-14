@@ -48,7 +48,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus, GitMerge, ChevronRight, ShieldCheck } from "lucide-react";
+import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus, GitMerge, ChevronRight, ShieldCheck, Zap } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { CoachVoiceCard } from "@/components/coach-voice-card";
@@ -175,9 +175,12 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  const handleSync = (itemId?: string) => {
+  const handleSync = (itemId?: string, opts?: { force?: boolean }) => {
     if (itemId) setSyncingItemId(itemId);
-    void runSync(itemId ? { itemId } : {}).finally(() => {
+    void runSync({
+      ...(itemId ? { itemId } : {}),
+      ...(opts?.force ? { force: true } : {}),
+    }).finally(() => {
       if (itemId) setSyncingItemId((curr) => (curr === itemId ? null : curr));
     });
   };
@@ -936,7 +939,11 @@ export default function SettingsPage() {
                                 await queryClient.invalidateQueries({
                                   queryKey: getListPlaidItemsQueryKey(),
                                 });
-                                await handleSync(item.id);
+                                // Re-enabling a rate-limited/disabled item is
+                                // a deliberate "pull fresh now" action — force
+                                // the billable refresh so it actually recovers
+                                // current data.
+                                await handleSync(item.id, { force: true });
                               } catch (e) {
                                 toast({
                                   title: "Couldn't re-enable refresh",
@@ -990,6 +997,22 @@ export default function SettingsPage() {
                     >
                       <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />
                       Sync
+                    </Button>
+                    {/* Deliberate paid pull. Plain "Sync" now uses Plaid's
+                        free cursor endpoint; this forces a billable
+                        /transactions/refresh for the "a pending charge
+                        hasn't shown up yet" case. Kept off the global header
+                        so it's never fired by muscle memory. */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSync(item.id, { force: true })}
+                      disabled={isAnySyncing}
+                      title="Pulls fresh from your bank — uses a paid Plaid refresh. Use when a pending charge hasn't shown up yet."
+                      data-testid={`button-force-refresh-${item.id}`}
+                    >
+                      <Zap className="w-3.5 h-3.5 mr-1.5" />
+                      Force refresh
                     </Button>
                     <Button
                       variant="ghost"

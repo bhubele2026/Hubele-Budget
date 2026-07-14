@@ -320,7 +320,9 @@ export function PlaidReconnectButton({
     // lastSyncError + lastSyncErrorCode on the server (the success branch of
     // syncPlaidItem). Use silent:true so we don't double up on toasts —
     // the success toast above is enough.
-    const totals = await runSync({ itemId, silent: true });
+    // Just reconnected a broken bank — force one billable refresh so the
+    // freshly re-authorized item pulls current pending charges immediately.
+    const totals = await runSync({ itemId, silent: true, force: true });
     if (cancelledRef.current) return;
     qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
     // (#400) Belt-and-braces refetch so the SyncButton chip + page-top

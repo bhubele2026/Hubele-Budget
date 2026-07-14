@@ -4634,6 +4634,7 @@ export const DismissPlaidExpirationWarningResponse = zod.object({
 
 export const SyncPlaidTransactionsBody = zod.object({
   itemId: zod.string().nullish(),
+  force: zod.boolean().optional(),
 });
 
 export const SyncPlaidTransactionsResponse = zod.object({

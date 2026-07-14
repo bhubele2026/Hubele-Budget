@@ -134,6 +134,9 @@ export function PostLinkProgressBanner({
     try {
       const totals = await runSync({
         silent: true,
+        // First sync after linking — force one billable refresh so pending
+        // charges land immediately (one-time per link).
+        force: true,
         ...(itemId ? { itemId } : {}),
       });
       if (totals.errors.length > 0) {
