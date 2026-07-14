@@ -1,0 +1,79 @@
+# Render deployment for H2 Budget (migrated off Replit).
+#
+# ONE always-on Web Service that serves both the built SPA
+# (artifacts/h2budget/dist/public, served by Express — see app.ts) and the
+# /api routes, plus a Render-managed Postgres. Single instance because the
+# in-process node-cron jobs (index.ts) must not double-fire; do NOT switch to
+# autoscale or scale numInstances > 1 without moving those crons to a Render
+# Cron Job first. The billable Plaid auto-sync is hard-disabled in code
+# (AUTO_SYNC_HARD_DISABLED = true) regardless.
+#
+# Toolchain mirrors CI (.github/workflows/ci.yml): Node 24, pnpm 10.34.3,
+# the .npmrc strict-dep-builds/verify-deps accommodations, --frozen-lockfile.
+databases:
+  - name: h2budget-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: h2budget
+    runtime: node
+    plan: starter
+    region: oregon
+    numInstances: 1
+    healthCheckPath: /api/healthz
+    autoDeploy: true
+    buildCommand: >-
+      corepack enable &&
+      corepack prepare pnpm@10.34.3 --activate &&
+      printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc &&
+      pnpm install --frozen-lockfile &&
+      pnpm run build
+    startCommand: node artifacts/api-server/dist/index.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      # Build-time: Vite `base` (vite.config.ts throws if unset when serving).
+      - key: BASE_PATH
+        value: /
+      - key: CI
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: h2budget-db
+          property: connectionString
+      - key: PLAID_ENV
+        value: production
+      - key: PLAID_OPTIONAL_PRODUCTS_CSV
+        value: liabilities
+      - key: OWNER_EMAIL
+        value: h2hubele@gmail.com
+      # --- set in the Render dashboard / via API (never in git) ---
+      # Host-derived (set after first deploy assigns the onrender.com host):
+      - key: APP_URL # https://<host>.onrender.com
+        sync: false
+      - key: PLAID_WEBHOOK_URL # https://<host>/api/plaid/webhook
+        sync: false
+      - key: PLAID_REDIRECT_URI # https://<host>/plaid-oauth
+        sync: false
+      # Build-time (baked into the web bundle — rebuild to change):
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
+      # Server secrets (restart to roll):
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: PLAID_CLIENT_ID
+        sync: false
+      - key: PLAID_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM_EMAIL
+        sync: false

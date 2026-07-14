@@ -1,4 +1,7 @@
 import express, { type Express } from "express";
+import path from "node:path";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -109,5 +112,48 @@ app.use(
 );
 
 app.use("/api", router);
+
+// (Render migration) Serve the built SPA from the same origin as the API.
+// On Replit the web ran as a separate Vite process and the platform router
+// unified the two ports; Render is a single Web Service, so Express must
+// serve `artifacts/h2budget/dist/public` itself. The web calls the API with
+// same-origin relative `/api` + credentialed Clerk cookies, so co-serving is
+// exactly what the client already assumes. Guarded on the dist existing so
+// local dev (Vite dev server, no build) and tests are untouched.
+//
+// WEB_DIST_DIR overrides the location; the default resolves the built web
+// relative to this bundle: at runtime this file is bundled to
+// artifacts/api-server/dist/index.mjs, so ../../h2budget/dist/public.
+const webDistDir =
+  process.env.WEB_DIST_DIR ??
+  path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../h2budget/dist/public",
+  );
+const webIndexHtml = path.join(webDistDir, "index.html");
+
+if (existsSync(webIndexHtml)) {
+  // Hashed asset files (…-[hash].js/css) are immutable — cache hard. index.html
+  // is the version pointer, so it must never be cached (the in-app poller
+  // compares build ids and prompts a reload after each deploy).
+  app.use(
+    express.static(webDistDir, {
+      index: false,
+      maxAge: "1y",
+      setHeaders: (res, filePath) => {
+        if (filePath === webIndexHtml) {
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      },
+    }),
+  );
+
+  // SPA fallback for client-side routes. The negative lookahead keeps this
+  // from swallowing `/api/*` (those must 404 as JSON, not the HTML shell).
+  app.get(/^(?!\/api\/).*/, (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
+    res.sendFile(webIndexHtml);
+  });
+}
 
 export default app;
