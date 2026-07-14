@@ -151,7 +151,13 @@ export function PlaidReconnectListener() {
         ? `Re-authenticated ${detail.institutionName}. Refreshing transactions…`
         : "Re-authenticated your bank. Refreshing transactions…",
     });
-    const totals = await runSync({ itemId: detail.itemId, silent: true });
+    // Re-auth just completed — force one billable refresh so the reconnected
+    // bank pulls current pending charges immediately.
+    const totals = await runSync({
+      itemId: detail.itemId,
+      silent: true,
+      force: true,
+    });
     if (cancelledRef.current) return;
     qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
     qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });

@@ -9,4 +9,5 @@
 export interface PlaidSyncInput {
   /** @nullable */
   itemId?: string | null;
+  force?: boolean;
 }

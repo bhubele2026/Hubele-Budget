@@ -8,5 +8,6 @@
 export interface PlaidSyncInput {
     /** @nullable */
     itemId?: string | null;
+    force?: boolean;
 }
 //# sourceMappingURL=plaidSyncInput.d.ts.map
