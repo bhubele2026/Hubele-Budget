@@ -369,6 +369,34 @@ app.listen(port, (err) => {
     logger.info("Plaid daily consent refresh scheduled");
     } // end if (autoSyncEnabled)
 
+    // (#plaid-free-pending) FREE scheduled cursor-sync backstop.
+    // DELIBERATELY placed OUTSIDE the `autoSyncEnabled` block and gated on
+    // its OWN dedicated env flag so it can NEVER re-arm the billable
+    // */10 forced-refresh loop above (that loop is the one that caused the
+    // ~$500/mo bill and stays hard-disabled). This calls syncAllForAllUsers()
+    // with NO args → forceRefresh stays false → ONLY the free
+    // /transactions/sync runs, never /transactions/refresh. It's a safety
+    // net so newly-authorized pending charges still land even if a Plaid
+    // SYNC_UPDATES_AVAILABLE webhook is missed. Free regardless of cadence;
+    // defaults to every 3 hours.
+    if (process.env.PLAID_FREE_CURSOR_SYNC_ENABLED === "true") {
+      const freeCursorCron =
+        process.env.PLAID_FREE_CURSOR_SYNC_CRON || "0 */3 * * *";
+      cron.schedule(freeCursorCron, () => {
+        // No opts → free /transactions/sync only. NEVER pass forceRefresh here.
+        syncAllForAllUsers().catch((err) => {
+          logger.error(
+            { err },
+            "[plaid-sync] free cursor-sync backstop failed",
+          );
+        });
+      });
+      logger.info(
+        { cron: freeCursorCron },
+        "Plaid FREE cursor-sync backstop scheduled (no billable refresh)",
+      );
+    }
+
     // (#369) Daily malformed access_token sweep. The boot-time scan
     // (`flagMalformedAccessTokens` above) only runs on server restart,
     // and the per-call guards in sync / liabilities / consent refresh
