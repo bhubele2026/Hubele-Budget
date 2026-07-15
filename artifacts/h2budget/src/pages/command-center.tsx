@@ -31,7 +31,6 @@ import { SyncButton } from "@/components/sync-button";
 import {
   useGetForecast,
   useGetDashboard,
-  useGetAdvisorNudge,
   useGetSettings,
   useListTransactions,
   useListRecurringItems,
@@ -81,7 +80,6 @@ import { SectionHeader, Callout } from "@/components/stat";
 import { BudgetHealthCard } from "@/components/budget-health-card";
 import { SpenderSpotlight } from "@/components/spender-spotlight";
 import { WallOfShame } from "@/components/wall-of-shame";
-import { SubscriptionInsightsSection } from "@/components/subscription-insights";
 import { BankingInsights } from "@/components/banking-insights";
 import { PillBadge } from "@/components/pill-badge";
 import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@/components/viz";
@@ -94,7 +92,6 @@ import { MonthlyWrapped } from "@/components/monthly-wrapped";
 import { Confetti } from "@/components/confetti";
 import { PaceGauge } from "@/components/pace-gauge";
 import { SpendScoreboard } from "@/components/spend-scoreboard";
-import { SpendStorySection } from "@/components/spend-story";
 
 const MIX_COLORS = [
   "hsl(var(--chart-1))",
@@ -330,7 +327,6 @@ function PeriodPager({
 export default function CommandCenterPage() {
   const { data: forecast } = useGetForecast({ days: 90 });
   const { data: dash } = useGetDashboard();
-  const { data: nudge } = useGetAdvisorNudge();
   const { data: settings } = useGetSettings();
   const { data: categories } = useListCategories();
   const nowRef = new Date();
@@ -922,14 +918,6 @@ export default function CommandCenterPage() {
     return out;
   }, [netMonth, income, spend, lowPoint, weekView]);
 
-  const nudgeMsg = nudge?.enabled && nudge.message ? nudge.message : null;
-  const nudgeTone =
-    nudge?.severity === "alert"
-      ? "danger"
-      : nudge?.severity === "warn"
-        ? "warning"
-        : "info";
-
   // Daily check-in streak — consecutive days the app was opened.
   useEffect(() => {
     const KEY = "h2:open-streak:v1";
@@ -988,7 +976,7 @@ export default function CommandCenterPage() {
       <SectionHeader
         eyebrow={`${greeting}, ${who}`}
         title="Where things stand"
-        sub="How you’re spending, right now — this week, this month, cash and net."
+        sub="This week, this month, cash and net."
       />
       <StatTileRow>
         {/* A) This week (Sun–Sat) discretionary spend, ◀ ▶ to cycle weeks.
@@ -1110,23 +1098,9 @@ export default function CommandCenterPage() {
         />
       </StatTileRow>
 
-      {/* ── Spending story — four minimal graphics (household-wide Amex + Chase)
-             that expand in place to Fable 5's read. Just the graphic; click to
-             get the analysis. Numbers are server-computed; Fable writes the
-             language. ──────────────────────────────────────────────────────── */}
-      <SpendStorySection />
-
-      {/* ── The four insight buckets — going well / could improve / cancel /
-             paying-for-but-not-budgeted. Numbers computed here from data the
-             page already loads; AI writes only the captions. ─────────────── */}
+      {/* ── The four insight buckets — merchant movement (spending less /
+             creeping up / cancel / new). Server-computed figures only. ────── */}
       <BankingInsights />
-
-      {/* ── What to CANCEL — auto-detected recurring subscriptions ───────── */}
-      <SubscriptionInsightsSection
-        recurringItems={recurringItemsData}
-        txns={weeklyTxns}
-        catNameById={catNameById}
-      />
 
       {/* ── What to STOP BUYING — one roast surface (consolidated) ───────── */}
       <WallOfShame transactions={weeklyTxns ?? []} recurringNames={recurringNames} />

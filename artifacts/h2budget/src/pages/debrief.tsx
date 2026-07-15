@@ -15,7 +15,6 @@ import {
   Send,
   Loader2,
   Sparkles,
-  MessageSquare,
   Flame,
 } from "lucide-react";
 import {
@@ -23,7 +22,6 @@ import {
   useGetWeeklyDebrief,
   useLockWeeklyDebrief,
   useUnlockWeeklyDebrief,
-  useGenerateWeeklyDebriefSummary,
   useUpsertForecastResolution,
   useCreateRecurringItem,
   useSendTransactionsToReview,
@@ -46,9 +44,7 @@ import type {
   WeeklyDebriefTxnItem,
   WeeklyDebriefCategoryBucket,
   WeeklyDebriefSnapshot,
-  WeeklyDebriefAdvisorSummary,
 } from "@workspace/api-client-react";
-import { openAdvisorChatWithContext } from "@/lib/advisorChatBridge";
 import type { RecurringItemInput } from "@workspace/api-zod";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1034,22 +1030,8 @@ function DebriefPageActive({
               />
             </div>
 
-            {/* RIGHT — Fable 5 takeaway, net-trend, and a small summary. */}
+            {/* RIGHT — net-trend and a compact summary. */}
             <div className="space-y-3">
-              {viewMode === "month" ? (
-                <MonthTakeawaysCard
-                  monthLabelText={monthLabel(month)}
-                  results={monthDetailResults}
-                />
-              ) : (
-                (detail!.advisorSummary || isLocked) && (
-                  <AdvisorTakeawayCard
-                    weekStart={activeWeekStart}
-                    summary={detail!.advisorSummary ?? null}
-                  />
-                )
-              )}
-
               <NetTrendCard
                 weeks={trendWeeks}
                 activeWeekStart={activeWeekStart}
@@ -2570,252 +2552,3 @@ function MonthWeeksStrip({
   );
 }
 
-// =====================================================================
-// Fable 5 — advisor takeaway (Week view)
-// =====================================================================
-
-function AdvisorTakeawayCard({
-  weekStart,
-  summary,
-}: {
-  weekStart: string;
-  summary: WeeklyDebriefAdvisorSummary | null;
-}) {
-  const queryClient = useQueryClient();
-  const generate = useGenerateWeeklyDebriefSummary();
-  const { toast } = useToast();
-
-  const handleGenerate = (label: string) => {
-    generate.mutate(
-      { weekStart },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({
-            queryKey: getGetWeeklyDebriefQueryKey(weekStart),
-          });
-          toast({ title: label });
-        },
-        onError: (err) =>
-          toast({
-            title: "Couldn't generate takeaway",
-            description: (err as Error).message,
-            variant: "destructive",
-          }),
-      },
-    );
-  };
-
-  const openChat = () => {
-    const contextLines = summary
-      ? [
-          `Locked week of ${weekStart}.`,
-          `Headline: ${summary.headline}`,
-          ...summary.bullets.map((b) => `- ${b}`),
-        ].join("\n")
-      : `Locked week of ${weekStart}. (No advisor summary stored.)`;
-    openAdvisorChatWithContext({
-      weekStart,
-      contextBlock: contextLines,
-      prompt: "Help me dig deeper into this week — what should I focus on?",
-    });
-  };
-
-  if (!summary) {
-    return (
-      <Card data-testid="card-advisor-takeaway">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
-            Fable 5 takeaway
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            No takeaway saved for this week yet.
-          </p>
-          <Button
-            size="sm"
-            onClick={() => handleGenerate("Takeaway generated")}
-            disabled={generate.isPending}
-            data-testid="button-advisor-generate"
-          >
-            {generate.isPending ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                Generating…
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                Generate takeaway
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const isFallback = summary.source === "fallback";
-  return (
-    <Card data-testid="card-advisor-takeaway">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
-            Fable 5 takeaway
-            {isFallback && (
-              <Badge variant="outline" className="text-[10px] font-normal">
-                template
-              </Badge>
-            )}
-          </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleGenerate("Fresh takeaway generated")}
-            disabled={generate.isPending}
-            data-testid="button-advisor-regenerate"
-            title="Regenerate takeaway"
-          >
-            {generate.isPending ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <RefreshCcw className="w-3.5 h-3.5" />
-            )}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p
-          className="text-sm font-semibold leading-snug"
-          data-testid="text-advisor-headline"
-        >
-          {summary.headline}
-        </p>
-        {summary.bullets.length > 0 && (
-          <ul className="text-sm space-y-1 list-disc pl-5 text-foreground/90">
-            {summary.bullets.map((b, i) => (
-              <li key={i} data-testid={`text-advisor-bullet-${i}`}>
-                {b}
-              </li>
-            ))}
-          </ul>
-        )}
-        {summary.suggestions.length > 0 && (
-          <div className="border-t pt-3 space-y-1.5">
-            {summary.suggestions.map((s, i) => (
-              <div
-                key={i}
-                className="text-sm flex items-start gap-2 text-foreground/90"
-                data-testid={`text-advisor-suggestion-${i}`}
-              >
-                <span className="text-primary mt-0.5">→</span>
-                <span>{s.text}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-xs text-muted-foreground">
-            Generated {new Date(summary.generatedAt).toLocaleString()}
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={openChat}
-            data-testid="button-advisor-dig-deeper"
-          >
-            <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
-            Dig deeper
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// Month view: roll up each locked week's advisor headline (existing text,
-// no new numbers) into one Fable 5 panel for the month.
-function MonthTakeawaysCard({
-  monthLabelText,
-  results,
-}: {
-  monthLabelText: string;
-  results: Array<{ data?: WeeklyDebriefDetail }>;
-}) {
-  const items = results
-    .map((r) => r.data)
-    .filter((d): d is WeeklyDebriefDetail => !!d?.advisorSummary)
-    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
-
-  if (items.length === 0) {
-    return (
-      <div data-testid="card-month-takeaways-empty">
-        <Callout icon={<Sparkles className="h-4 w-4" />} tone="info">
-          Lock the weeks in {monthLabelText} to bank a Fable 5 takeaway for each
-          — they'll roll up here.
-        </Callout>
-      </div>
-    );
-  }
-
-  return (
-    <Card data-testid="card-month-takeaways">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-primary" />
-          Fable 5 · {monthLabelText}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2.5">
-        {items.map((d) => (
-          <MonthTakeawayItem key={d.weekStart} detail={d} />
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-// One week's headline in the month roll-up — the bullets stay tucked behind an
-// expand so the month view reads as a scannable list of headlines.
-function MonthTakeawayItem({ detail }: { detail: WeeklyDebriefDetail }) {
-  const [open, setOpen] = useState(false);
-  const summary = detail.advisorSummary!;
-  const hasBullets = summary.bullets.length > 0;
-  return (
-    <Collapsible
-      open={open}
-      onOpenChange={setOpen}
-      className="border-l-2 border-primary/30 pl-3"
-      data-testid={`month-takeaway-${detail.weekStart}`}
-    >
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        Week of {shortWeekChipLabel(detail.weekStart)}
-      </div>
-      <CollapsibleTrigger
-        className="flex w-full items-start gap-1.5 text-left disabled:cursor-default"
-        disabled={!hasBullets}
-      >
-        {hasBullets && (
-          <ChevronRight
-            className={cn(
-              "mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-              open && "rotate-90",
-            )}
-          />
-        )}
-        <p className="text-sm font-medium leading-snug">{summary.headline}</p>
-      </CollapsibleTrigger>
-      {hasBullets && (
-        <CollapsibleContent>
-          <ul className="mt-1 text-xs space-y-0.5 list-disc pl-4 text-muted-foreground">
-            {summary.bullets.map((b, i) => (
-              <li key={i}>{b}</li>
-            ))}
-          </ul>
-        </CollapsibleContent>
-      )}
-    </Collapsible>
-  );
-}

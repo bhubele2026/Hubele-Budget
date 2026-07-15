@@ -101,7 +101,6 @@ import {
 } from "@/components/account-page";
 import { AmexLogo } from "@/components/brand-logos";
 import { AmexCardBand } from "@/components/amex-card-band";
-import { AiInsightBar } from "@/components/ai-insight-bar";
 import { SectionHeader } from "@/components/stat";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { currentWeekRange, type RangeMode } from "@/lib/timeRange";
@@ -1837,7 +1836,6 @@ export default function AmexPage() {
         <SectionHeader eyebrow="Cards" title="Per-card · this week" />
         <AmexCardBand selected={cardFilter} onSelect={setCardFilter} />
       </div>
-      <AiInsightBar />
 
       <BalanceTrendChart
         caption="Ending balance — forward 12 months"

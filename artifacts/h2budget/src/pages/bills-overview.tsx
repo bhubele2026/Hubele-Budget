@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ArrowUpCircle, ArrowDownCircle, Sparkles, Repeat, Wallet } from "lucide-react";
+import { ArrowUpCircle, ArrowDownCircle, Repeat, Wallet } from "lucide-react";
 import {
   useGetBillsSummary,
   getGetBillsSummaryQueryKey,
@@ -7,7 +7,7 @@ import {
   getGetBillsInsightsSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { SectionHeader, RingMeter, Callout } from "@/components/stat";
+import { SectionHeader, RingMeter } from "@/components/stat";
 import { MiniBars, StackBar } from "@/components/viz";
 import { StatTile } from "@/components/stat-tile";
 import { formatCurrency } from "@/lib/utils";
@@ -63,28 +63,6 @@ export default function BillsOverviewPage() {
         title="Overview"
         sub="Your month at a glance — income in, bills out, and where to save."
       />
-
-      {/* Fable 5 savings read */}
-      <Callout
-        tone={net >= 0 ? "good" : "warning"}
-        icon={<Sparkles className="h-4 w-4" />}
-      >
-        <div className="space-y-1.5">
-          <div className="text-[15px] font-bold tracking-tight leading-snug">
-            {insight?.headline ?? "Reading your bills…"}
-          </div>
-          {insight?.bullets?.length ? (
-            <ul className="space-y-1 text-[13px] font-normal text-muted-foreground">
-              {insight.bullets.map((b, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-current opacity-50" />
-                  <span className="leading-snug">{b}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      </Callout>
 
       {/* Hero KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

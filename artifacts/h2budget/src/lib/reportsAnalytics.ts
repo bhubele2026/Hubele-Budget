@@ -35,7 +35,7 @@ export const CHART_SERIES: string[] = [
   "hsl(var(--chart-4))",
   "hsl(var(--chart-2))",
   "hsl(var(--chart-3))",
-  "hsl(var(--negative))",
+  "hsl(var(--chart-2) / 0.7)",
   "hsl(var(--chart-1) / 0.55)",
   "hsl(var(--chart-5) / 0.55)",
   "hsl(var(--chart-4) / 0.6)",

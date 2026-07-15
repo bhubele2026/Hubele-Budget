@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   useListTransactions,
   useListCategories,
@@ -11,24 +11,14 @@ import {
   useGetForecastCashSignal,
   useGetDashboard,
   useListPlaidLiabilityAccounts,
-  useGetReportsAdvisorSummary,
-  getReportsAdvisorSummary,
-  getGetReportsAdvisorSummaryQueryKey,
   type ForecastBundle,
-  type GetReportsAdvisorSummaryParams,
-  type GetReportsAdvisorSummaryTab,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, PiggyBank, CreditCard, TrendingDown, RefreshCcw } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { PiggyBank, CreditCard, TrendingDown } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { rangeForMode, rangeDays as rangeDaysOf, type RangeMode } from "@/lib/timeRange";
 import { DrillBreadcrumb } from "@/components/drill-breadcrumb";
-import { AiInsightBar } from "@/components/ai-insight-bar";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
   resolveAmexRevolvingBalance,
@@ -152,128 +142,6 @@ export function useReportsData(rangeDays: number, monthOffset: number) {
     prevRangeTxns,
     budgetMonthStart,
   };
-}
-
-/**
- * Per-page Claude narrative. Opt-in (LLM call is billable) so opening a
- * report page is instant + free until the user asks for the read.
- */
-export function AdvisorSummaryCard({
-  tab,
-  rangeDays,
-  monthOffset,
-}: {
-  tab: GetReportsAdvisorSummaryTab;
-  rangeDays: number;
-  monthOffset: number;
-}) {
-  const queryClient = useQueryClient();
-  const [refreshing, setRefreshing] = useState(false);
-  const [show, setShow] = useState(false);
-
-  const params: GetReportsAdvisorSummaryParams = useMemo(
-    () => ({ tab, rangeDays, monthOffset }),
-    [tab, rangeDays, monthOffset],
-  );
-  const { data, isLoading } = useGetReportsAdvisorSummary(params, {
-    query: {
-      enabled: show,
-      queryKey: getGetReportsAdvisorSummaryQueryKey(params),
-    },
-  });
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      const fresh = await getReportsAdvisorSummary({ ...params, refresh: "true" });
-      queryClient.setQueryData(getGetReportsAdvisorSummaryQueryKey(params), fresh);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  // Collapsed = a slim one-line prompt, not a big empty card (no dead space).
-  if (!show) {
-    return (
-      <div
-        className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[0.03] px-4 py-2.5"
-        data-testid={`card-advisor-${tab}`}
-      >
-        <span className="text-sm font-medium text-muted-foreground">
-          What this means — get the blunt read on these numbers.
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShow(true)}
-          data-testid={`button-advisor-generate-${tab}`}
-        >
-          Explain
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <Card data-testid={`card-advisor-${tab}`} className="border-primary/20 bg-primary/[0.03]">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            What this means
-            {data?.summarySource === "fallback" && (
-              <Badge variant="outline" className="text-[10px] font-normal">
-                template
-              </Badge>
-            )}
-          </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={!show || refreshing || isLoading}
-            data-testid={`button-advisor-refresh-${tab}`}
-            title="Regenerate"
-            aria-label="Regenerate"
-          >
-            {refreshing ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <RefreshCcw className="w-3.5 h-3.5" />
-            )}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {isLoading || !data ? (
-          <p className="text-sm text-muted-foreground flex items-center gap-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            Reading your numbers…
-          </p>
-        ) : (
-          <>
-            <p
-              className="text-sm font-semibold leading-snug"
-              data-testid={`text-advisor-headline-${tab}`}
-            >
-              {data.headline}
-            </p>
-            {data.bullets.length > 0 && (
-              <ul className="text-sm space-y-1 list-disc pl-5 text-foreground/90">
-                {data.bullets.map((b, i) => (
-                  <li key={i} data-testid={`text-advisor-bullet-${tab}-${i}`}>
-                    {b}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <span className="text-xs text-muted-foreground block pt-1">
-              Generated {new Date(data.generatedAt).toLocaleString()}
-            </span>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
 }
 
 /** Four at-a-glance balance tiles — the household's live vitals. */
@@ -440,7 +308,6 @@ export function ReportShell({
         <p className="text-muted-foreground mt-1 text-sm">{blurb}</p>
         <div className="border-t border-border mt-5" />
       </div>
-      <AiInsightBar />
       {children}
     </div>
   );

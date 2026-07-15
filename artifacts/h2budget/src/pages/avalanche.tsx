@@ -79,7 +79,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { Trash2, Plus, RefreshCw, Flame, TrendingDown, PartyPopper, X, ClipboardPaste, Sparkles } from "lucide-react";
+import { Trash2, Plus, RefreshCw, Flame, TrendingDown, PartyPopper, X, ClipboardPaste } from "lucide-react";
 import {
   DebtPlaidActions,
   DebtLastSynced,
@@ -1091,7 +1091,7 @@ export default function AvalanchePage() {
                 { value: "snowball", label: "Snowball", sub: "Smallest balance first" },
               ]}
             />
-            <Callout tone="info" icon={<Sparkles className="h-4 w-4" />}>
+            <Callout tone="info" icon={<TrendingDown className="h-4 w-4" />}>
               <span className="font-normal text-muted-foreground">
                 {bothInfinite ? (
                   <>

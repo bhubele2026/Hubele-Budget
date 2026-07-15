@@ -48,7 +48,6 @@ import {
   Label as RechartsLabel,
 } from "recharts";
 import { DeltaPill, Sparkline, StackBar, RingStat, MoneyText } from "@/components/viz";
-import { AiInsightBar } from "@/components/ai-insight-bar";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { PillBadge } from "@/components/pill-badge";
 import { SectionHeader, Callout } from "@/components/stat";
@@ -2015,8 +2014,6 @@ export default function ForecastPage({
       </div>
 
       {mode === "overall" && (<>
-      {/* Sassy AI one-liner */}
-      <AiInsightBar />
       {/* KPI tiles — each carries a real visual, not just a number. */}
       {(() => {
         const balSeries = dailySeries.map((d) => d.balance);

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   useReportsData,
-  AdvisorSummaryCard,
   ReportShell,
   ReportsRangeControls,
   daysForMode,
@@ -29,7 +28,6 @@ export default function CashFlowPage() {
         compareToPrev={compareToPrev}
         setCompareToPrev={setCompareToPrev}
       />
-      <AdvisorSummaryCard tab="cashflow" rangeDays={rangeDays} monthOffset={0} />
       <CashFlowSection
         txns={d.rangeTxns}
         prevTxns={d.prevRangeTxns}
