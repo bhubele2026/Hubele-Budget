@@ -1906,20 +1906,19 @@ router.post("/plaid/webhook", async (req, res): Promise<void> => {
       // already in-flight. The handler returns 200 immediately — the sync
       // runs in the background.
       //
-      // Gated by PLAID_AUTO_SYNC_ENABLED (default OFF): a webhook-driven
-      // pull is still an automatic pull, and Plaid bills per pull. With
-      // the flag off we just ACK the webhook (200 below) and the user's
-      // next manual Sync click picks up the waiting updates. Set the env
-      // var to "true" to restore webhook-triggered background syncing.
-      // (#plaid-bill) HARD-DISABLED to match the cost kill-switch in
-      // index.ts. A webhook-driven pull is still an automatic (billable)
-      // pull, so we only ACK the webhook here; the user's next manual
-      // Sync click picks up whatever Plaid has waiting. The env var is
-      // intentionally ignored so a forgotten Secret can't re-enable it.
-      req.log?.info(
-        { item_id, webhook_code },
-        "[plaid-webhook] auto-sync hard-disabled — ACKing without scheduling a pull",
-      );
+      // (#plaid-free-pending) Hand off to the per-item scheduler, which
+      // debounces Plaid's burst of SYNC_UPDATES_AVAILABLE webhooks into a
+      // single run and calls syncPlaidItemSerialized WITHOUT forceRefresh —
+      // i.e. the FREE /transactions/sync only, NEVER the billable
+      // /transactions/refresh. Plaid fires these webhooks for free when it
+      // ingests new data (including pending charges), so this is the
+      // zero-cost way to surface pending automatically. Returns 200 below
+      // immediately; the sync runs in the background.
+      //
+      // NOTE: the ~$500/mo incident was the every-10-min BILLABLE forced-
+      // refresh cron in index.ts (forceRefresh:true), which stays disabled.
+      // This path never passes forceRefresh, so it cannot bill a refresh.
+      scheduleSyncForItem(item.userId, item.id);
     }
   } else if (webhook_type === "ITEM") {
     if (webhook_code === "ERROR") {
