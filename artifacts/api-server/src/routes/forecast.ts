@@ -815,9 +815,9 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
         options: { account_ids: [acct.accountId] },
       });
       const a = resp.data.accounts.find((x) => x.account_id === acct.accountId);
-      // (#balance) CURRENT (posted) balance, not `available` — pending charges
-      // are in the ledger, so `available` (pending pre-subtracted) double-counts.
-      const live = a?.balances.current ?? a?.balances.available;
+      // `available` = Chase's Available/Present balance (what the owner sees);
+      // fall back to `current` (posted) only when available is null.
+      const live = a?.balances.available ?? a?.balances.current;
       if (live == null) {
         // Task #546 — mirror the structured `no_balance` body that
         // /forecast/refresh-bank returns (Task #385) so the Forecast
@@ -984,9 +984,9 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
       options: { account_ids: [acct.accountId] },
     });
     const a = resp.data.accounts.find((x) => x.account_id === acct.accountId);
-    // (#balance) CURRENT (posted) balance, not `available` — pending charges
-    // are in the ledger, so `available` (pending pre-subtracted) double-counts.
-    const live = a?.balances.current ?? a?.balances.available;
+    // `available` = Chase's Available/Present balance (what the owner sees);
+    // fall back to `current` (posted) only when available is null.
+    const live = a?.balances.available ?? a?.balances.current;
     if (live == null) {
       // Task #385 — distinguish the "this Plaid account doesn't expose
       // a refreshable balance" case (e.g. brokerage sub-accounts) from

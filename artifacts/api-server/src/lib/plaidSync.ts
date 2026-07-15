@@ -1955,12 +1955,12 @@ export async function syncPlaidItem(
         const acct = resp.data.accounts.find(
           (a) => a.account_id === checkingPlaidAccountId,
         );
-        // (#balance) Anchor on the CURRENT (posted) balance, not `available`.
-        // Pending charges are stored as ledger transactions, so the forecast
-        // already deducts them going forward — anchoring on `available` (which
-        // has pending pre-subtracted) would double-count them. Current also
-        // matches what the bank shows as the account balance.
-        const live = acct?.balances.current ?? acct?.balances.available;
+        // Anchor on `available` (Chase's "Available/Present balance" — what the
+        // account owner actually sees as their balance), falling back to
+        // `current` (posted ledger) only when available is null. (Reverts a
+        // wrong change that used `current`, which shows the pre-pending posted
+        // number the bank does NOT present as the balance.)
+        const live = acct?.balances.available ?? acct?.balances.current;
         if (live != null) {
           await db
             .update(forecastSettingsTable)
