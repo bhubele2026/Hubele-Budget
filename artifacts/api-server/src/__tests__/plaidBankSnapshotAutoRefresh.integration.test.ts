@@ -212,10 +212,9 @@ describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
       .from(forecastSettingsTable)
       .where(eq(forecastSettingsTable.userId, TEST_USER));
     expect(settings).toBeDefined();
-    // (#balance) Prefers `current` (posted) over `available`. Pending charges
-    // are in the ledger, so anchoring on `available` (pending pre-subtracted)
-    // would double-count them; `current` matches the bank's posted balance.
-    expect(settings!.bankSnapshotBalance).toBe("4500.00");
+    // Prefers `available` (the balance the bank presents to the owner) over
+    // `current` (posted ledger). Mock: available 4321 / current 4500 → 4321.
+    expect(settings!.bankSnapshotBalance).toBe("4321.00");
     expect(settings!.bankSnapshotSource).toBe("plaid");
     expect(settings!.bankSnapshotAt).toBeInstanceOf(Date);
     expect(settings!.bankSnapshotAt!.getTime()).toBeGreaterThanOrEqual(
