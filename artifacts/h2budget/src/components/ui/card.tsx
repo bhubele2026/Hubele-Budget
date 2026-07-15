@@ -9,10 +9,10 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // (Final wrapper) Quiet depth baked into every Card app-wide — a soft
-      // shadow + smooth transition so hover/press on interactive wrappers reads
-      // premium. Square identity unchanged.
-      "glass-surface rounded-2xl bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color,transform] duration-200",
+      // Quiet depth baked into every Card app-wide — rests on a soft shadow and
+      // lifts with a deeper shadow + subtle rise on hover for a premium, tactile
+      // feel. Respects reduced-motion (no translate). Rounded via --radius-2xl.
+      "glass-surface rounded-2xl bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color,transform] duration-200 hover:shadow-md motion-safe:hover:-translate-y-0.5 motion-reduce:transform-none",
       className
     )}
     {...props}
