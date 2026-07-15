@@ -73,7 +73,7 @@ function Tile({
         onMouseEnter={() => prefetchRoute(href)}
         onFocus={() => prefetchRoute(href)}
         aria-label={title}
-        className="group flex flex-1 flex-col rounded-lg border border-card-border bg-card p-5 transition-colors hover:border-primary/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:p-6"
+        className="group flex flex-1 flex-col rounded-xl border border-card-border bg-card p-5 shadow-sm transition-[box-shadow,border-color,transform] duration-200 hover:border-primary/50 hover:shadow-md motion-safe:hover:-translate-y-0.5 motion-reduce:transform-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:p-6"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-muted/40 text-muted-foreground">

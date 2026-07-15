@@ -78,14 +78,14 @@
   --font-mono: var(--app-font-mono);
   --font-display: var(--app-font-display);
 
-  /* (Refreshing Summer · flat) Square everything box-like. rounded-full stays
-     round for genuine circles (dots, avatars, rings, toggles). */
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
-  --radius-2xl: 0px;
-  --radius-3xl: 0px;
+  /* Softly rounded scale — friendly + premium (cards ~16px, controls ~8px).
+     rounded-full stays round for genuine circles (dots, avatars, rings). */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.25rem;
 }
 
 :root {
@@ -321,9 +321,10 @@
 
   --shadow-2xs: none;
   --shadow-xs: none;
-  --shadow-sm: none;
-  --shadow: none;
-  --shadow-md: none;
+  /* Subtle matte-black depth so cards rest quietly and lift visibly on hover. */
+  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.45);
+  --shadow: 0 2px 8px -3px rgba(0,0,0,0.5);
+  --shadow-md: 0 6px 18px -6px rgba(0,0,0,0.6);
   --shadow-lg: 0px 10px 24px -8px rgba(0,0,0,0.6);
   --shadow-xl: 0px 16px 32px -10px rgba(0,0,0,0.65);
   --shadow-2xl: 0px 20px 44px -12px rgba(0,0,0,0.7);
