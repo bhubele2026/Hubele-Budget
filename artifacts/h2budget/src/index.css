@@ -166,25 +166,6 @@
   --card-silver: 210 10% 55%;
   --card-gold: 210 10% 55%;
 
-  /* Frosted-fintech launcher (/home) — soft, low-saturation pastel tiles for the
-     card icons + chips, and the cool page ground. Muted on purpose. */
-  --frost-page: 205 20% 98.5%;        /* bright frosted page ground (lifted whiter) */
-  --frost-ink: 215 25% 32%;           /* muted slate ink for icons/text */
-  --frost-blue: 205 60% 92%;          /* icy blue tile */
-  --frost-blue-ink: 205 55% 42%;
-  --frost-slate: 210 24% 92%;         /* pale slate tile */
-  --frost-slate-ink: 210 20% 42%;
-  --frost-indigo: 224 45% 93%;        /* pale blue-gray tile */
-  --frost-indigo-ink: 226 40% 52%;
-  --frost-amber: 28 60% 92%;          /* pale warm tile (soft flame) */
-  --frost-amber-ink: 26 55% 48%;
-  --frost-green: 152 40% 90%;         /* soft green pill */
-  --frost-green-ink: 155 40% 32%;
-  --frost-lav: 244 45% 94%;           /* soft lavender pill */
-  --frost-lav-ink: 244 35% 50%;
-  --frost-rose: 350 55% 94%;          /* soft rose pill */
-  --frost-rose-ink: 350 45% 46%;
-
   --app-font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --app-font-serif: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --app-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -201,9 +182,9 @@
      Tuned premium, never heavy. */
   --shadow-2xs: 0 1px 1px 0 rgba(4, 41, 63, 0.03);
   --shadow-xs: 0 1px 2px 0 rgba(4, 41, 63, 0.04);
-  --shadow-sm: 0 1px 2px 0 rgba(4, 41, 63, 0.05), 0 2px 6px -2px rgba(4, 41, 63, 0.06);
-  --shadow: 0 1px 3px 0 rgba(4, 41, 63, 0.06), 0 3px 10px -3px rgba(4, 41, 63, 0.07);
-  --shadow-md: 0 4px 14px -3px rgba(4, 41, 63, 0.11), 0 2px 6px -2px rgba(4, 41, 63, 0.06);
+  --shadow-sm: 0 1px 2px 0 rgba(4, 41, 63, 0.05), 0 2px 6px -2px rgba(4, 41, 63, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 0.55);
+  --shadow: 0 1px 3px 0 rgba(4, 41, 63, 0.06), 0 3px 10px -3px rgba(4, 41, 63, 0.07), inset 0 1px 0 0 rgba(255, 255, 255, 0.55);
+  --shadow-md: 0 4px 14px -3px rgba(4, 41, 63, 0.11), 0 2px 6px -2px rgba(4, 41, 63, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 0.6);
   --shadow-lg: 0 8px 24px -8px rgba(4, 41, 63, 0.18);
   --shadow-xl: 0 12px 32px -10px rgba(4, 41, 63, 0.22);
   --shadow-2xl: 0 16px 40px -12px rgba(4, 41, 63, 0.28);
@@ -235,8 +216,7 @@
   /* (Matte Black · premium) A true neutral matte-black canvas — hue 0, near-zero
      saturation — that ramps lighter from ground → card → border so cards *float*
      off the black. Teal #2496B5 stays the single structural accent (selection,
-     focus glow, primary actions / active nav); +/- money stays green / red, and
-     the per-tile --frost-* jewel tones carry restrained "color for fun". The
+     focus glow, primary actions / active nav); +/- money stays green / red. The
      matte neutral ground is what makes the app look like it cost millions. */
   --background: 0 0% 7%;         /* true matte black ground */
   --foreground: 0 0% 95%;        /* near-white headings */
@@ -298,33 +278,14 @@
   --card-silver: 210 10% 62%;
   --card-gold: 210 10% 62%;
 
-  /* Per-tile jewel-tone identities on the matte-black launcher — restrained
-     premium accents (the "color for fun"), NOT neon or pastel. Tile backgrounds
-     stay low-lightness so cards read as dark; the -ink variants are pushed a
-     touch brighter/more saturated so labels + icons stay crisp on true black. */
-  --frost-page: 0 0% 7%;         /* matches the matte-black ground */
-  --frost-ink: 0 0% 78%;
-  --frost-blue: 205 48% 24%;
-  --frost-blue-ink: 205 68% 78%;
-  --frost-slate: 210 12% 26%;
-  --frost-slate-ink: 210 14% 80%;
-  --frost-indigo: 224 40% 26%;
-  --frost-indigo-ink: 226 62% 82%;
-  --frost-amber: 28 46% 24%;
-  --frost-amber-ink: 30 72% 74%;
-  --frost-green: 152 36% 24%;
-  --frost-green-ink: 152 52% 74%;
-  --frost-lav: 244 36% 28%;
-  --frost-lav-ink: 244 52% 82%;
-  --frost-rose: 350 40% 28%;
-  --frost-rose-ink: 350 62% 82%;
 
   --shadow-2xs: none;
   --shadow-xs: none;
-  /* Subtle matte-black depth so cards rest quietly and lift visibly on hover. */
-  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.45);
-  --shadow: 0 2px 8px -3px rgba(0,0,0,0.5);
-  --shadow-md: 0 6px 18px -6px rgba(0,0,0,0.6);
+  /* Subtle matte-black depth + a whisper of a top highlight so cards read as
+     polished glass and lift visibly on hover. */
+  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.45), inset 0 1px 0 0 rgba(255,255,255,0.045);
+  --shadow: 0 2px 8px -3px rgba(0,0,0,0.5), inset 0 1px 0 0 rgba(255,255,255,0.05);
+  --shadow-md: 0 6px 18px -6px rgba(0,0,0,0.6), inset 0 1px 0 0 rgba(255,255,255,0.06);
   --shadow-lg: 0px 10px 24px -8px rgba(0,0,0,0.6);
   --shadow-xl: 0px 16px 32px -10px rgba(0,0,0,0.65);
   --shadow-2xl: 0px 20px 44px -12px rgba(0,0,0,0.7);
@@ -519,26 +480,6 @@
     box-shadow: inset 0 0 0 1px hsl(var(--primary));
   }
 
-  /* (Studio) Active StatTile: a solid teal accent block, white text. One
-     accent, no multi-hue gradient. */
-  .stat-hero {
-    background-image: none;
-    background-color: hsl(var(--primary));
-    color: #fff;
-    border-color: transparent;
-    border-image: none;
-  }
-  .stat-hero .stat-hero-muted {
-    color: rgba(255, 255, 255, 0.82);
-  }
-
-  /* (Studio) Reusable banner — solid teal accent, no gradient. */
-  .sunny-gradient {
-    background-image: none;
-    background-color: hsl(var(--primary));
-    border-image: none;
-  }
-
   /* (Refreshing Summer · FUN) Juicy gradient KPI tiles — each its own vibrant
      diagonal summer gradient. White text, a soft lifted shadow, and rounded
      corners even though the rest of the app is square: these are the hero
@@ -569,11 +510,6 @@
   .tile-grad-3 { background-image: none; background-color: hsl(220 16% 32%); }
   .tile-grad-4 { background-image: none; background-color: hsl(196 52% 30%); }
   .tile-grad-5 { background-image: none; background-color: hsl(4 52% 42%); }
-  /* Headline accent on big titles/numbers — solid teal (the one accent). */
-  .text-sunny {
-    color: hsl(var(--primary));
-  }
-
   .no-default-hover-elevate {}
   .no-default-active-elevate {}
 
