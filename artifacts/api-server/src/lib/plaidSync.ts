@@ -1955,7 +1955,12 @@ export async function syncPlaidItem(
         const acct = resp.data.accounts.find(
           (a) => a.account_id === checkingPlaidAccountId,
         );
-        const live = acct?.balances.available ?? acct?.balances.current;
+        // (#balance) Anchor on the CURRENT (posted) balance, not `available`.
+        // Pending charges are stored as ledger transactions, so the forecast
+        // already deducts them going forward — anchoring on `available` (which
+        // has pending pre-subtracted) would double-count them. Current also
+        // matches what the bank shows as the account balance.
+        const live = acct?.balances.current ?? acct?.balances.available;
         if (live != null) {
           await db
             .update(forecastSettingsTable)
