@@ -1,13 +1,11 @@
 import { useMemo } from "react";
-import { Wallet, TrendingDown, CalendarClock, Sparkles, Landmark } from "lucide-react";
+import { Wallet, TrendingDown, CalendarClock, Landmark } from "lucide-react";
 import {
   useGetForecastCashSignal,
   getGetForecastCashSignalQueryKey,
-  useGetForecastInsightsSummary,
-  getGetForecastInsightsSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { SectionHeader, RingMeter, Callout } from "@/components/stat";
+import { SectionHeader, RingMeter } from "@/components/stat";
 import { Sparkline, MiniBars, StackBar } from "@/components/viz";
 import { StatTile } from "@/components/stat-tile";
 import { formatCurrency } from "@/lib/utils";
@@ -26,9 +24,8 @@ function daysBetween(from: string, to: string): number {
 
 /**
  * Forecast → Overview tab. A graphics-first cash-flow snapshot: where the money
- * sits today, the projected low point, runway, and a Fable 5 read on the risk
- * ahead. Every figure comes from the server cash-signal + insights endpoints;
- * Fable 5 only writes the language.
+ * sits today, the projected low point, and runway. Every figure comes from the
+ * server cash-signal endpoint.
  */
 export default function ForecastOverviewPage() {
   const { data: signal } = useGetForecastCashSignal(
@@ -40,13 +37,6 @@ export default function ForecastOverviewPage() {
       },
     },
   );
-  const { data: insight } = useGetForecastInsightsSummary(undefined, {
-    query: {
-      queryKey: getGetForecastInsightsSummaryQueryKey(),
-      staleTime: 10 * 60_000,
-      gcTime: 30 * 60_000,
-    },
-  });
 
   const bankToday = num(signal?.bankToday);
   const lowest = num(signal?.lowestProjected);
@@ -89,50 +79,6 @@ export default function ForecastOverviewPage() {
         title="Overview"
         sub="Where your cash is headed over the next 90 days."
       />
-
-      {/* Fable 5 cash-flow read */}
-      <Callout
-        tone={status === "ready" ? "good" : status === "tight" ? "warning" : "danger"}
-        icon={<Sparkles className="h-4 w-4" />}
-      >
-        <div className="space-y-2">
-          <div className="text-[15px] font-bold tracking-tight leading-snug">
-            {insight?.headline ?? "Reading your cash flow…"}
-          </div>
-          {/* The 90-day overview paragraph. */}
-          {insight?.body ? (
-            <p className="text-[13px] font-normal text-muted-foreground leading-snug">
-              {insight.body}
-            </p>
-          ) : null}
-          {insight?.bullets?.length ? (
-            <ul className="space-y-1 text-[13px] font-normal text-muted-foreground">
-              {insight.bullets.map((b, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-current opacity-50" />
-                  <span className="leading-snug">{b}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {/* Concrete debt moves — the North-Star action list. */}
-          {insight?.debtMoves?.length ? (
-            <div className="mt-2 rounded-md border border-[hsl(var(--positive))]/25 bg-[hsl(var(--positive))]/10 px-3 py-2">
-              <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                What to do with debt
-              </div>
-              <ul className="mt-1 space-y-1 text-[13px]">
-                {insight.debtMoves.map((m, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[hsl(var(--positive))]" />
-                    <span className="leading-snug">{m}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-      </Callout>
 
       {/* Hero KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

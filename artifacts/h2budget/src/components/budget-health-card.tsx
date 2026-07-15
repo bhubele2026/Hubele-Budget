@@ -65,7 +65,6 @@ export function BudgetHealthCard({ className }: { className?: string }) {
   const status = toStatus(data.status);
   const color = STATUS_COLOR[status];
   const trendScores = (data.trend ?? []).map((p) => p.score);
-  const summary = data.summary;
 
   return (
     <Card className={cn("p-5", className)} data-testid="card-budget-health">
@@ -101,19 +100,6 @@ export function BudgetHealthCard({ className }: { className?: string }) {
           </div>
         </div>
       </div>
-
-      {summary ? (
-        <div className="mt-4 space-y-1.5">
-          <div className="text-sm font-medium">{summary.headline}</div>
-          <p className="text-sm text-muted-foreground">{summary.body}</p>
-          {summary.nextAction ? (
-            <p className="mt-2 rounded-md border border-[hsl(var(--positive))]/25 bg-[hsl(var(--positive))]/10 px-3 py-2 text-sm">
-              <span className="font-medium">Next: </span>
-              {summary.nextAction}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
 
       <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2">
         {(data.dimensions ?? []).map((d) => {

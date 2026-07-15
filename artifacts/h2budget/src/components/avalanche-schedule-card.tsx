@@ -1,28 +1,17 @@
 // (#826) Avalanche extra-payment schedule card for /forecast.
 //
-// Replaces the static single-number "MAX SAFE EXTRA PAYMENT" tile with a
-// multi-date schedule: 4-12 dated payments (amount, rationale, confidence
-// badge), a Claude-written summary naming the real avalanche-target debt,
-// a footer total, and a Refresh button that forces a fresh AI call.
-//
-// Numbers are deterministic (server-computed). When the AI narrative is
-// unavailable, the server falls back to a deterministic template and sets
-// summarySource === "fallback", which we surface as a small note.
+// A multi-date extra-payment schedule: 4-12 dated payments (amount, rationale,
+// confidence badge), the avalanche-target debt, and a footer total. All numbers
+// are deterministic (server-computed).
 
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import {
-  useGetForecastAvalancheSchedule,
-  getForecastAvalancheSchedule,
-  getGetForecastAvalancheScheduleQueryKey,
-} from "@workspace/api-client-react";
-import { Mountain, RefreshCw, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { useGetForecastAvalancheSchedule } from "@workspace/api-client-react";
+import { Mountain, ChevronDown, ChevronUp } from "lucide-react";
 
 const CONFIDENCE_META = {
   high: {
@@ -43,29 +32,8 @@ const CONFIDENCE_META = {
 } as const;
 
 export function AvalancheScheduleCard() {
-  const qc = useQueryClient();
   const { data, isLoading } = useGetForecastAvalancheSchedule();
-  const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState(false);
-
-  async function handleRefresh() {
-    if (refreshing) return;
-    setRefreshing(true);
-    try {
-      // Force a fresh Anthropic regeneration, then prime the cache so the
-      // hook re-renders with the new narrative.
-      const fresh = await getForecastAvalancheSchedule({ refresh: "true" });
-      qc.setQueryData(getGetForecastAvalancheScheduleQueryKey(), fresh);
-    } catch {
-      // Surface nothing fancy — leave the existing schedule on screen and
-      // let a manual retry happen. The button re-enables in finally.
-      await qc.invalidateQueries({
-        queryKey: getGetForecastAvalancheScheduleQueryKey(),
-      });
-    } finally {
-      setRefreshing(false);
-    }
-  }
 
   if (isLoading || !data) {
     return (
@@ -90,7 +58,6 @@ export function AvalancheScheduleCard() {
   const payments = data.proposedPayments ?? [];
   const hasPayments = payments.length > 0;
   const target = data.currentAvalancheTarget;
-  const fallback = data.summarySource === "fallback";
 
   return (
     <Card className="border-2" data-testid="card-avalanche-schedule">
@@ -114,35 +81,7 @@ export function AvalancheScheduleCard() {
               )}
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            data-testid="button-refresh-avalanche-schedule"
-            className="shrink-0"
-          >
-            <RefreshCw
-              className={`w-3.5 h-3.5 mr-1.5 ${refreshing ? "animate-spin" : ""}`}
-            />
-            {refreshing ? "Refreshing" : "Refresh"}
-          </Button>
         </div>
-
-        {/* AI summary */}
-        <p
-          className="text-sm leading-relaxed text-foreground/90"
-          data-testid="text-avalanche-summary"
-        >
-          {data.summary}
-        </p>
-        {fallback && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Info className="w-3.5 h-3.5" />
-            AI summary unavailable — showing a computed plan.
-          </div>
-        )}
 
         <Separator />
 
@@ -182,7 +121,6 @@ export function AvalancheScheduleCard() {
                 >
                   {payments.map((p, i) => {
                     const meta = CONFIDENCE_META[p.confidence];
-                    const label = data.paymentsText?.[i];
                     return (
                       <li
                         key={`${p.date}-${i}`}
@@ -199,7 +137,7 @@ export function AvalancheScheduleCard() {
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
-                            {label ?? p.rationale}
+                            {p.rationale}
                           </div>
                         </div>
                         <Badge

@@ -3,8 +3,6 @@ import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetBillsSummary,
-  useGetBillsInsightsSummary,
-  getGetBillsInsightsSummaryQueryKey,
   useCreateRecurringItem,
   useUpdateRecurringItem,
   useDeleteRecurringItem,
@@ -28,7 +26,7 @@ import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
 import { BillsHealthCheck } from "@/components/bills-health-check";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { RingMeter, SectionHeader } from "@/components/stat";
-import { TrendingUp, Receipt, Landmark, Scale, Sparkles } from "lucide-react";
+import { TrendingUp, Receipt, Landmark, Scale } from "lucide-react";
 import { formatBillRowAmount } from "@/lib/billsRowAmount";
 import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
 import { Lock, PartyPopper } from "lucide-react";
@@ -498,15 +496,6 @@ export default function BillsPage() {
     limit: 500,
   });
 
-  // Fable 5 savings read for the analysis card up top (headline + bullets).
-  const { data: billsInsight } = useGetBillsInsightsSummary(undefined, {
-    query: {
-      queryKey: getGetBillsInsightsSummaryQueryKey(),
-      staleTime: 10 * 60_000,
-      gcTime: 30 * 60_000,
-    },
-  });
-
   // #70 — real spend amounts. Compare planned ("Per month") against what
   // actually happened so far this calendar month: sum positive amounts as
   // income and the absolute value of negatives as spend, skipping
@@ -669,40 +658,22 @@ export default function BillsPage() {
         />
       </StatTileRow>
 
-      {/* Fable 5 read on the month's bills + a quick income-vs-outflow ring. */}
-      <Card data-testid="bills-fable-insight">
-        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight leading-snug">
-              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-              {billsInsight?.headline ?? "Reading your bills…"}
-            </div>
-            {billsInsight?.bullets?.length ? (
-              <ul className="space-y-1 text-[13px] text-muted-foreground">
-                {billsInsight.bullets.map((b, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current opacity-50" />
-                    <span className="leading-snug">{b}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 flex-col items-center gap-1">
-            <RingMeter
-              ratio={incomeMonthly > 0 ? (billsMonthly + debtMin) / incomeMonthly : 0}
-              status={net >= 0 ? "good" : "danger"}
-              centerTop={<MoneyText amount={net} signed />}
-              centerBottom="net / mo"
-              size={104}
-              stroke={9}
-            />
-            <div className="text-[11px] text-muted-foreground">
-              {incomeMonthly > 0
-                ? Math.round(((billsMonthly + debtMin) / incomeMonthly) * 100)
-                : 0}
-              % of income committed
-            </div>
+      {/* Income-vs-outflow ring for the month (server-computed figures). */}
+      <Card data-testid="bills-commitment">
+        <CardContent className="flex items-center gap-5 p-5">
+          <RingMeter
+            ratio={incomeMonthly > 0 ? (billsMonthly + debtMin) / incomeMonthly : 0}
+            status={net >= 0 ? "good" : "danger"}
+            centerTop={<MoneyText amount={net} signed />}
+            centerBottom="net / mo"
+            size={104}
+            stroke={9}
+          />
+          <div className="text-sm text-muted-foreground">
+            {incomeMonthly > 0
+              ? Math.round(((billsMonthly + debtMin) / incomeMonthly) * 100)
+              : 0}
+            % of income committed
           </div>
         </CardContent>
       </Card>

@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { AiInsightBar } from "@/components/ai-insight-bar";
 import { DrillCard } from "@/components/drill-card";
 import { Sparkline, StackBar, MiniBars, RingStat, MoneyText } from "@/components/viz";
 import { useReportsData, ReportsBalanceTiles } from "./reports/reportsShared";
@@ -113,8 +112,6 @@ export default function ReportsPage() {
         </p>
         <div className="border-t border-border mt-5" />
       </div>
-
-      <AiInsightBar />
 
       {/* At-a-glance balance tiles — the household's live vitals */}
       <ReportsBalanceTiles forecast={d.forecast} />

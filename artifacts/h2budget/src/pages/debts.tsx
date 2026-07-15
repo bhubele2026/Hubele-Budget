@@ -8,7 +8,6 @@ import {
 import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react";
 import { TrendingDown, CheckCircle2, Coins } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AiInsightBar } from "@/components/ai-insight-bar";
 import { SectionHeader } from "@/components/stat";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { RingStat, MoneyText } from "@/components/viz";
@@ -234,8 +233,6 @@ export default function DebtsPage() {
           icon={<Coins />}
         />
       </StatTileRow>
-
-      <AiInsightBar />
 
       {/* Debt status grid — one cell per card, colored by state. */}
       {sortedDebts.length > 0 && (

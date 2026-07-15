@@ -34,31 +34,18 @@ import { cn, formatCurrency } from "@/lib/utils";
 
 type Tone = "good" | "warning" | "danger" | "info";
 
+// Neutral, professional: every bucket header is the same muted strip; the icon
+// differentiates them. Only the row AMOUNT keeps a semantic money color.
+const NEUTRAL = {
+  bg: "hsl(var(--muted))",
+  ink: "hsl(var(--muted-foreground))",
+  bar: "hsl(var(--muted-foreground))",
+} as const;
 const TONE: Record<Tone, { bg: string; ink: string; bar: string; amount: string }> = {
-  good: {
-    bg: "hsl(var(--frost-green))",
-    ink: "hsl(var(--frost-green-ink))",
-    bar: "hsl(var(--frost-green-ink))",
-    amount: "text-positive",
-  },
-  warning: {
-    bg: "hsl(var(--frost-amber))",
-    ink: "hsl(var(--frost-amber-ink))",
-    bar: "hsl(var(--frost-amber-ink))",
-    amount: "text-[hsl(var(--warning))]",
-  },
-  danger: {
-    bg: "hsl(var(--frost-rose))",
-    ink: "hsl(var(--frost-rose-ink))",
-    bar: "hsl(var(--frost-rose-ink))",
-    amount: "text-[hsl(var(--negative))]",
-  },
-  info: {
-    bg: "hsl(var(--frost-blue))",
-    ink: "hsl(var(--frost-blue-ink))",
-    bar: "hsl(var(--frost-blue-ink))",
-    amount: "text-foreground",
-  },
+  good: { ...NEUTRAL, amount: "text-positive" },
+  warning: { ...NEUTRAL, amount: "text-[hsl(var(--warning))]" },
+  danger: { ...NEUTRAL, amount: "text-[hsl(var(--negative))]" },
+  info: { ...NEUTRAL, amount: "text-foreground" },
 };
 
 const EMPTY: Record<string, string> = {
@@ -172,11 +159,8 @@ function BucketCard({
   const rows = (bucket?.rows ?? []).filter(
     (r) => !dismissed || !dismissed.has(r.display),
   );
-  const headline = bucket?.headline?.trim() || title;
-  const caption = bucket?.caption?.trim() || "";
 
-  // Small "fun graphic": a bar per merchant row, sized to its figure, tinted to
-  // the bucket's tone. Pure decoration over the same figures shown below.
+  // A bar per merchant row, sized to its figure. Neutral tint.
   const bars = useMemo(
     () => rows.slice(0, 10).map((r) => ({ value: Math.abs(r.amount), color: t.bar })),
     [rows, t.bar],
@@ -202,25 +186,9 @@ function BucketCard({
           {chip ? <span className="normal-case tabular-nums opacity-80">{chip}</span> : null}
         </div>
         <div className="flex h-full flex-col p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[15px] font-bold tracking-tight leading-snug">
-                {headline}
-              </div>
-              {caption ? (
-                <p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground leading-snug">
-                  {caption}
-                </p>
-              ) : null}
-            </div>
-            {bars.length > 1 ? (
-              <MiniBars
-                data={bars}
-                height={30}
-                className="w-24 shrink-0 opacity-90"
-              />
-            ) : null}
-          </div>
+          {bars.length > 1 ? (
+            <MiniBars data={bars} height={26} className="w-full opacity-80" />
+          ) : null}
 
           <div className="mt-3 max-h-56 overflow-y-auto divide-y divide-border pr-1 [scrollbar-width:thin]">
             {rows.length === 0 ? (

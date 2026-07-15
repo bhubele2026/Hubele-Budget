@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   useReportsData,
-  AdvisorSummaryCard,
   ReportShell,
   ReportsRangeControls,
   daysForMode,
@@ -24,7 +23,6 @@ export default function SpendingPage() {
       blurb="Where it all went — by category, by merchant, by day."
     >
       <ReportsRangeControls mode={mode} setMode={setMode} showCompare={false} />
-      <AdvisorSummaryCard tab="spending" rangeDays={rangeDays} monthOffset={0} />
       <SpendingSection
         from={fmtISO(d.fromDate)}
         to={fmtISO(d.today)}

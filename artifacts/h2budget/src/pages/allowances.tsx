@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearch } from "wouter";
 import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban, Split, Flame, Wallet, CalendarDays, ShoppingBag } from "lucide-react";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
-import { AiInsightBar } from "@/components/ai-insight-bar";
 import {
   useListTransactions,
   useGetSettings,
@@ -1137,8 +1136,6 @@ export default function AllowancesPage() {
           );
         })}
       </StatTileRow>
-
-      <AiInsightBar />
 
       {roastForStreak(overStreak) ? (
         <div

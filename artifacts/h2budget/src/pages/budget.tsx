@@ -77,7 +77,6 @@ type BudgetLineWithActual = {
   plannedSource?: PlannedSource | null;
 };
 import { Card, CardContent } from "@/components/ui/card";
-import { AiInsightBar } from "@/components/ai-insight-bar";
 import { RingStat, StackBar, MoneyText } from "@/components/viz";
 import { PillBadge } from "@/components/pill-badge";
 import { Button } from "@/components/ui/button";
@@ -945,8 +944,8 @@ export default function BudgetPage() {
             disabled={pinMonth.isPending}
             title={
               monthPinned
-                ? "Auto-pulled lines are locked to the persisted planned amounts for this month. Click to unpin and let them track Bills/Debts again."
-                : "Lock every auto-pulled line to its current planned amount so it doesn't shift when Bills/Debts produce a different monthly total."
+                ? "Locked to this month's planned amounts. Click to unpin."
+                : "Lock planned amounts so they don't shift with Bills/Debts."
             }
             data-testid="button-toggle-pin-month"
           >
@@ -964,8 +963,6 @@ export default function BudgetPage() {
           </Button>
         </div>
       </div>
-
-      <AiInsightBar />
 
       {/* At-a-glance hero — leads with the projected month-end (what the plan
           says the month SHOULD end at = planned income − expenses), then the
@@ -1097,7 +1094,7 @@ export default function BudgetPage() {
                   Allowances · this month
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Weekly / Monthly / Unplanned — what you filed on Chase & Amex.
+                  Weekly / Monthly / Unplanned
                 </div>
               </div>
               <Link
@@ -1385,7 +1382,7 @@ export default function BudgetPage() {
                     My budget
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Things you're budgeting for that aren't tied to a bill.
+                    Goals not tied to a bill
                   </div>
                 </div>
               </div>
