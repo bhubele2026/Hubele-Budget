@@ -903,9 +903,17 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
       bankSnapshotBalance: snapshotBalance,
       bankSnapshotAt: at,
       bankSnapshotSource: source,
-      bankSnapshotAccountId: accountId,
-      bankSnapshotName: accountName,
-      bankSnapshotMask: accountMask,
+      // A manual balance entry must not detach the snapshot from its linked
+      // account — wiping the pointer here permanently disabled sync balance
+      // refreshes AND dropped every Plaid transaction from the forecast
+      // (cashSignal resolves its account scope from this pointer).
+      ...(accountId != null
+        ? {
+            bankSnapshotAccountId: accountId,
+            bankSnapshotName: accountName,
+            bankSnapshotMask: accountMask,
+          }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(forecastSettingsTable.userId, ownerUserId))
