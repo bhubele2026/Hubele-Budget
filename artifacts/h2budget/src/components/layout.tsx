@@ -133,7 +133,7 @@ const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
 
 const BRAND = (
   <span className="flex items-center gap-2 select-none">
-    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-[hsl(var(--splash-violet)/0.35)] to-[hsl(var(--splash-orange)/0.25)] text-foreground font-bold text-[11px] tracking-tight border border-[hsl(var(--splash-violet)/0.4)]">
+    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[hsl(var(--splash-violet)/0.14)] text-foreground font-bold text-[11px] tracking-tight border border-[hsl(var(--splash-violet)/0.4)]">
       H2
     </span>
     <span className="font-semibold text-[13.5px] tracking-tight">Budget</span>
@@ -453,7 +453,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors",
                       active
-                        ? "bg-[hsl(var(--splash-violet)/0.16)] text-foreground font-semibold ring-1 ring-[hsl(var(--splash-violet)/0.45)] shadow-[inset_0_-2px_0_hsl(var(--splash-violet))]"
+                        ? "text-foreground font-semibold shadow-[inset_0_-2px_0_hsl(var(--splash-violet))]"
                         : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                     )}
                     data-testid={`topnav-${item.href.slice(1)}`}
@@ -476,7 +476,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   className={cn(
                     "relative flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors outline-none",
                     moreActive
-                      ? "bg-[hsl(var(--splash-violet)/0.16)] text-foreground font-semibold ring-1 ring-[hsl(var(--splash-violet)/0.45)] shadow-[inset_0_-2px_0_hsl(var(--splash-violet))]"
+                      ? "text-foreground font-semibold shadow-[inset_0_-2px_0_hsl(var(--splash-violet))]"
                       : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                   )}
                   data-testid="topnav-more"

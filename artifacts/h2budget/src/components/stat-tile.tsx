@@ -39,7 +39,7 @@ export function StatTile({
   const body = (
     <div
       className={cn(
-        "group relative flex h-full min-h-[124px] flex-col justify-between gap-4 rounded-2xl border border-card-border bg-card p-4 text-left shadow-sm transition-[transform,box-shadow,border-color] duration-[240ms] ease-[var(--ease-glide)]",
+        "group relative flex h-full min-h-[124px] flex-col justify-between gap-4 rounded-xl border border-card-border bg-card p-4 text-left shadow-sm transition-[transform,box-shadow,border-color] duration-[240ms] ease-[var(--ease-glide)]",
         active && "ring-2 ring-primary/40",
         // (Final wrapper) Interactive tiles lift + brighten on hover and give a
         // quiet press — tasteful, reduced-motion safe.
@@ -50,7 +50,7 @@ export function StatTile({
     >
       <div className="flex items-start justify-between gap-2">
         {icon && (
-          <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-muted text-muted-foreground [&_svg]:h-5 [&_svg]:w-5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:h-5 [&_svg]:w-5">
             {icon}
           </span>
         )}
@@ -62,7 +62,7 @@ export function StatTile({
         <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
           {label}
         </div>
-        <div className="mt-1 text-[2.2rem] md:text-[2.6rem] font-bold tabular-nums leading-none text-foreground dark:text-white">
+        <div className="mt-1 text-[2rem] md:text-[2.25rem] font-semibold tracking-[-0.02em] tabular-nums leading-none text-foreground dark:text-white">
           {value}
         </div>
         {sub && <div className="mt-1.5 text-xs text-muted-foreground">{sub}</div>}

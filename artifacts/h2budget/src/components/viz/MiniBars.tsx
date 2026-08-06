@@ -69,7 +69,7 @@ export function MiniBars({
         const isActive = activeIndex === i;
         const bar = (
           <div
-            className="rounded-sm transition-[height] duration-700 ease-out"
+            className="rounded-[3px] transition-[height] duration-700 ease-out"
             style={{
               height: grown ? h : 0,
               background: color,
@@ -79,24 +79,26 @@ export function MiniBars({
             }}
           />
         );
+        // Flat-matte: bars never grow into slabs — thickness is capped and the
+        // bar centers in its track when the track is wider than the cap.
         return onBarClick ? (
           <button
             key={i}
             type="button"
             onClick={() => onBarClick(i)}
-            className="flex-1 flex items-end h-full min-w-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+            className="flex-1 flex items-end justify-center h-full min-w-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-[3px]"
             title={b.label}
             aria-label={b.label ?? `Bar ${i + 1}`}
           >
-            <span className="block w-full">{bar}</span>
+            <span className="block w-full max-w-10">{bar}</span>
           </button>
         ) : (
           <div
             key={i}
-            className="flex-1 flex items-end h-full min-w-0"
+            className="flex-1 flex items-end justify-center h-full min-w-0"
             title={b.label}
           >
-            <span className="block w-full">{bar}</span>
+            <span className="block w-full max-w-10">{bar}</span>
           </div>
         );
       })}

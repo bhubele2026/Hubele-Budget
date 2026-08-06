@@ -119,7 +119,7 @@ function Tile({
               data-testid={l.testid}
               onMouseEnter={() => prefetchRoute(l.href)}
               onFocus={() => prefetchRoute(l.href)}
-              className="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+              className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
             >
               {l.label}
             </Link>

@@ -33,8 +33,11 @@ export function StackBar({
 
   return (
     <div className={cn("w-full", className)}>
+      {/* Flat-matte: squared 4px ends and a 2px surface gap between segments
+          (the gap is the background showing through, per the dataviz spacer
+          rule) — reads as one measured bar, not a pill of candy stripes. */}
       <div
-        className="grow-x flex w-full overflow-hidden rounded-full bg-muted"
+        className="grow-x flex w-full gap-[2px] overflow-hidden rounded bg-muted"
         style={{ height }}
         role="img"
         aria-label="Spend mix"
