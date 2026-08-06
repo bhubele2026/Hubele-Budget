@@ -8,7 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeader, RingMeter } from "@/components/stat";
-import { MiniBars, StackBar } from "@/components/viz";
+import { StackBar } from "@/components/viz";
 import { StatTile } from "@/components/stat-tile";
 import { formatCurrency } from "@/lib/utils";
 
@@ -105,8 +105,8 @@ export default function BillsOverviewPage() {
               status={netStatus}
               centerTop={formatCurrency(net)}
               centerBottom={net >= 0 ? "net / mo" : "short / mo"}
-              size={132}
-              stroke={11}
+              size={120}
+              stroke={8}
             />
             <div className="text-center text-xs text-muted-foreground">
               {formatCurrency(outflow)} out of {formatCurrency(income)} in —{" "}
@@ -127,26 +127,33 @@ export default function BillsOverviewPage() {
               </div>
             </div>
             {topBills.length ? (
-              <>
-                <MiniBars
-                  data={topBills.map((b) => ({
-                    value: b.monthly,
-                    label: `${b.name}: ${formatCurrency(b.monthly)}`,
-                    color: "hsl(var(--chart-1))",
-                  }))}
-                  height={72}
-                />
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
-                  {topBills.map((b) => (
-                    <div key={b.name} className="flex justify-between gap-2">
-                      <span className="truncate text-muted-foreground">{b.name}</span>
-                      <span className="shrink-0 font-semibold tabular-nums">
-                        {formatCurrency(b.monthly)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </>
+              (() => {
+                const max = Math.max(...topBills.map((b) => b.monthly), 1);
+                return (
+                  <div className="grid gap-x-8 gap-y-2.5 sm:grid-cols-2">
+                    {topBills.map((b) => (
+                      <div key={b.name}>
+                        <div className="flex items-baseline justify-between gap-3 text-xs">
+                          <span className="truncate text-muted-foreground">{b.name}</span>
+                          <span className="shrink-0 font-semibold tabular-nums text-foreground">
+                            {formatCurrency(b.monthly)}
+                          </span>
+                        </div>
+                        {/* Thin proportional meter — quiet magnitude, no slabs. */}
+                        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full transition-[width] duration-700 ease-out"
+                            style={{
+                              width: `${(b.monthly / max) * 100}%`,
+                              background: "hsl(var(--chart-1))",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()
             ) : (
               <p className="py-6 text-center text-sm text-muted-foreground">
                 No recurring bills yet.
@@ -168,7 +175,7 @@ export default function BillsOverviewPage() {
               { label: "Debt minimums", value: debtMin, color: "hsl(var(--negative))" },
               { label: "One-off", value: oneOff, color: "hsl(var(--warning))" },
             ]}
-            height={14}
+            height={10}
             money
           />
         </CardContent>

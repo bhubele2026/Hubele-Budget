@@ -156,7 +156,7 @@
 
   /* Chart ramp on white: teal-led with the brand violet as the second hue
      (mirrors dark mode) — splash without rainbow. */
-  --chart-1: 192 80% 38%;
+  --chart-1: 192 55% 36%;
   --chart-2: 200 42% 52%;
   --chart-3: 0 0% 58%;
   --chart-4: 192 48% 58%;
@@ -175,12 +175,12 @@
   --app-font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --app-font-serif: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --app-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  /* (Refreshing Summer) Rounded, friendly display face for headings — gives
-     the app a happy, playful summer voice without hurting body legibility. */
-  --app-font-display: 'Fredoka', 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
-  /* (Juggernaut) Rounded-2xl command-center corners. Propagates to every
-     rounded-sm/md/lg/xl utility via the @theme radius mapping above. */
-  --radius: 0.875rem;
+  /* (Flat-matte) One serious family everywhere — headings differ from body by
+     weight and tracking only. No playful display faces; that's a design law. */
+  --app-font-display: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* (Flat-matte) Tight corners. Propagates to every rounded-sm/md/lg/xl
+     utility via the @theme radius mapping above. */
+  --radius: 0.625rem;
 
   /* (Final wrapper · depth) A soft, subtle layered elevation gives every card
      quiet depth + life without breaking the crisp square identity. Cards rest
@@ -273,7 +273,7 @@
   /* Series on the matte canvas: teal-led with a violet second hue (the
      logo's own color) so charts carry the brand splash without going
      rainbow. */
-  --chart-1: 191 85% 58%;
+  --chart-1: 191 60% 54%;
   --chart-2: 200 40% 60%;
   --chart-3: 0 0% 62%;           /* neutral series on the matte canvas */
   --chart-4: 191 45% 70%;        /* light teal */

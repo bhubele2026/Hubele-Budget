@@ -91,7 +91,7 @@ export function BiggestCharges({
           return (
             <div
               key={`${c.desc}-${c.date}-${i}`}
-              className="relative overflow-hidden rounded-[1.25rem] border border-card-border bg-card p-4 shadow-sm"
+              className="relative overflow-hidden rounded-xl border border-card-border bg-card p-4 shadow-sm"
               style={{
                 borderLeft: `4px solid hsl(var(${p.accent}))`,
                 backgroundImage: `linear-gradient(135deg, hsl(var(${p.accent}) / 0.09), transparent 55%)`,
