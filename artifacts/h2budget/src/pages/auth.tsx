@@ -123,8 +123,8 @@ function MarketingHero() {
           Where your money has nowhere to hide.
         </h1>
         <p className="text-base text-muted-foreground leading-relaxed">
-          Every account, every dollar, every &ldquo;where did THAT go&rdquo; —
-          tracked, forecast, and roasted. Built for the two of you.
+          Every account, every dollar, every &ldquo;where did that go&rdquo; —
+          tracked, forecast, and explained. Built for the two of you.
         </p>
       </div>
 
@@ -136,13 +136,13 @@ function MarketingHero() {
         />
         <HeroBullet
           icon={<Layers className="w-4 h-4" />}
-          title="A coach that won't sugarcoat it"
-          body="Over budget? You'll hear about it. Crushing it? You'll hear about that too."
+          title="A clear-eyed money coach"
+          body="Straight answers on where the month stands — over budget or ahead, you'll know."
         />
         <HeroBullet
           icon={<ShieldCheck className="w-4 h-4" />}
           title="Just the two of you"
-          body="Invite-only. No public sign-ups, no nosy in-laws."
+          body="Invite-only. No public sign-ups — your finances stay yours."
         />
       </dl>
     </div>
@@ -183,7 +183,7 @@ function MobileBrandHeader() {
           H2 Budget
         </h1>
         <p className="text-sm text-muted-foreground max-w-xs">
-          Your money, forecast and roasted. Built for the two of you.
+          Your money, tracked and forecast. Built for the two of you.
         </p>
       </div>
     </div>
@@ -235,7 +235,7 @@ export function SignInPage() {
     <AuthLayout
       intro={{
         eyebrow: "Welcome back",
-        title: "Let's see the damage.",
+        title: "Let's see where the month stands.",
         body: "Pick up right where you left off — the month, the buckets, and the running balance are waiting.",
       }}
     >
