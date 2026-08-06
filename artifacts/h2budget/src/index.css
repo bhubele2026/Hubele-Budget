@@ -230,7 +230,7 @@
   --foreground: 0 0% 98%;        /* bright white headings */
   --border: 0 0% 16%;            /* quieter neutral hairline */
 
-  --card: 0 0% 11%;              /* raised matte card — floats off ground */
+  --card: 0 0% 13%;              /* raised matte card — floats VISIBLY off ground */
   --card-foreground: 0 0% 98%;
   --card-border: 0 0% 16%;
 
@@ -243,7 +243,7 @@
   --sidebar-accent-foreground: 191 70% 74%;  /* teal active nav */
   --sidebar-ring: 191 85% 55%;
 
-  --popover: 0 0% 12%;
+  --popover: 0 0% 14%;
   --popover-foreground: 0 0% 98%;
   --popover-border: 0 0% 18%;
 

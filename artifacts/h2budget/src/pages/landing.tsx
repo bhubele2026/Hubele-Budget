@@ -53,6 +53,7 @@ function Tile({
   metricLabel,
   metric,
   links,
+  accent = "hsl(var(--primary))",
 }: {
   icon: React.ReactNode;
   title: string;
@@ -62,6 +63,8 @@ function Tile({
   metricLabel?: string;
   metric?: React.ReactNode;
   links?: QuickLink[];
+  /** Brand color for the icon chip + hover edge — each tile owns a hue. */
+  accent?: string;
 }) {
   return (
     <div
@@ -76,7 +79,14 @@ function Tile({
         className="group flex flex-1 flex-col rounded-xl border border-card-border bg-card p-5 shadow-sm transition-[box-shadow,border-color,transform] duration-200 hover:border-primary/50 hover:shadow-md motion-safe:hover:-translate-y-0.5 motion-reduce:transform-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:p-6"
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-muted/40 text-muted-foreground">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-md border"
+            style={{
+              color: accent,
+              background: `color-mix(in srgb, ${accent} 14%, transparent)`,
+              borderColor: `color-mix(in srgb, ${accent} 35%, transparent)`,
+            }}
+          >
             {icon}
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
@@ -146,6 +156,7 @@ function BankingTile() {
   return (
     <Tile
       testid="banking"
+      accent="hsl(var(--primary))"
       href="/banking"
       icon={<Landmark className="h-5 w-5" strokeWidth={1.75} />}
       title="Banking"
@@ -179,6 +190,7 @@ function BillsTile() {
   return (
     <Tile
       testid="bills"
+      accent="hsl(var(--splash-orange))"
       href="/bills"
       icon={<Receipt className="h-5 w-5" strokeWidth={1.75} />}
       title="Bills"
@@ -211,6 +223,7 @@ function ForecastTile() {
   return (
     <Tile
       testid="forecast"
+      accent="hsl(var(--splash-violet))"
       href="/forecast/overview"
       icon={<LineChart className="h-5 w-5" strokeWidth={1.75} />}
       title="Forecast"
@@ -255,6 +268,7 @@ function AvalancheTile() {
   return (
     <Tile
       testid="avalanche"
+      accent="hsl(var(--positive))"
       href="/avalanche"
       icon={<Flame className="h-5 w-5" strokeWidth={1.75} />}
       title="Future Goal"
@@ -310,15 +324,25 @@ export default function LandingPage() {
       </header>
 
       {/* Content */}
-      <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-8 sm:px-6">
-        <div className="mb-8">
+      <div className="relative mx-auto w-full max-w-5xl px-4 pb-16 pt-8 sm:px-6">
+        {/* Brand aurora — a soft violet→orange wash behind the greeting so
+            the black opens with unmistakable color. Pure decoration. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-10 left-0 h-56 w-[36rem] max-w-full opacity-60"
+          style={{
+            background:
+              "radial-gradient(60% 80% at 18% 30%, hsl(var(--splash-violet) / 0.28), transparent 65%), radial-gradient(50% 70% at 55% 20%, hsl(var(--splash-orange) / 0.16), transparent 60%)",
+          }}
+        />
+        <div className="relative mb-8">
           <h1
-            className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
+            className="text-3xl font-semibold tracking-tight text-white sm:text-4xl"
             style={{ fontFamily: "var(--app-font-sans)" }}
           >
             Hey, {who}.
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             Where do you want to go?
           </p>
         </div>
