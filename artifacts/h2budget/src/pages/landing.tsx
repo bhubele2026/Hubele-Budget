@@ -262,7 +262,7 @@ function AvalancheTile() {
       href="/avalanche"
       icon={<Flame className="h-5 w-5" strokeWidth={1.75} />}
       title="Future Goal"
-      blurb="Attack the debt — manage the payoff plan and free-by date."
+      blurb="Work the payoff plan — progress, next targets, and your debt-free date."
       metricLabel={overallPaid != null ? "Payoff progress" : undefined}
       metric={
         overallPaid != null ? (

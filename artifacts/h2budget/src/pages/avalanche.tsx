@@ -611,7 +611,7 @@ export default function AvalanchePage() {
       <SectionHeader
         eyebrow="Debt · Future Goal"
         title="Future Goal"
-        sub="Pay the highest interest first. Watch the snowball cascade."
+        sub="Pay the highest interest first — every extra dollar moves the debt-free date."
         action={
           <div className="flex gap-2 flex-wrap justify-end">
             <Button
