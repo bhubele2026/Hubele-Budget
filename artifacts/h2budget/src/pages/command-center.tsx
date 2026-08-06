@@ -78,7 +78,7 @@ import { DrillCard } from "@/components/drill-card";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { SectionHeader, Callout } from "@/components/stat";
 import { BudgetHealthCard } from "@/components/budget-health-card";
-import { WallOfShame } from "@/components/wall-of-shame";
+import { BiggestCharges } from "@/components/biggest-charges";
 import { BankingInsights } from "@/components/banking-insights";
 import { PillBadge } from "@/components/pill-badge";
 import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@/components/viz";
@@ -1102,7 +1102,7 @@ export default function CommandCenterPage() {
       <BankingInsights />
 
       {/* ── Largest single purchases this month (consolidated) ───────────── */}
-      <WallOfShame transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
+      <BiggestCharges transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
 
       {/* ── Spending detail — everything secondary, collapsed by default so the
              spending-control + act-on-it zones above stay the focus. ──────── */}

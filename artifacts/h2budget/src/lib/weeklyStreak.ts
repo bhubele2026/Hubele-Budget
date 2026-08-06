@@ -37,7 +37,7 @@ export function currentWeekBounds(now: Date): { startISO: string; endISO: string
 
 /**
  * Trailing run of COMPLETED weeks that all landed the same side of the weekly
- * allowance — `under` (good) or `over` (the roast). Walks back from last week
+ * allowance — `under` (good) or `over` (the warning). Walks back from last week
  * and stops at the first week that flips direction or has no spend data.
  * Mirrors the allowances over-budget streak but reports either direction.
  */

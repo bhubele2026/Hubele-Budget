@@ -30,7 +30,7 @@ const PRIMARY: Dest[] = [
   { name: "Dashboard", href: "/home", icon: LayoutDashboard, keywords: "home command center" },
   { name: "Overview / Reports", href: "/reports", icon: BarChart3, keywords: "reports analytics" },
   { name: "Chase", href: "/transactions", icon: Receipt, keywords: "bank checking transactions" },
-  { name: "Amex", href: "/amex", icon: CreditCard, keywords: "american express card kill stack" },
+  { name: "Amex", href: "/amex", icon: CreditCard, keywords: "american express card payoff" },
   { name: "Allowance", href: "/allowances", icon: Wallet, keywords: "weekly spending" },
   { name: "Forecast", href: "/forecast", icon: TrendingUp, keywords: "cash runway plan" },
 ];
