@@ -44,6 +44,14 @@ const isoDate = (d: Date) =>
 
 type QuickLink = { href: string; label: string; testid?: string };
 
+/**
+ * Every tile shares ONE rigid skeleton so the grid is strictly aligned:
+ * the card box holds a clickable main area (icon row, title, blurb, then the
+ * metric pinned to the bottom with mt-auto so all metrics share a baseline)
+ * and a quick-links footer INSIDE the card (border-t), so every card in a row
+ * has an identical bottom edge. Monochrome ink only — the single interactive
+ * accent is the existing primary hover; color never decorates this page.
+ */
 function Tile({
   icon,
   title,
@@ -53,7 +61,6 @@ function Tile({
   metricLabel,
   metric,
   links,
-  accent = "hsl(var(--primary))",
 }: {
   icon: React.ReactNode;
   title: string;
@@ -63,12 +70,10 @@ function Tile({
   metricLabel?: string;
   metric?: React.ReactNode;
   links?: QuickLink[];
-  /** Brand color for the icon chip + hover edge — each tile owns a hue. */
-  accent?: string;
 }) {
   return (
     <div
-      className="flex h-full flex-col"
+      className="flex h-full flex-col overflow-hidden rounded-xl border border-card-border bg-card shadow-sm transition-[box-shadow,border-color] duration-200 hover:border-primary/50 hover:shadow-md"
       data-testid={`landing-tile-${testid}`}
     >
       <Link
@@ -76,19 +81,12 @@ function Tile({
         onMouseEnter={() => prefetchRoute(href)}
         onFocus={() => prefetchRoute(href)}
         aria-label={title}
-        className="group flex flex-1 flex-col rounded-xl border border-card-border bg-card p-5 shadow-sm transition-[box-shadow,border-color,transform] duration-200 hover:border-primary/50 hover:shadow-md motion-safe:hover:-translate-y-0.5 motion-reduce:transform-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:p-6"
+        className="group flex flex-1 flex-col p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:p-6"
       >
         <div className="flex items-start justify-between gap-3">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-md border"
-            style={{
-              color: accent,
-              background: `color-mix(in srgb, ${accent} 14%, transparent)`,
-              borderColor: `color-mix(in srgb, ${accent} 35%, transparent)`,
-            }}
-          >
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
             {icon}
-          </div>
+          </span>
           <ChevronRight className="h-4 w-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
         </div>
         <div className="mt-4 text-base font-semibold text-foreground">
@@ -97,35 +95,30 @@ function Tile({
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
           {blurb}
         </p>
-        {metric != null && (
-          <div className="mt-4">
-            {metricLabel && (
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
-                {metricLabel}
-              </div>
-            )}
-            <div className="mt-0.5 text-lg font-bold tabular-nums text-foreground">
-              {metric}
-            </div>
+        <div className="mt-auto pt-4">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
+            {metricLabel ?? " "}
           </div>
-        )}
-      </Link>
-      {links && links.length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 px-1">
-          {links.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              data-testid={l.testid}
-              onMouseEnter={() => prefetchRoute(l.href)}
-              onFocus={() => prefetchRoute(l.href)}
-              className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
-            >
-              {l.label}
-            </Link>
-          ))}
+          <div className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
+            {metric ?? " "}
+          </div>
         </div>
-      )}
+      </Link>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-5 py-2.5 sm:px-6">
+        {(links ?? []).map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            data-testid={l.testid}
+            onMouseEnter={() => prefetchRoute(l.href)}
+            onFocus={() => prefetchRoute(l.href)}
+            className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline"
+          >
+            {l.label}
+          </Link>
+        ))}
+        {(links ?? []).length === 0 && <span className="text-xs">&nbsp;</span>}
+      </div>
     </div>
   );
 }
@@ -156,7 +149,6 @@ function BankingTile() {
   return (
     <Tile
       testid="banking"
-      accent="hsl(var(--primary))"
       href="/banking"
       icon={<Landmark className="h-5 w-5" strokeWidth={1.75} />}
       title="Banking"
@@ -190,13 +182,15 @@ function BillsTile() {
   return (
     <Tile
       testid="bills"
-      accent="hsl(var(--splash-orange))"
       href="/bills"
       icon={<Receipt className="h-5 w-5" strokeWidth={1.75} />}
       title="Bills"
       blurb="Your recurring bills & subscriptions — what's due, what changed, and the monthly total."
       metricLabel={monthlyTotal > 0 ? "Recurring this month" : undefined}
       metric={monthlyTotal > 0 ? <MoneyText countUp amount={monthlyTotal} /> : undefined}
+      links={[
+        { href: "/bills/all", label: "All bills", testid: "landing-link-bills-all" },
+      ]}
     />
   );
 }
@@ -223,7 +217,6 @@ function ForecastTile() {
   return (
     <Tile
       testid="forecast"
-      accent="hsl(var(--splash-violet))"
       href="/forecast/overview"
       icon={<LineChart className="h-5 w-5" strokeWidth={1.75} />}
       title="Forecast"
@@ -268,18 +261,13 @@ function AvalancheTile() {
   return (
     <Tile
       testid="avalanche"
-      accent="hsl(var(--positive))"
       href="/avalanche"
       icon={<Flame className="h-5 w-5" strokeWidth={1.75} />}
       title="Future Goal"
       blurb="Work the payoff plan — progress, next targets, and your debt-free date."
       metricLabel={overallPaid != null ? "Payoff progress" : undefined}
       metric={
-        overallPaid != null ? (
-          <span className="text-[hsl(var(--positive))]">
-            {Math.round(overallPaid * 100)}% paid
-          </span>
-        ) : undefined
+        overallPaid != null ? <>{Math.round(overallPaid * 100)}% paid</> : undefined
       }
       links={[
         { href: "/debts", label: "Debts", testid: "landing-link-avalanche-debts" },
@@ -325,21 +313,6 @@ export default function LandingPage() {
 
       {/* Content */}
       <div className="relative mx-auto w-full max-w-5xl px-4 pb-16 pt-8 sm:px-6">
-        {/* Brand aurora — a soft violet→orange wash behind the greeting.
-            Pure decoration. The mask guarantees the wash reaches zero before
-            every edge of the div, so it can never clip with a hard seam. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-14 -left-16 h-64 w-[42rem] max-w-full opacity-60"
-          style={{
-            background:
-              "radial-gradient(42% 50% at 32% 42%, hsl(var(--splash-violet) / 0.28), transparent 72%), radial-gradient(34% 42% at 58% 30%, hsl(var(--splash-orange) / 0.16), transparent 70%)",
-            maskImage:
-              "radial-gradient(65% 65% at 45% 40%, black 25%, transparent 95%)",
-            WebkitMaskImage:
-              "radial-gradient(65% 65% at 45% 40%, black 25%, transparent 95%)",
-          }}
-        />
         <div className="relative mb-8">
           <h1
             className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
@@ -364,7 +337,7 @@ export default function LandingPage() {
           advisor FAB (z-40) so it never blocks it. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed bottom-4 right-4 z-0 select-none opacity-[0.05]"
+        className="pointer-events-none fixed bottom-4 right-4 z-0 select-none opacity-[0.05] grayscale"
       >
         <H2Logo className="h-24 w-auto sm:h-28" />
       </div>
