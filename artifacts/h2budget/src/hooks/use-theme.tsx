@@ -19,19 +19,19 @@ function getSystemTheme(): "light" | "dark" {
     : "light";
 }
 
-const DARK_FORCE_KEY = "h2:dark-default:v1";
+const LIGHT_FORCE_KEY = "h2:light-default:v1";
 
 function readStoredTheme(): Theme {
-  // Premium matte-black is now the app's face. Default to dark, AND do a ONE-TIME
-  // snap: anyone carrying a prior light/system preference gets flipped to dark
-  // exactly once so the app *opens* matte-black. After that their explicit choice
-  // (including re-picking Light or System) is fully respected.
-  if (typeof window === "undefined") return "dark";
+  // Bright white is the app's face (owner's call, 2026-08). Default to light,
+  // AND do a ONE-TIME snap: anyone carrying the earlier forced-dark preference
+  // gets flipped to light exactly once so the app *opens* bright. After that
+  // their explicit choice (including re-picking Dark or System) is respected.
+  if (typeof window === "undefined") return "light";
   try {
-    if (!window.localStorage.getItem(DARK_FORCE_KEY)) {
-      window.localStorage.setItem(DARK_FORCE_KEY, "1");
-      window.localStorage.setItem(STORAGE_KEY, "dark");
-      return "dark";
+    if (!window.localStorage.getItem(LIGHT_FORCE_KEY)) {
+      window.localStorage.setItem(LIGHT_FORCE_KEY, "1");
+      window.localStorage.setItem(STORAGE_KEY, "light");
+      return "light";
     }
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === "light" || stored === "dark" || stored === "system") {
@@ -40,7 +40,7 @@ function readStoredTheme(): Theme {
   } catch {
     // ignore
   }
-  return "dark";
+  return "light";
 }
 
 function applyThemeClass(resolved: "light" | "dark") {
@@ -66,9 +66,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => mql.removeEventListener("change", handler);
   }, []);
 
-  // "system" follows the OS; "light"/"dark" are explicit. (Matte black is
-  // still the first-run default + one-time snap in readStoredTheme — but once
-  // you pick System it genuinely tracks your OS, light or dark.)
+  // "system" follows the OS; "light"/"dark" are explicit. (Bright white is
+  // the first-run default + one-time snap in readStoredTheme — but once you
+  // pick System it genuinely tracks your OS, light or dark.)
   const resolvedTheme = theme === "system" ? systemTheme : theme;
 
   useEffect(() => {
