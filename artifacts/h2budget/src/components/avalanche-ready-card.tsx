@@ -37,7 +37,9 @@ const STATUS_META = {
 } as const;
 
 export function AvalancheReadyCard({ compact = false }: { compact?: boolean }) {
-  const { data, isLoading } = useGetForecastCashSignal();
+  // Same {horizonDays: 90} key the landing / Command Center / Forecast
+  // pages use — a bare call forked a separate ~9-query server computation.
+  const { data, isLoading } = useGetForecastCashSignal({ horizonDays: 90 });
 
   if (isLoading || !data) {
     return (

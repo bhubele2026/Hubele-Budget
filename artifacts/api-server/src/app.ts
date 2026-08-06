@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import compression from "compression";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -46,6 +47,12 @@ app.use(
 );
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+
+// gzip every compressible response — JSON payloads and the SPA's JS/CSS
+// both shrink ~85-90%, which dominates perceived latency on non-local
+// networks. Registered ahead of the parsers/routes/static so everything
+// downstream is covered.
+app.use(compression());
 
 // CORS: origin:true reflects the request's Origin header back, which is
 // INTENTIONAL here. This API is fronted by the same deployment as the SPA

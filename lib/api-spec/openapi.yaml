@@ -1157,6 +1157,17 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankSnapshot" }
+  /forecast/review-count:
+    get:
+      operationId: getForecastReviewCount
+      tags: [forecast]
+      summary: Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BadgeCount" }
   /forecast/cash-signal:
     get:
       operationId: getForecastCashSignal
@@ -1634,6 +1645,24 @@ paths:
       responses:
         "204": { description: Reopened }
 
+  /debrief/awaiting-count:
+    get:
+      operationId: getDebriefAwaitingCount
+      tags: [debrief]
+      summary: Count of awaiting_review weeks (nav badge) without variance recompute
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string }
+        - in: query
+          name: to
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BadgeCount" }
   /debrief/weeks:
     get:
       operationId: listWeeklyDebriefs
@@ -2351,6 +2380,12 @@ components:
       required: [status]
       properties:
         status: { type: string }
+
+    BadgeCount:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer }
 
     BudgetHealthDimension:
       type: object

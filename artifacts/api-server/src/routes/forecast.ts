@@ -629,6 +629,83 @@ router.put("/forecast/settings", requireAuth, async (req, res): Promise<void> =>
 const ALLOWED_HORIZON_DAYS = new Set([7, 30, 90, 120, 183, 365]);
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// Cheap badge count for the nav's Review inbox: unmatched forecast-flagged
+// bank txns in the CURRENT month. Mirrors the client's
+// filterForecastTxns/isBankTxn semantics (h2budget/src/lib/forecastMatch.ts +
+// useReviewInboxCount) with three small queries — the layout previously
+// pulled the entire ~30-query /forecast bundle on every route just to
+// derive this integer.
+router.get(
+  "/forecast/review-count",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const householdId = req.householdId!;
+    const ownerUserId = req.householdOwnerId!;
+
+    const [settings] = await db
+      .select({
+        bankSnapshotAccountId: forecastSettingsTable.bankSnapshotAccountId,
+      })
+      .from(forecastSettingsTable)
+      .where(eq(forecastSettingsTable.userId, ownerUserId));
+    let checkingExternalId: string | null = null;
+    if (settings?.bankSnapshotAccountId) {
+      const [acct] = await db
+        .select({ accountId: plaidAccountsTable.accountId })
+        .from(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.id, settings.bankSnapshotAccountId));
+      checkingExternalId = acct?.accountId ?? null;
+    }
+
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const monthStart = `${y}-${pad(m + 1)}-01`;
+    const monthEnd = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
+
+    const txns = await db
+      .select({
+        id: transactionsTable.id,
+        source: transactionsTable.source,
+        plaidAccountId: transactionsTable.plaidAccountId,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, householdId),
+          eq(transactionsTable.forecastFlag, true),
+          gte(transactionsTable.occurredOn, monthStart),
+          lte(transactionsTable.occurredOn, monthEnd),
+        ),
+      );
+
+    const resolutions = await db
+      .select({ matchedTxnId: forecastResolutionsTable.matchedTxnId })
+      .from(forecastResolutionsTable)
+      .where(eq(forecastResolutionsTable.householdId, householdId));
+    const resolvedTxnIds = new Set(
+      resolutions.map((r) => r.matchedTxnId).filter(Boolean),
+    );
+
+    // isBankTxn semantics: account metadata wins; amex/plaid:* without a
+    // checking match are card-side; manual rows default to bank.
+    let count = 0;
+    for (const t of txns) {
+      if (t.plaidAccountId) {
+        if (!checkingExternalId || t.plaidAccountId !== checkingExternalId)
+          continue;
+      } else {
+        const s = (t.source ?? "manual").toLowerCase();
+        if (s === "amex" || s.startsWith("plaid:")) continue;
+      }
+      if (resolvedTxnIds.has(t.id)) continue;
+      count++;
+    }
+    res.json({ count });
+  },
+);
+
 router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void> => {
   let horizonDays: number | undefined;
   if (req.query.horizonDays != null) {

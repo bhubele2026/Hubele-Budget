@@ -286,9 +286,9 @@ export default function DebriefPage() {
     {
       query: {
         queryKey: getListWeeklyDebriefsQueryKey({ from: fromISO, to: toISO }),
-        staleTime: 0,
-        refetchOnMount: "always",
-        refetchOnWindowFocus: true,
+        // Inherits TXN_CACHE (2 min). Every debrief mutation invalidates
+        // this key, so always-refetch only re-ran an expensive per-week
+        // variance recompute on each mount for no freshness gain.
       },
     },
   );
@@ -471,13 +471,11 @@ function DebriefPageActive({
   qc: ReturnType<typeof useQueryClient>;
   toast: ReturnType<typeof useToast>["toast"];
 }) {
-  // (#823) Always-fresh per-week detail (Week view).
+  // (#823, relaxed) Per-week detail (Week view). Mutations invalidate the
+  // key, so the default cache keeps it fresh without a recompute per mount.
   const detailQ = useGetWeeklyDebrief(activeWeekStart, {
     query: {
       queryKey: getGetWeeklyDebriefQueryKey(activeWeekStart),
-      staleTime: 0,
-      refetchOnMount: "always",
-      refetchOnWindowFocus: true,
     },
   });
   const detail: WeeklyDebriefDetail | undefined = detailQ.data;

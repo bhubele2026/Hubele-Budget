@@ -67,6 +67,63 @@ function deriveStatus(
   return "awaiting_review";
 }
 
+// Cheap badge count: enumerate weeks and derive status from the stored rows
+// alone — no computeWeekVariance recompute. One DB query instead of the
+// ~6-per-week N+1 the full /debrief/weeks listing pays. Status semantics
+// mirror deriveStatus exactly (locked rows win; current/future weeks are
+// in_progress; every other past week awaits review).
+router.get(
+  "/debrief/awaiting-count",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const householdId = req.householdId!;
+    const now = new Date();
+    let from = typeof req.query.from === "string" ? req.query.from : undefined;
+    let to = typeof req.query.to === "string" ? req.query.to : undefined;
+    if ((from && !ISO_DATE.test(from)) || (to && !ISO_DATE.test(to))) {
+      res.status(400).json({ error: "from/to must be YYYY-MM-DD" });
+      return;
+    }
+    from = from
+      ? weekStartFor(from)
+      : fmtISO(addDays(parseISO(currentWeekStart(now)), -7 * 12));
+    to = to ? weekStartFor(to) : currentWeekStart(now);
+    if (from < DEBRIEF_FLOOR_WEEK_START) from = DEBRIEF_FLOOR_WEEK_START;
+    if (to < DEBRIEF_FLOOR_WEEK_START) {
+      res.json({ count: 0 });
+      return;
+    }
+
+    const stored = await db
+      .select({
+        weekStart: weeklyDebriefsTable.weekStart,
+        status: weeklyDebriefsTable.status,
+      })
+      .from(weeklyDebriefsTable)
+      .where(
+        and(
+          eq(weeklyDebriefsTable.householdId, householdId),
+          gte(weeklyDebriefsTable.weekStart, from),
+          lte(weeklyDebriefsTable.weekStart, to),
+        ),
+      );
+    const lockedWeeks = new Set(
+      stored.filter((r) => r.status === "locked").map((r) => r.weekStart),
+    );
+
+    const curr = currentWeekStart(now);
+    let count = 0;
+    let cur = parseISO(from);
+    const end = parseISO(to);
+    while (cur <= end) {
+      const ws = fmtISO(cur);
+      if (ws < curr && !lockedWeeks.has(ws)) count++;
+      cur = addDays(cur, 7);
+    }
+    res.json({ count });
+  },
+);
+
 router.get("/debrief/weeks", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;
   const now = new Date();
@@ -122,45 +179,55 @@ router.get("/debrief/weeks", requireAuth, async (req, res): Promise<void> => {
     netSummary: { plannedNet: string; actualNet: string; varianceNet: string };
     lockedAt: string | null;
   }> = [];
-  let cur = parseISO(from);
-  const end = parseISO(to);
-  while (cur <= end) {
-    const ws = fmtISO(cur);
-    const we = weekEndFor(ws);
-    const row = byWeek.get(ws) ?? null;
-    const status = deriveStatus(ws, row, now);
-    let openItemsCount = 0;
-    let netSummary = {
-      plannedNet: "0.00",
-      actualNet: "0.00",
-      varianceNet: "0.00",
-    };
-    if (status === "locked" && row?.varianceSnapshot) {
-      openItemsCount = 0;
-      netSummary = {
-        plannedNet: row.varianceSnapshot.totals.plannedNet,
-        actualNet: row.varianceSnapshot.totals.actualNet,
-        varianceNet: row.varianceSnapshot.totals.varianceNet,
-      };
-    } else {
-      const snap = await computeWeekVariance(householdId, ws, { now });
-      openItemsCount = snap.openItemsCount;
-      netSummary = {
-        plannedNet: snap.totals.plannedNet,
-        actualNet: snap.totals.actualNet,
-        varianceNet: snap.totals.varianceNet,
-      };
+  const weekStarts: string[] = [];
+  {
+    let cur = parseISO(from);
+    const end = parseISO(to);
+    while (cur <= end) {
+      weekStarts.push(fmtISO(cur));
+      cur = addDays(cur, 7);
     }
-    out.push({
-      weekStart: ws,
-      weekEnd: we,
-      status,
-      openItemsCount,
-      netSummary,
-      lockedAt: row?.lockedAt ? row.lockedAt.toISOString() : null,
-    });
-    cur = addDays(cur, 7);
   }
+  // Non-locked weeks each need a variance recompute (~6 queries). Run them
+  // concurrently instead of the previous strictly-sequential walk — with a
+  // 6-month window that was ~84 serial DB round-trips per request.
+  const computed = await Promise.all(
+    weekStarts.map(async (ws) => {
+      const row = byWeek.get(ws) ?? null;
+      const status = deriveStatus(ws, row, now);
+      let openItemsCount = 0;
+      let netSummary = {
+        plannedNet: "0.00",
+        actualNet: "0.00",
+        varianceNet: "0.00",
+      };
+      if (status === "locked" && row?.varianceSnapshot) {
+        openItemsCount = 0;
+        netSummary = {
+          plannedNet: row.varianceSnapshot.totals.plannedNet,
+          actualNet: row.varianceSnapshot.totals.actualNet,
+          varianceNet: row.varianceSnapshot.totals.varianceNet,
+        };
+      } else {
+        const snap = await computeWeekVariance(householdId, ws, { now });
+        openItemsCount = snap.openItemsCount;
+        netSummary = {
+          plannedNet: snap.totals.plannedNet,
+          actualNet: snap.totals.actualNet,
+          varianceNet: snap.totals.varianceNet,
+        };
+      }
+      return {
+        weekStart: ws,
+        weekEnd: weekEndFor(ws),
+        status,
+        openItemsCount,
+        netSummary,
+        lockedAt: row?.lockedAt ? row.lockedAt.toISOString() : null,
+      };
+    }),
+  );
+  out.push(...computed);
 
   res.json({ weeks: out });
 });

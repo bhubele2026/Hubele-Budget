@@ -9,6 +9,10 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface BadgeCount {
+  count: number;
+}
+
 export interface BudgetHealthDimension {
   key: string;
   label: string;
@@ -3842,6 +3846,11 @@ export type ListWeeklySettlementsParams = {
 
 export type ReopenWeekParams = {
   weekStart: string;
+};
+
+export type GetDebriefAwaitingCountParams = {
+  from?: string;
+  to?: string;
 };
 
 export type ListWeeklyDebriefsParams = {

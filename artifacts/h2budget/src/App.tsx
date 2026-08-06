@@ -135,12 +135,13 @@ const queryClient = new QueryClient({
 // the main remaining navigation lag on Dashboard / Forecast / Reports (each
 // pulls the whole bundle). With background auto-sync off they only change on
 // an explicit Sync or edit, and both paths now invalidate these keys
-// (transaction mutations + runSync). A short 30s staleTime lets rapid
-// Dashboard↔Forecast↔Reports navigation reuse the cache, while any missed
-// invalidation self-heals within 30s. keepPreviousData still avoids a
-// skeleton flash on the background revalidate.
+// (transaction mutations + runSync). 5 min staleTime: any pause between
+// clicks longer than the old 30s re-ran the app's most expensive handler
+// (~30-40 queries) for no freshness gain — every write path invalidates.
+// keepPreviousData still avoids a skeleton flash on the background
+// revalidate.
 const FORECAST_CACHE = {
-  staleTime: 30_000,
+  staleTime: 5 * 60_000,
   refetchOnWindowFocus: false,
 } as const;
 queryClient.setQueryDefaults(["/api/forecast"], FORECAST_CACHE);

@@ -1,16 +1,15 @@
-import { useMemo } from "react";
-import { useListWeeklyDebriefs } from "@workspace/api-client-react";
+import { useGetDebriefAwaitingCount } from "@workspace/api-client-react";
 
 /**
- * Count of `awaiting_review` weeks across the last ~6 months. Drives
- * the "Debrief" sidebar badge — mirrors `useReviewInboxCount`'s
- * pattern (read existing endpoint, derive a number, hide-at-zero
- * handled by the layout).
+ * Count of `awaiting_review` weeks across the last ~6 months. Drives the
+ * "Debrief" sidebar badge. Served by GET /debrief/awaiting-count, which
+ * derives week status from the stored rows alone (one query) — the layout
+ * used to trigger the full /debrief/weeks variance recompute (~6 queries
+ * per week) on every navigation just for this integer.
  *
- * We use a fixed 180-day backwards window from today rather than
- * pulling unbounded history — the badge is meant to surface the
- * actionable backlog, not historic locked weeks, and a fixed window
- * keeps the underlying query cacheable.
+ * Fixed 180-day backwards window from today: the badge surfaces the
+ * actionable backlog, not historic locked weeks, and a fixed window keeps
+ * the query cacheable.
  */
 export function useDebriefAwaitingCount(): number {
   const today = new Date();
@@ -19,12 +18,18 @@ export function useDebriefAwaitingCount(): number {
   fromDate.setDate(fromDate.getDate() - 180);
   const fromISO = fmtISO(fromDate);
 
-  const { data } = useListWeeklyDebriefs({ from: fromISO, to: toISO });
-
-  return useMemo(() => {
-    if (!data?.weeks) return 0;
-    return data.weeks.filter((w) => w.status === "awaiting_review").length;
-  }, [data]);
+  const params = { from: fromISO, to: toISO };
+  const { data } = useGetDebriefAwaitingCount(params, {
+    query: {
+      // Deliberately keyed UNDER the '/api/debrief/weeks' prefix so every
+      // existing `invalidateQueries({queryKey: getListWeeklyDebriefsQueryKey()})`
+      // site (lock week, resolve items) refreshes this badge too.
+      queryKey: ["/api/debrief/weeks", "awaiting-count", params],
+      staleTime: 10 * 60_000,
+      gcTime: 30 * 60_000,
+    },
+  });
+  return data?.count ?? 0;
 }
 
 function fmtISO(d: Date): string {
