@@ -121,6 +121,8 @@ vi.mock("@workspace/api-client-react", async () => {
   return {
     TransactionWeeklyBucket,
     useGetSettings: () => ({ data: undefined }),
+    useGetAmexWeeklyPayoff: () => ({ data: undefined, isLoading: false }),
+    getGetAmexWeeklyPayoffQueryKey: () => ["/api/amex/weekly-payoff"],
     useListTransactions: (
       params: { limit?: number; from?: string; to?: string; source?: string } = {},
       opts?: { query?: Record<string, unknown> },

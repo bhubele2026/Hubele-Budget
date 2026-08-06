@@ -9,7 +9,7 @@ export default function DebtPage() {
     <ReportShell
       crumb="Debt Payoff"
       title="Debt Payoff"
-      blurb="Momentum on the avalanche — what's falling, what's next, and when you're free."
+      blurb="Momentum on the payoff — what's shrinking, what's next, and when you're free."
     >
       <DebtSection
         debts={d.debts ?? []}

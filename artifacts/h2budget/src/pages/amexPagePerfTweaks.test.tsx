@@ -101,6 +101,8 @@ vi.mock("@workspace/api-client-react", () => {
   return {
     TransactionWeeklyBucket,
     useGetSettings: () => ({ data: undefined }),
+    useGetAmexWeeklyPayoff: () => ({ data: undefined, isLoading: false }),
+    getGetAmexWeeklyPayoffQueryKey: () => ["/api/amex/weekly-payoff"],
     useListTransactions: (params: { limit?: number } = {}) => {
       // Trend (12-month) query: stays loading so the page doesn't
       // depend on it for first paint.

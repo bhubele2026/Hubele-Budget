@@ -125,6 +125,8 @@ vi.mock("@workspace/api-client-react", () => {
   return {
     TransactionWeeklyBucket,
     useGetSettings: () => ({ data: undefined }),
+    useGetAmexWeeklyPayoff: () => ({ data: undefined, isLoading: false }),
+    getGetAmexWeeklyPayoffQueryKey: () => ["/api/amex/weekly-payoff"],
     useListTransactions: (params: { limit?: number } = {}) => {
       if ((params.limit ?? 0) >= 5000) {
         return { data: undefined, isLoading: true };

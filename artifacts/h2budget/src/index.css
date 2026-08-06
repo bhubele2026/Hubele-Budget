@@ -495,8 +495,8 @@
     transform: translateY(-1px);
     box-shadow: 0 14px 30px -16px rgba(0, 0, 0, 0.46);
   }
-  /* Roast card — a solid deep-red "danger" block. Static, no sheen. */
-  .roast-card {
+  /* Review-spending CTA — a solid deep-red "danger" block. Static, no sheen. */
+  .review-cta {
     background-image: none;
     background-color: hsl(4 62% 44%);
     border: none;

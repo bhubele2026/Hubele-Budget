@@ -107,7 +107,7 @@ export function AdvisorChat() {
 
   if (!nudge?.enabled) return null;
 
-  const ROAST_PROMPT =
+  const REVIEW_PROMPT =
     "Review my recent spending. Show me where the biggest problem areas are, how they affect the payoff date, and the one move that would help most right now.";
 
   const send = (explicit?: string) => {
@@ -208,10 +208,10 @@ export function AdvisorChat() {
           <div className="border-t px-3 pt-2 pb-3 space-y-2">
             <button
               type="button"
-              onClick={() => send(ROAST_PROMPT)}
+              onClick={() => send(REVIEW_PROMPT)}
               disabled={mutation.isPending}
-              data-testid="advisor-roast-me"
-              className="roast-card relative overflow-hidden w-full rounded-[10px] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white disabled:opacity-50"
+              data-testid="advisor-review-spending"
+              className="review-cta relative overflow-hidden w-full rounded-[10px] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white disabled:opacity-50"
             >
               <span className="relative z-10">Review my spending</span>
             </button>

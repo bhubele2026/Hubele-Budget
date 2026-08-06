@@ -80,6 +80,7 @@ vi.mock("@workspace/api-client-react", () => {
   const noop = () => {};
   const asyncNoop = async () => undefined;
   const mutation = { mutate: noop, mutateAsync: asyncNoop, isPending: false };
+  const mutation2 = () => mutation;
   return {
     useListDebts: () => ({ data: SEEDED_DEBTS, isLoading: false }),
     useCreateDebt: () => mutation,
@@ -102,9 +103,18 @@ vi.mock("@workspace/api-client-react", () => {
     useCreateDebtPayment: () => mutation,
     useListCategories: () => ({ data: [] }),
     useGetSettings: () => ({ data: undefined }),
+    useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
+    useGetAmexWeeklyPayoff: () => ({ data: undefined, isLoading: false }),
+    useUpdateSettings: mutation2,
+    useBulkCreateDebtsFromPlaidAccounts: mutation2,
+    getGetSettingsQueryKey: () => ["settings"],
+    getGetAmexWeeklyPayoffQueryKey: () => ["amex-weekly-payoff"],
     getListDebtsQueryKey: () => ["debts"],
     getGetAvalancheSettingsQueryKey: () => ["av-settings"],
     getGetAvalancheExtraQueryKey: () => ["av-extra"],
+    getGetBillsSummaryQueryKey: () => ["bills-summary"],
+    getGetForecastQueryKey: () => ["forecast"],
+    getGetBudgetMonthQueryKey: () => ["budget-month"],
   };
 });
 
@@ -129,9 +139,9 @@ describe("Avalanche page — seeded plan with mixed solvable + underwater debts"
   it("shows finite stat-strip numbers (not ∞) and an 'excludes N underwater' caption", () => {
     renderPage();
 
-    // The "Months to free" cell must NOT show ∞ — the page should fall back
+    // The "Months to freedom" cell must NOT show ∞ — the page should fall back
     // to the solvable subset when the full sim runs out of time.
-    const stat = screen.getByText("Months to free");
+    const stat = screen.getByText("Months to freedom");
     const cellText = stat.parentElement?.textContent ?? "";
     expect(cellText).not.toContain("∞");
     expect(cellText).toMatch(/excludes 1 underwater debt/i);
@@ -155,7 +165,9 @@ describe("Avalanche page — seeded plan with mixed solvable + underwater debts"
   it("'Your next 3 moves' uses the simulator's payoff cascade, not raw APR sort (underwater debt is not card 1)", () => {
     renderPage();
     const heading = screen.getByText("Your next 3 moves");
-    const section = heading.closest("div")!.parentElement!;
+    // SectionHeader nests the title, so climb to the section wrapper that
+    // holds both the header and the cards grid.
+    const section = heading.closest(".space-y-3")!;
     const cards = section.querySelectorAll(".grid > div");
     expect(cards.length).toBeGreaterThan(0);
     const firstCardText = cards[0]?.textContent ?? "";

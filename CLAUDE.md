@@ -46,7 +46,7 @@ to get the household out of debt; correctness and trust beat everything.
 
 - **One shared design system.** Reuse the existing primitives — `RingStat`,
   `Sparkline`, `MiniBars`, `StackBar`, `MoneyText`, `stat-tile`, `pill-badge`,
-  `kill-stack`, `drill-card`, plus the `components/stat/` kit (`RingMeter`,
+  `drill-card`, plus the `components/stat/` kit (`RingMeter`,
   `StatusPill`, `TrendSparkline`, `FillMeter`, `WhyExpander`, `SectionHeader`,
   `Callout`) — and centralized tokens (`index.css`, `lib/statusThresholds.ts`).
   **Do not introduce one-off card/pill/chart styles.**
@@ -56,12 +56,12 @@ to get the household out of debt; correctness and trust beat everything.
 - **No route may render a blank screen.** Unfinished/loading routes show a
   placeholder or skeleton **inside the shared layout** (`PageSkeleton`), never
   a white page.
-- **Voice:** savage, profane, brutally funny — **no-mercy, by explicit owner
-  request.** Swearing and hard roasting are encouraged, but aim every shot at
-  the **spending and the debt** (receipts, splurges, payoff date), never at a
-  person's looks, body, intelligence, or worth; no slurs, nothing sexual. A
-  furious coach who's 100% on the household's side, every nudge pointed at
-  getting out of debt. (Single source of truth: `advisorVoice.ts` VOICE_SYSTEM.)
+- **Voice:** a serious, supportive, professional financial advisor — calm,
+  clear, genuinely helpful. **No sass, no profanity, no roasting** (the owner
+  explicitly reversed the earlier savage voice in 2026-07). Tie every point to
+  a real number and a next action; frame partial periods as "so far"; every
+  nudge pointed at getting out of debt. (Single source of truth:
+  `advisorVoice.ts` VOICE_SYSTEM; UI microcopy follows the same tone.)
 
 ## 4. Workflow
 
@@ -88,6 +88,9 @@ to get the household out of debt; correctness and trust beat everything.
   - `pnpm run build` — typecheck + build
   - `pnpm --filter @workspace/api-spec run codegen` — regen API hooks + Zod
   - `pnpm --filter @workspace/db run push` — push DB schema (dev only)
-- **Deploy:** GitHub `main` is the source of truth; the Replit autoscale deploy
-  pulls from it. Pinned `packageManager: pnpm@10.34.3`; the deploy needs the
-  `CI=true` env var set. Never deploy unreviewed work.
+- **Deploy:** GitHub `main` is the source of truth; **Render** auto-deploys
+  `main` (single Web Service `h2budget` serving SPA + `/api`, health check
+  `/api/healthz`, live at https://h2budget.onrender.com). Pinned
+  `packageManager: pnpm@10.34.3`, Node 24. Verify `/api/version` matches the
+  merge SHA after deploy. (Replit remains only as a dormant rollback.) Never
+  deploy unreviewed work.

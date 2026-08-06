@@ -161,7 +161,7 @@ const TXN_CACHE = {
 queryClient.setQueryDefaults(["/api/transactions"], TXN_CACHE);
 // Amex weekly-payoff is derived from transactions; it only changes on a sync
 // or a transaction edit, both of which invalidate it. Cache like transactions
-// so the Kill Stack (Home + Allowance) doesn't re-tally on every nav.
+// so its consumers don't re-tally on every nav.
 queryClient.setQueryDefaults(["/api/amex/weekly-payoff"], TXN_CACHE);
 // Weekly-debrief summaries (the list of weeks + per-week detail). Was
 // ALWAYS_FRESH — refetched on EVERY Allowances/Debrief mount (the audit's

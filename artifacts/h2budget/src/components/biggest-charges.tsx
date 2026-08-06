@@ -10,13 +10,12 @@ import {
 const fmt$ = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
 
 /**
- * Wall of Shame — the month's three most reckless single charges, ranked on a
- * podium and roasted. Numbers come straight from the transactions (we never
- * invent a figure); the captions are the savage voice wrapped around them. Aims
- * at the PURCHASE, never the person. Hidden until there's at least one charge.
+ * Biggest charges — the month's three largest single discretionary purchases,
+ * ranked on a podium. Numbers come straight from the transactions (we never
+ * invent a figure). Hidden until there's at least one charge.
  */
 
-type Crime = { desc: string; amt: number; member: string | null; date: string };
+type Charge = { desc: string; amt: number; member: string | null; date: string };
 
 const PODIUM = [
   {
@@ -41,7 +40,7 @@ const PODIUM = [
   },
 ];
 
-export function WallOfShame({
+export function BiggestCharges({
   transactions,
   recurringNames = [],
   className,
@@ -51,7 +50,7 @@ export function WallOfShame({
   recurringNames?: string[];
   className?: string;
 }) {
-  const crimes = useMemo<Crime[]>(() => {
+  const charges = useMemo<Charge[]>(() => {
     const now = new Date();
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const isRecurring = makeRecurringMatcher(recurringNames);
@@ -73,7 +72,7 @@ export function WallOfShame({
       .slice(0, 3);
   }, [transactions, recurringNames]);
 
-  if (crimes.length === 0) return null;
+  if (charges.length === 0) return null;
 
   return (
     <div className={className}>
@@ -84,7 +83,7 @@ export function WallOfShame({
         </span>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        {crimes.map((c, i) => {
+        {charges.map((c, i) => {
           const p = PODIUM[i];
           return (
             <div

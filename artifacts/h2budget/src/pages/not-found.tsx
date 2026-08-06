@@ -12,15 +12,15 @@ export default function NotFound() {
           This page doesn&apos;t exist.
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Kind of like your dining budget this month. 😬 Let&apos;s get you back
-          somewhere useful.
+          The page you&apos;re looking for isn&apos;t here. Let&apos;s get you
+          back somewhere useful.
         </p>
         <div className="mt-5 flex items-center justify-center gap-2">
           <Link href="/home">
             <Button>Take me home</Button>
           </Link>
-          <Link href="/allowances">
-            <Button variant="outline">Check the damage</Button>
+          <Link href="/banking">
+            <Button variant="outline">Go to Banking</Button>
           </Link>
         </div>
       </div>

@@ -67,6 +67,7 @@ vi.mock("@workspace/api-client-react", () => {
   const noop = () => {};
   const asyncNoop = async () => undefined;
   const mutation = { mutate: noop, mutateAsync: asyncNoop, isPending: false };
+  const mutation2 = () => mutation;
   return {
     useListDebts: () => ({ data: SEEDED_DEBTS, isLoading: false }),
     useCreateDebt: () => mutation,
@@ -89,9 +90,18 @@ vi.mock("@workspace/api-client-react", () => {
     useCreateDebtPayment: () => mutation,
     useListCategories: () => ({ data: [] }),
     useGetSettings: () => ({ data: undefined }),
+    useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
+    useGetAmexWeeklyPayoff: () => ({ data: undefined, isLoading: false }),
+    useUpdateSettings: mutation2,
+    useBulkCreateDebtsFromPlaidAccounts: mutation2,
+    getGetSettingsQueryKey: () => ["settings"],
+    getGetAmexWeeklyPayoffQueryKey: () => ["amex-weekly-payoff"],
     getListDebtsQueryKey: () => ["debts"],
     getGetAvalancheSettingsQueryKey: () => ["av-settings"],
     getGetAvalancheExtraQueryKey: () => ["av-extra"],
+    getGetBillsSummaryQueryKey: () => ["bills-summary"],
+    getGetForecastQueryKey: () => ["forecast"],
+    getGetBudgetMonthQueryKey: () => ["budget-month"],
   };
 });
 

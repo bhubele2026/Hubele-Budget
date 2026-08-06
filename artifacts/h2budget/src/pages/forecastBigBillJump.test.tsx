@@ -309,7 +309,7 @@ describe("Forecast — big-bill marker click jumps to plan row (#335 / #388)", (
 
     // Pre-click: the matching plan row exists and has no sky highlight ring.
     const rentRowBefore = screen.getByTestId("plan-row-rent-2026-05-01");
-    expect(rentRowBefore.className).not.toMatch(/ring-sky-400/);
+    expect(rentRowBefore.className).not.toMatch(/ring-primary/);
 
     fireEvent.click(marker);
 
@@ -320,7 +320,7 @@ describe("Forecast — big-bill marker click jumps to plan row (#335 / #388)", (
 
     // The matching row now carries the highlight ring class.
     const rentRowAfter = screen.getByTestId("plan-row-rent-2026-05-01");
-    expect(rentRowAfter.className).toMatch(/ring-sky-400/);
+    expect(rentRowAfter.className).toMatch(/ring-primary/);
 
     // And it was scrolled into view (the call lives on the matched element,
     // so its `this` is that element).
@@ -336,7 +336,7 @@ describe("Forecast — big-bill marker click jumps to plan row (#335 / #388)", (
     // The OTHER plan row (gym) is not highlighted — we only ring the row
     // tied to the marker that was clicked.
     const gymRow = screen.getByTestId("plan-row-gym-2026-05-15");
-    expect(gymRow.className).not.toMatch(/ring-sky-400/);
+    expect(gymRow.className).not.toMatch(/ring-primary/);
   });
 
   it("clicking a bill inside the marker tooltip jumps to that specific plan row", async () => {
@@ -352,7 +352,7 @@ describe("Forecast — big-bill marker click jumps to plan row (#335 / #388)", (
     // Sanity: the gym row starts un-highlighted.
     expect(
       screen.getByTestId("plan-row-gym-2026-05-15").className,
-    ).not.toMatch(/ring-sky-400/);
+    ).not.toMatch(/ring-primary/);
 
     fireEvent.click(tooltipBill);
 
@@ -362,7 +362,7 @@ describe("Forecast — big-bill marker click jumps to plan row (#335 / #388)", (
 
     // The gym plan row is now ringed and was scrolled into view.
     const gymRowAfter = screen.getByTestId("plan-row-gym-2026-05-15");
-    expect(gymRowAfter.className).toMatch(/ring-sky-400/);
+    expect(gymRowAfter.className).toMatch(/ring-primary/);
 
     expect(scrollIntoViewMock).toHaveBeenCalled();
     const lastCall =
@@ -376,6 +376,6 @@ describe("Forecast — big-bill marker click jumps to plan row (#335 / #388)", (
     // The unrelated rent row stays un-highlighted.
     expect(
       screen.getByTestId("plan-row-rent-2026-05-01").className,
-    ).not.toMatch(/ring-sky-400/);
+    ).not.toMatch(/ring-primary/);
   });
 });

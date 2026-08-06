@@ -28,13 +28,13 @@ function toneWash(t: "good" | "bad" | "neutral"): string {
 }
 
 function verdict(net: number, income: number): string {
-  if (income <= 0) return "Sync your accounts and let's see the real damage.";
+  if (income <= 0) return "Sync your accounts to see the full month.";
   if (net >= income * 0.2)
-    return "Genuinely crushing it. Who are you two and what did you do with the DoorDash gremlins?";
-  if (net > 0) return "In the black — barely — but we'll take it. Date night's funded. 😏";
+    return "A strong month — well ahead of spending, with real room for the debt.";
+  if (net > 0) return "In the black this month — a modest surplus, and it counts.";
   if (net > -income * 0.1)
-    return "Basically broke even. Living on the edge — let's build a little cushion next month.";
-  return "Spent more than you made this month. Let's flip it — every dollar back is a dollar off the debt. 🙈";
+    return "Close to break-even. A small cushion next month would help.";
+  return "Spending exceeded income this month. Every dollar back next month goes straight at the debt.";
 }
 
 // A single huge count-up number for a slide.
@@ -104,10 +104,10 @@ export function MonthlyWrapped({
       body: (
         <div className="space-y-2">
           <div className="text-3xl md:text-4xl font-extrabold tracking-tight">
-            The Hubeles, by the numbers.
+            Your month, by the numbers.
           </div>
           <div className="text-sm text-muted-foreground">
-            Tap through your month. Brace yourselves.
+            Tap through the highlights.
           </div>
         </div>
       ),
@@ -184,9 +184,9 @@ export function MonthlyWrapped({
 
   const share = () => {
     const text =
-      `Our ${monthLabel()}, Wrapped 💸\n` +
+      `Our ${monthLabel()}, Wrapped\n` +
       `In: ${formatCurrency(income)} · Out: ${formatCurrency(spend)} · Net: ${formatCurrency(net)}\n` +
-      (biggest ? `Biggest hit: ${biggest.desc} ${formatCurrency(biggest.amt)}\n` : "") +
+      (biggest ? `Largest purchase: ${biggest.desc} ${formatCurrency(biggest.amt)}\n` : "") +
       `Verdict: ${verdict(net, income)}`;
     try {
       void navigator.clipboard?.writeText(text);

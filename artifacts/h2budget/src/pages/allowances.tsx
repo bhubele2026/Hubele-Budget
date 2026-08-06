@@ -16,7 +16,6 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useToCancelList, toCancelKey } from "@/hooks/useToCancelList";
 import { MiniBars } from "@/components/viz";
 import {
   SectionHeader,
@@ -110,7 +109,7 @@ import { expenseMagnitude as expenseAmount } from "@/lib/bucketSpend";
 // How many COMPLETED weeks in a row, ending last week, did they blow the
 // weekly allowance? Walks back week-by-week from the last finished Sun–Sat
 // week and stops the first time a week came in at/under plan. This is the
-// deterministic spine of the "you went over AGAIN" roast — no AI required.
+// deterministic spine of the over-budget streak banner — no AI required.
 function weeklyOverStreak(
   txns: Transaction[],
   weeklyAmt: number,
@@ -143,10 +142,9 @@ function weeklyOverStreak(
   return streak;
 }
 
-// Escalating, multi-country trash talk for an over-budget streak. Earned and
-// true — only ever shown when the streak is real. Gets nastier the longer
-// they keep blowing it.
-function roastForStreak(n: number): string {
+// Message for an over-budget streak. Earned and true — only ever shown when
+// the streak is real; firmer the longer it runs.
+function messageForOverStreak(n: number): string {
   if (n <= 1) return "";
   if (n === 2)
     return "Two weeks over your weekly allowance. Let's not make it a habit — tighten it up and that's days off the payoff date.";
@@ -159,7 +157,7 @@ function roastForStreak(n: number): string {
   return `${n} weeks over budget in a row. Deep breath, reset the week — every dollar back is a dollar off the debt.`;
 }
 
-// The positive counterpart to roastForStreak — how many COMPLETED weeks in a
+// The positive counterpart to messageForOverStreak — how many COMPLETED weeks in a
 // row, ending last week, they came in AT or UNDER the weekly allowance. Same
 // deterministic walk-back; drives the "look at you" hype banner.
 function weeklyUnderStreak(
@@ -194,8 +192,8 @@ function weeklyUnderStreak(
   return streak;
 }
 
-// Earned praise for an under-budget streak — same affectionate register as the
-// roast, just pointed the other way. Only ever shown when the streak is real.
+// Earned praise for an under-budget streak — the encouraging counterpart.
+// Only ever shown when the streak is real.
 function praiseForStreak(n: number): string {
   if (n <= 1) return "";
   if (n === 2)
@@ -263,8 +261,6 @@ function TxnRow({
   onChangeBucket,
   categories,
   onChangeCategory,
-  onToCancel,
-  isToCancel,
   onSplit,
 }: {
   t: Transaction;
@@ -272,8 +268,6 @@ function TxnRow({
   onChangeBucket?: (t: Transaction, sub: SubBucket) => void;
   categories?: { id: string; name: string }[];
   onChangeCategory?: (t: Transaction, categoryId: string) => void;
-  onToCancel?: (t: Transaction) => void;
-  isToCancel?: boolean;
   onSplit?: (t: Transaction) => void;
 }) {
   const current: SubBucket = SUB_BUCKETS.includes(t.weeklyBucket as SubBucket)
@@ -347,24 +341,6 @@ function TxnRow({
             Split
           </Button>
         )}
-        {onToCancel && (
-          <Button
-            type="button"
-            variant={isToCancel ? "secondary" : "ghost"}
-            size="sm"
-            className="h-7 px-2 text-xs w-[96px] justify-center shrink-0"
-            onClick={() => onToCancel(t)}
-            data-testid={`allowance-to-cancel-${t.id}`}
-            title={
-              isToCancel
-                ? "On your To-cancel list"
-                : "Add to your To-cancel list"
-            }
-          >
-            <Ban className="w-3.5 h-3.5 mr-1.5" />
-            {isToCancel ? "On list" : "To cancel"}
-          </Button>
-        )}
         <span className="tabular-nums whitespace-nowrap font-mono w-24 text-right shrink-0">
           {formatCurrency(expenseAmount(t))}
         </span>
@@ -379,8 +355,6 @@ function CategoryGroupRow({
   onChangeBucket,
   categories,
   onChangeCategory,
-  onToCancel,
-  isToCancel,
   onSplit,
 }: {
   group: Group;
@@ -388,8 +362,6 @@ function CategoryGroupRow({
   onChangeBucket?: (t: Transaction, sub: SubBucket) => void;
   categories?: { id: string; name: string }[];
   onChangeCategory?: (t: Transaction, categoryId: string) => void;
-  onToCancel?: (t: Transaction) => void;
-  isToCancel?: (t: Transaction) => boolean;
   onSplit?: (t: Transaction) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -432,8 +404,6 @@ function CategoryGroupRow({
             onChangeBucket={onChangeBucket}
             categories={categories}
             onChangeCategory={onChangeCategory}
-            onToCancel={onToCancel}
-            isToCancel={isToCancel?.(t)}
             onSplit={onSplit}
           />
         ))}
@@ -444,9 +414,8 @@ function CategoryGroupRow({
 
 // ----- bucket summary card --------------------------------------------
 
-// A little trash talk. Reacts to how much of the planned allowance is spent —
-// fun, but also a real at-a-glance gut check. Keeps it light and just-for-us.
-function funVerdict(actual: number, planned: number): string | null {
+// At-a-glance verdict on how much of the planned allowance is spent.
+function paceVerdict(actual: number, planned: number): string | null {
   if (planned <= 0) return null;
   const r = actual / planned;
   if (r <= 0.4) return "Well under budget — plenty of room left.";
@@ -866,28 +835,6 @@ export default function AllowancesPage() {
     }
   };
 
-  // (#to-cancel) Flag an unplanned charge onto the shared "To cancel" list
-  // (the same bucket surfaced under Reports → Behavior → Subscriptions). We
-  // treat it as a recurring monthly drain so the bucket's annual-savings
-  // total is meaningful; the user can remove it if it was a one-off.
-  const toCancel = useToCancelList();
-  const toCancelKeyFor = (t: Transaction) =>
-    toCancelKey(t.displayName || t.description);
-  const handleToCancelTxn = (t: Transaction) => {
-    const key = toCancelKeyFor(t);
-    if (toCancel.has(key)) {
-      toCancel.remove(key);
-      return;
-    }
-    const monthly = Math.abs(expenseAmount(t));
-    toCancel.add({
-      key,
-      name: t.displayName || t.description,
-      monthly,
-      annual: monthly * 12,
-    });
-  };
-
   // Change a transaction's CATEGORY from the Monthly / Unplanned breakdown
   // (those group by real category, unlike Weekly's sub-buckets).
   const changeCategory = async (t: Transaction, categoryId: string) => {
@@ -1000,7 +947,7 @@ export default function AllowancesPage() {
     return out;
   }, [windowTxns, monthScopeTxns]);
 
-  // The "you went over AGAIN" streak — drives the roast banner up top.
+  // The consecutive-weeks-over streak — drives the warning banner up top.
   const overStreak = useMemo(
     () =>
       weeklyOverStreak(
@@ -1137,11 +1084,11 @@ export default function AllowancesPage() {
         })}
       </StatTileRow>
 
-      {roastForStreak(overStreak) ? (
+      {messageForOverStreak(overStreak) ? (
         <div
           className="rounded-md border-2 px-4 py-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300"
           style={{ background: "hsl(var(--negative) / 0.08)", borderColor: "hsl(var(--negative) / 0.5)" }}
-          data-testid="allowance-roast"
+          data-testid="allowance-over-streak"
         >
           <Ban className="w-5 h-5 mt-0.5 shrink-0 text-[hsl(var(--negative))] animate-pulse" />
           <div className="min-w-0">
@@ -1149,7 +1096,7 @@ export default function AllowancesPage() {
               ⚠ Over budget · {overStreak} weeks running
             </div>
             <div className="text-sm font-bold text-foreground mt-1 leading-snug">
-              {roastForStreak(overStreak)}
+              {messageForOverStreak(overStreak)}
             </div>
           </div>
         </div>
@@ -1267,14 +1214,6 @@ export default function AllowancesPage() {
                           }
                           onChangeCategory={
                             b.key !== "weekly" ? changeCategory : undefined
-                          }
-                          onToCancel={
-                            b.key !== "weekly" ? handleToCancelTxn : undefined
-                          }
-                          isToCancel={
-                            b.key !== "weekly"
-                              ? (t) => toCancel.has(toCancelKeyFor(t))
-                              : undefined
                           }
                           onSplit={setSplitTx}
                         />

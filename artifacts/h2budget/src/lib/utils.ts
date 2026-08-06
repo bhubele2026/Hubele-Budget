@@ -70,7 +70,13 @@ export function formatRelativeTime(
 export function formatDate(dateStr: string | undefined | null) {
   if (!dateStr) return "";
   try {
-    const date = new Date(dateStr);
+    // Date-only strings (YYYY-MM-DD) parse as UTC midnight but format in the
+    // local zone, which shifts them a day early anywhere west of UTC — build
+    // them as local dates instead.
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+    const date = m
+      ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      : new Date(dateStr);
     return new Intl.DateTimeFormat("en-US", {
       month: "short",
       day: "numeric",

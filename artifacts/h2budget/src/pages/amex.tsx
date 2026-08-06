@@ -222,8 +222,8 @@ export default function AmexPage() {
   // an inherently forward-12-month projection, so the toggle scopes the
   // ledger, not that chart.)
   const [rangeMode, setRangeMode] = useState<RangeMode>("wk");
-  // Honor `?accountId=<external Plaid account_id>` deep-links (the Kill Stack
-  // rows + Home/Allowance per-card drills land here pre-filtered to one card).
+  // Honor `?accountId=<external Plaid account_id>` deep-links (per-card
+  // drills land here pre-filtered to one card).
   const [cardFilter, setCardFilter] = useState<string>(() => {
     if (typeof window !== "undefined") {
       const a = new URLSearchParams(window.location.search).get("accountId");

@@ -78,8 +78,7 @@ import { DrillCard } from "@/components/drill-card";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { SectionHeader, Callout } from "@/components/stat";
 import { BudgetHealthCard } from "@/components/budget-health-card";
-import { SpenderSpotlight } from "@/components/spender-spotlight";
-import { WallOfShame } from "@/components/wall-of-shame";
+import { BiggestCharges } from "@/components/biggest-charges";
 import { BankingInsights } from "@/components/banking-insights";
 import { PillBadge } from "@/components/pill-badge";
 import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@/components/viz";
@@ -101,27 +100,27 @@ const MIX_COLORS = [
   "hsl(var(--chart-5))",
 ];
 
-// A playful "money type" for the month, from the top spend category.
+// Neutral label for the month's top spend category.
 function moneyPersona(cat: string | undefined): { label: string; emoji: string } {
   const c = (cat || "").toLowerCase();
   if (/dining|restaurant|coffee|doordash|takeout|food/.test(c))
-    return { label: "The Foodies", emoji: "🍔" };
+    return { label: "Dining out", emoji: "🍽️" };
   if (/subscription|stream|netflix|spotify|hulu/.test(c))
-    return { label: "The Subscription Hoarders", emoji: "📺" };
-  if (/grocer/.test(c)) return { label: "The Home Chefs", emoji: "🥦" };
+    return { label: "Subscriptions & streaming", emoji: "📺" };
+  if (/grocer/.test(c)) return { label: "Groceries", emoji: "🥦" };
   if (/amazon|shop|retail|clothing|target/.test(c))
-    return { label: "The Add-to-Cart Crew", emoji: "📦" };
+    return { label: "Shopping & retail", emoji: "📦" };
   if (/alcohol|bar|liquor|wine|beer/.test(c))
-    return { label: "The Happy Hour Heroes", emoji: "🍷" };
+    return { label: "Dining & drinks", emoji: "🍷" };
   if (/travel|flight|hotel|airbnb|vacation/.test(c))
-    return { label: "The Jet Setters", emoji: "✈️" };
+    return { label: "Travel", emoji: "✈️" };
   if (/gas|fuel|auto|car|uber|lyft/.test(c))
-    return { label: "The Road Warriors", emoji: "🚗" };
-  if (/pet|dog|cat|vet/.test(c)) return { label: "The Pet Parents", emoji: "🐾" };
+    return { label: "Auto & transport", emoji: "🚗" };
+  if (/pet|dog|cat|vet/.test(c)) return { label: "Pets", emoji: "🐾" };
   if (/kid|child|daycare|school/.test(c))
-    return { label: "The Parents on Duty", emoji: "🍼" };
-  if (!c) return { label: "The Mystery Spenders", emoji: "🕵️" };
-  return { label: `The ${cat} Devotees`, emoji: "💸" };
+    return { label: "Kids & family", emoji: "🍼" };
+  if (!c) return { label: "Uncategorized", emoji: "💳" };
+  return { label: cat ?? "Top category", emoji: "💳" };
 }
 
 // The Banking area's sub-destinations. The global top nav is hidden on the
@@ -337,8 +336,8 @@ export default function CommandCenterPage() {
     // it for any realistic household).
     limit: 1000,
   });
-  // Recurring item names feed the Spotlight / Wall of Shame so bills &
-  // subscriptions are excluded — those roast surfaces want random splurges,
+  // Recurring item names feed the biggest-charges list so bills &
+  // subscriptions are excluded — it should surface one-off splurges,
   // not the mortgage.
   const { data: recurringItemsData } = useListRecurringItems();
   // Current month's budget plan-vs-actual — feeds the four insight buckets
@@ -367,7 +366,7 @@ export default function CommandCenterPage() {
   const [wrappedOpen, setWrappedOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
   const [openStreak, setOpenStreak] = useState(0);
-  // "The Damage" — the secondary/fun surfaces live in a collapsible below the
+  // "Spending detail" — the secondary surfaces live in a collapsible below the
   // spending-control + act-on-it zones, so the top of the page stays calm.
   // Remembers its open/closed state across visits.
   const [damageOpen, setDamageOpen] = useState<boolean>(() => {
@@ -417,8 +416,8 @@ export default function CommandCenterPage() {
   const persona = moneyPersona(dash?.topCategories?.[0]?.categoryName);
 
   // The one, shared discretionary-spend definition for the focal readouts:
-  // isSplurge() from lib/discretionarySpend — the SAME filter SpenderSpotlight /
-  // WallOfShame use. It drops income, reimbursables, transfers, external card
+  // isSplurge() from lib/discretionarySpend — the SAME filter the biggest-charges
+  // list uses. It drops income, reimbursables, transfers, external card
   // payments, debt payments, bill/payment bank-noise, and any known recurring
   // merchant (so no double-counting of transfers/card payments). Returns the
   // absolute dollars spent for whichever txns pass the filter in a window.
@@ -693,7 +692,7 @@ export default function CommandCenterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeklyTxns, dayOfMonth]);
 
-  // Biggest single expense this month — named and shamed.
+  // Biggest single expense this month.
   const biggestSplurge = useMemo(() => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const ym = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
@@ -750,24 +749,24 @@ export default function CommandCenterPage() {
       return {
         color: "hsl(var(--positive))",
         label: "Thriving",
-        blurb: "You two are running this like pros. Don't get cocky.",
+        blurb: "Spending and bills are well under control. Keep the current pace.",
       };
     if (s >= 60)
       return {
         color: "hsl(var(--primary))",
         label: "Solid",
-        blurb: "Good shape — a couple tweaks and you're untouchable.",
+        blurb: "Good shape — a couple of small tweaks would make it stronger.",
       };
     if (s >= 40)
       return {
         color: "hsl(var(--warning))",
         label: "Shaky",
-        blurb: "Wobbling. Tighten the spend before it bites — small cuts, big payoff.",
+        blurb: "Trending over in a few areas — small cuts now will steady the month.",
       };
     return {
       color: "hsl(var(--negative))",
       label: "Critical",
-      blurb: "Flashing red light. Sort it out before it sorts you.",
+      blurb: "Spending is well over plan — slow discretionary purchases this week.",
     };
   }, [healthScore]);
 
@@ -1102,10 +1101,10 @@ export default function CommandCenterPage() {
              creeping up / cancel / new). Server-computed figures only. ────── */}
       <BankingInsights />
 
-      {/* ── What to STOP BUYING — one roast surface (consolidated) ───────── */}
-      <WallOfShame transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
+      {/* ── Largest single purchases this month (consolidated) ───────────── */}
+      <BiggestCharges transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
 
-      {/* ── "The Damage" — everything secondary/fun, collapsed by default so the
+      {/* ── Spending detail — everything secondary, collapsed by default so the
              spending-control + act-on-it zones above stay the focus. ──────── */}
       <div className="rounded-2xl border border-card-border bg-card/40">
         <button
@@ -1117,10 +1116,10 @@ export default function CommandCenterPage() {
         >
           <span className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              The Damage
+              Spending detail
             </span>
             <span className="text-xs text-muted-foreground">
-              receipts, roasts, streaks & the deep cuts
+              reports, trends, streaks & the deeper cuts
             </span>
           </span>
           <ChevronDown
@@ -1259,7 +1258,7 @@ export default function CommandCenterPage() {
             </div>
             <HeatStrip data={dailyHeat.vals} labels={dailyHeat.labels} height={28} />
             <div className="mt-2 text-xs text-muted-foreground">
-              Darker = heavier day. Hover for the damage.
+              Darker = heavier day. Hover for details.
             </div>
           </CardContent>
         </Card>
@@ -1354,7 +1353,7 @@ export default function CommandCenterPage() {
               </div>
               <div className="min-w-0">
                 <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Your money type this month
+                  Top spending category this month
                 </div>
                 <div className="text-lg font-bold tracking-tight">{persona.label}</div>
                 <div className="text-sm text-muted-foreground">
@@ -1392,12 +1391,12 @@ export default function CommandCenterPage() {
               </div>
               <div className="mt-1.5 text-sm text-muted-foreground">
                 {-biggestSplurge.amt > 500
-                  ? "Absolutely unhinged. 😳"
+                  ? "A significant one-off — worth a quick review."
                   : -biggestSplurge.amt > 200
-                    ? "Bold move. 😬"
+                    ? "One of the larger purchases this month."
                     : -biggestSplurge.amt > 100
-                      ? "Noted. 👀"
-                      : "Eh — we've seen worse from you two."}
+                      ? "A mid-sized one-off purchase."
+                      : "A small one-off — nothing unusual."}
               </div>
             </CardContent>
           </Card>
@@ -1437,8 +1436,8 @@ export default function CommandCenterPage() {
                 {formatCurrency(momCompare.cur)} so far vs {formatCurrency(momCompare.last)} by
                 this day last month —{" "}
                 {momCompare.pctChange > 0
-                  ? "spending faster, watch it. 👀"
-                  : "spending less. Nice. 🟢"}
+                  ? "the pace is up — worth keeping an eye on."
+                  : "the pace is down from last month."}
               </div>
               <div className="mt-3">
                 <MiniBars
@@ -1594,7 +1593,7 @@ export default function CommandCenterPage() {
                 <DialogTitle>{drillData.title}</DialogTitle>
                 <DialogDescription>
                   {drillData.txns.length === 0 ? (
-                    "Nothing in here. Suspiciously well-behaved."
+                    "No transactions in this group yet."
                   ) : (
                     <>
                       <span className="font-semibold text-foreground">
