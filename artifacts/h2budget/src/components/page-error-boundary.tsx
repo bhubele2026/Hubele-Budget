@@ -61,9 +61,14 @@ export class PageErrorBoundary extends Component<Props, State> {
             Something on this page errored out — the rest of the app is fine.
             Try again, or switch to another page using the nav.
           </p>
-          <pre className="text-[11px] bg-muted/50 rounded p-2 overflow-auto max-h-40 text-muted-foreground whitespace-pre-wrap">
-            {error.message}
-          </pre>
+          <details className="text-[11px] text-muted-foreground">
+            <summary className="cursor-pointer select-none">
+              Technical detail
+            </summary>
+            <pre className="mt-1 bg-muted/50 rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap">
+              {error.message}
+            </pre>
+          </details>
           <div className="flex gap-2">
             <Button size="sm" onClick={() => this.setState({ error: null })}>
               Try again

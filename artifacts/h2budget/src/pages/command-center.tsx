@@ -366,7 +366,7 @@ export default function CommandCenterPage() {
   const [wrappedOpen, setWrappedOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
   const [openStreak, setOpenStreak] = useState(0);
-  // "The Damage" — the secondary/fun surfaces live in a collapsible below the
+  // "Spending detail" — the secondary surfaces live in a collapsible below the
   // spending-control + act-on-it zones, so the top of the page stays calm.
   // Remembers its open/closed state across visits.
   const [damageOpen, setDamageOpen] = useState<boolean>(() => {

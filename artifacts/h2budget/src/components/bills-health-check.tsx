@@ -131,7 +131,7 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
             {clean ? (
               <p className="text-sm text-muted-foreground">
                 Every bill and minimum payment feeds the forecast exactly once,
-                with a real due date. Nothing looks doubled or mis-dated. ✅
+                with a real due date. Nothing looks doubled or mis-dated.
               </p>
             ) : (
               issues.map((iss, i) => (
