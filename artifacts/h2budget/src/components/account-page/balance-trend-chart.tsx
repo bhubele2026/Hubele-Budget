@@ -385,7 +385,7 @@ function MultiSeriesBalanceTrendChart({
   todayISO,
   axisDates,
   actualColor = "hsl(var(--chart-1))",
-  forecastColor = "hsl(197 63% 58%)",
+  forecastColor = "hsl(var(--chart-2))",
   valueLabel = "Balance",
   testId = "card-balance-trend",
   collapsed,

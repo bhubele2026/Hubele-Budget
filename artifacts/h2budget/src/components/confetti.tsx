@@ -12,11 +12,11 @@ type Piece = {
 };
 
 const COLORS = [
-  "hsl(193 67% 43%)",
-  "hsl(197 63% 58%)",
-  "hsl(45 95% 50%)",
-  "hsl(33 94% 49%)",
-  "hsl(202 55% 40%)",
+  "hsl(var(--primary))",
+  "hsl(var(--splash-violet))",
+  "hsl(var(--splash-orange))",
+  "hsl(var(--positive))",
+  "hsl(var(--chart-2))",
 ];
 
 /**
