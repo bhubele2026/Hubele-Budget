@@ -58,13 +58,12 @@ export function SpendScoreboard({ entries }: { entries: MemberSpend[] }) {
         </div>
         {diff > 0 ? (
           <p className="mt-3 text-xs text-muted-foreground">
-            👑 <span className="font-semibold text-foreground">{winner.name}</span>{" "}
-            is winning — spent {formatCurrency(diff)} less than {loser.name} this
-            month. Don&apos;t let it go to your head. 😏
+            <span className="font-semibold text-foreground">{winner.name}</span>{" "}
+            has spent {formatCurrency(diff)} less than {loser.name} this month.
           </p>
         ) : (
           <p className="mt-3 text-xs text-muted-foreground">
-            Dead even this month. Suspicious. 👀
+            Even spending between you two this month.
           </p>
         )}
       </CardContent>
