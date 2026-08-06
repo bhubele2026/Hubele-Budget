@@ -78,7 +78,6 @@ import { DrillCard } from "@/components/drill-card";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { SectionHeader, Callout } from "@/components/stat";
 import { BudgetHealthCard } from "@/components/budget-health-card";
-import { SpenderSpotlight } from "@/components/spender-spotlight";
 import { WallOfShame } from "@/components/wall-of-shame";
 import { BankingInsights } from "@/components/banking-insights";
 import { PillBadge } from "@/components/pill-badge";
@@ -417,8 +416,8 @@ export default function CommandCenterPage() {
   const persona = moneyPersona(dash?.topCategories?.[0]?.categoryName);
 
   // The one, shared discretionary-spend definition for the focal readouts:
-  // isSplurge() from lib/discretionarySpend — the SAME filter SpenderSpotlight /
-  // WallOfShame use. It drops income, reimbursables, transfers, external card
+  // isSplurge() from lib/discretionarySpend — the SAME filter the biggest-charges
+  // list uses. It drops income, reimbursables, transfers, external card
   // payments, debt payments, bill/payment bank-noise, and any known recurring
   // merchant (so no double-counting of transfers/card payments). Returns the
   // absolute dollars spent for whichever txns pass the filter in a window.
