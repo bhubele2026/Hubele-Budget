@@ -149,7 +149,7 @@ function BankingTile() {
       href="/banking"
       icon={<Landmark className="h-5 w-5" strokeWidth={1.75} />}
       title="Banking"
-      blurb="How you're spending — this week & month, what to cancel, what to stop buying."
+      blurb="How you're spending — this week & month, where it's going, what's creeping up."
       metricLabel={curMonthTotal != null ? "Spent this month" : undefined}
       metric={
         curMonthTotal != null ? <MoneyText amount={curMonthTotal} /> : undefined
@@ -186,7 +186,7 @@ function BillsTile() {
       href="/bills"
       icon={<Receipt className="h-5 w-5" strokeWidth={1.75} />}
       title="Bills"
-      blurb="Your recurring bills & subscriptions — with an AI review of what to cut and what's missing."
+      blurb="Your recurring bills & subscriptions — what's due, what changed, and the monthly total."
       metricLabel={monthlyTotal > 0 ? "Recurring this month" : undefined}
       metric={monthlyTotal > 0 ? <MoneyText amount={monthlyTotal} /> : undefined}
     />

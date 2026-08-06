@@ -16,7 +16,6 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useToCancelList, toCancelKey } from "@/hooks/useToCancelList";
 import { MiniBars } from "@/components/viz";
 import {
   SectionHeader,
@@ -263,8 +262,6 @@ function TxnRow({
   onChangeBucket,
   categories,
   onChangeCategory,
-  onToCancel,
-  isToCancel,
   onSplit,
 }: {
   t: Transaction;
@@ -272,8 +269,6 @@ function TxnRow({
   onChangeBucket?: (t: Transaction, sub: SubBucket) => void;
   categories?: { id: string; name: string }[];
   onChangeCategory?: (t: Transaction, categoryId: string) => void;
-  onToCancel?: (t: Transaction) => void;
-  isToCancel?: boolean;
   onSplit?: (t: Transaction) => void;
 }) {
   const current: SubBucket = SUB_BUCKETS.includes(t.weeklyBucket as SubBucket)
@@ -347,24 +342,6 @@ function TxnRow({
             Split
           </Button>
         )}
-        {onToCancel && (
-          <Button
-            type="button"
-            variant={isToCancel ? "secondary" : "ghost"}
-            size="sm"
-            className="h-7 px-2 text-xs w-[96px] justify-center shrink-0"
-            onClick={() => onToCancel(t)}
-            data-testid={`allowance-to-cancel-${t.id}`}
-            title={
-              isToCancel
-                ? "On your To-cancel list"
-                : "Add to your To-cancel list"
-            }
-          >
-            <Ban className="w-3.5 h-3.5 mr-1.5" />
-            {isToCancel ? "On list" : "To cancel"}
-          </Button>
-        )}
         <span className="tabular-nums whitespace-nowrap font-mono w-24 text-right shrink-0">
           {formatCurrency(expenseAmount(t))}
         </span>
@@ -379,8 +356,6 @@ function CategoryGroupRow({
   onChangeBucket,
   categories,
   onChangeCategory,
-  onToCancel,
-  isToCancel,
   onSplit,
 }: {
   group: Group;
@@ -388,8 +363,6 @@ function CategoryGroupRow({
   onChangeBucket?: (t: Transaction, sub: SubBucket) => void;
   categories?: { id: string; name: string }[];
   onChangeCategory?: (t: Transaction, categoryId: string) => void;
-  onToCancel?: (t: Transaction) => void;
-  isToCancel?: (t: Transaction) => boolean;
   onSplit?: (t: Transaction) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -432,8 +405,6 @@ function CategoryGroupRow({
             onChangeBucket={onChangeBucket}
             categories={categories}
             onChangeCategory={onChangeCategory}
-            onToCancel={onToCancel}
-            isToCancel={isToCancel?.(t)}
             onSplit={onSplit}
           />
         ))}
@@ -866,28 +837,6 @@ export default function AllowancesPage() {
     }
   };
 
-  // (#to-cancel) Flag an unplanned charge onto the shared "To cancel" list
-  // (the same bucket surfaced under Reports → Behavior → Subscriptions). We
-  // treat it as a recurring monthly drain so the bucket's annual-savings
-  // total is meaningful; the user can remove it if it was a one-off.
-  const toCancel = useToCancelList();
-  const toCancelKeyFor = (t: Transaction) =>
-    toCancelKey(t.displayName || t.description);
-  const handleToCancelTxn = (t: Transaction) => {
-    const key = toCancelKeyFor(t);
-    if (toCancel.has(key)) {
-      toCancel.remove(key);
-      return;
-    }
-    const monthly = Math.abs(expenseAmount(t));
-    toCancel.add({
-      key,
-      name: t.displayName || t.description,
-      monthly,
-      annual: monthly * 12,
-    });
-  };
-
   // Change a transaction's CATEGORY from the Monthly / Unplanned breakdown
   // (those group by real category, unlike Weekly's sub-buckets).
   const changeCategory = async (t: Transaction, categoryId: string) => {
@@ -1267,14 +1216,6 @@ export default function AllowancesPage() {
                           }
                           onChangeCategory={
                             b.key !== "weekly" ? changeCategory : undefined
-                          }
-                          onToCancel={
-                            b.key !== "weekly" ? handleToCancelTxn : undefined
-                          }
-                          isToCancel={
-                            b.key !== "weekly"
-                              ? (t) => toCancel.has(toCancelKeyFor(t))
-                              : undefined
                           }
                           onSplit={setSplitTx}
                         />
