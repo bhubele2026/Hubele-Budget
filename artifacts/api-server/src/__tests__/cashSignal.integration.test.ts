@@ -1567,3 +1567,126 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
     ]);
   });
 });
+
+describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab semantics)", () => {
+  async function addPlaidAccount(opts: {
+    externalId: string;
+    name: string;
+  }): Promise<{ id: string; externalId: string }> {
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: `item-${randomUUID()}`,
+        accessToken: "test-token",
+        institutionSlug: "chase",
+      })
+      .returning();
+    const [acct] = await db
+      .insert(plaidAccountsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item.id,
+        accountId: opts.externalId,
+        name: opts.name,
+      })
+      .returning();
+    return { id: acct.id, externalId: acct.accountId };
+  }
+
+  async function addLedgerTxn(opts: {
+    occurredOn: string;
+    amount: string;
+    plaidAccountId?: string | null;
+    source?: string;
+    pending?: boolean;
+    forecastFlag?: boolean;
+  }): Promise<void> {
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: opts.occurredOn,
+      description: "ledger row",
+      amount: opts.amount,
+      plaidAccountId: opts.plaidAccountId ?? null,
+      source: opts.source ?? "manual",
+      pending: opts.pending ?? false,
+      forecastFlag: opts.forecastFlag ?? false,
+    });
+  }
+
+  it("bankToday = snapshot + checking-scoped ledger after the anchor day through today (pending included, forecast_flag irrelevant)", async () => {
+    // PINNED_NOW = 2026-05-14. Snapshot $1,000 on 05-01, wired to Chase.
+    const chase = await addPlaidAccount({
+      externalId: "chase-roll-1",
+      name: "Chase Checking",
+    });
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-05-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotAccountId: chase.id })
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+
+    // Anchor-day txn — excluded (strictly-after semantics, matching the
+    // Chase page's computeBalanceAtEndOfDate: available already nets it).
+    await addLedgerTxn({
+      occurredOn: "2026-05-01",
+      amount: "-100",
+      plaidAccountId: chase.externalId,
+      source: "plaid:chase",
+    });
+    // Posted after anchor, forecast_flag false — the curve ignores it,
+    // bankToday must not.
+    await addLedgerTxn({
+      occurredOn: "2026-05-05",
+      amount: "-200",
+      plaidAccountId: chase.externalId,
+      source: "plaid:chase",
+    });
+    // Pending after anchor — counts (the bank's Available nets pending).
+    await addLedgerTxn({
+      occurredOn: "2026-05-10",
+      amount: "50",
+      plaidAccountId: chase.externalId,
+      source: "plaid:chase",
+      pending: true,
+    });
+    // Another account — out of scope.
+    await addLedgerTxn({
+      occurredOn: "2026-05-12",
+      amount: "-75",
+      plaidAccountId: "someone-elses-account",
+      source: "plaid:chase",
+    });
+    // After today — not yet part of "bank today".
+    await addLedgerTxn({
+      occurredOn: "2026-05-20",
+      amount: "-500",
+      plaidAccountId: chase.externalId,
+      source: "plaid:chase",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      horizonDays: 30,
+    });
+
+    // 1000 - 200 + 50 = 850; the flag-false rows never reach the curve.
+    expect(sig.bankToday).toBe("850.00");
+  });
+
+  it("without a snapshot, bankToday stays on startingBalance (no roll-forward)", async () => {
+    await setSettings({ startingBalance: "750", cashBuffer: "0" });
+    await addLedgerTxn({ occurredOn: "2026-05-05", amount: "-200" });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      horizonDays: 30,
+    });
+    expect(sig.bankToday).toBe("750.00");
+  });
+});

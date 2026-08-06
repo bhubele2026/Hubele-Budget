@@ -295,3 +295,35 @@ describe("(#655) forecast balance-refresh catch translates Plaid reauth codes to
     expect(item!.lastSyncErrorCode).toBe("INVALID_ACCESS_TOKEN");
   });
 });
+
+describe("POST /forecast/bank-snapshot — manual entry preserves the account pointer", () => {
+  it("keeps bankSnapshotAccountId/Name/Mask when only a manual balance is posted", async () => {
+    const { plaidAccountRowId } = await seed();
+
+    const r = await fetch(`${baseUrl}/forecast/bank-snapshot`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ balance: "4321.99" }),
+    });
+    expect(r.status).toBe(200);
+
+    const [row] = await db
+      .select({
+        balance: forecastSettingsTable.bankSnapshotBalance,
+        source: forecastSettingsTable.bankSnapshotSource,
+        accountId: forecastSettingsTable.bankSnapshotAccountId,
+        name: forecastSettingsTable.bankSnapshotName,
+        mask: forecastSettingsTable.bankSnapshotMask,
+      })
+      .from(forecastSettingsTable)
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+    expect(row!.balance).toBe("4321.99");
+    expect(row!.source).toBe("manual");
+    // The linked-account pointer must survive a manual balance entry —
+    // wiping it detaches the snapshot from Plaid (kills sync refresh and
+    // silently drops every Plaid txn from the forecast's account scope).
+    expect(row!.accountId).toBe(plaidAccountRowId);
+    expect(row!.name).toBe("Chase Checking");
+    expect(row!.mask).toBe("9876");
+  });
+});

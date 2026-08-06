@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, lte } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -515,6 +515,40 @@ export async function computeCashSignal(
     isBankRow(t.source, t.plaidAccountId ?? null),
   );
 
+  // "Bank today" = snapshot rolled forward through the real ledger, the same
+  // derivation the Chase page uses (anchor + every checking-scoped txn dated
+  // strictly after the anchor day through today — pending included, no
+  // forecast_flag filter). The raw snapshot only advances on a manual
+  // Sync/Refresh, so without this roll-forward the tile drifts from the bank
+  // as webhook-synced transactions keep landing.
+  let bankTodayRolled = startBalanceAtAnchor;
+  if (snapshotISO) {
+    const rollRows = await db
+      .select({
+        amount: transactionsTable.amount,
+        source: transactionsTable.source,
+        plaidAccountId: transactionsTable.plaidAccountId,
+        plaidTransactionId: transactionsTable.plaidTransactionId,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, householdId),
+          gt(transactionsTable.occurredOn, anchorISO),
+          lte(transactionsTable.occurredOn, todayISO),
+        ),
+      );
+    const seenPlaidIds = new Set<string>();
+    for (const t of rollRows) {
+      if (!isBankRow(t.source, t.plaidAccountId ?? null)) continue;
+      if (t.plaidTransactionId) {
+        if (seenPlaidIds.has(t.plaidTransactionId)) continue;
+        seenPlaidIds.add(t.plaidTransactionId);
+      }
+      bankTodayRolled += Number(t.amount) || 0;
+    }
+  }
+
   // Get matched-resolutions to suppress double-count of plan items already paid for by a txn.
   //
   // (#687) PLAN-KEY suppression is account-agnostic. A `matched`
@@ -791,7 +825,7 @@ export async function computeCashSignal(
   else status = "not_yet";
 
   return {
-    bankToday: r2(startBalanceAtAnchor),
+    bankToday: r2(bankTodayRolled),
     lowestProjected: r2(lowest),
     lowestDate,
     cashBuffer: r2(cashBuffer),

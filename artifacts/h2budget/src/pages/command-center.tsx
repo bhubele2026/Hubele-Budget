@@ -30,6 +30,7 @@ import {
 import { SyncButton } from "@/components/sync-button";
 import {
   useGetForecast,
+  useGetForecastCashSignal,
   useGetDashboard,
   useGetSettings,
   useListTransactions,
@@ -38,6 +39,7 @@ import {
   useGetBudgetMonth,
   useUpdateTransaction,
   getGetBudgetMonthQueryKey,
+  getGetForecastCashSignalQueryKey,
   getListTransactionsQueryKey,
   getGetDashboardQueryKey,
   TransactionWeeklyBucket,
@@ -958,8 +960,19 @@ export default function CommandCenterPage() {
     return () => window.clearTimeout(t);
   }, [netMonth]);
 
-  const cashNow =
-    forecast?.bankSnapshot?.balance != null ? Number(forecast.bankSnapshot.balance) : null;
+  // Rolled-forward bank balance (snapshot + ledger since anchor) — same
+  // derivation the Chase page and the Forecast "Bank today" tile use, so the
+  // three surfaces always agree.
+  const { data: cashSignal } = useGetForecastCashSignal(
+    { horizonDays: 90 },
+    {
+      query: {
+        queryKey: getGetForecastCashSignalQueryKey({ horizonDays: 90 }),
+        staleTime: 5 * 60_000,
+      },
+    },
+  );
+  const cashNow = cashSignal?.bankToday != null ? Number(cashSignal.bankToday) : null;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
