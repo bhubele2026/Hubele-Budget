@@ -182,13 +182,13 @@ describe("(#239) Mapping Rules — ?focus=<ids> highlights matched rule rows", (
     // the test isn't racing the effect that sets `highlightedIds`.
     await waitFor(() => {
       expect(rowA.className).toMatch(/ring-2/);
-      expect(rowA.className).toMatch(/ring-blue-400/);
+      expect(rowA.className).toMatch(/ring-primary\/50/);
       expect(rowB.className).toMatch(/ring-2/);
-      expect(rowB.className).toMatch(/ring-blue-400/);
+      expect(rowB.className).toMatch(/ring-primary\/50/);
     });
 
     // Unfocused rows must NOT receive the highlight treatment.
-    expect(rowC.className).not.toMatch(/ring-blue-400/);
+    expect(rowC.className).not.toMatch(/ring-primary\/50/);
 
     // The first focused row must also be scrolled into view so users
     // landing from the toast deep-link don't have to hunt for the rules
@@ -217,8 +217,8 @@ describe("(#239) Mapping Rules — ?focus=<ids> highlights matched rule rows", (
     expect(rowC.getAttribute("data-focused")).toBeNull();
 
     // None of the rows pick up the blue highlight ring either.
-    expect(rowA.className).not.toMatch(/ring-blue-400/);
-    expect(rowB.className).not.toMatch(/ring-blue-400/);
-    expect(rowC.className).not.toMatch(/ring-blue-400/);
+    expect(rowA.className).not.toMatch(/ring-primary\/50/);
+    expect(rowB.className).not.toMatch(/ring-primary\/50/);
+    expect(rowC.className).not.toMatch(/ring-primary\/50/);
   });
 });

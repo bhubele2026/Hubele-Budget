@@ -79,6 +79,8 @@ vi.mock("@workspace/api-client-react", () => {
   return {
     TransactionWeeklyBucket,
     useGetSettings: () => ({ data: undefined }),
+    useGetAmexWeeklyPayoff: () => ({ data: undefined, isLoading: false }),
+    getGetAmexWeeklyPayoffQueryKey: () => ["/api/amex/weekly-payoff"],
     // First call: month query — resolves immediately. Second call:
     // trend query — never resolves (still loading). The page must
     // still render the day group.

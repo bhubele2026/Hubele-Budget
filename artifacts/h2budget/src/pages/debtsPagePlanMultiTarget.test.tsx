@@ -83,11 +83,20 @@ beforeEach(() => {
   cleanup();
 });
 
+// The debt status grid's legend always renders a static "Target" swatch
+// label, so scope badge counts to the actual PillBadge pills on the cards
+// (rounded-full is the pill primitive's signature class).
+function getTargetBadges() {
+  return screen
+    .getAllByText("Target")
+    .filter((el) => el.className.includes("rounded-full"));
+}
+
 describe("Debts page — multi-target month (extra wipes 2+ debts)", () => {
   it("shows the Target badge and 'Target payoff' row on EVERY current-month target", () => {
     extraAmount = "2000";
     renderPage();
-    const badges = screen.getAllByText("Target");
+    const badges = getTargetBadges();
     expect(badges.length).toBe(2);
     const targetPayoffRows = screen.getAllByTestId(
       "debt-card-target-payoff-date",
@@ -101,7 +110,7 @@ describe("Debts page — multi-target month (extra wipes 2+ debts)", () => {
   it("with $0 extra, only the strategy's first solvable debt is the target", () => {
     extraAmount = "0";
     renderPage();
-    const badges = screen.getAllByText("Target");
+    const badges = getTargetBadges();
     expect(badges.length).toBe(1);
     const targetPayoffRows = screen.getAllByTestId(
       "debt-card-target-payoff-date",
