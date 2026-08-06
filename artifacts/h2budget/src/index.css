@@ -429,20 +429,19 @@
   .stagger-children > *:nth-child(11) { --stagger-i: 10; }
   .stagger-children > *:nth-child(n + 12) { --stagger-i: 11; }
 
-  /* SVG line draw-in (Sparkline). Requires pathLength={1} on the path so
-     the dash math is resolution-independent. */
-  @keyframes h2-draw {
+  /* Chart draw-in: a clip-path sweep on the WRAPPER (never dash-animate a
+     non-scaling-stroke path — dashes compute in screen pixels and shred the
+     line into confetti). */
+  @keyframes h2-sweep {
     from {
-      stroke-dashoffset: 1;
+      clip-path: inset(0 100% 0 0);
     }
     to {
-      stroke-dashoffset: 0;
+      clip-path: inset(0 0 0 0);
     }
   }
-  .spark-draw {
-    stroke-dasharray: 1;
-    stroke-dashoffset: 0;
-    animation: h2-draw var(--dur-grand) var(--ease-glide);
+  .sweep-in {
+    animation: h2-sweep var(--dur-grand) var(--ease-glide);
   }
   @keyframes h2-fade {
     from {
@@ -562,21 +561,6 @@
     box-shadow: inset 0 0 0 1px hsl(var(--primary));
   }
 
-  /* (Refreshing Summer · FUN) Juicy gradient KPI tiles — each its own vibrant
-     diagonal summer gradient. White text, a soft lifted shadow, and rounded
-     corners even though the rest of the app is square: these are the hero
-     moment of the page. Lift + saturate on hover. */
-  .stat-card {
-    border-radius: 0.875rem;
-    color: #fff;
-    border: none;
-    box-shadow: 0 10px 24px -16px rgba(0, 0, 0, 0.38);
-    transition: transform var(--dur-quick) var(--ease-glide), box-shadow var(--dur-quick) var(--ease-glide);
-  }
-  .stat-card:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 14px 30px -16px rgba(0, 0, 0, 0.46);
-  }
   /* Review-spending CTA — a solid deep-red "danger" block. Static, no sheen. */
   .review-cta {
     background-image: none;
@@ -584,16 +568,6 @@
     border: none;
   }
 
-  /* (Matte wash) KPI tile fills — the app's deliberate SPLASH surfaces.
-     Deep matte fills of the brand hues (teal, violet, orange, slate,
-     deep-teal, red) so white text stays crisp; everything derives from
-     tokens so future washes stay one-block edits. */
-  .tile-grad-0 { background-image: none; background-color: hsl(191 68% 30%); }  /* deep teal */
-  .tile-grad-1 { background-image: none; background-color: hsl(262 42% 40%); }  /* deep violet (brand) */
-  .tile-grad-2 { background-image: none; background-color: hsl(188 58% 25%); }  /* deeper teal */
-  .tile-grad-3 { background-image: none; background-color: hsl(220 14% 30%); }  /* slate */
-  .tile-grad-4 { background-image: none; background-color: hsl(28 62% 38%); }   /* deep orange (brand) */
-  .tile-grad-5 { background-image: none; background-color: hsl(4 55% 42%); }    /* deep red (money) */
   .no-default-hover-elevate {}
   .no-default-active-elevate {}
 

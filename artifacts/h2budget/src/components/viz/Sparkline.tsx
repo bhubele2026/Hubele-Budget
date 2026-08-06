@@ -67,7 +67,11 @@ export function Sparkline({
   const areaPath = `${linePath} L ${W} ${height} L 0 ${height} Z`;
 
   return (
-    <div className={cn("w-full", className)} style={{ height }}>
+    // The sweep-in draw animation lives on the WRAPPER as a clip-path reveal.
+    // Never dash-animate the path itself: stroke-dasharray combined with
+    // vector-effect:non-scaling-stroke computes dashes in SCREEN pixels, which
+    // turned every sparkline into 1px confetti (the "broken graphs" bug).
+    <div className={cn("sweep-in w-full", className)} style={{ height }}>
       <svg
         width="100%"
         height="100%"
@@ -85,16 +89,8 @@ export function Sparkline({
           </defs>
         )}
         {variant === "area" && (
-          <path
-            d={areaPath}
-            fill={`url(#spark-${gid})`}
-            stroke="none"
-            className="spark-fill-in"
-          />
+          <path d={areaPath} fill={`url(#spark-${gid})`} stroke="none" />
         )}
-        {/* pathLength=1 normalizes the dash math so the draw-in animation
-            (.spark-draw, reduced-motion-neutralized globally) is
-            resolution-independent. */}
         <path
           d={linePath}
           fill="none"
@@ -103,8 +99,6 @@ export function Sparkline({
           strokeLinecap="round"
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
-          pathLength={1}
-          className="spark-draw"
         />
       </svg>
     </div>

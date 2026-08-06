@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   TrendingDown,
   TrendingUp,
@@ -18,7 +18,6 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeader } from "@/components/stat";
-import { MiniBars } from "@/components/viz";
 import { cn, formatCurrency } from "@/lib/utils";
 
 /**
@@ -34,18 +33,15 @@ import { cn, formatCurrency } from "@/lib/utils";
 
 type Tone = "good" | "warning" | "danger" | "info";
 
-// Neutral, professional: every bucket header is the same muted strip; the icon
-// differentiates them. Only the row AMOUNT keeps a semantic money color.
-const NEUTRAL = {
-  bg: "hsl(var(--muted))",
-  ink: "hsl(var(--muted-foreground))",
-  bar: "hsl(var(--muted-foreground))",
-} as const;
-const TONE: Record<Tone, { bg: string; ink: string; bar: string; amount: string }> = {
-  good: { ...NEUTRAL, amount: "text-positive" },
-  warning: { ...NEUTRAL, amount: "text-[hsl(var(--warning))]" },
-  danger: { ...NEUTRAL, amount: "text-[hsl(var(--negative))]" },
-  info: { ...NEUTRAL, amount: "text-foreground" },
+// Each bucket owns one accent (status semantics, shipped with its icon +
+// label per the house dataviz rules). The accent colors the header icon and
+// the thin proportion strip; text stays in ink tokens; only the row AMOUNT
+// keeps its semantic money color.
+const TONE: Record<Tone, { accent: string; amount: string }> = {
+  good: { accent: "--positive", amount: "text-positive" },
+  warning: { accent: "--warning", amount: "text-[hsl(var(--warning))]" },
+  danger: { accent: "--negative", amount: "text-[hsl(var(--negative))]" },
+  info: { accent: "--splash-violet", amount: "text-foreground" },
 };
 
 const EMPTY: Record<string, string> = {
@@ -159,12 +155,8 @@ function BucketCard({
   const rows = (bucket?.rows ?? []).filter(
     (r) => !dismissed || !dismissed.has(r.display),
   );
+  const [expanded, setExpanded] = useState(false);
 
-  // A bar per merchant row, sized to its figure. Neutral tint.
-  const bars = useMemo(
-    () => rows.slice(0, 10).map((r) => ({ value: Math.abs(r.amount), color: t.bar })),
-    [rows, t.bar],
-  );
   // A subtle header chip totalling the figures already computed server-side.
   const total = useMemo(
     () => rows.reduce((s, r) => s + Math.abs(r.amount), 0),
@@ -172,31 +164,59 @@ function BucketCard({
   );
   const chip = summaryChip(bucketKey, rows.length, total);
 
+  // Thin proportion strip: each merchant's share of the bucket total, in the
+  // bucket's accent at graded emphasis. 4px tall with 2px spacers — quiet
+  // magnitude context, not a chart demanding attention.
+  const shares = useMemo(() => {
+    if (rows.length < 2 || total <= 0) return [];
+    return rows.slice(0, 8).map((r, i) => ({
+      pct: (Math.abs(r.amount) / total) * 100,
+      alpha: Math.max(0.25, 0.9 - i * 0.12),
+    }));
+  }, [rows, total]);
+
+  const VISIBLE = 6;
+  const shown = expanded ? rows : rows.slice(0, VISIBLE);
+  const hiddenCount = rows.length - shown.length;
+
   return (
     <Card className="h-full overflow-hidden">
       <CardContent className="flex h-full flex-col p-0">
-        <div
-          className="flex items-center justify-between gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide [&_svg]:h-3.5 [&_svg]:w-3.5"
-          style={{ background: t.bg, color: t.ink }}
-        >
+        <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground [&_svg]:h-3.5 [&_svg]:w-3.5">
           <span className="flex items-center gap-1.5">
-            {icon}
+            <span style={{ color: `hsl(var(${t.accent}))` }}>{icon}</span>
             {title}
           </span>
-          {chip ? <span className="normal-case tabular-nums opacity-80">{chip}</span> : null}
+          {chip ? (
+            <span className="normal-case tabular-nums text-foreground/70">{chip}</span>
+          ) : null}
         </div>
-        <div className="flex h-full flex-col p-4">
-          {bars.length > 1 ? (
-            <MiniBars data={bars} height={26} className="w-full opacity-80" />
+        <div className="flex h-full flex-col p-4 pt-3">
+          {shares.length > 0 ? (
+            <div
+              className="mb-3 flex h-1 w-full gap-[2px] overflow-hidden rounded-full"
+              aria-hidden
+            >
+              {shares.map((sh, i) => (
+                <div
+                  key={i}
+                  className="rounded-full"
+                  style={{
+                    width: `${sh.pct}%`,
+                    background: `hsl(var(${t.accent}) / ${sh.alpha})`,
+                  }}
+                />
+              ))}
+            </div>
           ) : null}
 
-          <div className="mt-3 max-h-56 overflow-y-auto divide-y divide-border pr-1 [scrollbar-width:thin]">
+          <div className="divide-y divide-border/70">
             {rows.length === 0 ? (
               <p className="py-1 text-sm text-muted-foreground">
                 {EMPTY[bucketKey] ?? "Nothing to show yet."}
               </p>
             ) : (
-              rows.map((r, i) => (
+              shown.map((r, i) => (
                 <MoverRowView
                   key={`${r.display}-${i}`}
                   row={r}
@@ -206,6 +226,15 @@ function BucketCard({
               ))
             )}
           </div>
+          {hiddenCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="mt-2 self-start text-xs font-medium text-primary hover:underline"
+            >
+              Show {hiddenCount} more
+            </button>
+          ) : null}
         </div>
       </CardContent>
     </Card>

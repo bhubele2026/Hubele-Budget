@@ -13,6 +13,9 @@ const fmt$ = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString("en-US")}
  * Biggest charges — the month's three largest single discretionary purchases,
  * ranked on a podium. Numbers come straight from the transactions (we never
  * invent a figure). Hidden until there's at least one charge.
+ *
+ * Light-first design: white card, a strong colored left rail + soft tint wash
+ * in the rank's brand hue, matte ink. Works unchanged in dark (tokens flip).
  */
 
 type Charge = { desc: string; amt: number; member: string | null; date: string };
@@ -21,21 +24,21 @@ const PODIUM = [
   {
     medal: "1",
     title: "Largest charge",
-    grad: "tile-grad-5",
+    accent: "--splash-violet",
     quip: (m: string | null) =>
       m ? `${m}'s biggest single purchase this month.` : "The month's biggest single purchase.",
   },
   {
     medal: "2",
     title: "Second largest",
-    grad: "tile-grad-3",
+    accent: "--primary",
     quip: (m: string | null) =>
       m ? `${m}'s second-biggest purchase this month.` : "The second-biggest purchase this month.",
   },
   {
     medal: "3",
     title: "Third largest",
-    grad: "tile-grad-1",
+    accent: "--chart-2",
     quip: () => "The third-biggest purchase this month.",
   },
 ];
@@ -77,7 +80,7 @@ export function BiggestCharges({
   return (
     <div className={className}>
       <div className="mb-2 flex items-baseline gap-2">
-        <h2 className="text-lg font-bold">Biggest charges this month</h2>
+        <h2 className="text-lg font-bold dark:text-white">Biggest charges this month</h2>
         <span className="text-xs text-muted-foreground">
           your largest single purchases, ranked
         </span>
@@ -88,25 +91,35 @@ export function BiggestCharges({
           return (
             <div
               key={`${c.desc}-${c.date}-${i}`}
-              className={`stat-card ${p.grad} relative overflow-hidden rounded-[1.25rem] p-4 text-white`}
+              className="relative overflow-hidden rounded-[1.25rem] border border-card-border bg-card p-4 shadow-sm"
+              style={{
+                borderLeft: `4px solid hsl(var(${p.accent}))`,
+                backgroundImage: `linear-gradient(135deg, hsl(var(${p.accent}) / 0.09), transparent 55%)`,
+              }}
             >
-              <div className="relative z-10">
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl">{p.medal}</span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/85">
-                    {p.title}
-                  </span>
-                </div>
-                <div className="mt-3 truncate text-base font-semibold" title={c.desc}>
-                  {c.desc}
-                </div>
-                <div className="mt-0.5 text-3xl font-bold tabular-nums leading-none drop-shadow-sm">
-                  {fmt$(c.amt)}
-                </div>
-                <p className="mt-2 text-xs font-medium leading-snug text-white/90">
-                  {p.quip(c.member)}
-                </p>
+              <div className="flex items-center justify-between">
+                <span
+                  className="grid h-7 w-7 place-items-center rounded-full text-[13px] font-bold text-white"
+                  style={{ background: `hsl(var(${p.accent}))` }}
+                >
+                  {p.medal}
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  {p.title}
+                </span>
               </div>
+              <div
+                className="mt-3 truncate text-base font-semibold text-foreground"
+                title={c.desc}
+              >
+                {c.desc}
+              </div>
+              <div className="mt-0.5 text-3xl font-bold tabular-nums leading-none text-foreground dark:text-white">
+                {fmt$(c.amt)}
+              </div>
+              <p className="mt-2 text-xs font-medium leading-snug text-muted-foreground">
+                {p.quip(c.member)}
+              </p>
             </div>
           );
         })}
