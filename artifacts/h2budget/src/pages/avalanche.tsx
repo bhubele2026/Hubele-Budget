@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CHART_ANIM } from "@/lib/chartAnim";
 import { useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -1585,16 +1586,14 @@ export default function AvalanchePage() {
                       }
                     />
                     <Legend />
-                    <Line
-                      type="monotone"
+                    <Line {...CHART_ANIM} type="monotone"
                       dataKey="balance"
                       name="Remaining balance"
                       stroke="hsl(var(--chart-1))"
                       strokeWidth={2}
                       dot={false}
                     />
-                    <Line
-                      type="monotone"
+                    <Line {...CHART_ANIM} type="monotone"
                       dataKey="interest"
                       name="Cumulative interest"
                       stroke="hsl(var(--negative))"

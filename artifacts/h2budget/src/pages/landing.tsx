@@ -152,7 +152,7 @@ function BankingTile() {
       blurb="How you're spending — this week & month, where it's going, what's creeping up."
       metricLabel={curMonthTotal != null ? "Spent this month" : undefined}
       metric={
-        curMonthTotal != null ? <MoneyText amount={curMonthTotal} /> : undefined
+        curMonthTotal != null ? <MoneyText countUp amount={curMonthTotal} /> : undefined
       }
       links={[
         { href: "/transactions", label: "Chase", testid: "landing-link-banking-chase" },
@@ -184,7 +184,7 @@ function BillsTile() {
       title="Bills"
       blurb="Your recurring bills & subscriptions — what's due, what changed, and the monthly total."
       metricLabel={monthlyTotal > 0 ? "Recurring this month" : undefined}
-      metric={monthlyTotal > 0 ? <MoneyText amount={monthlyTotal} /> : undefined}
+      metric={monthlyTotal > 0 ? <MoneyText countUp amount={monthlyTotal} /> : undefined}
     />
   );
 }
@@ -218,7 +218,7 @@ function ForecastTile() {
       metricLabel={
         lowest != null && lowestDate ? `Lowest projected · ${lowestDate}` : undefined
       }
-      metric={lowest != null && lowestDate ? <MoneyText amount={lowest} /> : undefined}
+      metric={lowest != null && lowestDate ? <MoneyText countUp amount={lowest} /> : undefined}
       links={[
         { href: "/forecast", label: "Forecast", testid: "landing-link-forecast-forecast" },
         { href: "/review", label: "Review", testid: "landing-link-forecast-review" },
@@ -323,7 +323,7 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:auto-rows-fr">
+        <div className="stagger-children grid grid-cols-1 gap-4 sm:grid-cols-2 sm:auto-rows-fr">
           <BankingTile />
           <BillsTile />
           <ForecastTile />

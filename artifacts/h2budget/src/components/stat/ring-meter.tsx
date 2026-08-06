@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useReducedMotion } from "framer-motion";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { STATUS_COLOR, type Status } from "@/lib/statusThresholds";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +62,7 @@ export function RingMeter({
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - fill)}
-          style={{ transition: reduce ? undefined : "stroke-dashoffset 0.9s ease-out" }}
+          style={{ transition: reduce ? undefined : "stroke-dashoffset var(--dur-grand) var(--ease-glide)" }}
         />
       </svg>
       <div className="absolute inset-0 grid place-items-center text-center leading-none">

@@ -38,8 +38,12 @@ export function HeatStrip({
         }`;
         const cell = (
           <div
-            className="h-full w-full rounded-[3px]"
-            style={{ background: `hsl(${color} / ${opacity})` }}
+            className="spark-fill-in h-full w-full rounded-[3px]"
+            style={{
+              background: `hsl(${color} / ${opacity})`,
+              animationDelay: `${i * 40}ms`,
+              animationFillMode: "backwards",
+            }}
           />
         );
         return onCellClick ? (

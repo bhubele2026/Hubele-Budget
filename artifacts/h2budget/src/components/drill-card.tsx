@@ -45,9 +45,9 @@ export function DrillCard({
   const body = (
     <div
       className={cn(
-        "group relative flex h-full flex-col gap-3 rounded-xl border border-card-border bg-card p-4 text-left transition-colors",
+        "group relative flex h-full flex-col gap-3 rounded-xl border border-card-border bg-card p-4 text-left shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-[240ms] ease-[var(--ease-glide)]",
         isInteractive &&
-          "cursor-pointer hover:border-primary/40 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "cursor-pointer hover:border-primary/40 hover:bg-accent/40 hover:shadow-md motion-safe:hover:-translate-y-0.5 motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
       style={

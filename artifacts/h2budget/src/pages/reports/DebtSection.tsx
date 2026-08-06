@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CHART_ANIM } from "@/lib/chartAnim";
 import type { DebtBalanceHistoryEntry } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -312,8 +313,7 @@ export function DebtSection({
               contentStyle={tooltipStyle}
               formatter={(v: number) => tooltipMoney(v)}
             />
-            <Area
-              type="monotone"
+            <Area {...CHART_ANIM} type="monotone"
               dataKey="total"
               stroke={H2_PALETTE.primary}
               fill="url(#past-balance)"
@@ -368,8 +368,7 @@ export function DebtSection({
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             {activeDebts.map((d, i) => (
-              <Area
-                key={d.id}
+              <Area {...CHART_ANIM} key={d.id}
                 type="monotone"
                 dataKey={d.name}
                 stackId="1"
@@ -396,8 +395,8 @@ export function DebtSection({
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${v}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="freed" fill={H2_PALETTE.amber} name="Freed this kill" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="cumulative" fill={H2_PALETTE.primary} name="Snowball total" radius={[6, 6, 0, 0]} />
+              <Bar {...CHART_ANIM} dataKey="freed" fill={H2_PALETTE.amber} name="Freed this kill" radius={[6, 6, 0, 0]} />
+              <Bar {...CHART_ANIM} dataKey="cumulative" fill={H2_PALETTE.primary} name="Snowball total" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -415,8 +414,8 @@ export function DebtSection({
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${v}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="principal" stackId="1" fill={H2_PALETTE.primary} name="Principal" />
-              <Bar dataKey="interest" stackId="1" fill={H2_PALETTE.red} name="Interest" />
+              <Bar {...CHART_ANIM} dataKey="principal" stackId="1" fill={H2_PALETTE.primary} name="Principal" />
+              <Bar {...CHART_ANIM} dataKey="interest" stackId="1" fill={H2_PALETTE.red} name="Interest" />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>

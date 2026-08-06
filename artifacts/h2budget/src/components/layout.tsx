@@ -537,10 +537,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 min-h-0 flex">
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
           {location === "/home" ? (
-            // Landing renders full-bleed — it centers its own cards.
-            children
+            // Landing renders full-bleed — it centers its own cards — but
+            // still gets the keyed entry so Home breathes in like every
+            // other page.
+            <div
+              key={location}
+              className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 duration-700 ease-[var(--ease-glide)]"
+            >
+              {children}
+            </div>
           ) : (
-            <div className="p-3 md:p-5 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
+            // Keyed on location so EVERY client-side navigation re-runs the
+            // entrance (previously this animated once on layout mount and
+            // never again).
+            <div
+              key={location}
+              className="p-3 md:p-5 max-w-[1600px] mx-auto motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 duration-700 ease-[var(--ease-glide)]"
+            >
               {children}
             </div>
           )}

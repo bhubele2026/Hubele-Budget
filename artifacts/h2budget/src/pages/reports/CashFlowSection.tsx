@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { CHART_ANIM } from "@/lib/chartAnim";
 import type {
   Transaction,
   RecurringItem,
@@ -289,11 +290,10 @@ export function CashFlowSection({
             <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Line type="monotone" dataKey="income" stroke={H2_PALETTE.primary} strokeWidth={2.5} dot={false} name="Income" />
-            <Line type="monotone" dataKey="expense" stroke={H2_PALETTE.red} strokeWidth={2.5} dot={false} name="Expense" />
+            <Line {...CHART_ANIM} type="monotone" dataKey="income" stroke={H2_PALETTE.primary} strokeWidth={2.5} dot={false} name="Income" />
+            <Line {...CHART_ANIM} type="monotone" dataKey="expense" stroke={H2_PALETTE.red} strokeWidth={2.5} dot={false} name="Expense" />
             {compareToPrev && (
-              <Line
-                type="monotone"
+              <Line {...CHART_ANIM} type="monotone"
                 dataKey="prevIncome"
                 stroke={H2_PALETTE.primary}
                 strokeWidth={1.5}
@@ -305,8 +305,7 @@ export function CashFlowSection({
               />
             )}
             {compareToPrev && (
-              <Line
-                type="monotone"
+              <Line {...CHART_ANIM} type="monotone"
                 dataKey="prevExpense"
                 stroke={H2_PALETTE.red}
                 strokeWidth={1.5}
@@ -339,7 +338,7 @@ export function CashFlowSection({
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <ReferenceLine y={0} stroke="hsl(var(--border))" />
-            <Bar dataKey="net" name="Net" radius={[4, 4, 0, 0]}>
+            <Bar {...CHART_ANIM} dataKey="net" name="Net" radius={[4, 4, 0, 0]}>
               {series.map((row, i) => (
                 <Cell
                   key={i}
@@ -347,10 +346,9 @@ export function CashFlowSection({
                 />
               ))}
             </Bar>
-            <Line type="monotone" dataKey="running" stroke={H2_PALETTE.navy} strokeWidth={2} dot={false} name="Running net" />
+            <Line {...CHART_ANIM} type="monotone" dataKey="running" stroke={H2_PALETTE.navy} strokeWidth={2} dot={false} name="Running net" />
             {compareToPrev && (
-              <Line
-                type="monotone"
+              <Line {...CHART_ANIM} type="monotone"
                 dataKey="prevNet"
                 stroke={H2_PALETTE.slate}
                 strokeWidth={1.5}
@@ -406,8 +404,7 @@ export function CashFlowSection({
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <ReferenceLine y={0} stroke="hsl(var(--border))" />
-              <Area
-                type="monotone"
+              <Area {...CHART_ANIM} type="monotone"
                 dataKey="balance"
                 stroke={H2_PALETTE.navy}
                 strokeWidth={2}
@@ -433,8 +430,7 @@ export function CashFlowSection({
               <YAxis dataKey="stage" type="category" tick={{ fontSize: 11 }} width={80} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               {flowKeys.map((k, i) => (
-                <Bar
-                  key={k}
+                <Bar {...CHART_ANIM} key={k}
                   dataKey={k}
                   stackId="flow"
                   fill={CHART_SERIES[i % CHART_SERIES.length]}
@@ -463,7 +459,7 @@ export function CashFlowSection({
               <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" angle={-25} textAnchor="end" height={50} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
-              <Area type="monotone" dataKey="avg" stroke={H2_PALETTE.amber} strokeWidth={2} fill="url(#burn-gradient)" name="Avg daily spend" />
+              <Area {...CHART_ANIM} type="monotone" dataKey="avg" stroke={H2_PALETTE.amber} strokeWidth={2} fill="url(#burn-gradient)" name="Avg daily spend" />
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>

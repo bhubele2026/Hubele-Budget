@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { CHART_ANIM } from "@/lib/chartAnim";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -1016,7 +1017,7 @@ export default function CommandCenterPage() {
                 canNext={weekOffset < 0}
               />
             }
-            value={<MoneyText amount={weekView.spend} />}
+            value={<MoneyText countUp amount={weekView.spend} />}
             sub={
               weekView.cap > 0 ? (
                 <span
@@ -1056,7 +1057,7 @@ export default function CommandCenterPage() {
                 canNext={monthOffset < 0}
               />
             }
-            value={<MoneyText amount={monthView.spend} />}
+            value={<MoneyText countUp amount={monthView.spend} />}
             sub={
               monthView.cap > 0 ? (
                 <span
@@ -1080,7 +1081,7 @@ export default function CommandCenterPage() {
           tone={2}
           icon={<PiggyBank className="w-4 h-4" />}
           label="Cash on hand"
-          value={cashNow != null ? <MoneyText amount={cashNow} /> : "—"}
+          value={cashNow != null ? <MoneyText countUp amount={cashNow} /> : "—"}
           sub={forecast?.bankSnapshot?.name ?? "Checking"}
           href="/transactions"
         />
@@ -1088,7 +1089,7 @@ export default function CommandCenterPage() {
           tone={3}
           icon={<Zap className="w-4 h-4" />}
           label={`Unplanned · ${monthName}`}
-          value={<MoneyText amount={unplannedView.spend} />}
+          value={<MoneyText countUp amount={unplannedView.spend} />}
           sub={
             unplannedView.cap > 0 ? (
               <span
@@ -1338,9 +1339,7 @@ export default function CommandCenterPage() {
                     stroke="hsl(var(--primary))"
                     strokeWidth={2.5}
                     fill="url(#ccFill)"
-                    isAnimationActive
-                    animationDuration={1200}
-                    animationEasing="ease-out"
+                    {...CHART_ANIM}
                   />
                 </AreaChart>
               </ResponsiveContainer>

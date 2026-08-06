@@ -54,7 +54,7 @@ export function HealthScore({
             strokeDashoffset={offset}
             transform={`rotate(-90 ${CX} ${CY})`}
             style={{
-              transition: "stroke-dashoffset 1200ms cubic-bezier(0.22,1,0.36,1)",
+              transition: "stroke-dashoffset var(--dur-grand) var(--ease-glide)",
             }}
           />
           <text

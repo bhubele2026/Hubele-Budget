@@ -1,3 +1,4 @@
+import { CHART_ANIM } from "@/lib/chartAnim";
 import {
   PieChart,
   Pie,
@@ -36,16 +37,13 @@ export function CategoryDonut({
           <div className="relative w-[136px] h-[136px] shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={data}
+                <Pie {...CHART_ANIM} data={data}
                   dataKey="value"
                   nameKey="name"
                   innerRadius={42}
                   outerRadius={62}
                   paddingAngle={2}
                   stroke="none"
-                  isAnimationActive
-                  animationDuration={900}
                 >
                   {data.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />

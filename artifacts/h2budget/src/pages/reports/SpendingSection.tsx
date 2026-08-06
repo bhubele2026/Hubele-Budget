@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CHART_ANIM } from "@/lib/chartAnim";
 import {
   useGetReportsSpendingFacts,
   getGetReportsSpendingFactsQueryKey,
@@ -523,8 +524,7 @@ export function SpendingSection({
             <div className="w-full sm:w-1/2 h-full min-h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={pieData}
+                  <Pie {...CHART_ANIM} data={pieData}
                     dataKey="total"
                     nameKey="name"
                     outerRadius={100}
@@ -570,8 +570,7 @@ export function SpendingSection({
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie
-                data={reimDonut}
+              <Pie {...CHART_ANIM} data={reimDonut}
                 dataKey="value"
                 nameKey="name"
                 innerRadius={60}
@@ -675,8 +674,7 @@ export function SpendingSection({
                         formatter={(v: number) => tooltipMoney(v)}
                         cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
                       />
-                      <Bar
-                        dataKey="avgPerDay"
+                      <Bar {...CHART_ANIM} dataKey="avgPerDay"
                         radius={[6, 6, 0, 0]}
                         onClick={(d: { dow?: number; payload?: { dow?: number } }) => {
                           const dow = d?.payload?.dow ?? d?.dow ?? null;
@@ -863,8 +861,7 @@ export function SpendingSection({
                       data={t.series}
                       margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
                     >
-                      <Area
-                        type="monotone"
+                      <Area {...CHART_ANIM} type="monotone"
                         dataKey="spend"
                         stroke={CHART_SERIES[i % CHART_SERIES.length]}
                         fill={CHART_SERIES[i % CHART_SERIES.length]}
@@ -907,8 +904,7 @@ export function SpendingSection({
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {trendTopCatNames.map((name, i) => (
-                <Bar
-                  key={name}
+                <Bar {...CHART_ANIM} key={name}
                   dataKey={name}
                   stackId="trend"
                   fill={CHART_SERIES[i % CHART_SERIES.length]}

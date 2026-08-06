@@ -1,3 +1,4 @@
+import { CHART_ANIM } from "@/lib/chartAnim";
 import {
   useGetReportsBudgetFacts,
 } from "@workspace/api-client-react";
@@ -412,8 +413,8 @@ export function BudgetSection({
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} labelFormatter={(l: number) => `Day ${l}`} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="planned" stroke={H2_PALETTE.primarySoft} strokeWidth={2} strokeDasharray="6 4" dot={false} name="Planned (paced)" />
-              <Line type="monotone" dataKey="actual" stroke={H2_PALETTE.primary} strokeWidth={2.5} dot={false} name="Actual" connectNulls={false} />
+              <Line {...CHART_ANIM} type="monotone" dataKey="planned" stroke={H2_PALETTE.primarySoft} strokeWidth={2} strokeDasharray="6 4" dot={false} name="Planned (paced)" />
+              <Line {...CHART_ANIM} type="monotone" dataKey="actual" stroke={H2_PALETTE.primary} strokeWidth={2.5} dot={false} name="Actual" connectNulls={false} />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>

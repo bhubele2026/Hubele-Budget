@@ -6,7 +6,7 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeader, RingMeter } from "@/components/stat";
-import { Sparkline, MiniBars, StackBar } from "@/components/viz";
+import { Sparkline, MiniBars, StackBar, MoneyText } from "@/components/viz";
 import { StatTile } from "@/components/stat-tile";
 import { formatCurrency } from "@/lib/utils";
 
@@ -81,22 +81,22 @@ export default function ForecastOverviewPage() {
       />
 
       {/* Hero KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="stagger-children grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
           label="Bank today"
-          value={formatCurrency(bankToday)}
+          value={<MoneyText countUp amount={bankToday} />}
           sub="checking balance"
           icon={<Wallet />}
         />
         <StatTile
           label="Projected low"
-          value={formatCurrency(lowest)}
+          value={<MoneyText countUp amount={lowest} />}
           sub={signal?.lowestDate ? `on ${signal.lowestDate}` : "—"}
           icon={<TrendingDown />}
         />
         <StatTile
           label="Ending balance"
-          value={formatCurrency(ending)}
+          value={<MoneyText countUp amount={ending} />}
           sub="at 90 days"
           icon={<Landmark />}
         />
@@ -109,7 +109,7 @@ export default function ForecastOverviewPage() {
       </div>
 
       {/* Graphics */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="stagger-children grid gap-4 lg:grid-cols-3">
         {/* Low point vs buffer ring */}
         <Card>
           <CardContent className="flex flex-col items-center justify-center gap-3 p-5">
@@ -161,7 +161,7 @@ export default function ForecastOverviewPage() {
       </div>
 
       {/* In vs out + upcoming big bills */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="stagger-children grid gap-4 lg:grid-cols-2">
         <Card>
           <CardContent className="flex flex-col gap-3 p-5">
             <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">

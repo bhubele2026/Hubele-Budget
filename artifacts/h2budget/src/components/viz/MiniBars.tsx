@@ -1,4 +1,5 @@
-import { useReducedMotion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { cn } from "@/lib/utils";
 
 export type MiniBar = {
@@ -33,6 +34,15 @@ export function MiniBars({
   activeIndex?: number;
 }) {
   const reduce = useReducedMotion();
+  // Grow-in on mount: bars render at 0 height, then transition up on the
+  // next frame. Skipped entirely under reduced motion (also keeps jsdom
+  // tests single-render — the test matchMedia polyfill answers "reduce").
+  const [grown, setGrown] = useState(reduce);
+  useEffect(() => {
+    if (reduce || grown) return;
+    const raf = requestAnimationFrame(() => setGrown(true));
+    return () => cancelAnimationFrame(raf);
+  }, [reduce, grown]);
   const bars: MiniBar[] = (data ?? []).map((d) =>
     typeof d === "number" ? { value: d } : d,
   );
@@ -59,9 +69,9 @@ export function MiniBars({
         const isActive = activeIndex === i;
         const bar = (
           <div
-            className="rounded-sm transition-[height] duration-500 ease-out"
+            className="rounded-sm transition-[height] duration-700 ease-out"
             style={{
-              height: reduce ? h : h,
+              height: grown ? h : 0,
               background: color,
               opacity: activeIndex == null || isActive ? 1 : 0.42,
               outline: isActive ? `2px solid ${color}` : undefined,

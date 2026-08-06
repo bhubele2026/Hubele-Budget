@@ -85,8 +85,16 @@ export function Sparkline({
           </defs>
         )}
         {variant === "area" && (
-          <path d={areaPath} fill={`url(#spark-${gid})`} stroke="none" />
+          <path
+            d={areaPath}
+            fill={`url(#spark-${gid})`}
+            stroke="none"
+            className="spark-fill-in"
+          />
         )}
+        {/* pathLength=1 normalizes the dash math so the draw-in animation
+            (.spark-draw, reduced-motion-neutralized globally) is
+            resolution-independent. */}
         <path
           d={linePath}
           fill="none"
@@ -95,6 +103,8 @@ export function Sparkline({
           strokeLinecap="round"
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
+          pathLength={1}
+          className="spark-draw"
         />
       </svg>
     </div>
