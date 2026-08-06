@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useReducedMotion } from "framer-motion";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -67,7 +67,7 @@ export function RingStat({
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - fill)}
-          style={{ transition: reduce ? undefined : "stroke-dashoffset 0.9s ease-out" }}
+          style={{ transition: reduce ? undefined : "stroke-dashoffset var(--dur-grand) var(--ease-glide)" }}
         />
       </svg>
       {label !== "" && (

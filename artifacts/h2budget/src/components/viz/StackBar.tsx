@@ -34,7 +34,7 @@ export function StackBar({
   return (
     <div className={cn("w-full", className)}>
       <div
-        className="flex w-full overflow-hidden rounded-full bg-muted"
+        className="grow-x flex w-full overflow-hidden rounded-full bg-muted"
         style={{ height }}
         role="img"
         aria-label="Spend mix"
@@ -51,7 +51,7 @@ export function StackBar({
         ))}
       </div>
       {showLegend && (
-        <div className="mt-3 space-y-1.5">
+        <div className="stagger-children mt-3 space-y-1.5">
           {segs.slice(0, legendMax).map((s, i) => (
             <div key={`${s.label}-${i}`} className="flex items-center gap-2 text-xs">
               <span

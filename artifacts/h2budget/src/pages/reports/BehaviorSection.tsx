@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { CHART_ANIM } from "@/lib/chartAnim";
 import {
   useGetReportsBehaviorFacts,
 } from "@workspace/api-client-react";
@@ -248,7 +249,7 @@ export function BehaviorSection({ from, to }: { from: string; to: string }) {
               formatter={(v: number) => tooltipMoney(v)}
               labelFormatter={(l: string) => `${l} · avg/day`}
             />
-            <Bar dataKey="avgPerDay" radius={[4, 4, 0, 0]}>
+            <Bar {...CHART_ANIM} dataKey="avgPerDay" radius={[4, 4, 0, 0]}>
               {dow.map((_, i) => (
                 <Cell
                   key={i}

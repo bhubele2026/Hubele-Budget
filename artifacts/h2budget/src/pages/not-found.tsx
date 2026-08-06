@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 export default function NotFound() {
   return (
     <div className="min-h-[62vh] w-full flex items-center justify-center px-4">
-      <div className="text-center max-w-md">
+      <div className="section-enter text-center max-w-md">
         <div className="text-7xl md:text-8xl font-extrabold tracking-tight text-primary">
           404
         </div>

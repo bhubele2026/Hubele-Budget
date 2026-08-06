@@ -1,3 +1,4 @@
+import { CHART_ANIM } from "@/lib/chartAnim";
 import {
   ResponsiveContainer,
   LineChart,
@@ -270,9 +271,7 @@ function SingleSeriesBalanceTrendChart({
                   dot={{ r: 2.5, stroke: color, fill: "hsl(var(--background))", strokeWidth: 1.5 }}
                   activeDot={{ r: 4 }}
                   connectNulls={false}
-                  isAnimationActive={true}
-                  animationDuration={1100}
-                  animationEasing="ease-out"
+                  {...CHART_ANIM}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -338,9 +337,7 @@ function SingleSeriesBalanceTrendChart({
                 strokeWidth={2}
                 dot={{ r: 2.5, stroke: color, fill: "hsl(var(--background))", strokeWidth: 1.5 }}
                 activeDot={{ r: 4 }}
-                isAnimationActive={true}
-                  animationDuration={1100}
-                  animationEasing="ease-out"
+                {...CHART_ANIM}
               />
               {data
                 .filter((p) => p.isSelected)
@@ -608,9 +605,7 @@ function MultiSeriesBalanceTrendChart({
                 dot={false}
                 activeDot={{ r: 4 }}
                 connectNulls
-                isAnimationActive={true}
-                  animationDuration={1100}
-                  animationEasing="ease-out"
+                {...CHART_ANIM}
               />
               <Line
                 type="monotone"
@@ -621,9 +616,7 @@ function MultiSeriesBalanceTrendChart({
                 dot={false}
                 activeDot={{ r: 4 }}
                 connectNulls
-                isAnimationActive={true}
-                  animationDuration={1100}
-                  animationEasing="ease-out"
+                {...CHART_ANIM}
               />
             </LineChart>
           </ResponsiveContainer>

@@ -65,7 +65,7 @@ export default function BillsOverviewPage() {
       />
 
       {/* Hero KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="stagger-children grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
           label="Income"
           value={formatCurrency(income)}
@@ -93,7 +93,7 @@ export default function BillsOverviewPage() {
       </div>
 
       {/* Graphics */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="stagger-children grid gap-4 lg:grid-cols-3">
         {/* Income vs outflow ring */}
         <Card>
           <CardContent className="flex flex-col items-center justify-center gap-3 p-5">

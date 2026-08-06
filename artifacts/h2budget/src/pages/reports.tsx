@@ -147,7 +147,7 @@ export default function ReportsPage() {
         <DrillCard
           eyebrow="Spending"
           href="/reports/spending"
-          value={<MoneyText amount={spent} />}
+          value={<MoneyText countUp amount={spent} />}
           sub="Where it all went"
           visual={
             spendMix.length ? (

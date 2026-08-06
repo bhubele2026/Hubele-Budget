@@ -368,13 +368,29 @@
 }
 
 @layer utilities {
-  /* (polish · finish) Choreographed entrance — direct children fade + rise
-     in sequence when the page mounts. Used on stat-tile grids so a page
-     opens with a premium, "alive" stagger instead of a flat snap-in. */
+  /* ── Motion language ─────────────────────────────────────────────────
+     One easing, four speeds. Every animated surface in the app draws from
+     these tokens so the whole product moves as one system:
+       --ease-glide  the house curve (easeOutQuint — starts eager, lands soft)
+       --dur-quick   hovers & toggles — responsiveness, never showmanship
+       --dur-soft    section/page entrances
+       --dur-slow    choreographed staggers
+       --dur-grand   gauges, chart draws, count-ups — the "alive" moments */
+  :root {
+    --ease-glide: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur-quick: 240ms;
+    --dur-soft: 650ms;
+    --dur-slow: 800ms;
+    --dur-grand: 1300ms;
+  }
+
+  /* Choreographed entrance — direct children fade + rise in sequence when
+     the page mounts. Used on card/tile grids so a page opens with a calm,
+     premium cascade instead of a flat snap-in. */
   @keyframes h2-fade-up {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(12px);
     }
     to {
       opacity: 1;
@@ -382,7 +398,68 @@
     }
   }
   .stagger-children > * {
-    animation: h2-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation: h2-fade-up var(--dur-slow) var(--ease-glide) backwards;
+    animation-delay: calc(60ms + (var(--stagger-i, 0) * 90ms));
+  }
+  /* Linear 90ms cascade for up to 12 children (older builds popped
+     everything past the 6th child in at once). */
+  .stagger-children > *:nth-child(1) { --stagger-i: 0; }
+  .stagger-children > *:nth-child(2) { --stagger-i: 1; }
+  .stagger-children > *:nth-child(3) { --stagger-i: 2; }
+  .stagger-children > *:nth-child(4) { --stagger-i: 3; }
+  .stagger-children > *:nth-child(5) { --stagger-i: 4; }
+  .stagger-children > *:nth-child(6) { --stagger-i: 5; }
+  .stagger-children > *:nth-child(7) { --stagger-i: 6; }
+  .stagger-children > *:nth-child(8) { --stagger-i: 7; }
+  .stagger-children > *:nth-child(9) { --stagger-i: 8; }
+  .stagger-children > *:nth-child(10) { --stagger-i: 9; }
+  .stagger-children > *:nth-child(11) { --stagger-i: 10; }
+  .stagger-children > *:nth-child(n + 12) { --stagger-i: 11; }
+
+  /* SVG line draw-in (Sparkline). Requires pathLength={1} on the path so
+     the dash math is resolution-independent. */
+  @keyframes h2-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  .spark-draw {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+    animation: h2-draw var(--dur-grand) var(--ease-glide);
+  }
+  @keyframes h2-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .spark-fill-in {
+    animation: h2-fade var(--dur-grand) ease-out;
+  }
+
+  /* Horizontal grow-in (StackBar): the whole bar sweeps open from the left. */
+  @keyframes h2-grow-x {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  .grow-x {
+    transform-origin: left;
+    animation: h2-grow-x var(--dur-grand) var(--ease-glide);
+  }
+
+  /* Ad-hoc section entrance for surfaces outside a stagger grid. */
+  .section-enter {
+    animation: h2-fade-up var(--dur-soft) var(--ease-glide) backwards;
   }
 
   /* Confetti fall (used by <Confetti />). Drifts sideways + spins while it
@@ -393,27 +470,19 @@
       opacity: 0;
     }
   }
-  .stagger-children > *:nth-child(1) {
-    animation-delay: 40ms;
-  }
-  .stagger-children > *:nth-child(2) {
-    animation-delay: 95ms;
-  }
-  .stagger-children > *:nth-child(3) {
-    animation-delay: 150ms;
-  }
-  .stagger-children > *:nth-child(4) {
-    animation-delay: 205ms;
-  }
-  .stagger-children > *:nth-child(5) {
-    animation-delay: 260ms;
-  }
-  .stagger-children > *:nth-child(6) {
-    animation-delay: 315ms;
-  }
+
+  /* Reduced motion: neutralize the app's decorative animation everywhere —
+     covers the gauges, meters, staggers, and hover lifts that previously
+     each needed (and mostly lacked) their own guard. Radix overlay
+     animations collapse to near-instant rather than `none` so their
+     data-state open/close lifecycles still complete. */
   @media (prefers-reduced-motion: reduce) {
-    .stagger-children > * {
-      animation: none;
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0.01ms !important;
     }
   }
 
@@ -489,7 +558,7 @@
     color: #fff;
     border: none;
     box-shadow: 0 10px 24px -16px rgba(0, 0, 0, 0.38);
-    transition: transform .18s ease, box-shadow .18s ease;
+    transition: transform var(--dur-quick) var(--ease-glide), box-shadow var(--dur-quick) var(--ease-glide);
   }
   .stat-card:hover {
     transform: translateY(-1px);
