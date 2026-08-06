@@ -21,10 +21,10 @@ function monthLabel(): string {
 // Soft full-slide color wash per tone — drama without leaving matte.
 function toneWash(t: "good" | "bad" | "neutral"): string {
   if (t === "good")
-    return "radial-gradient(120% 95% at 0% 0%, hsl(193 67% 43% / 0.18), transparent 62%)";
+    return "radial-gradient(120% 95% at 0% 0%, hsl(var(--positive) / 0.18), transparent 62%)";
   if (t === "bad")
-    return "radial-gradient(120% 95% at 0% 0%, hsl(33 94% 49% / 0.18), transparent 62%)";
-  return "radial-gradient(120% 95% at 0% 0%, hsl(197 63% 74% / 0.18), transparent 62%)";
+    return "radial-gradient(120% 95% at 0% 0%, hsl(var(--warning) / 0.18), transparent 62%)";
+  return "radial-gradient(120% 95% at 0% 0%, hsl(var(--primary) / 0.14), transparent 62%)";
 }
 
 function verdict(net: number, income: number): string {

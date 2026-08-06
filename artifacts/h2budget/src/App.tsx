@@ -227,15 +227,18 @@ const clerkAppearance = {
     logoLinkUrl: basePath || "/",
     logoImageUrl: `${window.location.origin}${basePath}/logo.png`,
   },
+  // Theme-reactive: every color points at the app's CSS tokens, so the
+  // Clerk card follows light/dark automatically (it previously hardcoded
+  // light-mode values — a light card floating on the matte-black app).
   variables: {
-    colorPrimary: "hsl(193, 67%, 43%)",
-    colorForeground: "hsl(218, 30%, 15%)",
-    colorMutedForeground: "hsl(217, 14%, 41%)",
-    colorDanger: "hsl(0, 56%, 39%)",
-    colorBackground: "hsl(216, 17%, 94%)",
-    colorInput: "hsl(210, 11%, 98%)",
-    colorInputForeground: "hsl(218, 30%, 15%)",
-    colorNeutral: "hsl(218, 15%, 75%)",
+    colorPrimary: "hsl(var(--primary))",
+    colorForeground: "hsl(var(--foreground))",
+    colorMutedForeground: "hsl(var(--muted-foreground))",
+    colorDanger: "hsl(var(--destructive))",
+    colorBackground: "hsl(var(--card))",
+    colorInput: "hsl(var(--muted))",
+    colorInputForeground: "hsl(var(--foreground))",
+    colorNeutral: "hsl(var(--muted-foreground))",
     fontFamily: "'Geist', Inter, sans-serif",
     borderRadius: "0.5rem",
   },

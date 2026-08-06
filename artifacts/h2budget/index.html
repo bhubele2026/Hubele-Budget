@@ -5,7 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>H2 Budget — Family Finance</title>
     <meta name="description" content="A focused budgeting app for the Hubele family — track spending, plan bills, and stay ahead of debt." />
-    <meta name="theme-color" content="#08202e" />
+    <meta name="theme-color" content="#121212" />
+    <script>
+      // Pre-hydration theme: apply .dark before first paint so the app never
+      // flashes light on a cold load. Mirrors hooks/use-theme.tsx (storage
+      // key + dark default + system fallback).
+      (function () {
+        try {
+          var t = localStorage.getItem("h2budget-theme") || "dark";
+          var dark =
+            t === "dark" ||
+            (t === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) {
+            document.documentElement.classList.add("dark");
+            document.documentElement.style.colorScheme = "dark";
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      /* Ground color before the stylesheet arrives — kills the white flash. */
+      html.dark { background: #121212; }
+    </style>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">

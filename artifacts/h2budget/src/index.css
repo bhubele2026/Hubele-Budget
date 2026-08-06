@@ -62,6 +62,10 @@
   --color-card-silver: hsl(var(--card-silver));
   --color-card-gold: hsl(var(--card-gold));
 
+  /* Splash palette (the logo's violet + orange) — brand punctuation. */
+  --color-splash-violet: hsl(var(--splash-violet));
+  --color-splash-orange: hsl(var(--splash-orange));
+
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
   --color-sidebar-border: hsl(var(--sidebar-border));
@@ -166,6 +170,10 @@
   --card-silver: 210 10% 55%;
   --card-gold: 210 10% 55%;
 
+  /* Splash palette (light mode: slightly deeper for contrast on white). */
+  --splash-violet: 262 60% 52%;
+  --splash-orange: 28 85% 48%;
+
   --app-font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --app-font-serif: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --app-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -219,58 +227,64 @@
      focus glow, primary actions / active nav); +/- money stays green / red. The
      matte neutral ground is what makes the app look like it cost millions. */
   --background: 0 0% 7%;         /* true matte black ground */
-  --foreground: 0 0% 95%;        /* near-white headings */
-  --border: 0 0% 19%;            /* quiet neutral hairline (lifts off bg) */
+  --foreground: 0 0% 98%;        /* bright white headings */
+  --border: 0 0% 16%;            /* quieter neutral hairline */
 
   --card: 0 0% 11%;              /* raised matte card — floats off ground */
-  --card-foreground: 0 0% 95%;
-  --card-border: 0 0% 19%;
+  --card-foreground: 0 0% 98%;
+  --card-border: 0 0% 16%;
 
   --sidebar: 0 0% 7%;            /* panel = ground */
-  --sidebar-foreground: 0 0% 72%;     /* idle nav (light) */
-  --sidebar-border: 0 0% 16%;         /* dividers */
-  --sidebar-primary: 191 72% 52%;     /* teal accent */
+  --sidebar-foreground: 0 0% 78%;     /* idle nav (light) */
+  --sidebar-border: 0 0% 14%;         /* dividers */
+  --sidebar-primary: 191 85% 55%;     /* teal accent */
   --sidebar-primary-foreground: 0 0% 8%;
   --sidebar-accent: 0 0% 14%;         /* neutral hover row */
-  --sidebar-accent-foreground: 191 60% 72%;  /* teal active nav */
-  --sidebar-ring: 191 72% 54%;
+  --sidebar-accent-foreground: 191 70% 74%;  /* teal active nav */
+  --sidebar-ring: 191 85% 55%;
 
-  --popover: 0 0% 11%;
-  --popover-foreground: 0 0% 95%;
-  --popover-border: 0 0% 19%;
+  --popover: 0 0% 12%;
+  --popover-foreground: 0 0% 98%;
+  --popover-border: 0 0% 18%;
 
-  --primary: 191 70% 50%;        /* teal — the one accent (hued) */
+  --primary: 191 90% 55%;        /* bright teal — the structural accent */
   --primary-foreground: 0 0% 8%;
 
   --secondary: 0 0% 17%;
-  --secondary-foreground: 0 0% 95%;
+  --secondary-foreground: 0 0% 98%;
 
   --muted: 0 0% 14%;
-  --muted-foreground: 0 0% 62%;       /* body */
+  --muted-foreground: 0 0% 68%;       /* body */
 
   --accent: 0 0% 14%;            /* neutral raised row — not a second accent */
-  --accent-foreground: 0 0% 90%;
+  --accent-foreground: 0 0% 94%;
 
   --destructive: 4 74% 60%;
   --destructive-foreground: 0 0% 100%;
 
   --input: 0 0% 19%;
-  --ring: 191 72% 54%;           /* teal focus glow (hued) */
+  --ring: 191 85% 55%;           /* teal focus glow (hued) */
 
-  --positive: 152 52% 46%;       /* green */
-  --positive-foreground: 220 20% 8%;
-  --negative: 4 74% 62%;
+  --positive: 152 56% 48%;       /* green */
+  --positive-foreground: 0 0% 8%;
+  --negative: 4 78% 62%;
   --negative-foreground: 0 0% 100%;
-  --warning: 33 84% 56%;         /* amber */
-  --warning-foreground: 220 20% 9%;
+  --warning: 33 88% 58%;         /* amber */
+  --warning-foreground: 0 0% 8%;
 
-  /* Restrained series on the matte canvas: teal-led, mostly neutral, one warm +
-     one red so categorical charts stay readable rather than a rainbow. */
-  --chart-1: 191 72% 56%;
-  --chart-2: 200 35% 58%;
-  --chart-3: 0 0% 60%;           /* neutral series on the matte canvas */
-  --chart-4: 191 40% 68%;        /* light teal (was amber) */
-  --chart-5: 210 12% 52%;        /* slate (was red) */
+  /* Series on the matte canvas: teal-led with a violet second hue (the
+     logo's own color) so charts carry the brand splash without going
+     rainbow. */
+  --chart-1: 191 85% 58%;
+  --chart-2: 200 40% 60%;
+  --chart-3: 0 0% 62%;           /* neutral series on the matte canvas */
+  --chart-4: 191 45% 70%;        /* light teal */
+  --chart-5: 262 70% 68%;        /* violet (brand splash; was slate) */
+
+  /* Splash palette — the logo's violet + orange, used as PUNCTUATION
+     (rails, dots, podium tiles, confetti), never as full surfaces. */
+  --splash-violet: 262 75% 64%;
+  --splash-orange: 28 92% 58%;
 
   /* Amex per-card brand identity: Blue Cash = muted blue, Platinum = neutral
      silver. (Gold retired.) */
@@ -359,11 +373,11 @@
     background: transparent;
   }
   .dark ::-webkit-scrollbar-thumb {
-    background: #2a2f37;
+    background: hsl(0 0% 20%);
     border-radius: 3px;
   }
   .dark ::-webkit-scrollbar-thumb:hover {
-    background: #3a414b;
+    background: hsl(0 0% 27%);
   }
 }
 
@@ -567,18 +581,20 @@
   /* Review-spending CTA — a solid deep-red "danger" block. Static, no sheen. */
   .review-cta {
     background-image: none;
-    background-color: hsl(4 62% 44%);
+    background-color: hsl(var(--negative) / 0.82);
     border: none;
   }
 
-  /* (Studio) Restrained KPI tile fills — solid teal + slate family (white text
-     stays crisp), with one muted red for negatives. No rainbow. */
-  .tile-grad-0 { background-image: none; background-color: hsl(192 70% 32%); }
-  .tile-grad-1 { background-image: none; background-color: hsl(214 24% 30%); }
-  .tile-grad-2 { background-image: none; background-color: hsl(188 58% 27%); }
-  .tile-grad-3 { background-image: none; background-color: hsl(220 16% 32%); }
-  .tile-grad-4 { background-image: none; background-color: hsl(196 52% 30%); }
-  .tile-grad-5 { background-image: none; background-color: hsl(4 52% 42%); }
+  /* (Matte wash) KPI tile fills — the app's deliberate SPLASH surfaces.
+     Deep matte fills of the brand hues (teal, violet, orange, slate,
+     deep-teal, red) so white text stays crisp; everything derives from
+     tokens so future washes stay one-block edits. */
+  .tile-grad-0 { background-image: none; background-color: hsl(191 68% 30%); }  /* deep teal */
+  .tile-grad-1 { background-image: none; background-color: hsl(262 42% 40%); }  /* deep violet (brand) */
+  .tile-grad-2 { background-image: none; background-color: hsl(188 58% 25%); }  /* deeper teal */
+  .tile-grad-3 { background-image: none; background-color: hsl(220 14% 30%); }  /* slate */
+  .tile-grad-4 { background-image: none; background-color: hsl(28 62% 38%); }   /* deep orange (brand) */
+  .tile-grad-5 { background-image: none; background-color: hsl(4 55% 42%); }    /* deep red (money) */
   .no-default-hover-elevate {}
   .no-default-active-elevate {}
 
