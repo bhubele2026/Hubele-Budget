@@ -32,7 +32,14 @@ if (underTestRunner && !looksLikeTestDb && process.env.ALLOW_TEST_DB !== "1") {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Bounded pool sized for the Render basic-256mb Postgres: the heavier
+// handlers fan out dozens of queries, and pg's default max (10) plus
+// no keep-alive left connections churning under concurrent tabs.
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 8,
+  keepAlive: true,
+});
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";

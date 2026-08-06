@@ -376,8 +376,8 @@ export default function AmexPage() {
   const { data: monthTxns, isLoading } = useListTransactions(monthQueryParams, {
     query: {
       queryKey: getListTransactionsQueryKey(monthQueryParams),
-      refetchOnWindowFocus: true,
-      refetchOnMount: "always",
+      // Inherits TXN_CACHE (2 min); sync + txn mutations invalidate the
+      // key, so always-refetch only re-pulled a large payload per mount.
     },
   });
   // Lower-priority — page renders as soon as the month query resolves.

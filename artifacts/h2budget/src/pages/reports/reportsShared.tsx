@@ -151,7 +151,8 @@ export function ReportsBalanceTiles({
   forecast: ForecastBundle | null | undefined;
 }) {
   const { data: dashboard } = useGetDashboard();
-  const { data: cashSignal } = useGetForecastCashSignal();
+  // Shared {horizonDays: 90} key — see avalanche-ready-card.tsx.
+  const { data: cashSignal } = useGetForecastCashSignal({ horizonDays: 90 });
 
   const bankSnapshot = forecast?.bankSnapshot ?? null;
   const accountSnapshots = forecast?.accountSnapshots ?? {};

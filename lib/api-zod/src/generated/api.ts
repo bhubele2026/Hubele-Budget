@@ -2679,6 +2679,13 @@ export const RefreshForecastBankResponse = zod.object({
   mask: zod.string().nullish(),
 });
 
+/**
+ * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ */
+export const GetForecastReviewCountResponse = zod.object({
+  count: zod.number(),
+});
+
 export const GetForecastCashSignalQueryParams = zod.object({
   horizonDays: zod.coerce.number().optional(),
   fromDate: zod.coerce.string().optional(),
@@ -3657,6 +3664,18 @@ export const CloseOutWeekResponse = zod.object({
 
 export const ReopenWeekQueryParams = zod.object({
   weekStart: zod.coerce.string(),
+});
+
+/**
+ * @summary Count of awaiting_review weeks (nav badge) without variance recompute
+ */
+export const GetDebriefAwaitingCountQueryParams = zod.object({
+  from: zod.coerce.string().optional(),
+  to: zod.coerce.string().optional(),
+});
+
+export const GetDebriefAwaitingCountResponse = zod.object({
+  count: zod.number(),
 });
 
 export const ListWeeklyDebriefsQueryParams = zod.object({

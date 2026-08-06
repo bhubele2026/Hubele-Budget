@@ -269,6 +269,11 @@ const BILL_NAME_TO_MANUAL_CATEGORY: Readonly<Record<string, string>> = {
 // every category + recurring item for the user, adding ~1.5s of pointless
 // DB churn to a hot path that the dashboard hits twice per page load.
 const HEAL_BILL_LINKS_DONE = new Set<string>();
+
+// Same in-memory once-per-process pattern for the one-time category
+// migrate/ensure passes in GET /budget/months/:monthStart — they cost
+// ~15 queries and only matter once per household.
+const oneTimeEnsuresDone = new Set<string>();
 const ENSURE_UNCATEGORIZED_DONE = new Set<string>();
 const ENSURE_TRANSFER_DONE = new Set<string>();
 const ENSURE_IGNORE_DONE = new Set<string>();
@@ -1601,18 +1606,26 @@ router.get(
     const householdOwnerId = req.householdOwnerId!;
     const userId = req.userId!;
 
-    // One-time consolidation of the legacy budget category list (task #65).
-    // Gated by a per-household flag, so it's a no-op on subsequent requests.
-    await migrateBudgetCategoriesV2(householdId, householdOwnerId, userId);
+    // One-time migration/ensure passes (~15 queries) used to run on EVERY
+    // month read. They only matter once per household, so run them once per
+    // process — a restart re-runs them once, which is what "idempotent"
+    // buys us. The live-state syncs below (debts/bills/avalanche) still run
+    // per-request because they mirror current data into the budget.
+    if (!oneTimeEnsuresDone.has(householdId)) {
+      // One-time consolidation of the legacy budget category list (task #65).
+      // Also gated by a per-household DB flag.
+      await migrateBudgetCategoriesV2(householdId, householdOwnerId, userId);
 
-    // (#474) Ensure the system-managed Uncategorized category exists and
-    // carries `exclude_from_budget=true`. Idempotent — safe on every GET.
-    await ensureUncategorizedCategory(householdId, userId);
-    // (#607) Same treatment for the system-managed Transfer category.
-    await ensureTransferCategory(householdId, userId);
-    // (#624) And the system-managed Ignore category — picked to drop
-    // a row from Budget/Reports roll-ups while still affecting balances.
-    await ensureIgnoreCategory(householdId, userId);
+      // (#474) Ensure the system-managed Uncategorized category exists and
+      // carries `exclude_from_budget=true`. Idempotent.
+      await ensureUncategorizedCategory(householdId, userId);
+      // (#607) Same treatment for the system-managed Transfer category.
+      await ensureTransferCategory(householdId, userId);
+      // (#624) And the system-managed Ignore category — picked to drop
+      // a row from Budget/Reports roll-ups while still affecting balances.
+      await ensureIgnoreCategory(householdId, userId);
+      oneTimeEnsuresDone.add(householdId);
+    }
 
     // One-time reconciliation of May 2026 planned amounts to the household's
     // canonical source-of-truth values (task #106). Only runs when this

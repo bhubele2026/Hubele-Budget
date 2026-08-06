@@ -164,20 +164,16 @@ function BankingTile() {
 }
 
 function BillsTile() {
-  const month = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  }, []);
-  const { data } = useGetBillsSummary(
-    { month },
-    {
-      query: {
-        queryKey: getGetBillsSummaryQueryKey({ month }),
-        staleTime: 5 * 60_000,
-        gcTime: 30 * 60_000,
-      },
+  // No `month` param: the server defaults to the current month, and the
+  // param-less key is the one the Bills page + nav hover-prefetch share —
+  // an explicit current-month param forked a duplicate cache entry.
+  const { data } = useGetBillsSummary(undefined, {
+    query: {
+      queryKey: getGetBillsSummaryQueryKey(),
+      staleTime: 5 * 60_000,
+      gcTime: 30 * 60_000,
     },
-  );
+  });
   const monthlyTotal = Number(data?.monthly?.bills ?? 0);
 
   return (

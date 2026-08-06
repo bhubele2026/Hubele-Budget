@@ -5499,6 +5499,16 @@ export declare const RefreshForecastBankResponse: zod.ZodObject<{
     mask?: string | null | undefined;
     accountId?: string | null | undefined;
 }>;
+/**
+ * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ */
+export declare const GetForecastReviewCountResponse: zod.ZodObject<{
+    count: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    count: number;
+}, {
+    count: number;
+}>;
 export declare const GetForecastCashSignalQueryParams: zod.ZodObject<{
     horizonDays: zod.ZodOptional<zod.ZodNumber>;
     fromDate: zod.ZodOptional<zod.ZodString>;
@@ -8467,6 +8477,26 @@ export declare const ReopenWeekQueryParams: zod.ZodObject<{
     weekStart: string;
 }, {
     weekStart: string;
+}>;
+/**
+ * @summary Count of awaiting_review weeks (nav badge) without variance recompute
+ */
+export declare const GetDebriefAwaitingCountQueryParams: zod.ZodObject<{
+    from: zod.ZodOptional<zod.ZodString>;
+    to: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    from?: string | undefined;
+    to?: string | undefined;
+}, {
+    from?: string | undefined;
+    to?: string | undefined;
+}>;
+export declare const GetDebriefAwaitingCountResponse: zod.ZodObject<{
+    count: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    count: number;
+}, {
+    count: number;
 }>;
 export declare const ListWeeklyDebriefsQueryParams: zod.ZodObject<{
     from: zod.ZodOptional<zod.ZodString>;

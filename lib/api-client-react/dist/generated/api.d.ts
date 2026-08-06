@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BankingInsightsSummary, BehaviorFacts, BillsInsightsSummary, BillsSummary, BudgetFacts, BudgetHealthResponse, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastInsightsSummary, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBankingInsightsSummaryParams, GetBillsInsightsSummaryParams, GetBillsSummaryParams, GetForecastAvalancheScheduleParams, GetForecastCashSignalParams, GetForecastInsightsSummaryParams, GetForecastParams, GetReportsAdvisorSummaryParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, GetReportsSpendingStoryParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RecurringReviewSummary, RecurringReviewSummaryInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReportsAdvisorSummary, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, SpendingStory, SuggestMerchantNameInput, SuggestMerchantNameResult, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankSnapshot, BankingInsightsSummary, BehaviorFacts, BillsInsightsSummary, BillsSummary, BudgetFacts, BudgetHealthResponse, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastInsightsSummary, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBankingInsightsSummaryParams, GetBillsInsightsSummaryParams, GetBillsSummaryParams, GetDebriefAwaitingCountParams, GetForecastAvalancheScheduleParams, GetForecastCashSignalParams, GetForecastInsightsSummaryParams, GetForecastParams, GetReportsAdvisorSummaryParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, GetReportsSpendingStoryParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RecurringReviewSummary, RecurringReviewSummaryInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReportsAdvisorSummary, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, SpendingStory, SuggestMerchantNameInput, SuggestMerchantNameResult, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -1605,6 +1605,29 @@ export declare const useRefreshForecastBank: <TError = ErrorType<unknown>, TCont
 }) => UseMutationResult<Awaited<ReturnType<typeof refreshForecastBank>>, TError, {
     data: BodyType<RefreshBankInput>;
 }, TContext>;
+/**
+ * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ */
+export declare const getGetForecastReviewCountUrl: () => string;
+export declare const getForecastReviewCount: (options?: RequestInit) => Promise<BadgeCount>;
+export declare const getGetForecastReviewCountQueryKey: () => readonly ["/api/forecast/review-count"];
+export declare const getGetForecastReviewCountQueryOptions: <TData = Awaited<ReturnType<typeof getForecastReviewCount>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastReviewCount>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getForecastReviewCount>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetForecastReviewCountQueryResult = NonNullable<Awaited<ReturnType<typeof getForecastReviewCount>>>;
+export type GetForecastReviewCountQueryError = ErrorType<unknown>;
+/**
+ * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ */
+export declare function useGetForecastReviewCount<TData = Awaited<ReturnType<typeof getForecastReviewCount>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastReviewCount>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
 export declare const getGetForecastCashSignalUrl: (params?: GetForecastCashSignalParams) => string;
 export declare const getForecastCashSignal: (params?: GetForecastCashSignalParams, options?: RequestInit) => Promise<CashSignal>;
 export declare const getGetForecastCashSignalQueryKey: (params?: GetForecastCashSignalParams) => readonly ["/api/forecast/cash-signal", ...GetForecastCashSignalParams[]];
@@ -2154,6 +2177,29 @@ export declare const useReopenWeek: <TError = ErrorType<unknown>, TContext = unk
 }) => UseMutationResult<Awaited<ReturnType<typeof reopenWeek>>, TError, {
     params: ReopenWeekParams;
 }, TContext>;
+/**
+ * @summary Count of awaiting_review weeks (nav badge) without variance recompute
+ */
+export declare const getGetDebriefAwaitingCountUrl: (params?: GetDebriefAwaitingCountParams) => string;
+export declare const getDebriefAwaitingCount: (params?: GetDebriefAwaitingCountParams, options?: RequestInit) => Promise<BadgeCount>;
+export declare const getGetDebriefAwaitingCountQueryKey: (params?: GetDebriefAwaitingCountParams) => readonly ["/api/debrief/awaiting-count", ...GetDebriefAwaitingCountParams[]];
+export declare const getGetDebriefAwaitingCountQueryOptions: <TData = Awaited<ReturnType<typeof getDebriefAwaitingCount>>, TError = ErrorType<unknown>>(params?: GetDebriefAwaitingCountParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDebriefAwaitingCount>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getDebriefAwaitingCount>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetDebriefAwaitingCountQueryResult = NonNullable<Awaited<ReturnType<typeof getDebriefAwaitingCount>>>;
+export type GetDebriefAwaitingCountQueryError = ErrorType<unknown>;
+/**
+ * @summary Count of awaiting_review weeks (nav badge) without variance recompute
+ */
+export declare function useGetDebriefAwaitingCount<TData = Awaited<ReturnType<typeof getDebriefAwaitingCount>>, TError = ErrorType<unknown>>(params?: GetDebriefAwaitingCountParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDebriefAwaitingCount>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
 export declare const getListWeeklyDebriefsUrl: (params?: ListWeeklyDebriefsParams) => string;
 export declare const listWeeklyDebriefs: (params?: ListWeeklyDebriefsParams, options?: RequestInit) => Promise<WeeklyDebriefList>;
 export declare const getListWeeklyDebriefsQueryKey: (params?: ListWeeklyDebriefsParams) => readonly ["/api/debrief/weeks", ...ListWeeklyDebriefsParams[]];

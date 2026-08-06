@@ -32,6 +32,7 @@ import type {
   AvalancheSchedule,
   AvalancheSettings,
   AvalancheSettingsInput,
+  BadgeCount,
   BankSnapshot,
   BankingInsightsSummary,
   BehaviorFacts,
@@ -88,6 +89,7 @@ import type {
   GetBankingInsightsSummaryParams,
   GetBillsInsightsSummaryParams,
   GetBillsSummaryParams,
+  GetDebriefAwaitingCountParams,
   GetForecastAvalancheScheduleParams,
   GetForecastCashSignalParams,
   GetForecastInsightsSummaryParams,
@@ -5608,6 +5610,82 @@ export const useRefreshForecastBank = <
   return useMutation(getRefreshForecastBankMutationOptions(options));
 };
 
+/**
+ * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ */
+export const getGetForecastReviewCountUrl = () => {
+  return `/api/forecast/review-count`;
+};
+
+export const getForecastReviewCount = async (
+  options?: RequestInit,
+): Promise<BadgeCount> => {
+  return customFetch<BadgeCount>(getGetForecastReviewCountUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetForecastReviewCountQueryKey = () => {
+  return [`/api/forecast/review-count`] as const;
+};
+
+export const getGetForecastReviewCountQueryOptions = <
+  TData = Awaited<ReturnType<typeof getForecastReviewCount>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastReviewCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetForecastReviewCountQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getForecastReviewCount>>
+  > = ({ signal }) => getForecastReviewCount({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastReviewCount>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetForecastReviewCountQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getForecastReviewCount>>
+>;
+export type GetForecastReviewCountQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Count of unmatched current-month bank txns (Review inbox badge) without the full forecast bundle
+ */
+
+export function useGetForecastReviewCount<
+  TData = Awaited<ReturnType<typeof getForecastReviewCount>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastReviewCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetForecastReviewCountQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
 export const getGetForecastCashSignalUrl = (
   params?: GetForecastCashSignalParams,
 ) => {
@@ -7802,6 +7880,106 @@ export const useReopenWeek = <
 > => {
   return useMutation(getReopenWeekMutationOptions(options));
 };
+
+/**
+ * @summary Count of awaiting_review weeks (nav badge) without variance recompute
+ */
+export const getGetDebriefAwaitingCountUrl = (
+  params?: GetDebriefAwaitingCountParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/debrief/awaiting-count?${stringifiedParams}`
+    : `/api/debrief/awaiting-count`;
+};
+
+export const getDebriefAwaitingCount = async (
+  params?: GetDebriefAwaitingCountParams,
+  options?: RequestInit,
+): Promise<BadgeCount> => {
+  return customFetch<BadgeCount>(getGetDebriefAwaitingCountUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDebriefAwaitingCountQueryKey = (
+  params?: GetDebriefAwaitingCountParams,
+) => {
+  return [`/api/debrief/awaiting-count`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetDebriefAwaitingCountQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDebriefAwaitingCount>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDebriefAwaitingCountParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDebriefAwaitingCount>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDebriefAwaitingCountQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDebriefAwaitingCount>>
+  > = ({ signal }) =>
+    getDebriefAwaitingCount(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDebriefAwaitingCount>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDebriefAwaitingCountQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDebriefAwaitingCount>>
+>;
+export type GetDebriefAwaitingCountQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Count of awaiting_review weeks (nav badge) without variance recompute
+ */
+
+export function useGetDebriefAwaitingCount<
+  TData = Awaited<ReturnType<typeof getDebriefAwaitingCount>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDebriefAwaitingCountParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDebriefAwaitingCount>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDebriefAwaitingCountQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getListWeeklyDebriefsUrl = (params?: ListWeeklyDebriefsParams) => {
   const normalizedParams = new URLSearchParams();
