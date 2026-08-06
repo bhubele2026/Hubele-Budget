@@ -6,7 +6,7 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeader, RingMeter } from "@/components/stat";
-import { Sparkline, MiniBars, StackBar, MoneyText } from "@/components/viz";
+import { Sparkline, StackBar, MoneyText } from "@/components/viz";
 import { StatTile } from "@/components/stat-tile";
 import { formatCurrency } from "@/lib/utils";
 
@@ -91,7 +91,7 @@ export default function ForecastOverviewPage() {
         <StatTile
           label="Projected low"
           value={<MoneyText countUp amount={lowest} />}
-          sub={signal?.lowestDate ? `on ${signal.lowestDate}` : "—"}
+          sub={signal?.lowestDate ? `on ${signal.lowestDate}` : "today"}
           icon={<TrendingDown />}
         />
         <StatTile
@@ -184,26 +184,34 @@ export default function ForecastOverviewPage() {
               Biggest bills ahead
             </div>
             {bigBills.length ? (
-              <>
-                <MiniBars
-                  data={bigBills.map((b) => ({
-                    value: Math.abs(b.amount),
-                    label: `${b.label}: ${formatCurrency(Math.abs(b.amount))}`,
-                    color: "hsl(var(--chart-1))",
-                  }))}
-                  height={56}
-                />
-                <div className="grid grid-cols-1 gap-y-1 text-xs sm:grid-cols-2">
-                  {bigBills.slice(0, 6).map((b, i) => (
-                    <div key={`${b.label}-${i}`} className="flex justify-between gap-2">
-                      <span className="truncate text-muted-foreground">{b.label}</span>
-                      <span className="shrink-0 font-semibold tabular-nums">
-                        {formatCurrency(Math.abs(b.amount))}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </>
+              (() => {
+                const rows = bigBills.slice(0, 6);
+                const max = Math.max(...rows.map((b) => Math.abs(b.amount)), 1);
+                return (
+                  <div className="flex flex-col gap-2.5">
+                    {rows.map((b, i) => (
+                      <div key={`${b.label}-${i}`}>
+                        <div className="flex items-baseline justify-between gap-3 text-xs">
+                          <span className="truncate text-muted-foreground">{b.label}</span>
+                          <span className="shrink-0 font-semibold tabular-nums text-foreground">
+                            {formatCurrency(Math.abs(b.amount))}
+                          </span>
+                        </div>
+                        {/* Thin proportional meter — quiet magnitude, no slabs. */}
+                        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full transition-[width] duration-700 ease-out"
+                            style={{
+                              width: `${(Math.abs(b.amount) / max) * 100}%`,
+                              background: "hsl(var(--chart-1))",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()
             ) : (
               <p className="py-6 text-center text-sm text-muted-foreground">
                 No big bills in the window.

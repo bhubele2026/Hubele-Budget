@@ -102,7 +102,7 @@ export default function ReportsPage() {
       {/* Editorial header */}
       <div>
         <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Section V
+          Insights
         </div>
         <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mt-0.5 leading-tight">
           Reports

@@ -1453,9 +1453,12 @@ export default function CommandCenterPage() {
               </div>
               <div className="mt-3">
                 <MiniBars
-                  height={36}
+                  height={24}
                   data={[
-                    { value: momCompare.last, label: `Last month: ${formatCurrency(momCompare.last)}`, color: "hsl(var(--muted-foreground))" },
+                    // Reference series stays recessive (light neutral), the
+                    // current month carries the color — a dark slab here read
+                    // as a gray blob on the bright canvas.
+                    { value: momCompare.last, label: `Last month: ${formatCurrency(momCompare.last)}`, color: "hsl(var(--border))" },
                     {
                       value: momCompare.cur,
                       label: `This month: ${formatCurrency(momCompare.cur)}`,

@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Link } from "wouter";
 import {
   Breadcrumb,
@@ -21,14 +22,17 @@ export function DrillBreadcrumb({ items }: { items: Crumb[] }) {
       <BreadcrumbList>
         {items.map((c, i) => {
           const last = i === items.length - 1;
+          // Separator must be a SIBLING of the item — BreadcrumbSeparator is
+          // its own <li>, and nesting it inside BreadcrumbItem (also an <li>)
+          // is invalid HTML (React logs a hydration warning on every page).
           return (
-            <BreadcrumbItem key={`${c.label}-${i}`}>
-              {last || !c.href ? (
-                <BreadcrumbPage className="text-[11px] uppercase tracking-widest">
-                  {c.label}
-                </BreadcrumbPage>
-              ) : (
-                <>
+            <Fragment key={`${c.label}-${i}`}>
+              <BreadcrumbItem>
+                {last || !c.href ? (
+                  <BreadcrumbPage className="text-[11px] uppercase tracking-widest">
+                    {c.label}
+                  </BreadcrumbPage>
+                ) : (
                   <BreadcrumbLink asChild>
                     <Link
                       href={c.href}
@@ -37,10 +41,10 @@ export function DrillBreadcrumb({ items }: { items: Crumb[] }) {
                       {c.label}
                     </Link>
                   </BreadcrumbLink>
-                  <BreadcrumbSeparator />
-                </>
-              )}
-            </BreadcrumbItem>
+                )}
+              </BreadcrumbItem>
+              {!last && c.href ? <BreadcrumbSeparator /> : null}
+            </Fragment>
           );
         })}
       </BreadcrumbList>

@@ -86,7 +86,7 @@ export function BudgetHealthCard({ className }: { className?: string }) {
         />
         <div className="min-w-0 flex-1">
           {trendScores.length > 1 ? (
-            <Sparkline data={trendScores} variant="area" color={color} height={34} />
+            <Sparkline data={trendScores} variant="area" color={color} height={44} />
           ) : (
             <div className="text-xs text-muted-foreground">
               Trend fills in as the daily score is captured.
@@ -110,8 +110,10 @@ export function BudgetHealthCard({ className }: { className?: string }) {
                 className="h-2 w-2 flex-none rounded-full"
                 style={{ background: STATUS_COLOR[dStatus] }}
               />
-              <span className="flex-1 truncate text-muted-foreground">{d.label}</span>
-              <span className="tabular-nums font-medium">{Math.round(d.score)}</span>
+              <span className="truncate text-muted-foreground">{d.label}</span>
+              <span className="tabular-nums font-semibold text-foreground">
+                {Math.round(d.score)}
+              </span>
             </div>
           );
         })}
