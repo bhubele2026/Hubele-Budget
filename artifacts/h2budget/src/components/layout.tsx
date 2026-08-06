@@ -453,7 +453,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors",
                       active
-                        ? "bg-[hsl(var(--splash-violet)/0.16)] text-white font-semibold ring-1 ring-[hsl(var(--splash-violet)/0.45)] shadow-[inset_0_-2px_0_hsl(var(--splash-violet))]"
+                        ? "bg-[hsl(var(--splash-violet)/0.16)] text-foreground font-semibold ring-1 ring-[hsl(var(--splash-violet)/0.45)] shadow-[inset_0_-2px_0_hsl(var(--splash-violet))]"
                         : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                     )}
                     data-testid={`topnav-${item.href.slice(1)}`}
@@ -476,7 +476,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   className={cn(
                     "relative flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors outline-none",
                     moreActive
-                      ? "bg-[hsl(var(--splash-violet)/0.16)] text-white font-semibold ring-1 ring-[hsl(var(--splash-violet)/0.45)] shadow-[inset_0_-2px_0_hsl(var(--splash-violet))]"
+                      ? "bg-[hsl(var(--splash-violet)/0.16)] text-foreground font-semibold ring-1 ring-[hsl(var(--splash-violet)/0.45)] shadow-[inset_0_-2px_0_hsl(var(--splash-violet))]"
                       : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                   )}
                   data-testid="topnav-more"

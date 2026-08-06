@@ -111,7 +111,7 @@ function Tile({
         )}
       </Link>
       {links && links.length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 px-1">
           {links.map((l) => (
             <Link
               key={l.href}
@@ -119,7 +119,7 @@ function Tile({
               data-testid={l.testid}
               onMouseEnter={() => prefetchRoute(l.href)}
               onFocus={() => prefetchRoute(l.href)}
-              className="transition-colors hover:text-primary hover:underline"
+              className="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
             >
               {l.label}
             </Link>
@@ -325,19 +325,24 @@ export default function LandingPage() {
 
       {/* Content */}
       <div className="relative mx-auto w-full max-w-5xl px-4 pb-16 pt-8 sm:px-6">
-        {/* Brand aurora — a soft violet→orange wash behind the greeting so
-            the black opens with unmistakable color. Pure decoration. */}
+        {/* Brand aurora — a soft violet→orange wash behind the greeting.
+            Pure decoration. The mask guarantees the wash reaches zero before
+            every edge of the div, so it can never clip with a hard seam. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-10 left-0 h-56 w-[36rem] max-w-full opacity-60"
+          className="pointer-events-none absolute -top-14 -left-16 h-64 w-[42rem] max-w-full opacity-60"
           style={{
             background:
-              "radial-gradient(60% 80% at 18% 30%, hsl(var(--splash-violet) / 0.28), transparent 65%), radial-gradient(50% 70% at 55% 20%, hsl(var(--splash-orange) / 0.16), transparent 60%)",
+              "radial-gradient(42% 50% at 32% 42%, hsl(var(--splash-violet) / 0.28), transparent 72%), radial-gradient(34% 42% at 58% 30%, hsl(var(--splash-orange) / 0.16), transparent 70%)",
+            maskImage:
+              "radial-gradient(65% 65% at 45% 40%, black 25%, transparent 95%)",
+            WebkitMaskImage:
+              "radial-gradient(65% 65% at 45% 40%, black 25%, transparent 95%)",
           }}
         />
         <div className="relative mb-8">
           <h1
-            className="text-3xl font-semibold tracking-tight text-white sm:text-4xl"
+            className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
             style={{ fontFamily: "var(--app-font-sans)" }}
           >
             Hey, {who}.
