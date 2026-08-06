@@ -23,11 +23,11 @@ export function SectionHeader({
     <div className={cn("flex items-end justify-between gap-3", className)}>
       <div className="min-w-0">
         {eyebrow && (
-          <div className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+          <div className="text-[11px] font-semibold uppercase tracking-widest text-primary">
             {eyebrow}
           </div>
         )}
-        <h2 className="text-lg font-semibold tracking-tight leading-tight">{title}</h2>
+        <h2 className="text-lg font-semibold tracking-tight leading-tight dark:text-white">{title}</h2>
         {sub && <p className="text-sm text-muted-foreground mt-0.5">{sub}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
