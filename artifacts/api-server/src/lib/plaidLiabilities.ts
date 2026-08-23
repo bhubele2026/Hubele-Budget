@@ -17,7 +17,7 @@ import {
   ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
 } from "./plaid";
 import { logger } from "./logger";
-import { runStartupLinkRevolvingAmexDebts } from "./linkRevolvingAmexDebts";
+import { linkRevolvingAmexDebts } from "./linkRevolvingAmexDebts";
 import {
   extractPlaidError,
   markItemMalformedToken,
@@ -424,7 +424,7 @@ export async function fetchLiabilitiesForItem(
   // auto-move any qualifying revolving Amex card into Avalanche so it leaves
   // the Amex band on link + Sync — not just at server boot. Best-effort
   // (swallows its own errors); scoped to this household.
-  await runStartupLinkRevolvingAmexDebts({ householdId });
+  await linkRevolvingAmexDebts({ householdId });
   return out;
 }
 

@@ -15,7 +15,6 @@ export * from "./amexWeeklyPayoffCard";
 export * from "./amexWeeklyPayoffCardBrand";
 export * from "./amexWeeklyPayoffCardCadence";
 export * from "./amexWeeklyPayoffCardTopMerchant";
-export * from "./aprilChaseSeedResult";
 export * from "./avalancheExtra";
 export * from "./avalancheExtraBreakdown";
 export * from "./avalancheExtraMode";

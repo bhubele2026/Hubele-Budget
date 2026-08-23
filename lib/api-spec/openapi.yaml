@@ -160,7 +160,7 @@ paths:
       tags: [transactions]
       summary: |
         Clear the `isTransferUserOverridden` flag on a single transaction so
-        that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+        that the next Plaid sync (or XLSX import pass) can
         re-apply the description+PFC auto-Transfer heuristic to it. Used by
         the "Reset to auto" affordance surfaced in the row's Edit dialog
         when the user has previously toggled the Transfer flag manually.
@@ -1899,18 +1899,6 @@ paths:
         "403":
           description: Forbidden
 
-  /seed/april-chase:
-    post:
-      operationId: seedAprilChase
-      tags: [import]
-      summary: Seed the user's Chase checking with April 2026 transactions (idempotent)
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AprilChaseSeedResult" }
-
 components:
   schemas:
     HealthStatus:
@@ -1970,8 +1958,8 @@ components:
             True when the user has explicitly toggled `isTransfer` on this
             row (cleared the auto-flag from the row's "Transfer" pill, picked
             a real category on a transfer row, or flipped the toggle in the
-            Edit dialog). The Plaid sync / XLSX import / aprilChaseSeed
-            re-categorize paths honor this and skip the description/PFC
+            Edit dialog). The Plaid sync / XLSX import re-categorize
+            paths honor this and skip the description/PFC
             transfer heuristic so future syncs of the same row don't
             silently re-flag it as a transfer. Server-managed: writes to
             this field are not accepted via the input schema — toggling
@@ -3093,23 +3081,6 @@ components:
         linesInserted: { type: integer }
         mappingRulesInserted: { type: integer }
         alreadySeeded: { type: boolean }
-    AprilChaseSeedResult:
-      type: object
-      required: [alreadySeeded, inserted, skipped, categorized, transfers, rulesAdded, endingBalance, syntheticAccount, accountId, snapshotRepaired]
-      properties:
-        alreadySeeded: { type: boolean }
-        inserted: { type: integer }
-        skipped: { type: integer }
-        categorized: { type: integer }
-        transfers: { type: integer }
-        rulesAdded: { type: integer }
-        endingBalance: { type: string }
-        syntheticAccount: { type: boolean }
-        accountId: { type: string }
-        snapshotRepaired:
-          type: boolean
-          description: True when an existing manual bank snapshot still equal to the prior incorrect April ending balance was rewritten to the corrected value during this seed run. Use to invalidate cached forecast / bank snapshot queries even when no transactions or rules were inserted.
-
     MappingRule:
       type: object
       required: [id, pattern, matchType, priority]

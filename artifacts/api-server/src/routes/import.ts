@@ -5,7 +5,6 @@ import { db, importBatchesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { importWorkbook } from "../lib/workbookImporter";
 import { restoreImportSnapshot } from "../lib/importSnapshot";
-import { seedAprilChase } from "../lib/aprilChaseSeed";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -76,21 +75,6 @@ router.post(
     } catch (e) {
       req.log.error({ err: e }, "Import snapshot restore failed");
       const msg = e instanceof Error ? e.message : "Restore failed";
-      res.status(500).json({ error: msg });
-    }
-  },
-);
-
-router.post(
-  "/seed/april-chase",
-  requireAuth,
-  async (req, res): Promise<void> => {
-    try {
-      const result = await seedAprilChase(req.householdOwnerId!, req.householdId!);
-      res.json(result);
-    } catch (e) {
-      req.log.error({ err: e }, "April Chase seed failed");
-      const msg = e instanceof Error ? e.message : "Seed failed";
       res.status(500).json({ error: msg });
     }
   },

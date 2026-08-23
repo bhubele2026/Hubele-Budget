@@ -33,9 +33,7 @@ import {
  *      deterministically (no id-tiebreaker reliance). Mix debits
  *      (negative amounts) and a credit (positive amount) to
  *      exercise both walk directions.
- *   3. Stub /api/seed/april-chase so the page's on-mount April
- *      seed is a no-op against our fixture.
- *   4. Open /transactions, wait for the ending balance chip to
+ *   3. Open /transactions, wait for the ending balance chip to
  *      populate to the anchor value, then walk the per-row
  *      `text-running-balance-${id}` chips and assert:
  *        - Newest row's "bal" exactly equals the ending balance chip.
@@ -45,7 +43,7 @@ import {
  *      That single recurrence covers both monotonicity for debits
  *      (balance walks back up as we look further back) and the
  *      reverse for credits.
- *   5. Re-run the per-row read at a desktop viewport (1280×800)
+ *   4. Re-run the per-row read at a desktop viewport (1280×800)
  *      AND a mobile viewport (390×844). Unlike /amex which renders
  *      two physically separate DOM trees (`md:hidden` /
  *      `hidden md:block`), the Chase row uses a single DOM node
@@ -323,31 +321,6 @@ test.describe("Chase Transactions page — per-row running balance (#393)", () =
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(rows),
-      });
-    });
-
-    // Suppress the on-mount April 2026 Chase seed. The page fires
-    // `useSeedAprilChase` on every initial load, which would happily
-    // insert ~95 real April rows into our snapshot account. The
-    // listTransactions mock above already shields the page from that
-    // pollution, but stubbing the seed too keeps the test a no-op
-    // against the seed's repair logic.
-    await page.route("**/api/seed/april-chase", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          alreadySeeded: true,
-          inserted: 0,
-          skipped: 0,
-          categorized: 0,
-          transfers: 0,
-          rulesAdded: 0,
-          endingBalance: anchorBalance.toFixed(2),
-          syntheticAccount: false,
-          accountId: acct.accountId,
-          snapshotRepaired: false,
-        }),
       });
     });
 

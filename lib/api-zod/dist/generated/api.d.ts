@@ -906,7 +906,7 @@ export declare const DeleteTransactionParams: zod.ZodObject<{
 }>;
 /**
  * @summary Clear the `isTransferUserOverridden` flag on a single transaction so
-that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+that the next Plaid sync (or XLSX import pass) can
 re-apply the description+PFC auto-Transfer heuristic to it. Used by
 the "Reset to auto" affordance surfaced in the row's Edit dialog
 when the user has previously toggled the Transfer flag manually.
@@ -9564,42 +9564,5 @@ export declare const RemoveMemberParams: zod.ZodObject<{
     id: string;
 }, {
     id: string;
-}>;
-/**
- * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
- */
-export declare const SeedAprilChaseResponse: zod.ZodObject<{
-    alreadySeeded: zod.ZodBoolean;
-    inserted: zod.ZodNumber;
-    skipped: zod.ZodNumber;
-    categorized: zod.ZodNumber;
-    transfers: zod.ZodNumber;
-    rulesAdded: zod.ZodNumber;
-    endingBalance: zod.ZodString;
-    syntheticAccount: zod.ZodBoolean;
-    accountId: zod.ZodString;
-    snapshotRepaired: zod.ZodBoolean;
-}, "strip", zod.ZodTypeAny, {
-    accountId: string;
-    alreadySeeded: boolean;
-    endingBalance: string;
-    skipped: number;
-    inserted: number;
-    categorized: number;
-    transfers: number;
-    rulesAdded: number;
-    syntheticAccount: boolean;
-    snapshotRepaired: boolean;
-}, {
-    accountId: string;
-    alreadySeeded: boolean;
-    endingBalance: string;
-    skipped: number;
-    inserted: number;
-    categorized: number;
-    transfers: number;
-    rulesAdded: number;
-    syntheticAccount: boolean;
-    snapshotRepaired: boolean;
 }>;
 //# sourceMappingURL=api.d.ts.map

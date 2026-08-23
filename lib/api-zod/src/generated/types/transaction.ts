@@ -37,8 +37,8 @@ categorize).
   /** True when the user has explicitly toggled `isTransfer` on this
 row (cleared the auto-flag from the row's "Transfer" pill, picked
 a real category on a transfer row, or flipped the toggle in the
-Edit dialog). The Plaid sync / XLSX import / aprilChaseSeed
-re-categorize paths honor this and skip the description/PFC
+Edit dialog). The Plaid sync / XLSX import re-categorize
+paths honor this and skip the description/PFC
 transfer heuristic so future syncs of the same row don't
 silently re-flag it as a transfer. Server-managed: writes to
 this field are not accepted via the input schema — toggling

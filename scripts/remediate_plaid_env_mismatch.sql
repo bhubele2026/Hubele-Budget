@@ -47,7 +47,7 @@ BEGIN
       AND access_token !~ ('^access-' || target_env || '-')
       AND access_token ~ '^access-(sandbox|development|production)-'
       -- (#710) Skip synthetic seed rows (item_id `seed-…`, e.g. the
-      -- April-2026 Chase placeholder from aprilChaseSeed.ts). Their
+      -- April-2026 Chase synthetic placeholder row). Their
       -- access_token is a well-formed but fake `access-sandbox-seed-…`
       -- string that intentionally fails the env check, but there's no
       -- real Plaid item behind it — flagging it INVALID_ACCESS_TOKEN

@@ -76,7 +76,7 @@ export const GetDashboardResponse = zod.object({
       isTransferUserOverridden: zod
         .boolean()
         .describe(
-          "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+          "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
         ),
       isExternalCardPayment: zod
         .boolean()
@@ -190,7 +190,7 @@ export const ListTransactionsResponseItem = zod.object({
   isTransferUserOverridden: zod
     .boolean()
     .describe(
-      "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+      "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
     ),
   isExternalCardPayment: zod
     .boolean()
@@ -346,7 +346,7 @@ export const UpdateTransactionResponse = zod
     isTransferUserOverridden: zod
       .boolean()
       .describe(
-        "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+        "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
       ),
     isExternalCardPayment: zod
       .boolean()
@@ -501,7 +501,7 @@ export const DeleteTransactionParams = zod.object({
 
 /**
  * @summary Clear the `isTransferUserOverridden` flag on a single transaction so
-that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+that the next Plaid sync (or XLSX import pass) can
 re-apply the description+PFC auto-Transfer heuristic to it. Used by
 the "Reset to auto" affordance surfaced in the row's Edit dialog
 when the user has previously toggled the Transfer flag manually.
@@ -544,7 +544,7 @@ export const ClearTransferOverrideResponse = zod.object({
   isTransferUserOverridden: zod
     .boolean()
     .describe(
-      "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+      "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
     ),
   isExternalCardPayment: zod
     .boolean()
@@ -2389,7 +2389,7 @@ export const GetForecastResponse = zod.object({
       isTransferUserOverridden: zod
         .boolean()
         .describe(
-          "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+          "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
         ),
       isExternalCardPayment: zod
         .boolean()
@@ -3952,24 +3952,4 @@ export const ListMembersResponse = zod.array(ListMembersResponseItem);
  */
 export const RemoveMemberParams = zod.object({
   id: zod.coerce.string(),
-});
-
-/**
- * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
- */
-export const SeedAprilChaseResponse = zod.object({
-  alreadySeeded: zod.boolean(),
-  inserted: zod.number(),
-  skipped: zod.number(),
-  categorized: zod.number(),
-  transfers: zod.number(),
-  rulesAdded: zod.number(),
-  endingBalance: zod.string(),
-  syntheticAccount: zod.boolean(),
-  accountId: zod.string(),
-  snapshotRepaired: zod
-    .boolean()
-    .describe(
-      "True when an existing manual bank snapshot still equal to the prior incorrect April ending balance was rewritten to the corrected value during this seed run. Use to invalidate cached forecast \/ bank snapshot queries even when no transactions or rules were inserted.",
-    ),
 });

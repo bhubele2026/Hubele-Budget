@@ -130,11 +130,11 @@ test.describe("Chase per-account balance refresh (#342, covers #296)", () => {
       })
       .returning();
 
-    // Anchor the bank snapshot at account A using a balance + date that
-    // do NOT match seedAprilChase's repair triggers, so the on-mount
-    // seed leaves our snapshot intact. The snapshot timestamp lives in
-    // the current month so anchorMonth == selectedMonth and Starting /
-    // Ending balance render real numbers for account A right away.
+    // Anchor the bank snapshot at account A with a deliberately
+    // already-correct balance + date (not a stale legacy value). The
+    // snapshot timestamp lives in the current month so anchorMonth ==
+    // selectedMonth and Starting / Ending balance render real numbers
+    // for account A right away.
     const today = todayISO();
     await db.insert(forecastSettingsTable).values({
       userId,

@@ -1,22 +1,8 @@
 import cron from "node-cron";
 import app from "./app";
 import { logger } from "./lib/logger";
-import {
-  flagMalformedAccessTokens,
-  refreshConsentExpirationForAllItems,
-  syncAllForAllUsers,
-} from "./lib/plaidSync";
-import { sendExpirationRemindersForAllUsers } from "./lib/plaidExpirationReminder";
-import { maybeAlertOnMalformedTokenSpike } from "./lib/plaidMalformedTokenAlert";
-import { backfillMalformedTokenSiblings } from "./lib/plaidMalformedSiblingCleanup";
-import { backfillOrphanPlaidItems } from "./lib/plaidOrphanItemCleanup";
-import { maybeAlertOnSiblingCleanup } from "./lib/plaidMalformedSiblingCleanupAlert";
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
-import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
-import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
-import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
-import { runStartupLinkRevolvingAmexDebts } from "./lib/linkRevolvingAmexDebts";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
@@ -110,386 +96,31 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 
-  // (#434) One-shot startup pass: walk every user with a non-empty
-  // `forecast_settings.accountSnapshots` map and run the dedupe routine
-  // so users whose auto-dedupe gate was already stamped before #429
-  // (which added the orphan-snapshot prune/salvage) get healed without
-  // having to click anything. Idempotent — a clean account is a no-op.
-  // Best-effort, fire-and-forget: never blocks boot, never crashes it.
-  runStartupAccountSnapshotsRepair()
-    .then((summary) => {
-      logger.info(
-        summary,
-        "Startup accountSnapshots repair sweep complete",
-      );
-    })
-    .catch((err) => {
-      logger.error({ err }, "Startup accountSnapshots repair sweep failed");
-    });
-
-  // (#632) One-shot per-startup sweep: clean up existing transactions
-  // that match the new card-payment heuristics but were tagged into
-  // Monthly/Weekly/Unplanned before the upstream classifier knew about
-  // them (e.g. the +$1,593.52 "ONLINE PAYMENT - THANK YOU" sitting in
-  // Monthly Budget). User-overridden rows are skipped. Idempotent —
-  // a clean DB is a no-op. Best-effort: never blocks boot.
-  runStartupCardPaymentReclassify()
-    .then((summary) => {
-      logger.info(summary, "Startup card-payment reclassify complete");
-    })
-    .catch((err) => {
-      logger.error({ err }, "Startup card-payment reclassify failed");
-    });
-
-  // (#738) One-shot per-startup pass: apply the legacy
-  // `notes='[pending]'` marker cleanup to whatever DB the server is
-  // pointed at. This is the production-side counterpart to the
-  // dev-side `scripts/post-merge.sh` block (which only fires on task
-  // merge against the dev DB). Idempotent — converged DBs are a
-  // no-op. Best-effort: never blocks boot.
-  runStartupPendingNotesBackfill()
-    .then((summary) => {
-      logger.info(summary, "Startup pending-notes backfill complete");
-    })
-    .catch((err) => {
-      logger.error({ err }, "Startup pending-notes backfill failed");
-    });
-
-  // One-shot per-startup sweep: auto-move revolving Amex credit cards (an APR +
-  // a minimum payment + a materially carried balance, all from Plaid) into
-  // Avalanche debts so they leave the Amex band without the user clicking
-  // anything — the Sky Card being the motivating case. Idempotent: already-
-  // linked cards are skipped. Best-effort: never blocks boot.
-  runStartupLinkRevolvingAmexDebts()
-    .then((summary) => {
-      logger.info(summary, "Startup revolving-Amex auto-link complete");
-    })
-    .catch((err) => {
-      logger.error({ err }, "Startup revolving-Amex auto-link failed");
-    });
+  // Boot does NOTHING but listen. Every one-shot repair sweep that used
+  // to run here (accountSnapshots repair, card-payment reclassify,
+  // pending-notes backfill, revolving-Amex auto-link) and every Plaid
+  // boot scan (malformed-token flag, malformed-token sibling cleanup,
+  // orphan plaid_items cleanup) has been removed: they had been running
+  // on every deploy for months against a converged database, so they
+  // cost startup latency and PG contention while doing no work. The
+  // repairs that still matter run where the data actually changes —
+  // `linkRevolvingAmexDebts` on every manual Plaid sync (see
+  // lib/plaidLiabilities.ts) and the malformed-token check inside the
+  // owner-triggered sync path (see routes/plaid.ts POST /plaid/sync).
+  //
+  // The automatic Plaid sync crons (hourly cursor sync, */10 forced
+  // refresh, daily consent refresh) are gone entirely rather than
+  // sitting dead behind a kill-switch: they were hard-disabled in code
+  // after Plaid billed the household ~$500 for background pulls. Banks
+  // sync ONLY when the owner clicks Sync (POST /plaid/sync, untouched).
+  // Restoring background syncing means writing a Render Cron Job, not
+  // flipping a flag here.
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
-    // (#366) One-shot backfill: flag any pre-existing rows whose stored
-    // access_token doesn't match the canonical `access-<env>-<opaque>`
-    // shape. Catches legacy rows from earlier env-mismatch incidents
-    // and ensures users see the Reconnect CTA on the next page load
-    // instead of waiting for the next hourly sync. Best-effort — never
-    // crashes boot.
-    flagMalformedAccessTokens()
-      .then(({ scanned, flagged }) => {
-        logger.info(
-          { scanned, flagged },
-          "Plaid malformed access_token boot scan complete",
-        );
-      })
-      .catch((err) => {
-        logger.error({ err }, "Plaid malformed access_token boot scan failed");
-      });
-
-    // (#406) One-shot backfill: clean up duplicate "broken Chase"-style
-    // rows that pre-date the (#401) inline cleanup in the exchange
-    // handler. For each plaid_items row whose stored access_token fails
-    // the malformed-token guard AND has a healthy sibling for the same
-    // user + same institution, run the same local cleanup the exchange
-    // handler now does so existing users no longer have to re-link a
-    // third time to clear the stale row from Settings + the dashboard
-    // reauth banner. Idempotent — once the duplicates are gone the
-    // sweep is a no-op on subsequent boots. Best-effort: never crashes
-    // boot, never throws upstream.
-    backfillMalformedTokenSiblings()
-      .then(async (summary) => {
-        logger.info(
-          {
-            scannedMalformed: summary.scannedMalformed,
-            cleanedSiblings: summary.cleanedSiblings,
-            skippedNoHealthySibling: summary.skippedNoHealthySibling,
-          },
-          "Plaid malformed-token sibling backfill complete",
-        );
-        // (#551) Page operators when the boot sweep actually cleaned
-        // something so support can confirm "yes, we cleaned N rows
-        // after the deploy" without grepping rotated pino logs.
-        // Zero-cleanup boots stay silent inside the helper.
-        try {
-          const alert = await maybeAlertOnSiblingCleanup(summary);
-          if (alert.channel !== "skipped") {
-            logger.info(
-              {
-                channel: alert.channel,
-                recipient: alert.recipient,
-                cleanedSiblings: summary.cleanedSiblings,
-              },
-              "Plaid sibling-cleanup boot alert dispatched",
-            );
-          }
-        } catch (alertErr) {
-          logger.warn(
-            { err: alertErr },
-            "Plaid sibling-cleanup boot alert threw unexpectedly",
-          );
-        }
-      })
-      .catch((err) => {
-        logger.error(
-          { err },
-          "Plaid malformed-token sibling backfill failed",
-        );
-      });
-
-    // (#650) Orphan plaid_items sweep: rows with a valid token AND zero
-    // attached accounts AND a healthy sibling at the same institution
-    // for the same user. These survive the malformed-sibling cleanup
-    // (their tokens are valid) and burn /transactions/sync quota every
-    // hour for nothing. Idempotent + best-effort.
-    backfillOrphanPlaidItems()
-      .then((summary) => {
-        logger.info(
-          {
-            scannedOrphans: summary.scannedOrphans,
-            removedOrphans: summary.removedOrphans,
-            skippedNoHealthySibling: summary.skippedNoHealthySibling,
-          },
-          "Plaid orphan plaid_items backfill complete",
-        );
-      })
-      .catch((err) => {
-        logger.error({ err }, "Plaid orphan plaid_items backfill failed");
-      });
-
-    // Master switch for ALL automatic Plaid pulls: the hourly cursor
-    // sync, the frequent forced-refresh loop, and the daily consent
-    // refresh. Defaults to OFF because Plaid bills per pull — banks now
-    // sync only when the user clicks the in-app Sync button (the manual
-    // POST /plaid/sync route and the post-link first sync are unaffected).
-    // Set PLAID_AUTO_SYNC_ENABLED=true to restore background syncing. The
-    // webhook-triggered sync honors the same flag (see routes/plaid.ts).
-    // (#plaid-bill) HARD KILL-SWITCH. The household was billed ~$500 by
-    // Plaid for background pulls and has repeatedly asked that banks sync
-    // ONLY when they click the in-app Sync button. We deliberately ignore
-    // the PLAID_AUTO_SYNC_ENABLED Secret here so a stale/forgotten "true"
-    // in the deploy environment can never silently re-enable the hourly
-    // cursor sync, the */10 forced-refresh loop, or the daily consent
-    // refresh — each of which makes billable Plaid calls. To ever restore
-    // background syncing, flip AUTO_SYNC_HARD_DISABLED to false (and the
-    // env var below is honored again). Typed as boolean (not a literal)
-    // so the gated block stays reachable to the compiler.
-    const AUTO_SYNC_HARD_DISABLED = true;
-    const autoSyncEnabled: boolean =
-      !AUTO_SYNC_HARD_DISABLED &&
-      process.env.PLAID_AUTO_SYNC_ENABLED === "true";
-    if (!autoSyncEnabled) {
-      logger.warn(
-        AUTO_SYNC_HARD_DISABLED
-          ? "Automatic Plaid syncing is HARD-DISABLED in code (cost kill-switch). Banks pull ONLY via the manual Sync button, regardless of PLAID_AUTO_SYNC_ENABLED."
-          : "PLAID_AUTO_SYNC_ENABLED is not 'true' — automatic Plaid syncing is OFF; banks pull only via the manual Sync button.",
-      );
-    }
-
-    if (autoSyncEnabled) {
-      cron.schedule("0 * * * *", () => {
-        syncAllForAllUsers().catch((err) => {
-          logger.error({ err }, "Hourly Plaid sync failed");
-        });
-      });
-      logger.info("Plaid hourly sync scheduled");
-
-    // (#671) Frequent forced-refresh loop. The hourly cron above does a
-    // pure cursor-only /transactions/sync, which only returns what Plaid
-    // happened to cache during its own scheduled bank poll — for several
-    // institutions (notably Chase) that poll routinely lags pending
-    // charges by 6+ hours. Without this loop, a user who never opens
-    // the app sees newly-authorized pending charges land on the *next*
-    // organic Plaid poll, which can be 4–8h after the bank actually
-    // had them. The forced-refresh loop walks every active item, calls
-    // /transactions/refresh, then re-walks /transactions/sync (with
-    // the poll-after-refresh budget inside syncPlaidItem) so pending
-    // rows land within a single cron interval. Reauth-blocked items
-    // are skipped server-side to avoid burning quota on a token Plaid
-    // will bounce. Defaults to every 10 minutes; tunable via
-    // PLAID_FREQUENT_REFRESH_CRON for ops who need a different cadence.
-    const frequentRefreshCron =
-      process.env.PLAID_FREQUENT_REFRESH_CRON || "*/10 * * * *";
-    const frequentRefreshEnabled =
-      process.env.PLAID_FREQUENT_REFRESH_ENABLED !== "false";
-    if (frequentRefreshEnabled) {
-      cron.schedule(frequentRefreshCron, () => {
-        syncAllForAllUsers({ forceRefresh: true }).catch((err) => {
-          logger.error(
-            { err },
-            "[plaid-sync] frequent forced-refresh loop failed",
-          );
-        });
-      });
-      logger.info(
-        { cron: frequentRefreshCron },
-        "Plaid frequent forced-refresh loop scheduled",
-      );
-    }
-
-    // (#253) Daily consent_expiration_time refresh. The on-sync path only
-    // refreshes the cutoff when sync hits PENDING_EXPIRATION /
-    // PENDING_DISCONNECT, so a healthy item silently approaching its
-    // cutoff (or one whose date Plaid rolled forward after a partial
-    // re-consent) can drift. Walking every active item once a day keeps
-    // the dated banner copy ("Chase will disconnect on May 21") honest
-    // even when the user never opens the app and sync never errors.
-    // Runs at 03:17 UTC to avoid colliding with the top-of-hour sync.
-    // The explicit `timezone: "UTC"` is important — node-cron defaults to
-    // the host's local timezone, which would shift the actual run time
-    // depending on where the container is provisioned and silently
-    // contradict the 03:17 UTC documented above.
-    cron.schedule(
-      "17 3 * * *",
-      () => {
-        refreshConsentExpirationForAllItems()
-          .then((summary) => {
-            logger.info(
-              summary,
-              "Daily Plaid consent_expiration_time refresh complete",
-            );
-          })
-          .catch((err) => {
-            logger.error(
-              { err },
-              "Daily Plaid consent_expiration_time refresh failed",
-            );
-          });
-      },
-      { timezone: "UTC" },
-    );
-    logger.info("Plaid daily consent refresh scheduled");
-    } // end if (autoSyncEnabled)
-
-    // (#plaid-free-pending) FREE scheduled cursor-sync backstop.
-    // DELIBERATELY placed OUTSIDE the `autoSyncEnabled` block and gated on
-    // its OWN dedicated env flag so it can NEVER re-arm the billable
-    // */10 forced-refresh loop above (that loop is the one that caused the
-    // ~$500/mo bill and stays hard-disabled). This calls syncAllForAllUsers()
-    // with NO args → forceRefresh stays false → ONLY the free
-    // /transactions/sync runs, never /transactions/refresh. It's a safety
-    // net so newly-authorized pending charges still land even if a Plaid
-    // SYNC_UPDATES_AVAILABLE webhook is missed. Free regardless of cadence;
-    // defaults to every 3 hours.
-    if (process.env.PLAID_FREE_CURSOR_SYNC_ENABLED === "true") {
-      const freeCursorCron =
-        process.env.PLAID_FREE_CURSOR_SYNC_CRON || "0 */3 * * *";
-      cron.schedule(freeCursorCron, () => {
-        // No opts → free /transactions/sync only. NEVER pass forceRefresh here.
-        syncAllForAllUsers().catch((err) => {
-          logger.error(
-            { err },
-            "[plaid-sync] free cursor-sync backstop failed",
-          );
-        });
-      });
-      logger.info(
-        { cron: freeCursorCron },
-        "Plaid FREE cursor-sync backstop scheduled (no billable refresh)",
-      );
-    }
-
-    // (#369) Daily malformed access_token sweep. The boot-time scan
-    // (`flagMalformedAccessTokens` above) only runs on server restart,
-    // and the per-call guards in sync / liabilities / consent refresh
-    // only fire when those code paths actually execute. Walking every
-    // `plaid_items` row once a day catches a poison token (env mismatch,
-    // truncated row, manual DB edit) within 24h instead of "whenever
-    // the next sync happens to touch this item" — which surfaces the
-    // Reconnect CTA before the user notices a stale balance and lets
-    // support spot a sudden jump in flagged items via the daily count
-    // log line. Runs at 03:02 UTC, ahead of the 03:17 consent refresh
-    // so a freshly flagged item is already in the needs-reconnect state
-    // by the time the consent sweep walks it (and short-circuits its
-    // own Plaid call). Best-effort — never crashes the cron tick.
-    cron.schedule(
-      "2 3 * * *",
-      () => {
-        flagMalformedAccessTokens()
-          .then(async (summary) => {
-            logger.info(
-              { scanned: summary.scanned, flagged: summary.flagged },
-              "Daily Plaid malformed access_token sweep complete",
-            );
-            // (#371) Spike alert: if today's count crosses the operator
-            // threshold (default 3 — well above the steady-state "one
-            // user mangled their own row" floor), email the operator
-            // with the count and a sample of affected institutions so
-            // a config-level breakage (env-var swap, bad migration)
-            // gets caught the same morning instead of via user
-            // complaints. Best-effort — never crashes the cron tick.
-            try {
-              const alert = await maybeAlertOnMalformedTokenSpike(summary);
-              if (alert.channel !== "skipped") {
-                logger.info(
-                  {
-                    channel: alert.channel,
-                    recipient: alert.recipient,
-                    flagged: summary.flagged,
-                  },
-                  "Plaid malformed-token spike alert dispatched",
-                );
-              }
-            } catch (err) {
-              logger.warn(
-                { err },
-                "Plaid malformed-token spike alert threw unexpectedly",
-              );
-            }
-          })
-          .catch((err) => {
-            logger.error(
-              { err },
-              "Daily Plaid malformed access_token sweep failed",
-            );
-          });
-      },
-      { timezone: "UTC" },
-    );
-    logger.info("Plaid daily malformed access_token sweep scheduled");
-
-    // (#262) Daily disconnect reminder sweep. Walks every active Plaid
-    // item across every user, finds those whose consent_expiration_time
-    // falls inside the alert window (3 days by default), and emails the
-    // owner a "reconnect before <date>" nudge. The in-app expiring-soon
-    // alert (#257) only catches users who happen to open the dashboard,
-    // so this email closes the gap for users who don't visit for two
-    // weeks. De-dup is keyed on (item_id, cutoff) so the same user is
-    // never spammed twice for the same cutoff, and a successful
-    // re-consent (which rolls the cutoff months out of the window)
-    // automatically silences future reminders.
-    //
-    // Runs at 03:32 UTC — 15 minutes after the consent refresh at 03:17
-    // — so the reminder always sees the freshest cutoff Plaid reports.
-    cron.schedule(
-      "32 3 * * *",
-      () => {
-        sendExpirationRemindersForAllUsers()
-          .then((summary) => {
-            logger.info(
-              {
-                scanned: summary.scanned,
-                sent: summary.sent,
-                skipped: summary.skipped,
-                failed: summary.failed,
-              },
-              "Daily Plaid disconnect reminder sweep complete",
-            );
-          })
-          .catch((err) => {
-            logger.error(
-              { err },
-              "Daily Plaid disconnect reminder sweep failed",
-            );
-          });
-      },
-      { timezone: "UTC" },
-    );
-    logger.info("Plaid daily disconnect reminder scheduled");
-
     // (#279) Daily prune of the plaid_sync_attempts audit log so the
-    // table stays bounded as users accumulate hourly syncs over months.
-    // Runs at 03:47 UTC, well clear of the other daily Plaid jobs so a
-    // slow prune doesn't stack on top of them.
+    // table stays bounded as users accumulate syncs over months. This
+    // is the ONLY scheduled job left in the process — it makes no Plaid
+    // API calls and is therefore free. Runs at 03:47 UTC.
     cron.schedule(
       "47 3 * * *",
       () => {
@@ -511,6 +142,8 @@ app.listen(port, (err) => {
     );
     logger.info("Plaid daily sync-attempts prune scheduled");
   } else {
-    logger.warn("Plaid credentials missing — scheduled sync disabled");
+    logger.warn(
+      "Plaid credentials missing — the daily sync-attempts prune is disabled",
+    );
   }
 });

@@ -13,7 +13,7 @@ import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
 import {
   SYNTHETIC_ACCOUNT_ID,
   SYNTHETIC_ITEM_ID,
-} from "../lib/aprilChaseSeed";
+} from "../lib/syntheticSeedIds";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `dedupe-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;

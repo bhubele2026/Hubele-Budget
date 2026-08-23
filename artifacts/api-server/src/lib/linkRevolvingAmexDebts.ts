@@ -34,7 +34,7 @@ const AUTO_LINK_MIN_BALANCE = 1000;
  * that beats us to the link is caught as PlaidAccountAlreadyLinkedError.
  * Best-effort: errors are logged, never thrown, never block boot or a sync.
  */
-export async function runStartupLinkRevolvingAmexDebts(opts?: {
+export async function linkRevolvingAmexDebts(opts?: {
   householdId?: string;
 }): Promise<{ scanned: number; linked: number; skipped: number }> {
   const summary = { scanned: 0, linked: 0, skipped: 0 };

@@ -2306,6 +2306,54 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
   // literal `true` bills a refresh, so a fat-fingered or absent body always
   // takes the cheap path.
   const forceRefresh = force === true;
+
+  // (#369, moved off boot) Malformed access_token check. This used to run
+  // as a boot scan in index.ts plus a 03:02 UTC cron; both are gone now
+  // that the server boots straight to listening. An owner-triggered sync
+  // is the only path that touches Plaid, so it is also the only moment a
+  // poison token (env mismatch, truncated row, manual DB edit) can start
+  // mattering — checking here surfaces the Reconnect CTA on the very
+  // click the user is already making instead of up to 24h later.
+  //
+  // Deliberately fire-and-forget: it makes no Plaid API calls (it only
+  // validates the stored token shape), and the sync response must never
+  // wait on it. Failures are logged, never propagated — a sweep hiccup
+  // must not fail the user's sync.
+  void (async () => {
+    try {
+      const summary = await flagMalformedAccessTokens();
+      if (summary.flagged > 0) {
+        req.log.warn(
+          { scanned: summary.scanned, flagged: summary.flagged },
+          "[plaid-sync] malformed access_token check flagged items during manual sync",
+        );
+        try {
+          const alert = await maybeAlertOnMalformedTokenSpike(summary);
+          if (alert.channel !== "skipped") {
+            req.log.info(
+              {
+                channel: alert.channel,
+                recipient: alert.recipient,
+                flagged: summary.flagged,
+              },
+              "[plaid-sync] malformed-token spike alert dispatched",
+            );
+          }
+        } catch (alertErr) {
+          req.log.warn(
+            { err: alertErr },
+            "[plaid-sync] malformed-token spike alert threw unexpectedly",
+          );
+        }
+      }
+    } catch (err) {
+      req.log.warn(
+        { err },
+        "[plaid-sync] malformed access_token check failed (sync continues)",
+      );
+    }
+  })();
+
   try {
     // (#671 follow-up) Always prune orphan Plaid transactions for the
     // household on a manual Sync click — covers the itemId-only path

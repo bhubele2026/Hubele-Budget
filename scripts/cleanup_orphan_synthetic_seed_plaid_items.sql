@@ -1,5 +1,5 @@
 -- Task #710 — manual cleanup for the synthetic Chase seed placeholder
--- row spawned by `aprilChaseSeed.ts` (SYNTHETIC_ITEM_ID =
+-- row keyed by the synthetic seed ids (SYNTHETIC_ITEM_ID =
 -- "seed-april-2026-chase"). That row is not a real Plaid connection:
 -- it exists only so the dashboard bank-snapshot tile has a stable
 -- foreign-key target before the user has completed real Plaid OAuth.
@@ -29,7 +29,7 @@
 -- Safety guards — a candidate is deleted ONLY when:
 --   0. It belongs to the supplied household_id.
 --   1. Its item_id begins with `seed-` (matches the SYNTHETIC_ITEM_ID
---      family in aprilChaseSeed.ts). Real Plaid item ids never have
+--      family in syntheticSeedIds.ts). Real Plaid item ids never have
 --      this prefix.
 --   2. Its cursor is NULL or empty — i.e. /transactions/sync has never
 --      successfully staged rows against it.

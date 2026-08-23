@@ -67,8 +67,8 @@ categorize).
   /** True when the user has explicitly toggled `isTransfer` on this
 row (cleared the auto-flag from the row's "Transfer" pill, picked
 a real category on a transfer row, or flipped the toggle in the
-Edit dialog). The Plaid sync / XLSX import / aprilChaseSeed
-re-categorize paths honor this and skip the description/PFC
+Edit dialog). The Plaid sync / XLSX import re-categorize
+paths honor this and skip the description/PFC
 transfer heuristic so future syncs of the same row don't
 silently re-flag it as a transfer. Server-managed: writes to
 this field are not accepted via the input schema — toggling
@@ -1446,20 +1446,6 @@ export interface SeedDefaultBudgetResult {
   linesInserted: number;
   mappingRulesInserted?: number;
   alreadySeeded: boolean;
-}
-
-export interface AprilChaseSeedResult {
-  alreadySeeded: boolean;
-  inserted: number;
-  skipped: number;
-  categorized: number;
-  transfers: number;
-  rulesAdded: number;
-  endingBalance: string;
-  syntheticAccount: boolean;
-  accountId: string;
-  /** True when an existing manual bank snapshot still equal to the prior incorrect April ending balance was rewritten to the corrected value during this seed run. Use to invalidate cached forecast / bank snapshot queries even when no transactions or rules were inserted. */
-  snapshotRepaired: boolean;
 }
 
 export interface MappingRule {

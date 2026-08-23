@@ -119,10 +119,9 @@ test.describe("Chase per-account picker (#297, covers #103)", () => {
       })
       .returning();
 
-    // Anchor the bank snapshot at account A using a balance + date that
-    // do NOT match any of seedAprilChase's repair triggers (no historical
-    // ending value, not pinned to 2026-04-30) so the on-mount seed leaves
-    // our snapshot intact. The "at" timestamp lives inside the current
+    // Anchor the bank snapshot at account A using a deliberately
+    // already-correct balance + date (no historical ending value, not
+    // pinned to 2026-04-30). The "at" timestamp lives inside the current
     // month so anchorMonth == selectedMonth and the Starting/Ending
     // balance chips render real numbers for account A.
     const today = todayISO();
