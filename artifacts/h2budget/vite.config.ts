@@ -94,18 +94,40 @@ export default defineConfig({
     // Split the bulky third-party libs into their own chunks so the
     // main entry stays lean and the browser can cache vendor code
     // across deploys (only the app chunk changes on most releases).
+    //
+    // FUNCTION form on purpose (not the object form): the object form
+    // resolves package ENTRIES ("recharts", "react-dom") and drags every
+    // shared dependency into whichever chunk claims it first — that is
+    // exactly how the entry came to statically preload vendor-charts and
+    // how react-dom fell into vendor-clerk. The function form assigns by
+    // module PATH only; shared deps fall to Rollup's natural split, and
+    // vendor-charts is only ever pulled by the lazy routes that actually
+    // import recharts. Guarded by scripts/check-entry-graph.mjs in CI.
     rollupOptions: {
       output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "wouter"],
-          "vendor-query": ["@tanstack/react-query"],
-          "vendor-clerk": ["@clerk/react", "@clerk/themes"],
-          "vendor-dnd": [
-            "@dnd-kit/core",
-            "@dnd-kit/sortable",
-            "@dnd-kit/utilities",
-          ],
-          "vendor-charts": ["recharts"],
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (
+            /\.pnpm\/(recharts@|d3-|victory-vendor@|react-smooth@|recharts-scale@)/.test(
+              id,
+            )
+          ) {
+            return "vendor-charts";
+          }
+          // clsx is pinned here deliberately: it is shared by the app's
+          // cn()/cva utilities AND by recharts. Left unassigned, Rollup
+          // colours it into vendor-charts, which makes the ENTRY statically
+          // import the whole 451 KB charts chunk just to reach clsx
+          // (observed 2026-08-23; check-entry-graph.mjs caught it).
+          if (
+            /\.pnpm\/(react@|react-dom@|scheduler@|wouter@|clsx@)/.test(id)
+          ) {
+            return "vendor-react";
+          }
+          if (id.includes("@clerk")) return "vendor-clerk";
+          if (id.includes("@tanstack")) return "vendor-query";
+          if (id.includes("@dnd-kit")) return "vendor-dnd";
+          return undefined;
         },
       },
     },

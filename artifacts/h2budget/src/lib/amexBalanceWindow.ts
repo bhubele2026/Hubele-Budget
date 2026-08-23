@@ -16,14 +16,21 @@
 // bucket anchored on TODAY (local midnight) is appended, unless today
 // is itself a Saturday (already pushed by the loop).
 import { startOfMonth, addMonths, addDays, endOfWeek } from "date-fns";
+// Import from the concrete modules, NOT the account-page barrel: the barrel
+// re-exports BalanceTrendChart, which statically imports recharts — through
+// a barrel import here the whole 451 KB charts bundle lands in the entry
+// graph (caught by scripts/check-entry-graph.mjs). The chart TYPES are safe
+// as `import type` (fully erased at build).
 import {
   compareMonth,
   monthKeyFromISO,
   shiftMonth,
   type MonthKey,
-  type WindowConfig,
-  type WindowPoint,
-} from "@/components/account-page";
+} from "@/components/account-page/month-navigator";
+import type {
+  WindowConfig,
+  WindowPoint,
+} from "@/components/account-page/balance-trend-chart";
 
 // Earliest month the forward-looking balance window may start on. The
 // window is `max(MAY_2026, start of current month)` so it never reaches

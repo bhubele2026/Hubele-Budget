@@ -13,11 +13,13 @@
 //    (`endOfAnchorMonth = snapshot + sum(post-snapshot anchor-month txns)`).
 //  - Per-account transaction scoping + dedupe (mirrors the Chase
 //    Transactions page).
+// Concrete module, not the account-page barrel (the barrel drags recharts
+// into the entry graph via BalanceTrendChart — see check-entry-graph.mjs).
 import {
   compareMonth,
   monthKeyFromISO,
   type MonthKey,
-} from "@/components/account-page";
+} from "@/components/account-page/month-navigator";
 import {
   computeBalanceAtEndOf,
   computeBalanceAtEndOfDate,
