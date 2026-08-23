@@ -1,3 +1,6 @@
+> **SUPERSEDED — AI removed 2026-08.** All advisor/AI sections below are
+> historical; the app now contains no AI. Kept for context only.
+
 # H2 Budget — Manifesto Coverage Audit (Phase 5)
 
 **Mission:** get to **$0 debt as fast as the math allows**, and make the plan so

@@ -8,9 +8,8 @@
 // tab on top of this pipeline.
 //
 // Actuals reuse the amex-aware signed-sum semantics already implemented in
-// routes/budget.ts and reportsAdvisorSummary.ts buildBudgetFacts (the sum is
-// not currently extracted into a shared helper; it is duplicated inline in
-// both places, so this third copy stays faithful to those rather than
+// routes/budget.ts (the sum is not currently extracted into a shared helper;
+// it is duplicated inline, so this copy stays faithful to that rather than
 // inventing a new convention). Amex charges are POSITIVE (spend), bank
 // outflows are NEGATIVE (spend); income categories use the inflow side.
 
@@ -231,7 +230,7 @@ async function loadMonth(
     );
 
   // amex-aware spend + inflow per category (transfers excluded). Matches the
-  // CASE expressions in routes/budget.ts and reportsAdvisorSummary.ts.
+  // CASE expressions in routes/budget.ts.
   const actualsRows = await db
     .select({
       categoryId: transactionsTable.categoryId,

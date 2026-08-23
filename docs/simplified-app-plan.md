@@ -1,3 +1,6 @@
+> **SUPERSEDED — AI removed 2026-08.** All advisor/AI sections below are
+> historical; the app now contains no AI. Kept for context only.
+
 # H2 Budget — Simplified App Plan (locked)
 
 **Approved 2026-07-02.** Source of truth for the IA simplification. Goal: control

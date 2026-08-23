@@ -1,3 +1,6 @@
+> **SUPERSEDED — AI removed 2026-08.** All advisor/AI sections below are
+> historical; the app now contains no AI. Kept for context only.
+
 # H2 Budget — 8-Phase Plan to "Perfect"
 
 **Source of truth:** this repo (GitHub). Replit is hosting/deploy only.

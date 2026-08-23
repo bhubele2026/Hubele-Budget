@@ -18,17 +18,8 @@ import meRouter from "./me";
 import invitationsRouter from "./invitations";
 import membersRouter from "./members";
 import amexRouter from "./amex";
-import advisorRouter from "./advisor";
-import advisorUndoRouter from "./advisorUndo";
-import advisorProposalsRouter from "./advisorProposals";
 import weeklyDebriefRouter from "./weeklyDebrief";
 import reportsRouter from "./reports";
-import bankingRouter from "./banking";
-import billsInsightsRouter from "./billsInsights";
-import forecastInsightsRouter from "./forecastInsights";
-import budgetHealthRouter from "./budgetHealth";
-import spendingStoryRouter from "./spendingStory";
-import recurringReviewSummaryRouter from "./recurringReviewSummary";
 
 const router: IRouter = Router();
 
@@ -51,16 +42,7 @@ router.use(meRouter);
 router.use(invitationsRouter);
 router.use(membersRouter);
 router.use(amexRouter);
-router.use(advisorRouter);
-router.use(advisorUndoRouter);
-router.use(advisorProposalsRouter);
 router.use(weeklyDebriefRouter);
 router.use(reportsRouter);
-router.use(bankingRouter);
-router.use(billsInsightsRouter);
-router.use(forecastInsightsRouter);
-router.use(budgetHealthRouter);
-router.use(spendingStoryRouter);
-router.use(recurringReviewSummaryRouter);
 
 export default router;

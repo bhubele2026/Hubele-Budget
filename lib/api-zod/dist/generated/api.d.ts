@@ -1116,33 +1116,6 @@ export declare const DeleteMerchantAliasResponse: zod.ZodObject<{
     deleted: boolean;
 }>;
 /**
- * @summary (#888) Suggest a clean, human-friendly merchant name for a raw bank
-`description` using Anthropic. Read-only — does NOT persist an alias.
-Always returns a usable suggestion: on any AI error/timeout it falls
-back to the deterministic cleanMerchant label (`source: "fallback"`).
-
- */
-export declare const SuggestMerchantNameBody: zod.ZodObject<{
-    description: zod.ZodString;
-}, "strip", zod.ZodTypeAny, {
-    description: string;
-}, {
-    description: string;
-}>;
-export declare const SuggestMerchantNameResponse: zod.ZodObject<{
-    suggestion: zod.ZodString;
-    signature: zod.ZodString;
-    source: zod.ZodEnum<["ai", "fallback"]>;
-}, "strip", zod.ZodTypeAny, {
-    source: "ai" | "fallback";
-    signature: string;
-    suggestion: string;
-}, {
-    source: "ai" | "fallback";
-    signature: string;
-    suggestion: string;
-}>;
-/**
  * @summary Bulk clear the categoryId on a list of transactions, scoped by an
 optional `fromCategoryId` guard so manual edits made between the
 original recategorize and the Undo click are preserved. Used by the
@@ -5628,19 +5601,10 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
 /**
  * Returns a deterministic schedule of avalanche extra payments
 across the next ~12 months (one per safe paycheck-to-paycheck
-window) plus a Claude-written narrative. The narrative is cached
-on a hash of the deterministic facts; pass `refresh=true` to force
-a fresh regeneration.
+window). Every date and amount is computed server-side in code.
 
- * @summary AI-driven multi-date avalanche extra-payment schedule
+ * @summary Deterministic multi-date avalanche extra-payment schedule
  */
-export declare const GetForecastAvalancheScheduleQueryParams: zod.ZodObject<{
-    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
-}, "strip", zod.ZodTypeAny, {
-    refresh?: "1" | "true" | undefined;
-}, {
-    refresh?: "1" | "true" | undefined;
-}>;
 export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
     proposedPayments: zod.ZodArray<zod.ZodObject<{
         date: zod.ZodString;
@@ -5686,14 +5650,7 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
     cashBuffer: zod.ZodNumber;
     bankBalance: zod.ZodNumber;
     scheduleThroughDate: zod.ZodNullable<zod.ZodString>;
-    summary: zod.ZodString;
-    paymentsText: zod.ZodArray<zod.ZodString, "many">;
-    summarySource: zod.ZodEnum<["ai", "fallback"]>;
-    generatedAt: zod.ZodString;
-    source: zod.ZodEnum<["cache", "fresh"]>;
 }, "strip", zod.ZodTypeAny, {
-    source: "cache" | "fresh";
-    summary: string;
     cashBuffer: number;
     proposedPayments: {
         date: string;
@@ -5714,12 +5671,7 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
     } | null;
     bankBalance: number;
     scheduleThroughDate: string | null;
-    paymentsText: string[];
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
 }, {
-    source: "cache" | "fresh";
-    summary: string;
     cashBuffer: number;
     proposedPayments: {
         date: string;
@@ -5740,433 +5692,6 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
     } | null;
     bankBalance: number;
     scheduleThroughDate: string | null;
-    paymentsText: string[];
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-}>;
-/**
- * Returns a short Claude-written narrative (headline + bullets) for
-one Reports tab, grounded in deterministic facts computed from the
-household's data. The narrative is cached per tab on a hash of the
-facts; pass `refresh=true` to force a fresh regeneration.
-
- * @summary Per-tab Claude narrative for the Reports page
- */
-export declare const GetReportsAdvisorSummaryQueryParams: zod.ZodObject<{
-    tab: zod.ZodEnum<["debt", "cashflow", "spending", "budget", "behavior"]>;
-    rangeDays: zod.ZodOptional<zod.ZodNumber>;
-    monthOffset: zod.ZodOptional<zod.ZodNumber>;
-    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
-}, "strip", zod.ZodTypeAny, {
-    tab: "budget" | "debt" | "cashflow" | "spending" | "behavior";
-    refresh?: "1" | "true" | undefined;
-    rangeDays?: number | undefined;
-    monthOffset?: number | undefined;
-}, {
-    tab: "budget" | "debt" | "cashflow" | "spending" | "behavior";
-    refresh?: "1" | "true" | undefined;
-    rangeDays?: number | undefined;
-    monthOffset?: number | undefined;
-}>;
-export declare const GetReportsAdvisorSummaryResponse: zod.ZodObject<{
-    tab: zod.ZodEnum<["debt", "cashflow", "spending", "budget", "behavior"]>;
-    headline: zod.ZodString;
-    bullets: zod.ZodArray<zod.ZodString, "many">;
-    summarySource: zod.ZodEnum<["ai", "fallback"]>;
-    generatedAt: zod.ZodString;
-    source: zod.ZodEnum<["cache", "fresh"]>;
-}, "strip", zod.ZodTypeAny, {
-    source: "cache" | "fresh";
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    tab: "budget" | "debt" | "cashflow" | "spending" | "behavior";
-    headline: string;
-    bullets: string[];
-}, {
-    source: "cache" | "fresh";
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    tab: "budget" | "debt" | "cashflow" | "spending" | "behavior";
-    headline: string;
-    bullets: string[];
-}>;
-/**
- * Returns the four reworked, MERCHANT-LEVEL Banking buckets — spending
-less, creeping up, recurring to cut (true subscriptions only), and new
-or unusual — each with a Claude-written headline + one-liner AND the
-ranked merchant rows behind it. Every dollar, count, and run-rate is
-computed server-side in code (merchants grouped by a stable signature,
-noise filtered out); the model only classifies merchants and writes the
-language. Cached per household on a hash of the facts; pass
-`refresh=true` to force a fresh regeneration.
-
- * @summary Merchant-level insights + captions for the four Banking buckets
- */
-export declare const GetBankingInsightsSummaryQueryParams: zod.ZodObject<{
-    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
-}, "strip", zod.ZodTypeAny, {
-    refresh?: "1" | "true" | undefined;
-}, {
-    refresh?: "1" | "true" | undefined;
-}>;
-export declare const GetBankingInsightsSummaryResponse: zod.ZodObject<{
-    spendingLess: zod.ZodObject<{
-        headline: zod.ZodString;
-        caption: zod.ZodString;
-        rows: zod.ZodArray<zod.ZodObject<{
-            display: zod.ZodString;
-            detail: zod.ZodString;
-            amount: zod.ZodNumber;
-            amountLabel: zod.ZodString;
-            tone: zod.ZodEnum<["positive", "negative", "neutral"]>;
-        }, "strip", zod.ZodTypeAny, {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }, {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }>, "many">;
-    }, "strip", zod.ZodTypeAny, {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    }, {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    }>;
-    creepingUp: zod.ZodObject<{
-        headline: zod.ZodString;
-        caption: zod.ZodString;
-        rows: zod.ZodArray<zod.ZodObject<{
-            display: zod.ZodString;
-            detail: zod.ZodString;
-            amount: zod.ZodNumber;
-            amountLabel: zod.ZodString;
-            tone: zod.ZodEnum<["positive", "negative", "neutral"]>;
-        }, "strip", zod.ZodTypeAny, {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }, {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }>, "many">;
-    }, "strip", zod.ZodTypeAny, {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    }, {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    }>;
-    recurringToCut: zod.ZodObject<{
-        headline: zod.ZodString;
-        caption: zod.ZodString;
-        rows: zod.ZodArray<zod.ZodObject<{
-            display: zod.ZodString;
-            detail: zod.ZodString;
-            amount: zod.ZodNumber;
-            amountLabel: zod.ZodString;
-            tone: zod.ZodEnum<["positive", "negative", "neutral"]>;
-        }, "strip", zod.ZodTypeAny, {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }, {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }>, "many">;
-    }, "strip", zod.ZodTypeAny, {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    }, {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    }>;
-    newOrUnusual: zod.ZodObject<{
-        headline: zod.ZodString;
-        caption: zod.ZodString;
-        rows: zod.ZodArray<zod.ZodObject<{
-            display: zod.ZodString;
-            detail: zod.ZodString;
-            amount: zod.ZodNumber;
-            amountLabel: zod.ZodString;
-            tone: zod.ZodEnum<["positive", "negative", "neutral"]>;
-        }, "strip", zod.ZodTypeAny, {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }, {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }>, "many">;
-    }, "strip", zod.ZodTypeAny, {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    }, {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    }>;
-    summarySource: zod.ZodEnum<["ai", "fallback"]>;
-    generatedAt: zod.ZodString;
-    source: zod.ZodEnum<["cache", "fresh"]>;
-}, "strip", zod.ZodTypeAny, {
-    source: "cache" | "fresh";
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    spendingLess: {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    };
-    creepingUp: {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    };
-    recurringToCut: {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    };
-    newOrUnusual: {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    };
-}, {
-    source: "cache" | "fresh";
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    spendingLess: {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    };
-    creepingUp: {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    };
-    recurringToCut: {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    };
-    newOrUnusual: {
-        headline: string;
-        caption: string;
-        rows: {
-            amount: number;
-            display: string;
-            detail: string;
-            amountLabel: string;
-            tone: "positive" | "negative" | "neutral";
-        }[];
-    };
-}>;
-/**
- * Returns a short Fable 5 read on the household's monthly bills — a
-headline plus 2–4 concrete savings suggestions, each tied to a real
-bill. Every dollar is computed server-side (recurring items expanded,
-debt minimums, one-off spend); the model only writes language. Cached
-per household + month on a hash of the facts; `refresh=true` forces a
-fresh regeneration.
-
- * @summary Fable 5 savings analysis for the Bills page
- */
-export declare const GetBillsInsightsSummaryQueryParams: zod.ZodObject<{
-    month: zod.ZodOptional<zod.ZodString>;
-    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
-}, "strip", zod.ZodTypeAny, {
-    refresh?: "1" | "true" | undefined;
-    month?: string | undefined;
-}, {
-    refresh?: "1" | "true" | undefined;
-    month?: string | undefined;
-}>;
-export declare const GetBillsInsightsSummaryResponse: zod.ZodObject<{
-    headline: zod.ZodString;
-    bullets: zod.ZodArray<zod.ZodString, "many">;
-    oneOffTotal: zod.ZodNumber;
-    oneOffCount: zod.ZodNumber;
-    summarySource: zod.ZodEnum<["ai", "fallback"]>;
-    generatedAt: zod.ZodString;
-    source: zod.ZodEnum<["cache", "fresh"]>;
-}, "strip", zod.ZodTypeAny, {
-    source: "cache" | "fresh";
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    headline: string;
-    bullets: string[];
-    oneOffTotal: number;
-    oneOffCount: number;
-}, {
-    source: "cache" | "fresh";
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    headline: string;
-    bullets: string[];
-    oneOffTotal: number;
-    oneOffCount: number;
-}>;
-/**
- * Returns a short Fable 5 read on the household's cash-flow forecast — a
-headline plus 2–4 bullets on the projected low point, runway, and risk
-ahead. Every number is computed server-side (computeCashSignal + runway);
-the model only writes language. Cached per household on a hash of the
-facts; `refresh=true` forces a fresh regeneration.
-
- * @summary Fable 5 cash-flow read for the Forecast area
- */
-export declare const GetForecastInsightsSummaryQueryParams: zod.ZodObject<{
-    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
-}, "strip", zod.ZodTypeAny, {
-    refresh?: "1" | "true" | undefined;
-}, {
-    refresh?: "1" | "true" | undefined;
-}>;
-export declare const GetForecastInsightsSummaryResponse: zod.ZodObject<{
-    headline: zod.ZodString;
-    body: zod.ZodString;
-    bullets: zod.ZodArray<zod.ZodString, "many">;
-    debtMoves: zod.ZodArray<zod.ZodString, "many">;
-    summarySource: zod.ZodEnum<["ai", "fallback"]>;
-    generatedAt: zod.ZodString;
-    source: zod.ZodEnum<["cache", "fresh"]>;
-}, "strip", zod.ZodTypeAny, {
-    source: "cache" | "fresh";
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    headline: string;
-    bullets: string[];
-    body: string;
-    debtMoves: string[];
-}, {
-    source: "cache" | "fresh";
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    headline: string;
-    bullets: string[];
-    body: string;
-    debtMoves: string[];
 }>;
 /**
  * Returns deterministic Spending facts (real spend, excluded buckets,
@@ -6525,217 +6050,6 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
             name: string;
         }[];
     }[];
-}>;
-/**
- * Returns a short Fable 5 read of household spending (Amex + Chase
-combined) across four lenses — trend, category mix, top merchants, and
-day-of-week — each a headline plus 2–3 bullets. Every number is computed
-server-side via buildSpendingFacts; the model only writes language. Backs
-the click-to-expand analysis on the Overview spending graphics. `from`/`to`
-are optional (default last 30 days). Cached per household on a hash of the
-facts; `refresh=true` forces a fresh regeneration.
-
- * @summary Fable 5 read of the household's spending, told in four lenses
- */
-export declare const GetReportsSpendingStoryQueryParams: zod.ZodObject<{
-    from: zod.ZodOptional<zod.ZodString>;
-    to: zod.ZodOptional<zod.ZodString>;
-    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
-}, "strip", zod.ZodTypeAny, {
-    from?: string | undefined;
-    to?: string | undefined;
-    refresh?: "1" | "true" | undefined;
-}, {
-    from?: string | undefined;
-    to?: string | undefined;
-    refresh?: "1" | "true" | undefined;
-}>;
-export declare const GetReportsSpendingStoryResponse: zod.ZodObject<{
-    lenses: zod.ZodObject<{
-        trend: zod.ZodObject<{
-            headline: zod.ZodString;
-            bullets: zod.ZodArray<zod.ZodString, "many">;
-        }, "strip", zod.ZodTypeAny, {
-            headline: string;
-            bullets: string[];
-        }, {
-            headline: string;
-            bullets: string[];
-        }>;
-        category: zod.ZodObject<{
-            headline: zod.ZodString;
-            bullets: zod.ZodArray<zod.ZodString, "many">;
-        }, "strip", zod.ZodTypeAny, {
-            headline: string;
-            bullets: string[];
-        }, {
-            headline: string;
-            bullets: string[];
-        }>;
-        merchants: zod.ZodObject<{
-            headline: zod.ZodString;
-            bullets: zod.ZodArray<zod.ZodString, "many">;
-        }, "strip", zod.ZodTypeAny, {
-            headline: string;
-            bullets: string[];
-        }, {
-            headline: string;
-            bullets: string[];
-        }>;
-        dayOfWeek: zod.ZodObject<{
-            headline: zod.ZodString;
-            bullets: zod.ZodArray<zod.ZodString, "many">;
-        }, "strip", zod.ZodTypeAny, {
-            headline: string;
-            bullets: string[];
-        }, {
-            headline: string;
-            bullets: string[];
-        }>;
-    }, "strip", zod.ZodTypeAny, {
-        category: {
-            headline: string;
-            bullets: string[];
-        };
-        dayOfWeek: {
-            headline: string;
-            bullets: string[];
-        };
-        trend: {
-            headline: string;
-            bullets: string[];
-        };
-        merchants: {
-            headline: string;
-            bullets: string[];
-        };
-    }, {
-        category: {
-            headline: string;
-            bullets: string[];
-        };
-        dayOfWeek: {
-            headline: string;
-            bullets: string[];
-        };
-        trend: {
-            headline: string;
-            bullets: string[];
-        };
-        merchants: {
-            headline: string;
-            bullets: string[];
-        };
-    }>;
-    summarySource: zod.ZodEnum<["ai", "fallback"]>;
-    generatedAt: zod.ZodString;
-    source: zod.ZodEnum<["cache", "fresh"]>;
-}, "strip", zod.ZodTypeAny, {
-    source: "cache" | "fresh";
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    lenses: {
-        category: {
-            headline: string;
-            bullets: string[];
-        };
-        dayOfWeek: {
-            headline: string;
-            bullets: string[];
-        };
-        trend: {
-            headline: string;
-            bullets: string[];
-        };
-        merchants: {
-            headline: string;
-            bullets: string[];
-        };
-    };
-}, {
-    source: "cache" | "fresh";
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    lenses: {
-        category: {
-            headline: string;
-            bullets: string[];
-        };
-        dayOfWeek: {
-            headline: string;
-            bullets: string[];
-        };
-        trend: {
-            headline: string;
-            bullets: string[];
-        };
-        merchants: {
-            headline: string;
-            bullets: string[];
-        };
-    };
-}>;
-/**
- * Takes the client-detected new recurring charges (structured facts) and
-returns a short Fable 5 read — a headline plus 2–3 bullets nudging the
-owner on what's worth cancelling. The model only writes language; every
-dollar figure is computed in our code and passed in. Used by the
-subscription triage section.
-
- * @summary Fable 5 read of the recurring-charge review queue
- */
-export declare const PostReportsRecurringReviewSummaryBody: zod.ZodObject<{
-    charges: zod.ZodArray<zod.ZodObject<{
-        merchant: zod.ZodString;
-        annual: zod.ZodNumber;
-        monthly: zod.ZodNumber;
-        cadence: zod.ZodString;
-        confidence: zod.ZodOptional<zod.ZodEnum<["high", "medium", "low"]>>;
-    }, "strip", zod.ZodTypeAny, {
-        monthly: number;
-        merchant: string;
-        annual: number;
-        cadence: string;
-        confidence?: "high" | "medium" | "low" | undefined;
-    }, {
-        monthly: number;
-        merchant: string;
-        annual: number;
-        cadence: string;
-        confidence?: "high" | "medium" | "low" | undefined;
-    }>, "many">;
-}, "strip", zod.ZodTypeAny, {
-    charges: {
-        monthly: number;
-        merchant: string;
-        annual: number;
-        cadence: string;
-        confidence?: "high" | "medium" | "low" | undefined;
-    }[];
-}, {
-    charges: {
-        monthly: number;
-        merchant: string;
-        annual: number;
-        cadence: string;
-        confidence?: "high" | "medium" | "low" | undefined;
-    }[];
-}>;
-export declare const PostReportsRecurringReviewSummaryResponse: zod.ZodObject<{
-    headline: zod.ZodString;
-    bullets: zod.ZodArray<zod.ZodString, "many">;
-    summarySource: zod.ZodEnum<["ai", "fallback"]>;
-    generatedAt: zod.ZodString;
-}, "strip", zod.ZodTypeAny, {
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    headline: string;
-    bullets: string[];
-}, {
-    summarySource: "ai" | "fallback";
-    generatedAt: string;
-    headline: string;
-    bullets: string[];
 }>;
 /**
  * Returns deterministic Behavior facts (days-since-last buckets, no-dining
@@ -7906,6 +7220,7 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
             } | null)[];
         }>, "many">;
     }, "strip", zod.ZodTypeAny, {
+        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -7917,8 +7232,8 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
-        monthKeys: string[];
     }, {
+        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -7930,7 +7245,6 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
-        monthKeys: string[];
     }>;
 }, "strip", zod.ZodTypeAny, {
     income: {
@@ -8008,6 +7322,7 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
         totalCount: number;
     };
     streak: {
+        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -8019,7 +7334,6 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
-        monthKeys: string[];
     };
 }, {
     income: {
@@ -8097,6 +7411,7 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
         totalCount: number;
     };
     streak: {
+        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -8108,7 +7423,6 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
-        monthKeys: string[];
     };
 }>;
 export declare const CloseForecastMonthBody: zod.ZodObject<{
@@ -8235,8 +7549,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
+        cadence: "weekly" | "monthly";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -8252,8 +7566,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
+        cadence: "weekly" | "monthly";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -8266,8 +7580,6 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
     }>, "many">;
     combinedWeekCharges: zod.ZodNumber;
     combinedStatementBalance: zod.ZodNumber;
-    directive: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-    directiveSource: zod.ZodOptional<zod.ZodEnum<["ai", "fallback"]>>;
 }, "strip", zod.ZodTypeAny, {
     weekStart: string;
     weekEnd: string;
@@ -8277,8 +7589,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
+        cadence: "weekly" | "monthly";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -8291,8 +7603,6 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
     }[];
     combinedWeekCharges: number;
     combinedStatementBalance: number;
-    directive?: string | null | undefined;
-    directiveSource?: "ai" | "fallback" | undefined;
 }, {
     weekStart: string;
     weekEnd: string;
@@ -8302,8 +7612,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        cadence: "weekly" | "monthly";
         brand: "blue" | "silver" | "gold";
+        cadence: "weekly" | "monthly";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -8316,8 +7626,6 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
     }[];
     combinedWeekCharges: number;
     combinedStatementBalance: number;
-    directive?: string | null | undefined;
-    directiveSource?: "ai" | "fallback" | undefined;
 }>;
 export declare const ListDashboardBudgetsQueryParams: zod.ZodObject<{
     bucket: zod.ZodOptional<zod.ZodString>;
@@ -9026,40 +8334,6 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     }>>>;
-    advisorSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
-        generatedAt: zod.ZodString;
-        headline: zod.ZodString;
-        bullets: zod.ZodArray<zod.ZodString, "many">;
-        suggestions: zod.ZodArray<zod.ZodObject<{
-            text: zod.ZodString;
-            toolHint: zod.ZodOptional<zod.ZodString>;
-        }, "strip", zod.ZodTypeAny, {
-            text: string;
-            toolHint?: string | undefined;
-        }, {
-            text: string;
-            toolHint?: string | undefined;
-        }>, "many">;
-        source: zod.ZodEnum<["ai", "fallback"]>;
-    }, "strip", zod.ZodTypeAny, {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    }, {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    }>>>;
     postLockAdditions: zod.ZodArray<zod.ZodObject<{
         txnId: zod.ZodString;
         date: zod.ZodString;
@@ -9191,16 +8465,6 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     } | null | undefined;
-    advisorSummary?: {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    } | null | undefined;
 }, {
     status: "in_progress" | "awaiting_review" | "locked";
     weekStart: string;
@@ -9306,16 +8570,6 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         unmatchedCount: number;
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
-    } | null | undefined;
-    advisorSummary?: {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
     } | null | undefined;
 }>;
 export declare const LockWeeklyDebriefParams: zod.ZodObject<{
@@ -9766,40 +9020,6 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     }>>>;
-    advisorSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
-        generatedAt: zod.ZodString;
-        headline: zod.ZodString;
-        bullets: zod.ZodArray<zod.ZodString, "many">;
-        suggestions: zod.ZodArray<zod.ZodObject<{
-            text: zod.ZodString;
-            toolHint: zod.ZodOptional<zod.ZodString>;
-        }, "strip", zod.ZodTypeAny, {
-            text: string;
-            toolHint?: string | undefined;
-        }, {
-            text: string;
-            toolHint?: string | undefined;
-        }>, "many">;
-        source: zod.ZodEnum<["ai", "fallback"]>;
-    }, "strip", zod.ZodTypeAny, {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    }, {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    }>>>;
     postLockAdditions: zod.ZodArray<zod.ZodObject<{
         txnId: zod.ZodString;
         date: zod.ZodString;
@@ -9931,16 +9151,6 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     } | null | undefined;
-    advisorSummary?: {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    } | null | undefined;
 }, {
     status: "in_progress" | "awaiting_review" | "locked";
     weekStart: string;
@@ -10046,756 +9256,6 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         unmatchedCount: number;
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
-    } | null | undefined;
-    advisorSummary?: {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    } | null | undefined;
-}>;
-export declare const GenerateWeeklyDebriefSummaryParams: zod.ZodObject<{
-    weekStart: zod.ZodString;
-}, "strip", zod.ZodTypeAny, {
-    weekStart: string;
-}, {
-    weekStart: string;
-}>;
-export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
-    weekStart: zod.ZodString;
-    weekEnd: zod.ZodString;
-    status: zod.ZodEnum<["in_progress", "awaiting_review", "locked"]>;
-    lockedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-    lockedByUserId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-    varianceSnapshot: zod.ZodNullable<zod.ZodObject<{
-        weekStart: zod.ZodString;
-        weekEnd: zod.ZodString;
-        computedAt: zod.ZodString;
-        totals: zod.ZodObject<{
-            plannedIncome: zod.ZodString;
-            actualIncome: zod.ZodString;
-            plannedExpenses: zod.ZodString;
-            actualExpenses: zod.ZodString;
-            plannedNet: zod.ZodString;
-            actualNet: zod.ZodString;
-            varianceNet: zod.ZodString;
-        }, "strip", zod.ZodTypeAny, {
-            plannedIncome: string;
-            plannedExpenses: string;
-            plannedNet: string;
-            actualNet: string;
-            varianceNet: string;
-            actualIncome: string;
-            actualExpenses: string;
-        }, {
-            plannedIncome: string;
-            plannedExpenses: string;
-            plannedNet: string;
-            actualNet: string;
-            varianceNet: string;
-            actualIncome: string;
-            actualExpenses: string;
-        }>;
-        plans: zod.ZodArray<zod.ZodObject<{
-            recurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            name: zod.ZodString;
-            kind: zod.ZodEnum<["income", "expense"]>;
-            forecastDate: zod.ZodString;
-            forecastAmount: zod.ZodString;
-            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "missed", "skipped", "unmatched"]>;
-            matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            matchedDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            matchedAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            varianceAmount: zod.ZodString;
-        }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }>, "many">;
-        transactions: zod.ZodArray<zod.ZodObject<{
-            txnId: zod.ZodString;
-            date: zod.ZodString;
-            description: zod.ZodString;
-            amount: zod.ZodString;
-            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "unplanned", "acknowledged_unplanned"]>;
-            matchedRecurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-        }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }, {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }>, "many">;
-        unmatchedPlans: zod.ZodArray<zod.ZodObject<{
-            recurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            name: zod.ZodString;
-            kind: zod.ZodEnum<["income", "expense"]>;
-            forecastDate: zod.ZodString;
-            forecastAmount: zod.ZodString;
-            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "missed", "skipped", "unmatched"]>;
-            matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            matchedDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            matchedAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            varianceAmount: zod.ZodString;
-        }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }>, "many">;
-        unplannedTxns: zod.ZodArray<zod.ZodObject<{
-            txnId: zod.ZodString;
-            date: zod.ZodString;
-            description: zod.ZodString;
-            amount: zod.ZodString;
-            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "unplanned", "acknowledged_unplanned"]>;
-            matchedRecurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-        }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }, {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }>, "many">;
-        byCategory: zod.ZodArray<zod.ZodObject<{
-            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            plannedAmount: zod.ZodString;
-            actualAmount: zod.ZodString;
-            varianceAmount: zod.ZodString;
-            plannedItems: zod.ZodArray<zod.ZodObject<{
-                recurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-                name: zod.ZodString;
-                amount: zod.ZodNumber;
-                forecastDate: zod.ZodString;
-            }, "strip", zod.ZodTypeAny, {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }, {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }>, "many">;
-            actualTxns: zod.ZodArray<zod.ZodObject<{
-                txnId: zod.ZodString;
-                description: zod.ZodString;
-                amount: zod.ZodNumber;
-                date: zod.ZodString;
-                matchedToPlan: zod.ZodBoolean;
-                source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            }, "strip", zod.ZodTypeAny, {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-                source?: string | null | undefined;
-            }, {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-                source?: string | null | undefined;
-            }>, "many">;
-        }, "strip", zod.ZodTypeAny, {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-                source?: string | null | undefined;
-            }[];
-            categoryId?: string | null | undefined;
-        }, {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-                source?: string | null | undefined;
-            }[];
-            categoryId?: string | null | undefined;
-        }>, "many">;
-        openItemsCount: zod.ZodNumber;
-    }, "strip", zod.ZodTypeAny, {
-        transactions: {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }[];
-        weekStart: string;
-        weekEnd: string;
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-                source?: string | null | undefined;
-            }[];
-            categoryId?: string | null | undefined;
-        }[];
-        openItemsCount: number;
-        computedAt: string;
-        totals: {
-            plannedIncome: string;
-            plannedExpenses: string;
-            plannedNet: string;
-            actualNet: string;
-            varianceNet: string;
-            actualIncome: string;
-            actualExpenses: string;
-        };
-        plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }[];
-        unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }[];
-        unplannedTxns: {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }[];
-    }, {
-        transactions: {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }[];
-        weekStart: string;
-        weekEnd: string;
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-                source?: string | null | undefined;
-            }[];
-            categoryId?: string | null | undefined;
-        }[];
-        openItemsCount: number;
-        computedAt: string;
-        totals: {
-            plannedIncome: string;
-            plannedExpenses: string;
-            plannedNet: string;
-            actualNet: string;
-            varianceNet: string;
-            actualIncome: string;
-            actualExpenses: string;
-        };
-        plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }[];
-        unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }[];
-        unplannedTxns: {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }[];
-    }>>;
-    actionsSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
-        matchedCount: zod.ZodNumber;
-        rescheduledCount: zod.ZodNumber;
-        missedCount: zod.ZodNumber;
-        unmatchedCount: zod.ZodNumber;
-        unplannedAcceptedCount: zod.ZodNumber;
-        convertedToRecurringCount: zod.ZodNumber;
-    }, "strip", zod.ZodTypeAny, {
-        matchedCount: number;
-        rescheduledCount: number;
-        missedCount: number;
-        unmatchedCount: number;
-        unplannedAcceptedCount: number;
-        convertedToRecurringCount: number;
-    }, {
-        matchedCount: number;
-        rescheduledCount: number;
-        missedCount: number;
-        unmatchedCount: number;
-        unplannedAcceptedCount: number;
-        convertedToRecurringCount: number;
-    }>>>;
-    advisorSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
-        generatedAt: zod.ZodString;
-        headline: zod.ZodString;
-        bullets: zod.ZodArray<zod.ZodString, "many">;
-        suggestions: zod.ZodArray<zod.ZodObject<{
-            text: zod.ZodString;
-            toolHint: zod.ZodOptional<zod.ZodString>;
-        }, "strip", zod.ZodTypeAny, {
-            text: string;
-            toolHint?: string | undefined;
-        }, {
-            text: string;
-            toolHint?: string | undefined;
-        }>, "many">;
-        source: zod.ZodEnum<["ai", "fallback"]>;
-    }, "strip", zod.ZodTypeAny, {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    }, {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    }>>>;
-    postLockAdditions: zod.ZodArray<zod.ZodObject<{
-        txnId: zod.ZodString;
-        date: zod.ZodString;
-        description: zod.ZodString;
-        amount: zod.ZodString;
-        categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-        source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-        syncedAt: zod.ZodString;
-    }, "strip", zod.ZodTypeAny, {
-        date: string;
-        description: string;
-        amount: string;
-        txnId: string;
-        syncedAt: string;
-        categoryId?: string | null | undefined;
-        source?: string | null | undefined;
-    }, {
-        date: string;
-        description: string;
-        amount: string;
-        txnId: string;
-        syncedAt: string;
-        categoryId?: string | null | undefined;
-        source?: string | null | undefined;
-    }>, "many">;
-}, "strip", zod.ZodTypeAny, {
-    status: "in_progress" | "awaiting_review" | "locked";
-    weekStart: string;
-    weekEnd: string;
-    varianceSnapshot: {
-        transactions: {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }[];
-        weekStart: string;
-        weekEnd: string;
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-                source?: string | null | undefined;
-            }[];
-            categoryId?: string | null | undefined;
-        }[];
-        openItemsCount: number;
-        computedAt: string;
-        totals: {
-            plannedIncome: string;
-            plannedExpenses: string;
-            plannedNet: string;
-            actualNet: string;
-            varianceNet: string;
-            actualIncome: string;
-            actualExpenses: string;
-        };
-        plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }[];
-        unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }[];
-        unplannedTxns: {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }[];
-    } | null;
-    postLockAdditions: {
-        date: string;
-        description: string;
-        amount: string;
-        txnId: string;
-        syncedAt: string;
-        categoryId?: string | null | undefined;
-        source?: string | null | undefined;
-    }[];
-    lockedAt?: string | null | undefined;
-    lockedByUserId?: string | null | undefined;
-    actionsSummary?: {
-        matchedCount: number;
-        rescheduledCount: number;
-        missedCount: number;
-        unmatchedCount: number;
-        unplannedAcceptedCount: number;
-        convertedToRecurringCount: number;
-    } | null | undefined;
-    advisorSummary?: {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    } | null | undefined;
-}, {
-    status: "in_progress" | "awaiting_review" | "locked";
-    weekStart: string;
-    weekEnd: string;
-    varianceSnapshot: {
-        transactions: {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }[];
-        weekStart: string;
-        weekEnd: string;
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-                source?: string | null | undefined;
-            }[];
-            categoryId?: string | null | undefined;
-        }[];
-        openItemsCount: number;
-        computedAt: string;
-        totals: {
-            plannedIncome: string;
-            plannedExpenses: string;
-            plannedNet: string;
-            actualNet: string;
-            varianceNet: string;
-            actualIncome: string;
-            actualExpenses: string;
-        };
-        plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }[];
-        unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
-            name: string;
-            kind: "income" | "expense";
-            forecastDate: string;
-            forecastAmount: string;
-            varianceAmount: string;
-            categoryId?: string | null | undefined;
-            recurringItemId?: string | null | undefined;
-            matchedTxnId?: string | null | undefined;
-            rescheduledTo?: string | null | undefined;
-            matchedDate?: string | null | undefined;
-            matchedAmount?: string | null | undefined;
-        }[];
-        unplannedTxns: {
-            status: "matched" | "unplanned" | "acknowledged_unplanned";
-            date: string;
-            description: string;
-            amount: string;
-            txnId: string;
-            categoryId?: string | null | undefined;
-            source?: string | null | undefined;
-            matchedRecurringItemId?: string | null | undefined;
-        }[];
-    } | null;
-    postLockAdditions: {
-        date: string;
-        description: string;
-        amount: string;
-        txnId: string;
-        syncedAt: string;
-        categoryId?: string | null | undefined;
-        source?: string | null | undefined;
-    }[];
-    lockedAt?: string | null | undefined;
-    lockedByUserId?: string | null | undefined;
-    actionsSummary?: {
-        matchedCount: number;
-        rescheduledCount: number;
-        missedCount: number;
-        unmatchedCount: number;
-        unplannedAcceptedCount: number;
-        convertedToRecurringCount: number;
-    } | null | undefined;
-    advisorSummary?: {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
     } | null | undefined;
 }>;
 export declare const UnlockWeeklyDebriefParams: zod.ZodObject<{
@@ -11253,40 +9713,6 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     }>>>;
-    advisorSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
-        generatedAt: zod.ZodString;
-        headline: zod.ZodString;
-        bullets: zod.ZodArray<zod.ZodString, "many">;
-        suggestions: zod.ZodArray<zod.ZodObject<{
-            text: zod.ZodString;
-            toolHint: zod.ZodOptional<zod.ZodString>;
-        }, "strip", zod.ZodTypeAny, {
-            text: string;
-            toolHint?: string | undefined;
-        }, {
-            text: string;
-            toolHint?: string | undefined;
-        }>, "many">;
-        source: zod.ZodEnum<["ai", "fallback"]>;
-    }, "strip", zod.ZodTypeAny, {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    }, {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    }>>>;
     postLockAdditions: zod.ZodArray<zod.ZodObject<{
         txnId: zod.ZodString;
         date: zod.ZodString;
@@ -11418,16 +9844,6 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     } | null | undefined;
-    advisorSummary?: {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
-    } | null | undefined;
 }, {
     status: "in_progress" | "awaiting_review" | "locked";
     weekStart: string;
@@ -11533,16 +9949,6 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         unmatchedCount: number;
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
-    } | null | undefined;
-    advisorSummary?: {
-        source: "ai" | "fallback";
-        generatedAt: string;
-        headline: string;
-        bullets: string[];
-        suggestions: {
-            text: string;
-            toolHint?: string | undefined;
-        }[];
     } | null | undefined;
 }>;
 export declare const CreatePlaidLinkTokenResponse: zod.ZodObject<{
@@ -13404,368 +11810,5 @@ export declare const SeedAprilChaseResponse: zod.ZodObject<{
     rulesAdded: number;
     syntheticAccount: boolean;
     snapshotRepaired: boolean;
-}>;
-/**
- * Returns a cached (1h TTL) AI-generated observation about the
-household's current financial state. The frontend renders this
-as a dismissible card on the Dashboard. When the advisor is
-disabled (no API key, ADVISOR_ENABLED=false, or no meaningful
-data yet), returns `enabled: false` and the UI hides itself.
-
- * @summary Get a single proactive financial observation for the dashboard
- */
-export declare const GetAdvisorNudgeResponse: zod.ZodObject<{
-    enabled: zod.ZodBoolean;
-    severity: zod.ZodOptional<zod.ZodEnum<["info", "warn", "alert"]>>;
-    message: zod.ZodOptional<zod.ZodString>;
-    source: zod.ZodOptional<zod.ZodEnum<["advisor", "empty"]>>;
-    generatedAt: zod.ZodOptional<zod.ZodDate>;
-}, "strip", zod.ZodTypeAny, {
-    enabled: boolean;
-    message?: string | undefined;
-    source?: "advisor" | "empty" | undefined;
-    generatedAt?: Date | undefined;
-    severity?: "alert" | "info" | "warn" | undefined;
-}, {
-    enabled: boolean;
-    message?: string | undefined;
-    source?: "advisor" | "empty" | undefined;
-    generatedAt?: Date | undefined;
-    severity?: "alert" | "info" | "warn" | undefined;
-}>;
-/**
- * Stateless chat endpoint. The client passes the full conversation
-history each turn; the server tacks on the latest message and
-calls the model. The server augments the system prompt with a
-live snapshot of the household's budget, cashflow, and debts.
-
- * @summary Send a message to the AI budget advisor
- */
-export declare const postAdvisorChatBodyMessageMax = 4000;
-export declare const postAdvisorChatBodyHistoryMax = 24;
-export declare const PostAdvisorChatBody: zod.ZodObject<{
-    message: zod.ZodString;
-    history: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
-        role: zod.ZodEnum<["user", "assistant"]>;
-        content: zod.ZodString;
-    }, "strip", zod.ZodTypeAny, {
-        role: "user" | "assistant";
-        content: string;
-    }, {
-        role: "user" | "assistant";
-        content: string;
-    }>, "many">>;
-}, "strip", zod.ZodTypeAny, {
-    message: string;
-    history?: {
-        role: "user" | "assistant";
-        content: string;
-    }[] | undefined;
-}, {
-    message: string;
-    history?: {
-        role: "user" | "assistant";
-        content: string;
-    }[] | undefined;
-}>;
-export declare const PostAdvisorChatResponse: zod.ZodObject<{
-    message: zod.ZodString;
-    toolCalls: zod.ZodArray<zod.ZodObject<{
-        name: zod.ZodString;
-        ok: zod.ZodBoolean;
-        summary: zod.ZodString;
-        auditLogId: zod.ZodOptional<zod.ZodString>;
-        proposal: zod.ZodOptional<zod.ZodObject<{
-            id: zod.ZodString;
-            summary: zod.ZodString;
-        }, "strip", zod.ZodTypeAny, {
-            id: string;
-            summary: string;
-        }, {
-            id: string;
-            summary: string;
-        }>>;
-    }, "strip", zod.ZodTypeAny, {
-        name: string;
-        ok: boolean;
-        summary: string;
-        auditLogId?: string | undefined;
-        proposal?: {
-            id: string;
-            summary: string;
-        } | undefined;
-    }, {
-        name: string;
-        ok: boolean;
-        summary: string;
-        auditLogId?: string | undefined;
-        proposal?: {
-            id: string;
-            summary: string;
-        } | undefined;
-    }>, "many">;
-    usage: zod.ZodOptional<zod.ZodObject<{
-        inputTokens: zod.ZodOptional<zod.ZodNumber>;
-        outputTokens: zod.ZodOptional<zod.ZodNumber>;
-    }, "strip", zod.ZodTypeAny, {
-        inputTokens?: number | undefined;
-        outputTokens?: number | undefined;
-    }, {
-        inputTokens?: number | undefined;
-        outputTokens?: number | undefined;
-    }>>;
-}, "strip", zod.ZodTypeAny, {
-    message: string;
-    toolCalls: {
-        name: string;
-        ok: boolean;
-        summary: string;
-        auditLogId?: string | undefined;
-        proposal?: {
-            id: string;
-            summary: string;
-        } | undefined;
-    }[];
-    usage?: {
-        inputTokens?: number | undefined;
-        outputTokens?: number | undefined;
-    } | undefined;
-}, {
-    message: string;
-    toolCalls: {
-        name: string;
-        ok: boolean;
-        summary: string;
-        auditLogId?: string | undefined;
-        proposal?: {
-            id: string;
-            summary: string;
-        } | undefined;
-    }[];
-    usage?: {
-        inputTokens?: number | undefined;
-        outputTokens?: number | undefined;
-    } | undefined;
-}>;
-/**
- * Undoes the effects of an advisor tool call within a 5-minute window
-of its execution. Only tools registered with an undoHandler are
-undoable. Household-scoped — a request can only undo tool calls
-attached to its own household's audit log.
-
- * @summary Reverse a previously executed advisor tool call
- */
-export declare const PostAdvisorUndoParams: zod.ZodObject<{
-    auditLogId: zod.ZodString;
-}, "strip", zod.ZodTypeAny, {
-    auditLogId: string;
-}, {
-    auditLogId: string;
-}>;
-export declare const PostAdvisorUndoResponse: zod.ZodObject<{
-    ok: zod.ZodBoolean;
-}, "strip", zod.ZodTypeAny, {
-    ok: boolean;
-}, {
-    ok: boolean;
-}>;
-/**
- * Confirms a destructive tool proposal created during a chat turn.
-Re-runs the tool with the originally proposed arguments, writes
-an audit log row, and returns the execution result.
-
- * @summary Confirm and execute a pending advisor proposal
- */
-export declare const PostAdvisorProposalConfirmParams: zod.ZodObject<{
-    proposalId: zod.ZodString;
-}, "strip", zod.ZodTypeAny, {
-    proposalId: string;
-}, {
-    proposalId: string;
-}>;
-export declare const PostAdvisorProposalConfirmResponse: zod.ZodObject<{
-    ok: zod.ZodBoolean;
-    toolName: zod.ZodOptional<zod.ZodString>;
-    auditLogId: zod.ZodOptional<zod.ZodString>;
-}, "strip", zod.ZodTypeAny, {
-    ok: boolean;
-    auditLogId?: string | undefined;
-    toolName?: string | undefined;
-}, {
-    ok: boolean;
-    auditLogId?: string | undefined;
-    toolName?: string | undefined;
-}>;
-/**
- * Marks a destructive tool proposal as cancelled without executing
-it. Tools that were already cancelled or executed cannot be
-cancelled again.
-
- * @summary Cancel a pending advisor proposal
- */
-export declare const PostAdvisorProposalCancelParams: zod.ZodObject<{
-    proposalId: zod.ZodString;
-}, "strip", zod.ZodTypeAny, {
-    proposalId: string;
-}, {
-    proposalId: string;
-}>;
-export declare const PostAdvisorProposalCancelResponse: zod.ZodObject<{
-    ok: zod.ZodBoolean;
-    toolName: zod.ZodOptional<zod.ZodString>;
-    auditLogId: zod.ZodOptional<zod.ZodString>;
-}, "strip", zod.ZodTypeAny, {
-    ok: boolean;
-    auditLogId?: string | undefined;
-    toolName?: string | undefined;
-}, {
-    ok: boolean;
-    auditLogId?: string | undefined;
-    toolName?: string | undefined;
-}>;
-/**
- * The one "how are we doing" read. The server computes a 0-100 health
-score in code (debt-payoff weighted) from existing engines, upserts
-today's daily row (so the trend stays continuous), and returns the
-score/status/grade, weighted sub-scores, drivers, a ~30-day trend
-series, vs-yesterday/vs-last-week deltas, and a Fable 5 narrative.
-
- * @summary Overall budget-health score, trend, and AI narrative
- */
-export declare const GetBudgetHealthResponse: zod.ZodObject<{
-    score: zod.ZodNumber;
-    status: zod.ZodString;
-    grade: zod.ZodString;
-    dimensions: zod.ZodArray<zod.ZodObject<{
-        key: zod.ZodString;
-        label: zod.ZodString;
-        score: zod.ZodNumber;
-        weight: zod.ZodNumber;
-        summary: zod.ZodString;
-    }, "strip", zod.ZodTypeAny, {
-        summary: string;
-        label: string;
-        score: number;
-        key: string;
-        weight: number;
-    }, {
-        summary: string;
-        label: string;
-        score: number;
-        key: string;
-        weight: number;
-    }>, "many">;
-    drivers: zod.ZodArray<zod.ZodString, "many">;
-    facts: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>;
-    trend: zod.ZodArray<zod.ZodObject<{
-        recordedOn: zod.ZodString;
-        score: zod.ZodNumber;
-        status: zod.ZodString;
-        grade: zod.ZodString;
-    }, "strip", zod.ZodTypeAny, {
-        status: string;
-        recordedOn: string;
-        score: number;
-        grade: string;
-    }, {
-        status: string;
-        recordedOn: string;
-        score: number;
-        grade: string;
-    }>, "many">;
-    deltas: zod.ZodObject<{
-        vsYesterday: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
-        vsLastWeek: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
-        direction: zod.ZodString;
-    }, "strip", zod.ZodTypeAny, {
-        direction: string;
-        vsYesterday?: number | null | undefined;
-        vsLastWeek?: number | null | undefined;
-    }, {
-        direction: string;
-        vsYesterday?: number | null | undefined;
-        vsLastWeek?: number | null | undefined;
-    }>;
-    summary: zod.ZodObject<{
-        generatedAt: zod.ZodString;
-        headline: zod.ZodString;
-        body: zod.ZodString;
-        nextAction: zod.ZodString;
-        source: zod.ZodString;
-    }, "strip", zod.ZodTypeAny, {
-        source: string;
-        generatedAt: string;
-        headline: string;
-        body: string;
-        nextAction: string;
-    }, {
-        source: string;
-        generatedAt: string;
-        headline: string;
-        body: string;
-        nextAction: string;
-    }>;
-}, "strip", zod.ZodTypeAny, {
-    status: string;
-    summary: {
-        source: string;
-        generatedAt: string;
-        headline: string;
-        body: string;
-        nextAction: string;
-    };
-    trend: {
-        status: string;
-        recordedOn: string;
-        score: number;
-        grade: string;
-    }[];
-    score: number;
-    grade: string;
-    dimensions: {
-        summary: string;
-        label: string;
-        score: number;
-        key: string;
-        weight: number;
-    }[];
-    drivers: string[];
-    deltas: {
-        direction: string;
-        vsYesterday?: number | null | undefined;
-        vsLastWeek?: number | null | undefined;
-    };
-    facts?: Record<string, unknown> | undefined;
-}, {
-    status: string;
-    summary: {
-        source: string;
-        generatedAt: string;
-        headline: string;
-        body: string;
-        nextAction: string;
-    };
-    trend: {
-        status: string;
-        recordedOn: string;
-        score: number;
-        grade: string;
-    }[];
-    score: number;
-    grade: string;
-    dimensions: {
-        summary: string;
-        label: string;
-        score: number;
-        key: string;
-        weight: number;
-    }[];
-    drivers: string[];
-    deltas: {
-        direction: string;
-        vsYesterday?: number | null | undefined;
-        vsLastWeek?: number | null | undefined;
-    };
-    facts?: Record<string, unknown> | undefined;
 }>;
 //# sourceMappingURL=api.d.ts.map

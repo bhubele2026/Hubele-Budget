@@ -7,8 +7,6 @@
  */
 import type { AvalancheScheduleCurrentAvalancheTarget } from "./avalancheScheduleCurrentAvalancheTarget";
 import type { AvalancheScheduleProposedPaymentsItem } from "./avalancheScheduleProposedPaymentsItem";
-import type { AvalancheScheduleSource } from "./avalancheScheduleSource";
-import type { AvalancheScheduleSummarySource } from "./avalancheScheduleSummarySource";
 
 export interface AvalancheSchedule {
   proposedPayments: AvalancheScheduleProposedPaymentsItem[];
@@ -21,9 +19,4 @@ export interface AvalancheSchedule {
   bankBalance: number;
   /** @nullable */
   scheduleThroughDate: string | null;
-  summary: string;
-  paymentsText: string[];
-  summarySource: AvalancheScheduleSummarySource;
-  generatedAt: string;
-  source: AvalancheScheduleSource;
 }

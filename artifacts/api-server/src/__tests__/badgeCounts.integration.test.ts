@@ -3,7 +3,6 @@
 // N+1 on every route. These tests pin the cheap replacements:
 //   GET /forecast/review-count   — unmatched current-month bank txns
 //   GET /debrief/awaiting-count  — awaiting_review weeks from stored rows only
-// plus the budget-health facts-hash cache (one Anthropic call per facts hash).
 
 import {
   describe,
@@ -41,37 +40,6 @@ vi.mock("../middlewares/requireAuth", () => ({
   },
 }));
 
-// Budget-health: stub the facts/trend layer to return stable values so the
-// cache test is deterministic, and count LLM-summary generations.
-const generateHealthSummaryMock = vi.fn(async () => ({
-  headline: "steady",
-  body: "all good",
-  source: "ai" as const,
-}));
-vi.mock("../lib/healthAdvisorSummary", async () => {
-  const actual = await vi.importActual<
-    typeof import("../lib/healthAdvisorSummary")
-  >("../lib/healthAdvisorSummary");
-  return {
-    ...actual,
-    generateHealthSummary: (...args: unknown[]) =>
-      generateHealthSummaryMock(...(args as [])),
-  };
-});
-let healthScore = 80;
-vi.mock("../lib/healthSnapshot", () => ({
-  upsertTodayHealth: async () => ({
-    score: healthScore,
-    status: "solid",
-    grade: "B",
-    dimensions: [],
-    drivers: [],
-    facts: { score: healthScore },
-  }),
-  getHealthTrend: async () => [],
-  computeDeltas: () => ({ d7: null, d30: null }),
-}));
-
 import {
   db,
   forecastSettingsTable,
@@ -83,7 +51,6 @@ import {
 } from "@workspace/db";
 import forecastRouter from "../routes/forecast";
 import weeklyDebriefRouter from "../routes/weeklyDebrief";
-import budgetHealthRouter from "../routes/budgetHealth";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
@@ -94,7 +61,6 @@ app.use((req: { log?: unknown }, _res, next) => {
 });
 app.use(forecastRouter);
 app.use(weeklyDebriefRouter);
-app.use(budgetHealthRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -138,7 +104,6 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await cleanup();
-  generateHealthSummaryMock.mockClear();
 });
 
 function isoInCurrentMonth(day: number): string {
@@ -299,29 +264,5 @@ describe("GET /debrief/awaiting-count", () => {
     );
     expect(r.status).toBe(200);
     expect(await r.json()).toEqual({ count: 0 });
-  });
-});
-
-describe("GET /budget-health — facts-hash summary cache", () => {
-  it("only regenerates the LLM summary when the facts hash changes", async () => {
-    const r1 = await fetch(`${baseUrl}/budget-health`);
-    expect(r1.status).toBe(200);
-    expect(generateHealthSummaryMock).toHaveBeenCalledTimes(1);
-
-    // Same facts → cached summary, no new LLM call.
-    const r2 = await fetch(`${baseUrl}/budget-health`);
-    expect(r2.status).toBe(200);
-    expect(generateHealthSummaryMock).toHaveBeenCalledTimes(1);
-
-    // Changed facts → regenerate.
-    healthScore = 55;
-    const r3 = await fetch(`${baseUrl}/budget-health`);
-    expect(r3.status).toBe(200);
-    expect(generateHealthSummaryMock).toHaveBeenCalledTimes(2);
-
-    // ?refresh=true forces a call even with unchanged facts.
-    const r4 = await fetch(`${baseUrl}/budget-health?refresh=true`);
-    expect(r4.status).toBe(200);
-    expect(generateHealthSummaryMock).toHaveBeenCalledTimes(3);
   });
 });

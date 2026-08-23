@@ -19,7 +19,6 @@ import {
 } from "../lib/autoCategorize";
 import { selectPatternCandidates } from "../lib/patternCandidates";
 import { cleanMerchant, merchantSignature } from "../lib/merchantNameExtract";
-import { suggestMerchantName } from "../lib/merchantSuggest";
 import {
   EXCLUDED_CATEGORY_RULE_ERROR,
   isExcludedCategory,
@@ -42,7 +41,6 @@ import {
   sendTransactionsToReviewBodyTransactionIdsMax,
   PutMerchantAliasBody,
   DeleteMerchantAliasQueryParams,
-  SuggestMerchantNameBody,
 } from "@workspace/api-zod";
 
 void UpdateTransactionBody;
@@ -1464,23 +1462,6 @@ router.put(
       (r) => merchantSignature(r.description) === signature,
     ).length;
     res.json({ signature, alias, affectedCount });
-  },
-);
-
-// (#888) AI-assisted name suggestion for the rename popover's "✨ Suggest".
-// Always returns a usable name — falls back to cleanMerchant if the LLM is
-// unavailable/slow. Read-only (does NOT persist an alias).
-router.post(
-  "/transactions/suggest-name",
-  requireAuth,
-  async (req, res): Promise<void> => {
-    const body = SuggestMerchantNameBody.safeParse(req.body);
-    if (!body.success) {
-      res.status(400).json({ error: body.error.message });
-      return;
-    }
-    const result = await suggestMerchantName(body.data.description);
-    res.json(result);
   },
 );
 

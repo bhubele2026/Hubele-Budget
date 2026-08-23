@@ -13,51 +13,6 @@ export interface BadgeCount {
   count: number;
 }
 
-export interface BudgetHealthDimension {
-  key: string;
-  label: string;
-  score: number;
-  weight: number;
-  summary: string;
-}
-
-export interface BudgetHealthTrendPoint {
-  recordedOn: string;
-  score: number;
-  status: string;
-  grade: string;
-}
-
-export interface BudgetHealthDeltas {
-  /** @nullable */
-  vsYesterday?: number | null;
-  /** @nullable */
-  vsLastWeek?: number | null;
-  direction: string;
-}
-
-export interface BudgetHealthSummary {
-  generatedAt: string;
-  headline: string;
-  body: string;
-  nextAction: string;
-  source: string;
-}
-
-export type BudgetHealthResponseFacts = { [key: string]: unknown };
-
-export interface BudgetHealthResponse {
-  score: number;
-  status: string;
-  grade: string;
-  dimensions: BudgetHealthDimension[];
-  drivers: string[];
-  facts?: BudgetHealthResponseFacts;
-  trend: BudgetHealthTrendPoint[];
-  deltas: BudgetHealthDeltas;
-  summary: BudgetHealthSummary;
-}
-
 export interface VersionInfo {
   /** Per-deploy build identifier (APP_BUILD_ID env, falling back
 to the git short hash, then a shared "dev" sentinel when
@@ -2049,226 +2004,6 @@ export interface CashSignal {
   events?: CashSignalEventsItem[];
 }
 
-export type ReportsAdvisorSummaryTab =
-  (typeof ReportsAdvisorSummaryTab)[keyof typeof ReportsAdvisorSummaryTab];
-
-export const ReportsAdvisorSummaryTab = {
-  debt: "debt",
-  cashflow: "cashflow",
-  spending: "spending",
-  budget: "budget",
-  behavior: "behavior",
-} as const;
-
-export type ReportsAdvisorSummarySummarySource =
-  (typeof ReportsAdvisorSummarySummarySource)[keyof typeof ReportsAdvisorSummarySummarySource];
-
-export const ReportsAdvisorSummarySummarySource = {
-  ai: "ai",
-  fallback: "fallback",
-} as const;
-
-export type ReportsAdvisorSummarySource =
-  (typeof ReportsAdvisorSummarySource)[keyof typeof ReportsAdvisorSummarySource];
-
-export const ReportsAdvisorSummarySource = {
-  cache: "cache",
-  fresh: "fresh",
-} as const;
-
-export interface ReportsAdvisorSummary {
-  tab: ReportsAdvisorSummaryTab;
-  headline: string;
-  bullets: string[];
-  summarySource: ReportsAdvisorSummarySummarySource;
-  generatedAt: string;
-  source: ReportsAdvisorSummarySource;
-}
-
-export type BankingInsightsMoverRowTone =
-  (typeof BankingInsightsMoverRowTone)[keyof typeof BankingInsightsMoverRowTone];
-
-export const BankingInsightsMoverRowTone = {
-  positive: "positive",
-  negative: "negative",
-  neutral: "neutral",
-} as const;
-
-/**
- * One merchant-level row inside a bucket. Every figure and the detail
-string are computed server-side in code; the client renders verbatim.
-
- */
-export interface BankingInsightsMoverRow {
-  /** Merchant name (normalized). */
-  display: string;
-  /** Pre-formatted secondary line, e.g. '$120 vs $138 last mo · 3 fewer visits'. */
-  detail: string;
-  /** Primary figure for the row. */
-  amount: number;
-  /** Unit/label for the figure, e.g. 'saved', 'more', '/yr', 'spent'. */
-  amountLabel: string;
-  tone: BankingInsightsMoverRowTone;
-}
-
-export interface BankingInsightsBucket {
-  headline: string;
-  caption: string;
-  rows: BankingInsightsMoverRow[];
-}
-
-export type BankingInsightsSummarySummarySource =
-  (typeof BankingInsightsSummarySummarySource)[keyof typeof BankingInsightsSummarySummarySource];
-
-export const BankingInsightsSummarySummarySource = {
-  ai: "ai",
-  fallback: "fallback",
-} as const;
-
-export type BankingInsightsSummarySource =
-  (typeof BankingInsightsSummarySource)[keyof typeof BankingInsightsSummarySource];
-
-export const BankingInsightsSummarySource = {
-  cache: "cache",
-  fresh: "fresh",
-} as const;
-
-export interface BankingInsightsSummary {
-  spendingLess: BankingInsightsBucket;
-  creepingUp: BankingInsightsBucket;
-  recurringToCut: BankingInsightsBucket;
-  newOrUnusual: BankingInsightsBucket;
-  summarySource: BankingInsightsSummarySummarySource;
-  generatedAt: string;
-  source: BankingInsightsSummarySource;
-}
-
-export type ForecastInsightsSummarySummarySource =
-  (typeof ForecastInsightsSummarySummarySource)[keyof typeof ForecastInsightsSummarySummarySource];
-
-export const ForecastInsightsSummarySummarySource = {
-  ai: "ai",
-  fallback: "fallback",
-} as const;
-
-export type ForecastInsightsSummarySource =
-  (typeof ForecastInsightsSummarySource)[keyof typeof ForecastInsightsSummarySource];
-
-export const ForecastInsightsSummarySource = {
-  cache: "cache",
-  fresh: "fresh",
-} as const;
-
-export interface ForecastInsightsSummary {
-  headline: string;
-  body: string;
-  bullets: string[];
-  debtMoves: string[];
-  summarySource: ForecastInsightsSummarySummarySource;
-  generatedAt: string;
-  source: ForecastInsightsSummarySource;
-}
-
-export interface SpendingStoryLens {
-  headline: string;
-  bullets: string[];
-}
-
-export type SpendingStoryLenses = {
-  trend: SpendingStoryLens;
-  category: SpendingStoryLens;
-  merchants: SpendingStoryLens;
-  dayOfWeek: SpendingStoryLens;
-};
-
-export type SpendingStorySummarySource =
-  (typeof SpendingStorySummarySource)[keyof typeof SpendingStorySummarySource];
-
-export const SpendingStorySummarySource = {
-  ai: "ai",
-  fallback: "fallback",
-} as const;
-
-export type SpendingStorySource =
-  (typeof SpendingStorySource)[keyof typeof SpendingStorySource];
-
-export const SpendingStorySource = {
-  cache: "cache",
-  fresh: "fresh",
-} as const;
-
-export interface SpendingStory {
-  lenses: SpendingStoryLenses;
-  summarySource: SpendingStorySummarySource;
-  generatedAt: string;
-  source: SpendingStorySource;
-}
-
-export type RecurringReviewSummaryInputItemConfidence =
-  (typeof RecurringReviewSummaryInputItemConfidence)[keyof typeof RecurringReviewSummaryInputItemConfidence];
-
-export const RecurringReviewSummaryInputItemConfidence = {
-  high: "high",
-  medium: "medium",
-  low: "low",
-} as const;
-
-export interface RecurringReviewSummaryInputItem {
-  merchant: string;
-  annual: number;
-  monthly: number;
-  cadence: string;
-  confidence?: RecurringReviewSummaryInputItemConfidence;
-}
-
-export interface RecurringReviewSummaryInput {
-  /** The client-detected new recurring charges awaiting review. */
-  charges: RecurringReviewSummaryInputItem[];
-}
-
-export type RecurringReviewSummarySummarySource =
-  (typeof RecurringReviewSummarySummarySource)[keyof typeof RecurringReviewSummarySummarySource];
-
-export const RecurringReviewSummarySummarySource = {
-  ai: "ai",
-  fallback: "fallback",
-} as const;
-
-export interface RecurringReviewSummary {
-  headline: string;
-  bullets: string[];
-  summarySource: RecurringReviewSummarySummarySource;
-  generatedAt: string;
-}
-
-export type BillsInsightsSummarySummarySource =
-  (typeof BillsInsightsSummarySummarySource)[keyof typeof BillsInsightsSummarySummarySource];
-
-export const BillsInsightsSummarySummarySource = {
-  ai: "ai",
-  fallback: "fallback",
-} as const;
-
-export type BillsInsightsSummarySource =
-  (typeof BillsInsightsSummarySource)[keyof typeof BillsInsightsSummarySource];
-
-export const BillsInsightsSummarySource = {
-  cache: "cache",
-  fresh: "fresh",
-} as const;
-
-export interface BillsInsightsSummary {
-  headline: string;
-  bullets: string[];
-  /** One-off / non-recurring spend this month. */
-  oneOffTotal: number;
-  /** Count of one-off charges. */
-  oneOffCount: number;
-  summarySource: BillsInsightsSummarySummarySource;
-  generatedAt: string;
-  source: BillsInsightsSummarySource;
-}
-
 export type SpendingFactsRange = {
   start: string;
   end: string;
@@ -2665,22 +2400,6 @@ export type AvalancheScheduleCurrentAvalancheTarget = {
   balance: number;
 } | null;
 
-export type AvalancheScheduleSummarySource =
-  (typeof AvalancheScheduleSummarySource)[keyof typeof AvalancheScheduleSummarySource];
-
-export const AvalancheScheduleSummarySource = {
-  ai: "ai",
-  fallback: "fallback",
-} as const;
-
-export type AvalancheScheduleSource =
-  (typeof AvalancheScheduleSource)[keyof typeof AvalancheScheduleSource];
-
-export const AvalancheScheduleSource = {
-  cache: "cache",
-  fresh: "fresh",
-} as const;
-
 export interface AvalancheSchedule {
   proposedPayments: AvalancheScheduleProposedPaymentsItem[];
   totalProposed: number;
@@ -2692,11 +2411,6 @@ export interface AvalancheSchedule {
   bankBalance: number;
   /** @nullable */
   scheduleThroughDate: string | null;
-  summary: string;
-  paymentsText: string[];
-  summarySource: AvalancheScheduleSummarySource;
-  generatedAt: string;
-  source: AvalancheScheduleSource;
 }
 
 export interface MonthSnapshot {
@@ -2861,23 +2575,12 @@ export interface AmexWeeklyPayoffCard {
   topMerchant: AmexWeeklyPayoffCardTopMerchant;
 }
 
-export type AmexWeeklyPayoffDirectiveSource =
-  (typeof AmexWeeklyPayoffDirectiveSource)[keyof typeof AmexWeeklyPayoffDirectiveSource];
-
-export const AmexWeeklyPayoffDirectiveSource = {
-  ai: "ai",
-  fallback: "fallback",
-} as const;
-
 export interface AmexWeeklyPayoff {
   weekStart: string;
   weekEnd: string;
   cards: AmexWeeklyPayoffCard[];
   combinedWeekCharges: number;
   combinedStatementBalance: number;
-  /** @nullable */
-  directive?: string | null;
-  directiveSource?: AmexWeeklyPayoffDirectiveSource;
 }
 
 export interface DashboardBudget {
@@ -2997,27 +2700,6 @@ export interface WeeklyDebriefSnapshot {
   openItemsCount: number;
 }
 
-export interface WeeklyDebriefAdvisorSuggestion {
-  text: string;
-  toolHint?: string;
-}
-
-export type WeeklyDebriefAdvisorSummarySource =
-  (typeof WeeklyDebriefAdvisorSummarySource)[keyof typeof WeeklyDebriefAdvisorSummarySource];
-
-export const WeeklyDebriefAdvisorSummarySource = {
-  ai: "ai",
-  fallback: "fallback",
-} as const;
-
-export interface WeeklyDebriefAdvisorSummary {
-  generatedAt: string;
-  headline: string;
-  bullets: string[];
-  suggestions: WeeklyDebriefAdvisorSuggestion[];
-  source: WeeklyDebriefAdvisorSummarySource;
-}
-
 export interface WeeklyDebriefActionsSummary {
   matchedCount: number;
   rescheduledCount: number;
@@ -3082,7 +2764,6 @@ export interface WeeklyDebriefDetail {
   lockedByUserId?: string | null;
   varianceSnapshot: WeeklyDebriefSnapshot | null;
   actionsSummary?: WeeklyDebriefActionsSummary | null;
-  advisorSummary?: WeeklyDebriefAdvisorSummary | null;
   postLockAdditions: WeeklyDebriefPostLockAddition[];
 }
 
@@ -3419,129 +3100,6 @@ export interface PlaidEnvironmentInfo {
   nonProdItems: PlaidEnvironmentInfoNonProdItemsItem[];
 }
 
-/**
- * UI hint for color/icon. `info` = neutral observation, `warn`
-= something to keep an eye on, `alert` = something likely to
-cause a problem if ignored.
-
- */
-export type AdvisorNudgeSeverity =
-  (typeof AdvisorNudgeSeverity)[keyof typeof AdvisorNudgeSeverity];
-
-export const AdvisorNudgeSeverity = {
-  info: "info",
-  warn: "warn",
-  alert: "alert",
-} as const;
-
-/**
- * `advisor` = generated by the model. `empty` = the model
-decided there was nothing worth surfacing right now (the UI
-should hide).
-
- */
-export type AdvisorNudgeSource =
-  (typeof AdvisorNudgeSource)[keyof typeof AdvisorNudgeSource];
-
-export const AdvisorNudgeSource = {
-  advisor: "advisor",
-  empty: "empty",
-} as const;
-
-export interface AdvisorNudge {
-  /** When false, the frontend hides the nudge UI entirely. */
-  enabled: boolean;
-  /** UI hint for color/icon. `info` = neutral observation, `warn`
-= something to keep an eye on, `alert` = something likely to
-cause a problem if ignored.
- */
-  severity?: AdvisorNudgeSeverity;
-  /** 1–2 sentence observation in plain English. */
-  message?: string;
-  /** `advisor` = generated by the model. `empty` = the model
-decided there was nothing worth surfacing right now (the UI
-should hide).
- */
-  source?: AdvisorNudgeSource;
-  generatedAt?: string;
-}
-
-export type AdvisorChatMessageRole =
-  (typeof AdvisorChatMessageRole)[keyof typeof AdvisorChatMessageRole];
-
-export const AdvisorChatMessageRole = {
-  user: "user",
-  assistant: "assistant",
-} as const;
-
-export interface AdvisorChatMessage {
-  role: AdvisorChatMessageRole;
-  content: string;
-}
-
-export interface AdvisorChatRequest {
-  /**
-   * @minLength 1
-   * @maxLength 4000
-   */
-  message: string;
-  /** @maxItems 24 */
-  history?: AdvisorChatMessage[];
-}
-
-export type AdvisorChatResponseUsage = {
-  inputTokens?: number;
-  outputTokens?: number;
-};
-
-export interface AdvisorProposal {
-  /** Proposal id, used to confirm or cancel. */
-  id: string;
-  /** Human-readable preview of what the tool will do. */
-  summary: string;
-}
-
-export interface AdvisorToolCall {
-  /** Tool name (e.g. "list_categories") */
-  name: string;
-  /** True if the tool executed without error. */
-  ok: boolean;
-  /** One-line summary suitable for inline UI display. */
-  summary: string;
-  /** Reference to the advisor_audit_log row for this call. */
-  auditLogId?: string;
-  /** Present only when the tool returned a destructive proposal
-awaiting user confirmation. The frontend should render a
-confirm/cancel card and call POST /advisor/proposals/{id}/confirm
-or /cancel.
- */
-  proposal?: AdvisorProposal;
-}
-
-export interface AdvisorChatResponse {
-  message: string;
-  toolCalls: AdvisorToolCall[];
-  usage?: AdvisorChatResponseUsage;
-}
-
-export interface AdvisorProposalResolveResponse {
-  ok: boolean;
-  toolName?: string;
-  auditLogId?: string;
-}
-
-export interface AdvisorProposalErrorResponse {
-  error: string;
-}
-
-export interface AdvisorUndoResponse {
-  ok: boolean;
-}
-
-export interface AdvisorUndoErrorResponse {
-  error: string;
-}
-
 export interface PutMerchantAliasInput {
   /**
    * (#888) The raw bank description of the transaction being renamed.
@@ -3573,38 +3131,6 @@ also covered but not counted here.
 export interface DeleteMerchantAliasResult {
   signature: string;
   deleted: boolean;
-}
-
-export interface SuggestMerchantNameInput {
-  /**
-   * The raw bank description to clean into a friendly name.
-   * @minLength 1
-   */
-  description: string;
-}
-
-/**
- * "ai" when Anthropic produced the name, "fallback" when the
-deterministic cleanMerchant label was used (API down/slow/empty).
-
- */
-export type SuggestMerchantNameResultSource =
-  (typeof SuggestMerchantNameResultSource)[keyof typeof SuggestMerchantNameResultSource];
-
-export const SuggestMerchantNameResultSource = {
-  ai: "ai",
-  fallback: "fallback",
-} as const;
-
-export interface SuggestMerchantNameResult {
-  /** The suggested friendly merchant name. */
-  suggestion: string;
-  /** The stable signature derived from the description. */
-  signature: string;
-  /** "ai" when Anthropic produced the name, "fallback" when the
-deterministic cleanMerchant label was used (API down/slow/empty).
- */
-  source: SuggestMerchantNameResultSource;
 }
 
 export type ListTransactionsParams = {
@@ -3647,108 +3173,6 @@ export type GetForecastCashSignalParams = {
   fromDate?: string;
 };
 
-export type GetForecastAvalancheScheduleParams = {
-  /**
-   * Force a fresh Claude regeneration, bypassing the cache.
-   */
-  refresh?: GetForecastAvalancheScheduleRefresh;
-};
-
-export type GetForecastAvalancheScheduleRefresh =
-  (typeof GetForecastAvalancheScheduleRefresh)[keyof typeof GetForecastAvalancheScheduleRefresh];
-
-export const GetForecastAvalancheScheduleRefresh = {
-  true: "true",
-  NUMBER_1: "1",
-} as const;
-
-export type GetReportsAdvisorSummaryParams = {
-  /**
-   * Which Reports tab to summarize.
-   */
-  tab: GetReportsAdvisorSummaryTab;
-  /**
-   * Look-back window in days for range-scoped tabs.
-   */
-  rangeDays?: number;
-  /**
-   * Months back from the current month for the budget tab.
-   */
-  monthOffset?: number;
-  /**
-   * Force a fresh Claude regeneration, bypassing the cache.
-   */
-  refresh?: GetReportsAdvisorSummaryRefresh;
-};
-
-export type GetReportsAdvisorSummaryTab =
-  (typeof GetReportsAdvisorSummaryTab)[keyof typeof GetReportsAdvisorSummaryTab];
-
-export const GetReportsAdvisorSummaryTab = {
-  debt: "debt",
-  cashflow: "cashflow",
-  spending: "spending",
-  budget: "budget",
-  behavior: "behavior",
-} as const;
-
-export type GetReportsAdvisorSummaryRefresh =
-  (typeof GetReportsAdvisorSummaryRefresh)[keyof typeof GetReportsAdvisorSummaryRefresh];
-
-export const GetReportsAdvisorSummaryRefresh = {
-  true: "true",
-  NUMBER_1: "1",
-} as const;
-
-export type GetBankingInsightsSummaryParams = {
-  /**
-   * Force a fresh Claude regeneration, bypassing the cache.
-   */
-  refresh?: GetBankingInsightsSummaryRefresh;
-};
-
-export type GetBankingInsightsSummaryRefresh =
-  (typeof GetBankingInsightsSummaryRefresh)[keyof typeof GetBankingInsightsSummaryRefresh];
-
-export const GetBankingInsightsSummaryRefresh = {
-  true: "true",
-  NUMBER_1: "1",
-} as const;
-
-export type GetBillsInsightsSummaryParams = {
-  /**
-   * Month to analyze as YYYY-MM-01 (defaults to the current month).
-   */
-  month?: string;
-  /**
-   * Force a fresh Fable 5 regeneration, bypassing the cache.
-   */
-  refresh?: GetBillsInsightsSummaryRefresh;
-};
-
-export type GetBillsInsightsSummaryRefresh =
-  (typeof GetBillsInsightsSummaryRefresh)[keyof typeof GetBillsInsightsSummaryRefresh];
-
-export const GetBillsInsightsSummaryRefresh = {
-  true: "true",
-  NUMBER_1: "1",
-} as const;
-
-export type GetForecastInsightsSummaryParams = {
-  /**
-   * Force a fresh Fable 5 regeneration, bypassing the cache.
-   */
-  refresh?: GetForecastInsightsSummaryRefresh;
-};
-
-export type GetForecastInsightsSummaryRefresh =
-  (typeof GetForecastInsightsSummaryRefresh)[keyof typeof GetForecastInsightsSummaryRefresh];
-
-export const GetForecastInsightsSummaryRefresh = {
-  true: "true",
-  NUMBER_1: "1",
-} as const;
-
 export type GetReportsSpendingFactsParams = {
   /**
    * Range start (YYYY-MM-DD). Defaults to 30 days ago.
@@ -3759,29 +3183,6 @@ export type GetReportsSpendingFactsParams = {
    */
   to?: string;
 };
-
-export type GetReportsSpendingStoryParams = {
-  /**
-   * Range start (YYYY-MM-DD). Defaults to 30 days ago.
-   */
-  from?: string;
-  /**
-   * Range end (YYYY-MM-DD). Defaults to today.
-   */
-  to?: string;
-  /**
-   * Force a fresh Fable 5 regeneration, bypassing the cache.
-   */
-  refresh?: GetReportsSpendingStoryRefresh;
-};
-
-export type GetReportsSpendingStoryRefresh =
-  (typeof GetReportsSpendingStoryRefresh)[keyof typeof GetReportsSpendingStoryRefresh];
-
-export const GetReportsSpendingStoryRefresh = {
-  true: "true",
-  NUMBER_1: "1",
-} as const;
 
 export type GetReportsBehaviorFactsParams = {
   /**

@@ -14,14 +14,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.98.0",
     "@clerk/express": "^2.1.12",
     "@clerk/shared": "^4.9.0",
     "@workspace/api-zod": "workspace:*",
     "@workspace/avalanche-core": "workspace:*",
     "@workspace/db": "workspace:*",
     "compression": "^1.8.1",
-    "cookie-parser": "^1.4.7",
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
@@ -38,7 +36,6 @@
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",
-    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
