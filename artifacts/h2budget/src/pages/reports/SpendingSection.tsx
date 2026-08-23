@@ -3,7 +3,6 @@ import { CHART_ANIM } from "@/lib/chartAnim";
 import {
   useGetReportsSpendingFacts,
   getGetReportsSpendingFactsQueryKey,
-  getGetReportsAdvisorSummaryQueryKey,
   useUpdateTransaction,
   getListTransactionsQueryKey,
   type Transaction,
@@ -167,9 +166,6 @@ function UncategorizedBanner({
           qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
           qc.invalidateQueries({
             queryKey: getGetReportsSpendingFactsQueryKey(),
-          });
-          qc.invalidateQueries({
-            queryKey: getGetReportsAdvisorSummaryQueryKey({ tab: "spending" }),
           });
           toast({ title: "Recategorized" });
         },

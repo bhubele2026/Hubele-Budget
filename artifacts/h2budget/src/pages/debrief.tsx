@@ -1007,8 +1007,8 @@ function DebriefPageActive({
           <HeroTiles view={view} rangeLabel={rangeLabel} viewMode={viewMode} />
 
           {/* Two-column main grid: the drillable category graphic beside the
-              advisor takeaway, net-trend, and a compact summary — side by
-              side, above the fold. */}
+              net-trend and a compact summary — side by side, above the
+              fold. */}
           <div className="grid gap-4 lg:grid-cols-3">
             {/* LEFT — the centerpiece: forecast vs actual by category. */}
             <div className="lg:col-span-2">

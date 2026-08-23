@@ -695,7 +695,7 @@ export default function AvalanchePage() {
         </CardContent>
       </Card>
 
-      {/* Fable 5 insight — Claude summary + dated avalanche schedule. */}
+      {/* Dated avalanche extra-payment schedule (server-computed). */}
       <AvalancheScheduleCard />
 
       {/* Stat strip — compact data detail beneath the visual hero. */}

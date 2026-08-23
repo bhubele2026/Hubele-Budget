@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Pencil, Sparkles, Loader2 } from "lucide-react";
+import { Pencil, Loader2 } from "lucide-react";
 import {
   usePutMerchantAlias,
   useDeleteMerchantAlias,
-  useSuggestMerchantName,
   getListTransactionsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,10 +21,9 @@ import { useToast } from "@/hooks/use-toast";
 // A small pencil button next to the merchant title opens a popover where the
 // user can rename the merchant. The rename is keyed on the row's stable
 // `merchantSignature`, so it applies to every current AND future transaction
-// that shares the signature. "✨ Suggest" asks the server (Anthropic, with a
-// deterministic fallback) for a clean name; "Reset to bank default" clears the
-// alias. All three mutations invalidate the transactions list so every
-// same-signature row re-renders without a manual reload.
+// that shares the signature. "Reset to bank default" clears the alias. Both
+// mutations invalidate the transactions list so every same-signature row
+// re-renders without a manual reload.
 export interface MerchantRenamePopoverTx {
   id: string;
   description: string;
@@ -39,14 +37,11 @@ export function MerchantRenamePopover({ tx }: { tx: MerchantRenamePopoverTx }) {
   const [open, setOpen] = useState(false);
   const currentName = (tx.displayName || tx.description || "").trim();
   const [value, setValue] = useState(currentName);
-  const [suggestFailed, setSuggestFailed] = useState(false);
 
   const putAlias = usePutMerchantAlias();
   const deleteAlias = useDeleteMerchantAlias();
-  const suggestName = useSuggestMerchantName();
 
-  const busy =
-    putAlias.isPending || deleteAlias.isPending || suggestName.isPending;
+  const busy = putAlias.isPending || deleteAlias.isPending;
   const trimmed = value.trim();
   const canSave = trimmed.length > 0 && trimmed !== currentName && !busy;
 
@@ -58,25 +53,8 @@ export function MerchantRenamePopover({ tx }: { tx: MerchantRenamePopoverTx }) {
   const handleOpenChange = (next: boolean) => {
     if (next) {
       setValue((tx.displayName || tx.description || "").trim());
-      setSuggestFailed(false);
     }
     setOpen(next);
-  };
-
-  const handleSuggest = () => {
-    setSuggestFailed(false);
-    suggestName.mutate(
-      { data: { description: tx.description } },
-      {
-        onSuccess: (res) => {
-          if (res?.suggestion) setValue(res.suggestion);
-          // A deterministic fallback still returns a usable name; only flag
-          // "couldn't suggest" when the server gave us nothing at all.
-          if (!res?.suggestion) setSuggestFailed(true);
-        },
-        onError: () => setSuggestFailed(true),
-      },
-    );
   };
 
   const handleSave = () => {
@@ -176,28 +154,7 @@ export function MerchantRenamePopover({ tx }: { tx: MerchantRenamePopoverTx }) {
             }}
           />
 
-          {suggestFailed && (
-            <p className="text-[11px] text-muted-foreground">
-              Couldn't suggest a name — keep editing.
-            </p>
-          )}
-
-          <div className="flex items-center justify-between gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={handleSuggest}
-              disabled={busy}
-              data-testid={`rename-suggest-${tx.id}`}
-            >
-              {suggestName.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              Suggest
-            </Button>
+          <div className="flex items-center justify-end gap-2">
             <Button
               size="sm"
               onClick={handleSave}

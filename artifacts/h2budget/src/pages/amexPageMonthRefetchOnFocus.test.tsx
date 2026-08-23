@@ -191,11 +191,6 @@ vi.mock("@workspace/api-client-react", async () => {
       mutateAsync: async () => undefined,
       isPending: false,
     }),
-    useSuggestMerchantName: () => ({
-      mutate: () => undefined,
-      mutateAsync: async () => undefined,
-      isPending: false,
-    }),
     customFetch: async () => undefined,
   };
 });

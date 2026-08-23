@@ -333,8 +333,7 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* Faint brand watermark, bottom-right. Non-interactive; sits below the
-          advisor FAB (z-40) so it never blocks it. */}
+      {/* Faint brand watermark, bottom-right. Non-interactive. */}
       <div
         aria-hidden="true"
         className="pointer-events-none fixed bottom-4 right-4 z-0 select-none opacity-[0.05] grayscale"

@@ -29,7 +29,7 @@ export type BucketTxn = {
 /**
  * Positive spend magnitude for an expense; 0 for income/credits.
  * Source-aware, mirroring the SERVER convention exactly (spendingFilter.ts:68,
- * budgetFacts.ts, bankingInsightsSummary.ts): only the manual/workbook `"amex"`
+ * budgetFacts.ts): only the manual/workbook `"amex"`
  * source is stored POSITIVE-for-charges. Plaid-synced cards — including
  * `plaid:amex` — store charges NEGATIVE like the bank, so they go through the
  * bank branch. (Previously this also matched `plaid:amex`, which zeroed every

@@ -31,8 +31,6 @@ import {
   getGetAmexWeeklyPayoffQueryKey,
   getBillsSummary,
   getGetBillsSummaryQueryKey,
-  getBillsInsightsSummary,
-  getGetBillsInsightsSummaryQueryKey,
   listDebts,
   getListDebtsQueryKey,
   listTransactions,
@@ -57,8 +55,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { useDebriefAwaitingCount } from "@/hooks/useDebriefAwaitingCount";
-import { AdvisorChat } from "@/components/advisor-chat";
-import { CommandPalette } from "@/components/command-palette";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavItem = { name: string; href: string; icon: typeof Receipt };
@@ -285,10 +281,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       qc.prefetchQuery({
         queryKey: getGetBillsSummaryQueryKey(),
         queryFn: () => getBillsSummary(),
-      });
-      qc.prefetchQuery({
-        queryKey: getGetBillsInsightsSummaryQueryKey(),
-        queryFn: () => getBillsInsightsSummary(),
       });
     } else if (href === "/forecast/overview" || href === "/forecast") {
       qc.prefetchQuery({
@@ -559,8 +551,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         </main>
       </div>
-      <AdvisorChat />
-      <CommandPalette />
     </div>
   );
 }
