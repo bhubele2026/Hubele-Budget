@@ -315,21 +315,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         queryKey: getListCategoriesQueryKey(),
         queryFn: () => listCategories(),
       });
-    } else if (href === "/reports") {
-      // Reports aggregates a bounded txn window client-side; warm the same key
-      // the landing report reads (useReportsData(30, 0): 95-day floor → today).
-      const today = new Date();
-      const iso = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-          d.getDate(),
-        ).padStart(2, "0")}`;
-      const fetchFrom = new Date(today);
-      fetchFrom.setDate(fetchFrom.getDate() - 95);
-      const params = { from: iso(fetchFrom), to: iso(today), limit: 2000 };
-      qc.prefetchQuery({
-        queryKey: getListTransactionsQueryKey(params),
-        queryFn: () => listTransactions(params),
-      });
     }
   };
 

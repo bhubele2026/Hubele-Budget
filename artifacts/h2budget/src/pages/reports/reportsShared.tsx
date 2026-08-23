@@ -1,19 +1,47 @@
+// The ONE shared module for the Reports family: recharts type-wrappers, the
+// HeroTile/ChartCard visual blocks, tooltip helpers, the balance-tile row,
+// range controls, and the drill-page shell. Data fetching lives in each page —
+// every report page mounts only the hooks for what it actually renders (the
+// old shared-hook fan-out fired 11 network hooks on every sub-page).
 import { useMemo, type ReactNode } from "react";
+import { Link } from "wouter";
 import {
-  useListTransactions,
-  useListCategories,
-  useListDebts,
-  useListDebtBalanceHistory,
-  useGetAvalancheSettings,
-  useGetAvalancheExtra,
-  useListRecurringItems,
-  useGetForecast,
-  useGetForecastCashSignal,
+  ResponsiveContainer,
+  LineChart,
+  Line as LineRaw,
+  AreaChart,
+  Area as AreaRaw,
+  BarChart,
+  Bar as BarRaw,
+  ComposedChart,
+  XAxis as XAxisRaw,
+  YAxis as YAxisRaw,
+  CartesianGrid,
+  Tooltip as TooltipRaw,
+  Legend as LegendRaw,
+  PieChart,
+  Pie as PieRaw,
+  Cell,
+  ReferenceLine as ReferenceLineRaw,
+  type AreaProps,
+  type BarProps,
+  type LegendProps,
+  type LineProps,
+  type PieProps,
+  type ReferenceLineProps,
+  type TooltipProps,
+  type XAxisProps,
+  type YAxisProps,
+} from "recharts";
+import {
   useGetDashboard,
+  useGetForecastCashSignal,
   useListPlaidLiabilityAccounts,
   type ForecastBundle,
 } from "@workspace/api-client-react";
-import { PiggyBank, CreditCard, TrendingDown } from "lucide-react";
+import { ArrowRight, PiggyBank, CreditCard, TrendingDown } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
@@ -26,123 +54,196 @@ import {
   cashBufferStatusMeta,
   type CashSignalStatus,
 } from "@/lib/reportsBalances";
-import { formatCurrency } from "@/lib/utils";
-import { fmtISO } from "@/lib/reportsAnalytics";
+import { useCountUp } from "@/hooks/useCountUp";
+import { formatCurrency, cn } from "@/lib/utils";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 
-export const RANGES = [
-  { value: "30", label: "Last 30 days" },
-  { value: "60", label: "Last 60 days" },
-  { value: "90", label: "Last 90 days" },
-  { value: "180", label: "Last 6 months" },
-  { value: "365", label: "Last 12 months" },
-];
+// Recharts ships these as class components, which TypeScript + React 19's
+// @types/react can no longer accept as JSX element constructors. Re-bind each
+// to a function-component shape that preserves the component's own prop type.
+type FCFromProps<P> = (props: P) => React.ReactElement | null;
+export const Line = LineRaw as unknown as FCFromProps<LineProps>;
+export const Area = AreaRaw as unknown as FCFromProps<AreaProps>;
+export const Bar = BarRaw as unknown as FCFromProps<BarProps>;
+export const XAxis = XAxisRaw as unknown as FCFromProps<XAxisProps>;
+export const YAxis = YAxisRaw as unknown as FCFromProps<YAxisProps>;
+export const Tooltip = TooltipRaw as unknown as FCFromProps<TooltipProps<number, string>>;
+export const Legend = LegendRaw as unknown as FCFromProps<LegendProps>;
+export const Pie = PieRaw as unknown as FCFromProps<PieProps>;
+export const ReferenceLine = ReferenceLineRaw as unknown as FCFromProps<ReferenceLineProps>;
+
+// Recharts primitives that don't need the FC re-bind, re-exported so the
+// report pages can pull their whole chart toolkit from one place.
+export {
+  ResponsiveContainer,
+  LineChart,
+  AreaChart,
+  BarChart,
+  ComposedChart,
+  CartesianGrid,
+  PieChart,
+  Cell,
+};
+
+export function fireMilestoneConfetti() {
+  // Confetti celebration removed by request.
+}
 
 /**
- * Day-span for a Wk/Mo/Yr mode, fed into useReportsData(rangeDays). Weekly-
- * first: "wk" is the default everywhere and resolves to the current Sun–Sat
- * week's span; mo/yr are opt-in.
+ * Day-span for a Wk/Mo/Yr mode, fed into each page's date-window derivation.
+ * Weekly-first: "wk" is the default everywhere and resolves to the current
+ * Sun–Sat week's span; mo/yr are opt-in.
  */
 export function daysForMode(mode: RangeMode): number {
   return rangeDaysOf(rangeForMode(mode));
 }
 
-/**
- * Shared data layer for every Reports drill page. Each routed sub-page calls
- * this with its own range/month state; React Query dedupes the underlying
- * fetches so the five pages share one set of network requests. Lifted
- * verbatim from the old tabbed ReportsPage — no money math changed.
- */
-export function useReportsData(rangeDays: number, monthOffset: number) {
-  const today = useMemo(() => new Date(), []);
+// --- Small visual building blocks -----------------------------------------
 
-  const fromDate = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - rangeDays);
-    return d;
-  }, [today, rangeDays]);
-  const prevFromDate = useMemo(() => {
-    const d = new Date(fromDate);
-    d.setDate(d.getDate() - rangeDays);
-    return d;
-  }, [fromDate, rangeDays]);
-  // (#perf-3) Fetch only the window the page actually aggregates: the selected
-  // range + its previous period (for the compare), with a 95-day floor so the
-  // behavior page's subscription enrichment still has context, capped at the
-  // prior 365-day max so the Yr view is unchanged. The default Wk/Mo views now
-  // pull ~95 days instead of a full year (the old 1.57 MB / limit=5000 fetch).
-  // rangeTxns / prevRangeTxns are byte-identical — same rows, just scoped at the
-  // server instead of filtered from a year client-side.
-  const fetchFromDate = useMemo(() => {
-    const span = Math.min(Math.max(rangeDays * 2 + 7, 95), 365);
-    const d = new Date(today);
-    d.setDate(d.getDate() - span);
-    return d;
-  }, [today, rangeDays]);
-
-  const { data: txns, isLoading: txnsLoading } = useListTransactions({
-    from: fmtISO(fetchFromDate),
-    to: fmtISO(today),
-    limit: 2000,
-  });
-  const { data: categories } = useListCategories();
-  const { data: debts } = useListDebts();
-  const { data: debtBalanceHistory } = useListDebtBalanceHistory();
-  const { data: avSettings } = useGetAvalancheSettings();
-  const { data: avExtra } = useGetAvalancheExtra();
-  const { data: recurringItems } = useListRecurringItems();
-  const { data: forecast } = useGetForecast({ days: 90 });
-
-  const catNameById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const c of categories ?? []) m.set(c.id, c.name);
-    return m;
-  }, [categories]);
-
-  const excludedCategoryIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const c of categories ?? []) {
-      if (c.excludeFromBudget) s.add(c.id);
-    }
-    return s;
-  }, [categories]);
-
-  const rangeTxns = useMemo(() => {
-    if (!txns) return [];
-    const fromIso = fmtISO(fromDate);
-    return txns.filter((t) => t.occurredOn >= fromIso);
-  }, [txns, fromDate]);
-  const prevRangeTxns = useMemo(() => {
-    if (!txns) return [];
-    const prevFromIso = fmtISO(prevFromDate);
-    const fromIso = fmtISO(fromDate);
-    return txns.filter((t) => t.occurredOn >= prevFromIso && t.occurredOn < fromIso);
-  }, [txns, prevFromDate, fromDate]);
-
-  const budgetMonthStart = useMemo(() => {
-    const d = new Date(today.getFullYear(), today.getMonth() - monthOffset, 1);
-    return fmtISO(d);
-  }, [today, monthOffset]);
-
-  return {
-    today,
-    fromDate,
-    txns,
-    txnsLoading,
-    categories,
-    debts,
-    debtBalanceHistory,
-    avSettings,
-    avExtra,
-    recurringItems,
-    forecast,
-    catNameById,
-    excludedCategoryIds,
-    rangeTxns,
-    prevRangeTxns,
-    budgetMonthStart,
-  };
+export function HeroTile({
+  label,
+  value,
+  sub,
+  tone = "default",
+  icon,
+  delta,
+  badge,
+  action,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "default" | "good" | "bad" | "amber";
+  icon?: React.ReactNode;
+  delta?: { pct: number; goodIfUp: boolean } | null;
+  badge?: string;
+  action?: { label: string; href: string };
+  // (#884) Optional hover hint, surfaced via the native title attribute.
+  // Used by the Amex tile to explain why its "current balance" can differ
+  // from the Amex page's projected end-of-month figure.
+  tooltip?: string;
+}) {
+  const toneClass =
+    tone === "good"
+      ? "text-[hsl(var(--positive))]"
+      : tone === "bad"
+        ? "text-[hsl(var(--negative))]"
+        : tone === "amber"
+          ? "text-[hsl(var(--warning))]"
+          : "text-foreground";
+  void icon;
+  // (#wow) Count currency figures up on load; pass non-currency values
+  // (dates, "Not Yet", "∞") through untouched.
+  const numericTarget = useMemo(() => {
+    if (!value.includes("$")) return null;
+    const n = Number(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(n) ? n : null;
+  }, [value]);
+  const counted = useCountUp(numericTarget);
+  const displayValue = numericTarget != null ? formatCurrency(counted) : value;
+  return (
+    <Card className="rounded-lg" title={tooltip}>
+      <CardContent className="p-4">
+        <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+          {label}
+        </div>
+        <div className="mt-1.5 flex items-baseline gap-2 flex-wrap">
+          <div
+            className={cn(
+              "text-[1.9rem] md:text-[2.1rem] font-semibold tracking-[-0.02em] tabular-nums truncate leading-none",
+              toneClass,
+            )}
+          >
+            {displayValue}
+          </div>
+          {badge && (
+            <Badge variant="secondary" className="tabular-nums shrink-0">
+              {badge}
+            </Badge>
+          )}
+        </div>
+        {sub && (
+          <div className="text-xs text-muted-foreground mt-1">{sub}</div>
+        )}
+        {action && (
+          <Link
+            href={action.href}
+            className="text-xs font-medium text-primary hover:underline mt-1 inline-flex items-center gap-1"
+          >
+            {action.label}
+            <ArrowRight className="w-3 h-3" />
+          </Link>
+        )}
+        {delta && Number.isFinite(delta.pct) && (
+          <div
+            className={cn(
+              "text-[11px] mt-1 tabular-nums font-medium",
+              (delta.pct >= 0) === delta.goodIfUp
+                ? "text-[hsl(var(--positive))]"
+                : "text-[hsl(var(--negative))]",
+            )}
+          >
+            {delta.pct >= 0 ? "▲" : "▼"} {Math.abs(delta.pct).toFixed(1)}% vs prev
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
+
+export function ChartCard({
+  title,
+  caption,
+  empty,
+  hideWhenEmpty,
+  children,
+  height = 320,
+}: {
+  title: string;
+  caption?: string;
+  empty?: string | null;
+  hideWhenEmpty?: boolean;
+  children: React.ReactNode;
+  height?: number;
+}) {
+  if (empty && hideWhenEmpty) return null;
+  return (
+    <Card className="rounded-lg">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-display">{title}</CardTitle>
+        {caption && (
+          <p className="text-xs text-muted-foreground">{caption}</p>
+        )}
+      </CardHeader>
+      <CardContent>
+        {empty ? (
+          <div
+            className="flex items-center justify-center text-sm text-muted-foreground"
+            style={{ height }}
+          >
+            {empty}
+          </div>
+        ) : (
+          <div style={{ height }}>{children}</div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function tooltipMoney(v: number | string) {
+  return formatCurrency(v);
+}
+
+export const tooltipStyle = {
+  background: "hsl(var(--card))",
+  border: "1px solid hsl(var(--card-border))",
+  color: "hsl(var(--card-foreground))",
+  borderRadius: 8,
+  fontSize: 12,
+  boxShadow: "var(--shadow-md)",
+};
 
 /** Four at-a-glance balance tiles — the household's live vitals. */
 export function ReportsBalanceTiles({
