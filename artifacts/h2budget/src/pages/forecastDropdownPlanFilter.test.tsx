@@ -31,10 +31,6 @@ vi.mock("@/components/plaid-reauth-banner", () => ({
   PlaidReauthBanner: () => null,
 }));
 
-vi.mock("@/components/avalanche-ready-card", () => ({
-  AvalancheReadyCard: () => null,
-}));
-
 vi.mock("@/components/ui/tabs", () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => (
     <div>{children}</div>

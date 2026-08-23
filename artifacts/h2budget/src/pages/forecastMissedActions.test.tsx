@@ -51,10 +51,6 @@ vi.mock("@/components/plaid-reauth-banner", () => ({
   PlaidReauthBanner: () => null,
 }));
 
-vi.mock("@/components/avalanche-ready-card", () => ({
-  AvalancheReadyCard: () => null,
-}));
-
 vi.mock("@/components/avalanche-schedule-card", () => ({
   AvalancheScheduleCard: () => null,
 }));

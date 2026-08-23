@@ -1,10 +1,8 @@
 import { useMemo } from "react";
-import { ArrowUpCircle, ArrowDownCircle, Repeat, Wallet } from "lucide-react";
+import { ArrowUpCircle, ArrowDownCircle, Repeat } from "lucide-react";
 import {
   useGetBillsSummary,
   getGetBillsSummaryQueryKey,
-  useGetBillsInsightsSummary,
-  getGetBillsInsightsSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeader, RingMeter } from "@/components/stat";
@@ -19,20 +17,12 @@ const num = (v: string | number | null | undefined): number => {
 
 /**
  * Bills → Overview tab. A clean, at-a-glance read on the month's money: income,
- * recurring bills, debt minimums, one-off spend, and where Fable 5 thinks we
- * could save. Every figure is computed server-side (`/bills/summary` +
- * `/bills/insights-summary`); Fable 5 only writes the savings language.
+ * recurring bills, debt minimums, and net. Every figure is computed
+ * server-side (`/bills/summary`).
  */
 export default function BillsOverviewPage() {
   const { data: summary } = useGetBillsSummary(undefined, {
     query: { queryKey: getGetBillsSummaryQueryKey(), staleTime: 5 * 60_000 },
-  });
-  const { data: insight } = useGetBillsInsightsSummary(undefined, {
-    query: {
-      queryKey: getGetBillsInsightsSummaryQueryKey(),
-      staleTime: 10 * 60_000,
-      gcTime: 30 * 60_000,
-    },
   });
 
   const m = summary?.monthly;
@@ -41,7 +31,6 @@ export default function BillsOverviewPage() {
   const debtMin = num(m?.debtMin);
   const outflow = num(m?.totalOutflow);
   const net = num(m?.net);
-  const oneOff = insight?.oneOffTotal ?? 0;
 
   const topBills = useMemo(
     () =>
@@ -61,11 +50,11 @@ export default function BillsOverviewPage() {
       <SectionHeader
         eyebrow="Bills"
         title="Overview"
-        sub="Your month at a glance — income in, bills out, and where to save."
+        sub="Your month at a glance — income in, bills out."
       />
 
       {/* Hero KPIs */}
-      <div className="stagger-children grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="stagger-children grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatTile
           label="Income"
           value={formatCurrency(income)}
@@ -77,12 +66,6 @@ export default function BillsOverviewPage() {
           value={formatCurrency(bills)}
           sub={`+ ${formatCurrency(debtMin)} debt minimums`}
           icon={<Repeat />}
-        />
-        <StatTile
-          label="One-off this month"
-          value={formatCurrency(oneOff)}
-          sub={`${insight?.oneOffCount ?? 0} non-recurring charges`}
-          icon={<Wallet />}
         />
         <StatTile
           label="Net"
@@ -173,7 +156,6 @@ export default function BillsOverviewPage() {
             segments={[
               { label: "Recurring bills", value: bills, color: "hsl(var(--chart-1))" },
               { label: "Debt minimums", value: debtMin, color: "hsl(var(--negative))" },
-              { label: "One-off", value: oneOff, color: "hsl(var(--warning))" },
             ]}
             height={10}
             money

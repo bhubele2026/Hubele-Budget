@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetVersion,
   getGetVersionQueryKey,
@@ -10,21 +11,21 @@ import { RefreshCw } from "lucide-react";
 
 // (#823) New-version reload prompt. The loaded bundle bakes its build
 // identifier (APP_VERSION) at build time; the API serves the identifier
-// of the *currently deployed* build at /api/version. We poll that
-// endpoint on a sensible cadence (and on window focus) and, when the
-// served version no longer matches the one we booted with, surface a
-// small non-intrusive banner inviting the user to reload onto the new
-// bundle.
+// of the *currently deployed* build at /api/version. We check that
+// endpoint on window focus plus once shortly after load (at browser
+// idle) and, when the served version no longer matches the one we
+// booted with, surface a small non-intrusive banner inviting the user
+// to reload onto the new bundle. No background polling — a tab left
+// open just checks again the next time it's focused.
 //
 // Deliberate constraints (see task #823):
 //   * No automatic reload — the user may be mid-input.
 //   * No re-nagging — once shown, the banner stays put until the user
 //     reloads (or navigates fresh, which reloads anyway). We latch the
-//     "outdated" state so a flaky poll that briefly returns the old
+//     "outdated" state so a flaky check that briefly returns the old
 //     value can't make it flicker away.
 //   * Only meaningful in a real deploy. In dev the bundle runs unbuilt
-//     (APP_VERSION === "dev"), so we never poll or prompt there.
-const POLL_INTERVAL_MS = 90_000;
+//     (APP_VERSION === "dev"), so we never check or prompt there.
 
 // Once-per-session latch so a persistent build-id mismatch can never spin in
 // a reload loop — we self-heal a stale bundle exactly once, then fall back to
@@ -45,22 +46,40 @@ export function VersionUpdatePrompt() {
   const enabled = import.meta.env.PROD && APP_VERSION !== "dev";
   const [outdated, setOutdated] = useState(false);
   const [location] = useLocation();
+  const queryClient = useQueryClient();
 
   const { data } = useGetVersion({
     query: {
       queryKey: getGetVersionQueryKey(),
       enabled,
-      // Treat the version as always-stale and poll on a fixed cadence
-      // plus whenever the user tabs back to the app.
+      // Treat the version as always-stale so the focus/idle checks
+      // actually hit the network. No refetchInterval — checks happen on
+      // mount, once at idle after load, and whenever the user tabs back.
       staleTime: 0,
-      refetchInterval: POLL_INTERVAL_MS,
       refetchOnWindowFocus: true,
       refetchOnMount: "always",
       // A transient version-check failure should never bubble up as a
-      // user-facing error — silently retry on the next tick.
+      // user-facing error — silently retry on the next check.
       retry: false,
     },
   });
+
+  // One extra check shortly after load, at browser idle — catches a deploy
+  // that lands right as the tab boots, without any recurring poll.
+  useEffect(() => {
+    if (!enabled) return;
+    const check = () => {
+      void queryClient.invalidateQueries({
+        queryKey: getGetVersionQueryKey(),
+      });
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(check);
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(check, 3_000); // Safari: no requestIdleCallback
+    return () => window.clearTimeout(id);
+  }, [enabled, queryClient]);
 
   useEffect(() => {
     if (!enabled) return;

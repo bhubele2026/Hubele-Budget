@@ -200,7 +200,7 @@ test.describe("Amex bulk action bar (#531)", () => {
     );
 
     await page.getByRole("button", { name: /set category/i }).click();
-    // The popover renders a Command palette; pick our seeded category.
+    // The popover renders a searchable Command list; pick our seeded category.
     await page
       .getByRole("option", { name: catName })
       .first()
