@@ -40,7 +40,7 @@ import { PLAID_REAUTH_ERROR_CODES } from "./plaidReauthCodes";
  * that pairs newly-inserted checking transactions with planned recurring
  * items and inserts `forecast_resolutions` rows with `status='matched'`
  * on the user's behalf. Set to `false` so the workflow overhaul (manual
- * Send-to-Review gate, lingering past-due plans, weekly Debrief) can land
+ * Send-to-Review gate, lingering past-due plans) can land
  * on top of an "every match is an explicit user click" baseline. The
  * underlying matching logic is preserved verbatim behind this gate — a
  * later phase may reintroduce it as an explicit user-toggled "AI auto-

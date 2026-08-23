@@ -209,7 +209,6 @@ const FORECAST_BASE = {
   bankSnapshot: null,
   plaidCheckingAccounts: [],
   settings: { startingBalance: "5000", cashBuffer: "500" },
-  lockedWeeks: [],
 };
 
 // Server-computed cash signal. The page renders these verbatim into the

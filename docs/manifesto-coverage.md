@@ -1,5 +1,10 @@
 > **SUPERSEDED — AI removed 2026-08.** All advisor/AI sections below are
 > historical; the app now contains no AI. Kept for context only.
+>
+> **Weekly Debrief removed 2026-08.** The Debrief feature (pages/debrief.tsx,
+> lib/weeklyDebrief.ts, routes/weeklyDebrief.ts, the /debrief endpoints) no
+> longer exists — rows and sections below that cite those files (M17, M22–M28,
+> M47) describe the app as it was when this audit was written.
 
 # H2 Budget — Manifesto Coverage Audit (Phase 5)
 

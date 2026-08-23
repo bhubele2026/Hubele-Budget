@@ -1,8 +1,7 @@
-// Badge-count endpoints (perf pass): the nav layout used to derive its two
-// badge integers by pulling the full /forecast bundle and the /debrief/weeks
-// N+1 on every route. These tests pin the cheap replacements:
+// Badge-count endpoint (perf pass): the nav layout used to derive its
+// badge integer by pulling the full /forecast bundle on every route.
+// These tests pin the cheap replacement:
 //   GET /forecast/review-count   — unmatched current-month bank txns
-//   GET /debrief/awaiting-count  — awaiting_review weeks from stored rows only
 
 import {
   describe,
@@ -47,10 +46,8 @@ import {
   transactionsTable,
   plaidAccountsTable,
   plaidItemsTable,
-  weeklyDebriefsTable,
 } from "@workspace/db";
 import forecastRouter from "../routes/forecast";
-import weeklyDebriefRouter from "../routes/weeklyDebrief";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
@@ -60,7 +57,6 @@ app.use((req: { log?: unknown }, _res, next) => {
   next();
 });
 app.use(forecastRouter);
-app.use(weeklyDebriefRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -79,11 +75,6 @@ async function cleanup(): Promise<void> {
     .delete(plaidAccountsTable)
     .where(eq(plaidAccountsTable.userId, TEST_USER));
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
-  if (TEST_HOUSEHOLD_ID) {
-    await db
-      .delete(weeklyDebriefsTable)
-      .where(eq(weeklyDebriefsTable.householdId, TEST_HOUSEHOLD_ID));
-  }
 }
 
 beforeAll(async () => {
@@ -218,51 +209,5 @@ describe("GET /forecast/review-count", () => {
     const r = await fetch(`${baseUrl}/forecast/review-count`);
     expect(r.status).toBe(200);
     expect(await r.json()).toEqual({ count: 2 });
-  });
-});
-
-describe("GET /debrief/awaiting-count", () => {
-  it("counts past non-locked weeks in range from stored rows alone", async () => {
-    // Window: last 5 completed weeks + current week. Lock one of them.
-    const now = new Date();
-    const day = now.getDay();
-    const currentSunday = new Date(now);
-    currentSunday.setDate(now.getDate() - day);
-    const fmt = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const weeksAgo = (n: number) => {
-      const d = new Date(currentSunday);
-      d.setDate(d.getDate() - 7 * n);
-      return d;
-    };
-
-    const lockedWs = fmt(weeksAgo(2));
-    const lockedEnd = new Date(weeksAgo(2));
-    lockedEnd.setDate(lockedEnd.getDate() + 6);
-    await db.insert(weeklyDebriefsTable).values({
-      householdId: TEST_HOUSEHOLD_ID,
-      weekStart: lockedWs,
-      weekEnd: fmt(lockedEnd),
-      status: "locked",
-      lockedAt: new Date(),
-    });
-
-    const from = fmt(weeksAgo(5));
-    const to = fmt(currentSunday);
-    const r = await fetch(
-      `${baseUrl}/debrief/awaiting-count?from=${from}&to=${to}`,
-    );
-    expect(r.status).toBe(200);
-    // Weeks -5..-1 are past (5), minus the locked one; the current week is
-    // in_progress. (The 2026-05-03 floor is far behind this window.)
-    expect(await r.json()).toEqual({ count: 4 });
-  });
-
-  it("returns 0 when the window ends before the debrief floor", async () => {
-    const r = await fetch(
-      `${baseUrl}/debrief/awaiting-count?from=2026-01-04&to=2026-02-01`,
-    );
-    expect(r.status).toBe(200);
-    expect(await r.json()).toEqual({ count: 0 });
   });
 });

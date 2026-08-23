@@ -7,7 +7,6 @@ import {
   CreditCard,
   Inbox,
   TrendingUp,
-  CalendarCheck,
   BarChart3,
   PieChart,
   CalendarDays,
@@ -39,8 +38,6 @@ import {
   getGetBudgetMonthQueryKey,
   listCategories,
   getListCategoriesQueryKey,
-  listWeeklyDebriefs,
-  getListWeeklyDebriefsQueryKey,
 } from "@workspace/api-client-react";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { cn } from "@/lib/utils";
@@ -54,7 +51,6 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
-import { useDebriefAwaitingCount } from "@/hooks/useDebriefAwaitingCount";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavItem = { name: string; href: string; icon: typeof Receipt };
@@ -81,7 +77,7 @@ const MORE_NAV: NavItem[] = [
   { name: "Budget", href: "/budget", icon: PieChart },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Debts", href: "/debts", icon: Landmark },
-  // Review + Debrief now live in the Forecast ribbon (FORECAST_SUBNAV), not here.
+  // Review now lives in the Forecast ribbon (FORECAST_SUBNAV), not here.
   { name: "Settings", href: "/settings", icon: SettingsIcon },
 ];
 
@@ -115,14 +111,13 @@ const AVALANCHE_SUBNAV: NavItem[] = [
 ];
 
 // The Forecast area ribbon — Overview (the section landing) · Review · Forecast
-// (the cash-flow curve) · Debrief. Review + Debrief are pulled OUT of "More" and
-// live here as forecast tabs. Same pattern as Banking/Bills/Avalanche: no
-// "More", escape via brand → /home.
+// (the cash-flow curve). Review is pulled OUT of "More" and lives here as a
+// forecast tab. Same pattern as Banking/Bills/Avalanche: no "More", escape via
+// brand → /home.
 const FORECAST_SUBNAV: NavItem[] = [
   { name: "Overview", href: "/forecast/overview", icon: LayoutDashboard },
   { name: "Review", href: "/review", icon: Inbox },
   { name: "Forecast", href: "/forecast", icon: TrendingUp },
-  { name: "Debrief", href: "/debrief", icon: CalendarCheck },
 ];
 
 const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
@@ -221,14 +216,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const inBills = location === "/bills" || location.startsWith("/bills/");
   const inAvalanche =
     location === "/avalanche" || location.startsWith("/avalanche/");
-  // Forecast area = the cash-flow curve + its two moved-in tabs (Review, Debrief).
+  // Forecast area = the cash-flow curve + its moved-in Review tab.
   const inForecast =
     location === "/forecast" ||
     location.startsWith("/forecast/") ||
     location === "/review" ||
-    location.startsWith("/review/") ||
-    location === "/debrief" ||
-    location.startsWith("/debrief/");
+    location.startsWith("/review/");
   const areaNav = inBanking
     ? BANKING_SUBNAV
     : inBills
@@ -251,7 +244,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const moreNav = ALL_NAV.filter((item) => !ribbonHrefs.has(item.href));
   const [mobileOpen, setMobileOpen] = useState(false);
   const reviewCount = useReviewInboxCount();
-  const debriefCount = useDebriefAwaitingCount();
 
   // (#perf-4) Warm a route's primary, stable-key queries on nav hover/focus so
   // the page renders from cache on click. Only routes whose query keys are
@@ -338,19 +330,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         queryKey: getListTransactionsQueryKey(params),
         queryFn: () => listTransactions(params),
       });
-    } else if (href === "/debrief") {
-      const today = new Date();
-      const iso = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-          d.getDate(),
-        ).padStart(2, "0")}`;
-      const from = new Date(today);
-      from.setDate(from.getDate() - 180);
-      const params = { from: iso(from), to: iso(today) };
-      qc.prefetchQuery({
-        queryKey: getListWeeklyDebriefsQueryKey(params),
-        queryFn: () => listWeeklyDebriefs(params),
-      });
     }
   };
 
@@ -376,7 +355,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const railBadge = (href: string): number | null => {
     if (href === "/review" && reviewCount > 0) return reviewCount;
-    if (href === "/debrief" && debriefCount > 0) return debriefCount;
     return null;
   };
 

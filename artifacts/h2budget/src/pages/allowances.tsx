@@ -6,7 +6,6 @@ import {
   useListTransactions,
   useGetSettings,
   useListCategories,
-  useGetWeeklyDebrief,
   useUpdateTransaction,
   useUpdateSettings,
   getListTransactionsQueryKey,
@@ -47,7 +46,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
@@ -439,7 +437,6 @@ function BucketCard({
   onPrevPeriod,
   onNextPeriod,
   canNextPeriod,
-  locked,
 }: {
   name: string;
   actual: number;
@@ -455,7 +452,6 @@ function BucketCard({
   onPrevPeriod?: () => void;
   onNextPeriod?: () => void;
   canNextPeriod?: boolean;
-  locked?: boolean;
 }) {
   const variance = actual - planned;
   const over = variance > 0;
@@ -491,11 +487,6 @@ function BucketCard({
             <div className="min-w-0 text-center leading-tight">
               <div className="flex items-center justify-center gap-1.5 text-xs font-medium tabular-nums">
                 {periodLabel}
-                {locked && (
-                  <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
-                    Locked
-                  </Badge>
-                )}
               </div>
               <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
                 {periodSub}
@@ -867,15 +858,7 @@ export default function AllowancesPage() {
   });
   const txns = txnsQ.data ?? [];
 
-  // (#spec) A locked weekly debrief freezes that week's transactions, so a
-  // live recompute equals the locked snapshot's numbers. We surface a
-  // "Locked" badge when the debrief for this week is locked. Only relevant
-  // in WEEK mode.
   const weekStartISO = fmtISO(weekStart);
-  const debriefQ = useGetWeeklyDebrief(weekStartISO, {
-    query: { enabled: true } as any,
-  });
-  const isLocked = debriefQ.data?.status === "locked";
 
   const catNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -1143,7 +1126,6 @@ export default function AllowancesPage() {
             canNextPeriod={
               b.key === "weekly" ? !weekAtCurrent : !monthAtCurrent
             }
-            locked={b.key === "weekly" ? isLocked : false}
             // The 8-week over/under history exists for the weekly allowance.
             trend={
               b.key === "weekly"

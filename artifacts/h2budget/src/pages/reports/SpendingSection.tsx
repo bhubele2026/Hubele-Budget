@@ -133,8 +133,8 @@ function eachIsoDay(startIso: string, endIso: string): string[] {
 }
 
 // (Phase 2) Warning banner above the tile row. Only renders when there is an
-// uncategorized backlog. The Recategorize button opens the same per-row
-// CategoryPicker popover treatment shipped on /debrief.
+// uncategorized backlog. The Recategorize button opens the shared per-row
+// CategoryPicker popover treatment.
 function UncategorizedBanner({
   facts,
   uncategorizedTxns,

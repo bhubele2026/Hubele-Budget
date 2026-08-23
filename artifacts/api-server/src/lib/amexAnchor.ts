@@ -14,8 +14,7 @@ import {
   type SpendContext,
 } from "./spendingFilter";
 import { cleanMerchant } from "./merchantNameExtract";
-import { weekStartFor, weekEndFor } from "./weeklyDebrief";
-import { parseISO, fmtISO, addDays } from "./cashSignal";
+import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 
 /**
  * Source values that count as Amex when computing the anchor. The legacy

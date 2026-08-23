@@ -52,7 +52,6 @@ import {
   importBudget,
   importAllowances,
   importMappingRules,
-  importDebrief,
   importSettings,
 } from "./lib/routePrefetch";
 
@@ -80,7 +79,6 @@ const BillsOverviewPage = lazy(importBillsOverview);
 const BudgetPage = lazy(importBudget);
 const AllowancesPage = lazy(importAllowances);
 const MappingRulesPage = lazy(importMappingRules);
-const DebriefPage = lazy(importDebrief);
 const SettingsPage = lazy(importSettings);
 const PlaidOAuthPage = lazy(() => import("./pages/plaid-oauth"));
 const DevComponentsPage = lazy(() => import("./pages/dev-components"));
@@ -146,12 +144,12 @@ const FORECAST_CACHE = {
 } as const;
 queryClient.setQueryDefaults(["/api/forecast"], FORECAST_CACHE);
 queryClient.setQueryDefaults(["/api/forecast/cash-signal"], FORECAST_CACHE);
-// Transaction lists powering Chase / Amex / Debrief / Dashboard. These used
+// Transaction lists powering Chase / Amex / Dashboard. These used
 // to be ALWAYS_FRESH (refetch up to 5,000 rows on EVERY page mount) so live
 // Plaid syncs showed without a manual refresh. With background auto-sync now
 // off, transactions only change when the user Syncs or edits — and every one
 // of those paths already invalidates this key explicitly. So cache for a
-// couple of minutes instead: navigating between Chase/Amex/Debrief/Dashboard
+// couple of minutes instead: navigating between Chase/Amex/Dashboard
 // is now instant (served from cache) rather than re-downloading the whole
 // list each time. keepPreviousData (root config) still avoids skeleton flash
 // on the occasional background revalidate.
@@ -164,11 +162,6 @@ queryClient.setQueryDefaults(["/api/transactions"], TXN_CACHE);
 // or a transaction edit, both of which invalidate it. Cache like transactions
 // so its consumers don't re-tally on every nav.
 queryClient.setQueryDefaults(["/api/amex/weekly-payoff"], TXN_CACHE);
-// Weekly-debrief summaries (the list of weeks + per-week detail). Was
-// ALWAYS_FRESH — refetched on EVERY Allowances/Debrief mount (the audit's
-// repeated /debrief/weeks calls). Debrief data only changes when a week is
-// locked/settled (which invalidates the key), so cache like transactions.
-queryClient.setQueryDefaults(["/api/debrief/weeks"], TXN_CACHE);
 
 // (#perf-1) Slow-changing reference data: settings, categories, mapping rules,
 // debts (+ balance history), recurring items, avalanche/forecast settings, and
@@ -303,8 +296,6 @@ function ProtectedShell() {
             <Route path="/review">
               <ForecastPage mode="review" />
             </Route>
-            <Route path="/debrief" component={DebriefPage} />
-            <Route path="/debrief/:week" component={DebriefPage} />
             <Route path="/reports" component={ReportsPage} />
             <Route path="/reports/debt" component={ReportsDebtPage} />
             <Route path="/reports/cashflow" component={ReportsCashFlowPage} />

@@ -7,7 +7,7 @@
 -- hook (#812 / tests #817). That hook ran on EVERY boot and was a footgun:
 -- because new Plaid syncs insert awaiting-match rows with forecast_flag =
 -- true, the hook would silently flip genuinely-new review items out of the
--- Debrief / Review queue on each restart, not just the original backlog.
+-- Review queue on each restart, not just the original backlog.
 -- Per the #706 convention, a one-time risky prod data mutation belongs in
 -- an explicit, parameterized operator script that a human runs once — not
 -- in an unconditional boot hook.

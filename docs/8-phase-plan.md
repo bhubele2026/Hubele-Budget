@@ -69,8 +69,9 @@ Hardening, not rebuilding (most battle-tested area).
 - Build `docs/manifesto-coverage.md`: one row per M1–M50 (implemented? tested?
   file?). Fill every partial point with code + test; flip rows green.
 - Likely fill-ins: M18 (two-weeks-over trash talk), M19 (reimbursables settle),
-  M37/M38 (days-since + streak chips), M28 (debrief shows only open items),
-  M9 (Kill Order = next 3 ranked moves).
+  M37/M38 (days-since + streak chips), M9 (Kill Order = next 3 ranked moves).
+  (M28 was a Debrief item — the Weekly Debrief feature was removed 2026-08,
+  so it is moot.)
 
 ## Phase 6 — UX, accessibility & performance (M5, M31, M35–M36, M43)
 - a11y pass (names, table headers, focus traps); add axe to Playwright.
@@ -96,6 +97,7 @@ one-step unlock (Clerk), web↔phone sync correctness.
 
 ## Throughline (M46–M50)
 Income in → bills + caps reserve what's needed → everything left is avalanche
-ammo → the debrief tells you how much you freed → the avalanche fires it at the
-highest-APR debt → each kill feeds the next → repeat to **$0**. Phases 2–5 make
+ammo → the avalanche fires it at the
+highest-APR debt → each kill feeds the next → repeat to **$0**. (The Weekly
+Debrief step was removed 2026-08.) Phases 2–5 make
 that machine *correct*; 1, 6–8 make it *safe, fast, and everywhere*.
