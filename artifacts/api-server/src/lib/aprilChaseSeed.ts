@@ -137,7 +137,7 @@ type SeedRow = {
 // 3/31) are not a complete reconciliation of the month: the authoritative
 // 4/30 ending balance is the bank snapshot ($3,565.09 — see
 // APRIL_2026_ENDING_BALANCE), which is what the Forecast / Chase pages
-// anchor to. Embedded so we don't depend on attached_assets at runtime.
+// anchor to. Embedded so there is no runtime dependency on external files.
 export const APRIL_2026_CHASE_ROWS: readonly SeedRow[] = [
   { idx: 1, date: "2026-04-01", description: "CAPITAL ONE CRCARDPMT CA0CBEAA436C428 WEB ID: 9541719318", type: "expense", pfc: "LOAN_PAYMENTS", amount: 500.00 },
   { idx: 2, date: "2026-04-01", description: "Venmo", type: "expense", pfc: "TRANSFER_OUT", amount: 16.25 },

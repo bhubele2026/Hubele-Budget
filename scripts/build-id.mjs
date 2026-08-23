@@ -15,7 +15,7 @@
 // alone because an env var exported in one build process does not
 // propagate to the other.
 //
-// Fix: a single repo-root pre-build hook (`.replit` [deployment.build])
+// Fix: a single repo-root pre-build hook (the deploy build command)
 // runs `node scripts/build-id.mjs --write` ONCE before either artifact
 // builds. It resolves one real id (env → git → deploy timestamp; never
 // "dev") and persists it to `.app-build-id` at the repo root. Both
