@@ -1,8 +1,10 @@
+// Concrete module, not the account-page barrel (the barrel drags recharts
+// into the entry graph via BalanceTrendChart — see check-entry-graph.mjs).
 import {
   compareMonth,
   shiftMonth,
   type MonthKey,
-} from "@/components/account-page";
+} from "@/components/account-page/month-navigator";
 
 export type AnchorMonthTxn = {
   occurredOn: string;

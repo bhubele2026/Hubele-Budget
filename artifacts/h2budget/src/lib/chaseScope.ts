@@ -1,8 +1,12 @@
+// Import from the concrete module, NOT the account-page barrel: the barrel
+// re-exports BalanceTrendChart, which statically imports recharts — through
+// a barrel import here the whole 451 KB charts bundle lands in the entry
+// graph (caught by scripts/check-entry-graph.mjs).
 import {
   compareMonth,
   monthKeyFromISO,
   type MonthKey,
-} from "@/components/account-page";
+} from "@/components/account-page/month-navigator";
 
 /**
  * Source values that belong on the Chase Transactions page when no Plaid
