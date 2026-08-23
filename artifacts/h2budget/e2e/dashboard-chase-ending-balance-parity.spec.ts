@@ -40,13 +40,9 @@ import {
  *          net change and so a regression that drops or doubles a
  *          month's rows in either surface would surface as a parity
  *          mismatch.
- *   2. Stub `/api/seed/april-chase` so the on-mount Chase auto-seed
- *      can't insert real April activity into our snapshot account
- *      (would pollute April's net change and any same-period parity
- *      assertion against it).
- *   3. Open `/` (dashboard) and read `text-chase-ending-balance`.
- *   4. Open `/transactions` and read `stat-ending-balance`.
- *   5. Assert the two formatted currency strings match for the
+ *   2. Open `/` (dashboard) and read `text-chase-ending-balance`.
+ *   3. Open `/transactions` and read `stat-ending-balance`.
+ *   4. Assert the two formatted currency strings match for the
  *      current month, then walk one month back on each surface and
  *      re-assert, then walk forward to the month after current and
  *      re-assert. Each transition exercises a different branch of
@@ -255,29 +251,6 @@ test.describe("Dashboard ↔ Chase page — Chase ending balance parity (#477)",
         plaidAccountId: acct.accountId,
       });
     }
-
-    // Suppress the on-mount April 2026 Chase auto-seed — see
-    // `transactions-chase-running-balance.spec.ts` for the same
-    // pattern. We want this user's transaction set to be exactly the
-    // three rows above.
-    await page.route("**/api/seed/april-chase", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          alreadySeeded: true,
-          inserted: 0,
-          skipped: 0,
-          categorized: 0,
-          transfers: 0,
-          rulesAdded: 0,
-          endingBalance: anchorBalance.toFixed(2),
-          syntheticAccount: false,
-          accountId: acct.accountId,
-          snapshotRepaired: false,
-        }),
-      });
-    });
 
     // ---------- Phase 1: current month ----------
     await signInAndOpen(page, email, password, "/");

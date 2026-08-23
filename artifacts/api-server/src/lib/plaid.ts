@@ -109,24 +109,26 @@ export function isAccessTokenForCurrentEnv(
 }
 
 /**
- * (#398) Sentinel access_token written by the April-2026 Chase seed
- * (`aprilChaseSeed.ts`) to anchor the bank-snapshot tile when the user
- * has not yet completed real Plaid OAuth. Synthetic seed rows are not
- * real Plaid connections — they exist only as a foreign-key target
- * for plaid_accounts so the dashboard snapshot has a stable home.
+ * (#398) Sentinel access_token on the synthetic April-2026 Chase row,
+ * which anchors the bank-snapshot tile when the user has not yet
+ * completed real Plaid OAuth. The one-shot seeder that wrote these rows
+ * is gone; the rows (and the id constants in `syntheticSeedIds.ts`)
+ * remain. Synthetic seed rows are not real Plaid connections — they
+ * exist only as a foreign-key target for plaid_accounts so the
+ * dashboard snapshot has a stable home.
  *
  * Combined with `isSyntheticPlaidItem` below, every code path that
- * would otherwise try to call Plaid with this value (sync sweep,
- * /transactions/sync, consent /item/get, daily malformed-token
- * scan) silently skips these rows. They never appear in /plaid/items
+ * would otherwise try to call Plaid with this value (manual sync,
+ * /transactions/sync, consent /item/get, the malformed-token
+ * check) silently skips these rows. They never appear in /plaid/items
  * either, so the reauth banner / "needs reconnecting" chip cannot
  * fire on a row that was never a real connection in the first place.
  */
 export const SYNTHETIC_PLAID_ACCESS_TOKEN_SENTINEL = "synthetic-no-access";
 
 /**
- * Identifies a synthetic seed row (Chase placeholder created by
- * aprilChaseSeed.ts before the user has completed real Plaid OAuth).
+ * Identifies a synthetic seed row (the Chase placeholder that predates
+ * the user completing real Plaid OAuth — see `syntheticSeedIds.ts`).
  * Two independent signals so cleanup of either column alone still
  * classifies the row correctly:
  *   - `itemId` text starts with `seed-` (matches SYNTHETIC_ITEM_ID

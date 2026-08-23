@@ -314,7 +314,7 @@ router.patch(
     }
     // (#479) Detect explicit user intent to set the Transfer flag or pick a
     // category, then derive `isTransferUserOverridden` so future Plaid syncs
-    // / XLSX imports / aprilChaseSeed re-categorize passes won't re-flip the
+    // / XLSX import re-categorize passes won't re-flip the
     // row's `isTransfer` from the description+PFC heuristic. Two triggers:
     //   - body explicitly sets `isTransfer` (true OR false) — the user
     //     toggled the Transfer flag in the Edit dialog or cleared the
@@ -1331,7 +1331,7 @@ router.post(
 void sendTransactionsToReviewBodyTransactionIdsMax;
 
 // (#493) "Reset to auto" — clear the user-overridden flag on a single
-// transaction so the next Plaid sync / XLSX import / aprilChaseSeed pass
+// transaction so the next Plaid sync / XLSX import pass
 // can re-apply the description+PFC auto-Transfer heuristic. Surfaced from
 // the Edit dialog when a row's transfer status was previously toggled
 // manually (and from the mobile transaction detail screen). Does not

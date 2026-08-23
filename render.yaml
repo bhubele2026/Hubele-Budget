@@ -2,11 +2,19 @@
 #
 # ONE always-on Web Service that serves both the built SPA
 # (artifacts/h2budget/dist/public, served by Express — see app.ts) and the
-# /api routes, plus a Render-managed Postgres. Single instance because the
-# in-process node-cron jobs (index.ts) must not double-fire; do NOT switch to
-# autoscale or scale numInstances > 1 without moving those crons to a Render
-# Cron Job first. The billable Plaid auto-sync is hard-disabled in code
-# (AUTO_SYNC_HARD_DISABLED = true) regardless.
+# /api routes, plus a Render-managed Postgres.
+#
+# Single instance because in-process node-cron jobs must not double-fire.
+# That constraint now covers exactly ONE job: the daily plaid_sync_attempts
+# prune at 03:47 UTC (index.ts), which makes no Plaid API calls. Every other
+# scheduled job is gone — the billable Plaid auto-sync (hourly cursor sync,
+# */10 forced refresh, daily consent refresh) was deleted outright rather
+# than left dead behind a kill-switch, and the startup repair sweeps were
+# removed so the server boots straight to listening. Banks now sync ONLY
+# when the owner clicks Sync (POST /plaid/sync).
+#
+# So scaling numInstances > 1 is nearly unblocked: move that single prune to
+# a Render Cron Job first and the constraint disappears entirely.
 #
 # Toolchain mirrors CI (.github/workflows/ci.yml): Node 24, pnpm 10.34.3,
 # the .npmrc strict-dep-builds/verify-deps accommodations, --frozen-lockfile.

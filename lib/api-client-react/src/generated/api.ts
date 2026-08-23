@@ -20,7 +20,6 @@ import type {
   AmexAnchor,
   AmexAnchorInput,
   AmexWeeklyPayoff,
-  AprilChaseSeedResult,
   AvalancheExtra,
   AvalancheSchedule,
   AvalancheSettings,
@@ -716,7 +715,7 @@ export const useDeleteTransaction = <
 
 /**
  * @summary Clear the `isTransferUserOverridden` flag on a single transaction so
-that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+that the next Plaid sync (or XLSX import pass) can
 re-apply the description+PFC auto-Transfer heuristic to it. Used by
 the "Reset to auto" affordance surfaced in the row's Edit dialog
 when the user has previously toggled the Transfer flag manually.
@@ -782,7 +781,7 @@ export type ClearTransferOverrideMutationError = ErrorType<void>;
 
 /**
  * @summary Clear the `isTransferUserOverridden` flag on a single transaction so
-that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+that the next Plaid sync (or XLSX import pass) can
 re-apply the description+PFC auto-Transfer heuristic to it. Used by
 the "Reset to auto" affordance surfaced in the row's Edit dialog
 when the user has previously toggled the Transfer flag manually.
@@ -9241,85 +9240,4 @@ export const useRemoveMember = <
   TContext
 > => {
   return useMutation(getRemoveMemberMutationOptions(options));
-};
-
-/**
- * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
- */
-export const getSeedAprilChaseUrl = () => {
-  return `/api/seed/april-chase`;
-};
-
-export const seedAprilChase = async (
-  options?: RequestInit,
-): Promise<AprilChaseSeedResult> => {
-  return customFetch<AprilChaseSeedResult>(getSeedAprilChaseUrl(), {
-    ...options,
-    method: "POST",
-  });
-};
-
-export const getSeedAprilChaseMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof seedAprilChase>>,
-    TError,
-    void,
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof seedAprilChase>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["seedAprilChase"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof seedAprilChase>>,
-    void
-  > = () => {
-    return seedAprilChase(requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type SeedAprilChaseMutationResult = NonNullable<
-  Awaited<ReturnType<typeof seedAprilChase>>
->;
-
-export type SeedAprilChaseMutationError = ErrorType<unknown>;
-
-/**
- * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
- */
-export const useSeedAprilChase = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof seedAprilChase>>,
-    TError,
-    void,
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof seedAprilChase>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(getSeedAprilChaseMutationOptions(options));
 };

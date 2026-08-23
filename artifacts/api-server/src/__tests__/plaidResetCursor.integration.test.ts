@@ -178,7 +178,7 @@ describe("(#651) POST /plaid/items/:itemId/reset-cursor", () => {
   it("rejects synthetic seed items", async () => {
     const { itemRowId } = await seedItem({
       itemId: `seed-april-2026-chase-${randomUUID()}`,
-      accessToken: "access-sandbox-seed-april-chase",
+      accessToken: "access-sandbox-seed-synthetic-row",
     });
 
     const resp = await fetch(

@@ -120,10 +120,9 @@ test.describe("Chase per-account picker — stale selection self-heal (#316)", (
       })
       .returning();
 
-    // Anchor the bank snapshot at account A using a balance + date that
-    // do NOT match any of seedAprilChase's repair triggers, so the
-    // on-mount seed leaves our snapshot intact and the snapshot account
-    // remains the picker's default fallback.
+    // Anchor the bank snapshot at account A using a deliberately
+    // already-correct balance + date (not a stale legacy value), so the
+    // snapshot account remains the picker's default fallback.
     const today = todayISO();
     await db.insert(forecastSettingsTable).values({
       userId,

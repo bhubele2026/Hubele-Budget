@@ -147,9 +147,8 @@ test.describe("Chase Starting/Ending balance — effective snapshot wiring (#435
       })
       .returning();
 
-    // Anchor the bank snapshot at A. Manual source + balance/date
-    // that don't match seedAprilChase's repair triggers so the
-    // on-mount seed leaves the snapshot intact.
+    // Anchor the bank snapshot at A. Manual source + a deliberately
+    // already-correct balance/date (not a stale legacy value).
     const today = todayISO();
     await db.insert(forecastSettingsTable).values({
       userId,

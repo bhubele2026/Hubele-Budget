@@ -117,8 +117,8 @@ test.describe("Chase Transactions page — no duplicate rows after sync (#459, c
 
     // Pre-populate the bank snapshot so the snapshot-anchored balance
     // tiles render (otherwise the page falls back to the "Unavailable"
-    // placeholder). Using the canonical April-end value sidesteps the
-    // seedAprilChase repair path on first mount.
+    // placeholder). The canonical April-end value is deliberately the
+    // already-correct one, not a stale legacy balance.
     await db.insert(forecastSettingsTable).values({
       userId,
       householdId,
@@ -222,28 +222,6 @@ test.describe("Chase Transactions page — no duplicate rows after sync (#459, c
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(rows),
-      });
-    });
-
-    // Suppress the on-mount April Chase seed — same reason as in
-    // `transactions-chase-month-tiles.spec.ts`: it would otherwise
-    // insert ~95 real April rows into our snapshot account.
-    await page.route("**/api/seed/april-chase", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          alreadySeeded: true,
-          inserted: 0,
-          skipped: 0,
-          categorized: 0,
-          transfers: 0,
-          rulesAdded: 0,
-          endingBalance: "3565.09",
-          syntheticAccount: false,
-          accountId: acct.accountId,
-          snapshotRepaired: false,
-        }),
       });
     });
 

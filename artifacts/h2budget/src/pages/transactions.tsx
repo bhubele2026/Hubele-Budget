@@ -10,7 +10,6 @@ import {
   useListMappingRules,
   useGetForecast,
   useRefreshForecastBank,
-  useSeedAprilChase,
   useBulkSetForecastFlag,
   useSendTransactionsToReview,
   useUnsendTransactionsFromReview,
@@ -209,48 +208,9 @@ export default function TransactionsPage() {
     fromDate: todayISO,
   });
   const refreshBank = useRefreshForecastBank();
-  const seedAprilChase = useSeedAprilChase();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
-
-  // One-shot seed of the user's April 2026 Chase activity. Idempotent on the
-  // server (skips rows whose plaid_transaction_id already exists), so it's
-  // safe to fire on every initial mount.
-  const seededRef = useRef(false);
-  useEffect(() => {
-    if (seededRef.current) return;
-    if (isLoading) return;
-    seededRef.current = true;
-    seedAprilChase.mutate(undefined, {
-      onSuccess: (res) => {
-        if (res.inserted > 0 || res.rulesAdded > 0) {
-          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
-          queryClient.invalidateQueries({
-            queryKey: getGetBudgetMonthQueryKey("2026-04-01"),
-          });
-          if (res.inserted > 0) {
-            toast({
-              title: `Loaded ${res.inserted} April Chase transactions`,
-              description: `Ending balance ${formatCurrency(res.endingBalance)}`,
-            });
-          }
-        } else if (res.snapshotRepaired) {
-          // Snapshot was rewritten from the legacy ending balance to the
-          // corrected one — refresh the forecast bundle so the cached UI
-          // picks up the new bank snapshot value.
-          queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
-        }
-      },
-      onError: (e) => {
-        // Non-fatal — page still renders whatever the user already has.
-        // eslint-disable-next-line no-console
-        console.warn("April Chase seed failed:", (e as Error).message);
-      },
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading]);
 
   const bankSnapshot = forecastData?.bankSnapshot ?? null;
   const accountSnapshots = forecastData?.accountSnapshots ?? {};

@@ -17,9 +17,6 @@
  *   - The dashboard's defensive bucket predicate
  *     (`isTxnInBucket` in `dashboard.tsx`) no longer hides rows whose
  *     description "looks like" a transfer.
- *   - The startup card-payment reclassify sweep
- *     (`runStartupCardPaymentReclassify`) walks empty pattern lists,
- *     short-circuits, and is a no-op on every boot.
  *   - The Unplanned-bucket write guards in `routes/transactions.ts`
  *     never reject a user's tag attempt.
  *

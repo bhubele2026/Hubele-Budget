@@ -102,9 +102,9 @@ test.describe("Chase month tiles — May 2026 totals (#447, covers #443)", () =>
       .returning();
 
     // Anchor the bank snapshot at end-of-April 2026 with the
-    // canonical $3,565.09 ending balance from #443. Using the
-    // already-correct value sidesteps the seedAprilChase repair path
-    // (which would otherwise rewrite balance/source/at on us).
+    // canonical $3,565.09 ending balance from #443. That value is
+    // deliberately the already-correct one (not a stale legacy
+    // balance), so the tiles render the number under test as-is.
     await db.insert(forecastSettingsTable).values({
       userId,
       householdId,
@@ -233,31 +233,6 @@ test.describe("Chase month tiles — May 2026 totals (#447, covers #443)", () =>
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(rows),
-      });
-    });
-
-    // Suppress the on-mount April 2026 Chase seed. The page fires
-    // `useSeedAprilChase` on every initial load, which would happily
-    // insert ~95 real April rows into our snapshot account. The
-    // listTransactions mock above already shields the page from that
-    // pollution, but stubbing the seed too keeps the test a no-op
-    // against the seed's repair logic.
-    await page.route("**/api/seed/april-chase", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          alreadySeeded: true,
-          inserted: 0,
-          skipped: 0,
-          categorized: 0,
-          transfers: 0,
-          rulesAdded: 0,
-          endingBalance: "3565.09",
-          syntheticAccount: false,
-          accountId: acct.accountId,
-          snapshotRepaired: false,
-        }),
       });
     });
 

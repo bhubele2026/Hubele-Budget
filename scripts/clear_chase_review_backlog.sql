@@ -3,7 +3,7 @@
 -- genuinely-stuck, already-occurred, non-terminally-resolved plaid:chase
 -- rows on one specific Chase checking account.
 --
--- This REPLACES the retired `runStartupChaseReviewBacklogClear` startup
+-- This REPLACES a long-retired Chase review-backlog startup
 -- hook (#812 / tests #817). That hook ran on EVERY boot and was a footgun:
 -- because new Plaid syncs insert awaiting-match rows with forecast_flag =
 -- true, the hook would silently flip genuinely-new review items out of the

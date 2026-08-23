@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 const TEST_USER = `synthetic-seed-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
 // (#398) Synthetic seed rows (the April-2026 Chase placeholder created
-// by aprilChaseSeed.ts before the user has completed real Plaid OAuth)
+// before the user has completed real Plaid OAuth — see syntheticSeedIds.ts)
 // must never reach Plaid and must never be flagged as malformed by the
 // daily backfill / sweep — they are not a real connection. Mock every
 // Plaid product call this codepath could touch with a spy that THROWS;
@@ -123,7 +123,7 @@ describe("(#398) synthetic seed plaid_items rows are inert", () => {
     // (#398) The classifier keys off the `seed-` PREFIX, not the exact
     // SYNTHETIC_ITEM_ID literal. plaid_items.item_id has a global
     // UNIQUE constraint, so a literal "seed-april-2026-chase" here
-    // collides with the real aprilChaseSeed row whenever any sibling
+    // collides with the real synthetic seed row whenever any sibling
     // suite (or a prior failed run) has already inserted it. Use a
     // unique seed-* itemId so the assertion still exercises the
     // prefix-only branch without depending on cross-suite cleanup.

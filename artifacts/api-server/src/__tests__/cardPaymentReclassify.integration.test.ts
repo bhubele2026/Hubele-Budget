@@ -22,7 +22,6 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { syncPlaidItem } from "../lib/plaidSync";
-import { runStartupCardPaymentReclassify } from "../lib/startupCardPaymentReclassify";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
 async function deleteAllForUser(): Promise<void> {
@@ -53,61 +52,16 @@ async function readRow(id: string) {
 }
 
 // (#666) Auto-detection of transfers and card payments is disabled.
-// The startup reclassify sweep is a no-op, and Plaid sync no longer
-// flips `isTransfer` on bland-description / LOAN_PAYMENTS rows. The
-// user is in full manual control: only explicitly assigning a row to
-// the system "Transfer" category sets `isTransfer=true`.
+// Plaid sync no longer flips `isTransfer` on bland-description /
+// LOAN_PAYMENTS rows. The user is in full manual control: only
+// explicitly assigning a row to the system "Transfer" category sets
+// `isTransfer=true`.
+//
+// The two startup-sweep cases that used to live here were deleted with
+// the boot sweep itself, which had been a structural no-op since #666
+// emptied TRANSFER_DESC_PATTERNS and TRANSFER_PFC_PRIMARY. The live
+// Plaid-sync path below is the coverage that still matters.
 describe("(#666) Card-payment auto-classification is disabled", () => {
-  it("startup sweep does NOT flip card-payment-pattern rows to isTransfer", async () => {
-    const [cardPayment] = await db
-      .insert(transactionsTable)
-      .values({
-        userId: TEST_USER,
-        householdId: TEST_HOUSEHOLD_ID,
-        occurredOn: "2026-04-15",
-        description: "ONLINE PAYMENT - THANK YOU",
-        amount: "-1234.56",
-        isTransfer: false,
-        monthlyAllowance: true,
-        source: "manual",
-      })
-      .returning();
-
-    const summary = await runStartupCardPaymentReclassify();
-    expect(summary.reclassified).toBe(0);
-
-    const after = await readRow(cardPayment!.id);
-    expect(after.isTransfer).toBe(false);
-    expect(after.monthlyAllowance).toBe(true);
-  });
-
-  it("startup sweep does NOT flip rows whose Plaid PFC primary is LOAN_PAYMENTS", async () => {
-    const [pfcCardPayment] = await db
-      .insert(transactionsTable)
-      .values({
-        userId: TEST_USER,
-        householdId: TEST_HOUSEHOLD_ID,
-        occurredOn: "2026-04-25",
-        description: "ACH WEB PAYMENT 12345",
-        amount: "-300.00",
-        isTransfer: false,
-        monthlyAllowance: true,
-        source: "plaid:card",
-        plaidTransactionId: `t-${randomUUID()}`,
-        plaidAccountId: "acct-cc-2",
-        pfcPrimary: "LOAN_PAYMENTS",
-        pfcDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
-      })
-      .returning();
-
-    const summary = await runStartupCardPaymentReclassify();
-    expect(summary.reclassified).toBe(0);
-
-    const after = await readRow(pfcCardPayment!.id);
-    expect(after.isTransfer).toBe(false);
-    expect(after.monthlyAllowance).toBe(true);
-  });
-
   it("Plaid sync upsert does NOT flip pre-existing rows to transfer when modified row carries LOAN_PAYMENTS PFC", async () => {
     const plaidTxnId = `t-${randomUUID()}`;
     const [row] = await db

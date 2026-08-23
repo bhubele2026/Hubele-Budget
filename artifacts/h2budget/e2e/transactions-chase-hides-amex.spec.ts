@@ -196,27 +196,6 @@ test.describe("Chase Transactions page — Amex/debt rows stay off the page when
       });
     });
 
-    // Suppress the on-mount April Chase seed so it can't insert real
-    // April rows that would muddy the May totals under test.
-    await page.route("**/api/seed/april-chase", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          alreadySeeded: true,
-          inserted: 0,
-          skipped: 0,
-          categorized: 0,
-          transfers: 0,
-          rulesAdded: 0,
-          endingBalance: "0.00",
-          syntheticAccount: false,
-          accountId: null,
-          snapshotRepaired: false,
-        }),
-      });
-    });
-
     await signInAndOpen(
       page,
       email,

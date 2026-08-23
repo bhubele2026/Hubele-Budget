@@ -9,7 +9,7 @@ import {
   plaidItemsTable,
   transactionsTable,
 } from "@workspace/db";
-import { SYNTHETIC_ACCOUNT_ID } from "./aprilChaseSeed";
+import { SYNTHETIC_ACCOUNT_ID } from "./syntheticSeedIds";
 import { dedupeTransactionsForAccount } from "./dedupeTransactions";
 
 export type DedupeReport = {

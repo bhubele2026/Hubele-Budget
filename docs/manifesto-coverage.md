@@ -42,7 +42,7 @@ relative to the repo root.
 | M17 | weekly cap burndown → avalanche fuel | ✅ | yes | `artifacts/api-server/src/lib/weeklyDebrief.ts`, `artifacts/api-server/src/routes/weeklySettlements.ts`, `artifacts/api-server/src/routes/avalanche.ts` |
 | M18 | trash-talk when allowance blown 2 weeks straight | ✅ | yes | `artifacts/h2budget/src/pages/allowances.tsx` (`roastForStreak`), `artifacts/h2budget/src/lib/weeklyStreak.ts` |
 | M19 | reimbursables tagged + path to settle | ✅ | yes | `artifacts/h2budget/src/pages/dashboard.tsx` (`ReimbursementsBox`), `artifacts/h2budget/src/pages/reimbursements-box.test.tsx` |
-| M20 | transfers/card-payments excluded from spending | ✅ | yes | `artifacts/api-server/src/lib/spendingFilter.ts`, `startupCardPaymentReclassify.ts`, `artifacts/api-server/src/__tests__/cardPaymentReclassify.integration.test.ts` |
+| M20 | transfers/card-payments excluded from spending | ✅ | yes | `artifacts/api-server/src/lib/spendingFilter.ts`, `artifacts/api-server/src/__tests__/cardPaymentReclassify.integration.test.ts` |
 | M21 | review inbox surfaces only what needs attention | ✅ | yes | `artifacts/h2budget/src/hooks/useReviewInboxCount.ts`, `artifacts/h2budget/src/hooks/useReviewInboxCount.test.tsx` |
 | M22 | weekly debrief planned-vs-actual | ✅ | yes | `artifacts/api-server/src/lib/weeklyDebrief.ts`, `artifacts/api-server/src/__tests__/weeklyDebrief.integration.test.ts` |
 | M23 | top-line income/expenses/net | ✅ | yes | `artifacts/api-server/src/lib/weeklyDebrief.ts` (`totals`/`netSummary`), `artifacts/h2budget/src/pages/debrief.tsx` |
