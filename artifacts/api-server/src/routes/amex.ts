@@ -10,8 +10,6 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { AMEX_TXN_SOURCES, computeWeeklyPayoff } from "../lib/amexAnchor";
-import { generateAmexPayoffDirective } from "../lib/amexPayoffSummary";
-import { voiceFallback } from "../lib/advisorVoice";
 import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
 
 const router: IRouter = Router();
@@ -559,40 +557,21 @@ router.delete("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
 
 /**
  * (#weekly-payoff) Per-card weekly payoff — what to pay, per physical Amex
- * card (Blue/Silver/Gold), for one Sun–Sat week. Read-only.
+ * card (Blue/Silver/Gold), for one Sun–Sat week. Read-only, fully
+ * deterministic (all numbers computed in code).
  *
  * `?weekStart=YYYY-MM-DD` selects the week (defaults to the last fully
- * completed Sun–Sat week). The sassy `directive` defaults to the FREE,
- * deterministic in-voice line (no LLM, no cost — important given this
- * household's Plaid-bill history); pass `?ai=true` to upgrade it to a live
- * Claude-written directive. The client requests AI sparingly (once on mount,
- * React-Query cached) so the home page never bills per render.
+ * completed Sun–Sat week).
  */
 router.get("/amex/weekly-payoff", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;
   const weekStartRaw = req.query.weekStart;
   const weekStart =
     typeof weekStartRaw === "string" && weekStartRaw.length > 0 ? weekStartRaw : undefined;
-  const wantAi = req.query.ai === "true";
 
   const payoff = await computeWeeklyPayoff(householdId, weekStart, req.householdOwnerId);
 
-  let directive: string;
-  let directiveSource: "ai" | "fallback";
-  if (wantAi) {
-    const gen = await generateAmexPayoffDirective(payoff);
-    directive = gen.directive;
-    directiveSource = gen.source;
-  } else {
-    directive = voiceFallback("amexPayoff", {
-      cards: payoff.cards.map((c) => ({ brand: c.brand, weekCharges: c.weekCharges })),
-      combinedWeekCharges: payoff.combinedWeekCharges,
-      weekStart: payoff.weekStart,
-    });
-    directiveSource = "fallback";
-  }
-
-  res.json({ ...payoff, directive, directiveSource });
+  res.json(payoff);
 });
 
 export default router;

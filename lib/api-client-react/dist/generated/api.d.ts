@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankSnapshot, BankingInsightsSummary, BehaviorFacts, BillsInsightsSummary, BillsSummary, BudgetFacts, BudgetHealthResponse, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastInsightsSummary, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBankingInsightsSummaryParams, GetBillsInsightsSummaryParams, GetBillsSummaryParams, GetDebriefAwaitingCountParams, GetForecastAvalancheScheduleParams, GetForecastCashSignalParams, GetForecastInsightsSummaryParams, GetForecastParams, GetReportsAdvisorSummaryParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, GetReportsSpendingStoryParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RecurringReviewSummary, RecurringReviewSummaryInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReportsAdvisorSummary, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, SpendingStory, SuggestMerchantNameInput, SuggestMerchantNameResult, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetDebriefAwaitingCountParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -314,41 +314,6 @@ export declare const useDeleteMerchantAlias: <TError = ErrorType<unknown>, TCont
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof deleteMerchantAlias>>, TError, {
     params: DeleteMerchantAliasParams;
-}, TContext>;
-/**
- * @summary (#888) Suggest a clean, human-friendly merchant name for a raw bank
-`description` using Anthropic. Read-only — does NOT persist an alias.
-Always returns a usable suggestion: on any AI error/timeout it falls
-back to the deterministic cleanMerchant label (`source: "fallback"`).
-
- */
-export declare const getSuggestMerchantNameUrl: () => string;
-export declare const suggestMerchantName: (suggestMerchantNameInput: SuggestMerchantNameInput, options?: RequestInit) => Promise<SuggestMerchantNameResult>;
-export declare const getSuggestMerchantNameMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof suggestMerchantName>>, TError, {
-        data: BodyType<SuggestMerchantNameInput>;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationOptions<Awaited<ReturnType<typeof suggestMerchantName>>, TError, {
-    data: BodyType<SuggestMerchantNameInput>;
-}, TContext>;
-export type SuggestMerchantNameMutationResult = NonNullable<Awaited<ReturnType<typeof suggestMerchantName>>>;
-export type SuggestMerchantNameMutationBody = BodyType<SuggestMerchantNameInput>;
-export type SuggestMerchantNameMutationError = ErrorType<unknown>;
-/**
- * @summary (#888) Suggest a clean, human-friendly merchant name for a raw bank
-`description` using Anthropic. Read-only — does NOT persist an alias.
-Always returns a usable suggestion: on any AI error/timeout it falls
-back to the deterministic cleanMerchant label (`source: "fallback"`).
-
- */
-export declare const useSuggestMerchantName: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof suggestMerchantName>>, TError, {
-        data: BodyType<SuggestMerchantNameInput>;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationResult<Awaited<ReturnType<typeof suggestMerchantName>>, TError, {
-    data: BodyType<SuggestMerchantNameInput>;
 }, TContext>;
 /**
  * @summary Bulk clear the categoryId on a list of transactions, scoped by an
@@ -1648,16 +1613,14 @@ export declare function useGetForecastCashSignal<TData = Awaited<ReturnType<type
 /**
  * Returns a deterministic schedule of avalanche extra payments
 across the next ~12 months (one per safe paycheck-to-paycheck
-window) plus a Claude-written narrative. The narrative is cached
-on a hash of the deterministic facts; pass `refresh=true` to force
-a fresh regeneration.
+window). Every date and amount is computed server-side in code.
 
- * @summary AI-driven multi-date avalanche extra-payment schedule
+ * @summary Deterministic multi-date avalanche extra-payment schedule
  */
-export declare const getGetForecastAvalancheScheduleUrl: (params?: GetForecastAvalancheScheduleParams) => string;
-export declare const getForecastAvalancheSchedule: (params?: GetForecastAvalancheScheduleParams, options?: RequestInit) => Promise<AvalancheSchedule>;
-export declare const getGetForecastAvalancheScheduleQueryKey: (params?: GetForecastAvalancheScheduleParams) => readonly ["/api/forecast/avalanche-schedule", ...GetForecastAvalancheScheduleParams[]];
-export declare const getGetForecastAvalancheScheduleQueryOptions: <TData = Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError = ErrorType<unknown>>(params?: GetForecastAvalancheScheduleParams, options?: {
+export declare const getGetForecastAvalancheScheduleUrl: () => string;
+export declare const getForecastAvalancheSchedule: (options?: RequestInit) => Promise<AvalancheSchedule>;
+export declare const getGetForecastAvalancheScheduleQueryKey: () => readonly ["/api/forecast/avalanche-schedule"];
+export declare const getGetForecastAvalancheScheduleQueryOptions: <TData = Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError = ErrorType<unknown>>(options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseQueryOptions<Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError, TData> & {
@@ -1666,129 +1629,10 @@ export declare const getGetForecastAvalancheScheduleQueryOptions: <TData = Await
 export type GetForecastAvalancheScheduleQueryResult = NonNullable<Awaited<ReturnType<typeof getForecastAvalancheSchedule>>>;
 export type GetForecastAvalancheScheduleQueryError = ErrorType<unknown>;
 /**
- * @summary AI-driven multi-date avalanche extra-payment schedule
+ * @summary Deterministic multi-date avalanche extra-payment schedule
  */
-export declare function useGetForecastAvalancheSchedule<TData = Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError = ErrorType<unknown>>(params?: GetForecastAvalancheScheduleParams, options?: {
+export declare function useGetForecastAvalancheSchedule<TData = Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError = ErrorType<unknown>>(options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-};
-/**
- * Returns a short Claude-written narrative (headline + bullets) for
-one Reports tab, grounded in deterministic facts computed from the
-household's data. The narrative is cached per tab on a hash of the
-facts; pass `refresh=true` to force a fresh regeneration.
-
- * @summary Per-tab Claude narrative for the Reports page
- */
-export declare const getGetReportsAdvisorSummaryUrl: (params: GetReportsAdvisorSummaryParams) => string;
-export declare const getReportsAdvisorSummary: (params: GetReportsAdvisorSummaryParams, options?: RequestInit) => Promise<ReportsAdvisorSummary>;
-export declare const getGetReportsAdvisorSummaryQueryKey: (params?: GetReportsAdvisorSummaryParams) => readonly ["/api/reports/advisor-summary", ...GetReportsAdvisorSummaryParams[]];
-export declare const getGetReportsAdvisorSummaryQueryOptions: <TData = Awaited<ReturnType<typeof getReportsAdvisorSummary>>, TError = ErrorType<unknown>>(params: GetReportsAdvisorSummaryParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getReportsAdvisorSummary>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseQueryOptions<Awaited<ReturnType<typeof getReportsAdvisorSummary>>, TError, TData> & {
-    queryKey: QueryKey;
-};
-export type GetReportsAdvisorSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getReportsAdvisorSummary>>>;
-export type GetReportsAdvisorSummaryQueryError = ErrorType<unknown>;
-/**
- * @summary Per-tab Claude narrative for the Reports page
- */
-export declare function useGetReportsAdvisorSummary<TData = Awaited<ReturnType<typeof getReportsAdvisorSummary>>, TError = ErrorType<unknown>>(params: GetReportsAdvisorSummaryParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getReportsAdvisorSummary>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-};
-/**
- * Returns the four reworked, MERCHANT-LEVEL Banking buckets — spending
-less, creeping up, recurring to cut (true subscriptions only), and new
-or unusual — each with a Claude-written headline + one-liner AND the
-ranked merchant rows behind it. Every dollar, count, and run-rate is
-computed server-side in code (merchants grouped by a stable signature,
-noise filtered out); the model only classifies merchants and writes the
-language. Cached per household on a hash of the facts; pass
-`refresh=true` to force a fresh regeneration.
-
- * @summary Merchant-level insights + captions for the four Banking buckets
- */
-export declare const getGetBankingInsightsSummaryUrl: (params?: GetBankingInsightsSummaryParams) => string;
-export declare const getBankingInsightsSummary: (params?: GetBankingInsightsSummaryParams, options?: RequestInit) => Promise<BankingInsightsSummary>;
-export declare const getGetBankingInsightsSummaryQueryKey: (params?: GetBankingInsightsSummaryParams) => readonly ["/api/banking/insights-summary", ...GetBankingInsightsSummaryParams[]];
-export declare const getGetBankingInsightsSummaryQueryOptions: <TData = Awaited<ReturnType<typeof getBankingInsightsSummary>>, TError = ErrorType<unknown>>(params?: GetBankingInsightsSummaryParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingInsightsSummary>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseQueryOptions<Awaited<ReturnType<typeof getBankingInsightsSummary>>, TError, TData> & {
-    queryKey: QueryKey;
-};
-export type GetBankingInsightsSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getBankingInsightsSummary>>>;
-export type GetBankingInsightsSummaryQueryError = ErrorType<unknown>;
-/**
- * @summary Merchant-level insights + captions for the four Banking buckets
- */
-export declare function useGetBankingInsightsSummary<TData = Awaited<ReturnType<typeof getBankingInsightsSummary>>, TError = ErrorType<unknown>>(params?: GetBankingInsightsSummaryParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getBankingInsightsSummary>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-};
-/**
- * Returns a short Fable 5 read on the household's monthly bills — a
-headline plus 2–4 concrete savings suggestions, each tied to a real
-bill. Every dollar is computed server-side (recurring items expanded,
-debt minimums, one-off spend); the model only writes language. Cached
-per household + month on a hash of the facts; `refresh=true` forces a
-fresh regeneration.
-
- * @summary Fable 5 savings analysis for the Bills page
- */
-export declare const getGetBillsInsightsSummaryUrl: (params?: GetBillsInsightsSummaryParams) => string;
-export declare const getBillsInsightsSummary: (params?: GetBillsInsightsSummaryParams, options?: RequestInit) => Promise<BillsInsightsSummary>;
-export declare const getGetBillsInsightsSummaryQueryKey: (params?: GetBillsInsightsSummaryParams) => readonly ["/api/bills/insights-summary", ...GetBillsInsightsSummaryParams[]];
-export declare const getGetBillsInsightsSummaryQueryOptions: <TData = Awaited<ReturnType<typeof getBillsInsightsSummary>>, TError = ErrorType<unknown>>(params?: GetBillsInsightsSummaryParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getBillsInsightsSummary>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseQueryOptions<Awaited<ReturnType<typeof getBillsInsightsSummary>>, TError, TData> & {
-    queryKey: QueryKey;
-};
-export type GetBillsInsightsSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getBillsInsightsSummary>>>;
-export type GetBillsInsightsSummaryQueryError = ErrorType<unknown>;
-/**
- * @summary Fable 5 savings analysis for the Bills page
- */
-export declare function useGetBillsInsightsSummary<TData = Awaited<ReturnType<typeof getBillsInsightsSummary>>, TError = ErrorType<unknown>>(params?: GetBillsInsightsSummaryParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getBillsInsightsSummary>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-};
-/**
- * Returns a short Fable 5 read on the household's cash-flow forecast — a
-headline plus 2–4 bullets on the projected low point, runway, and risk
-ahead. Every number is computed server-side (computeCashSignal + runway);
-the model only writes language. Cached per household on a hash of the
-facts; `refresh=true` forces a fresh regeneration.
-
- * @summary Fable 5 cash-flow read for the Forecast area
- */
-export declare const getGetForecastInsightsSummaryUrl: (params?: GetForecastInsightsSummaryParams) => string;
-export declare const getForecastInsightsSummary: (params?: GetForecastInsightsSummaryParams, options?: RequestInit) => Promise<ForecastInsightsSummary>;
-export declare const getGetForecastInsightsSummaryQueryKey: (params?: GetForecastInsightsSummaryParams) => readonly ["/api/forecast/insights-summary", ...GetForecastInsightsSummaryParams[]];
-export declare const getGetForecastInsightsSummaryQueryOptions: <TData = Awaited<ReturnType<typeof getForecastInsightsSummary>>, TError = ErrorType<unknown>>(params?: GetForecastInsightsSummaryParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastInsightsSummary>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseQueryOptions<Awaited<ReturnType<typeof getForecastInsightsSummary>>, TError, TData> & {
-    queryKey: QueryKey;
-};
-export type GetForecastInsightsSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getForecastInsightsSummary>>>;
-export type GetForecastInsightsSummaryQueryError = ErrorType<unknown>;
-/**
- * @summary Fable 5 cash-flow read for the Forecast area
- */
-export declare function useGetForecastInsightsSummary<TData = Awaited<ReturnType<typeof getForecastInsightsSummary>>, TError = ErrorType<unknown>>(params?: GetForecastInsightsSummaryParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastInsightsSummary>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -1822,70 +1666,6 @@ export declare function useGetReportsSpendingFacts<TData = Awaited<ReturnType<ty
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
-/**
- * Returns a short Fable 5 read of household spending (Amex + Chase
-combined) across four lenses — trend, category mix, top merchants, and
-day-of-week — each a headline plus 2–3 bullets. Every number is computed
-server-side via buildSpendingFacts; the model only writes language. Backs
-the click-to-expand analysis on the Overview spending graphics. `from`/`to`
-are optional (default last 30 days). Cached per household on a hash of the
-facts; `refresh=true` forces a fresh regeneration.
-
- * @summary Fable 5 read of the household's spending, told in four lenses
- */
-export declare const getGetReportsSpendingStoryUrl: (params?: GetReportsSpendingStoryParams) => string;
-export declare const getReportsSpendingStory: (params?: GetReportsSpendingStoryParams, options?: RequestInit) => Promise<SpendingStory>;
-export declare const getGetReportsSpendingStoryQueryKey: (params?: GetReportsSpendingStoryParams) => readonly ["/api/reports/spending-story", ...GetReportsSpendingStoryParams[]];
-export declare const getGetReportsSpendingStoryQueryOptions: <TData = Awaited<ReturnType<typeof getReportsSpendingStory>>, TError = ErrorType<unknown>>(params?: GetReportsSpendingStoryParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getReportsSpendingStory>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseQueryOptions<Awaited<ReturnType<typeof getReportsSpendingStory>>, TError, TData> & {
-    queryKey: QueryKey;
-};
-export type GetReportsSpendingStoryQueryResult = NonNullable<Awaited<ReturnType<typeof getReportsSpendingStory>>>;
-export type GetReportsSpendingStoryQueryError = ErrorType<unknown>;
-/**
- * @summary Fable 5 read of the household's spending, told in four lenses
- */
-export declare function useGetReportsSpendingStory<TData = Awaited<ReturnType<typeof getReportsSpendingStory>>, TError = ErrorType<unknown>>(params?: GetReportsSpendingStoryParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getReportsSpendingStory>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-};
-/**
- * Takes the client-detected new recurring charges (structured facts) and
-returns a short Fable 5 read — a headline plus 2–3 bullets nudging the
-owner on what's worth cancelling. The model only writes language; every
-dollar figure is computed in our code and passed in. Used by the
-subscription triage section.
-
- * @summary Fable 5 read of the recurring-charge review queue
- */
-export declare const getPostReportsRecurringReviewSummaryUrl: () => string;
-export declare const postReportsRecurringReviewSummary: (recurringReviewSummaryInput: RecurringReviewSummaryInput, options?: RequestInit) => Promise<RecurringReviewSummary>;
-export declare const getPostReportsRecurringReviewSummaryMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>, TError, {
-        data: BodyType<RecurringReviewSummaryInput>;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationOptions<Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>, TError, {
-    data: BodyType<RecurringReviewSummaryInput>;
-}, TContext>;
-export type PostReportsRecurringReviewSummaryMutationResult = NonNullable<Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>>;
-export type PostReportsRecurringReviewSummaryMutationBody = BodyType<RecurringReviewSummaryInput>;
-export type PostReportsRecurringReviewSummaryMutationError = ErrorType<unknown>;
-/**
- * @summary Fable 5 read of the recurring-charge review queue
- */
-export declare const usePostReportsRecurringReviewSummary: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>, TError, {
-        data: BodyType<RecurringReviewSummaryInput>;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationResult<Awaited<ReturnType<typeof postReportsRecurringReviewSummary>>, TError, {
-    data: BodyType<RecurringReviewSummaryInput>;
-}, TContext>;
 /**
  * Returns deterministic Behavior facts (days-since-last buckets, no-dining
 and coffee-free streaks, fun facts, hourly spending clock, day-of-week
@@ -2252,26 +2032,6 @@ export declare const useLockWeeklyDebrief: <TError = ErrorType<unknown>, TContex
     }, TContext>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof lockWeeklyDebrief>>, TError, {
-    weekStart: string;
-}, TContext>;
-export declare const getGenerateWeeklyDebriefSummaryUrl: (weekStart: string) => string;
-export declare const generateWeeklyDebriefSummary: (weekStart: string, options?: RequestInit) => Promise<WeeklyDebriefDetail>;
-export declare const getGenerateWeeklyDebriefSummaryMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>, TError, {
-        weekStart: string;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationOptions<Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>, TError, {
-    weekStart: string;
-}, TContext>;
-export type GenerateWeeklyDebriefSummaryMutationResult = NonNullable<Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>>;
-export type GenerateWeeklyDebriefSummaryMutationError = ErrorType<unknown>;
-export declare const useGenerateWeeklyDebriefSummary: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>, TError, {
-        weekStart: string;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationResult<Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>, TError, {
     weekStart: string;
 }, TContext>;
 export declare const getUnlockWeeklyDebriefUrl: (weekStart: string) => string;
@@ -2977,186 +2737,5 @@ export declare const useSeedAprilChase: <TError = ErrorType<unknown>, TContext =
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof seedAprilChase>>, TError, void, TContext>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof seedAprilChase>>, TError, void, TContext>;
-/**
- * Returns a cached (1h TTL) AI-generated observation about the
-household's current financial state. The frontend renders this
-as a dismissible card on the Dashboard. When the advisor is
-disabled (no API key, ADVISOR_ENABLED=false, or no meaningful
-data yet), returns `enabled: false` and the UI hides itself.
-
- * @summary Get a single proactive financial observation for the dashboard
- */
-export declare const getGetAdvisorNudgeUrl: () => string;
-export declare const getAdvisorNudge: (options?: RequestInit) => Promise<AdvisorNudge>;
-export declare const getGetAdvisorNudgeQueryKey: () => readonly ["/api/advisor/nudge"];
-export declare const getGetAdvisorNudgeQueryOptions: <TData = Awaited<ReturnType<typeof getAdvisorNudge>>, TError = ErrorType<void>>(options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getAdvisorNudge>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseQueryOptions<Awaited<ReturnType<typeof getAdvisorNudge>>, TError, TData> & {
-    queryKey: QueryKey;
-};
-export type GetAdvisorNudgeQueryResult = NonNullable<Awaited<ReturnType<typeof getAdvisorNudge>>>;
-export type GetAdvisorNudgeQueryError = ErrorType<void>;
-/**
- * @summary Get a single proactive financial observation for the dashboard
- */
-export declare function useGetAdvisorNudge<TData = Awaited<ReturnType<typeof getAdvisorNudge>>, TError = ErrorType<void>>(options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getAdvisorNudge>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-};
-/**
- * Stateless chat endpoint. The client passes the full conversation
-history each turn; the server tacks on the latest message and
-calls the model. The server augments the system prompt with a
-live snapshot of the household's budget, cashflow, and debts.
-
- * @summary Send a message to the AI budget advisor
- */
-export declare const getPostAdvisorChatUrl: () => string;
-export declare const postAdvisorChat: (advisorChatRequest: AdvisorChatRequest, options?: RequestInit) => Promise<AdvisorChatResponse>;
-export declare const getPostAdvisorChatMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorChat>>, TError, {
-        data: BodyType<AdvisorChatRequest>;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationOptions<Awaited<ReturnType<typeof postAdvisorChat>>, TError, {
-    data: BodyType<AdvisorChatRequest>;
-}, TContext>;
-export type PostAdvisorChatMutationResult = NonNullable<Awaited<ReturnType<typeof postAdvisorChat>>>;
-export type PostAdvisorChatMutationBody = BodyType<AdvisorChatRequest>;
-export type PostAdvisorChatMutationError = ErrorType<void>;
-/**
- * @summary Send a message to the AI budget advisor
- */
-export declare const usePostAdvisorChat: <TError = ErrorType<void>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorChat>>, TError, {
-        data: BodyType<AdvisorChatRequest>;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationResult<Awaited<ReturnType<typeof postAdvisorChat>>, TError, {
-    data: BodyType<AdvisorChatRequest>;
-}, TContext>;
-/**
- * Undoes the effects of an advisor tool call within a 5-minute window
-of its execution. Only tools registered with an undoHandler are
-undoable. Household-scoped — a request can only undo tool calls
-attached to its own household's audit log.
-
- * @summary Reverse a previously executed advisor tool call
- */
-export declare const getPostAdvisorUndoUrl: (auditLogId: string) => string;
-export declare const postAdvisorUndo: (auditLogId: string, options?: RequestInit) => Promise<AdvisorUndoResponse>;
-export declare const getPostAdvisorUndoMutationOptions: <TError = ErrorType<AdvisorUndoErrorResponse | void>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorUndo>>, TError, {
-        auditLogId: string;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationOptions<Awaited<ReturnType<typeof postAdvisorUndo>>, TError, {
-    auditLogId: string;
-}, TContext>;
-export type PostAdvisorUndoMutationResult = NonNullable<Awaited<ReturnType<typeof postAdvisorUndo>>>;
-export type PostAdvisorUndoMutationError = ErrorType<AdvisorUndoErrorResponse | void>;
-/**
- * @summary Reverse a previously executed advisor tool call
- */
-export declare const usePostAdvisorUndo: <TError = ErrorType<AdvisorUndoErrorResponse | void>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorUndo>>, TError, {
-        auditLogId: string;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationResult<Awaited<ReturnType<typeof postAdvisorUndo>>, TError, {
-    auditLogId: string;
-}, TContext>;
-/**
- * Confirms a destructive tool proposal created during a chat turn.
-Re-runs the tool with the originally proposed arguments, writes
-an audit log row, and returns the execution result.
-
- * @summary Confirm and execute a pending advisor proposal
- */
-export declare const getPostAdvisorProposalConfirmUrl: (proposalId: string) => string;
-export declare const postAdvisorProposalConfirm: (proposalId: string, options?: RequestInit) => Promise<AdvisorProposalResolveResponse>;
-export declare const getPostAdvisorProposalConfirmMutationOptions: <TError = ErrorType<AdvisorProposalErrorResponse | void>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalConfirm>>, TError, {
-        proposalId: string;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalConfirm>>, TError, {
-    proposalId: string;
-}, TContext>;
-export type PostAdvisorProposalConfirmMutationResult = NonNullable<Awaited<ReturnType<typeof postAdvisorProposalConfirm>>>;
-export type PostAdvisorProposalConfirmMutationError = ErrorType<AdvisorProposalErrorResponse | void>;
-/**
- * @summary Confirm and execute a pending advisor proposal
- */
-export declare const usePostAdvisorProposalConfirm: <TError = ErrorType<AdvisorProposalErrorResponse | void>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalConfirm>>, TError, {
-        proposalId: string;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationResult<Awaited<ReturnType<typeof postAdvisorProposalConfirm>>, TError, {
-    proposalId: string;
-}, TContext>;
-/**
- * Marks a destructive tool proposal as cancelled without executing
-it. Tools that were already cancelled or executed cannot be
-cancelled again.
-
- * @summary Cancel a pending advisor proposal
- */
-export declare const getPostAdvisorProposalCancelUrl: (proposalId: string) => string;
-export declare const postAdvisorProposalCancel: (proposalId: string, options?: RequestInit) => Promise<AdvisorProposalResolveResponse>;
-export declare const getPostAdvisorProposalCancelMutationOptions: <TError = ErrorType<AdvisorProposalErrorResponse | void>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalCancel>>, TError, {
-        proposalId: string;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalCancel>>, TError, {
-    proposalId: string;
-}, TContext>;
-export type PostAdvisorProposalCancelMutationResult = NonNullable<Awaited<ReturnType<typeof postAdvisorProposalCancel>>>;
-export type PostAdvisorProposalCancelMutationError = ErrorType<AdvisorProposalErrorResponse | void>;
-/**
- * @summary Cancel a pending advisor proposal
- */
-export declare const usePostAdvisorProposalCancel: <TError = ErrorType<AdvisorProposalErrorResponse | void>, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalCancel>>, TError, {
-        proposalId: string;
-    }, TContext>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseMutationResult<Awaited<ReturnType<typeof postAdvisorProposalCancel>>, TError, {
-    proposalId: string;
-}, TContext>;
-/**
- * The one "how are we doing" read. The server computes a 0-100 health
-score in code (debt-payoff weighted) from existing engines, upserts
-today's daily row (so the trend stays continuous), and returns the
-score/status/grade, weighted sub-scores, drivers, a ~30-day trend
-series, vs-yesterday/vs-last-week deltas, and a Fable 5 narrative.
-
- * @summary Overall budget-health score, trend, and AI narrative
- */
-export declare const getGetBudgetHealthUrl: () => string;
-export declare const getBudgetHealth: (options?: RequestInit) => Promise<BudgetHealthResponse>;
-export declare const getGetBudgetHealthQueryKey: () => readonly ["/api/budget-health"];
-export declare const getGetBudgetHealthQueryOptions: <TData = Awaited<ReturnType<typeof getBudgetHealth>>, TError = ErrorType<void>>(options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getBudgetHealth>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}) => UseQueryOptions<Awaited<ReturnType<typeof getBudgetHealth>>, TError, TData> & {
-    queryKey: QueryKey;
-};
-export type GetBudgetHealthQueryResult = NonNullable<Awaited<ReturnType<typeof getBudgetHealth>>>;
-export type GetBudgetHealthQueryError = ErrorType<void>;
-/**
- * @summary Overall budget-health score, trend, and AI narrative
- */
-export declare function useGetBudgetHealth<TData = Awaited<ReturnType<typeof getBudgetHealth>>, TError = ErrorType<void>>(options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getBudgetHealth>>, TError, TData>;
-    request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-};
 export {};
 //# sourceMappingURL=api.d.ts.map

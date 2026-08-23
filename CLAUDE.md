@@ -11,18 +11,13 @@ to get the household out of debt; correctness and trust beat everything.
 
 ## 1. Money & correctness (non-negotiable)
 
-- **The AI/advisor model NEVER does arithmetic.** Every dollar figure, %, date,
-  and projection shown to a user is computed in **our code** and passed to the
-  model as **structured data**. The model only does language, prioritization,
-  and judgment. It must never restate or re-derive a figure it wasn't handed.
+- **This app contains NO AI.** No advisor, no generated narratives, no LLM
+  calls anywhere — every number and every word on screen is computed or
+  written in our code. Do not re-add AI features (removed 2026-08).
 - **Never change financial calculations, queries, or stored data values** while
   doing UI, routing, performance, or copy work. UI consumes existing hooks/data
   unchanged. If a change genuinely requires touching financial logic, **stop and
   ask first.**
-- **Commentary, not regulated advice.** The advisor describes the user's *own*
-  data and suggests behavioral nudges ("dining is $X over budget"). It must not
-  give individualized investment, tax, or legal advice — refuse those and keep a
-  short disclaimer surface.
 - After any change that could affect displayed numbers, **confirm no financial
   totals changed.**
 
@@ -56,12 +51,10 @@ to get the household out of debt; correctness and trust beat everything.
 - **No route may render a blank screen.** Unfinished/loading routes show a
   placeholder or skeleton **inside the shared layout** (`PageSkeleton`), never
   a white page.
-- **Voice:** a serious, supportive, professional financial advisor — calm,
-  clear, genuinely helpful. **No sass, no profanity, no roasting** (the owner
-  explicitly reversed the earlier savage voice in 2026-07). Tie every point to
-  a real number and a next action; frame partial periods as "so far"; every
-  nudge pointed at getting out of debt. (Single source of truth:
-  `advisorVoice.ts` VOICE_SYSTEM; UI microcopy follows the same tone.)
+- **Voice (UI microcopy):** serious, supportive, professional — calm, clear,
+  genuinely helpful. **No sass, no profanity, no roasting** (the owner
+  explicitly reversed the earlier savage voice in 2026-07). Tie copy to real
+  numbers and next actions; frame partial periods as "so far".
 
 ## 4. Workflow
 

@@ -6,7 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AmexWeeklyPayoffCard } from "./amexWeeklyPayoffCard";
-import type { AmexWeeklyPayoffDirectiveSource } from "./amexWeeklyPayoffDirectiveSource";
 
 export interface AmexWeeklyPayoff {
   weekStart: string;
@@ -14,7 +13,4 @@ export interface AmexWeeklyPayoff {
   cards: AmexWeeklyPayoffCard[];
   combinedWeekCharges: number;
   combinedStatementBalance: number;
-  /** @nullable */
-  directive?: string | null;
-  directiveSource?: AmexWeeklyPayoffDirectiveSource;
 }

@@ -6,9 +6,8 @@
 // months. For every safe paycheck-to-paycheck window it proposes a
 // specific avalanche extra payment (date, amount, rationale, confidence).
 //
-// The numbers here are DETERMINISTIC ground truth. The Claude narrative
-// (avalancheAdvisorSummary.ts) only ever narrates these facts — it never
-// invents its own dates or amounts.
+// The numbers here are DETERMINISTIC ground truth — every date and amount
+// is computed in code.
 //
 // Pipeline:
 //   1. Reuse computeCashSignal(daysAhead = 365) to get the 12-month daily

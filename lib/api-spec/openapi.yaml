@@ -22,7 +22,6 @@ tags:
   - name: auth
   - name: invitations
   - name: members
-  - name: advisor
   - name: debrief
 paths:
   /healthz:
@@ -248,27 +247,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DeleteMerchantAliasResult" }
-
-  /transactions/suggest-name:
-    post:
-      operationId: suggestMerchantName
-      tags: [transactions]
-      summary: |
-        (#888) Suggest a clean, human-friendly merchant name for a raw bank
-        `description` using Anthropic. Read-only — does NOT persist an alias.
-        Always returns a usable suggestion: on any AI error/timeout it falls
-        back to the deterministic cleanMerchant label (`source: "fallback"`).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SuggestMerchantNameInput" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SuggestMerchantNameResult" }
 
   /transactions/uncategorize-by-ids:
     post:
@@ -1190,138 +1168,17 @@ paths:
     get:
       operationId: getForecastAvalancheSchedule
       tags: [forecast]
-      summary: AI-driven multi-date avalanche extra-payment schedule
+      summary: Deterministic multi-date avalanche extra-payment schedule
       description: |
         Returns a deterministic schedule of avalanche extra payments
         across the next ~12 months (one per safe paycheck-to-paycheck
-        window) plus a Claude-written narrative. The narrative is cached
-        on a hash of the deterministic facts; pass `refresh=true` to force
-        a fresh regeneration.
-      parameters:
-        - in: query
-          name: refresh
-          description: Force a fresh Claude regeneration, bypassing the cache.
-          schema: { type: string, enum: ["true", "1"] }
+        window). Every date and amount is computed server-side in code.
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AvalancheSchedule" }
-
-  /reports/advisor-summary:
-    get:
-      operationId: getReportsAdvisorSummary
-      tags: [reports]
-      summary: Per-tab Claude narrative for the Reports page
-      description: |
-        Returns a short Claude-written narrative (headline + bullets) for
-        one Reports tab, grounded in deterministic facts computed from the
-        household's data. The narrative is cached per tab on a hash of the
-        facts; pass `refresh=true` to force a fresh regeneration.
-      parameters:
-        - in: query
-          name: tab
-          required: true
-          description: Which Reports tab to summarize.
-          schema:
-            type: string
-            enum: [debt, cashflow, spending, budget, behavior]
-        - in: query
-          name: rangeDays
-          description: Look-back window in days for range-scoped tabs.
-          schema: { type: integer }
-        - in: query
-          name: monthOffset
-          description: Months back from the current month for the budget tab.
-          schema: { type: integer }
-        - in: query
-          name: refresh
-          description: Force a fresh Claude regeneration, bypassing the cache.
-          schema: { type: string, enum: ["true", "1"] }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ReportsAdvisorSummary" }
-
-  /banking/insights-summary:
-    get:
-      operationId: getBankingInsightsSummary
-      tags: [banking]
-      summary: Merchant-level insights + captions for the four Banking buckets
-      description: |
-        Returns the four reworked, MERCHANT-LEVEL Banking buckets — spending
-        less, creeping up, recurring to cut (true subscriptions only), and new
-        or unusual — each with a Claude-written headline + one-liner AND the
-        ranked merchant rows behind it. Every dollar, count, and run-rate is
-        computed server-side in code (merchants grouped by a stable signature,
-        noise filtered out); the model only classifies merchants and writes the
-        language. Cached per household on a hash of the facts; pass
-        `refresh=true` to force a fresh regeneration.
-      parameters:
-        - in: query
-          name: refresh
-          description: Force a fresh Claude regeneration, bypassing the cache.
-          schema: { type: string, enum: ["true", "1"] }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/BankingInsightsSummary" }
-
-  /bills/insights-summary:
-    get:
-      operationId: getBillsInsightsSummary
-      tags: [bills]
-      summary: Fable 5 savings analysis for the Bills page
-      description: |
-        Returns a short Fable 5 read on the household's monthly bills — a
-        headline plus 2–4 concrete savings suggestions, each tied to a real
-        bill. Every dollar is computed server-side (recurring items expanded,
-        debt minimums, one-off spend); the model only writes language. Cached
-        per household + month on a hash of the facts; `refresh=true` forces a
-        fresh regeneration.
-      parameters:
-        - in: query
-          name: month
-          description: "Month to analyze as YYYY-MM-01 (defaults to the current month)."
-          schema: { type: string }
-        - in: query
-          name: refresh
-          description: Force a fresh Fable 5 regeneration, bypassing the cache.
-          schema: { type: string, enum: ["true", "1"] }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/BillsInsightsSummary" }
-
-  /forecast/insights-summary:
-    get:
-      operationId: getForecastInsightsSummary
-      tags: [forecast]
-      summary: Fable 5 cash-flow read for the Forecast area
-      description: |
-        Returns a short Fable 5 read on the household's cash-flow forecast — a
-        headline plus 2–4 bullets on the projected low point, runway, and risk
-        ahead. Every number is computed server-side (computeCashSignal + runway);
-        the model only writes language. Cached per household on a hash of the
-        facts; `refresh=true` forces a fresh regeneration.
-      parameters:
-        - in: query
-          name: refresh
-          description: Force a fresh Fable 5 regeneration, bypassing the cache.
-          schema: { type: string, enum: ["true", "1"] }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ForecastInsightsSummary" }
 
   /reports/spending-facts:
     get:
@@ -1349,62 +1206,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SpendingFacts" }
-
-  /reports/spending-story:
-    get:
-      operationId: getReportsSpendingStory
-      tags: [reports]
-      summary: Fable 5 read of the household's spending, told in four lenses
-      description: |
-        Returns a short Fable 5 read of household spending (Amex + Chase
-        combined) across four lenses — trend, category mix, top merchants, and
-        day-of-week — each a headline plus 2–3 bullets. Every number is computed
-        server-side via buildSpendingFacts; the model only writes language. Backs
-        the click-to-expand analysis on the Overview spending graphics. `from`/`to`
-        are optional (default last 30 days). Cached per household on a hash of the
-        facts; `refresh=true` forces a fresh regeneration.
-      parameters:
-        - in: query
-          name: from
-          description: Range start (YYYY-MM-DD). Defaults to 30 days ago.
-          schema: { type: string }
-        - in: query
-          name: to
-          description: Range end (YYYY-MM-DD). Defaults to today.
-          schema: { type: string }
-        - in: query
-          name: refresh
-          description: Force a fresh Fable 5 regeneration, bypassing the cache.
-          schema: { type: string, enum: ["true", "1"] }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SpendingStory" }
-
-  /reports/recurring-review-summary:
-    post:
-      operationId: postReportsRecurringReviewSummary
-      tags: [reports]
-      summary: Fable 5 read of the recurring-charge review queue
-      description: |
-        Takes the client-detected new recurring charges (structured facts) and
-        returns a short Fable 5 read — a headline plus 2–3 bullets nudging the
-        owner on what's worth cancelling. The model only writes language; every
-        dollar figure is computed in our code and passed in. Used by the
-        subscription triage section.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/RecurringReviewSummaryInput" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/RecurringReviewSummary" }
 
   /reports/behavior-facts:
     get:
@@ -1698,21 +1499,6 @@ paths:
   /debrief/weeks/{weekStart}/lock:
     post:
       operationId: lockWeeklyDebrief
-      tags: [debrief]
-      parameters:
-        - in: path
-          name: weekStart
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/WeeklyDebriefDetail" }
-  /debrief/weeks/{weekStart}/generate-summary:
-    post:
-      operationId: generateWeeklyDebriefSummary
       tags: [debrief]
       parameters:
         - in: path
@@ -2216,163 +2002,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AprilChaseSeedResult" }
 
-  /advisor/nudge:
-    get:
-      operationId: getAdvisorNudge
-      tags: [advisor]
-      summary: Get a single proactive financial observation for the dashboard
-      description: |
-        Returns a cached (1h TTL) AI-generated observation about the
-        household's current financial state. The frontend renders this
-        as a dismissible card on the Dashboard. When the advisor is
-        disabled (no API key, ADVISOR_ENABLED=false, or no meaningful
-        data yet), returns `enabled: false` and the UI hides itself.
-      responses:
-        "200":
-          description: Nudge (possibly disabled)
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdvisorNudge" }
-        "401":
-          description: Unauthorized
-
-  /advisor/chat:
-    post:
-      operationId: postAdvisorChat
-      tags: [advisor]
-      summary: Send a message to the AI budget advisor
-      description: |
-        Stateless chat endpoint. The client passes the full conversation
-        history each turn; the server tacks on the latest message and
-        calls the model. The server augments the system prompt with a
-        live snapshot of the household's budget, cashflow, and debts.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/AdvisorChatRequest" }
-      responses:
-        "200":
-          description: Advisor reply
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdvisorChatResponse" }
-        "400":
-          description: Invalid request body
-        "401":
-          description: Unauthorized
-        "503":
-          description: Advisor not configured on this server
-
-  /advisor/undo/{auditLogId}:
-    post:
-      operationId: postAdvisorUndo
-      tags: [advisor]
-      summary: Reverse a previously executed advisor tool call
-      description: |
-        Undoes the effects of an advisor tool call within a 5-minute window
-        of its execution. Only tools registered with an undoHandler are
-        undoable. Household-scoped — a request can only undo tool calls
-        attached to its own household's audit log.
-      parameters:
-        - name: auditLogId
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Undo succeeded
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdvisorUndoResponse" }
-        "400":
-          description: |
-            Undo not possible: window expired, tool not undoable, already
-            undone, or not in 'executed' status.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdvisorUndoErrorResponse" }
-        "401":
-          description: Unauthorized
-        "500":
-          description: Undo handler threw unexpectedly
-
-  /advisor/proposals/{proposalId}/confirm:
-    post:
-      operationId: postAdvisorProposalConfirm
-      tags: [advisor]
-      summary: Confirm and execute a pending advisor proposal
-      description: |
-        Confirms a destructive tool proposal created during a chat turn.
-        Re-runs the tool with the originally proposed arguments, writes
-        an audit log row, and returns the execution result.
-      parameters:
-        - name: proposalId
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Proposal confirmed and executed
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdvisorProposalResolveResponse" }
-        "400":
-          description: Proposal not in 'pending' state, expired, or execution failed
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdvisorProposalErrorResponse" }
-        "401":
-          description: Unauthorized
-
-  /advisor/proposals/{proposalId}/cancel:
-    post:
-      operationId: postAdvisorProposalCancel
-      tags: [advisor]
-      summary: Cancel a pending advisor proposal
-      description: |
-        Marks a destructive tool proposal as cancelled without executing
-        it. Tools that were already cancelled or executed cannot be
-        cancelled again.
-      parameters:
-        - name: proposalId
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Proposal cancelled
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdvisorProposalResolveResponse" }
-        "400":
-          description: Proposal not in 'pending' state
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdvisorProposalErrorResponse" }
-        "401":
-          description: Unauthorized
-
-  /budget-health:
-    get:
-      operationId: getBudgetHealth
-      tags: [budget-health]
-      summary: Overall budget-health score, trend, and AI narrative
-      description: |
-        The one "how are we doing" read. The server computes a 0-100 health
-        score in code (debt-payoff weighted) from existing engines, upserts
-        today's daily row (so the trend stays continuous), and returns the
-        score/status/grade, weighted sub-scores, drivers, a ~30-day trend
-        series, vs-yesterday/vs-last-week deltas, and a Fable 5 narrative.
-      responses:
-        "200":
-          description: Budget health
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/BudgetHealthResponse" }
-        "401":
-          description: Unauthorized
-
 components:
   schemas:
     HealthStatus:
@@ -2386,65 +2015,6 @@ components:
       required: [count]
       properties:
         count: { type: integer }
-
-    BudgetHealthDimension:
-      type: object
-      required: [key, label, score, weight, summary]
-      properties:
-        key: { type: string }
-        label: { type: string }
-        score: { type: number }
-        weight: { type: number }
-        summary: { type: string }
-
-    BudgetHealthTrendPoint:
-      type: object
-      required: [recordedOn, score, status, grade]
-      properties:
-        recordedOn: { type: string }
-        score: { type: number }
-        status: { type: string }
-        grade: { type: string }
-
-    BudgetHealthDeltas:
-      type: object
-      required: [direction]
-      properties:
-        vsYesterday: { type: ["number", "null"] }
-        vsLastWeek: { type: ["number", "null"] }
-        direction: { type: string }
-
-    BudgetHealthSummary:
-      type: object
-      required: [generatedAt, headline, body, nextAction, source]
-      properties:
-        generatedAt: { type: string }
-        headline: { type: string }
-        body: { type: string }
-        nextAction: { type: string }
-        source: { type: string }
-
-    BudgetHealthResponse:
-      type: object
-      required: [score, status, grade, dimensions, drivers, trend, deltas, summary]
-      properties:
-        score: { type: number }
-        status: { type: string }
-        grade: { type: string }
-        dimensions:
-          type: array
-          items: { $ref: "#/components/schemas/BudgetHealthDimension" }
-        drivers:
-          type: array
-          items: { type: string }
-        facts:
-          type: object
-          additionalProperties: true
-        trend:
-          type: array
-          items: { $ref: "#/components/schemas/BudgetHealthTrendPoint" }
-        deltas: { $ref: "#/components/schemas/BudgetHealthDeltas" }
-        summary: { $ref: "#/components/schemas/BudgetHealthSummary" }
 
     VersionInfo:
       type: object
@@ -4179,158 +3749,6 @@ components:
                   forward by the pre-snapshot drag-to-today rule. Used
                   by the chart tooltip to distinguish dragged plans
                   from bills naturally due that day.
-    ReportsAdvisorSummary:
-      type: object
-      required: [tab, headline, bullets, summarySource, generatedAt, source]
-      properties:
-        tab:
-          type: string
-          enum: [debt, cashflow, spending, budget, behavior]
-        headline: { type: string }
-        bullets:
-          type: array
-          items: { type: string }
-        summarySource: { type: string, enum: [ai, fallback] }
-        generatedAt: { type: string }
-        source: { type: string, enum: [cache, fresh] }
-
-    BankingInsightsMoverRow:
-      type: object
-      description: |
-        One merchant-level row inside a bucket. Every figure and the detail
-        string are computed server-side in code; the client renders verbatim.
-      required: [display, detail, amount, amountLabel, tone]
-      properties:
-        display: { type: string, description: Merchant name (normalized). }
-        detail:
-          {
-            type: string,
-            description: "Pre-formatted secondary line, e.g. '$120 vs $138 last mo · 3 fewer visits'.",
-          }
-        amount: { type: number, description: Primary figure for the row. }
-        amountLabel:
-          {
-            type: string,
-            description: "Unit/label for the figure, e.g. 'saved', 'more', '/yr', 'spent'.",
-          }
-        tone: { type: string, enum: [positive, negative, neutral] }
-    BankingInsightsBucket:
-      type: object
-      required: [headline, caption, rows]
-      properties:
-        headline: { type: string }
-        caption: { type: string }
-        rows:
-          type: array
-          items: { $ref: "#/components/schemas/BankingInsightsMoverRow" }
-    BankingInsightsSummary:
-      type: object
-      required:
-        [
-          spendingLess,
-          creepingUp,
-          recurringToCut,
-          newOrUnusual,
-          summarySource,
-          generatedAt,
-          source,
-        ]
-      properties:
-        spendingLess: { $ref: "#/components/schemas/BankingInsightsBucket" }
-        creepingUp: { $ref: "#/components/schemas/BankingInsightsBucket" }
-        recurringToCut: { $ref: "#/components/schemas/BankingInsightsBucket" }
-        newOrUnusual: { $ref: "#/components/schemas/BankingInsightsBucket" }
-        summarySource: { type: string, enum: [ai, fallback] }
-        generatedAt: { type: string }
-        source: { type: string, enum: [cache, fresh] }
-
-    ForecastInsightsSummary:
-      type: object
-      required: [headline, body, bullets, debtMoves, summarySource, generatedAt, source]
-      properties:
-        headline: { type: string }
-        body: { type: string }
-        bullets:
-          type: array
-          items: { type: string }
-        debtMoves:
-          type: array
-          items: { type: string }
-        summarySource: { type: string, enum: [ai, fallback] }
-        generatedAt: { type: string }
-        source: { type: string, enum: [cache, fresh] }
-
-    SpendingStoryLens:
-      type: object
-      required: [headline, bullets]
-      properties:
-        headline: { type: string }
-        bullets:
-          type: array
-          items: { type: string }
-
-    SpendingStory:
-      type: object
-      required: [lenses, summarySource, generatedAt, source]
-      properties:
-        lenses:
-          type: object
-          required: [trend, category, merchants, dayOfWeek]
-          properties:
-            trend: { $ref: "#/components/schemas/SpendingStoryLens" }
-            category: { $ref: "#/components/schemas/SpendingStoryLens" }
-            merchants: { $ref: "#/components/schemas/SpendingStoryLens" }
-            dayOfWeek: { $ref: "#/components/schemas/SpendingStoryLens" }
-        summarySource: { type: string, enum: [ai, fallback] }
-        generatedAt: { type: string }
-        source: { type: string, enum: [cache, fresh] }
-
-    RecurringReviewSummaryInputItem:
-      type: object
-      required: [merchant, annual, monthly, cadence]
-      properties:
-        merchant: { type: string }
-        annual: { type: number }
-        monthly: { type: number }
-        cadence: { type: string }
-        confidence: { type: string, enum: [high, medium, low] }
-
-    RecurringReviewSummaryInput:
-      type: object
-      required: [charges]
-      properties:
-        charges:
-          type: array
-          description: The client-detected new recurring charges awaiting review.
-          items: { $ref: "#/components/schemas/RecurringReviewSummaryInputItem" }
-
-    RecurringReviewSummary:
-      type: object
-      required: [headline, bullets, summarySource, generatedAt]
-      properties:
-        headline: { type: string }
-        bullets:
-          type: array
-          items: { type: string }
-        summarySource: { type: string, enum: [ai, fallback] }
-        generatedAt: { type: string }
-
-    BillsInsightsSummary:
-      type: object
-      required:
-        [headline, bullets, oneOffTotal, oneOffCount, summarySource, generatedAt, source]
-      properties:
-        headline: { type: string }
-        bullets:
-          type: array
-          items: { type: string }
-        oneOffTotal:
-          { type: number, description: One-off / non-recurring spend this month. }
-        oneOffCount: { type: integer, description: Count of one-off charges. }
-        summarySource: { type: string, enum: [ai, fallback] }
-        generatedAt: { type: string }
-        source: { type: string, enum: [cache, fresh] }
-
     SpendingFacts:
       type: object
       required:
@@ -4784,11 +4202,6 @@ components:
           cashBuffer,
           bankBalance,
           scheduleThroughDate,
-          summary,
-          paymentsText,
-          summarySource,
-          generatedAt,
-          source,
         ]
       properties:
         proposedPayments:
@@ -4828,13 +4241,6 @@ components:
         cashBuffer: { type: number }
         bankBalance: { type: number }
         scheduleThroughDate: { type: ["string", "null"] }
-        summary: { type: string }
-        paymentsText:
-          type: array
-          items: { type: string }
-        summarySource: { type: string, enum: [ai, fallback] }
-        generatedAt: { type: string }
-        source: { type: string, enum: [cache, fresh] }
     ForecastBundle:
       type: object
       required: [events, transactions, resolutions, closedMonths, settings, fromDate, toDate, plaidCheckingAccounts]
@@ -5009,8 +4415,6 @@ components:
           items: { $ref: "#/components/schemas/AmexWeeklyPayoffCard" }
         combinedWeekCharges: { type: number }
         combinedStatementBalance: { type: number }
-        directive: { type: ["string", "null"] }
-        directiveSource: { type: string, enum: [ai, fallback] }
 
     DashboardBudget:
       type: object
@@ -5143,27 +4547,6 @@ components:
           type: array
           items: { $ref: "#/components/schemas/WeeklyDebriefCategoryBucket" }
         openItemsCount: { type: integer }
-    WeeklyDebriefAdvisorSuggestion:
-      type: object
-      required: [text]
-      properties:
-        text: { type: string }
-        toolHint: { type: string }
-    WeeklyDebriefAdvisorSummary:
-      type: object
-      required: [generatedAt, headline, bullets, suggestions, source]
-      properties:
-        generatedAt: { type: string }
-        headline: { type: string }
-        bullets:
-          type: array
-          items: { type: string }
-        suggestions:
-          type: array
-          items: { $ref: "#/components/schemas/WeeklyDebriefAdvisorSuggestion" }
-        source:
-          type: string
-          enum: [ai, fallback]
     WeeklyDebriefActionsSummary:
       type: object
       required:
@@ -5234,10 +4617,6 @@ components:
         actionsSummary:
           allOf:
             - { $ref: "#/components/schemas/WeeklyDebriefActionsSummary" }
-          nullable: true
-        advisorSummary:
-          allOf:
-            - { $ref: "#/components/schemas/WeeklyDebriefAdvisorSummary" }
           nullable: true
         postLockAdditions:
           type: array
@@ -5766,151 +5145,6 @@ components:
               institutionName: { type: ["string", "null"] }
               env: { type: ["string", "null"] }
 
-    AdvisorNudge:
-      type: object
-      additionalProperties: false
-      required: [enabled]
-      properties:
-        enabled:
-          type: boolean
-          description: When false, the frontend hides the nudge UI entirely.
-        severity:
-          type: string
-          enum: [info, warn, alert]
-          description: |
-            UI hint for color/icon. `info` = neutral observation, `warn`
-            = something to keep an eye on, `alert` = something likely to
-            cause a problem if ignored.
-        message:
-          type: string
-          description: 1–2 sentence observation in plain English.
-        source:
-          type: string
-          enum: [advisor, empty]
-          description: |
-            `advisor` = generated by the model. `empty` = the model
-            decided there was nothing worth surfacing right now (the UI
-            should hide).
-        generatedAt:
-          type: string
-          format: date-time
-
-    AdvisorChatMessage:
-      type: object
-      additionalProperties: false
-      required: [role, content]
-      properties:
-        role:
-          type: string
-          enum: [user, assistant]
-        content:
-          type: string
-
-    AdvisorChatRequest:
-      type: object
-      additionalProperties: false
-      required: [message]
-      properties:
-        message:
-          type: string
-          minLength: 1
-          maxLength: 4000
-        history:
-          type: array
-          maxItems: 24
-          items: { $ref: "#/components/schemas/AdvisorChatMessage" }
-
-    AdvisorChatResponse:
-      type: object
-      additionalProperties: false
-      required: [message, toolCalls]
-      properties:
-        message:
-          type: string
-        toolCalls:
-          type: array
-          items: { $ref: "#/components/schemas/AdvisorToolCall" }
-        usage:
-          type: object
-          additionalProperties: false
-          properties:
-            inputTokens:
-              type: integer
-            outputTokens:
-              type: integer
-    AdvisorToolCall:
-      type: object
-      additionalProperties: false
-      required: [name, ok, summary]
-      properties:
-        name:
-          type: string
-          description: Tool name (e.g. "list_categories")
-        ok:
-          type: boolean
-          description: True if the tool executed without error.
-        summary:
-          type: string
-          description: One-line summary suitable for inline UI display.
-        auditLogId:
-          type: string
-          description: Reference to the advisor_audit_log row for this call.
-        proposal:
-          $ref: "#/components/schemas/AdvisorProposal"
-          description: |
-            Present only when the tool returned a destructive proposal
-            awaiting user confirmation. The frontend should render a
-            confirm/cancel card and call POST /advisor/proposals/{id}/confirm
-            or /cancel.
-
-    AdvisorProposal:
-      type: object
-      additionalProperties: false
-      required: [id, summary]
-      properties:
-        id:
-          type: string
-          description: Proposal id, used to confirm or cancel.
-        summary:
-          type: string
-          description: Human-readable preview of what the tool will do.
-
-    AdvisorProposalResolveResponse:
-      type: object
-      additionalProperties: false
-      required: [ok]
-      properties:
-        ok:
-          type: boolean
-        toolName:
-          type: string
-        auditLogId:
-          type: string
-
-    AdvisorProposalErrorResponse:
-      type: object
-      additionalProperties: false
-      required: [error]
-      properties:
-        error:
-          type: string
-
-    AdvisorUndoResponse:
-      type: object
-      additionalProperties: false
-      required: [ok]
-      properties:
-        ok:
-          type: boolean
-
-    AdvisorUndoErrorResponse:
-      type: object
-      additionalProperties: false
-      required: [error]
-      properties:
-        error:
-          type: string
-
     PutMerchantAliasInput:
       type: object
       additionalProperties: false
@@ -5955,31 +5189,3 @@ components:
           type: string
         deleted:
           type: boolean
-
-    SuggestMerchantNameInput:
-      type: object
-      additionalProperties: false
-      required: [description]
-      properties:
-        description:
-          type: string
-          minLength: 1
-          description: The raw bank description to clean into a friendly name.
-
-    SuggestMerchantNameResult:
-      type: object
-      additionalProperties: false
-      required: [suggestion, signature, source]
-      properties:
-        suggestion:
-          type: string
-          description: The suggested friendly merchant name.
-        signature:
-          type: string
-          description: The stable signature derived from the description.
-        source:
-          type: string
-          enum: [ai, fallback]
-          description: |
-            "ai" when Anthropic produced the name, "fallback" when the
-            deterministic cleanMerchant label was used (API down/slow/empty).
