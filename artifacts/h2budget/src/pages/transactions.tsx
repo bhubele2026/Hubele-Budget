@@ -1263,7 +1263,7 @@ export default function TransactionsPage() {
       >
         <Link
           href="/forecast#bucket"
-          className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-l-full hover-elevate active-elevate-2"
+          className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-l-full press hover:bg-secondary"
           title="Match this in the Forecast Review Bucket"
           data-testid={`link-forecast-state-${tx.id}`}
         >
@@ -1275,7 +1275,7 @@ export default function TransactionsPage() {
           disabled={updateTx.isPending}
           title="Remove from forecast"
           aria-label="Remove from forecast"
-          className="inline-flex items-center pr-1.5 pl-0.5 py-0.5 rounded-r-full text-muted-foreground hover-elevate active-elevate-2 disabled:opacity-50"
+          className="inline-flex items-center pr-1.5 pl-0.5 py-0.5 rounded-r-full text-muted-foreground press hover:bg-secondary disabled:opacity-50"
           data-testid={`button-remove-forecast-${tx.id}`}
         >
           <X className="w-3 h-3" />
@@ -2223,7 +2223,7 @@ export default function TransactionsPage() {
           <Link
             href="/forecast#bucket"
             data-testid="link-bucket-pending-count"
-            className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 text-warning px-2.5 py-0.5 text-xs font-medium hover-elevate active-elevate-2"
+            className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 text-warning px-2.5 py-0.5 text-xs font-medium press hover:bg-secondary"
             title="Open the Forecast Review Bucket to match these"
           >
             <Inbox className="w-3 h-3" />

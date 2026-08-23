@@ -470,8 +470,8 @@ function DebtSection({
             <ul className="space-y-3 py-1">
               {killed.map((k) => (
                 <li key={`${k.name}-${k.monthIndex}`} className="relative pl-10">
-                  <div className="absolute left-2 top-1.5 w-5 h-5 rounded-full bg-[hsl(var(--splash-orange))] border-4 border-background flex items-center justify-center">
-                    <Trophy className="w-2.5 h-2.5 text-[hsl(0_0%_10%)]" />
+                  <div className="absolute left-2 top-1.5 w-5 h-5 rounded-full bg-brand-orange border-4 border-background flex items-center justify-center">
+                    <Trophy className="w-2.5 h-2.5 text-brand-navy" />
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <div>

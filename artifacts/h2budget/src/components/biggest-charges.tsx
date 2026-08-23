@@ -24,7 +24,7 @@ const PODIUM = [
   {
     medal: "1",
     title: "Largest charge",
-    accent: "--splash-violet",
+    accent: "--chart-1",
     quip: (m: string | null) =>
       m ? `${m}'s biggest single purchase this month.` : "The month's biggest single purchase.",
   },
@@ -80,7 +80,7 @@ export function BiggestCharges({
   return (
     <div className={className}>
       <div className="mb-2 flex items-baseline gap-2">
-        <h2 className="text-lg font-bold dark:text-white">Biggest charges this month</h2>
+        <h2 className="text-lg font-bold">Biggest charges this month</h2>
         <span className="text-xs text-muted-foreground">
           your largest single purchases, ranked
         </span>
@@ -114,7 +114,7 @@ export function BiggestCharges({
               >
                 {c.desc}
               </div>
-              <div className="mt-0.5 text-3xl font-bold tabular-nums leading-none text-foreground dark:text-white">
+              <div className="mt-0.5 text-3xl font-bold tabular-nums leading-none text-foreground">
                 {fmt$(c.amt)}
               </div>
               <p className="mt-2 text-xs font-medium leading-snug text-muted-foreground">

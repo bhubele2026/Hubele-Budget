@@ -1,10 +1,125 @@
+/* H2 Budget — the KFI Financial Dashboard design language.
+   Navy + platinum, flat and matte, one typeface, four motion dials.
+   Ported from KFI-Housing (src/web/index.css) and the Financial Dashboard
+   (apps/web/src/index.css), which are the two apps this now sits beside. */
 @layer theme, base, clerk, components, utilities;
-@import "tailwindcss";
-@import "tw-animate-css";
-@plugin "@tailwindcss/typography";
+/* ⚠️ `source(none)` IS LOAD-BEARING, AND `@source` ALONE WOULD NOT DO IT.
+   `@source` ADDS to automatic detection; it never replaces it. Automatic
+   detection starts at the Vite root, which drags in `e2e/` — ~100 Playwright
+   specs whose selector strings read as class names — and emits utilities for
+   markup that has never rendered. Turning detection off and naming the two real
+   sources is what keeps the stylesheet a description of the app rather than of
+   its test suite. */
+@import "tailwindcss" source(none);
+@source "../src";
+@source "../index.html";
 
-@custom-variant dark (&:is(.dark *));
+/* ONE TYPEFACE, SERVED BY US. Never a CDN: three cross-origin render-blocking
+   requests used to sit in front of first paint, and a webfont that fails to
+   load is a page that changes shape under the reader. The variable weight axis
+   means one 48 KB file covers 400/500/600/700 instead of ten round trips.
+   `wght.css` = upright only — the app has no italic, and the italic subsets
+   would double the emitted font assets for nothing. The system stack stays the
+   fallback, so a failed font degrades to something styled, never to nothing. */
+@import "@fontsource-variable/inter/wght.css";
 
+/* Registered so the area-draw mask edge can be ANIMATED — an unregistered
+   custom property has no type, so the browser can only swap it at the halfway
+   point instead of interpolating it. Top level, not inside a @layer: a
+   registration is a global fact, not a cascade participant. */
+@property --reveal {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+@theme {
+  /* ── PALETTE: NAVY, ORANGE, PLATINUM. Nothing else. ───────────────────────
+     The Financial Dashboard's standing rule 7c. Status is
+     navy = good · grey = watch · deep orange #e16d3e = bad, and THE LABEL
+     ALWAYS SAYS WHICH — `ok` is the same navy as body text on purpose,
+     because good is the resting state and should not shout.
+
+     ⚠️ DEEP ORANGE #e16d3e IS NOT BRAND ORANGE #f68d2e. #f68d2e is the accent
+     (tile-caption hover, the active tab underline); #e16d3e means something is
+     wrong. Using one for both makes an accent look like an alarm and an alarm
+     look like decoration. */
+  --color-brand-navy: #19315b;
+  --color-brand-navy2: #22406e;
+  --color-brand-orange: #f68d2e;
+  --color-brand-orange-deep: #e16d3e;
+  --color-brand-tint: #f7f9fc;
+  --color-brand-line: #e6edf5;
+  --color-brand-ink: #1a2233;
+
+  /* The platinum ramp — every neutral surface in the app is one of these six
+     steps. Before this the app mixed a true-neutral white wash with cool greys
+     and a teal cast, which is why nothing ever looked like it was made of the
+     same material. */
+  --color-platinum-0: #ffffff;
+  --color-platinum-1: #fbfcfe;
+  --color-platinum-2: #f7f9fc;
+  --color-platinum-3: #f2f6fb;
+  --color-platinum-4: #eef3fa;
+  --color-platinum-5: #e6edf5;
+
+  --color-ok: #19315b;
+  --color-ok-bg: #eef3fa;
+  --color-warn: #5d6674;
+  --color-warn-bg: #eef0f3;
+  --color-bad: #e16d3e;
+  --color-bad-bg: #fbeee7;
+  --color-info: #19315b;
+  --color-info-bg: #eef3fa;
+
+  /* ── TYPE SCALE ──────────────────────────────────────────────────────────
+     Five steps and no more. Ad-hoc font sizes are the single loudest
+     "nobody designed this" signal on a screen, because nothing lines up and
+     every card invents its own hierarchy. */
+  --text-display: 1.5rem;   /* 24 — page titles */
+  --text-title: 1.125rem;   /* 18 — card headings */
+  --text-body: 0.875rem;    /* 14 — everything ordinary */
+  --text-label: 0.8125rem;  /* 13 — secondary, field labels */
+  --text-micro: 0.6875rem;  /* 11 — column heads, chips, captions */
+
+  /* ── RADIUS ──────────────────────────────────────────────────────────────
+     Two, not six. Tight and flat: the house style is thin marks and small
+     corners, never candy. The generic scale below is pulled in behind them so
+     any surviving `rounded-2xl` call site lands on the card radius rather than
+     re-opening a third geometry.
+     ⚠️ Tailwind v4: `rounded-[--radius-card]` emits the literal
+     `border-radius: --radius-card` — invalid, silently dropped. Tokens declared
+     here generate their own utilities; use `rounded-card` / `rounded-control`. */
+  --radius-control: 8px;
+  --radius-card: 14px;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.875rem;
+  --radius-3xl: 1rem;
+
+  /* ── ELEVATION ───────────────────────────────────────────────────────────
+     Three steps, and every surface picks exactly one. Two competing depth
+     languages in one app is what reads as cheap. */
+  --shadow-rest: 0 1px 2px rgb(25 49 91 / 0.04), 0 1px 3px rgb(25 49 91 / 0.06);
+  --shadow-lift: 0 4px 12px rgb(25 49 91 / 0.08), 0 2px 4px rgb(25 49 91 / 0.05);
+  --shadow-over: 0 16px 40px rgb(25 49 91 / 0.16), 0 4px 12px rgb(25 49 91 / 0.08);
+
+  /* Inter, self-hosted. Mono numerals use the system stack — zero font bytes,
+     and a monospace face downloaded purely to align digits is a round trip
+     spent on something `tabular-nums` already does. */
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* ══ THE BRIDGE LAYER ═══════════════════════════════════════════════════════
+   The whole app already styles itself through shadcn's HSL variables. Keeping
+   those NAMES and rebinding their VALUES to navy/platinum turns every one of
+   the ~43k lines of page code over in a single merge — no week where Forecast
+   is teal and Bills is navy. Nothing below this line needs a page edit.       */
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -22,23 +137,18 @@
 
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-primary-border: var(--primary-border);
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-secondary-border: var(--secondary-border);
 
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-muted-border: var(--muted-border);
 
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-accent-border: var(--accent-border);
 
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-destructive-border: var(--destructive-border);
 
   --color-chart-1: hsl(var(--chart-1));
   --color-chart-2: hsl(var(--chart-2));
@@ -46,9 +156,9 @@
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
 
-  /* Money semantics surfaced as Tailwind colors so `text-positive` /
-     `bg-negative` / `text-warning` work everywhere (previously these tokens
-     were only reachable via arbitrary `text-[hsl(var(--positive))]`). */
+  /* Money semantics. Under rule 7c good does not get its own colour: positive
+     resolves to the same navy as ordinary text, and only `negative` spends the
+     one alarm colour the palette has. */
   --color-positive: hsl(var(--positive));
   --color-positive-foreground: hsl(var(--positive-foreground));
   --color-negative: hsl(var(--negative));
@@ -56,251 +166,124 @@
   --color-warning: hsl(var(--warning));
   --color-warning-foreground: hsl(var(--warning-foreground));
 
-  /* Per-card Amex brand identity (Blue Cash / Platinum / Gold). Drives the
-     Kill Stack + per-card headers so each physical card reads as itself. */
+  /* Amex per-card identity (Blue Cash / Platinum). Identity, not health — the
+     one case the dashboard keeps a categorical hue for — so they are navy-ramp
+     steps rather than a second palette. */
   --color-card-blue: hsl(var(--card-blue));
   --color-card-silver: hsl(var(--card-silver));
   --color-card-gold: hsl(var(--card-gold));
-
-  /* Splash palette (the logo's violet + orange) — brand punctuation. */
-  --color-splash-violet: hsl(var(--splash-violet));
-  --color-splash-orange: hsl(var(--splash-orange));
 
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-primary: hsl(var(--sidebar-primary));
   --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
-  --color-sidebar-primary-border: var(--sidebar-primary-border);
   --color-sidebar-accent: hsl(var(--sidebar-accent));
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
-  --color-sidebar-accent-border: var(--sidebar-accent-border);
   --color-sidebar-ring: hsl(var(--sidebar-ring));
-
-  --font-sans: var(--app-font-sans);
-  --font-serif: var(--app-font-serif);
-  --font-mono: var(--app-font-mono);
-  --font-display: var(--app-font-display);
-
-  /* Softly rounded scale — friendly + premium (cards ~16px, controls ~8px).
-     rounded-full stays round for genuine circles (dots, avatars, rings). */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.625rem;
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1rem;
-  --radius-3xl: 1.25rem;
 }
 
 :root {
-  --button-outline: rgba(26, 34, 48, .08);
-  --badge-outline: rgba(26, 34, 48, .06);
+  color-scheme: light;
 
-  --opaque-button-border-intensity: -6;
+  /* ── Motion dials ────────────────────────────────────────────────────────
+     Every movement in the app is one of these numbers. Turn one here and the
+     whole thing changes together — that is the point of having them.
+     --dur-press stays short: the CLICK must answer instantly even when
+     everything it sets in motion is deliberate. */
+  --anim-speed: 2.2;   /* the dashboard's speed knob — keep equal to SPEED in the chart kit */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-enter: cubic-bezier(0.22, 0.61, 0.36, 1); /* gentle ease-out — arrivals */
+  --ease-move: cubic-bezier(0.45, 0, 0.55, 1);     /* symmetric — anything travelling */
+  --dur-press: 120ms;
+  --dur-in: 460ms;
+  --dur-page: 280ms;
+  --stagger: 45ms;
 
-  --elevate-1: rgba(26, 34, 48, .03);
-  --elevate-2: rgba(26, 34, 48, .06);
+  /* Legacy dial names, rebound onto the kit — the same bridge trick as the
+     colours. Twenty-odd surfaces still name these; rebinding moves them all
+     onto the house curves and pace instead of leaving two motion systems. */
+  --ease-glide: var(--ease-enter);
+  --dur-quick: var(--dur-press);
+  --dur-soft: calc(240ms * var(--anim-speed));
+  --dur-slow: calc(280ms * var(--anim-speed));
+  --dur-grand: calc(700ms * var(--anim-speed));
 
-  /* (Bright wash) Brad's brief: MOSTLY BRIGHT WHITE, matte-black ink,
-     splashes of color. True-neutral bright white canvas (no cool cast),
-     pure white cards, quiet neutral hairlines, matte-black text. Teal is
-     the structural accent; the logo's violet + orange punctuate. */
-  --background: 0 0% 99%;
-  --foreground: 0 0% 10%;
-  --border: 0 0% 89%;
+  /* ── The bridged palette ─────────────────────────────────────────────────
+     HSL triplets, every one round-tripping exactly to its hex so the built
+     bundle only ever ships colours from the navy/platinum allowlist. */
+  --background: 216 45.5% 97.8%;      /* #f7f9fc platinum tint */
+  --foreground: 220.8 32.5% 15.1%;    /* #1a2233 ink — matte, never #000 */
+  --border: 212 42.9% 93.1%;          /* #e6edf5 brand line */
 
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 10%;
-  --card-border: 0 0% 90%;
+  --card-foreground: 220.8 32.5% 15.1%;
+  --card-border: 212 42.9% 93.1%;
 
-  --sidebar: 0 0% 100%;
-  --sidebar-foreground: 0 0% 38%;
-  --sidebar-border: 0 0% 90%;
-  --sidebar-primary: 192 80% 38%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 0 0% 95%;
-  --sidebar-accent-foreground: 192 75% 30%;
-  --sidebar-ring: 192 80% 40%;
+  /* Navy chrome: the header and mobile nav are a navy band, not a white one. */
+  --sidebar: 218.2 56.9% 22.7%;                 /* #19315b */
+  --sidebar-foreground: 216.3 30.6% 75.7%;      /* #aebdd4 */
+  --sidebar-border: 216.3 52.8% 28.2%;          /* #22406e */
+  --sidebar-primary: 28.5 91.7% 57.3%;          /* #f68d2e — the active accent */
+  --sidebar-primary-foreground: 218.2 56.9% 22.7%;
+  --sidebar-accent: 216.3 52.8% 28.2%;          /* #22406e hover row */
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-ring: 28.5 91.7% 57.3%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 10%;
-  --popover-border: 0 0% 90%;
+  --popover-foreground: 220.8 32.5% 15.1%;
+  --popover-border: 212 42.9% 93.1%;
 
-  /* Teal primary — the structural accent. Deepened for AA on white. */
-  --primary: 192 80% 37%;
+  --primary: 218.2 56.9% 22.7%;       /* #19315b */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 0 0% 94%;
-  --secondary-foreground: 0 0% 15%;
+  --secondary: 215 54.5% 95.7%;       /* #eef3fa */
+  --secondary-foreground: 218.2 56.9% 22.7%;
 
-  --muted: 0 0% 95%;
-  --muted-foreground: 0 0% 40%;
+  --muted: 213.3 52.9% 96.7%;         /* #f2f6fb */
+  --muted-foreground: 216.5 11% 41%;  /* #5d6674 */
 
-  /* Neutral raised surface for hovers/active states — NOT a second accent.
-     Emphasis comes from the teal primary, never a competing color. */
-  --accent: 0 0% 95%;
-  --accent-foreground: 0 0% 15%;
+  --accent: 215 54.5% 95.7%;          /* #eef3fa — a raised neutral, NOT a second accent */
+  --accent-foreground: 218.2 56.9% 22.7%;
 
-  --destructive: 4 72% 48%;
+  --destructive: 17.3 73.1% 56.3%;    /* #e16d3e deep orange */
   --destructive-foreground: 0 0% 100%;
 
-  --input: 0 0% 88%;
-  --ring: 192 80% 40%;
+  --input: 212 42.9% 93.1%;
+  --ring: 218.2 56.9% 22.7%;
 
-  --positive: 152 55% 34%;
+  --positive: 218.2 56.9% 22.7%;      /* good is navy and does not shout */
   --positive-foreground: 0 0% 100%;
-  --negative: 4 68% 46%;
+  --negative: 17.3 73.1% 56.3%;
   --negative-foreground: 0 0% 100%;
-  --warning: 33 82% 46%;
+  --warning: 216.5 11% 41%;           /* watch is grey */
   --warning-foreground: 0 0% 100%;
 
-  /* Chart ramp on white: teal-led with the brand violet as the second hue
-     (mirrors dark mode) — splash without rainbow. */
-  --chart-1: 192 55% 36%;
-  --chart-2: 200 42% 52%;
-  --chart-3: 0 0% 58%;
-  --chart-4: 192 48% 58%;
-  --chart-5: 262 55% 52%;
+  /* Sequential encoding = the dashboard's NAVY_RAMP by rank, densest first. */
+  --chart-1: 218.2 56.9% 22.7%;       /* #19315b */
+  --chart-2: 216.4 41.6% 39.6%;       /* #3b5c8f */
+  --chart-3: 215 27.3% 65.5%;         /* #8fa3bf */
+  --chart-4: 215.1 31.3% 74.3%;       /* #a9bad2 */
+  --chart-5: 216 34.1% 82.7%;         /* #c4d0e2 */
 
-  /* Amex per-card brand identity: Blue Cash = muted blue, Platinum = neutral
-     silver. (Gold retired.) Kill Stack + per-card UI. */
-  --card-blue: 200 60% 48%;
-  --card-silver: 210 10% 55%;
-  --card-gold: 210 10% 55%;
+  --card-blue: 216.4 41.6% 39.6%;
+  --card-silver: 215 27.3% 65.5%;
+  --card-gold: 215 27.3% 65.5%;
 
-  /* Splash palette (light mode: slightly deeper for contrast on white). */
-  --splash-violet: 262 60% 52%;
-  --splash-orange: 28 85% 48%;
-
-  --app-font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --app-font-serif: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --app-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  /* (Flat-matte) One serious family everywhere — headings differ from body by
-     weight and tracking only. No playful display faces; that's a design law. */
-  --app-font-display: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
-  /* (Flat-matte) Tight corners. Propagates to every rounded-sm/md/lg/xl
-     utility via the @theme radius mapping above. */
-  --radius: 0.625rem;
-
-  /* (Final wrapper · depth) A soft, subtle layered elevation gives every card
-     quiet depth + life without breaking the crisp square identity. Cards rest
-     on --shadow-sm; hover lifts to --shadow-md. Overlays keep shadow-lg/xl.
-     Tuned premium, never heavy. */
-  --shadow-2xs: 0 1px 1px 0 rgba(0, 0, 0, 0.03);
-  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 2px 6px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 0.55);
-  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 3px 10px -3px rgba(0, 0, 0, 0.07), inset 0 1px 0 0 rgba(255, 255, 255, 0.55);
-  --shadow-md: 0 4px 14px -3px rgba(0, 0, 0, 0.11), 0 2px 6px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 0.6);
-  --shadow-lg: 0 8px 24px -8px rgba(0, 0, 0, 0.18);
-  --shadow-xl: 0 12px 32px -10px rgba(0, 0, 0, 0.22);
-  --shadow-2xl: 0 16px 40px -12px rgba(0, 0, 0, 0.28);
+  --shadow-2xs: 0 1px 1px rgb(25 49 91 / 0.03);
+  --shadow-xs: 0 1px 2px rgb(25 49 91 / 0.04);
+  --shadow-sm: var(--shadow-rest);
+  --shadow: var(--shadow-rest);
+  --shadow-md: var(--shadow-lift);
+  --shadow-lg: var(--shadow-lift);
+  --shadow-xl: var(--shadow-over);
+  --shadow-2xl: var(--shadow-over);
 
   --tracking-normal: 0em;
-  /* (Refreshing Summer · tight) Shrink the base spacing unit so every
-     padding / gap / margin tightens app-wide — denser, sexier, far less wasted
-     space. */
-  --spacing: 0.2rem;
-
-  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
-  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
-  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
-  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
-  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
-  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
-  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
-}
-
-.dark {
-  --button-outline: rgba(255,255,255, .08);
-  --badge-outline: rgba(255,255,255, .06);
-
-  --opaque-button-border-intensity: 8;
-
-  --elevate-1: rgba(255,255,255, .035);
-  --elevate-2: rgba(255,255,255, .07);
-
-  /* (Matte Black · premium) A true neutral matte-black canvas — hue 0, near-zero
-     saturation — that ramps lighter from ground → card → border so cards *float*
-     off the black. Teal #2496B5 stays the single structural accent (selection,
-     focus glow, primary actions / active nav); +/- money stays green / red. The
-     matte neutral ground is what makes the app look like it cost millions. */
-  --background: 0 0% 7%;         /* true matte black ground */
-  --foreground: 0 0% 98%;        /* bright white headings */
-  --border: 0 0% 16%;            /* quieter neutral hairline */
-
-  --card: 0 0% 13%;              /* raised matte card — floats VISIBLY off ground */
-  --card-foreground: 0 0% 98%;
-  --card-border: 0 0% 16%;
-
-  --sidebar: 0 0% 7%;            /* panel = ground */
-  --sidebar-foreground: 0 0% 78%;     /* idle nav (light) */
-  --sidebar-border: 0 0% 14%;         /* dividers */
-  --sidebar-primary: 191 85% 55%;     /* teal accent */
-  --sidebar-primary-foreground: 0 0% 8%;
-  --sidebar-accent: 0 0% 14%;         /* neutral hover row */
-  --sidebar-accent-foreground: 191 70% 74%;  /* teal active nav */
-  --sidebar-ring: 191 85% 55%;
-
-  --popover: 0 0% 14%;
-  --popover-foreground: 0 0% 98%;
-  --popover-border: 0 0% 18%;
-
-  --primary: 191 90% 55%;        /* bright teal — the structural accent */
-  --primary-foreground: 0 0% 8%;
-
-  --secondary: 0 0% 17%;
-  --secondary-foreground: 0 0% 98%;
-
-  --muted: 0 0% 14%;
-  --muted-foreground: 0 0% 68%;       /* body */
-
-  --accent: 0 0% 14%;            /* neutral raised row — not a second accent */
-  --accent-foreground: 0 0% 94%;
-
-  --destructive: 4 74% 60%;
-  --destructive-foreground: 0 0% 100%;
-
-  --input: 0 0% 19%;
-  --ring: 191 85% 55%;           /* teal focus glow (hued) */
-
-  --positive: 152 56% 48%;       /* green */
-  --positive-foreground: 0 0% 8%;
-  --negative: 4 78% 62%;
-  --negative-foreground: 0 0% 100%;
-  --warning: 33 88% 58%;         /* amber */
-  --warning-foreground: 0 0% 8%;
-
-  /* Series on the matte canvas: teal-led with a violet second hue (the
-     logo's own color) so charts carry the brand splash without going
-     rainbow. */
-  --chart-1: 191 60% 54%;
-  --chart-2: 200 40% 60%;
-  --chart-3: 0 0% 62%;           /* neutral series on the matte canvas */
-  --chart-4: 191 45% 70%;        /* light teal */
-  --chart-5: 262 70% 68%;        /* violet (brand splash; was slate) */
-
-  /* Splash palette — the logo's violet + orange, used as PUNCTUATION
-     (rails, dots, podium tiles, confetti), never as full surfaces. */
-  --splash-violet: 262 75% 64%;
-  --splash-orange: 28 92% 58%;
-
-  /* Amex per-card brand identity: Blue Cash = muted blue, Platinum = neutral
-     silver. (Gold retired.) */
-  --card-blue: 200 65% 60%;
-  --card-silver: 210 10% 62%;
-  --card-gold: 210 10% 62%;
-
-
-  --shadow-2xs: none;
-  --shadow-xs: none;
-  /* Subtle matte-black depth + a whisper of a top highlight so cards read as
-     polished glass and lift visibly on hover. */
-  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.45), inset 0 1px 0 0 rgba(255,255,255,0.045);
-  --shadow: 0 2px 8px -3px rgba(0,0,0,0.5), inset 0 1px 0 0 rgba(255,255,255,0.05);
-  --shadow-md: 0 6px 18px -6px rgba(0,0,0,0.6), inset 0 1px 0 0 rgba(255,255,255,0.06);
-  --shadow-lg: 0px 10px 24px -8px rgba(0,0,0,0.6);
-  --shadow-xl: 0px 16px 32px -10px rgba(0,0,0,0.65);
-  --shadow-2xl: 0px 20px 44px -12px rgba(0,0,0,0.7);
+  /* Tailwind's own spacing unit. The app had been running a 0.2rem unit, which
+     shrank every padding, gap and icon by a fifth — the ported kit's class
+     strings are drawn against 0.25rem and read cramped at anything else. */
+  --spacing: 0.25rem;
 }
 
 @layer base {
@@ -308,194 +291,70 @@
     @apply border-border;
   }
 
+  /**
+   * ⚠️⚠️ `html` IS THE SOLE VERTICAL SCROLLER, AND THE GUTTER IS ALWAYS RESERVED.
+   *
+   * A scrollbar that appears and disappears between views moves the layout by
+   * ~15px. Anything measuring its own width mid-animation — a chart's
+   * responsive container above all — re-measures at the new size, throws away
+   * the frame it was drawing and swaps in the final static picture, so the draw
+   * simply never happens. It cost the Financial Dashboard a day to find.
+   *
+   * `body` deliberately gets NO `overflow-x`: `overflow-x: hidden` forces
+   * `overflow-y` to compute to `auto`, which would make body a SECOND scroll
+   * container whose gutter double-reserves and whose transient scrollbar
+   * reintroduces the very width shift above. A wide table scrolls inside its
+   * own container, never by moving the page.
+   */
   html {
-    font-feature-settings: "cv11", "ss01", "ss03", "calt";
-    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+    overflow-y: scroll;
+    max-width: 100%;
+    scrollbar-gutter: stable;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    letter-spacing: -0.005em;
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
-    font-feature-settings: "cv11", "ss01", "ss03", "calt";
-    line-height: 1.5;
-    letter-spacing: -0.005em;
-    /* (Bright wash) Bright white canvas with a whisper of the brand aurora
-       (teal + violet) in the top-left — color you can feel, not see-see.
-       Fixed so it doesn't scroll. */
-    background-image:
-      radial-gradient(1200px 640px at 6% -10%, hsl(192 45% 92% / 0.6), transparent 60%),
-      radial-gradient(900px 480px at 40% -14%, hsl(var(--splash-violet) / 0.07), transparent 55%);
-    background-attachment: fixed;
-  }
-  /* (Studio · night) Matte near-black canvas with one faint teal glow — the
-     single-accent discipline carried into the backdrop; no rainbow. */
-  .dark body {
-    background-image:
-      radial-gradient(1200px 680px at 6% -12%, hsl(191 60% 20% / 0.35), transparent 60%);
+    @apply bg-background text-foreground;
+    max-width: 100%;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    /* cv11 = the single-storey 'a' that keeps numerals and text feeling of a
+       piece; ss01 tightens the punctuation. Both are Inter's own, no drawing. */
+    font-feature-settings: "cv11", "ss01";
+    /* Money must NEVER reflow as it counts or updates. */
+    font-variant-numeric: tabular-nums;
   }
 
-  /* Teal-tinted text selection (matches the single accent). */
-  ::selection {
-    background: hsl(192 60% 50% / 0.28);
-  }
-
+  /* Headings carry the tracking, not the size alone — a heading that is merely
+     bigger reads like body text that got promoted. */
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display tracking-tight text-foreground;
+    @apply font-display text-foreground;
     font-weight: 600;
-    line-height: 1.15;
-    letter-spacing: -0.012em;
+    line-height: 1.18;
+    letter-spacing: -0.014em;
   }
-  /* (Studio) Page titles are solid near-black/near-white ink — the weight and
-     tracking do the work, not a gradient fill. Cleaner, more premium. */
-  h1 {
-    letter-spacing: -0.018em;
-    font-weight: 700;
-    color: hsl(var(--foreground));
+  h1 { letter-spacing: -0.018em; font-weight: 700; }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.16);
   }
-  h2 { letter-spacing: -0.014em; font-weight: 600; }
-  h3 { letter-spacing: -0.01em; }
+
+  /* KEYBOARD FOCUS. Nothing reads unfinished faster than tabbing through an app
+     and watching nothing move. `:focus-visible` only — a mouse click must not
+     leave a ring behind it. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-navy);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 
   [data-money], .tabular-nums {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1, "cv11" 1;
-  }
-
-  /* (Refreshing Summer) Slim teal-navy scrollbar in dark mode so the chrome
-     reads as part of the ocean-dusk UI rather than the OS default. */
-  .dark ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  .dark ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .dark ::-webkit-scrollbar-thumb {
-    background: hsl(0 0% 20%);
-    border-radius: 3px;
-  }
-  .dark ::-webkit-scrollbar-thumb:hover {
-    background: hsl(0 0% 27%);
-  }
-}
-
-@layer utilities {
-  /* ── Motion language ─────────────────────────────────────────────────
-     One easing, four speeds. Every animated surface in the app draws from
-     these tokens so the whole product moves as one system:
-       --ease-glide  the house curve (easeOutQuint — starts eager, lands soft)
-       --dur-quick   hovers & toggles — responsiveness, never showmanship
-       --dur-soft    section/page entrances
-       --dur-slow    choreographed staggers
-       --dur-grand   gauges, chart draws, count-ups — the "alive" moments */
-  :root {
-    --ease-glide: cubic-bezier(0.22, 1, 0.36, 1);
-    --dur-quick: 240ms;
-    --dur-soft: 650ms;
-    --dur-slow: 800ms;
-    --dur-grand: 1300ms;
-  }
-
-  /* Choreographed entrance — direct children fade + rise in sequence when
-     the page mounts. Used on card/tile grids so a page opens with a calm,
-     premium cascade instead of a flat snap-in. */
-  @keyframes h2-fade-up {
-    from {
-      opacity: 0;
-      transform: translateY(12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  .stagger-children > * {
-    animation: h2-fade-up var(--dur-slow) var(--ease-glide) backwards;
-    animation-delay: calc(60ms + (var(--stagger-i, 0) * 90ms));
-  }
-  /* Linear 90ms cascade for up to 12 children (older builds popped
-     everything past the 6th child in at once). */
-  .stagger-children > *:nth-child(1) { --stagger-i: 0; }
-  .stagger-children > *:nth-child(2) { --stagger-i: 1; }
-  .stagger-children > *:nth-child(3) { --stagger-i: 2; }
-  .stagger-children > *:nth-child(4) { --stagger-i: 3; }
-  .stagger-children > *:nth-child(5) { --stagger-i: 4; }
-  .stagger-children > *:nth-child(6) { --stagger-i: 5; }
-  .stagger-children > *:nth-child(7) { --stagger-i: 6; }
-  .stagger-children > *:nth-child(8) { --stagger-i: 7; }
-  .stagger-children > *:nth-child(9) { --stagger-i: 8; }
-  .stagger-children > *:nth-child(10) { --stagger-i: 9; }
-  .stagger-children > *:nth-child(11) { --stagger-i: 10; }
-  .stagger-children > *:nth-child(n + 12) { --stagger-i: 11; }
-
-  /* Chart draw-in: a clip-path sweep on the WRAPPER (never dash-animate a
-     non-scaling-stroke path — dashes compute in screen pixels and shred the
-     line into confetti). */
-  @keyframes h2-sweep {
-    from {
-      clip-path: inset(0 100% 0 0);
-    }
-    to {
-      clip-path: inset(0 0 0 0);
-    }
-  }
-  .sweep-in {
-    animation: h2-sweep var(--dur-grand) var(--ease-glide);
-  }
-  @keyframes h2-fade {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-  .spark-fill-in {
-    animation: h2-fade var(--dur-grand) ease-out;
-  }
-
-  /* Horizontal grow-in (StackBar): the whole bar sweeps open from the left. */
-  @keyframes h2-grow-x {
-    from {
-      transform: scaleX(0);
-    }
-    to {
-      transform: scaleX(1);
-    }
-  }
-  .grow-x {
-    transform-origin: left;
-    animation: h2-grow-x var(--dur-grand) var(--ease-glide);
-  }
-
-  /* Ad-hoc section entrance for surfaces outside a stagger grid. */
-  .section-enter {
-    animation: h2-fade-up var(--dur-soft) var(--ease-glide) backwards;
-  }
-
-  /* Confetti fall (used by <Confetti />). Drifts sideways + spins while it
-     drops the full viewport height, then fades. */
-  @keyframes cc-fall {
-    to {
-      transform: translate(var(--cc-drift, 0), 100vh) rotate(var(--cc-rot, 360deg));
-      opacity: 0;
-    }
-  }
-
-  /* Reduced motion: neutralize the app's decorative animation everywhere —
-     covers the gauges, meters, staggers, and hover lifts that previously
-     each needed (and mostly lacked) their own guard. Radix overlay
-     animations collapse to near-instant rather than `none` so their
-     data-state open/close lifecycles still complete. */
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-delay: 0ms !important;
-      transition-duration: 0.01ms !important;
-    }
   }
 
   input[type="search"]::-webkit-search-cancel-button {
@@ -506,124 +365,349 @@
     color: hsl(var(--muted-foreground));
     pointer-events: none;
   }
+}
 
-  /* Slate-palette polish for in-app charts. Raw recharts usage on the
-     dashboard / forecast / reports pages bypasses the <ChartContainer>
-     wrapper, so style the underlying SVG primitives globally to keep
-     gridlines, axis ticks, tooltip cursors, and legends legible on the
-     new card surfaces. */
-  .recharts-cartesian-grid line {
-    stroke: hsl(var(--border));
-  }
-  .recharts-cartesian-axis-line,
-  .recharts-cartesian-axis-tick-line {
-    stroke: hsl(var(--border));
-  }
-  .recharts-cartesian-axis-tick-value,
-  .recharts-polar-angle-axis-tick-value,
-  .recharts-polar-radius-axis-tick-value {
-    fill: hsl(var(--muted-foreground));
-  }
-  .recharts-polar-grid-angle line,
-  .recharts-polar-grid-concentric circle,
-  .recharts-polar-grid-concentric polygon {
-    stroke: hsl(var(--border));
-  }
-  .recharts-tooltip-cursor {
-    stroke: hsl(var(--muted-foreground) / 0.4);
-    fill: hsl(var(--muted) / 0.35);
-  }
-  .recharts-default-legend .recharts-legend-item-text {
-    color: hsl(var(--muted-foreground)) !important;
-  }
-  .recharts-reference-line line {
-    stroke: hsl(var(--border));
-  }
-  /* (Refreshing Summer) Sea-glass surface. The dark mode teal-navy gradient +
-     hairline border + deep ambient shadow that defines the card look app-wide.
-     In light mode it degrades to a flat white surface so light stays clean. */
-  /* (Studio) Clean flat card surface — solid fill, quiet neutral hairline, no
-     rainbow border. The single teal accent is reserved for active/emphasis. */
-  .glass-surface {
-    border: 1px solid hsl(var(--card-border));
-  }
-  .dark .glass-surface {
-    border: 1px solid hsl(var(--card-border));
+@layer components {
+  /* ── The platinum surface ───────────────────────────────────────────────
+     A machined edge, not a drawn border. Three cheap layers do all the work:
+     a barely perceptible vertical gradient so a card isn't a flat slab; a 1px
+     inset highlight along the top edge — the lit rim of a milled panel; and a
+     TWO-stop shadow (tight contact + wide soft ambient) instead of one blunt
+     blur. Slight by design: at 100% zoom you should feel depth, not see an
+     effect. Pair with `ring-1 ring-brand-line` for the platinum hairline. */
+  .surface {
+    background-image: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 1px 1.5px rgba(16, 24, 40, 0.04),
+      0 6px 16px -6px rgba(16, 24, 40, 0.07);
   }
 
-  /* Emphasis ring — a flat 2px teal accent border (no blur halo). */
+  /* Clickable surfaces settle a little deeper under the pointer. Shadow only —
+     the lift itself lives on the button token, which owns the translate. */
+  .surface-lift {
+    transition: box-shadow calc(96ms * var(--anim-speed)) var(--ease-move);
+  }
+  .surface-lift:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 2px 4px rgba(16, 24, 40, 0.05),
+      0 14px 28px -10px rgba(16, 24, 40, 0.13);
+  }
+
+  /* ── The head, and its bleed ─────────────────────────────────────────────
+     At REST the card head is plain — title, hairline, nothing painted. Every
+     earlier attempt at this put colour in the header PERMANENTLY, and a
+     coloured bar across every card all the time is what read first as ugly and
+     then as juvenile. Colour as a RESPONSE to your pointer is the only version
+     that is subtle.
+
+     Brand navy seeps down from the top edge as three overlapping pools at
+     different x centres and strengths, so the lower edge undulates instead of
+     ruling straight across. That unevenness is the whole difference between
+     "a gradient was applied" and "the colour soaked in". Vertical radii finish
+     at ~72 / 56 / 63px — INSIDE the 78px box — so each pool reaches zero on its
+     own, at three different depths. */
+  .card-bleed::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 78px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity calc(420ms * var(--anim-speed)) var(--ease-move);
+    background-image:
+      radial-gradient(240px 76px at 13% -4px, rgba(25, 49, 91, 0.28) 0%, rgba(25, 49, 91, 0.10) 50%, rgba(25, 49, 91, 0) 84%),
+      radial-gradient(188px 58px at 46% -2px, rgba(25, 49, 91, 0.2) 0%, rgba(25, 49, 91, 0.06) 54%, rgba(25, 49, 91, 0) 86%),
+      radial-gradient(260px 69px at 82% -6px, rgba(25, 49, 91, 0.24) 0%, rgba(25, 49, 91, 0.07) 52%, rgba(25, 49, 91, 0) 85%);
+    /* ⚠️ A pool still painting when the BOX ends gets sliced off, and the
+       element's own bottom edge draws a dead-straight line across the card —
+       the one thing a stain must never do. Belt and braces against any future
+       height change. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 60%, rgba(0, 0, 0, 0) 100%);
+    mask-image: linear-gradient(to bottom, #000 60%, rgba(0, 0, 0, 0) 100%);
+  }
+  .card-bleed:hover::before { opacity: 1; }
+
+  /* Status chips — the label says the state; colour only reinforces it. */
+  .chip {
+    display: inline-block;
+    border-radius: 9999px;
+    padding: 2px 9px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .chip.ok { color: var(--color-ok); background: var(--color-ok-bg); }
+  .chip.warn { color: var(--color-warn); background: var(--color-warn-bg); }
+  .chip.bad { color: var(--color-bad); background: var(--color-bad-bg); }
+  .chip.info { color: var(--color-info); background: var(--color-info-bg); }
+  .chip.gray { color: #5d6674; background: #eef0f3; }
+
+  /* Emphasis ring — a flat navy hairline, no blur halo. */
   .focus-glow {
     border-color: hsl(var(--primary));
     box-shadow: inset 0 0 0 1px hsl(var(--primary));
   }
-  .dark .focus-glow {
-    border-color: hsl(var(--primary));
-    box-shadow: inset 0 0 0 1px hsl(var(--primary));
+}
+
+@layer utilities {
+  /* Aligning (tabular) lining figures for financial tables — clean, not
+     monospace/"code". Money never reflows as it counts or updates. */
+  .fin-num {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
   }
 
-  /* Review-spending CTA — a solid deep-red "danger" block. Static, no sheen. */
-  .review-cta {
-    background-image: none;
-    background-color: hsl(var(--negative) / 0.82);
-    border: none;
+  /* A scroller that carries no scrollbar — the tab strip on a narrow screen. */
+  .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+
+  /* ── Entrances ───────────────────────────────────────────────────────────
+     ⚠️ `backwards`, not `both`: an animation that ENDS holding a transform
+     leaves a containing block behind, and any `position: fixed` inside it
+     (every modal in this app) would then anchor to the card instead of the
+     viewport. Backwards gives the same entrance and lets the element settle
+     back to no transform. */
+  @keyframes tileIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .tile-in { animation: tileIn calc(280ms * var(--anim-speed)) var(--ease-enter) backwards; }
+
+  @keyframes riseIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  .rise-in { animation: riseIn calc(240ms * var(--anim-speed)) var(--ease-enter) backwards; }
+
+  @keyframes revealIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .reveal { animation: revealIn var(--dur-in) var(--ease-out) backwards; }
+
+  /* Route change: the outgoing page settles out, the incoming one lifts in.
+     A cut between two full pages is the most abrupt thing an app can do. */
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pageOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-4px); }
+  }
+  .page-in { animation: pageIn calc(var(--dur-page) * 1.4) var(--ease-out) backwards; }
+  .page-out { animation: pageOut var(--dur-page) ease-in both; }
+
+  /* Stagger: one class on a grid/flex/list container and its DIRECT children
+     cascade in, instead of an animation class per child. */
+  .stagger > * { animation: riseIn calc(240ms * var(--anim-speed)) var(--ease-enter) backwards; }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 28ms; }
+  .stagger > *:nth-child(3) { animation-delay: 56ms; }
+  .stagger > *:nth-child(4) { animation-delay: 84ms; }
+  .stagger > *:nth-child(5) { animation-delay: 112ms; }
+  .stagger > *:nth-child(6) { animation-delay: 140ms; }
+  .stagger > *:nth-child(7) { animation-delay: 168ms; }
+  .stagger > *:nth-child(8) { animation-delay: 196ms; }
+  .stagger > *:nth-child(n + 9) { animation-delay: 224ms; }
+
+  /* The legacy stagger name, on the new keyframe and the new dials. */
+  .stagger-children > * {
+    animation: riseIn var(--dur-slow) var(--ease-enter) backwards;
+    animation-delay: calc(var(--stagger) * var(--stagger-i, 0));
+  }
+  .stagger-children > *:nth-child(1) { --stagger-i: 0; }
+  .stagger-children > *:nth-child(2) { --stagger-i: 1; }
+  .stagger-children > *:nth-child(3) { --stagger-i: 2; }
+  .stagger-children > *:nth-child(4) { --stagger-i: 3; }
+  .stagger-children > *:nth-child(5) { --stagger-i: 4; }
+  .stagger-children > *:nth-child(6) { --stagger-i: 5; }
+  .stagger-children > *:nth-child(7) { --stagger-i: 6; }
+  .stagger-children > *:nth-child(8) { --stagger-i: 7; }
+  .stagger-children > *:nth-child(n + 9) { --stagger-i: 8; }
+  .section-enter { animation: riseIn var(--dur-soft) var(--ease-enter) backwards; }
+
+  /* ── Charts ──────────────────────────────────────────────────────────────
+     A GPU-composited fade+rise on the chart WRAPPER that outlasts the chart's
+     first paint, so even a heavy chart materialises smoothly instead of
+     popping in at the tail of the page fade. */
+  @keyframes chartIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+  }
+  .chart-in { animation: chartIn calc(340ms * var(--anim-speed)) var(--ease-enter) backwards; }
+
+  /* Area draw-on: softly fill the chart LEFT→RIGHT, like it is being plotted
+     across the months. A gradient mask with a feathered leading edge sweeps
+     across, so there is no hard clip line — and it reveals the already-painted
+     chart, one cheap animation regardless of series count. Never dash-animate a
+     non-scaling-stroke path: dashes compute in screen pixels and shred the line
+     into confetti. */
+  @keyframes areaFill {
+    from { --reveal: -7%; }
+    to { --reveal: 100%; }
+  }
+  .area-draw {
+    -webkit-mask-image: linear-gradient(to right, #000 var(--reveal), transparent calc(var(--reveal) + 7%));
+    mask-image: linear-gradient(to right, #000 var(--reveal), transparent calc(var(--reveal) + 7%));
+    animation: areaFill calc(900ms * var(--anim-speed)) var(--ease-move) both;
+  }
+  .sweep-in { animation: chartIn var(--dur-grand) var(--ease-enter) backwards; }
+  .spark-fill-in { animation: chartIn var(--dur-grand) var(--ease-enter) backwards; }
+
+  /* ── Bars ────────────────────────────────────────────────────────────────
+     Bars sweep their WIDTH in at the shared reveal speed. The CURVE matters
+     more than the duration: a hard ease-out puts ~94% of the travel in the
+     first ~43% of the time and reads as a snap followed by an invisible creep
+     on something you are meant to watch move. --ease-move spends its time in
+     the middle. */
+  .bar-sweep { transition: width calc(700ms * var(--anim-speed)) var(--ease-move); }
+  .bar-morph {
+    transition:
+      width calc(600ms * var(--anim-speed)) var(--ease-move),
+      left calc(600ms * var(--anim-speed)) var(--ease-move),
+      transform calc(600ms * var(--anim-speed)) var(--ease-move),
+      opacity calc(600ms * var(--anim-speed)) linear,
+      background-color calc(600ms * var(--anim-speed)) linear;
+  }
+  .row-morph {
+    transition:
+      transform calc(600ms * var(--anim-speed)) var(--ease-move),
+      opacity calc(600ms * var(--anim-speed)) linear;
+  }
+  .list-morph {
+    transition:
+      height calc(600ms * var(--anim-speed)) var(--ease-move),
+      opacity calc(600ms * var(--anim-speed)) var(--ease-move);
+  }
+  @keyframes growX {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  .grow-x { transform-origin: left; animation: growX var(--dur-grand) var(--ease-move) backwards; }
+
+  /* The active-tab underline sweeps in from the left. It is the ONLY moving
+     part of a tab ribbon: the label must not shift, or a row of tabs jitters
+     as you read across it. */
+  @keyframes underlineSweep {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  .tab-underline {
+    transform-origin: left center;
+    animation: underlineSweep calc(220ms * var(--anim-speed)) var(--ease-enter) both;
   }
 
-  .no-default-hover-elevate {}
-  .no-default-active-elevate {}
-
-  .toggle-elevate::before,
-  .toggle-elevate-2::before {
-    content: "";
-    pointer-events: none;
-    position: absolute;
-    inset: 0px;
-    border-radius: inherit;
-    z-index: -1;
+  /* Loading placeholder. A shape where the content will be — never a spinner,
+     which says "wait" without saying what for. */
+  @keyframes skeletonSweep {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  .skeleton {
+    border-radius: 6px;
+    background-image: linear-gradient(90deg, #e6edf5 25%, #f2f6fb 37%, #e6edf5 63%);
+    background-size: 200% 100%;
+    animation: skeletonSweep 1.6s ease-in-out infinite;
   }
 
-  .toggle-elevate.toggle-elevated::before {
-    background-color: var(--elevate-2);
+  /* Press. Every clickable surface dips slightly, instantly, so the click is
+     answered on the frame it happens — long before the page moves.
+     ⚠️ `translate`/`scale`/`rotate` are listed because Tailwind v4 animates
+     those as their own CSS properties, NOT through the `transform` shorthand.
+     Leave them out and `hover:-translate-y-1` jumps instead of lifting —
+     the same silent-failure class as `transition-transform`. */
+  .press {
+    transition-property: transform, translate, scale, rotate, box-shadow, background-color, border-color, color, opacity;
+    transition-duration: var(--dur-press);
+    transition-timing-function: var(--ease-out);
+  }
+  .press:active { transform: scale(0.985); }
+  .press:disabled:active { transform: none; }
+
+  /* ── Radix overlay states ────────────────────────────────────────────────
+     The app used to pull in tw-animate-css purely for these. Four keyframes
+     on the shared dials replace the dependency, and now the overlays move on
+     the same two curves as everything else. */
+  @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes overlayOut { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes popIn { from { opacity: 0; transform: scale(0.97) translateY(-2px); } to { opacity: 1; transform: none; } }
+  @keyframes popOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.97) translateY(-2px); } }
+  @keyframes modalIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+  @keyframes modalOut { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -50%) scale(0.97); } }
+
+  .anim-overlay[data-state="open"] { animation: overlayIn var(--dur-page) var(--ease-enter); }
+  .anim-overlay[data-state="closed"] { animation: overlayOut var(--dur-page) var(--ease-move); }
+  .anim-pop[data-state="open"] { animation: popIn var(--dur-page) var(--ease-enter); }
+  .anim-pop[data-state="closed"] { animation: popOut var(--dur-press) var(--ease-move); }
+  /* The modal is centred by its own translate, so its keyframes have to carry
+     that translate too — a scale-only keyframe would drop the centring for the
+     duration of the animation and the dialog would fly in from the corner. */
+  .anim-modal[data-state="open"] { animation: modalIn var(--dur-page) var(--ease-enter); }
+  .anim-modal[data-state="closed"] { animation: modalOut var(--dur-press) var(--ease-move); }
+
+  @keyframes sheetInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  @keyframes sheetOutRight { from { transform: translateX(0); } to { transform: translateX(100%); } }
+  @keyframes sheetInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+  @keyframes sheetOutLeft { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+  @keyframes sheetInTop { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+  @keyframes sheetOutTop { from { transform: translateY(0); } to { transform: translateY(-100%); } }
+  @keyframes sheetInBottom { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes sheetOutBottom { from { transform: translateY(0); } to { transform: translateY(100%); } }
+  .anim-sheet-right[data-state="open"] { animation: sheetInRight var(--dur-in) var(--ease-out); }
+  .anim-sheet-right[data-state="closed"] { animation: sheetOutRight var(--dur-page) var(--ease-move); }
+  .anim-sheet-left[data-state="open"] { animation: sheetInLeft var(--dur-in) var(--ease-out); }
+  .anim-sheet-left[data-state="closed"] { animation: sheetOutLeft var(--dur-page) var(--ease-move); }
+  .anim-sheet-top[data-state="open"] { animation: sheetInTop var(--dur-in) var(--ease-out); }
+  .anim-sheet-top[data-state="closed"] { animation: sheetOutTop var(--dur-page) var(--ease-move); }
+  .anim-sheet-bottom[data-state="open"] { animation: sheetInBottom var(--dur-in) var(--ease-out); }
+  .anim-sheet-bottom[data-state="closed"] { animation: sheetOutBottom var(--dur-page) var(--ease-move); }
+
+  /* Confetti fall — kept only so the keyframe the gamification layer names
+     still resolves until that layer is deleted. */
+  @keyframes cc-fall {
+    to {
+      transform: translate(var(--cc-drift, 0), 100vh) rotate(var(--cc-rot, 360deg));
+      opacity: 0;
+    }
   }
 
-  .border.toggle-elevate::before {
-    inset: -1px;
-  }
-
-  .hover-elevate:not(.no-default-hover-elevate),
-  .active-elevate:not(.no-default-active-elevate),
-  .hover-elevate-2:not(.no-default-hover-elevate),
-  .active-elevate-2:not(.no-default-active-elevate) {
-    position: relative;
-    z-index: 0;
-  }
-
-  .hover-elevate:not(.no-default-hover-elevate)::after,
-  .active-elevate:not(.no-default-active-elevate)::after,
-  .hover-elevate-2:not(.no-default-hover-elevate)::after,
-  .active-elevate-2:not(.no-default-active-elevate)::after {
-    content: "";
-    pointer-events: none;
-    position: absolute;
-    inset: 0px;
-    border-radius: inherit;
-    z-index: 999;
-  }
-
-  .hover-elevate:hover:not(.no-default-hover-elevate)::after,
-  .active-elevate:active:not(.no-default-active-elevate)::after {
-    background-color: var(--elevate-1);
-  }
-
-  .hover-elevate-2:hover:not(.no-default-hover-elevate)::after,
-  .active-elevate-2:active:not(.no-default-active-elevate)::after {
-    background-color: var(--elevate-2);
-  }
-
-  .border.hover-elevate:not(.no-hover-interaction-elevate)::after,
-  .border.active-elevate:not(.no-active-interaction-elevate)::after,
-  .border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
-  .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
-  .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
-    inset: -1px;
+  /* ── ONE SWITCH FOR THE WHOLE SYSTEM ─────────────────────────────────────
+     Someone who has asked their machine for less motion gets a working app
+     with none of it, not a half-animated one. Zeroing the dials covers every
+     duration expressed against them; the explicit list covers the keyframes
+     whose base durations are literal. Radix open/close lifecycles still need
+     to COMPLETE, so overlay animations collapse to near-instant rather than
+     `none` — an animation removed outright never fires its end event and the
+     element would stay mounted. */
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --anim-speed: 0;
+      --dur-press: 0ms;
+      --dur-in: 0ms;
+      --dur-page: 0ms;
+      --stagger: 0ms;
+    }
+    .tile-in, .rise-in, .reveal, .page-in, .page-out, .chart-in, .area-draw,
+    .sweep-in, .spark-fill-in, .grow-x, .tab-underline, .skeleton,
+    .stagger > *, .stagger-children > *, .section-enter {
+      animation: none !important;
+    }
+    .bar-sweep, .bar-morph, .row-morph, .list-morph, .card-bleed::before,
+    .surface-lift {
+      transition: none !important;
+    }
+    /* Animation off would leave --reveal at 0% and mask most of the chart. */
+    .area-draw { -webkit-mask-image: none; mask-image: none; }
+    .press:active { transform: none; }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

@@ -27,7 +27,7 @@ export function SectionHeader({
             {eyebrow}
           </div>
         )}
-        <h2 className="text-lg font-semibold tracking-tight leading-tight dark:text-white">{title}</h2>
+        <h2 className="text-lg font-semibold tracking-tight leading-tight">{title}</h2>
         {sub && <p className="text-sm text-muted-foreground mt-0.5">{sub}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}

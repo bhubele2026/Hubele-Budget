@@ -1,7 +1,8 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import { createRequire } from "module";
 // @ts-expect-error -- plain .mjs shared module, no type declarations
 import { resolveBuildId } from "../../scripts/build-id.mjs";
 
@@ -43,12 +44,62 @@ if (isServe && !basePath) {
   );
 }
 
+/**
+ * Rewrites the `__INTER_WOFF2__` placeholder in index.html to the real URL of
+ * the Inter latin woff2, so the font can be PRELOADED without anyone
+ * hardcoding a content hash that goes stale on the next build.
+ *
+ * A webfont discovered inside a stylesheet is always one round trip late: the
+ * browser has to fetch and parse the CSS before it learns the font exists.
+ * Preloading it starts the download alongside the CSS instead.
+ *
+ * In a build the file has already been emitted by the CSS pipeline (the
+ * `@import "@fontsource-variable/inter/wght.css"` in index.css), so we look its
+ * hashed name up in the bundle rather than emitting a SECOND copy — two copies
+ * would mean the browser preloads one file and then downloads a different one.
+ * In dev nothing is emitted, so we point at the resolved node_modules path,
+ * which Vite serves directly.
+ */
+function interPreload(): Plugin {
+  const FILE = "inter-latin-wght-normal.woff2";
+  return {
+    name: "h2-inter-preload",
+    transformIndexHtml: {
+      order: "post",
+      handler(html, ctx) {
+        let href: string | undefined;
+        if (ctx.bundle) {
+          const hit = Object.values(ctx.bundle).find(
+            (a) => a.type === "asset" && a.fileName.includes("inter-latin-wght-normal"),
+          );
+          if (hit) href = `${(basePath ?? "").replace(/\/$/, "")}/${hit.fileName}`;
+        } else {
+          const require = createRequire(import.meta.url);
+          const pkg = require.resolve("@fontsource-variable/inter/package.json");
+          href = `/@fs${path.join(path.dirname(pkg), "files", FILE)}`;
+        }
+        // No font resolved (a dependency change, a renamed subset) — drop the
+        // tag rather than shipping a preload that 404s and warns in every
+        // console. The font still loads via the stylesheet, one hop later.
+        return href
+          ? html.replace("__INTER_WOFF2__", href)
+          : html.replace(/\n\s*<link rel="preload" href="__INTER_WOFF2__"[^>]*>/, "");
+      },
+    },
+  };
+}
+
 export default defineConfig({
   base: basePath,
   define: {
     __APP_VERSION__: JSON.stringify(buildId),
   },
-  plugins: [react(), tailwindcss({ optimize: false })],
+  // ⚠️ Tailwind's optimize pass is ON. It had been disabled, which shipped the
+  // stylesheet unminified with every declaration written out long-hand — 110 KB
+  // of CSS on a 90 KB budget, and the single largest render-blocking asset on
+  // the open path. Turning it on is a byte-for-byte-equivalent minify (Lightning
+  // CSS), not a rewrite: same cascade, same output, ~60% smaller.
+  plugins: [react(), tailwindcss(), interPreload()],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),

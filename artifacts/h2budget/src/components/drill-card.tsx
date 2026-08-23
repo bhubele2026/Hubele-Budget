@@ -70,7 +70,7 @@ export function DrillCard({
       )}
 
       {value != null && (
-        <div className="text-2xl font-bold tabular-nums leading-none dark:text-white">
+        <div className="text-2xl font-bold tabular-nums leading-none">
           {value}
         </div>
       )}

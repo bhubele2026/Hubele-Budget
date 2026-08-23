@@ -6,7 +6,9 @@ function Skeleton({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("animate-pulse rounded-md bg-primary/10", className)}
+      // `.skeleton` (index.css) is a platinum sweep, not a pulse: a shape where
+      // the content will be, so nothing moves when the data lands.
+      className={cn("skeleton", className)}
       {...props}
     />
   )
