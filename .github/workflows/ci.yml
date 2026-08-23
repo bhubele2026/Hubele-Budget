@@ -137,6 +137,12 @@ jobs:
           pnpm install --frozen-lockfile
       - name: Production build (same command Replit deploys)
         run: pnpm run build
+      # Entry-graph guard: the landing route must never statically pull
+      # recharts (vendor-charts), react-dom must live only in vendor-react,
+      # and total landing JS stays under the byte budget. Fails the PR the
+      # moment an import chain re-eagerizes a heavy vendor chunk.
+      - name: Entry-graph guard (no recharts on open, JS byte budget)
+        run: node scripts/check-entry-graph.mjs
 
   # Playwright e2e needs a booted app + Clerk test credentials + browsers.
   # Opt-in until those secrets/profile exist (set repo variable E2E_ENABLED=true)

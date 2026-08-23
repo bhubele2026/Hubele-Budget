@@ -17,12 +17,14 @@
 // fallback) lives on the page because it depends on hooks and the
 // Amex-specific debt-matching rules; this helper takes the already-
 // resolved anchor as input.
+// Concrete module, not the account-page barrel (the barrel drags recharts
+// into the entry graph via BalanceTrendChart — see check-entry-graph.mjs).
 import {
   compareMonth,
   monthKeyFromISO,
   monthKeyOf,
   type MonthKey,
-} from "@/components/account-page";
+} from "@/components/account-page/month-navigator";
 import { computeBalanceAtEndOf } from "./accountBalance";
 
 export type AmexTxnInput = {
