@@ -28,7 +28,7 @@ to get the household out of debt; correctness and trust beat everything.
   list views). Summary/aggregate pages request **server-computed aggregates**,
   not raw rows. **The `limit=5000` pattern is banned.**
 - **Every `useQuery` has an explicit, sensible `staleTime`/`gcTime`.** Slow-
-  changing data (settings, version, mapping-rules, forecast, debrief history)
+  changing data (settings, version, mapping-rules, forecast)
   gets a **generous `staleTime`** so navigation doesn't refetch.
 - **No duplicate or overlapping queries** for the same data. Global / slow-
   changing data is fetched **once at app level** and reused, not per page.

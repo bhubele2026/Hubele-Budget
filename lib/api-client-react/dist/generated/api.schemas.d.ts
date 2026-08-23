@@ -2173,15 +2173,6 @@ export interface AccountSnapshot {
 export type ForecastBundleAccountSnapshots = {
     [key: string]: AccountSnapshot;
 };
-export type LockedWeekActualActualPointsItem = {
-    date: string;
-    balance: string;
-};
-export interface LockedWeekActual {
-    weekStart: string;
-    weekEnd: string;
-    actualPoints: LockedWeekActualActualPointsItem[];
-}
 export interface ForecastBundle {
     fromDate: string;
     toDate: string;
@@ -2195,16 +2186,6 @@ export interface ForecastBundle {
     plaidCheckingAccounts: PlaidCheckingAccount[];
     monthSnapshots?: ForecastBundleMonthSnapshots;
     accountSnapshots?: ForecastBundleAccountSnapshots;
-    /** (#804 — Phase F) Per locked weekly_debrief, the daily ACTUAL
-  checking balance for that week. The /forecast chart overlays
-  these points on the projected balance area so the user can
-  see forecast vs. reality for any week they've locked. The
-  forecast curve itself is frozen over these date ranges
-  (driven by each week's varianceSnapshot.plans), so editing a
-  recurring item after locking cannot retroactively shift the
-  forecast for a locked week.
-   */
-    lockedWeeks?: LockedWeekActual[];
 }
 export interface SetBankSnapshotInput {
     /** @nullable */
@@ -2294,148 +2275,6 @@ export interface DashboardBudgetInput {
     bucket: string;
     periodKey: string;
     amount: string;
-}
-export interface WeeklyDebriefTotals {
-    plannedIncome: string;
-    actualIncome: string;
-    plannedExpenses: string;
-    actualExpenses: string;
-    plannedNet: string;
-    actualNet: string;
-    varianceNet: string;
-}
-export type WeeklyDebriefPlanItemKind = (typeof WeeklyDebriefPlanItemKind)[keyof typeof WeeklyDebriefPlanItemKind];
-export declare const WeeklyDebriefPlanItemKind: {
-    readonly income: "income";
-    readonly expense: "expense";
-};
-export type WeeklyDebriefPlanItemStatus = (typeof WeeklyDebriefPlanItemStatus)[keyof typeof WeeklyDebriefPlanItemStatus];
-export declare const WeeklyDebriefPlanItemStatus: {
-    readonly matched: "matched";
-    readonly matched_on_time: "matched_on_time";
-    readonly rescheduled: "rescheduled";
-    readonly missed: "missed";
-    readonly skipped: "skipped";
-    readonly unmatched: "unmatched";
-};
-export interface WeeklyDebriefPlanItem {
-    recurringItemId?: string | null;
-    name: string;
-    kind: WeeklyDebriefPlanItemKind;
-    forecastDate: string;
-    forecastAmount: string;
-    categoryId?: string | null;
-    status: WeeklyDebriefPlanItemStatus;
-    matchedTxnId?: string | null;
-    matchedDate?: string | null;
-    matchedAmount?: string | null;
-    rescheduledTo?: string | null;
-    varianceAmount: string;
-}
-export type WeeklyDebriefTxnItemStatus = (typeof WeeklyDebriefTxnItemStatus)[keyof typeof WeeklyDebriefTxnItemStatus];
-export declare const WeeklyDebriefTxnItemStatus: {
-    readonly matched: "matched";
-    readonly unplanned: "unplanned";
-    readonly acknowledged_unplanned: "acknowledged_unplanned";
-};
-export interface WeeklyDebriefTxnItem {
-    txnId: string;
-    date: string;
-    description: string;
-    amount: string;
-    categoryId?: string | null;
-    source?: string | null;
-    status: WeeklyDebriefTxnItemStatus;
-    matchedRecurringItemId?: string | null;
-}
-export interface WeeklyDebriefCategoryPlannedItem {
-    recurringItemId?: string | null;
-    name: string;
-    amount: number;
-    forecastDate: string;
-}
-export interface WeeklyDebriefCategoryActualTxn {
-    txnId: string;
-    description: string;
-    amount: number;
-    date: string;
-    matchedToPlan: boolean;
-    source?: string | null;
-}
-export interface WeeklyDebriefCategoryBucket {
-    categoryId?: string | null;
-    plannedAmount: string;
-    actualAmount: string;
-    varianceAmount: string;
-    plannedItems: WeeklyDebriefCategoryPlannedItem[];
-    actualTxns: WeeklyDebriefCategoryActualTxn[];
-}
-export interface WeeklyDebriefSnapshot {
-    weekStart: string;
-    weekEnd: string;
-    computedAt: string;
-    totals: WeeklyDebriefTotals;
-    plans: WeeklyDebriefPlanItem[];
-    transactions: WeeklyDebriefTxnItem[];
-    unmatchedPlans: WeeklyDebriefPlanItem[];
-    unplannedTxns: WeeklyDebriefTxnItem[];
-    byCategory: WeeklyDebriefCategoryBucket[];
-    openItemsCount: number;
-}
-export interface WeeklyDebriefActionsSummary {
-    matchedCount: number;
-    rescheduledCount: number;
-    missedCount: number;
-    unmatchedCount: number;
-    unplannedAcceptedCount: number;
-    convertedToRecurringCount: number;
-}
-export interface WeeklyDebriefPostLockAddition {
-    txnId: string;
-    date: string;
-    description: string;
-    amount: string;
-    categoryId?: string | null;
-    source?: string | null;
-    syncedAt: string;
-}
-export type WeeklyDebriefListItemStatus = (typeof WeeklyDebriefListItemStatus)[keyof typeof WeeklyDebriefListItemStatus];
-export declare const WeeklyDebriefListItemStatus: {
-    readonly in_progress: "in_progress";
-    readonly awaiting_review: "awaiting_review";
-    readonly locked: "locked";
-};
-export type WeeklyDebriefListItemNetSummary = {
-    plannedNet: string;
-    actualNet: string;
-    varianceNet: string;
-};
-export interface WeeklyDebriefListItem {
-    weekStart: string;
-    weekEnd: string;
-    status: WeeklyDebriefListItemStatus;
-    openItemsCount: number;
-    netSummary: WeeklyDebriefListItemNetSummary;
-    lockedAt?: string | null;
-}
-export interface WeeklyDebriefList {
-    weeks: WeeklyDebriefListItem[];
-}
-export type WeeklyDebriefDetailStatus = (typeof WeeklyDebriefDetailStatus)[keyof typeof WeeklyDebriefDetailStatus];
-export declare const WeeklyDebriefDetailStatus: {
-    readonly in_progress: "in_progress";
-    readonly awaiting_review: "awaiting_review";
-    readonly locked: "locked";
-};
-export interface WeeklyDebriefDetail {
-    weekStart: string;
-    weekEnd: string;
-    status: WeeklyDebriefDetailStatus;
-    lockedAt?: string | null;
-    lockedByUserId?: string | null;
-    varianceSnapshot: WeeklyDebriefSnapshot | null;
-    actionsSummary?: WeeklyDebriefActionsSummary | null;
-    postLockAdditions: WeeklyDebriefPostLockAddition[];
 }
 export interface WeeklySettlement {
     id: string;
@@ -2858,17 +2697,6 @@ export type ListWeeklySettlementsParams = {
 };
 export type ReopenWeekParams = {
     weekStart: string;
-};
-export type GetDebriefAwaitingCountParams = {
-    from?: string;
-    to?: string;
-};
-export type ListWeeklyDebriefsParams = {
-    from?: string;
-    to?: string;
-};
-export type UnlockWeeklyDebriefBody = {
-    confirm: boolean;
 };
 export type UpdatePlaidImportCutoffDateBody = {
     /** @nullable */

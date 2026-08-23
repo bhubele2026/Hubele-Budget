@@ -263,11 +263,11 @@ export function buildLineRegister(opts: {
   const visibleBank = activeBank.filter((b) => inVisibleWindow(b.date));
   // (#751 — REVERTED in #803) The original #751 linger rule kept
   // every pending past-due plan visible forever so the user had to
-  // explicitly resolve each one. With the Weekly Debrief now the
-  // authoritative reconciliation surface, the Forecast register has
+  // explicitly resolve each one. The Forecast register has since
   // gone back to being a forward-looking "what's coming" view —
   // pre-visibleFromMs plans (typically pre-today) drop off the
-  // register and live in the Debrief instead. The "Look Back"
+  // register; the Review page (opt-in re-linger below) is where
+  // still-owed past-due plans get resolved. The "Look Back"
   // control still lets the user pull `visibleFromMs` earlier on
   // demand.
   //

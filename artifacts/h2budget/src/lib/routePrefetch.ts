@@ -33,7 +33,6 @@ export const importBillsOverview = () => import("../pages/bills-overview");
 export const importBudget = () => import("../pages/budget");
 export const importAllowances = () => import("../pages/allowances");
 export const importMappingRules = () => import("../pages/mapping-rules");
-export const importDebrief = () => import("../pages/debrief");
 export const importSettings = () => import("../pages/settings");
 
 // ── href → importer map (keyed exactly as the nav links / routes) ────────────
@@ -54,7 +53,6 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/budget": importBudget,
   "/allowances": importAllowances,
   "/debts": importDebts,
-  "/debrief": importDebrief,
   "/reports": importReports,
   "/reports/debt": importReportsDebt,
   "/reports/cashflow": importReportsCashFlow,

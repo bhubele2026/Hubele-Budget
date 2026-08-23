@@ -26,7 +26,8 @@ A **landing page** with **4 tiles** is the whole navigation. No crowded top bar
 - ➡️ **Sky Card** off Amex → Avalanche (a card tracked as a debt drops off the Amex band automatically).
 - ➡️ **Allowance** → under Banking.
 - ➡️ **Budget** → under Forecast.
-- 🔽 **Weekly Debrief + Mapping Rules** → tucked under **More / Settings** (still work, just out of the way).
+- ❌ **Weekly Debrief** — removed entirely (2026-08).
+- 🔽 **Mapping Rules** → tucked under **More / Settings** (still works, just out of the way).
 
 ## Conventions
 - Amex: **Blue = monthly** expenses, **Platinum = weekly**. Tier drives cadence.
