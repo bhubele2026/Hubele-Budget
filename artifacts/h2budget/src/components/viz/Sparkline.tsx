@@ -6,10 +6,12 @@ import { cn } from "@/lib/utils";
  * that sits beside a number. Pairs with any tile in the viz kit. Pass raw
  * numbers; the spark scales to its own min/max.
  *
- * Hand-rolled inline SVG (no charting lib) so it stays out of the heavy
- * recharts bundle. Renders a smooth <path> for the line and a filled <path>
- * for the area variant. Width is responsive via a fixed viewBox + width:100%;
- * strokes use non-scaling-stroke so they stay crisp at any width.
+ * Hand-rolled inline SVG — deliberately NO charting library, so a page that
+ * only wants a 28px trend beside a number never pulls the ~450 KB charting
+ * bundle into its chunk (see the import discipline note in `@/lib/charts`).
+ * Renders a smooth <path> for the line and a filled <path> for the area
+ * variant. Width is responsive via a fixed viewBox + width:100%; strokes use
+ * non-scaling-stroke so they stay crisp at any width.
  */
 export function Sparkline({
   data,
@@ -49,7 +51,7 @@ export function Sparkline({
   });
 
   // Smooth the line with a Catmull-Rom spline expressed as cubic béziers, so
-  // it reads like the old recharts type="monotone" curve.
+  // it reads as a monotone curve rather than a jagged polyline.
   const linePath = points
     .map(([x, y], i) => {
       if (i === 0) return `M ${x} ${y}`;
