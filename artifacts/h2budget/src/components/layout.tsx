@@ -51,7 +51,6 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavItem = { name: string; href: string; icon: typeof Receipt };
 
@@ -124,7 +123,7 @@ const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
 
 const BRAND = (
   <span className="flex items-center gap-2 select-none">
-    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[hsl(var(--splash-violet)/0.14)] text-foreground font-bold text-[11px] tracking-tight border border-[hsl(var(--splash-violet)/0.4)]">
+    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[hsl(var(--primary)/0.14)] text-foreground font-bold text-[11px] tracking-tight border border-[hsl(var(--primary)/0.4)]">
       H2
     </span>
     <span className="font-semibold text-[13.5px] tracking-tight">Budget</span>
@@ -197,7 +196,6 @@ function MobileNav({
           Account
         </span>
         <div className="flex items-center gap-1">
-          <ThemeToggle />
           <UserButton />
         </div>
       </div>
@@ -408,7 +406,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors",
                       active
-                        ? "text-foreground font-semibold shadow-[inset_0_-2px_0_hsl(var(--splash-violet))]"
+                        ? "text-foreground font-semibold shadow-[inset_0_-2px_0_var(--color-brand-orange)]"
                         : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                     )}
                     data-testid={`topnav-${item.href.slice(1)}`}
@@ -431,7 +429,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   className={cn(
                     "relative flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors outline-none",
                     moreActive
-                      ? "text-foreground font-semibold shadow-[inset_0_-2px_0_hsl(var(--splash-violet))]"
+                      ? "text-foreground font-semibold shadow-[inset_0_-2px_0_var(--color-brand-orange)]"
                       : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                   )}
                   data-testid="topnav-more"
@@ -480,7 +478,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="md:hidden mr-1 font-semibold truncate max-w-[40vw]">
               {currentTitle}
             </span>
-            <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
             <UserButton />
           </div>
         </div>

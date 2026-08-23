@@ -5,34 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>H2 Budget — Family Finance</title>
     <meta name="description" content="A focused budgeting app for the Hubele family — track spending, plan bills, and stay ahead of debt." />
-    <meta name="theme-color" content="#fafafa" />
-    <script>
-      // Pre-hydration theme: apply the stored theme before first paint so a
-      // dark-mode user never flashes light (and vice versa). Mirrors
-      // hooks/use-theme.tsx (storage key + LIGHT default + system fallback).
-      (function () {
-        try {
-          var t = localStorage.getItem("h2budget-theme") || "light";
-          var dark =
-            t === "dark" ||
-            (t === "system" &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches);
-          if (dark) {
-            document.documentElement.classList.add("dark");
-            document.documentElement.style.colorScheme = "dark";
-          }
-        } catch (e) {}
-      })();
-    </script>
+    <meta name="theme-color" content="#19315b" />
     <style>
-      /* Ground color before the stylesheet arrives — kills the white flash. */
-      html.dark { background: #121212; }
+      /* The platinum ground, before the stylesheet arrives — kills the white
+         flash. Dark mode is gone: the app is light-only on the navy/platinum
+         palette, so there is no pre-hydration theme script any more. */
+      html { background: #f7f9fc; }
     </style>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!--
+      ⚠️ Inter Variable is SELF-HOSTED and preloaded here.
+
+      This used to be three cross-origin requests (two preconnects and a
+      render-blocking Google Fonts stylesheet pulling ten static weights), which
+      sat in front of first paint. One same-origin 48 KB woff2 covers every
+      weight the app uses, and preloading it starts the download in parallel
+      with the CSS instead of after it — a webfont discovered inside a
+      stylesheet is always one round trip late.
+
+      The `href` below is a placeholder: `interPreload()` in vite.config.ts
+      rewrites it to the real emitted filename (content-hashed in a build,
+      the node_modules path in dev). Never hardcode a hash here.
+    -->
+    <link rel="preload" href="__INTER_WOFF2__" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
     <div id="root"></div>

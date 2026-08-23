@@ -20,7 +20,6 @@ import {
   getListDebtsQueryKey,
 } from "@workspace/api-client-react";
 import { prefetchRoute } from "@/lib/routePrefetch";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { MoneyText } from "@/components/viz/MoneyText";
 import { H2Logo } from "@/components/h2-logo";
@@ -305,7 +304,6 @@ export default function LandingPage() {
                 </span>
               )}
             </Link>
-            <ThemeToggle />
             <UserButton />
           </div>
         </div>

@@ -62,7 +62,7 @@ export function StatTile({
         <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
           {label}
         </div>
-        <div className="mt-1 text-[2rem] md:text-[2.25rem] font-semibold tracking-[-0.02em] tabular-nums leading-none text-foreground dark:text-white">
+        <div className="mt-1 text-[2rem] md:text-[2.25rem] font-semibold tracking-[-0.02em] tabular-nums leading-none text-foreground">
           {value}
         </div>
         {sub && <div className="mt-1.5 text-xs text-muted-foreground">{sub}</div>}

@@ -3,25 +3,19 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// `.chip` geometry (index.css): a pill, 10px, uppercase, tracked out. The
+// LABEL says the state — colour only reinforces it, because under the navy
+// palette `ok` is the same navy as body text and can no longer carry meaning
+// on its own.
 const badgeVariants = cva(
-  // custom
-  // Whitespace-nowrap: Badges should never wrap.
-  "whitespace-nowrap inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2" +
-  " hover-elevate ",
+  "chip inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
   {
     variants: {
       variant: {
-        default:
-          // custom shadow-xs instead of shadow, no hover because we use hover-elevate
-          "border-transparent bg-primary text-primary-foreground shadow-xs",
-        secondary:
-          // custom no hover because we use hover-elevate
-          "border-transparent bg-secondary text-secondary-foreground",
-        destructive:
-          // custom shadow-xs instead of shadow, no hover because we use hover-elevate
-          "border-transparent bg-destructive text-destructive-foreground shadow-xs",
-          // custom shadow-xs" - use badge outline variable
-        outline: "text-foreground border [border-color:var(--badge-outline)]",
+        default: "bg-brand-navy text-white",
+        secondary: "info",
+        destructive: "bad",
+        outline: "bg-transparent text-neutral-600 ring-1 ring-brand-line",
       },
     },
     defaultVariants: {

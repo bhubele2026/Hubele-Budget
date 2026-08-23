@@ -21,7 +21,6 @@ import { PlaidReconnectListener } from "@/components/plaid-reconnect-listener";
 import { VersionUpdatePrompt } from "@/components/version-update-prompt";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
-import { ThemeProvider } from "@/hooks/use-theme";
 import { PageErrorBoundary } from "@/components/page-error-boundary";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
@@ -220,9 +219,10 @@ const clerkAppearance = {
     logoLinkUrl: basePath || "/",
     logoImageUrl: `${window.location.origin}${basePath}/logo.png`,
   },
-  // Theme-reactive: every color points at the app's CSS tokens, so the
-  // Clerk card follows light/dark automatically (it previously hardcoded
-  // light-mode values — a light card floating on the matte-black app).
+  // ⚠️ THE FRONT DOOR READS THESE. Every colour points at the app's own CSS
+  // tokens, so the sign-in card is navy/platinum for free — and a bridge-layer
+  // rebind moves it without touching this file. Verify `/sign-in` after any
+  // token change: a broken sign-in fails "it just opens" harder than anything.
   variables: {
     colorPrimary: "hsl(var(--primary))",
     colorForeground: "hsl(var(--foreground))",
@@ -232,15 +232,25 @@ const clerkAppearance = {
     colorInput: "hsl(var(--muted))",
     colorInputForeground: "hsl(var(--foreground))",
     colorNeutral: "hsl(var(--muted-foreground))",
-    fontFamily: "'Geist', Inter, sans-serif",
-    borderRadius: "0.5rem",
+    colorRing: "hsl(var(--ring))",
+    fontFamily:
+      "'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
+    borderRadius: "8px",
   },
   elements: {
     rootBox: "w-full flex justify-center",
     cardBox:
-      "bg-card rounded-lg w-[440px] max-w-full overflow-hidden shadow-lg",
+      "bg-card rounded-card w-[440px] max-w-full overflow-hidden shadow-over ring-1 ring-brand-line",
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
+    // ⚠️ THE FRONT DOOR'S ONE HARD-CODED RULE, AND IT EARNS ITS KEEP.
+    // Clerk resolves colours in JS, so a `hsl(var(--…))` string is passed
+    // through for FILLS but cannot be parsed to derive a readable label —
+    // `colorPrimaryForeground` therefore silently does nothing here and the
+    // solid button falls back to `colorForeground`. On the old teal that was
+    // merely ugly; on navy it is ink-on-navy at 1.2:1, an invisible "Continue"
+    // on the sign-in card. A class beats the computed style deterministically.
+    formButtonPrimary: "!text-white",
     headerTitle: "text-foreground text-xl font-semibold",
     headerSubtitle: "text-muted-foreground text-sm",
     socialButtonsBlockButtonText: "text-foreground",
@@ -366,7 +376,7 @@ function ClerkProviderWithRoutes() {
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
-        <ThemeProvider>
+
         <TooltipProvider>
           <Switch>
             <Route path="/" component={HomeRoute} />
@@ -385,7 +395,7 @@ function ClerkProviderWithRoutes() {
               new bundle has been deployed. No-op in dev. */}
           <VersionUpdatePrompt />
         </TooltipProvider>
-        </ThemeProvider>
+
       </QueryClientProvider>
     </ClerkProvider>
   );

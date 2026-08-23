@@ -13,8 +13,8 @@ type Piece = {
 
 const COLORS = [
   "hsl(var(--primary))",
-  "hsl(var(--splash-violet))",
-  "hsl(var(--splash-orange))",
+  "hsl(var(--chart-2))",
+  "var(--color-brand-orange)",
   "hsl(var(--positive))",
   "hsl(var(--chart-2))",
 ];

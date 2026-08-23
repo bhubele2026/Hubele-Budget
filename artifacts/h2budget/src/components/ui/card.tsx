@@ -9,10 +9,13 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // Quiet depth baked into every Card app-wide — rests on a soft shadow and
-      // lifts with a deeper shadow + subtle rise on hover for a premium, tactile
-      // feel. Respects reduced-motion (no translate). Rounded via --radius-2xl.
-      "glass-surface rounded-2xl bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color,transform] duration-[240ms] ease-[var(--ease-glide)] hover:shadow-md motion-safe:hover:-translate-y-0.5 motion-reduce:transform-none",
+      // ⚠️ ONE ELEVATION LANGUAGE: the platinum ramp plus a hairline ring, and
+      // navy seeping into the head on HOVER ONLY. Do NOT add a second shadow-*
+      // on top — two competing depth cues is exactly what read as cheap, and a
+      // card that is coloured at rest is a children's dashboard.
+      // `relative overflow-hidden` is load-bearing: `.card-bleed::before`
+      // paints from the top edge down and has to be clipped to the radius.
+      "card-bleed surface relative overflow-hidden rounded-card text-card-foreground ring-1 ring-brand-line",
       className
     )}
     {...props}
@@ -26,7 +29,10 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex flex-col space-y-1 p-4", className)}
+    // ⚠️ `relative z-[1]` keeps the head above `.card-bleed::before`, which
+    // paints from the top edge down; without it the hover stain sits over the
+    // title.
+    className={cn("relative z-[1] flex flex-col space-y-1 p-4", className)}
     {...props}
   />
 ))
@@ -38,7 +44,10 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("font-semibold leading-none tracking-tight", className)}
+    className={cn(
+      "text-title font-semibold leading-none tracking-tight text-brand-navy",
+      className
+    )}
     {...props}
   />
 ))
@@ -50,7 +59,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-label text-muted-foreground", className)}
     {...props}
   />
 ))
@@ -60,7 +69,7 @@ const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("p-4 pt-0", className)} {...props} />
+  <div ref={ref} className={cn("relative z-[1] p-4 pt-0", className)} {...props} />
 ))
 CardContent.displayName = "CardContent"
 
@@ -70,7 +79,7 @@ const CardFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex items-center p-4 pt-0", className)}
+    className={cn("relative z-[1] flex items-center p-4 pt-0", className)}
     {...props}
   />
 ))

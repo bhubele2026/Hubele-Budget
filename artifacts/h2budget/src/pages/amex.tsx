@@ -2158,7 +2158,7 @@ export default function AmexPage() {
                             <span
                               aria-hidden="true"
                               data-testid={`badge-transfer-overridden-mobile-${t.id}`}
-                              className="text-slate-500 -ml-0.5"
+                              className="text-neutral-500 -ml-0.5"
                             >
                               *
                             </span>
@@ -2167,7 +2167,7 @@ export default function AmexPage() {
                             type="button"
                             aria-label="Clear Transfer flag"
                             data-testid={`button-clear-transfer-mobile-${t.id}`}
-                            className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60"
+                            className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-secondary"
                             onClick={(e) => {
                               e.stopPropagation();
                               updateTx.mutate(
@@ -2282,7 +2282,7 @@ export default function AmexPage() {
                                 type="button"
                                 aria-label="Clear Transfer flag"
                                 data-testid={`button-clear-transfer-${t.id}`}
-                                className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60"
+                                className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-secondary"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   updateTx.mutate(

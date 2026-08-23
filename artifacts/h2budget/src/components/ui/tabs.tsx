@@ -12,7 +12,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground",
+      "inline-flex h-9 items-center justify-center rounded-control bg-muted p-1 text-muted-foreground",
       className
     )}
     {...props}
@@ -27,7 +27,10 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow",
+      // Active reads as a raised white chip with navy ink — not a coloured
+      // pill. The one accent in a tab strip is the orange underline, and that
+      // belongs to the app's own ribbon, not to this generic control.
+      "press inline-flex items-center justify-center whitespace-nowrap rounded-control px-3 py-1 text-label font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-55 data-[state=active]:bg-white data-[state=active]:text-brand-navy data-[state=active]:shadow-rest",
       className
     )}
     {...props}

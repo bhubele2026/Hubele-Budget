@@ -181,14 +181,14 @@ export function TransactionEditDialog({
               })()}
               {editingTx?.isTransferUserOverridden && (
                 <div
-                  className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+                  className="flex items-start justify-between gap-3 rounded-md ring-1 ring-brand-line bg-brand-tint px-3 py-2 text-micro text-neutral-600"
                   data-testid="transfer-override-hint"
                 >
                   <div>
-                    <div className="font-medium text-slate-700">
+                    <div className="font-medium text-brand-navy">
                       Transfer status manually set
                     </div>
-                    <div className="mt-0.5 text-slate-500">
+                    <div className="mt-0.5 text-neutral-500">
                       Future bank syncs won't re-flag this row from the description
                       heuristic. Reset to let auto-detection take over again.
                     </div>

@@ -27,7 +27,7 @@ const CONFIDENCE_META = {
   low: {
     label: "Low",
     className:
-      "border-destructive/50 text-destructive dark:border-destructive/60",
+      "border-destructive/50 text-destructive",
   },
 } as const;
 

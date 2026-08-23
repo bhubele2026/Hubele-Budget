@@ -1,5 +1,30 @@
 import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { extendTailwindMerge } from "tailwind-merge"
+
+/**
+ * ⚠️⚠️ tailwind-merge MUST BE TAUGHT THE DESIGN TOKENS, AND THE FAILURE IS SILENT.
+ *
+ * The kit adds font sizes (`text-micro`), radii (`rounded-card`) and elevations
+ * (`shadow-rest`) as `@theme` tokens. tailwind-merge does not read the theme —
+ * it pattern-matches, and `text-<unknown>` falls through its font-size check
+ * into the TEXT-COLOUR group. So `cn("bg-brand-navy text-white", "text-micro")`
+ * decided the two `text-*` classes conflicted and dropped `text-white`, which
+ * shipped a navy button with ink-coloured text at 1.2:1 — caught on the small
+ * Button variant, and it would have hit every call site mixing a size step with
+ * a colour. `shadow-<unknown>` has the same trap via `shadow-color`.
+ *
+ * Declaring the scales here is the fix, and it must be extended whenever a new
+ * step is added to `@theme` in index.css.
+ */
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [{ text: ["display", "title", "body", "label", "micro"] }],
+      rounded: [{ rounded: ["card", "control"] }],
+      shadow: [{ shadow: ["rest", "lift", "over"] }],
+    },
+  },
+})
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
