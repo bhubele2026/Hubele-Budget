@@ -358,7 +358,7 @@ describe("dedupeTransactionsForAccount (#452)", () => {
       occurredOn: "2026-05-01",
       amount: "-100.00",
       description: "REPLIT, INC. FOSTER CITY CA",
-      plaidTransactionId: `pt-replit-${randomUUID().slice(0, 8)}`,
+      plaidTransactionId: `pt-legacy-${randomUUID().slice(0, 8)}`,
     });
     await insertTxn({
       plaidAccountId: acct,

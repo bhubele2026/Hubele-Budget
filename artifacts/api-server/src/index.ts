@@ -73,8 +73,7 @@ if (isProd) {
  * `PLAID_REDIRECT_URI` is set to anything else (e.g. `…/transactions`),
  * non-OAuth banks still work but every OAuth bank silently fails to
  * return to the app. Surface the misconfiguration loudly at boot so it
- * cannot sit silently in production. See replit.md → "Plaid OAuth
- * redirect URI" for the canonical setup instructions.
+ * cannot sit silently in production.
  */
 function validatePlaidRedirectUri(): void {
   const raw = process.env.PLAID_REDIRECT_URI?.trim();
@@ -276,7 +275,7 @@ app.listen(port, (err) => {
     // Plaid for background pulls and has repeatedly asked that banks sync
     // ONLY when they click the in-app Sync button. We deliberately ignore
     // the PLAID_AUTO_SYNC_ENABLED Secret here so a stale/forgotten "true"
-    // in the Replit environment can never silently re-enable the hourly
+    // in the deploy environment can never silently re-enable the hourly
     // cursor sync, the */10 forced-refresh loop, or the daily consent
     // refresh — each of which makes billable Plaid calls. To ever restore
     // background syncing, flip AUTO_SYNC_HARD_DISABLED to false (and the

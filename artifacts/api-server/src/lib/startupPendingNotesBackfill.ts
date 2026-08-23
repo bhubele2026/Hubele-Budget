@@ -8,9 +8,8 @@ import { logger } from "./logger";
  * pointed at. This is the production-side counterpart to the dev-side
  * `scripts/post-merge.sh` block (lines 57-61) which runs the same
  * `scripts/backfill_transactions_pending.sql` against `$DATABASE_URL`
- * on every task merge — but only in the dev environment. The Replit
- * autoscale deployment config (`.replit` → `[deployment.postBuild]`)
- * only runs `pnpm store prune`, so the production DB never sees the
+ * on every task merge — but only in the dev environment. The production
+ * deploy build never runs that SQL, so the production DB never sees the
  * cleanup unless we apply it on boot.
  *
  * Two passes, mirroring the SQL file exactly:

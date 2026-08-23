@@ -1,7 +1,0 @@
-node_modules/
-.expo/
-dist/
-*.log
-.DS_Store
-ios/
-android/
