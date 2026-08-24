@@ -14,7 +14,10 @@
 // bundler emits one shared chunk per page.
 
 // ── Per-page importers (reused by App.tsx's lazy() calls) ────────────────────
-export const importLanding = () => import("../pages/landing");
+// ⚠️ NO `importLanding` HERE, DELIBERATELY. The landing is statically imported
+// by App.tsx: it is the default destination of every open, so code-splitting it
+// only bought a guaranteed extra round trip on the one route that must feel
+// instant. Nothing to prefetch when the chunk is already the entry.
 export const importCommandCenter = () => import("../pages/command-center");
 export const importForecast = () => import("../pages/forecast");
 export const importForecastOverview = () => import("../pages/forecast-overview");
@@ -40,7 +43,6 @@ export const importSettings = () => import("../pages/settings");
 // render the Forecast page); both keys point at the same importer so either
 // hover warms the right chunk.
 export const routeImporters: Record<string, () => Promise<unknown>> = {
-  "/home": importLanding,
   "/banking": importCommandCenter,
   "/bills": importBillsOverview,
   "/bills/all": importBills,

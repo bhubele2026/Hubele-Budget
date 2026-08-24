@@ -40,4 +40,13 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 });
 
-createRoot(document.getElementById("root")!).render(<App />);
+const container = document.getElementById("root")!;
+
+// The static pre-hydration shell in index.html lives inside #root so it paints
+// with zero JavaScript. Clear it explicitly before mounting rather than relying
+// on createRoot to tidy up: this is a client render, not a hydration, and
+// leaving the placeholder in the container is how you end up with two navy
+// bands stacked for a frame.
+container.replaceChildren();
+
+createRoot(container).render(<App />);

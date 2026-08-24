@@ -513,3 +513,55 @@ export function sortDebts<T extends SimDebt>(debts: T[], strat: Strategy): T[] {
     return b.apr - a.apr;
   });
 }
+
+// ── Payoff progress ─────────────────────────────────────────────────────────
+
+/**
+ * ⭐ THE ONE NUMBER THE LANDING IS ALLOWED TO SHOW, AND ITS ONLY DEFINITION.
+ *
+ * ⚠️ THIS IS A MOVE, NOT A NEW CALCULATION. Every line below is the expression
+ * that already shipped in `artifacts/h2budget/src/pages/landing.tsx`
+ * (`AvalancheTile.overallPaid` — the "% paid" the Future Goal tile has been
+ * rendering), lifted here verbatim so the server can serve it on `/api/spine`
+ * without the client fetching every debt BALANCE just to derive a percentage.
+ * The standing rule is that no landing-facing surface may carry an amount owed;
+ * the only way to honour that AND keep the number is to compute the ratio where
+ * the balances already live and ship only the ratio.
+ *
+ * ⚠️ `min(balance, originalBalance)`, NOT `original - balance`. A balance can
+ * exceed its own anchor — a card charged back up past the peak we recorded, or
+ * an anchor captured after the debt had already been paid down. Subtracting raw
+ * would hand back a NEGATIVE contribution and let one misbehaving card drag the
+ * household's progress below where it truly is. Clamping per debt keeps every
+ * debt's contribution inside [0, original].
+ *
+ * ⚠️ DEBTS WITH NO ANCHOR ARE EXCLUDED FROM BOTH SIDES OF THE RATIO, not
+ * counted as 0% paid. A debt we have no "original" for is unknown, not
+ * unstarted, and treating it as unstarted would understate real progress.
+ *
+ * Returns percent in [0, 100] (NOT a 0–1 fraction), or `null` when no debt
+ * carries an anchor — `null` means "nothing to show", never "0% paid".
+ */
+export function payoffPct(
+  debts: Array<{
+    balance: number | string;
+    originalBalance?: number | string | null;
+    status?: string | null;
+  }>,
+): number | null {
+  // `status !== "paid_off"` — the landing's own filter. A retired debt must not
+  // keep inflating the numerator forever after it is gone.
+  const active = debts.filter((d) => d.status !== "paid_off");
+  let sumOrig = 0;
+  let sumBal = 0;
+  for (const d of active) {
+    const bal = Number(d.balance) || 0;
+    const orig = Number(d.originalBalance ?? 0) || 0;
+    if (orig > 0) {
+      sumOrig += orig;
+      sumBal += Math.min(bal, orig);
+    }
+  }
+  if (sumOrig <= 0) return null;
+  return Math.max(0, Math.min(1, (sumOrig - sumBal) / sumOrig)) * 100;
+}

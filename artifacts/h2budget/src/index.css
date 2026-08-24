@@ -429,6 +429,12 @@
   }
   .card-bleed:hover::before { opacity: 1; }
 
+  /* Tile-scale bleed. The 78px default is tuned for a full-width card head; on
+     a ~154px landing tile it would stain half the box and the effect stops
+     reading as a head and starts reading as a two-tone card. Same three pools,
+     shallower — the mask still finishes the fade inside the shorter box. */
+  .bleed-sm::before { height: 52px; }
+
   /* Status chips — the label says the state; colour only reinforces it. */
   .chip {
     display: inline-block;

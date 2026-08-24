@@ -19,6 +19,7 @@ import invitationsRouter from "./invitations";
 import membersRouter from "./members";
 import amexRouter from "./amex";
 import reportsRouter from "./reports";
+import spineRouter from "./spine";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(invitationsRouter);
 router.use(membersRouter);
 router.use(amexRouter);
 router.use(reportsRouter);
+router.use(spineRouter);
 
 export default router;

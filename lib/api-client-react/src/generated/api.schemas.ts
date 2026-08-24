@@ -13,6 +13,60 @@ export interface BadgeCount {
   count: number;
 }
 
+export interface SpineNextBill {
+  name: string;
+  amount: string;
+  dueDate: string;
+}
+
+export type SpineBank = {
+  /** computeCashSignal().bankToday — snapshot rolled forward through the ledger */
+  balance: string;
+  /**
+   * computeCashSignal().snapshotAt — when the bank snapshot was taken
+   * @nullable
+   */
+  asOfDate: string | null;
+};
+
+export type SpineForecast = {
+  /** computeCashSignal().lowestProjected over the 90-day horizon */
+  lowPoint: string;
+  /** @nullable */
+  lowPointDate: string | null;
+  /**
+   * Days until the projection first goes negative; null when it never does
+   * @nullable
+   */
+  runwayDays: number | null;
+};
+
+export type SpineDebt = {
+  /**
+   * Percent of anchored debt paid off, 0–100. ⚠️ PERCENT ONLY — no balance or amount owed may ever be added to this object; the landing page renders it and the standing rule is that the front door never shows what is owed. null = no debt carries an anchor.
+   * @nullable
+   */
+  payoffPct: number | null;
+};
+
+export interface Spine {
+  /** ISO timestamp the snapshot was read */
+  asOf: string;
+  bank: SpineBank;
+  /** buildSpendingFacts(monthStart..today).realSpend.total */
+  spentMonth: number;
+  /** buildSpendingFacts(weekStart..weekEnd).realSpend.total */
+  spentWeek: number;
+  /** Earliest upcoming bill or debt minimum on/after today; null when nothing is scheduled */
+  nextBill: SpineNextBill | null;
+  /** Upcoming bills + debt minimums still landing inside the current month */
+  billsDueCount: number;
+  forecast: SpineForecast;
+  debt: SpineDebt;
+  /** computeReviewCount() — unmatched forecast-flagged bank txns this month */
+  reviewCount: number;
+}
+
 export interface VersionInfo {
   /** Per-deploy build identifier (APP_BUILD_ID env, falling back
 to the git short hash, then a shared "dev" sentinel when
