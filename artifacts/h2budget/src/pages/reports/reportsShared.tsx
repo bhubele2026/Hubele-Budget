@@ -1,8 +1,12 @@
 // The ONE shared module for the Reports family: recharts type-wrappers, the
-// HeroTile/ChartCard visual blocks, tooltip helpers, the balance-tile row,
-// range controls, and the drill-page shell. Data fetching lives in each page —
-// every report page mounts only the hooks for what it actually renders (the
-// old shared-hook fan-out fired 11 network hooks on every sub-page).
+// ChartCard block, the shared tooltip surface, the balance-tile row, range
+// controls, and the drill-page shell. Data fetching lives in each page — every
+// report page mounts only the hooks for what it actually renders (the old
+// shared-hook fan-out fired 11 network hooks on every sub-page).
+//
+// ⚠️ This module statically imports recharts (~450 KB). Everything that
+// imports it must stay on a LAZY route chunk; `scripts/check-entry-graph.mjs`
+// fails the build if a recharts fingerprint reaches the landing graph.
 import { useMemo, type ReactNode } from "react";
 import { Link } from "wouter";
 import {
@@ -39,24 +43,20 @@ import {
   useListPlaidLiabilityAccounts,
   type ForecastBundle,
 } from "@workspace/api-client-react";
-import { ArrowRight, PiggyBank, CreditCard, TrendingDown } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { rangeForMode, rangeDays as rangeDaysOf, type RangeMode } from "@/lib/timeRange";
-import { DrillBreadcrumb } from "@/components/drill-breadcrumb";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
+  AMEX_BALANCE_DISTINCTION,
   resolveAmexRevolvingBalance,
   describeReportsAmexTileSub,
   cashBufferStatusMeta,
   type CashSignalStatus,
 } from "@/lib/reportsBalances";
-import { useCountUp } from "@/hooks/useCountUp";
 import { formatCurrency, cn } from "@/lib/utils";
-import { StatTile, StatTileRow } from "@/components/stat-tile";
+import { CHART } from "@/lib/chartTokens";
+import { card, cardHead, emptyNote, fieldLabel, Stat, Help } from "@/ui";
 
 // Recharts ships these as class components, which TypeScript + React 19's
 // @types/react can no longer accept as JSX element constructors. Re-bind each
@@ -94,152 +94,120 @@ export function daysForMode(mode: RangeMode): number {
   return rangeDaysOf(rangeForMode(mode));
 }
 
-// --- Small visual building blocks -----------------------------------------
+// --- Chart chrome ---------------------------------------------------------
 
-export function HeroTile({
-  label,
-  value,
-  sub,
-  tone = "default",
-  icon,
-  delta,
-  badge,
-  action,
-  tooltip,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone?: "default" | "good" | "bad" | "amber";
-  icon?: React.ReactNode;
-  delta?: { pct: number; goodIfUp: boolean } | null;
-  badge?: string;
-  action?: { label: string; href: string };
-  // (#884) Optional hover hint, surfaced via the native title attribute.
-  // Used by the Amex tile to explain why its "current balance" can differ
-  // from the Amex page's projected end-of-month figure.
-  tooltip?: string;
-}) {
-  const toneClass =
-    tone === "good"
-      ? "text-[hsl(var(--positive))]"
-      : tone === "bad"
-        ? "text-[hsl(var(--negative))]"
-        : tone === "amber"
-          ? "text-[hsl(var(--warning))]"
-          : "text-foreground";
-  void icon;
-  // (#wow) Count currency figures up on load; pass non-currency values
-  // (dates, "Not Yet", "∞") through untouched.
-  const numericTarget = useMemo(() => {
-    if (!value.includes("$")) return null;
-    const n = Number(value.replace(/[^0-9.-]/g, ""));
-    return Number.isFinite(n) ? n : null;
-  }, [value]);
-  const counted = useCountUp(numericTarget);
-  const displayValue = numericTarget != null ? formatCurrency(counted) : value;
-  return (
-    <Card className="rounded-lg" title={tooltip}>
-      <CardContent className="p-4">
-        <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-          {label}
-        </div>
-        <div className="mt-1.5 flex items-baseline gap-2 flex-wrap">
-          <div
-            className={cn(
-              "text-[1.9rem] md:text-[2.1rem] font-semibold tracking-[-0.02em] tabular-nums truncate leading-none",
-              toneClass,
-            )}
-          >
-            {displayValue}
-          </div>
-          {badge && (
-            <Badge variant="secondary" className="tabular-nums shrink-0">
-              {badge}
-            </Badge>
-          )}
-        </div>
-        {sub && (
-          <div className="text-xs text-muted-foreground mt-1">{sub}</div>
-        )}
-        {action && (
-          <Link
-            href={action.href}
-            className="text-xs font-medium text-primary hover:underline mt-1 inline-flex items-center gap-1"
-          >
-            {action.label}
-            <ArrowRight className="w-3 h-3" />
-          </Link>
-        )}
-        {delta && Number.isFinite(delta.pct) && (
-          <div
-            className={cn(
-              "text-[11px] mt-1 tabular-nums font-medium",
-              (delta.pct >= 0) === delta.goodIfUp
-                ? "text-[hsl(var(--positive))]"
-                : "text-[hsl(var(--negative))]",
-            )}
-          >
-            {delta.pct >= 0 ? "▲" : "▼"} {Math.abs(delta.pct).toFixed(1)}% vs prev
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-export function ChartCard({
-  title,
-  caption,
-  empty,
-  hideWhenEmpty,
-  children,
-  height = 320,
-}: {
-  title: string;
-  caption?: string;
-  empty?: string | null;
-  hideWhenEmpty?: boolean;
-  children: React.ReactNode;
-  height?: number;
-}) {
-  if (empty && hideWhenEmpty) return null;
-  return (
-    <Card className="rounded-lg">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base font-display">{title}</CardTitle>
-        {caption && (
-          <p className="text-xs text-muted-foreground">{caption}</p>
-        )}
-      </CardHeader>
-      <CardContent>
-        {empty ? (
-          <div
-            className="flex items-center justify-center text-sm text-muted-foreground"
-            style={{ height }}
-          >
-            {empty}
-          </div>
-        ) : (
-          <div style={{ height }}>{children}</div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+/** Axis ticks + legend, on the kit's type scale. One object, every chart. */
+export const AXIS_TICK = { fontSize: 11, fill: "#64748b" } as const;
+export const LEGEND_STYLE = { fontSize: 11 } as const;
+/** Money on an axis, short enough to fit a ~55px tick. */
+export const axisMoney = (v: number) => `$${Math.round(v).toLocaleString()}`;
+export const axisMoneyK = (v: number) => `$${Math.round(v / 1000)}k`;
 
 export function tooltipMoney(v: number | string) {
   return formatCurrency(v);
 }
 
+/**
+ * The kit's tooltip surface — a white card with the brand hairline, replacing
+ * recharts' grey-outline default. Hex literals rather than `hsl(var(--…))`
+ * because recharts writes these into an inline style on an element outside
+ * the themed subtree.
+ */
 export const tooltipStyle = {
-  background: "hsl(var(--card))",
-  border: "1px solid hsl(var(--card-border))",
-  color: "hsl(var(--card-foreground))",
+  background: "#ffffff",
+  border: `1px solid ${CHART.grid}`,
+  color: "#1a2233",
   borderRadius: 8,
   fontSize: 12,
-  boxShadow: "var(--shadow-md)",
+  boxShadow: "0 6px 24px -8px rgb(25 49 91 / 0.18)",
 };
+
+/** Grid stroke, so no page hand-rolls one. */
+export const GRID_STROKE = CHART.grid;
+
+// --- Small visual building blocks -----------------------------------------
+
+/**
+ * A chart in a kit card.
+ *
+ * ⭐ WHERE THE CAPTIONS WENT. Every one of these used to carry a sentence
+ * under the title ("The classic line — income up top, expense below"). The
+ * sentence is not deleted, it is demoted to the `Help` chip in the head:
+ * the face carries the title, the explanation is one hover away.
+ */
+export function ChartCard({
+  title,
+  help,
+  empty,
+  hideWhenEmpty,
+  children,
+  height = 320,
+  right,
+  testId,
+}: {
+  title: string;
+  /** The disclosure — what this counts, or which basis it uses. */
+  help?: string;
+  empty?: string | null;
+  hideWhenEmpty?: boolean;
+  children: ReactNode;
+  height?: number;
+  /** Optional control rendered at the right of the card head. */
+  right?: ReactNode;
+  testId?: string;
+}) {
+  if (empty && hideWhenEmpty) return null;
+  return (
+    <div className={card} data-testid={testId}>
+      <div className={cardHead}>
+        <span className={cn(fieldLabel, "flex-1 truncate")}>{title}</span>
+        {help && <Help>{help}</Help>}
+        {right}
+      </div>
+      {empty ? (
+        <div className={emptyNote} style={{ height }}>
+          <span className="flex h-full items-center justify-center">{empty}</span>
+        </div>
+      ) : (
+        <div className="px-4 py-3" style={{ height: height + 24 }}>
+          <div style={{ height }}>{children}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A plain card with a kit head — for the blocks that are a list or a figure
+ * rather than a chart. Same head geometry as `ChartCard` so titles line up
+ * down the page.
+ */
+export function PanelCard({
+  title,
+  help,
+  children,
+  right,
+  className,
+  testId,
+}: {
+  title: string;
+  help?: string;
+  children: ReactNode;
+  right?: ReactNode;
+  className?: string;
+  testId?: string;
+}) {
+  return (
+    <div className={cn(card, className)} data-testid={testId}>
+      <div className={cardHead}>
+        <span className={cn(fieldLabel, "flex-1 truncate")}>{title}</span>
+        {help && <Help>{help}</Help>}
+        {right}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 /** Four at-a-glance balance tiles — the household's live vitals. */
 export function ReportsBalanceTiles({
@@ -248,7 +216,7 @@ export function ReportsBalanceTiles({
   forecast: ForecastBundle | null | undefined;
 }) {
   const { data: dashboard } = useGetDashboard();
-  // Shared {horizonDays: 90} key — see avalanche-ready-card.tsx.
+  // Shared {horizonDays: 90} key.
   const { data: cashSignal } = useGetForecastCashSignal({ horizonDays: 90 });
 
   const bankSnapshot = forecast?.bankSnapshot ?? null;
@@ -298,42 +266,54 @@ export function ReportsBalanceTiles({
       ? "Set a checking balance on Forecast"
       : `Lowest ${formatCurrency(lowest)} · buffer ${formatCurrency(buffer)}`;
 
-  // GET OUT OF DEBT is the spine — Total Debt wears the hero gradient.
-  const amexValueNode =
-    amex.found && amex.total > 0 ? (
-      <span className="text-[hsl(var(--negative))]">{amexValue}</span>
-    ) : (
-      amexValue
-    );
   return (
-    <StatTileRow>
-      <StatTile
-        label="Total Debt"
+    <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Stat
+        index={0}
+        label="Total debt"
         value={totalDebtValue}
-        sub={totalDebtSub}
-        active
-        icon={<TrendingDown className="w-4 h-4" />}
+        hint={totalDebtSub}
+        data-testid="reports-tile-total-debt"
       />
-      <StatTile
-        label="Bank Balance"
+      <Stat
+        index={1}
+        label="Bank balance"
         value={bankValue}
-        sub={bankSub}
-        icon={<PiggyBank className="w-4 h-4" />}
+        hint={bankSub}
+        data-testid="reports-tile-bank"
       />
-      <StatTile
-        label="Amex"
-        value={amexValueNode}
-        sub={amexSub}
-        icon={<CreditCard className="w-4 h-4" />}
-        href={amexNoCardLinked ? "/amex" : undefined}
-      />
-      <StatTile
-        label="Cash Buffer"
+      {/* (#884/#887) The Amex tile carries hover copy explaining why this
+          CURRENT balance can differ from the Amex page's projected
+          end-of-month figure — and carries it only when there IS a live
+          balance to explain.
+
+          ⚠️ This was lost in a refactor: the tooltip shipped on `HeroTile`,
+          then `ReportsBalanceTiles` moved to `StatTile`, which has no title
+          prop, and nothing put it back. `e2e/reports-amex-tile.spec.ts` still
+          asserts it (against a `div.rounded-2xl` locator that also no longer
+          matches anything), so the spec has been red rather than guarding it.
+          Restored here on a wrapper we control, with a testid so the spec can
+          stop matching on class names. */}
+      <div
+        title={amexNoCardLinked ? undefined : AMEX_BALANCE_DISTINCTION.reportsTooltip}
+        data-testid="reports-tile-amex"
+      >
+        <Stat
+          index={2}
+          label="Amex (Blue Cash + Platinum)"
+          value={amexValue}
+          hint={amexSub}
+          tone={amex.found && amex.total > 0 ? "bad" : "navy"}
+        />
+      </div>
+      <Stat
+        index={3}
+        label="Cash buffer"
         value={statusMeta.label}
-        sub={cashSub}
-        icon={<PiggyBank className="w-4 h-4" />}
+        hint={cashSub}
+        data-testid="reports-tile-cash-buffer"
       />
-    </StatTileRow>
+    </div>
   );
 }
 
@@ -352,11 +332,9 @@ export function ReportsRangeControls({
   showCompare?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-6">
+    <div className="flex flex-wrap items-center gap-5">
       <div className="flex items-center gap-2">
-        <Label className="text-xs uppercase tracking-widest text-muted-foreground">
-          Range
-        </Label>
+        <span className={fieldLabel}>Range</span>
         <TimeRangeToggle value={mode} onChange={setMode} />
       </div>
       {showCompare && setCompareToPrev && (
@@ -366,45 +344,49 @@ export function ReportsRangeControls({
             checked={compareToPrev}
             onCheckedChange={setCompareToPrev}
           />
-          <Label
-            htmlFor="cmp-prev"
-            className="text-xs uppercase tracking-widest text-muted-foreground cursor-pointer"
-          >
-            Compare to previous period
-          </Label>
+          <label htmlFor="cmp-prev" className={cn(fieldLabel, "cursor-pointer")}>
+            Compare to previous
+          </label>
         </div>
       )}
     </div>
   );
 }
 
-/** Wrapper for a Reports drill destination: breadcrumb + editorial header. */
+/**
+ * Wrapper for a Reports drill destination: the trail back up, the title, and
+ * the page's own controls on the same baseline as the title — the house
+ * header shape, matching Budget and Allowances.
+ */
 export function ReportShell({
   crumb,
   title,
-  blurb,
   children,
+  controls,
 }: {
   crumb: string;
   title: string;
-  blurb: string;
+  /** Range toggles etc., rendered on the title row rather than under it. */
+  controls?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-6">
-      <div>
-        <DrillBreadcrumb
-          items={[
-            { label: "Dashboard", href: "/home" },
-            { label: "Reports", href: "/reports" },
-            { label: crumb },
-          ]}
-        />
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mt-1 leading-tight">
-          {title}
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">{blurb}</p>
-        <div className="border-t border-border mt-5" />
+    <div className="space-y-4">
+      <nav className="flex flex-wrap items-center gap-1 text-micro text-neutral-400">
+        <Link
+          href="/reports"
+          className="press rounded px-1 py-0.5 font-medium text-neutral-500 hover:bg-neutral-100 hover:text-brand-navy"
+        >
+          Reports
+        </Link>
+        <span aria-hidden className="text-neutral-300">
+          ›
+        </span>
+        <span className="px-1 py-0.5 text-neutral-400">{crumb}</span>
+      </nav>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-display font-semibold text-brand-navy">{title}</h1>
+        {controls}
       </div>
       {children}
     </div>

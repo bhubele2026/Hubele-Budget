@@ -1,10 +1,5 @@
 import { useMemo, useState } from "react";
-import { CHART_ANIM } from "@/lib/chartAnim";
-import {
-  useGetReportsBudgetFacts,
-} from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { useGetReportsBudgetFacts } from "@workspace/api-client-react";
 import {
   Select,
   SelectContent,
@@ -12,25 +7,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Flame, Check, Clock } from "lucide-react";
-import { SectionHeader } from "@/components/stat";
-import { H2_PALETTE, fmtISO } from "@/lib/reportsAnalytics";
+import { formatCurrency, cn } from "@/lib/utils";
+import { fmtISO } from "@/lib/reportsAnalytics";
+import { CHART } from "@/lib/chartTokens";
+import { LineTrend } from "@/lib/charts";
+import { CssFillMeter } from "@/lib/cssBars";
 import {
-  ResponsiveContainer,
-  LineChart,
-  CartesianGrid,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ChartCard,
-  HeroTile,
-  tooltipMoney,
-  tooltipStyle,
-  ReportShell,
-} from "./reportsShared";
+  card,
+  emptyNote,
+  fieldLabel,
+  th,
+  td,
+  tdNum,
+  Foot,
+  Stat,
+} from "@/ui";
+import { ChartCard, PanelCard, ReportShell } from "./reportsShared";
 
 export default function BudgetPage() {
   const [monthOffset, setMonthOffset] = useState("0");
@@ -46,106 +38,97 @@ export default function BudgetPage() {
     <ReportShell
       crumb="Budget"
       title="Budget"
-      blurb="Planned vs actual, bucket by bucket, for the month you pick."
+      controls={
+        <div className="flex items-center gap-2">
+          <span className={fieldLabel}>Month</span>
+          <Select value={monthOffset} onValueChange={setMonthOffset}>
+            <SelectTrigger className="h-8 w-40" aria-label="Budget month">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">This month</SelectItem>
+              <SelectItem value="1">Last month</SelectItem>
+              <SelectItem value="2">2 months ago</SelectItem>
+              <SelectItem value="3">3 months ago</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      }
     >
-      <BudgetSection
-        monthStart={budgetMonthStart}
-        monthOffset={monthOffset}
-        setMonthOffset={setMonthOffset}
-      />
+      <BudgetSection monthStart={budgetMonthStart} />
     </ReportShell>
   );
 }
 
-// (#854 Phase 2) Status → color, on each class's own terms. good = on plan,
-// watch = creeping, miss = over (flex) / unpaid (bills) / not-yet-landed.
-function budgetStatusColor(status: "good" | "watch" | "miss"): string {
+type BudgetStatus = "good" | "watch" | "miss";
+
+/**
+ * (#854 Phase 2) Status → colour, on each class's own terms. good = on plan,
+ * watch = creeping, miss = over (flex) / unpaid (bills) / not-yet-landed.
+ *
+ * ⚠️ Three DISTINCT hexes, checked by `reportsPalette.test.ts`. The previous
+ * version routed these through the old alias palette's `primary`/`amber`/`red`,
+ * where `amber` resolved to #a9bad2 — a pale blue-grey barely separable from
+ * the navy it was supposed to contrast with.
+ */
+export function budgetStatusColor(status: BudgetStatus): string {
   return status === "good"
-    ? H2_PALETTE.primary
+    ? CHART.navy
     : status === "watch"
-      ? H2_PALETTE.amber
-      : H2_PALETTE.red;
+      ? CHART.steel
+      : CHART.orangeDeep;
 }
 
-function BudgetStatusChip({
-  status,
-}: {
-  status: "good" | "watch" | "miss";
-}) {
-  const label =
-    status === "good" ? "on track" : status === "watch" ? "watch" : "over";
-  const color = budgetStatusColor(status);
-  return (
-    <span
-      className="text-[10px] uppercase tracking-wider font-medium px-2 py-0.5 rounded-full shrink-0"
-      style={{ color, background: `${color}1f` }}
-    >
-      {label}
-    </span>
-  );
+/** The chip class for a status. The LABEL carries the state; colour follows. */
+export function budgetStatusChip(status: BudgetStatus): string {
+  return status === "good" ? "ok" : status === "watch" ? "warn" : "bad";
 }
 
-function BudgetSection({
-  monthStart,
-  monthOffset,
-  setMonthOffset,
-}: {
-  monthStart: string;
-  monthOffset: string;
-  setMonthOffset: (s: string) => void;
-}) {
+function budgetStatusLabel(status: BudgetStatus): string {
+  return status === "good" ? "On track" : status === "watch" ? "Watch" : "Over";
+}
+
+function BudgetSection({ monthStart }: { monthStart: string }) {
   const { data: facts, isLoading, isError } = useGetReportsBudgetFacts({
     monthStart,
     monthsBack: 6,
   });
 
-  const header = (
-    <>
-      <SectionHeader
-        eyebrow="Section · Budget"
-        title="Plan vs. reality"
-        sub="The plan said one thing. Real life always says another."
-      />
-      <div className="flex items-center gap-3">
-        <Label className="text-xs uppercase tracking-widest text-muted-foreground">
-          Month
-        </Label>
-        <Select value={monthOffset} onValueChange={setMonthOffset}>
-          <SelectTrigger className="w-44 h-9" aria-label="Budget month">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="0">This month</SelectItem>
-            <SelectItem value="1">Last month</SelectItem>
-            <SelectItem value="2">2 months ago</SelectItem>
-            <SelectItem value="3">3 months ago</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </>
+  // Stable reference for the burndown so recharts does not restart its draw.
+  const burndownData = useMemo(
+    () =>
+      (facts?.flex.burndown ?? []).map((b) => ({
+        day: b.day,
+        planned: b.plannedCumulative,
+        actual: b.actualCumulative,
+      })),
+    [facts],
+  );
+  const burndownLines = useMemo(
+    () => [
+      { key: "planned", name: "Planned (paced)", color: CHART.mist, dashed: true },
+      { key: "actual", name: "Actual", color: CHART.navy },
+    ],
+    [],
   );
 
   if (!facts) {
-    const message = isLoading
-      ? "Reading your budget…"
-      : isError
-        ? "We couldn't load your budget just now — give it a moment and try again."
-        : "All clear — no budget set for this month.";
     return (
-      <div className="space-y-6">
-        {header}
-        <Card className="rounded-lg">
-          <CardContent className="p-8 text-center text-sm text-muted-foreground">
-            {message}
-          </CardContent>
-        </Card>
+      <div className={card}>
+        <div className={emptyNote}>
+          {isLoading
+            ? "Loading"
+            : isError
+              ? "Budget facts unavailable"
+              : "No budget set for this month"}
+        </div>
       </div>
     );
   }
 
   const { range, income, bills, debts, flex, streak } = facts;
 
-  // Class-aware roll-ups (BudgetClassSection carries no totals — derive here).
+  // Class-aware roll-ups (the fact payload carries no totals — derive here).
   const sumActual = (ls: { actual: number }[]) =>
     ls.reduce((s, l) => s + l.actual, 0);
   const sumPlanned = (ls: { planned: number }[]) =>
@@ -153,8 +136,6 @@ function BudgetSection({
 
   const incomeActual = sumActual(income.lines);
   const incomePlanned = sumPlanned(income.lines);
-  const incomeProgressPct =
-    incomePlanned > 0 ? Math.round((incomeActual / incomePlanned) * 100) : 0;
   const paychecksLanded = income.paidCount;
   const paychecksExpected = income.lines.filter((l) => l.planned > 0).length;
 
@@ -163,7 +144,6 @@ function BudgetSection({
   const billsTotal = bills.totalCount + debts.totalCount;
   const fixedActual = sumActual(fixedLines);
   const fixedPlanned = sumPlanned(fixedLines);
-  const anyFixedMiss = fixedLines.some((l) => l.status === "miss");
 
   const paidFixed = fixedLines
     .filter((l) => l.status === "good")
@@ -179,329 +159,298 @@ function BudgetSection({
 
   if (nothingSet) {
     return (
-      <div className="space-y-6">
-        {header}
-        <Card className="rounded-lg">
-          <CardContent className="p-8 text-center text-sm text-muted-foreground">
-            All clear — no budget set for this month.
-          </CardContent>
-        </Card>
+      <div className={card}>
+        <div className={emptyNote}>No budget set for this month</div>
       </div>
     );
   }
 
-  // Pace bar geometry (plannedTotal = 100% of the track).
-  const paceFillPct =
-    flex.plannedTotal > 0
-      ? Math.min(100, (flex.actualTotal / flex.plannedTotal) * 100)
-      : flex.actualTotal > 0
-        ? 100
-        : 0;
-  const paceMarkerPct =
-    flex.plannedTotal > 0
-      ? Math.min(100, (flex.pacePlanToDate / flex.plannedTotal) * 100)
-      : 0;
-  const paceColor =
-    flex.paceStatus === "over" ? H2_PALETTE.red : H2_PALETTE.primary;
   const projectedUnder = flex.projectedVsPlan < 0;
-
-  const burndownData = flex.burndown.map((b) => ({
-    day: b.day,
-    planned: b.plannedCumulative,
-    actual: b.actualCumulative,
-  }));
+  const overPace = flex.paceStatus === "over";
 
   return (
-    <div className="space-y-6">
-      {header}
-
-      {/* Top tiles — three separate stories */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <HeroTile
+    <div className="space-y-4">
+      {/* Three separate stories, three tiles. */}
+      <div className="stagger grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Stat
+          index={0}
           label="Money in"
           value={formatCurrency(incomeActual)}
-          sub={`${paychecksLanded} of ${paychecksExpected} paychecks landed · ~${formatCurrency(incomePlanned)} expected`}
-          tone={incomeProgressPct >= 95 ? "good" : "amber"}
-          icon={<TrendingUp className="h-4 w-4" />}
+          hint={`${paychecksLanded} of ${paychecksExpected} paychecks landed · ${formatCurrency(incomePlanned)} expected`}
+          data-testid="budget-report-income"
         />
-        <HeroTile
-          label="Bills & loans"
+        <Stat
+          index={1}
+          label="Bills & loans paid"
           value={`${billsPaid} of ${billsTotal}`}
-          sub={`${formatCurrency(fixedActual)} of ${formatCurrency(fixedPlanned)}`}
-          tone={anyFixedMiss ? "amber" : "good"}
-          icon={<Check className="h-4 w-4" />}
+          hint={`${formatCurrency(fixedActual)} of ${formatCurrency(fixedPlanned)}`}
+          data-testid="budget-report-fixed"
         />
-        <HeroTile
+        <Stat
+          index={2}
           label="Flex spending"
           value={formatCurrency(flex.actualTotal)}
-          sub={`of ${formatCurrency(flex.plannedTotal)} planned · ${daysLeft} days left`}
-          tone={flex.paceStatus === "over" ? "bad" : "good"}
-          icon={
-            flex.paceStatus === "over" ? (
-              <TrendingUp className="h-4 w-4" />
-            ) : (
-              <TrendingDown className="h-4 w-4" />
-            )
-          }
+          hint={`of ${formatCurrency(flex.plannedTotal)} planned · ${daysLeft} days left`}
+          tone={overPace ? "bad" : "navy"}
+          data-testid="budget-report-flex"
         />
       </div>
 
-      {/* Flex — how it's going (centerpiece) */}
+      {/* Flex — the part you actually steer week to week. */}
       {flex.lines.length > 0 && (
-        <Card className="rounded-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Day-to-day spending</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Flex categories only — the part you actually steer week to week.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-5">
-            {/* Pace bar */}
+        <PanelCard
+          title="Day-to-day spending"
+          help="Flex categories only — bills, loans and income are excluded. Pace-to-date is what the plan says should be gone by today."
+          right={
+            <span className={`chip ${overPace ? "bad" : "ok"}`}>
+              {overPace ? "Over pace" : "On pace"}
+            </span>
+          }
+        >
+          <div className="border-b border-brand-line px-4 py-3">
+            <CssFillMeter
+              value={flex.actualTotal}
+              ceiling={flex.plannedTotal}
+              title={`${formatCurrency(flex.actualTotal)} of ${formatCurrency(flex.plannedTotal)}`}
+            />
+            <div className="mt-1.5 flex flex-wrap justify-between gap-2 font-mono text-micro tabular-nums text-neutral-500">
+              <span>{formatCurrency(flex.actualTotal)} spent</span>
+              <span>pace to date {formatCurrency(flex.pacePlanToDate)}</span>
+              <span>{formatCurrency(flex.plannedTotal)} planned</span>
+            </div>
+          </div>
+
+          {/* The projection sentence, as the two numbers it was carrying. */}
+          <div className="grid grid-cols-2 gap-3 border-b border-brand-line px-4 py-3">
             <div>
-              <div className="relative h-4 rounded-full bg-muted/50 overflow-visible">
-                <div
-                  className="absolute inset-y-0 left-0 rounded-full"
-                  style={{ width: `${paceFillPct}%`, background: paceColor }}
-                />
-                <div
-                  className="absolute -top-1 -bottom-1 w-0.5 bg-foreground/70"
-                  style={{ left: `${paceMarkerPct}%` }}
-                  title="Today's pace"
-                />
-              </div>
-              <div className="flex justify-between text-[11px] text-muted-foreground mt-1 tabular-nums">
-                <span>{formatCurrency(flex.actualTotal)} spent</span>
-                <span>{formatCurrency(flex.plannedTotal)} planned</span>
+              <div className={fieldLabel}>Projected month-end</div>
+              <div
+                className={cn(
+                  "mt-0.5 font-mono text-title font-semibold tabular-nums",
+                  projectedUnder ? "text-brand-navy" : "text-bad",
+                )}
+              >
+                {formatCurrency(flex.projectedMonthEnd)}
               </div>
             </div>
+            <div>
+              <div className={fieldLabel}>
+                {projectedUnder ? "Under plan" : "Over plan"}
+              </div>
+              <div
+                className={cn(
+                  "mt-0.5 font-mono text-title font-semibold tabular-nums",
+                  projectedUnder ? "text-brand-navy" : "text-bad",
+                )}
+              >
+                {formatCurrency(Math.abs(flex.projectedVsPlan))}
+              </div>
+            </div>
+          </div>
 
-            {/* Narrative */}
-            <div
-              className="flex items-center gap-2 text-sm font-medium"
-              style={{ color: projectedUnder ? H2_PALETTE.primary : H2_PALETTE.red }}
-            >
-              {projectedUnder ? (
-                <TrendingDown className="h-4 w-4 shrink-0" />
-              ) : (
-                <TrendingUp className="h-4 w-4 shrink-0" />
-              )}
-              <span>
-                At today's pace, {range.monthLabel} lands near {formatCurrency(flex.projectedMonthEnd)} — about {formatCurrency(Math.abs(flex.projectedVsPlan))} {projectedUnder ? "under" : "over"} plan.
-              </span>
-            </div>
-
-            {/* Per-category list (already sorted by pct desc) */}
-            <div className="space-y-2">
-              {flex.lines.map((l) => {
-                const barPct = l.unbudgeted
-                  ? 130
-                  : Math.min(130, l.pct);
-                return (
-                  <div key={l.categoryId} className="flex items-center gap-3">
-                    <div className="w-32 sm:w-40 truncate text-sm">{l.name}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${barPct}%`,
-                            background: budgetStatusColor(l.status),
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="w-40 text-right text-xs tabular-nums text-muted-foreground shrink-0">
-                      {l.unbudgeted ? (
-                        <span style={{ color: H2_PALETTE.amber }}>
-                          no budget — {formatCurrency(l.actual)} spent
-                        </span>
-                      ) : (
-                        `${formatCurrency(l.actual)} / ${formatCurrency(l.planned)}`
-                      )}
-                    </div>
-                    <BudgetStatusChip status={l.status} />
-                  </div>
-                );
-              })}
-            </div>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px]">
+              <thead>
+                <tr>
+                  <th className={th}>Category</th>
+                  <th className={cn(th, "w-[28%]")}>Progress</th>
+                  <th className={cn(th, "text-right")}>Spent</th>
+                  <th className={cn(th, "text-right")}>Planned</th>
+                  <th className={th}>State</th>
+                </tr>
+              </thead>
+              <tbody>
+                {flex.lines.map((l) => (
+                  <tr key={l.categoryId} data-testid={`budget-flex-${l.categoryId}`}>
+                    <td className={cn(td, "max-w-[220px] truncate font-medium")}>
+                      {l.name}
+                    </td>
+                    <td className={td}>
+                      <CssFillMeter value={l.actual} ceiling={l.planned} />
+                    </td>
+                    <td className={tdNum}>{formatCurrency(l.actual)}</td>
+                    <td className={cn(tdNum, "text-neutral-500")}>
+                      {l.unbudgeted ? "—" : formatCurrency(l.planned)}
+                    </td>
+                    <td className={td}>
+                      <span className={`chip ${budgetStatusChip(l.status)}`}>
+                        {l.unbudgeted ? "No budget" : budgetStatusLabel(l.status)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </PanelCard>
       )}
 
-      {/* Bills & loans — checklist */}
+      {/* Bills & loans — a checklist, as a table. */}
       {fixedLines.length > 0 && (
-        <Card className="rounded-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Bills & loans</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Fixed obligations. A loan at 100% is paid — a green check, not a red bar.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {paidFixed.length > 0 && (
-              <div>
-                <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-                  Paid this month
-                </div>
-                <div className="space-y-1.5">
-                  {paidFixed.map((l) => (
-                    <div key={l.categoryId} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 truncate">
-                        <Check className="h-4 w-4 shrink-0" style={{ color: H2_PALETTE.emerald }} />
-                        <span className="truncate">{l.name}</span>
-                      </span>
-                      <span className="tabular-nums shrink-0">{formatCurrency(l.actual)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {expectedFixed.length > 0 && (
-              <div>
-                <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-                  Still expected
-                </div>
-                <div className="space-y-1.5">
-                  {expectedFixed.map((l) => (
-                    <div key={l.categoryId} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 truncate">
-                        <Clock className="h-4 w-4 shrink-0" style={{ color: H2_PALETTE.amber }} />
-                        <span className="truncate">{l.name}</span>
-                      </span>
-                      <span className="tabular-nums shrink-0 text-muted-foreground">
-                        {formatCurrency(l.actual)} / {formatCurrency(l.planned)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <PanelCard
+          title="Bills & loans"
+          help="Fixed obligations. A loan at 100% is paid, not over — these are graded on being complete, not on being small."
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px]">
+              <thead>
+                <tr>
+                  <th className={th}>Obligation</th>
+                  <th className={cn(th, "text-right")}>Paid</th>
+                  <th className={cn(th, "text-right")}>Expected</th>
+                  <th className={th}>State</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paidFixed.map((l) => (
+                  <tr key={l.categoryId}>
+                    <td className={cn(td, "max-w-[260px] truncate font-medium")}>
+                      {l.name}
+                    </td>
+                    <td className={tdNum}>{formatCurrency(l.actual)}</td>
+                    <td className={cn(tdNum, "text-neutral-400")}>—</td>
+                    <td className={td}>
+                      <span className="chip ok">Paid</span>
+                    </td>
+                  </tr>
+                ))}
+                {expectedFixed.map((l) => (
+                  <tr key={l.categoryId}>
+                    <td className={cn(td, "max-w-[260px] truncate font-medium")}>
+                      {l.name}
+                    </td>
+                    <td className={tdNum}>{formatCurrency(l.actual)}</td>
+                    <td className={cn(tdNum, "text-neutral-500")}>
+                      {formatCurrency(l.planned)}
+                    </td>
+                    <td className={td}>
+                      <span className="chip warn">Expected</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </PanelCard>
       )}
 
       {/* Paychecks */}
       {income.lines.length > 0 && (
-        <Card className="rounded-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Paychecks</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Money landing this month. Coming in over estimate is good, never flagged.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-1.5">
-            {income.lines.map((l) => {
-              const isGood = l.status === "good";
-              const label = isGood
-                ? l.actual > l.planned
-                  ? "ahead"
-                  : "on track"
-                : "still expected this month";
-              return (
-                <div key={l.categoryId} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2 truncate">
-                    {isGood ? (
-                      <Check className="h-4 w-4 shrink-0" style={{ color: H2_PALETTE.emerald }} />
-                    ) : (
-                      <Clock className="h-4 w-4 shrink-0" style={{ color: H2_PALETTE.amber }} />
-                    )}
-                    <span className="truncate">{l.name}</span>
-                  </span>
-                  <span className="flex items-center gap-3 shrink-0">
-                    <span className="tabular-nums text-muted-foreground">
-                      {formatCurrency(l.actual)} in · ~{formatCurrency(l.planned)} expected
-                    </span>
-                    <span
-                      className="text-[10px] uppercase tracking-wider font-medium"
-                      style={{ color: isGood ? H2_PALETTE.primary : H2_PALETTE.amber }}
-                    >
-                      {label}
-                    </span>
-                  </span>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
+        <PanelCard
+          title="Paychecks"
+          help="Money landing this month. Coming in over the estimate is good and is never flagged."
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px]">
+              <thead>
+                <tr>
+                  <th className={th}>Source</th>
+                  <th className={cn(th, "text-right")}>Landed</th>
+                  <th className={cn(th, "text-right")}>Expected</th>
+                  <th className={th}>State</th>
+                </tr>
+              </thead>
+              <tbody>
+                {income.lines.map((l) => {
+                  const isGood = l.status === "good";
+                  const label = isGood
+                    ? l.actual > l.planned
+                      ? "Ahead"
+                      : "On track"
+                    : "Expected";
+                  return (
+                    <tr key={l.categoryId}>
+                      <td className={cn(td, "max-w-[260px] truncate font-medium")}>
+                        {l.name}
+                      </td>
+                      <td className={tdNum}>{formatCurrency(l.actual)}</td>
+                      <td className={cn(tdNum, "text-neutral-500")}>
+                        {formatCurrency(l.planned)}
+                      </td>
+                      <td className={td}>
+                        <span className={`chip ${isGood ? "ok" : "warn"}`}>
+                          {label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </PanelCard>
       )}
 
       {/* Pace of the month — flex burndown */}
       {flex.lines.length > 0 && burndownData.length > 0 && (
         <ChartCard
           title="Pace of the month"
-          caption="Are we on track to make it through the month on day-to-day spending?"
+          help="Cumulative flex spending against the plan paced evenly across the month. Above the dashed line is ahead of plan."
+          height={300}
         >
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={burndownData} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-              <XAxis dataKey="day" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} labelFormatter={(l: number) => `Day ${l}`} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line {...CHART_ANIM} type="monotone" dataKey="planned" stroke={H2_PALETTE.primarySoft} strokeWidth={2} strokeDasharray="6 4" dot={false} name="Planned (paced)" />
-              <Line {...CHART_ANIM} type="monotone" dataKey="actual" stroke={H2_PALETTE.primary} strokeWidth={2.5} dot={false} name="Actual" connectNulls={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          <LineTrend
+            data={burndownData}
+            xKey="day"
+            lines={burndownLines}
+            height={300}
+            labelMode="none"
+            ariaLabel="Cumulative flex spending against the paced plan"
+          />
         </ChartCard>
       )}
 
       {/* Six-month streak board */}
       {streak.rows.length > 0 && (
-        <ChartCard
+        <PanelCard
           title="Six-month streak board"
-          caption="Each row graded on its own terms — bills want 100%, spending wants less, paychecks want more."
-          height={Math.max(220, 60 + streak.rows.length * 28)}
+          help="Each row graded on its own terms — bills want 100%, flex spending wants less, paychecks want more. Cell shows actual as a percentage of plan."
         >
-          <div className="overflow-y-auto pr-1 h-full">
-            <table className="w-full text-xs">
-              <thead className="text-muted-foreground">
+          <div className="max-h-[420px] overflow-auto">
+            <table className="w-full min-w-[520px]">
+              <thead>
                 <tr>
-                  <th className="text-left font-normal pb-1">Category</th>
+                  <th className={th}>Category</th>
                   {streak.monthKeys.map((mk) => (
-                    <th key={mk} className="text-center font-normal pb-1">
+                    <th key={mk} className={cn(th, "text-center")}>
                       {mk.slice(5)}
                     </th>
                   ))}
+                  <th className={cn(th, "text-right")}>Run</th>
                 </tr>
               </thead>
               <tbody>
                 {streak.rows.map((row) => (
                   <tr key={row.categoryId}>
-                    <td className="py-1 pr-2 max-w-[160px]">
-                      <span className="flex items-center gap-1 truncate">
-                        {row.currentStreakGood >= 3 && (
-                          <Flame className="h-3.5 w-3.5 shrink-0" style={{ color: H2_PALETTE.amber }} />
-                        )}
-                        <span className="truncate">{row.name}</span>
-                      </span>
+                    <td className={cn(td, "max-w-[180px] truncate font-medium")}>
+                      {row.name}
                     </td>
-                    {row.cells.map((c, i) => {
-                      if (!c)
-                        return (
-                          <td key={i} className="py-1 px-1">
-                            <div className="h-6 rounded bg-muted/40" />
-                          </td>
-                        );
-                      return (
-                        <td key={i} className="py-1 px-1">
+                    {row.cells.map((c, i) => (
+                      <td key={i} className={cn(td, "px-1")}>
+                        {c ? (
                           <div
-                            className="h-6 rounded flex items-center justify-center text-[10px] font-mono text-white tabular-nums"
+                            className="flex h-6 items-center justify-center rounded font-mono text-micro tabular-nums text-white"
                             style={{ background: budgetStatusColor(c.status) }}
-                            title={`${row.name} · ${c.status}`}
+                            title={`${row.name} · ${c.status} · ${c.pct >= 999 ? "no plan" : `${Math.round(c.pct)}%`}`}
                           >
                             {c.pct >= 999 ? "—" : `${Math.round(c.pct)}%`}
                           </div>
-                        </td>
-                      );
-                    })}
+                        ) : (
+                          <div className="h-6 rounded bg-brand-line/60" />
+                        )}
+                      </td>
+                    ))}
+                    <td className={tdNum}>{row.currentStreakGood}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </ChartCard>
+          <Foot>
+            A cell is navy on plan, grey when creeping and deep orange when
+            missed; the hover text names the state so the colour is never the
+            only signal. "Run" counts consecutive good months to date.
+          </Foot>
+        </PanelCard>
       )}
     </div>
   );
