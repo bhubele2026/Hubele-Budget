@@ -134,6 +134,39 @@ describe("palette — no aliases, no collisions", () => {
     expect(new Set(hexes).size).toBe(hexes.length);
   });
 
+  /**
+   * ⚠️ REGRESSION GUARD FOR A REAL KIT BUG (fixed in D1).
+   *
+   * `OTHER_GREY` was #8fa3bf — byte-identical to `CAT8[4]` and to `CHART.mist`.
+   * Any chart following the kit's own documented shape (cap at 8, roll the tail
+   * into "Other") therefore drew slice 4 and the Other slice in ONE colour the
+   * moment a fifth category existed. The old assertions never caught it because
+   * they only checked `CHART` against itself.
+   */
+  it("never lets the Other rollup wear a categorical identity's colour", () => {
+    expect(CAT8).not.toContain(OTHER_GREY);
+    for (const hex of CAT8) expect(hex).not.toBe(OTHER_GREY);
+  });
+
+  it("draws nine distinct marks for a capped-at-8 chart plus Other", () => {
+    // The exact shape law 3 prescribes — this is what used to collide.
+    const ninePie = [...Array.from({ length: 8 }, (_, i) => catColor(i)), OTHER_GREY];
+    expect(new Set(ninePie).size).toBe(9);
+  });
+
+  it("keeps Other out of the sequential ramp and the named series too", () => {
+    // A rollup that equals a NAVY_RAMP stop collides on any page that draws a
+    // ranked list beside a categorical one; equalling a CHART token is the
+    // alias law 5 forbids.
+    expect(NAVY_RAMP).not.toContain(OTHER_GREY);
+    expect(Object.values(CHART)).not.toContain(OTHER_GREY);
+  });
+
+  it("has no duplicate hex anywhere across CAT8 + OTHER_GREY", () => {
+    const all = [...CAT8, OTHER_GREY];
+    expect(new Set(all).size).toBe(all.length);
+  });
+
   it("keeps good and bad visually opposite", () => {
     expect(CHART.navy).toBe("#19315b");
     expect(CHART.orangeDeep).toBe("#e16d3e");

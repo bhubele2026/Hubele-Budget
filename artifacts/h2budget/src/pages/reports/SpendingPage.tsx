@@ -68,23 +68,6 @@ import {
   daysForMode,
 } from "./reportsShared";
 
-/**
- * ⚠️ THE "OTHER" SLICE IS **NOT** `OTHER_GREY`.
- *
- * The kit's `OTHER_GREY` is #8fa3bf, which is byte-identical to `CAT8[4]`. So
- * any chart with five or more real categories plus a rollup draws TWO marks in
- * one colour — the exact failure this PR exists to remove, sitting inside the
- * kit's own tokens. Until that is fixed at the token level, the rollup here
- * takes `NAVY_RAMP[1]` (#c4d0e2): a sanctioned hex, absent from `CAT8`, and
- * lighter than every real category, which is the right read for "the rest".
- */
-const OTHER_SLICE = NAVY_RAMP[1];
-
-/** Colour for slice `i` of a capped list whose LAST entry is the rollup. */
-function sliceColor(i: number, count: number, hasOther: boolean): string {
-  return hasOther && i === count - 1 ? OTHER_SLICE : catColor(i);
-}
-
 /** Reimbursable vs personal — two marks, two clearly opposed hexes. */
 export const REIMBURSABLE_SERIES = {
   outstanding: CHART.orange, // #f68d2e — money still owed back
@@ -403,7 +386,6 @@ function SpendingSection({
     }
     return top8;
   }, [realCats]);
-  const pieHasOther = realCats.length > 8;
 
   // Reimbursable donut from facts.reimbursable.
   const reimDonut = useMemo(() => {
@@ -622,11 +604,12 @@ function SpendingSection({
                     stroke="#fff"
                     strokeWidth={2}
                   >
+                    {/* Slots 0–7 are the real categories; the optional 9th
+                        entry is the rollup, and `catColor(8)` IS `OTHER_GREY`.
+                        No local substitute needed — the kit's token is now
+                        genuinely distinct from all eight identities. */}
                     {pieData.map((_, i) => (
-                      <Cell
-                        key={i}
-                        fill={sliceColor(i, pieData.length, pieHasOther)}
-                      />
+                      <Cell key={i} fill={catColor(i)} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -643,9 +626,7 @@ function SpendingSection({
                 <li key={d.name} className="flex items-center gap-2">
                   <span
                     className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px]"
-                    style={{
-                      background: sliceColor(i, pieData.length, pieHasOther),
-                    }}
+                    style={{ background: catColor(i) }}
                   />
                   <span className="flex-1 truncate text-neutral-600">
                     {sentenceCase(d.name)}

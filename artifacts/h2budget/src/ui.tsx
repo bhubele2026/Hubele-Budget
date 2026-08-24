@@ -36,7 +36,7 @@ export const btnSecondarySm =
 /** ⚠️ Hover is a DEEPER ORANGE, not a dark red — `bg-bad` is #e16d3e, and a
  *  crimson hover under an orange rest state reads as two different buttons. */
 export const btnDanger =
-  "press rounded-control bg-bad px-3.5 py-1.5 text-body font-medium text-white hover:bg-[#c2562a] disabled:pointer-events-none disabled:opacity-55";
+  "press rounded-control bg-bad px-3.5 py-1.5 text-body font-medium text-white hover:bg-bad-hover disabled:pointer-events-none disabled:opacity-55";
 /**
  * ⭐ NOT A LINK. Secondary actions used to render as web-page hypertext — blue,
  * underlined, `edit` / `delete` / `+ add`. They are app controls, so they read

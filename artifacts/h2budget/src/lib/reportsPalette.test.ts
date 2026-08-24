@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as reportsAnalytics from "./reportsAnalytics";
-import { CAT8, CHART, NAVY_RAMP, catColor } from "./chartTokens";
+import { CAT8, CHART, NAVY_RAMP, OTHER_GREY, catColor } from "./chartTokens";
 import { CASHFLOW_SERIES } from "../pages/reports/CashFlowPage";
 import { DEBT_SERIES } from "../pages/reports/DebtPage";
 import { REIMBURSABLE_SERIES } from "../pages/reports/SpendingPage";
@@ -117,19 +117,20 @@ describe("the categorical set stays categorical", () => {
   });
 
   /**
-   * ⚠️ REGRESSION GUARD FOR A REAL KIT BUG.
+   * ⚠️ REGRESSION GUARD FOR A REAL KIT BUG (fixed at the token level in D1).
    *
-   * `OTHER_GREY` is #8fa3bf, byte-identical to `CAT8[4]`. So a chart with the
-   * kit's documented "cap at 8 + roll the tail into Other" shape draws slice 4
-   * and the Other slice in ONE colour. SpendingPage therefore does NOT use
-   * `OTHER_GREY` for its rollup; it uses `NAVY_RAMP[1]`. This test pins that
-   * the substitute is genuinely distinct from every categorical slot, so the
-   * nine-slice pie can never collide.
+   * `OTHER_GREY` used to be #8fa3bf, byte-identical to `CAT8[4]`, so a chart
+   * with the kit's documented "cap at 8 + roll the tail into Other" shape drew
+   * slice 4 and the Other slice in ONE colour. SpendingPage carried a local
+   * `NAVY_RAMP[1]` substitute to dodge it. The token is now a true neutral grey
+   * (#767b83) that no identity wears, the substitute is gone, and SpendingPage
+   * simply calls `catColor(i)` across all nine slots.
    */
   it("the Other rollup colour is absent from CAT8", () => {
-    const other = NAVY_RAMP[1];
-    expect(CAT8).not.toContain(other);
-    const ninePie = [...Array.from({ length: 8 }, (_, i) => catColor(i)), other];
+    expect(CAT8).not.toContain(OTHER_GREY);
+    // The exact nine-slot shape SpendingPage renders: catColor(8) IS the rollup.
+    const ninePie = Array.from({ length: 9 }, (_, i) => catColor(i));
+    expect(ninePie[8]).toBe(OTHER_GREY);
     expect(new Set(ninePie).size).toBe(9);
   });
 });
