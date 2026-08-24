@@ -1,6 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { btnLink } from "@/ui";
 import {
   Tooltip,
   TooltipContent,
@@ -100,43 +99,42 @@ export function PlanDropRow({
       }
       data-plan-key={`${row.itemId}|${row.date}`}
       data-testid={`plan-row-${row.itemId}-${row.date}`}
-      className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors cursor-pointer ${
+      // ⚠️ `ring-primary` is the NAVY focus treatment — B1 rebound `--primary`
+      // to #19315b. Keep the token name: the drag tests assert on it, and it
+      // already resolves to the right colour.
+      // ⭐ ONE MARKUP, TWO SHAPES. On a phone the label, the amount and two
+      // buttons cannot share a line: the name collapses to "Pa…" and the date
+      // wraps to three lines. Below `sm` the row breaks — name and date own
+      // the first line, status/amount/actions the second, right-aligned. Same
+      // DOM, no second mobile render, no duplicated testids.
+      className={`flex w-full cursor-pointer flex-wrap items-center justify-between gap-y-2 px-4 py-2.5 text-left transition-colors ${
         isOverEligible
           ? "bg-primary/10 ring-2 ring-primary ring-inset"
           : isOverBlocked
-            ? "bg-destructive/5 ring-2 ring-destructive/60 ring-inset opacity-60 cursor-not-allowed"
+            ? "cursor-not-allowed bg-bad-bg opacity-60 ring-2 ring-bad/60 ring-inset"
             : isHighlighted
               ? "bg-primary/10 ring-2 ring-primary ring-inset"
               : showSuggestion
-                ? "bg-warning/10 ring-2 ring-warning/70 ring-inset"
+                ? "bg-brand-navy/[0.06] ring-2 ring-brand-navy/40 ring-inset"
                 : showDropAffordance
-                  ? "bg-primary/[0.04] ring-1 ring-dashed ring-primary/40 ring-inset"
+                  ? "bg-brand-navy/[0.03] ring-1 ring-dashed ring-brand-navy/30 ring-inset"
                   : showDropBlocked
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:bg-muted/50"
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-neutral-50"
       }`}
     >
-      <div className="flex items-center gap-3 min-w-0">
-        <Badge
-          variant="outline"
-          className="bg-warning/10 text-warning border-warning/30"
-        >
-          Plan
-        </Badge>
+      <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-auto">
         <div className="min-w-0">
-          <div className="font-medium text-sm truncate flex items-center gap-2">
+          <div className="flex items-center gap-2 truncate text-body font-medium text-neutral-700">
             <span className="truncate">{row.label}</span>
             {payoff && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge
-                      variant="outline"
-                      className="bg-warning/10 text-warning border-warning/30 text-[10px] gap-1 px-1.5 py-0"
-                    >
-                      <Flame className="h-3 w-3" />
+                    <span className="chip ok inline-flex items-center gap-1">
+                      <Flame className="h-3 w-3" aria-hidden="true" />
                       ends {fmtMonth(payoff.payoffDate)}
-                    </Badge>
+                    </span>
                   </TooltipTrigger>
                   <TooltipContent>
                     Avalanche projects {payoff.debtName} paid off in {fmtMonth(payoff.payoffDate)}.
@@ -145,25 +143,27 @@ export function PlanDropRow({
               </TooltipProvider>
             )}
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="whitespace-nowrap font-mono text-micro tabular-nums text-neutral-400">
             {formatDate(row.date)}
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex w-full items-center justify-end gap-3 sm:w-auto sm:gap-4">
         {statusBadge(row.status)}
         <span
-          className={`font-medium tabular-nums ${
-            row.amount < 0 ? "text-destructive" : "text-primary"
+          className={`font-mono text-label tabular-nums ${
+            row.amount < 0 ? "text-bad" : "text-brand-navy"
           }`}
         >
           {formatCurrency(row.amount)}
         </span>
         {canMove && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
+          <button
+            type="button"
+            // Local `whitespace-nowrap`, not a kit change: the kit is frozen
+            // for the Phase C page passes, and "Move to…" is the only label in
+            // it long enough to break across two lines in a phone-width row.
+            className={`${btnLink} whitespace-nowrap`}
             onClick={(e) => {
               e.stopPropagation();
               onMove?.(row);
@@ -172,13 +172,12 @@ export function PlanDropRow({
             title="Move this occurrence to another day (next 30 days)"
           >
             Move to…
-          </Button>
+          </button>
         )}
         {canMarkMissed && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-warning hover:text-warning hover:bg-warning/10"
+          <button
+            type="button"
+            className={`${btnLink} whitespace-nowrap`}
             onClick={(e) => {
               e.stopPropagation();
               onMarkMissed?.(row);
@@ -187,7 +186,7 @@ export function PlanDropRow({
             title="Move this occurrence into the Missed bucket"
           >
             Mark missed
-          </Button>
+          </button>
         )}
       </div>
     </div>

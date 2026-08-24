@@ -34,32 +34,18 @@ import {
 import { Link } from "wouter";
 import { AvalancheScheduleCard } from "@/components/avalanche-schedule-card";
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ReferenceLine,
-  ReferenceDot,
-  Label as RechartsLabel,
-} from "recharts";
-import { DeltaPill, Sparkline, StackBar, RingStat, MoneyText } from "@/components/viz";
-import { StatTile, StatTileRow } from "@/components/stat-tile";
-import { PillBadge } from "@/components/pill-badge";
-import { SectionHeader, Callout } from "@/components/stat";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+  card as kitCard,
+  cardHead,
+  btnLink,
+  emptyNote,
+  Foot,
+  Help,
+  Stat,
+} from "@/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -67,7 +53,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -129,14 +114,11 @@ import {
   Settings as SettingsIcon,
   X,
   GripVertical,
-  PartyPopper,
   Inbox as InboxIcon,
   Sparkles,
   RefreshCw,
   Landmark,
-  TrendingDown,
   CheckCircle2,
-  AlertCircle,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -152,6 +134,7 @@ import {
   PlannedItemsList,
   type PlannedItem,
 } from "./forecast/PlannedItemsList";
+import { ProjectedBalanceChart } from "./forecast/ProjectedBalanceChart";
 import { statusBadge, isPlanRowMatchEligible } from "./forecast/statusBadge";
 
 // Re-exported here so existing imports (and the Task #285 test) keep
@@ -1731,7 +1714,6 @@ export default function ForecastPage({
       .slice(0, 5);
     return candidates;
   })();
-  const bigBillByDate = new Map(bigBillMarkers.map((m) => [m.date, m]));
 
   // Per-day index of EVERY expense event the cash signal returned (not
   // just "big bill" days). Used by the chart tooltip so hovering on any
@@ -1818,25 +1800,32 @@ export default function ForecastPage({
     <div className="space-y-6">
       <PlaidReauthBanner />
       <div ref={pageStickyHeaderRef} className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
-      <SectionHeader
-        eyebrow="Section IV — Forecast"
-        title="Plan register — you decide every match."
-        action={
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="outline" size="sm" asChild className="h-8">
-              <Link href="/bills" data-testid="link-manage-bills">
-                Manage in Bills
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => openSettings()} className="h-8">
-              <SettingsIcon className="w-3.5 h-3.5 mr-1.5" /> Settings
-            </Button>
-          </div>
-        }
-      />
+      {/* ⭐ The title used to be a sentence explaining the page's philosophy
+          ("Plan register — you decide every match."). The register below says
+          that by existing; the head just names the screen. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-title font-semibold text-brand-navy">
+          {mode === "review" ? "Review" : "Forecast"}
+        </h1>
+        <Help>
+          Plans are matched to bank activity by you — nothing is auto-accepted.
+          A matched plan leaves the register and lands in the month's bucket.
+        </Help>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Link href="/bills" data-testid="link-manage-bills" className={btnLink}>
+            Bills
+          </Link>
+          <button type="button" onClick={() => openSettings()} className={btnLink}>
+            <SettingsIcon className="h-3 w-3" aria-hidden="true" /> Settings
+          </button>
+        </div>
+      </div>
 
       <div className="flex items-center gap-2 flex-wrap" data-testid="horizon-tabs">
-        <div className="inline-flex flex-wrap items-center gap-0.5 rounded-xl border border-card-border bg-muted/40 p-0.5">
+        {/* ⭐ The horizon segmented control. One hairline track, the active
+            segment navy-filled — the same shape the tab ribbon uses, so the
+            page has one language for "pick one of these". */}
+        <div className="inline-flex flex-wrap items-center gap-0.5 rounded-control bg-neutral-50 p-0.5 ring-1 ring-brand-line">
         {HORIZON_OPTS.map((h) => {
           const active = horizonDays === h.days;
           // (#618) The active button shows a subtle spinner while the new
@@ -1845,34 +1834,37 @@ export default function ForecastPage({
           // (global `keepPreviousData`), so the page never goes blank.
           const showPending = active && horizonSwitchPending;
           return (
-            <Button
+            <button
               key={h.label}
-              variant={active ? "default" : "ghost"}
-              size="sm"
+              type="button"
               onClick={() => setHorizonDays(h.days)}
-              className="text-xs tracking-wider h-7 px-2.5"
+              className={`press inline-flex items-center rounded-control px-2.5 py-1 text-micro font-semibold tracking-wide ${
+                active
+                  ? "bg-brand-navy text-white"
+                  : "text-neutral-500 hover:bg-white hover:text-brand-navy"
+              }`}
               data-testid={`horizon-${h.days}`}
               data-pending={showPending ? "true" : undefined}
+              aria-pressed={active}
               aria-busy={showPending || undefined}
             >
               {h.label}
               {showPending && (
                 <RefreshCw
-                  className="w-3 h-3 ml-1.5 animate-spin"
+                  className="ml-1.5 h-3 w-3 animate-spin"
                   data-testid={`horizon-${h.days}-pending`}
                   aria-hidden="true"
                 />
               )}
-            </Button>
+            </button>
           );
         })}
         </div>
         {/* (#650 follow-up) Look-back toggle. Default chart starts at
             today; clicking this reveals a date picker so the user can
             rewind the chart to a historical start date when needed. */}
-        <Button
-          variant={lookbackOpen ? "default" : "outline"}
-          size="sm"
+        <button
+          type="button"
           onClick={() => {
             const next = !lookbackOpen;
             setLookbackOpen(next);
@@ -1880,21 +1872,28 @@ export default function ForecastPage({
             // forecast keeps moving forward.
             if (!next) setForecastFromDate(todayISO());
           }}
-          className="text-xs tracking-wider h-7 px-2.5"
+          className={`press inline-flex items-center gap-1.5 rounded-control px-2.5 py-1 text-micro font-semibold tracking-wide ring-1 ${
+            lookbackOpen
+              ? "bg-brand-navy text-white ring-brand-navy"
+              : "bg-white text-neutral-500 ring-brand-line hover:text-brand-navy"
+          }`}
           data-testid="toggle-forecast-lookback"
           aria-expanded={lookbackOpen}
           aria-controls="forecast-lookback-panel"
         >
-          <CalendarDays className="w-3 h-3 mr-1.5" aria-hidden="true" />
+          <CalendarDays className="h-3 w-3" aria-hidden="true" />
           LOOK BACK
-        </Button>
+        </button>
         {lookbackOpen && (
           <div
             id="forecast-lookback-panel"
             className="flex items-center gap-2"
             data-testid="forecast-lookback-panel"
           >
-            <Label htmlFor="forecast-from" className="text-xs text-muted-foreground">
+            <Label
+              htmlFor="forecast-from"
+              className="text-micro font-semibold uppercase tracking-wide text-neutral-500"
+            >
               Start
             </Label>
             <Input
@@ -1904,14 +1903,14 @@ export default function ForecastPage({
               min={FORECAST_MIN_FROM_DATE}
               max={todayISO()}
               onChange={(e) => setForecastFromDate(clampForecastFrom(e.target.value))}
-              className="h-7 w-[150px] text-xs"
+              className="h-7 w-[150px] font-mono text-micro tabular-nums"
               data-testid="input-forecast-from"
               data-pending={fromDateSwitchPending ? "true" : undefined}
               aria-busy={fromDateSwitchPending || undefined}
             />
             {fromDateSwitchPending && (
               <RefreshCw
-                className="w-3 h-3 animate-spin text-muted-foreground"
+                className="h-3 w-3 animate-spin text-neutral-400"
                 data-testid="forecast-from-pending"
                 aria-hidden="true"
               />
@@ -1921,190 +1920,138 @@ export default function ForecastPage({
       </div>
 
       {mode === "overall" && (
-      /* Hero: Current Forecast Balance */
-      <Card data-testid="card-forecast-hero">
-        <CardContent className="p-4">
-          <div className="flex justify-between items-center gap-4 flex-wrap">
-            <div className="space-y-1 min-w-0">
-              <div className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                Current Forecast Balance
-              </div>
-              <div
-                className={`text-[2rem] md:text-[2.4rem] font-bold tabular-nums leading-none ${
-                  Number.isFinite(endingNum) && endingNum < 0
-                    ? "text-destructive"
-                    : "text-foreground"
-                }`}
-                data-testid="hero-forecast-balance"
-              >
-                {Number.isFinite(endingNum)
-                  ? formatCurrency(endingNum)
-                  : formatCurrency(0)}
-              </div>
-              <div className="text-xs text-muted-foreground leading-snug">
-                <div>
-                  Bank balance before {formatDate(forecastFromDate)}:{" "}
-                  <span className="tabular-nums font-medium text-foreground">
-                    {formatCurrency(proj?.startingBalance ?? "0")}
-                  </span>
-                </div>
-                <div>
-                  Accepted / matched impact:{" "}
-                  <span className="tabular-nums font-medium text-foreground">
-                    {formatCurrency(proj?.acceptedImpact ?? "0")}
-                  </span>
-                </div>
-                <div>
-                  Target bank balance through{" "}
-                  {formatDate(proj?.endingDate ?? proj?.toDate ?? forecastFromDate)}:{" "}
-                  <span className="tabular-nums font-medium text-foreground">
-                    {formatCurrency(proj?.endingBalance ?? "0")}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-2 text-xs">
-              {inboxCount === 0 && reconciledNow && (
-                <Badge
-                  className="bg-primary/15 text-primary border-primary/30"
-                  data-testid="badge-inbox-cleared"
-                >
-                  <PartyPopper className="w-3.5 h-3.5 mr-1" /> Inbox cleared
-                </Badge>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      /* ⭐ The headline. One big number, and the three figures it is built
+         from demoted to a footnote — they used to be three sentences. */
+      <section className={kitCard} data-testid="card-forecast-hero">
+        <div className={cardHead}>
+          <h2 className="text-title font-semibold text-brand-navy">
+            Forecast balance
+          </h2>
+          <Help>
+            Where checking lands at the end of the horizon: the bank balance
+            before the start date, plus every matched and still-planned item
+            between then and the end date.
+          </Help>
+          {inboxCount === 0 && reconciledNow && (
+            <span className="chip ok ml-auto" data-testid="badge-inbox-cleared">
+              Inbox cleared
+            </span>
+          )}
+        </div>
+        <div
+          className={`px-4 py-3 font-mono text-display font-semibold tabular-nums ${
+            Number.isFinite(endingNum) && endingNum < 0
+              ? "text-bad"
+              : "text-brand-navy"
+          }`}
+          data-testid="hero-forecast-balance"
+        >
+          {Number.isFinite(endingNum)
+            ? formatCurrency(endingNum)
+            : formatCurrency(0)}
+        </div>
+        <Foot>
+          <span className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <span>
+              Bank before {formatDate(forecastFromDate)}{" "}
+              <span className="font-mono tabular-nums text-neutral-600">
+                {formatCurrency(proj?.startingBalance ?? "0")}
+              </span>
+            </span>
+            <span>
+              Matched impact{" "}
+              <span className="font-mono tabular-nums text-neutral-600">
+                {formatCurrency(proj?.acceptedImpact ?? "0")}
+              </span>
+            </span>
+            <span>
+              Through{" "}
+              {formatDate(proj?.endingDate ?? proj?.toDate ?? forecastFromDate)}{" "}
+              <span className="font-mono tabular-nums text-neutral-600">
+                {formatCurrency(proj?.endingBalance ?? "0")}
+              </span>
+            </span>
+          </span>
+        </Foot>
+      </section>
       )}
       </div>
 
       {mode === "overall" && (<>
-      {/* KPI tiles — each carries a real visual, not just a number. */}
+      {/* ⭐ Four figures, mono, on one baseline. Each tile used to carry its
+          own little graphic — a sparkline of the curve drawn full-size
+          directly below it, a ring restating a ratio the two neighbouring
+          numbers already give, a stripe repeating in-vs-out. The numbers are
+          the content; the chart below is the picture. */}
       {(() => {
-        const balSeries = dailySeries.map((d) => d.balance);
-        const startBal = Number(data?.bankSnapshot?.balance);
-        const endBal = Number(proj?.endingBalance);
-        const endDeltaPct =
-          Number.isFinite(startBal) && startBal !== 0 && Number.isFinite(endBal)
-            ? ((endBal - startBal) / Math.abs(startBal)) * 100
-            : null;
         const inc = Number(proj?.projectedIncome) || 0;
         const exp = Number(proj?.projectedExpenses) || 0;
         const dipsBelowBuffer =
           Number.isFinite(lowestNum) && lowestNum < Number(proj?.cashBuffer ?? 0);
-        const expRatio = inc > 0 ? exp / inc : exp > 0 ? 1 : 0;
         return (
-          <StatTileRow>
-            <div data-testid="kpi-lowest-point" className="h-full">
-              <StatTile
-                active={dipsBelowBuffer}
-                label="Lowest Point"
-                value={<MoneyText amount={Number.isFinite(lowestNum) ? lowestNum : 0} />}
-                sub={
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span>{proj?.lowestDate ? `on ${formatDate(proj.lowestDate)}` : "—"}</span>
-                    <PillBadge tone={dipsBelowBuffer ? "danger" : "good"}>
-                      {dipsBelowBuffer ? "At risk" : "On track"}
-                    </PillBadge>
-                  </span>
-                }
-              />
-            </div>
-            <div data-testid="kpi-ending-balance" className="h-full">
-              <StatTile
-                label="Ending Balance"
-                value={<MoneyText amount={proj?.endingBalance ?? 0} />}
-                sub={
-                  <span className="flex flex-col gap-1.5">
-                    <span className="flex items-center gap-2">
-                      <span>
-                        {proj?.endingDate
-                          ? `on ${formatDate(proj.endingDate)}`
-                          : `${horizonDays}-day horizon`}
-                      </span>
-                      {endDeltaPct != null && <DeltaPill value={endDeltaPct} />}
-                    </span>
-                    {balSeries.length > 1 && (
-                      <Sparkline
-                        data={balSeries}
-                        variant="line"
-                        color="hsl(var(--chart-1))"
-                        height={28}
-                      />
-                    )}
-                  </span>
-                }
-              />
-            </div>
-            <div data-testid="kpi-projected-income" className="h-full">
-              <StatTile
-                label="In vs Out"
-                value={<MoneyText amount={inc} className="text-[hsl(var(--positive))]" />}
-                sub={
-                  <span className="flex flex-col gap-1.5">
-                    <span>income over {horizonDays}d</span>
-                    <StackBar
-                      legendMax={2}
-                      showLegend={false}
-                      segments={[
-                        { label: "Income", value: inc, color: "hsl(var(--positive))" },
-                        { label: "Expenses", value: exp, color: "hsl(var(--negative))" },
-                      ]}
-                    />
-                  </span>
-                }
-              />
-            </div>
-            <div data-testid="kpi-projected-expenses" className="h-full">
-              <StatTile
-                label="Projected Out"
-                value={<MoneyText amount={exp} />}
-                sub={
-                  <span className="flex items-center gap-3">
-                    <RingStat
-                      value={Math.min(1, expRatio)}
-                      size={44}
-                      color={expRatio > 1 ? "hsl(var(--negative))" : "hsl(var(--primary))"}
-                      centerSub="of in"
-                    />
-                    <span>over {horizonDays}d</span>
-                  </span>
-                }
-              />
-            </div>
-          </StatTileRow>
+          <div
+            className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+            data-testid="forecast-kpis"
+          >
+            <Stat
+              index={0}
+              data-testid="kpi-lowest-point"
+              label="Lowest point"
+              value={formatCurrency(Number.isFinite(lowestNum) ? lowestNum : 0)}
+              tone={dipsBelowBuffer ? "bad" : "navy"}
+              hint={`${dipsBelowBuffer ? "under buffer" : "above buffer"}${
+                proj?.lowestDate ? ` · ${formatDate(proj.lowestDate)}` : ""
+              }`}
+            />
+            <Stat
+              index={1}
+              data-testid="kpi-ending-balance"
+              label="Ending balance"
+              value={formatCurrency(proj?.endingBalance ?? 0)}
+              hint={
+                proj?.endingDate
+                  ? formatDate(proj.endingDate)
+                  : `${horizonDays}-day horizon`
+              }
+            />
+            <Stat
+              index={2}
+              data-testid="kpi-projected-income"
+              label="Money in"
+              value={formatCurrency(inc)}
+              hint={`over ${horizonDays}d`}
+            />
+            <Stat
+              index={3}
+              data-testid="kpi-projected-expenses"
+              label="Money out"
+              value={formatCurrency(exp)}
+              hint={`over ${horizonDays}d`}
+            />
+          </div>
         );
       })()}
 
       {/* (#683) Past-due plans dragging tomorrow — discoverable summary */}
       {draggingPlans.length > 0 && draggingTargetDate && (
-        <div data-testid="card-dragging-plans-summary">
-        <Callout tone="warning" icon={<AlertCircle className="h-4 w-4" />}>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-warning">
-              <span>
-                {draggingPlans.length === 1
-                  ? "1 past-due plan is weighing on"
-                  : `${draggingPlans.length} past-due plans are weighing on`}{" "}
-                {formatDate(draggingTargetDate)}
-              </span>
-              <span
-                className="ml-auto tabular-nums"
-                data-testid="dragging-plans-total"
-              >
-                {formatCurrency(draggingTotal)}
-              </span>
-            </div>
-            <p className="text-xs font-normal text-muted-foreground">
-              These plans were due earlier but haven't been matched, missed,
-              or skipped yet — so the projection keeps them on{" "}
-              {formatDate(draggingTargetDate)} until you resolve them.
-            </p>
-            <ul
-              className="divide-y divide-warning/20 rounded-md border border-warning/20 bg-background"
-              data-testid="dragging-plans-list"
+        <section className={kitCard} data-testid="card-dragging-plans-summary">
+          <div className={cardHead}>
+            <h2 className="text-title font-semibold text-brand-navy">Past due</h2>
+            <span className="chip bad">
+              {draggingPlans.length} on {formatDate(draggingTargetDate)}
+            </span>
+            <Help>
+              {`These occurrences were due earlier and have not been matched, missed or skipped, so the projection carries them forward onto ${formatDate(draggingTargetDate)} until you resolve them. That is why the next day dips.`}
+            </Help>
+            <span
+              className="ml-auto font-mono text-label tabular-nums text-bad"
+              data-testid="dragging-plans-total"
             >
+              {formatCurrency(draggingTotal)}
+            </span>
+          </div>
+          <div>
+            <ul data-testid="dragging-plans-list">
               {draggingPlans.map((row) => {
                 const planLine: PlanLine = {
                   kind: "plan",
@@ -2119,26 +2066,26 @@ export default function ForecastPage({
                   <li
                     key={`${row.itemId}|${row.originalDate}`}
                     data-testid={`dragging-plan-${row.itemId}-${row.originalDate}`}
-                    className="flex items-center justify-between gap-3 px-3 py-2 flex-wrap"
+                    className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0"
                   >
                     <button
                       type="button"
                       onClick={() =>
                         jumpToPlan(row.itemId, row.originalDate)
                       }
-                      className="flex items-center justify-between gap-3 flex-1 min-w-0 text-left hover:bg-warning/10 focus-visible:bg-warning/10 rounded-sm -mx-1 px-1 py-1 outline-none focus-visible:ring-2 focus-visible:ring-warning"
+                      className="press -mx-1 flex min-w-0 flex-1 items-center justify-between gap-3 rounded-control px-1 py-1 text-left outline-none hover:bg-neutral-50 focus-visible:ring-2 focus-visible:ring-brand-navy/40"
                       title={`Jump to ${row.label} in the planned-items register`}
                       data-testid={`dragging-plan-jump-${row.itemId}-${row.originalDate}`}
                     >
                       <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">
+                        <div className="truncate text-body font-medium text-neutral-700">
                           {row.label}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          Originally due {formatDate(row.originalDate)}
+                        <div className="text-micro text-neutral-400">
+                          Due {formatDate(row.originalDate)}
                         </div>
                       </div>
-                      <span className="text-sm font-medium tabular-nums text-destructive">
+                      <span className="font-mono text-label tabular-nums text-bad">
                         {formatCurrency(row.amount)}
                       </span>
                     </button>
@@ -2193,7 +2140,7 @@ export default function ForecastPage({
                         </SelectTrigger>
                         <SelectContent>
                           {bankInbox.length === 0 && (
-                            <div className="px-2 py-1 text-xs text-muted-foreground">
+                            <div className="px-2 py-1 text-micro text-neutral-400">
                               No pending bank txns
                             </div>
                           )}
@@ -2216,303 +2163,94 @@ export default function ForecastPage({
               })}
             </ul>
           </div>
-        </Callout>
-        </div>
+          <Foot>
+            Resolving a row here removes it from the projection for that day.
+          </Foot>
+        </section>
       )}
 
-      {/* Projected Balance area chart */}
-      <Card data-testid="card-projected-balance-chart">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Projected Balance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[280px] w-full">
-            {cashProjectionLoading && dailySeries.length === 0 ? (
-              <Skeleton className="h-full w-full" />
-            ) : dailySeries.length === 0 || proj?.status === "no_data" ? (
-              <div
-                className="h-full w-full flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground text-center px-4"
-                data-testid="empty-projected-balance"
+      {/* ── The cash curve ─────────────────────────────────────────────────
+             The one chart on this page. Drawing, annotation and tooltip live
+             in ./forecast/ProjectedBalanceChart so `useXTicks` can be called
+             above the page's loading early-return. ─────────────────────── */}
+      <section className={kitCard} data-testid="card-projected-balance-chart">
+        <div className={cardHead}>
+          <h2 className="text-title font-semibold text-brand-navy">
+            Projected balance
+          </h2>
+          <Help>
+            Bank balance rolled forward through every planned bill and income
+            event over the selected horizon. The dashed line is your cash
+            buffer; the orange dot is the projected low point.
+          </Help>
+          <span className="ml-auto text-micro uppercase tracking-wider text-neutral-400">
+            {horizonDays} days
+          </span>
+        </div>
+        <div className="h-[280px] w-full px-1 pb-1 pt-3">
+          {cashProjectionLoading && dailySeries.length === 0 ? (
+            <Skeleton className="h-full w-full" />
+          ) : dailySeries.length === 0 || proj?.status === "no_data" ? (
+            <div
+              className="flex h-full w-full flex-col items-center justify-center gap-3 px-4 text-center"
+              data-testid="empty-projected-balance"
+            >
+              <p className="text-body text-neutral-500">
+                Set a bank snapshot or add planned items to draw the curve.
+              </p>
+              <Button
+                size="sm"
+                onClick={openSnapshot}
+                data-testid="button-empty-set-bank-snapshot"
               >
-                <p>
-                  All clear — set a bank snapshot or add planned items to
-                  draw your projected balance.
-                </p>
-                <Button
-                  size="sm"
-                  onClick={openSnapshot}
-                  data-testid="button-empty-set-bank-snapshot"
-                >
-                  Set bank snapshot
-                </Button>
-              </div>
-            ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={dailySeries}
-                margin={{ top: 10, right: 16, bottom: 16, left: 0 }}
-              >
-                <defs>
-                  <linearGradient id="projectedBalanceGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                <XAxis
-                  dataKey="rawDate"
-                  tick={{ fontSize: 10 }}
-                  tickFormatter={(v: string) => shortDate(v)}
-                  interval="preserveStartEnd"
-                  minTickGap={32}
-                />
-                <YAxis
-                  tick={{ fontSize: 10 }}
-                  tickFormatter={(v: number) => `$${Math.round(v)}`}
-                  width={60}
-                />
-                <RechartsTooltip
-                  // Allow the user to click bill names inside the tooltip
-                  // to deep-link into the register below (#335).
-                  wrapperStyle={{ pointerEvents: "auto" }}
-                  content={({ active, payload }: { active?: boolean; payload?: any[] }) => {
-                    if (!active || !payload || payload.length === 0) return null;
-                    const p = payload[0]?.payload as
-                      | {
-                          rawDate?: string;
-                          balance?: number;
-                          actual?: number | null;
-                        }
-                      | undefined;
-                    const rawDate = p?.rawDate;
-                    const balance = Number(p?.balance);
-                    const marker = rawDate ? bigBillByDate.get(rawDate) : undefined;
-                    const dayEvents = rawDate ? eventsByDate.get(rawDate) : undefined;
-                    const dayTotal = dayEvents
-                      ? dayEvents.reduce((s, b) => s + b.amount, 0)
-                      : 0;
-                    return (
-                      <div className="min-w-[168px] rounded-lg border border-card-border bg-card px-3 py-2 text-xs text-card-foreground shadow-md">
-                        <div className="font-semibold">
-                          {rawDate ? formatDate(rawDate) : ""}
-                        </div>
-                        <div className="mt-1 flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">
-                            Balance
-                          </span>
-                          <span className="font-medium tabular-nums">
-                            {Number.isFinite(balance)
-                              ? formatCurrency(balance)
-                              : "—"}
-                          </span>
-                        </div>
-                        {dayEvents && dayEvents.length > 0 && rawDate && (() => {
-                          // (#650) Split this day's events into two
-                          // groups so the "dragging" section only lists
-                          // items that were actually pulled forward
-                          // from a pre-snapshot pending plan. Bills
-                          // naturally due on this calendar day go
-                          // under "Bills due this day" instead.
-                          const dragged = dayEvents.filter((b) => b.dragged);
-                          const dueToday = dayEvents.filter((b) => !b.dragged);
-                          const sections: Array<{
-                            title: string;
-                            bills: typeof dayEvents;
-                          }> = [];
-                          if (dragged.length > 0) {
-                            sections.push({
-                              title: "Pending plans dragging this day",
-                              bills: dragged,
-                            });
-                          }
-                          if (dueToday.length > 0) {
-                            sections.push({
-                              title: "Bills due this day",
-                              bills: dueToday,
-                            });
-                          }
-                          return sections.map((section, sIdx) => (
-                          <div
-                            key={section.title}
-                            className={
-                              sIdx === 0
-                                ? "mt-2 border-t border-card-border pt-2"
-                                : "mt-2"
-                            }
-                          >
-                            <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                              {section.title}
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              {section.bills.map((b, idx) => {
-                                const canJump = !!b.itemId;
-                                // (#682) Per-plan "Mark missed" is only
-                                // surfaced for dragged rows — that's the
-                                // recurring source of the day-1 dip the
-                                // tooltip exists to explain. Bills
-                                // naturally due today are handled by the
-                                // planned-items register below.
-                                const canMarkMissed =
-                                  !!b.itemId && !!b.originalDate && b.dragged;
-                                return (
-                                  <div
-                                    key={`${b.itemId ?? "_"}-${idx}`}
-                                    className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted"
-                                  >
-                                    <button
-                                      type="button"
-                                      disabled={!canJump}
-                                      onClick={() => {
-                                        if (b.itemId)
-                                          jumpToPlan(b.itemId, rawDate);
-                                      }}
-                                      data-testid={`tooltip-bill-${rawDate}-${b.itemId ?? idx}`}
-                                      className={`flex min-w-0 flex-1 items-center justify-between gap-3 border-0 bg-transparent p-0 text-left font-[inherit] text-inherit ${
-                                        canJump ? "cursor-pointer" : "cursor-default"
-                                      }`}
-                                    >
-                                      <span className="min-w-0 truncate">{b.label}</span>
-                                      <span className="tabular-nums">
-                                        {formatCurrency(b.amount)}
-                                      </span>
-                                    </button>
-                                    {canMarkMissed && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          // Construct a real PlanLine
-                                          // (no type cast) — onMarkMissed
-                                          // consumes status, itemId,
-                                          // originalDate/date, and label.
-                                          onMarkMissed({
-                                            kind: "plan",
-                                            itemId: b.itemId!,
-                                            label: b.label,
-                                            amount: b.amount,
-                                            date: rawDate,
-                                            originalDate: b.originalDate!,
-                                            status: "pending_plan",
-                                          });
-                                        }}
-                                        data-testid={`tooltip-mark-missed-${b.itemId}-${b.originalDate}`}
-                                        title="Mark this past-due plan as missed so it stops dragging the projection"
-                                        className="cursor-pointer whitespace-nowrap rounded border border-destructive/40 bg-transparent px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-destructive"
-                                      >
-                                        Mark missed
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          ));
-                        })()}
-                      </div>
-                    );
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="balance"
-                  stroke="hsl(var(--chart-1))"
-                  strokeWidth={2}
-                  fill="url(#projectedBalanceGrad)"
-                  name="Forecast"
-                  isAnimationActive={false}
-                />
-                {Number.isFinite(cashBufferNum) && (
-                  <ReferenceLine
-                    y={cashBufferNum}
-                    stroke="hsl(var(--destructive))"
-                    strokeDasharray="4 4"
-                    strokeWidth={1.5}
-                    ifOverflow="extendDomain"
-                    data-testid="ref-cash-buffer"
-                  >
-                    <RechartsLabel
-                      value={`Cash buffer ${formatCurrency(cashBufferNum)}`}
-                      position="insideTopRight"
-                      fill="hsl(var(--destructive))"
-                      fontSize={10}
-                    />
-                  </ReferenceLine>
-                )}
-                {bigBillMarkers.map((m) => {
-                  const top = m.bills.find((b) => !!b.itemId) ?? m.bills[0];
-                  return (
-                    <ReferenceDot
-                      key={`big-bill-${m.date}`}
-                      x={m.date}
-                      y={m.balance}
-                      r={6}
-                      fill="hsl(var(--chart-1))"
-                      stroke="hsl(var(--background))"
-                      strokeWidth={1.5}
-                      ifOverflow="extendDomain"
-                      isFront
-                      data-testid={`big-bill-marker-${m.date}`}
-                      cursor={top?.itemId ? "pointer" : undefined}
-                      onClick={() => {
-                        if (top?.itemId) jumpToPlan(top.itemId, m.date);
-                      }}
-                    />
-                  );
-                })}
-                {lowestPoint && (
-                  <ReferenceDot
-                    x={lowestPoint.x}
-                    y={lowestPoint.y}
-                    r={5}
-                    fill="hsl(var(--destructive))"
-                    stroke="hsl(var(--background))"
-                    strokeWidth={2}
-                    ifOverflow="extendDomain"
-                    isFront
-                    data-testid="ref-lowest-point"
-                  >
-                    <RechartsLabel
-                      value={`Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
-                      position="top"
-                      fill="hsl(var(--destructive))"
-                      fontSize={11}
-                      fontWeight={600}
-                    />
-                  </ReferenceDot>
-                )}
-              </AreaChart>
-            </ResponsiveContainer>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                Set bank snapshot
+              </Button>
+            </div>
+          ) : (
+            <ProjectedBalanceChart
+              data={dailySeries}
+              cashBuffer={cashBufferNum}
+              lowestPoint={lowestPoint}
+              bigBillMarkers={bigBillMarkers}
+              eventsByDate={eventsByDate}
+              onJumpToPlan={jumpToPlan}
+              onMarkMissed={onMarkMissed}
+            />
+          )}
+        </div>
+      </section>
 
       {/* Bank snapshot + Avalanche cards (kept below the new summary) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card data-testid="card-bank-snapshot">
-          <CardHeader className="pb-2 flex-row items-center justify-between">
-            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-              <Landmark className="w-4 h-4" /> Bank balance
-            </CardTitle>
+        <section className={kitCard} data-testid="card-bank-snapshot">
+          <div className={cardHead}>
+            <Landmark className="h-4 w-4 text-neutral-400" aria-hidden="true" />
+            <h2 className="text-title font-semibold text-brand-navy">
+              Bank balance
+            </h2>
+            <Help>
+              The anchor the whole projection is rolled forward from. A Plaid
+              snapshot refreshes on sync; a manual one holds until you change
+              it.
+            </Help>
             {data.bankSnapshot && data.bankSnapshot.source === "plaid" && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
+              <button
+                type="button"
+                className="press ml-auto grid h-6 w-6 place-items-center rounded-control text-neutral-500 ring-1 ring-brand-line hover:bg-neutral-50 hover:text-brand-navy disabled:pointer-events-none disabled:opacity-40"
                 onClick={onRefreshBank}
                 disabled={refreshBank.isPending}
                 title="Refresh from Plaid"
+                aria-label="Refresh bank balance from Plaid"
               >
                 <RefreshCw
-                  className={`w-4 h-4 ${refreshBank.isPending ? "animate-spin" : ""}`}
+                  className={`h-3.5 w-3.5 ${refreshBank.isPending ? "animate-spin" : ""}`}
                 />
-              </Button>
+              </button>
             )}
-          </CardHeader>
-          <CardContent className="space-y-2">
+          </div>
+          <div className="space-y-2 px-4 py-3">
             <div
-              className="text-2xl font-bold tabular-nums"
+              className="font-mono text-title font-semibold tabular-nums text-brand-navy"
               data-testid="text-bank-balance"
             >
               {data.bankSnapshot
@@ -2520,7 +2258,7 @@ export default function ForecastPage({
                 : formatCurrency(data.settings.startingBalance)}
             </div>
             <div
-              className="text-xs text-muted-foreground"
+              className="text-micro text-neutral-400"
               data-testid="text-bank-snapshot-meta"
             >
               {data.bankSnapshot ? (
@@ -2538,18 +2276,18 @@ export default function ForecastPage({
                 <>No snapshot — using starting balance</>
               )}
             </div>
-            <div className="flex gap-2 pt-1 flex-wrap">
-              <Button
-                size="sm"
-                variant="outline"
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                type="button"
+                className={btnLink}
                 onClick={openSnapshot}
                 data-testid="button-set-bank-snapshot"
               >
                 Set manually
-              </Button>
+              </button>
               {data.plaidCheckingAccounts.length > 0 && (
                 <Select onValueChange={onLinkChecking}>
-                  <SelectTrigger className="h-8 w-44 text-xs">
+                  <SelectTrigger className="h-7 w-44 text-micro">
                     <SelectValue placeholder="Link a checking account" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2563,8 +2301,8 @@ export default function ForecastPage({
                 </Select>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
         <AvalancheScheduleCard />
       </div>
       </>)}
@@ -2574,49 +2312,55 @@ export default function ForecastPage({
         // Review, so an empty Review just means nothing's flagged /
         // everything's matched. One honest empty state, pointing back
         // to Chase to send more to Forecast.
-        <Card
-          className="border-primary/30 bg-primary/5"
-          data-testid="review-empty-state"
-        >
-          <CardContent className="p-6 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="w-4 h-4 text-primary" />
-              <span className="font-medium">All caught up — Review is empty.</span>
-              <span className="text-muted-foreground">
-                Send a Chase transaction to Forecast to start reviewing.
+        <section className={kitCard} data-testid="review-empty-state">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
+            <span className="flex items-center gap-2">
+              <CheckCircle2
+                className="h-4 w-4 text-brand-navy"
+                aria-hidden="true"
+              />
+              <span className="text-body font-medium text-neutral-700">
+                Review is empty
               </span>
-            </div>
-            <Button asChild size="sm" variant="outline" className="h-8">
-              <Link href="/transactions" data-testid="link-open-chase">
-                Open Chase →
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+              <Help>
+                A Chase transaction sent to Forecast lands here straight away —
+                sending it IS putting it in Review. Nothing is waiting, so
+                either nothing is flagged or everything is matched.
+              </Help>
+            </span>
+            <Link
+              href="/transactions"
+              data-testid="link-open-chase"
+              className={btnLink}
+            >
+              Open Chase
+            </Link>
+          </div>
+        </section>
       )}
 
       {mode === "overall" && bankInbox.length > 0 && (
-        <Card
-          className="border-warning/30 bg-warning/10"
-          data-testid="banner-review-waiting"
-        >
-          <CardContent className="p-3 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2 text-sm min-w-0">
-              <InboxIcon className="w-4 h-4 text-warning flex-none" />
-              <span className="font-medium text-warning">
-                {bankInbox.length} waiting in Review
+        <section className={kitCard} data-testid="banner-review-waiting">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+            <span className="flex min-w-0 items-center gap-2">
+              <InboxIcon
+                className="h-4 w-4 flex-none text-neutral-400"
+                aria-hidden="true"
+              />
+              <span className="chip info">{bankInbox.length} waiting</span>
+              <span className="truncate text-body text-neutral-600">
+                Match Chase activity to planned items
               </span>
-              <span className="text-xs text-warning/80 truncate">
-                Match Chase activity against your planned items.
-              </span>
-            </div>
-            <Button asChild size="sm" variant="outline" className="h-8">
-              <Link href="/review" data-testid="link-go-to-review">
-                Go to Review →
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+            </span>
+            <Link
+              href="/review"
+              data-testid="link-go-to-review"
+              className={btnLink}
+            >
+              Go to Review
+            </Link>
+          </div>
+        </section>
       )}
 
       <DndContext
@@ -2626,26 +2370,29 @@ export default function ForecastPage({
         onDragCancel={() => setActiveDragId(null)}
       >
         {mode === "review" && (
-          <Card data-testid="card-from-bank">
-              <CardHeader className="pb-3 flex-row items-center justify-between flex-wrap gap-2">
-                <CardTitle className="flex items-center gap-2 flex-wrap">
-                  <Landmark className="w-4 h-4" />
-                  Inbox from Chase · {monthFilter}
-                  <PillBadge tone="warning">{bankReconcile.pending} pending</PillBadge>
-                  <PillBadge tone="good">{bankReconcile.matched} matched</PillBadge>
-                  <PillBadge tone="neutral">{bankReconcile.unplanned} unplanned</PillBadge>
-                </CardTitle>
-                <div className="flex items-center gap-2">
+          <section className={kitCard} data-testid="card-from-bank">
+              <div className={`${cardHead} flex-wrap`}>
+                <Landmark
+                  className="h-4 w-4 text-neutral-400"
+                  aria-hidden="true"
+                />
+                <h2 className="text-title font-semibold text-brand-navy">
+                  From Chase · {monthFilter}
+                </h2>
+                <span className="chip warn">{bankReconcile.pending} pending</span>
+                <span className="chip ok">{bankReconcile.matched} matched</span>
+                <span className="chip gray">
+                  {bankReconcile.unplanned} unplanned
+                </span>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
                   {bankReconcile.hasBank && !bankReconcile.isPriorMonth && (
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      Forecast end {formatCurrency(bankReconcile.forecastEnd)} ·
-                      Bank now {formatCurrency(bankReconcile.bankEnd)}
+                    <span className="font-mono text-micro tabular-nums text-neutral-500">
+                      Forecast {formatCurrency(bankReconcile.forecastEnd)} · Bank{" "}
+                      {formatCurrency(bankReconcile.bankEnd)}
                     </span>
                   )}
                   {bankReconcile.isPriorMonth && (
-                    <span className="text-xs text-muted-foreground">
-                      Prior period — counts only
-                    </span>
+                    <span className="chip gray">Prior period</span>
                   )}
                   {confidentMatches.length > 0 && (
                     <Button
@@ -2659,53 +2406,53 @@ export default function ForecastPage({
                     </Button>
                   )}
                   {bankInbox.length > 0 && (
-                    <Button
-                      size="sm"
-                      variant="outline"
+                    <button
+                      type="button"
+                      className={btnLink}
                       onClick={bulkMarkBankUnplanned}
                       disabled={upsertResolution.isPending}
                       data-testid="bulk-mark-unplanned"
                     >
                       Mark all unplanned
-                    </Button>
+                    </button>
                   )}
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
+              </div>
+              <div className="space-y-2 px-4 py-3">
                 {/* (#456) First-time drag-to-match callout. Only shown when
                     the user has at least one unresolved inbox row to act on
                     AND hasn't dismissed the hint yet. */}
                 {!dragHintDismissed && bankInbox.length > 0 && (
                   <div
-                    className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary"
+                    className="flex items-center gap-2 rounded-control bg-neutral-50 px-3 py-1.5 ring-1 ring-brand-line"
                     data-testid="drag-to-match-hint"
                     role="note"
                   >
-                    <GripVertical className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                    <div className="flex-1">
-                      <span className="font-medium">Tip:</span> drag any inbox
-                      row onto a planned item to match it — even when there's
-                      no suggestion.
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-xs -my-1"
+                    <GripVertical
+                      className="h-3.5 w-3.5 shrink-0 text-neutral-400"
+                      aria-hidden="true"
+                    />
+                    <span className="flex-1 text-micro text-neutral-500">
+                      Drag a row onto any planned item to match it
+                    </span>
+                    <button
+                      type="button"
+                      className={btnLink}
                       onClick={dismissDragHint}
                       data-testid="drag-to-match-hint-dismiss"
                       aria-label="Dismiss drag-to-match tip"
                     >
                       Got it
-                    </Button>
+                    </button>
                   </div>
                 )}
                 {/* (#27) Selection-scoped bulk bar */}
                 {selectedBankIds.size > 0 && (
                   <div
-                    className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2"
+                    className="flex flex-wrap items-center gap-2 rounded-control bg-white px-3 py-2 ring-1 ring-brand-navy/25"
                     data-testid="bank-inbox-selection-bar"
                   >
-                    <span className="text-xs font-medium">
+                    <span className="chip info">
                       {selectedBankIds.size} selected
                     </span>
                     {(() => {
@@ -2725,97 +2472,86 @@ export default function ForecastPage({
                         </Button>
                       ) : null;
                     })()}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs"
+                    <button
+                      type="button"
+                      className={btnLink}
                       onClick={bulkMarkBankUnplannedSelected}
                       disabled={upsertResolution.isPending}
                       data-testid="bulk-mark-unplanned-selected"
                     >
                       Mark {selectedBankIds.size} unplanned
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 text-xs ml-auto"
+                    </button>
+                    <button
+                      type="button"
+                      className={`${btnLink} ml-auto`}
                       onClick={clearBankSelection}
                       data-testid="bank-inbox-clear-selection"
                     >
                       Clear
-                    </Button>
+                    </button>
                   </div>
                 )}
                 {bankInbox.length === 0 && (
-                  <div className="py-2.5 text-center text-xs text-muted-foreground">
+                  <div className="py-2.5 text-center text-micro text-neutral-400">
                     {isReconciledToBank ? (
-                      <span className="inline-flex items-center gap-1.5 text-primary">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Reconciled to bank
-                        for {monthFilter}.
+                      <span className="chip ok">
+                        Reconciled to bank · {monthFilter}
                       </span>
                     ) : (
-                      <>Send a bank transaction from the Transactions page to start reconciling.</>
+                      <>Send a Chase transaction to Forecast to start</>
                     )}
                   </div>
                 )}
                 {bankResolvedThisMonth.length > 0 && (
                   <div
-                    className="mt-3 pt-3 border-t"
+                    className="mt-3 border-t border-brand-line pt-3"
                     data-testid="bank-resolved-list"
                   >
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-                      Resolved this month — undo if needed
+                    <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">
+                      Resolved this month
                     </div>
                     <div
-                      className="space-y-1 max-h-[7.5rem] overflow-y-auto pr-1"
+                      className="max-h-[7.5rem] space-y-1 overflow-y-auto pr-1"
                       data-testid="bank-resolved-list-scroll"
                     >
                     {bankResolvedThisMonth.map((r) => (
                       <div
                         key={r.resolutionId}
-                        className="flex items-center gap-2 text-xs rounded-md border bg-muted/30 px-2 py-1"
+                        className="flex items-center gap-2 rounded-control bg-white px-2 py-1 text-micro ring-1 ring-brand-line"
                       >
-                        <Badge
-                          variant="outline"
-                          className={
-                            r.kind === "matched"
-                              ? "text-[10px] bg-primary/10 text-primary border-primary/20"
-                              : "text-[10px]"
-                          }
+                        <span
+                          className={`chip ${r.kind === "matched" ? "ok" : "gray"}`}
                         >
                           {r.kind === "matched" ? "matched" : "unplanned"}
-                        </Badge>
-                        <span className="truncate flex-1">
+                        </span>
+                        <span className="flex-1 truncate text-neutral-600">
                           {r.bank.txn.description}
                         </span>
-                        <span className="text-muted-foreground">
+                        <span className="text-neutral-400">
                           {formatDate(r.bank.date)}
                         </span>
                         <span
-                          className={`tabular-nums ${
-                            r.bank.amount < 0
-                              ? "text-destructive"
-                              : "text-primary"
+                          className={`font-mono tabular-nums ${
+                            r.bank.amount < 0 ? "text-bad" : "text-brand-navy"
                           }`}
                         >
                           {formatCurrency(r.bank.amount)}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-xs"
+                        <button
+                          type="button"
+                          className={btnLink}
                           onClick={() => onUndo(r.resolutionId)}
                           data-testid={`undo-resolution-${r.resolutionId}`}
                         >
                           Undo
-                        </Button>
+                        </button>
                       </div>
                     ))}
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
         )}
 
         {mode === "review" && bankInbox.length > 0 && (() => {
@@ -2849,15 +2585,14 @@ export default function ForecastPage({
                   data-pinned={canPinInbox ? "true" : "false"}
                   data-collapsed={pinnedInboxCollapsed ? "true" : "false"}
                 >
-                  <div className="rounded-md border bg-card p-2 space-y-2">
+                  <div className="surface space-y-2 rounded-card p-2 ring-1 ring-brand-line">
                     <div
                       className="flex items-center justify-between gap-2 px-1"
                       data-testid="bank-inbox-pager"
                     >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
+                      <button
+                        type="button"
+                        className={btnLink}
                         onClick={() =>
                           setActiveInboxIndex((i) => Math.max(0, i - 1))
                         }
@@ -2865,20 +2600,19 @@ export default function ForecastPage({
                         data-testid="bank-inbox-pager-prev"
                         aria-label="Previous pending inbox row"
                       >
-                        <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                        <ChevronLeft className="h-3 w-3" aria-hidden="true" />
                         Prev
-                      </Button>
+                      </button>
                       <span
-                        className="text-xs text-muted-foreground tabular-nums"
+                        className="font-mono text-micro tabular-nums text-neutral-500"
                         data-testid="bank-inbox-pager-indicator"
                       >
                         {safeIndex + 1} of {bankInbox.length}
                       </span>
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
+                        <button
+                          type="button"
+                          className={btnLink}
                           onClick={() =>
                             setActiveInboxIndex((i) =>
                               Math.min(bankInbox.length - 1, i + 1),
@@ -2889,12 +2623,11 @@ export default function ForecastPage({
                           aria-label="Next pending inbox row"
                         >
                           Next
-                          <ChevronRight className="w-3.5 h-3.5 ml-1" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
+                          <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          className="press grid h-6 w-6 place-items-center rounded-control text-neutral-500 ring-1 ring-brand-line hover:bg-neutral-50 hover:text-brand-navy"
                           onClick={togglePinnedInboxCollapsed}
                           data-testid="pinned-inbox-collapse-toggle"
                           aria-label={
@@ -2910,11 +2643,11 @@ export default function ForecastPage({
                           }
                         >
                           {pinnedInboxCollapsed ? (
-                            <ChevronDown className="w-4 h-4" />
+                            <ChevronDown className="h-3.5 w-3.5" />
                           ) : (
-                            <ChevronUp className="w-4 h-4" />
+                            <ChevronUp className="h-3.5 w-3.5" />
                           )}
-                        </Button>
+                        </button>
                       </div>
                     </div>
                     {pinnedInboxCollapsed ? (
@@ -2924,12 +2657,12 @@ export default function ForecastPage({
                         data-testid="pinned-inbox-collapsed-row"
                       >
                         <span
-                          className="flex-1 truncate text-sm"
+                          className="flex-1 truncate text-body text-neutral-700"
                           title={card.bank.txn.description}
                         >
                           {card.bank.txn.description}
                         </span>
-                        <span className="text-sm tabular-nums text-muted-foreground">
+                        <span className="font-mono text-label tabular-nums text-neutral-500">
                           {formatCurrency(card.bank.amount)}
                         </span>
                         {(() => {
@@ -2937,10 +2670,9 @@ export default function ForecastPage({
                             card.bank.txn.id,
                           );
                           return (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
+                            <button
+                              type="button"
+                              className={btnLink}
                               disabled={!oneClick}
                               onClick={() => {
                                 if (oneClick) {
@@ -2958,7 +2690,7 @@ export default function ForecastPage({
                               }
                             >
                               Match
-                            </Button>
+                            </button>
                           );
                         })()}
                       </div>
@@ -3019,16 +2751,20 @@ export default function ForecastPage({
                             }
                           />
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
+                        {/* The single flow, in reverse. Send-to-Forecast puts a
+                            Chase row straight into Review; this puts it back.
+                            There is no gate in either direction. */}
+                        <button
+                          type="button"
+                          className="press grid h-7 w-7 shrink-0 place-items-center self-start rounded-control text-neutral-400 hover:bg-neutral-50 hover:text-brand-navy"
                           onClick={() =>
                             onRemoveFromForecast(card.bank.txn.id)
                           }
                           title="Un-send back to Bank list"
+                          aria-label="Un-send back to Bank list"
                         >
-                          <X className="w-4 h-4 text-muted-foreground" />
-                        </Button>
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
                       </div>
                     </div>
                     )}
@@ -3037,22 +2773,29 @@ export default function ForecastPage({
               );
             })()}
 
-            <Card>
-              <CardHeader className="pb-3 flex-row items-center justify-between flex-wrap gap-2">
-                <CardTitle>Planned forecast items</CardTitle>
+            <section className={kitCard}>
+              <div className={`${cardHead} flex-wrap`}>
+                <h2 className="text-title font-semibold text-brand-navy">
+                  Planned items
+                </h2>
+                <Help>
+                  Every bill and income occurrence scheduled inside the visible
+                  window. A row leaves this register once you match, miss, skip
+                  or move it.
+                </Help>
                 {bankReconcile.hasBank && !bankReconcile.isPriorMonth && (
                   <span
-                    className="text-xs text-muted-foreground tabular-nums"
+                    className="ml-auto font-mono text-micro tabular-nums text-neutral-500"
                     data-testid="planned-projected-end"
                   >
                     Projected end {formatCurrency(bankReconcile.forecastEnd)}
                   </span>
                 )}
-              </CardHeader>
-              <CardContent className="p-0">
+              </div>
+              <div>
                 {planRows.length === 0 ? (
-                  <div className="p-12 text-center text-muted-foreground">
-                    All clear — nothing planned in this window.
+                  <div className={emptyNote}>
+                    Nothing planned in this window.
                   </div>
                 ) : (
                   <PlannedItemsList
@@ -3066,100 +2809,97 @@ export default function ForecastPage({
                     onMarkMissed={onMarkMissed}
                   />
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
 
             {(() => {
               const missed = bucket.filter((b) => b.status === "missed");
               if (missed.length === 0) return null;
               const missedTotal = missed.reduce((s, b) => s + b.amount, 0);
               return (
-                <div data-testid="missed-bucket-panel">
-                <Callout tone="warning" icon={<AlertCircle className="h-4 w-4" />}>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold">
-                      Missed in {monthFilter}
-                      <Badge variant="outline" className="ml-1 text-[10px]">
-                        {missed.length}
-                      </Badge>
-                      <span
-                        className={`ml-auto font-medium tabular-nums text-sm ${
-                          missedTotal < 0 ? "text-destructive" : "text-primary"
-                        }`}
-                        data-testid="missed-bucket-total"
-                      >
-                        {formatCurrency(missedTotal)}
-                      </span>
-                    </div>
-                    <div
-                      className="max-h-[20rem] divide-y divide-border overflow-y-auto rounded-lg border border-card-border bg-background"
-                      data-testid="missed-bucket-scroll"
+                <section className={kitCard} data-testid="missed-bucket-panel">
+                  <div className={cardHead}>
+                    <h2 className="text-title font-semibold text-brand-navy">
+                      Missed · {monthFilter}
+                    </h2>
+                    <span className="chip bad">{missed.length}</span>
+                    <Help>
+                      Occurrences you marked as not happening. They no longer
+                      affect the projection; undo puts one back in the register.
+                    </Help>
+                    <span
+                      className={`ml-auto font-mono text-label tabular-nums ${
+                        missedTotal < 0 ? "text-bad" : "text-brand-navy"
+                      }`}
+                      data-testid="missed-bucket-total"
                     >
-                      {missed.map((b) => (
-                        <div
-                          key={b.id}
-                          className="p-4 flex items-center justify-between gap-3"
-                          data-testid={`missed-row-${b.id}`}
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            {statusBadge(b.status)}
-                            <div className="min-w-0">
-                              <div className="font-medium text-sm truncate">
-                                {b.label || "—"}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {formatDate(b.date)}
-                              </div>
+                      {formatCurrency(missedTotal)}
+                    </span>
+                  </div>
+                  <div
+                    className="max-h-[20rem] overflow-y-auto"
+                    data-testid="missed-bucket-scroll"
+                  >
+                    {missed.map((b) => (
+                      <div
+                        key={b.id}
+                        className="flex items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0"
+                        data-testid={`missed-row-${b.id}`}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          {statusBadge(b.status)}
+                          <div className="min-w-0">
+                            <div className="truncate text-body font-medium text-neutral-700">
+                              {b.label || "—"}
+                            </div>
+                            <div className="text-micro text-neutral-400">
+                              {formatDate(b.date)}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 flex-wrap justify-end">
-                            <span
-                              className={`font-medium tabular-nums mr-2 ${
-                                b.amount < 0 ? "text-destructive" : "text-primary"
-                              }`}
-                            >
-                              {formatCurrency(b.amount)}
-                            </span>
-                            {b.recurringItemId && b.occurrenceDate && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                onClick={() => onSetNewDateFromBucket(b)}
-                                data-testid={`missed-set-new-date-${b.id}`}
-                                title="Reschedule this occurrence to another day (next 30 days)"
-                              >
-                                Set new date
-                              </Button>
-                            )}
-                            {b.recurringItemId && b.occurrenceDate && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                                onClick={() => onSkipFromBucket(b)}
-                                data-testid={`missed-skip-${b.id}`}
-                                title="Clear this occurrence — won't return or affect the projection"
-                              >
-                                Skip
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => onUndo(b.id)}
-                              data-testid={`missed-undo-${b.id}`}
-                            >
-                              Undo
-                            </Button>
-                          </div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <span
+                            className={`mr-2 font-mono text-label tabular-nums ${
+                              b.amount < 0 ? "text-bad" : "text-brand-navy"
+                            }`}
+                          >
+                            {formatCurrency(b.amount)}
+                          </span>
+                          {b.recurringItemId && b.occurrenceDate && (
+                            <button
+                              type="button"
+                              className={btnLink}
+                              onClick={() => onSetNewDateFromBucket(b)}
+                              data-testid={`missed-set-new-date-${b.id}`}
+                              title="Reschedule this occurrence to another day (next 30 days)"
+                            >
+                              Set new date
+                            </button>
+                          )}
+                          {b.recurringItemId && b.occurrenceDate && (
+                            <button
+                              type="button"
+                              className={btnLink}
+                              onClick={() => onSkipFromBucket(b)}
+                              data-testid={`missed-skip-${b.id}`}
+                              title="Clear this occurrence — won't return or affect the projection"
+                            >
+                              Skip
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className={btnLink}
+                            onClick={() => onUndo(b.id)}
+                            data-testid={`missed-undo-${b.id}`}
+                          >
+                            Undo
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </Callout>
-                </div>
+                </section>
               );
             })()}
 
@@ -3168,68 +2908,71 @@ export default function ForecastPage({
               if (moved.length === 0) return null;
               const movedTotal = moved.reduce((s, b) => s + b.amount, 0);
               return (
-                <Card data-testid="rescheduled-bucket-panel">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <CalendarDays className="w-4 h-4 text-primary" />
-                      Moved from {monthFilter}
-                      <Badge variant="outline" className="ml-1 text-[10px]">
-                        {moved.length}
-                      </Badge>
-                      <span
-                        className={`ml-auto font-medium tabular-nums text-sm ${
-                          movedTotal < 0 ? "text-destructive" : "text-primary"
-                        }`}
-                        data-testid="rescheduled-bucket-total"
-                      >
-                        {formatCurrency(movedTotal)}
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div
-                      className="divide-y divide-border max-h-[20rem] overflow-y-auto"
-                      data-testid="rescheduled-bucket-scroll"
+                <section className={kitCard} data-testid="rescheduled-bucket-panel">
+                  <div className={cardHead}>
+                    <CalendarDays
+                      className="h-4 w-4 text-neutral-400"
+                      aria-hidden="true"
+                    />
+                    <h2 className="text-title font-semibold text-brand-navy">
+                      Moved · {monthFilter}
+                    </h2>
+                    <span className="chip info">{moved.length}</span>
+                    <Help>
+                      Occurrences you pushed to another day. The projection
+                      counts them on the new date, not the original one.
+                    </Help>
+                    <span
+                      className={`ml-auto font-mono text-label tabular-nums ${
+                        movedTotal < 0 ? "text-bad" : "text-brand-navy"
+                      }`}
+                      data-testid="rescheduled-bucket-total"
                     >
-                      {moved.map((b) => (
-                        <div
-                          key={b.id}
-                          className="p-4 flex items-center justify-between gap-3"
-                          data-testid={`rescheduled-row-${b.id}`}
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            {statusBadge("rescheduled")}
-                            <div className="min-w-0">
-                              <div className="font-medium text-sm truncate">
-                                {b.label || "—"}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {formatDate(b.date)} → {formatDate(b.rescheduledTo!)}
-                              </div>
+                      {formatCurrency(movedTotal)}
+                    </span>
+                  </div>
+                  <div
+                    className="max-h-[20rem] overflow-y-auto"
+                    data-testid="rescheduled-bucket-scroll"
+                  >
+                    {moved.map((b) => (
+                      <div
+                        key={b.id}
+                        className="flex items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0"
+                        data-testid={`rescheduled-row-${b.id}`}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          {statusBadge("rescheduled")}
+                          <div className="min-w-0">
+                            <div className="truncate text-body font-medium text-neutral-700">
+                              {b.label || "—"}
+                            </div>
+                            <div className="font-mono text-micro tabular-nums text-neutral-400">
+                              {formatDate(b.date)} → {formatDate(b.rescheduledTo!)}
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <span
-                              className={`font-medium tabular-nums ${
-                                b.amount < 0 ? "text-destructive" : "text-primary"
-                              }`}
-                            >
-                              {formatCurrency(b.amount)}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onUndo(b.id)}
-                              data-testid={`rescheduled-undo-${b.id}`}
-                            >
-                              Undo
-                            </Button>
-                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                        <div className="flex items-center gap-4">
+                          <span
+                            className={`font-mono text-label tabular-nums ${
+                              b.amount < 0 ? "text-bad" : "text-brand-navy"
+                            }`}
+                          >
+                            {formatCurrency(b.amount)}
+                          </span>
+                          <button
+                            type="button"
+                            className={btnLink}
+                            onClick={() => onUndo(b.id)}
+                            data-testid={`rescheduled-undo-${b.id}`}
+                          >
+                            Undo
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
               );
             })()}
 
@@ -3254,11 +2997,13 @@ export default function ForecastPage({
       {mode === "overall" && (
         <div className="space-y-4 mt-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <Label className="text-sm">Month</Label>
+            <div className="flex flex-wrap items-center gap-3">
+              <Label className="text-micro font-semibold uppercase tracking-wide text-neutral-500">
+                Month
+              </Label>
               {monthSwitchPending && (
                 <RefreshCw
-                  className="w-3 h-3 animate-spin text-muted-foreground"
+                  className="h-3 w-3 animate-spin text-neutral-400"
                   data-testid="month-filter-pending"
                   aria-hidden="true"
                 />
@@ -3298,68 +3043,54 @@ export default function ForecastPage({
                   })}
                 </SelectContent>
               </Select>
-              {isClosed && (
-                <Badge className="bg-muted text-muted-foreground border">
-                  <Lock className="w-3 h-3 mr-1" /> Closed
-                </Badge>
-              )}
+              {isClosed && <span className="chip gray">Closed</span>}
               {isClosed && monthSnapshotsMap[monthFilter]?.reconciled && (
-                <Badge
-                  className="bg-primary/15 text-primary border-primary/30"
-                  data-testid="month-reconciled-at-close"
-                >
-                  <CheckCircle2 className="w-3 h-3 mr-1" /> Reconciled at close
-                </Badge>
+                <span className="chip ok" data-testid="month-reconciled-at-close">
+                  Reconciled at close
+                </span>
               )}
               {isClosed &&
                 monthSnapshotsMap[monthFilter] &&
                 !monthSnapshotsMap[monthFilter]?.reconciled &&
                 monthSnapshotsMap[monthFilter]?.gap != null && (
-                  <Badge
-                    variant="outline"
-                    className="bg-warning/10 text-warning border-warning/30"
-                    data-testid="month-gap-at-close"
-                  >
-                    <AlertCircle className="w-3 h-3 mr-1" />
-                    Closed {formatCurrency(
+                  <span className="chip bad" data-testid="month-gap-at-close">
+                    {formatCurrency(
                       Number(monthSnapshotsMap[monthFilter]!.gap),
                     )}{" "}
                     off bank
-                  </Badge>
+                  </span>
                 )}
             </div>
             {isClosed ? (
-              <Button variant="outline" onClick={onReopenMonth}>
-                <Unlock className="w-4 h-4 mr-2" /> Reopen month
-              </Button>
+              <button type="button" className={btnLink} onClick={onReopenMonth}>
+                <Unlock className="h-3 w-3" aria-hidden="true" /> Reopen month
+              </button>
             ) : (
-              <Button onClick={onCloseMonth} variant="outline">
-                <Lock className="w-4 h-4 mr-2" /> Close month
-              </Button>
+              <button type="button" className={btnLink} onClick={onCloseMonth}>
+                <Lock className="h-3 w-3" aria-hidden="true" /> Close month
+              </button>
             )}
           </div>
 
-          <Card data-testid="review-bucket-panel">
+          <section className={kitCard} data-testid="review-bucket-panel">
             {(() => {
               const bucketTotal = bucket.reduce((s, b) => s + b.amount, 0);
               return (
-                <div
-                  className="flex items-center justify-between gap-3 px-4 py-3 border-b"
-                  data-testid="review-bucket-header"
-                >
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <span>Review Bucket</span>
-                    <Badge
-                      variant="outline"
-                      className="text-[10px]"
-                      data-testid="review-bucket-count"
-                    >
-                      {bucket.length}
-                    </Badge>
-                  </div>
+                <div className={cardHead} data-testid="review-bucket-header">
+                  <h2 className="text-title font-semibold text-brand-navy">
+                    Review bucket
+                  </h2>
+                  <span className="chip gray" data-testid="review-bucket-count">
+                    {bucket.length}
+                  </span>
+                  <Help>
+                    Everything triaged in this month — matched, missed, moved
+                    and unplanned. The total is the net effect on the month, so
+                    it does not tie to any single register above.
+                  </Help>
                   <span
-                    className={`font-medium tabular-nums ${
-                      bucketTotal < 0 ? "text-destructive" : "text-primary"
+                    className={`ml-auto font-mono text-label tabular-nums ${
+                      bucketTotal < 0 ? "text-bad" : "text-brand-navy"
                     }`}
                     data-testid="review-bucket-total"
                   >
@@ -3368,14 +3099,14 @@ export default function ForecastPage({
                 </div>
               );
             })()}
-            <CardContent className="p-0">
+            <div>
               <div
-                className="divide-y divide-border max-h-[360px] overflow-y-auto"
+                className="max-h-[360px] overflow-y-auto"
                 data-testid="review-bucket-list"
               >
                 {bucket.length === 0 && (
-                  <div className="p-12 text-center text-muted-foreground">
-                    {isClosed ? "Month is closed — bucket hidden." : "Nothing triaged for this month yet."}
+                  <div className={emptyNote}>
+                    {isClosed ? "Month is closed — bucket hidden." : "Nothing triaged this month yet."}
                   </div>
                 )}
                 {bucket.map((b) => {
@@ -3397,33 +3128,45 @@ export default function ForecastPage({
                   <div
                     key={b.id}
                     data-plan-key={planKey}
-                    className={`p-4 flex items-center justify-between gap-3 transition-colors ${
+                    className={`flex items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 transition-colors last:border-b-0 ${
                       isHighlightedBucket
                         ? "bg-primary/10 ring-2 ring-primary ring-inset"
                         : ""
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex min-w-0 items-center gap-3">
                       {statusBadge(b.status)}
                       <div className="min-w-0">
-                        <div className="font-medium text-sm truncate">{b.label || "—"}</div>
-                        <div className="text-xs text-muted-foreground">{formatDate(b.date)}</div>
+                        <div className="truncate text-body font-medium text-neutral-700">
+                          {b.label || "—"}
+                        </div>
+                        <div className="text-micro text-neutral-400">
+                          {formatDate(b.date)}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <span className={`font-medium tabular-nums ${b.amount < 0 ? "text-destructive" : "text-primary"}`}>
+                      <span
+                        className={`font-mono text-label tabular-nums ${
+                          b.amount < 0 ? "text-bad" : "text-brand-navy"
+                        }`}
+                      >
                         {formatCurrency(b.amount)}
                       </span>
-                      <Button variant="ghost" size="sm" onClick={() => onUndo(b.id)}>
+                      <button
+                        type="button"
+                        className={btnLink}
+                        onClick={() => onUndo(b.id)}
+                      >
                         Undo
-                      </Button>
+                      </button>
                     </div>
                   </div>
                   );
                 })}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </div>
       )}
 
@@ -3465,8 +3208,9 @@ export default function ForecastPage({
                 value={draftBuffer}
                 onChange={(e) => setDraftBuffer(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Floor under which "Avalanche Ready" turns red.
+              <p className="mt-1 text-micro text-neutral-400">
+                The floor the projection is measured against. Dipping under it
+                flags the low point as at risk.
               </p>
             </div>
             <div className="flex justify-end pt-2">
@@ -3494,7 +3238,7 @@ export default function ForecastPage({
                 onChange={(e) => setDraftSnapshot(e.target.value)}
                 data-testid="input-snapshot"
               />
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="mt-1 text-micro text-neutral-400">
                 Anchors the running balance to today. Past items won't shift it.
               </p>
             </div>
@@ -3527,15 +3271,15 @@ export default function ForecastPage({
           </DialogHeader>
           {moveTarget && (
             <div className="space-y-4">
-              <div className="text-sm text-muted-foreground">
-                <div className="font-medium text-foreground truncate">
+              <div className="text-body text-neutral-500">
+                <div className="truncate font-medium text-neutral-700">
                   {moveTarget.label || "—"}
                 </div>
                 <div>
-                  Currently planned for {formatDate(moveTarget.date)} ·{" "}
+                  Planned for {formatDate(moveTarget.date)} ·{" "}
                   <span
-                    className={`tabular-nums ${
-                      moveTarget.amount < 0 ? "text-destructive" : "text-primary"
+                    className={`font-mono tabular-nums ${
+                      moveTarget.amount < 0 ? "text-bad" : "text-brand-navy"
                     }`}
                   >
                     {formatCurrency(moveTarget.amount)}
@@ -3563,13 +3307,12 @@ export default function ForecastPage({
                   }}
                   data-testid="input-move-date"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Pick any day within the next 30 days. Creates a one-off
-                  override for this occurrence only.
+                <p className="mt-1 text-micro text-neutral-400">
+                  Any day in the next 30. Overrides this occurrence only.
                 </p>
                 {moveError && (
                   <p
-                    className="text-xs text-destructive mt-1"
+                    className="mt-1 text-micro text-bad"
                     data-testid="move-error"
                   >
                     {moveError}
@@ -3726,9 +3469,8 @@ export default function ForecastPage({
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                After adding, the new {addBillSeed.kind === "income" ? "income" : "bill"}{" "}
-                appears in Planned forecast items so you can match this transaction to it.
+              <p className="text-micro text-neutral-400">
+                Appears in Planned items, ready to match this transaction to.
               </p>
             </div>
           )}
