@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { CHART_ANIM } from "@/lib/chartAnim";
 import {
   useListTransactions,
   useListCategories,
@@ -18,14 +17,29 @@ import {
 } from "@/components/ui/popover";
 import { CategoryPicker } from "@/components/category-picker";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { PageSkeleton } from "@/components/page-skeleton";
-import { formatCurrency } from "@/lib/utils";
-import { Wand2 } from "lucide-react";
-import { SectionHeader } from "@/components/stat";
-import { H2_PALETTE, CHART_SERIES, fmtISO } from "@/lib/reportsAnalytics";
+import { formatCurrency, cn } from "@/lib/utils";
+import { fmtISO } from "@/lib/reportsAnalytics";
+import {
+  ANIM_AREA,
+  ANIM_BAR,
+  CHART,
+  NAVY_RAMP,
+  animBegin,
+  catColor,
+} from "@/lib/chartTokens";
+import { CssBars, type CssBarRow } from "@/lib/cssBars";
+import {
+  card,
+  btnSecondarySm,
+  emptyNote,
+  fieldLabel,
+  td,
+  tdNum,
+  Foot,
+  Stat,
+} from "@/ui";
 import { type RangeMode } from "@/lib/timeRange";
 import {
   ResponsiveContainer,
@@ -41,14 +55,41 @@ import {
   YAxis,
   Tooltip,
   Legend,
-  HeroTile,
+  AXIS_TICK,
+  GRID_STROKE,
+  LEGEND_STYLE,
   ChartCard,
+  PanelCard,
+  axisMoney,
   tooltipMoney,
   tooltipStyle,
   ReportShell,
   ReportsRangeControls,
   daysForMode,
 } from "./reportsShared";
+
+/**
+ * ⚠️ THE "OTHER" SLICE IS **NOT** `OTHER_GREY`.
+ *
+ * The kit's `OTHER_GREY` is #8fa3bf, which is byte-identical to `CAT8[4]`. So
+ * any chart with five or more real categories plus a rollup draws TWO marks in
+ * one colour — the exact failure this PR exists to remove, sitting inside the
+ * kit's own tokens. Until that is fixed at the token level, the rollup here
+ * takes `NAVY_RAMP[1]` (#c4d0e2): a sanctioned hex, absent from `CAT8`, and
+ * lighter than every real category, which is the right read for "the rest".
+ */
+const OTHER_SLICE = NAVY_RAMP[1];
+
+/** Colour for slice `i` of a capped list whose LAST entry is the rollup. */
+function sliceColor(i: number, count: number, hasOther: boolean): string {
+  return hasOther && i === count - 1 ? OTHER_SLICE : catColor(i);
+}
+
+/** Reimbursable vs personal — two marks, two clearly opposed hexes. */
+export const REIMBURSABLE_SERIES = {
+  outstanding: CHART.orange, // #f68d2e — money still owed back
+  personal: CHART.navy, //      #19315b — the true personal cost
+} as const;
 
 export default function SpendingPage() {
   // Weekly-first: opens on the current week; Mo/Yr are opt-in.
@@ -80,9 +121,10 @@ export default function SpendingPage() {
     <ReportShell
       crumb="Spending"
       title="Spending"
-      blurb="Where it all went — by category, by merchant, by day."
+      controls={
+        <ReportsRangeControls mode={mode} setMode={setMode} showCompare={false} />
+      }
     >
-      <ReportsRangeControls mode={mode} setMode={setMode} showCompare={false} />
       <SpendingSection
         from={fmtISO(fromDate)}
         to={fmtISO(today)}
@@ -182,9 +224,11 @@ function eachIsoDay(startIso: string, endIso: string): string[] {
   return out;
 }
 
-// (Phase 2) Warning banner above the tile row. Only renders when there is an
-// uncategorized backlog. The Recategorize button opens the same per-row
-// CategoryPicker popover treatment used across the ledger pages.
+/**
+ * (Phase 2) The uncategorized backlog. This is a caveat about the DATA — every
+ * other number on the page is computed net of these rows — so it takes the one
+ * alarm colour the palette has, and says so in words.
+ */
 function UncategorizedBanner({
   facts,
   uncategorizedTxns,
@@ -235,86 +279,75 @@ function UncategorizedBanner({
     .join(", ");
 
   return (
-    <Card
-      className="rounded-lg border-[hsl(var(--warning))]/40 bg-[hsl(var(--warning))]/[0.08]"
+    <div
+      className="flex flex-col justify-between gap-3 rounded-card bg-bad-bg px-4 py-3 ring-1 ring-bad/25 sm:flex-row sm:items-center"
       data-testid="banner-uncategorized"
     >
-      <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3 min-w-0">
-          <Wand2 className="w-5 h-5 text-[hsl(var(--warning))] mt-0.5 shrink-0" />
-          <div className="min-w-0">
-            <div className="text-lg font-bold">
-              <span className="tabular-nums">
-                {formatCurrency(facts.uncategorized.total)}
-              </span>{" "}
-              of your spending is uncategorized
-            </div>
-            <div className="text-xs text-muted-foreground mt-0.5 truncate">
-              {facts.uncategorized.transactionCount} transactions
-              {samples ? ` · top merchants: ${samples}` : ""}
-            </div>
-          </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <span className="chip bad">Uncategorized</span>
+          <span className="font-mono text-title font-semibold tabular-nums text-bad">
+            {formatCurrency(facts.uncategorized.total)}
+          </span>
         </div>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 border-[hsl(var(--warning))]/50"
-              data-testid="button-recategorize-uncategorized"
-            >
-              <Wand2 className="w-3.5 h-3.5 mr-1.5" />
-              Recategorize
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            className="w-96 p-0 max-h-[28rem] overflow-y-auto"
+        <div className="mt-0.5 truncate text-micro text-neutral-500">
+          {facts.uncategorized.transactionCount} transactions
+          {samples ? ` · ${samples}` : ""}
+        </div>
+      </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={cn(btnSecondarySm, "shrink-0")}
+            data-testid="button-recategorize-uncategorized"
           >
-            <div className="px-3 py-2 border-b text-xs font-medium text-muted-foreground sticky top-0 bg-popover">
-              {uncategorizedTxns.length} uncategorized{" "}
-              {uncategorizedTxns.length === 1 ? "transaction" : "transactions"}
-            </div>
-            {uncategorizedTxns.length === 0 ? (
-              <div className="px-3 py-6 text-sm text-muted-foreground text-center">
-                All caught up — nothing uncategorized.
-              </div>
-            ) : (
-              <div className="divide-y">
-                {uncategorizedTxns.map((t) => (
-                  <div key={t.id} className="px-3 py-2">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">
-                          {t.description}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {t.occurredOn}
-                        </div>
+            Recategorize
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="max-h-[28rem] w-96 overflow-y-auto p-0">
+          <div className="sticky top-0 border-b border-brand-line bg-white px-3 py-2">
+            <span className={fieldLabel}>
+              {uncategorizedTxns.length} uncategorized
+            </span>
+          </div>
+          {uncategorizedTxns.length === 0 ? (
+            <div className={emptyNote}>Nothing uncategorized</div>
+          ) : (
+            <div>
+              {uncategorizedTxns.map((t) => (
+                <div key={t.id} className="border-b border-brand-line/70 px-3 py-2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-body font-medium">
+                        {t.description}
                       </div>
-                      <div className="tabular-nums text-sm whitespace-nowrap">
-                        {formatCurrency(Math.abs(parseFloat(t.amount)))}
+                      <div className="font-mono text-micro tabular-nums text-neutral-400">
+                        {t.occurredOn}
                       </div>
                     </div>
-                    <div className="mt-1">
-                      <CategoryPicker
-                        value={t.categoryId ?? null}
-                        categories={categories}
-                        description={t.description}
-                        onChange={(newId, rememberPattern) =>
-                          handleChange(t.id, newId, rememberPattern)
-                        }
-                        testId={`recat-uncat-${t.id}`}
-                      />
+                    <div className="whitespace-nowrap font-mono text-label tabular-nums">
+                      {formatCurrency(Math.abs(parseFloat(t.amount)))}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
-      </CardContent>
-    </Card>
+                  <div className="mt-1">
+                    <CategoryPicker
+                      value={t.categoryId ?? null}
+                      categories={categories}
+                      description={t.description}
+                      onChange={(newId, rememberPattern) =>
+                        handleChange(t.id, newId, rememberPattern)
+                      }
+                      testId={`recat-uncat-${t.id}`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 
@@ -370,6 +403,7 @@ function SpendingSection({
     }
     return top8;
   }, [realCats]);
+  const pieHasOther = realCats.length > 8;
 
   // Reimbursable donut from facts.reimbursable.
   const reimDonut = useMemo(() => {
@@ -386,9 +420,9 @@ function SpendingSection({
   // Heatmap: build a continuous calendar from the range. While we have under
   // 12 weeks (84 days) of data, show every day since tracking started;
   // afterward automatically roll to the last 84 days.
-  const { heatCols, maxHeat, heatStartIso } = useMemo(() => {
+  const { heatCols, maxHeat } = useMemo(() => {
     if (!facts)
-      return { heatCols: [] as { week: number; cells: HeatCell[] }[], maxHeat: 0, heatStartIso: "" };
+      return { heatCols: [] as { week: number; cells: HeatCell[] }[], maxHeat: 0 };
     const totals = new Map(facts.dailyBuckets.map((b) => [b.date, b.total]));
     const allDays = eachIsoDay(facts.range.start, facts.range.end);
     const days = allDays.length > 84 ? allDays.slice(-84) : allDays;
@@ -421,7 +455,7 @@ function SpendingSection({
       curr.push(c);
     }
     if (curr.length) cols.push({ week: lastWeek, cells: curr });
-    return { heatCols: cols, maxHeat: max, heatStartIso: days[0] };
+    return { heatCols: cols, maxHeat: max };
   }, [facts]);
 
   // Day-of-week: avg per day, highlight the highest-average day.
@@ -435,7 +469,18 @@ function SpendingSection({
     () => (facts?.byMerchant ?? []).slice(0, 10),
     [facts],
   );
-  const maxMerch = topMerch[0]?.total ?? 0;
+  // Ranked CSS bars, not recharts — a ranked list that re-reads itself is
+  // exactly what chart law 4 keeps off the charting library.
+  const merchRows = useMemo<CssBarRow[]>(
+    () =>
+      topMerch.map((m) => ({
+        id: m.name,
+        label: m.name,
+        value: m.total,
+        hint: `${m.count}×${m.sampleCategoryName ? ` · ${m.sampleCategoryName}` : ""}`,
+      })),
+    [topMerch],
+  );
 
   // Category trends treatment depends on how many months of data exist.
   const months = facts?.monthlyTrends ?? [];
@@ -482,16 +527,11 @@ function SpendingSection({
 
   if (isLoading || !facts) {
     return (
-      <div className="space-y-6">
-        <SectionHeader
-          eyebrow="Section · Spending"
-          title="Where the money went"
-          sub="The rhythms, the leaks, and the merchants that quietly add up."
-        />
-        <Skeleton className="h-28 w-full rounded-lg" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="space-y-4">
+        <Skeleton className="h-20 w-full rounded-card" />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 rounded-lg" />
+            <Skeleton key={i} className="h-24 rounded-card" />
           ))}
         </div>
       </div>
@@ -501,15 +541,13 @@ function SpendingSection({
   const topCat = realCats[0];
   const topMerchant = facts.byMerchant[0];
   const showUncatBanner = facts.uncategorized.total > 0;
+  const selected =
+    selectedDow === null
+      ? null
+      : facts.dayOfWeek.find((d) => d.dow === selectedDow) ?? null;
 
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        eyebrow="Section · Spending"
-        title="Where the money went"
-        sub="The rhythms, the leaks, and the merchants that quietly add up."
-      />
-
+    <div className="space-y-4">
       {showUncatBanner && (
         <UncategorizedBanner
           facts={facts}
@@ -518,66 +556,77 @@ function SpendingSection({
         />
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <HeroTile
+      <div className="stagger grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat
+          index={0}
           label="Total real spend"
           value={formatCurrency(facts.realSpend.total)}
-          sub={`${facts.realSpend.transactionCount} transactions · ${rangeLabel(facts.range.start, facts.range.end)}`}
+          hint={`${facts.realSpend.transactionCount} transactions · ${rangeLabel(facts.range.start, facts.range.end)}`}
+          data-testid="spending-total"
         />
-        <HeroTile
+        <Stat
+          index={1}
           label="Top category"
           value={topCat?.name ?? "—"}
-          sub={
+          hint={
             topCat
               ? `${formatCurrency(topCat.total)} · ${Math.round(topCat.pctOfRealSpend)}% of real spend`
               : "—"
           }
-          tone="amber"
+          data-testid="spending-top-category"
         />
-        <HeroTile
+        <Stat
+          index={2}
           label="Top merchant"
           value={topMerchant?.name ?? "—"}
-          sub={
+          hint={
             topMerchant
               ? `${topMerchant.count} ${topMerchant.count === 1 ? "hit" : "hits"}${topMerchant.sampleCategoryName ? ` · ${topMerchant.sampleCategoryName}` : ""}`
               : "—"
           }
+          data-testid="spending-top-merchant"
         />
-        <HeroTile
+        <Stat
+          index={3}
           label="Reimbursable outstanding"
           value={formatCurrency(facts.reimbursable.outstandingReimbursableTotal)}
-          sub={
+          hint={
             facts.reimbursable.outstandingReimbursableTotal > 0
               ? "still owed back to the household"
               : "nothing outstanding"
           }
           tone={
-            facts.reimbursable.outstandingReimbursableTotal > 0
-              ? "amber"
-              : "good"
+            facts.reimbursable.outstandingReimbursableTotal > 0 ? "bad" : "navy"
           }
+          data-testid="spending-reimbursable"
         />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Top categories"
-          caption="Real spend by category — uncategorized lives in its own banner."
-          empty={pieData.length === 0 ? "All clear — no categorized spend yet." : null}
+          help="Real spend by category. Uncategorized is excluded — it has its own banner — so these percentages are of categorized spend only."
+          empty={pieData.length === 0 ? "No categorized spend yet" : null}
           hideWhenEmpty
         >
-          <div className="flex flex-col sm:flex-row items-center gap-4 h-full">
-            <div className="w-full sm:w-1/2 h-full min-h-[200px]">
+          <div className="flex h-full flex-col items-center gap-4 sm:flex-row">
+            <div className="h-full min-h-[200px] w-full sm:w-1/2">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie {...CHART_ANIM} data={pieData}
+                  <Pie {...ANIM_BAR} data={pieData}
                     dataKey="total"
                     nameKey="name"
-                    outerRadius={100}
-                    innerRadius={52}
+                    outerRadius="92%"
+                    innerRadius="55%"
+                    paddingAngle={2}
+                    stroke="#fff"
+                    strokeWidth={2}
                   >
                     {pieData.map((_, i) => (
-                      <Cell key={i} fill={CHART_SERIES[i % CHART_SERIES.length]} />
+                      <Cell
+                        key={i}
+                        fill={sliceColor(i, pieData.length, pieHasOther)}
+                      />
                     ))}
                   </Pie>
                   <Tooltip
@@ -587,19 +636,24 @@ function SpendingSection({
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            {/* Custom HTML legend — sentence-case label, dollars, percentage. */}
-            <ul className="w-full sm:w-1/2 space-y-1.5 text-xs">
+            {/* The legend carries every label and value, so the chart reads
+                without relying on hue discrimination. */}
+            <ul className="w-full space-y-1 text-micro sm:w-1/2">
               {pieData.map((d, i) => (
                 <li key={d.name} className="flex items-center gap-2">
                   <span
-                    className="inline-block h-2.5 w-2.5 rounded-[2px] shrink-0"
-                    style={{ background: CHART_SERIES[i % CHART_SERIES.length] }}
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                    style={{
+                      background: sliceColor(i, pieData.length, pieHasOther),
+                    }}
                   />
-                  <span className="truncate flex-1">{sentenceCase(d.name)}</span>
-                  <span className="tabular-nums text-muted-foreground">
+                  <span className="flex-1 truncate text-neutral-600">
+                    {sentenceCase(d.name)}
+                  </span>
+                  <span className="font-mono tabular-nums text-neutral-700">
                     {formatCurrency(d.total)}
                   </span>
-                  <span className="tabular-nums text-muted-foreground/70 w-9 text-right">
+                  <span className="w-9 text-right font-mono tabular-nums text-neutral-400">
                     {Math.round(d.pct)}%
                   </span>
                 </li>
@@ -610,26 +664,29 @@ function SpendingSection({
 
         <ChartCard
           title="Reimbursable vs personal"
-          caption="On Amex: how much will come back vs. the true personal cost."
-          empty={reimDonut.length === 0 ? "All clear — no Amex spend tagged yet." : null}
+          help="On Amex: how much is still expected back against the true personal cost."
+          empty={reimDonut.length === 0 ? "No Amex spend tagged yet" : null}
           hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie {...CHART_ANIM} data={reimDonut}
+              <Pie {...ANIM_BAR} data={reimDonut}
                 dataKey="value"
                 nameKey="name"
-                innerRadius={60}
-                outerRadius={110}
+                innerRadius="55%"
+                outerRadius="90%"
+                paddingAngle={2}
+                stroke="#fff"
+                strokeWidth={2}
               >
-                <Cell fill={H2_PALETTE.amber} />
-                <Cell fill={H2_PALETTE.primary} />
+                <Cell fill={REIMBURSABLE_SERIES.outstanding} />
+                <Cell fill={REIMBURSABLE_SERIES.personal} />
               </Pie>
               <Tooltip
                 contentStyle={tooltipStyle}
                 formatter={(v: number) => tooltipMoney(v)}
               />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Legend wrapperStyle={LEGEND_STYLE} />
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -637,17 +694,17 @@ function SpendingSection({
 
       <ChartCard
         title="Spending heatmap"
-        caption={`Since tracking started — ${monthLongLabel(TRACKING_START_YM)}. Each square is one day; darker = more spent.`}
+        help={`One square per day since tracking started in ${monthLongLabel(TRACKING_START_YM)}. Darker is more spent; the scale is the heaviest day in view.`}
         empty={
-          heatCols.length === 0 || maxHeat === 0
-            ? "All clear — no spending recorded yet."
-            : null
+          heatCols.length === 0 || maxHeat === 0 ? "No spending recorded yet" : null
         }
         hideWhenEmpty
-        height={180}
+        height={160}
       >
-        <div className="flex items-start gap-1 h-full overflow-x-auto pb-2">
-          <div className="grid grid-rows-7 gap-1 mr-2 text-[9px] text-muted-foreground items-center">
+        {/* Twelve weeks is a narrow calendar, so it is CENTRED rather than
+            pinned left in a full-width card with 80% dead space. */}
+        <div className="flex h-full items-start justify-center gap-1 overflow-x-auto pb-2">
+          <div className="mr-2 grid grid-rows-7 items-center gap-1 text-micro text-neutral-400">
             {["", "Mon", "", "Wed", "", "Fri", ""].map((l, i) => (
               <div key={i} className="h-3 leading-none">
                 {l}
@@ -659,16 +716,21 @@ function SpendingSection({
               {Array.from({ length: 7 }).map((_, dow) => {
                 const cell = col.cells.find((c) => c.dow === dow);
                 if (!cell) return <div key={dow} className="h-3 w-3" />;
+                // Sequential encoding on NAVY_RAMP, indexed by intensity —
+                // light = low, navy = high (chart law 2).
                 const intensity = maxHeat > 0 ? cell.amount / maxHeat : 0;
-                const bg =
+                const step =
                   cell.amount === 0
-                    ? "hsl(var(--muted))"
-                    : `hsl(var(--chart-1) / ${0.25 + intensity * 0.75})`;
+                    ? 0
+                    : Math.min(
+                        NAVY_RAMP.length - 1,
+                        1 + Math.floor(intensity * (NAVY_RAMP.length - 1)),
+                      );
                 return (
                   <div
                     key={dow}
                     className="h-3 w-3 rounded-[2px]"
-                    style={{ background: bg }}
+                    style={{ background: NAVY_RAMP[step] }}
                     title={`${cell.date}: ${formatCurrency(cell.amount)}`}
                   />
                 );
@@ -678,240 +740,200 @@ function SpendingSection({
         </div>
       </ChartCard>
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <Card className="rounded-lg">
-          <CardContent className="p-5">
-            <div className="font-semibold">Day of week</div>
-            <p className="text-sm text-muted-foreground mb-3">
-              Average spend per day — click a bar to see what you spent.
-            </p>
-            {(facts.dayOfWeek ?? []).every((d) => d.avgPerDay === 0) ? (
-              <div className="h-[180px] flex items-center justify-center text-sm text-muted-foreground">
-                All clear — no spending data yet.
-              </div>
-            ) : (
-              <>
-                <div className="h-[180px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={facts.dayOfWeek}
-                      margin={{ top: 10, right: 16, bottom: 4, left: 0 }}
-                    >
-                      <CartesianGrid
-                        stroke="hsl(var(--border))"
-                        strokeOpacity={0.6}
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 10 }}
-                        tickFormatter={(v: number) => `$${Math.round(v)}`}
-                        tickLine={false}
-                        axisLine={false}
-                        width={44}
-                      />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        formatter={(v: number) => tooltipMoney(v)}
-                        cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
-                      />
-                      <Bar {...CHART_ANIM} dataKey="avgPerDay"
-                        radius={[6, 6, 0, 0]}
-                        onClick={(d: { dow?: number; payload?: { dow?: number } }) => {
-                          const dow = d?.payload?.dow ?? d?.dow ?? null;
-                          setSelectedDow((cur) => (cur === dow ? null : dow));
-                        }}
-                      >
-                        {facts.dayOfWeek.map((d, i) => (
-                          <Cell
-                            key={i}
-                            cursor="pointer"
-                            fill={
-                              selectedDow === d.dow ||
-                              (maxDowAvg > 0 && d.avgPerDay === maxDowAvg)
-                                ? H2_PALETTE.amber
-                                : H2_PALETTE.primary
-                            }
-                            fillOpacity={
-                              selectedDow === null || selectedDow === d.dow
-                                ? 1
-                                : 0.4
-                            }
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                {(() => {
-                  const sel =
-                    selectedDow === null
-                      ? null
-                      : facts.dayOfWeek.find((d) => d.dow === selectedDow);
-                  if (!sel) {
-                    return (
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        Click a bar to break down that day&rsquo;s spending.
-                      </p>
-                    );
-                  }
-                  return (
-                    <div className="mt-3 border-t pt-3">
-                      <div className="flex items-baseline justify-between mb-1.5">
-                        <div className="text-sm font-medium">
-                          {sel.label} · top merchants
-                        </div>
-                        <div className="text-sm tabular-nums font-semibold">
-                          {formatCurrency(sel.total)}
-                        </div>
-                      </div>
-                      {sel.topMerchants.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          No spending on {sel.label}s in this window.
-                        </p>
-                      ) : (
-                        <div className="space-y-1">
-                          {sel.topMerchants.map((m) => (
-                            <div
-                              key={m.name}
-                              className="flex items-center justify-between text-sm"
-                            >
-                              <span className="truncate text-muted-foreground">
-                                {m.name}
-                              </span>
-                              <span className="tabular-nums shrink-0 ml-2">
-                                {formatCurrency(m.total)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-              </>
-            )}
-          </CardContent>
-        </Card>
-
+      <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
-          title="Top merchants"
-          caption="Where your dollars actually land. Top 10 by total, with category context."
-          empty={topMerch.length === 0 ? "All clear — no merchants tracked yet." : null}
+          title="Day of week"
+          help="Average spend per day for each weekday. The heaviest day takes the orange; click any bar to break that day down."
+          empty={
+            (facts.dayOfWeek ?? []).every((d) => d.avgPerDay === 0)
+              ? "No spending data yet"
+              : null
+          }
           hideWhenEmpty
+          height={selected ? 300 : 190}
         >
-          {/* Custom HTML bar list so each merchant can carry its category
-              context as muted text to the right of the bar. */}
-          <div className="h-full overflow-y-auto pr-1 space-y-2.5">
-            {topMerch.map((m) => (
-              <div key={m.name}>
-                <div className="flex items-baseline justify-between gap-2 text-xs">
-                  <span className="truncate font-medium">{m.name}</span>
-                  <span className="tabular-nums whitespace-nowrap">
-                    {formatCurrency(m.total)}
+          <div className="flex h-full flex-col">
+            <div className="h-[180px] w-full shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={facts.dayOfWeek}
+                  margin={{ top: 10, right: 16, bottom: 4, left: 0 }}
+                >
+                  <CartesianGrid stroke={GRID_STROKE} vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={AXIS_TICK}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tick={AXIS_TICK}
+                    tickFormatter={axisMoney}
+                    tickLine={false}
+                    axisLine={false}
+                    width={56}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v: number) => tooltipMoney(v)}
+                    cursor={{ fill: CHART.grid, opacity: 0.45 }}
+                  />
+                  <Bar {...ANIM_BAR} animationBegin={animBegin(0)} dataKey="avgPerDay"
+                    radius={[4, 4, 0, 0]}
+                    onClick={(d: { dow?: number; payload?: { dow?: number } }) => {
+                      const dow = d?.payload?.dow ?? d?.dow ?? null;
+                      setSelectedDow((cur) => (cur === dow ? null : dow));
+                    }}
+                  >
+                    {facts.dayOfWeek.map((d, i) => (
+                      <Cell
+                        key={i}
+                        cursor="pointer"
+                        fill={
+                          selectedDow === d.dow ||
+                          (maxDowAvg > 0 && d.avgPerDay === maxDowAvg)
+                            ? CHART.orange
+                            : CHART.navy
+                        }
+                        fillOpacity={
+                          selectedDow === null || selectedDow === d.dow ? 1 : 0.4
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {selected && (
+              <div className="mt-2 min-h-0 flex-1 overflow-y-auto border-t border-brand-line pt-2">
+                <div className="mb-1 flex items-baseline justify-between gap-2">
+                  <span className={fieldLabel}>{selected.label} · top merchants</span>
+                  <span className="font-mono text-label font-semibold tabular-nums">
+                    {formatCurrency(selected.total)}
                   </span>
                 </div>
-                <div className="mt-1 flex items-center gap-2">
-                  <div className="h-2 flex-1 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${maxMerch > 0 ? (m.total / maxMerch) * 100 : 0}%`,
-                        background: H2_PALETTE.primary,
-                      }}
-                    />
-                  </div>
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                    {m.count} {m.count === 1 ? "hit" : "hits"}
-                    {m.sampleCategoryName ? ` · ${m.sampleCategoryName}` : ""}
-                  </span>
-                </div>
+                {selected.topMerchants.length === 0 ? (
+                  <p className="text-micro text-neutral-400">
+                    No spending on {selected.label}s in this window
+                  </p>
+                ) : (
+                  <table className="w-full">
+                    <tbody>
+                      {selected.topMerchants.map((m) => (
+                        <tr key={m.name}>
+                          <td className={cn(td, "max-w-[220px] truncate border-0 px-0 py-0.5 text-neutral-600")}>
+                            {m.name}
+                          </td>
+                          <td className={cn(tdNum, "border-0 px-0 py-0.5")}>
+                            {formatCurrency(m.total)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
-            ))}
+            )}
           </div>
         </ChartCard>
+
+        <PanelCard
+          title="Top merchants"
+          help="Top 10 by total spend in this window, with how many times each was hit. Bars darken with rank."
+        >
+          {merchRows.length === 0 ? (
+            <div className={emptyNote}>No merchants tracked yet</div>
+          ) : (
+            <div className="px-4 py-3">
+              {/* `valueWidth` has to hold the money AND the trailing hint on
+                  ONE line — the hint sits inline after the value, so too
+                  narrow a column wraps it into the row below and the rows
+                  visually collide. */}
+              <CssBars
+                rows={merchRows}
+                format={(v) => formatCurrency(v)}
+                ramp
+                rowHeight={30}
+                labelWidth={132}
+                valueWidth={224}
+                ariaLabel="Top merchants by total spend"
+              />
+            </div>
+          )}
+        </PanelCard>
       </div>
 
       {months.length === 1 ? (
-        <ChartCard
-          title="Category trends — since tracking started"
-          caption="One month of data so far. A trend line appears as more months land."
-          height={220}
+        <PanelCard
+          title="Category trends"
+          help="Only one month of data so far. A month-by-month chart takes over once a second month lands."
         >
-          <div className="flex flex-col h-full">
-            <div className="text-sm font-medium mb-1">
-              {monthLongLabel(months[0].month)}:{" "}
-              <span className="tabular-nums">
-                {formatCurrency(months[0].total)}
-              </span>{" "}
-              across {realCats.length}{" "}
-              {realCats.length === 1 ? "category" : "categories"}
+          <div className="px-4 py-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-body font-medium">
+                {monthLongLabel(months[0].month)}
+              </span>
+              <span className="font-mono text-label tabular-nums">
+                {formatCurrency(months[0].total)} across {realCats.length}{" "}
+                {realCats.length === 1 ? "category" : "categories"}
+              </span>
             </div>
-            {/* Single horizontal stacked bar of the month's top categories. */}
-            <div className="flex h-8 w-full rounded-md overflow-hidden mt-2">
-              {months[0].byTopCategory.map((c, i) => {
-                const w =
-                  months[0].total > 0 ? (c.total / months[0].total) * 100 : 0;
-                return (
-                  <div
-                    key={c.name}
-                    className="h-full"
-                    style={{
-                      width: `${w}%`,
-                      background: CHART_SERIES[i % CHART_SERIES.length],
-                    }}
-                    title={`${c.name}: ${formatCurrency(c.total)}`}
-                  />
-                );
-              })}
+            <div className="mt-2 flex h-6 w-full overflow-hidden rounded-control">
+              {months[0].byTopCategory.map((c, i) => (
+                <div
+                  key={c.name}
+                  className="h-full"
+                  style={{
+                    width: `${months[0].total > 0 ? (c.total / months[0].total) * 100 : 0}%`,
+                    background: catColor(i),
+                  }}
+                  title={`${c.name}: ${formatCurrency(c.total)}`}
+                />
+              ))}
             </div>
-            <ul className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-xs mt-3">
+            <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-micro md:grid-cols-3">
               {months[0].byTopCategory.map((c, i) => (
                 <li key={c.name} className="flex items-center gap-2">
                   <span
-                    className="inline-block h-2.5 w-2.5 rounded-[2px] shrink-0"
-                    style={{ background: CHART_SERIES[i % CHART_SERIES.length] }}
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                    style={{ background: catColor(i) }}
                   />
-                  <span className="truncate flex-1">{sentenceCase(c.name)}</span>
-                  <span className="tabular-nums text-muted-foreground">
+                  <span className="flex-1 truncate text-neutral-600">
+                    {sentenceCase(c.name)}
+                  </span>
+                  <span className="font-mono tabular-nums text-neutral-700">
                     {formatCurrency(c.total)}
                   </span>
                 </li>
               ))}
             </ul>
           </div>
-        </ChartCard>
+        </PanelCard>
       ) : months.length >= 6 ? (
-        <ChartCard
-          title="Category trends — last 6 months"
-          caption="One sparkline per top category. Watch for upward creep."
-          empty={trendSparkData.length === 0 ? "All clear — no category spending yet." : null}
-          hideWhenEmpty
-          height={260}
+        <PanelCard
+          title="Category trends · last 6 months"
+          help="One sparkline per top category, on a shared six-month axis. Watch for a line that creeps up month over month."
         >
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 h-full">
+          <div className="grid grid-cols-2 gap-4 px-4 py-3 md:grid-cols-4">
             {trendSparkData.map((t, i) => (
               <div key={t.name} className="flex flex-col">
-                <div className="text-xs font-medium truncate">{t.name}</div>
-                <div className="text-[10px] text-muted-foreground tabular-nums mb-1">
+                <div className="truncate text-micro font-medium text-neutral-700">
+                  {t.name}
+                </div>
+                <div className="mb-1 font-mono text-micro tabular-nums text-neutral-400">
                   {formatCurrency(t.total)}
                 </div>
-                <div className="flex-1">
+                <div className="h-16">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
                       data={t.series}
-                      margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+                      margin={{ top: 2, right: 0, left: 0, bottom: 0 }}
                     >
-                      <Area {...CHART_ANIM} type="monotone"
+                      <Area {...ANIM_AREA} animationBegin={animBegin(i)} type="monotone"
                         dataKey="spend"
-                        stroke={CHART_SERIES[i % CHART_SERIES.length]}
-                        fill={CHART_SERIES[i % CHART_SERIES.length]}
-                        fillOpacity={0.25}
+                        stroke={catColor(i)}
+                        fill={catColor(i)}
+                        fillOpacity={0.2}
                         strokeWidth={1.5}
                       />
                       <Tooltip
@@ -924,12 +946,16 @@ function SpendingSection({
               </div>
             ))}
           </div>
-        </ChartCard>
+          <Foot>
+            Each sparkline is scaled to its own category, so heights compare
+            within a card and never across them.
+          </Foot>
+        </PanelCard>
       ) : (
         <ChartCard
-          title="Category trends — since tracking started"
-          caption="Spend per month for your top categories. A sparkline grid takes over at 6 months."
-          empty={trendBarData.length === 0 ? "All clear — no category spending yet." : null}
+          title="Category trends"
+          help="Spend per month for the top categories since tracking started. A sparkline grid takes over at six months."
+          empty={trendBarData.length === 0 ? "No category spending yet" : null}
           hideWhenEmpty
           height={280}
         >
@@ -938,22 +964,20 @@ function SpendingSection({
               data={trendBarData}
               margin={{ top: 10, right: 16, bottom: 8, left: 0 }}
             >
-              <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis
-                tick={{ fontSize: 10 }}
-                tickFormatter={(v: number) => `$${Math.round(v)}`}
-              />
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+              <XAxis dataKey="month" tick={AXIS_TICK} />
+              <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
               <Tooltip
                 contentStyle={tooltipStyle}
                 formatter={(v: number) => tooltipMoney(v)}
               />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Legend wrapperStyle={LEGEND_STYLE} />
               {trendTopCatNames.map((name, i) => (
-                <Bar {...CHART_ANIM} key={name}
+                <Bar {...ANIM_BAR} key={name}
+                  animationBegin={animBegin(i)}
                   dataKey={name}
                   stackId="trend"
-                  fill={CHART_SERIES[i % CHART_SERIES.length]}
+                  fill={catColor(i)}
                 />
               ))}
             </BarChart>

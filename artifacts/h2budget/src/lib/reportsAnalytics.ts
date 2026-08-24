@@ -9,38 +9,38 @@ import type {
 } from "@workspace/api-client-react";
 import { simulate, type SimResult, type Strategy, type SimDebt } from "./avalanche";
 
-// H2 chart palette: anchored to the Slate Professional design tokens
-// (--chart-1..5 + --positive/--negative/--warning) so charts re-tone
-// automatically when the global theme changes (e.g. light vs dark).
-// `emerald` keeps its semantic "positive / net surplus" meaning by
-// pointing at --positive, and `red` points at --negative.
-export const H2_PALETTE = {
-  primary: "hsl(var(--chart-1))",
-  primarySoft: "hsl(var(--chart-1) / 0.55)",
-  navy: "hsl(var(--chart-5))",
-  navySoft: "hsl(var(--chart-5) / 0.55)",
-  amber: "hsl(var(--chart-4))",
-  amberSoft: "hsl(var(--chart-4) / 0.55)",
-  warning: "hsl(var(--warning))",
-  red: "hsl(var(--negative))",
-  rose: "hsl(var(--negative) / 0.7)",
-  sky: "hsl(var(--chart-2))",
-  emerald: "hsl(var(--positive))",
-  slate: "hsl(var(--chart-3))",
-};
-
-export const CHART_SERIES: string[] = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-5))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-2) / 0.7)",
-  "hsl(var(--chart-1) / 0.55)",
-  "hsl(var(--chart-5) / 0.55)",
-  "hsl(var(--chart-4) / 0.6)",
-  "hsl(var(--chart-3) / 0.7)",
-];
+/**
+ * ⛔ THIS MODULE OWNS NO COLOURS.
+ *
+ * It used to export a semantic alias palette (`primary` / `emerald` / `amber`
+ * / `navy` / `red` / `slate` …) plus an ordered series list, both pointing at
+ * the old teal `--chart-1..5` ramp. Both are DELETED (see C9). Chart colour
+ * lives in exactly one place now — `@/lib/chartTokens`, re-exported by
+ * `@/lib/charts`: `CHART`, `CAT8`/`catColor`, `NAVY_RAMP`/`rampByRank`.
+ *
+ * Why they had to go — measured, not theoretical. After B1 rebound the shadcn
+ * vars to the navy/platinum set, the aliases resolved like this:
+ *
+ *   .primary → --chart-1  → #19315b
+ *   .emerald → --positive → #19315b   ← THE SAME PIXEL as `primary`
+ *   .navy    → --chart-5  → #c4d0e2   ← the palest ramp stop, not navy
+ *   .amber   → --chart-4  → #a9bad2   ← pale blue-grey, not amber
+ *
+ * So two differently-named series drew one colour (the exact failure the
+ * dashboard's chart kit was written to prevent — see law 5 in chartTokens),
+ * a line named `navy` drew nearly-invisible pale grey on a white card, and
+ * every "amber = caution" call site was quietly painting blue-grey. The names
+ * had stopped describing the pixels, which is what an alias always risks.
+ *
+ * The series list was worse than an alias: chart-1/5/4/2/3 IS `NAVY_RAMP`
+ * order, so a SEQUENTIAL ramp was being handed out as CATEGORICAL identity
+ * (law 2), and `[i % length]` recycled colours once a chart passed 10 series.
+ * Categorical work now uses `catColor(i)` — capped at 8 with an "Other"
+ * rollup, so a colour marks an item and never silently repeats.
+ *
+ * `reportsPalette.test.ts` enforces the absence generically: ANY export whose
+ * name ends `_PALETTE`/`_SERIES`, or that is named after a colour, fails.
+ */
 
 export function fmtISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
