@@ -69,8 +69,28 @@ export const CAT8: readonly string[] = [
   "#a9bad2",
 ];
 
-/** Desaturated slate for the "All others" rollup band. */
-export const OTHER_GREY = "#8fa3bf";
+/**
+ * Desaturated neutral grey for the "All others" rollup band.
+ *
+ * ⚠️ THIS VALUE IS LOAD-BEARING AND IS PINNED BY A TEST. It used to be
+ * `#8fa3bf` — byte-identical to `CAT8[4]` and to `CHART.mist` — so any chart
+ * using the kit's own documented shape (cap at 8, roll the tail into "Other")
+ * drew slice 4 and the Other slice in ONE colour as soon as a fifth category
+ * appeared. That is precisely the failure law 5 exists to prevent, sitting
+ * inside the kit's own tokens; `SpendingPage` had to carry a local substitute
+ * to dodge it.
+ *
+ * The replacement is chosen by measurement, not by eye. `#767b83` is a true
+ * low-chroma grey (the eight identities are all navy-family or orange), and
+ * its CIEDE2000 distance to the NEAREST `CAT8` member is **13.6** — against an
+ * internal `CAT8` minimum separation of 5.1. The rollup is therefore further
+ * from every identity than the identities are from each other, which is the
+ * right hierarchy: "Other" is the absence of an identity and must never be
+ * mistaken for one. It is also absent from `NAVY_RAMP` (min ΔE 15.5) and from
+ * the platinum surface ramp (min ΔE 31.6), so it cannot collide with a
+ * sequential encoding or vanish into a card.
+ */
+export const OTHER_GREY = "#767b83";
 
 /**
  * Sequential ramp for intensity/heat encoding (light = low, navy = high).

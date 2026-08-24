@@ -104,7 +104,13 @@ export interface ChartBand {
   x2: string | number;
 }
 
-const BAND_FILL = "#eef2f7";
+/**
+ * Platinum step 4 — the same wash `--color-platinum-4` paints raised neutral
+ * surfaces with. It was #eef2f7 until the D1 colour audit read it out of the
+ * built bundle: three hex digits off the ramp, invisible on screen, and exactly
+ * the drift that ends with a palette nobody can grep for.
+ */
+const BAND_FILL = "#eef3fa";
 
 const bandAreas = (bands?: ChartBand[]) =>
   bands?.map((b) => (

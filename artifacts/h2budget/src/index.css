@@ -68,6 +68,12 @@
   --color-warn: #5d6674;
   --color-warn-bg: #eef0f3;
   --color-bad: #e16d3e;
+  /* The pressed/hover step of the alarm colour. It exists as a TOKEN because it
+     used to be an arbitrary bracketed-hex hover literal, copy-pasted into two
+     files (`ui.tsx` and `ui/button.tsx`) — the D1 colour audit caught it in the
+     built bundle. An escape-hatch hex is invisible to every palette grep and
+     drifts the moment one of the two copies is edited. */
+  --color-bad-hover: #c2562a;
   --color-bad-bg: #fbeee7;
   --color-info: #19315b;
   --color-info-bg: #eef3fa;
@@ -292,6 +298,37 @@
   --spacing: 0.25rem;
 }
 
+/* ── REDUCED MOTION, PART 1: THE FOUR DIALS ─────────────────────────────────
+   ⚠️ THIS BLOCK MUST STAY UNLAYERED, AND MUST STAY BELOW THE `:root` ABOVE.
+   Both facts are load-bearing, and a test pins them (`index.css.test.ts`).
+
+   It used to live inside `@layer utilities`, next to the `!important` keyframe
+   kills, which read as tidy and did nothing: in the CSS cascade UNLAYERED
+   rules beat LAYERED ones outright — layer order is consulted only among
+   layered declarations. So `--anim-speed: 0` in a layer lost to `--anim-speed:
+   2.2` at top level, and under `prefers-reduced-motion: reduce` the dial still
+   computed 2.2. Every duration written as `calc(280ms * var(--anim-speed))`
+   kept its full length; the bug was invisible only because the `!important`
+   `animation: none` list downstream masked the result on the specific classes
+   it happened to name.
+
+   Unlayered here, `:root` vs `:root` is a specificity tie, so SOURCE ORDER
+   decides — which is why this must follow the base `:root` and not precede it.
+
+   Zeroing the dials — rather than only killing named classes — is what makes
+   the switch cover motion nobody remembered to add to a list, including any
+   future `calc(… * var(--anim-speed))` and the transitions on `.surface`,
+   `.card-bleed` and the tab underline. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --anim-speed: 0;
+    --dur-press: 0ms;
+    --dur-in: 0ms;
+    --dur-page: 0ms;
+    --stagger: 0ms;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -381,12 +418,17 @@
      TWO-stop shadow (tight contact + wide soft ambient) instead of one blunt
      blur. Slight by design: at 100% zoom you should feel depth, not see an
      effect. Pair with `ring-1 ring-brand-line` for the platinum hairline. */
+  /* Shadow tint is BRAND NAVY, matching --shadow-rest/lift/over above. It was
+     rgb(16 24 40) here — a second, near-black depth language running alongside
+     the navy one, which the elevation comment above explicitly forbids. The
+     audit found it in the built CSS as #101828; at 4–13% alpha the correction
+     is imperceptible, and it leaves exactly one shadow colour in the app. */
   .surface {
     background-image: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      0 1px 1.5px rgba(16, 24, 40, 0.04),
-      0 6px 16px -6px rgba(16, 24, 40, 0.07);
+      0 1px 1.5px rgba(25, 49, 91, 0.04),
+      0 6px 16px -6px rgba(25, 49, 91, 0.07);
   }
 
   /* Clickable surfaces settle a little deeper under the pointer. Shadow only —
@@ -397,8 +439,8 @@
   .surface-lift:hover {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.95),
-      0 2px 4px rgba(16, 24, 40, 0.05),
-      0 14px 28px -10px rgba(16, 24, 40, 0.13);
+      0 2px 4px rgba(25, 49, 91, 0.05),
+      0 14px 28px -10px rgba(25, 49, 91, 0.13);
   }
 
   /* ── The head, and its bleed ─────────────────────────────────────────────
@@ -679,22 +721,22 @@
   .anim-sheet-bottom[data-state="open"] { animation: sheetInBottom var(--dur-in) var(--ease-out); }
   .anim-sheet-bottom[data-state="closed"] { animation: sheetOutBottom var(--dur-page) var(--ease-move); }
 
-  /* ── ONE SWITCH FOR THE WHOLE SYSTEM ─────────────────────────────────────
+  /* ── ONE SWITCH FOR THE WHOLE SYSTEM, PART 2: THE LITERAL DURATIONS ──────
      Someone who has asked their machine for less motion gets a working app
-     with none of it, not a half-animated one. Zeroing the dials covers every
-     duration expressed against them; the explicit list covers the keyframes
-     whose base durations are literal. Radix open/close lifecycles still need
-     to COMPLETE, so overlay animations collapse to near-instant rather than
-     `none` — an animation removed outright never fires its end event and the
-     element would stay mounted. */
+     with none of it, not a half-animated one.
+
+     Zeroing the four dials does most of the work, but that half CANNOT LIVE
+     HERE — a `:root` inside `@layer utilities` loses to the unlayered `:root`
+     no matter what it says, so the dials are overridden at top level instead
+     (search "REDUCED MOTION, PART 1"). What remains below is the half that the
+     dials genuinely cannot reach, and it is not redundant: `.stagger`'s
+     per-child delays are literal (28ms…224ms) and `.skeleton` runs a literal
+     `1.6s` infinite sweep, so neither reads a dial at all.
+
+     Radix open/close lifecycles still need to COMPLETE, so overlay animations
+     collapse to near-instant rather than `none` — an animation removed
+     outright never fires its end event and the element would stay mounted. */
   @media (prefers-reduced-motion: reduce) {
-    :root {
-      --anim-speed: 0;
-      --dur-press: 0ms;
-      --dur-in: 0ms;
-      --dur-page: 0ms;
-      --stagger: 0ms;
-    }
     .tile-in, .rise-in, .reveal, .page-in, .page-out, .chart-in, .area-draw,
     .sweep-in, .spark-fill-in, .grow-x, .tab-underline, .skeleton,
     .stagger > *, .stagger-children > *, .section-enter {

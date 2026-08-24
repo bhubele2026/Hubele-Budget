@@ -16,7 +16,7 @@ const buttonVariants = cva(
         default: "bg-brand-navy text-white hover:bg-brand-navy2",
         // ⚠️ Deep orange #e16d3e, and the hover is a DEEPER orange — a crimson
         // hover under an orange rest state reads as two different buttons.
-        destructive: "bg-bad text-white hover:bg-[#c2562a]",
+        destructive: "bg-bad text-white hover:bg-bad-hover",
         // The quiet ghost control: a hairline ring, no blue, no underline.
         outline:
           "bg-white text-neutral-700 ring-1 ring-brand-line hover:bg-neutral-50 hover:text-brand-navy",

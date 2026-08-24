@@ -1,16 +1,10 @@
-// BH-style stat-card kit — reusable across pages. Composes the viz primitives
-// into the ring + pill + sparkline + fill + "why" pattern.
-export { RingMeter } from "./ring-meter";
-export { StatusPill } from "./status-pill";
-export { TrendSparkline, type TrendPoint } from "./trend-sparkline";
-export { FillMeter } from "./fill-meter";
-export { WhyExpander } from "./why-expander";
+// What remains of the pre-overhaul "BH stat-card kit". The ring/pill/sparkline/
+// fill/why primitives it used to export were displayed only by the dev gallery
+// at /dev/components and rendered by no real screen; they went in D1 along with
+// the gallery and the good/warning/danger colour vocabulary they carried, which
+// the navy+orange palette law replaced.
+//
+// SectionHeader survives because `pages/amex.tsx` renders it. New work should
+// reach for `src/ui.tsx` (cards, Stat, chips, table tokens) rather than growing
+// this barrel back.
 export { SectionHeader } from "./section-header";
-export { Callout } from "./callout";
-export {
-  spendStatus,
-  progressStatus,
-  statusTone,
-  STATUS_COLOR,
-  type Status,
-} from "@/lib/statusThresholds";
