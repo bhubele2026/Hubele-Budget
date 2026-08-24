@@ -35,8 +35,6 @@ if (typeof window !== "undefined" && !window.matchMedia) {
   })) as unknown as typeof window.matchMedia;
 }
 
-vi.mock("canvas-confetti", () => ({ default: () => undefined }));
-
 vi.mock("wouter", () => ({
   Link: ({ children }: { children?: React.ReactNode }) => <a>{children}</a>,
 }));

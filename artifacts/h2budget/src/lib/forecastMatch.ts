@@ -95,7 +95,7 @@ export type LineRow = (PlanLine | BankLine) & { runningBalance?: number };
 const DAY = 86_400_000;
 
 /**
- * Gate condition for the "inbox cleared" confetti celebration. We only
+ * Gate condition for the "inbox cleared" reconciled state. We only
  * fire when both:
  *   1. The pending-bank inbox is empty, and
  *   2. The forecast end balance reconciles to the live bank snapshot

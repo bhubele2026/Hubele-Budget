@@ -72,7 +72,7 @@ export function Sparkline({
     // The sweep-in draw animation lives on the WRAPPER as a clip-path reveal.
     // Never dash-animate the path itself: stroke-dasharray combined with
     // vector-effect:non-scaling-stroke computes dashes in SCREEN pixels, which
-    // turned every sparkline into 1px confetti (the "broken graphs" bug).
+    // turned every sparkline into 1px specks (the "broken graphs" bug).
     <div className={cn("sweep-in w-full", className)} style={{ height }}>
       <svg
         width="100%"

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CHART_ANIM } from "@/lib/chartAnim";
 import {
   useListDebts,
@@ -42,7 +42,6 @@ import {
   YAxis,
   Tooltip,
   Legend,
-  fireMilestoneConfetti,
   HeroTile,
   ChartCard,
   tooltipMoney,
@@ -129,21 +128,6 @@ function DebtSection({
     const id = window.setTimeout(() => setGaugeFill(totalPaid.pct), 80);
     return () => window.clearTimeout(id);
   }, [totalPaid.pct]);
-
-  // Confetti when entering this tab if we project a kill within 30 days.
-  const confettiFiredRef = useRef(false);
-  useEffect(() => {
-    if (confettiFiredRef.current) return;
-    if (!countdown.date) return;
-    const next = sim.killedOrder[0];
-    if (next) {
-      const days = Math.floor((next.date.getTime() - today.getTime()) / 86_400_000);
-      if (days >= 0 && days <= 30) {
-        fireMilestoneConfetti();
-        confettiFiredRef.current = true;
-      }
-    }
-  }, [countdown.date, sim.killedOrder, today]);
 
   const activeDebts = simDebts.filter((d) => (d.status ?? "active") === "active");
   const maxMonthsLeft = Math.max(

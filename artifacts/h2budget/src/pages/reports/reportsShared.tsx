@@ -85,10 +85,6 @@ export {
   Cell,
 };
 
-export function fireMilestoneConfetti() {
-  // Confetti celebration removed by request.
-}
-
 /**
  * Day-span for a Wk/Mo/Yr mode, fed into each page's date-window derivation.
  * Weekly-first: "wk" is the default everywhere and resolves to the current

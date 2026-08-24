@@ -114,7 +114,7 @@ describe("Forecast reschedule overrides", () => {
   });
 });
 
-describe("shouldCelebrateClear (confetti gating)", () => {
+describe("shouldCelebrateClear (reconciled-state gating)", () => {
   it("celebrates only when inbox empty AND reconciled to bank", () => {
     expect(
       shouldCelebrateClear({ inboxCount: 0, isReconciledToBank: true }),
