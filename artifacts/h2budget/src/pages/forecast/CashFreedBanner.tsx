@@ -1,8 +1,6 @@
-import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { fmtMonth } from "@/lib/avalanche";
 import type { PayoffTransition } from "@/lib/forecastDebts";
-import { Sparkles } from "lucide-react";
 
 export function nextMonthLabel(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
@@ -11,37 +9,35 @@ export function nextMonthLabel(ym: string): string {
   return fmtMonth(d);
 }
 
+/**
+ * A debt clears mid-register, so the money that was servicing it comes back.
+ *
+ * ⚠️ THIS IS THE NORTH STAR EVENT — a payoff — so it is the one row allowed to
+ * look different from a plan row. It stays a hairline card in the navy set,
+ * not a celebration: the app's own rule is that good news is navy and does not
+ * shout. The "✨ Cash Freed" badge and the "freed up" caption under the number
+ * both went; the chip says what happened and the number says how much.
+ */
 export function CashFreedBanner({ transition }: { transition: PayoffTransition }) {
   return (
     <div
       data-testid={`cash-freed-${transition.debtId}`}
-      className="p-4 flex items-center justify-between gap-3 bg-[hsl(var(--chart-3)/0.12)] border border-[hsl(var(--chart-3)/0.35)] rounded-md"
+      className="flex items-center justify-between gap-3 border-b border-brand-line/70 bg-brand-navy/[0.03] px-4 py-3 last:border-b-0"
     >
-      <div className="flex items-center gap-3 min-w-0">
-        <Badge
-          variant="outline"
-          className="bg-[hsl(var(--chart-3)/0.2)] text-warning border-[hsl(var(--chart-3)/0.45)] gap-1"
-        >
-          <Sparkles className="h-3 w-3" />
-          Cash Freed
-        </Badge>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="chip ok">Paid off</span>
         <div className="min-w-0">
-          <div className="font-medium text-sm truncate text-foreground">
+          <div className="truncate text-body font-medium text-neutral-700">
             {transition.debtName} is gone
           </div>
-          <div className="text-xs text-muted-foreground">
-            starting {nextMonthLabel(transition.payoffYM)}
+          <div className="text-micro text-neutral-400">
+            from {nextMonthLabel(transition.payoffYM)}
           </div>
         </div>
       </div>
-      <div className="text-right">
-        <div className="font-semibold tabular-nums text-positive">
-          +{formatCurrency(transition.freedAmount)}/mo
-        </div>
-        <div className="text-[10px] uppercase tracking-wide text-warning/70">
-          freed up
-        </div>
-      </div>
+      <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+        +{formatCurrency(transition.freedAmount)}/mo
+      </span>
     </div>
   );
 }

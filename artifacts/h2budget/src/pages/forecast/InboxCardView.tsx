@@ -1,7 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { btnLink } from "@/ui";
 import {
   Select,
   SelectContent,
@@ -94,16 +94,16 @@ export function InboxCardView({
           onMatchPick(oneClickSuggestion);
         }
       }}
-      className={`rounded-md border border-card-border bg-card p-3 flex items-center gap-3 shadow-sm transition-all outline-none hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/40 ${
-        canOneClick ? "ring-1 ring-primary/25" : ""
+      className={`surface flex items-center gap-3 rounded-card p-3 outline-none ring-1 transition-all hover:ring-brand-navy/30 focus-visible:ring-2 focus-visible:ring-brand-navy/40 ${
+        canOneClick ? "ring-brand-navy/25" : "ring-brand-line"
       } ${isDragging ? "opacity-30" : ""} ${
-        isOverlay ? "shadow-lg ring-2 ring-primary/40 cursor-grabbing" : ""
+        isOverlay ? "cursor-grabbing shadow-lift ring-2 ring-brand-navy/40" : ""
       }`}
     >
       <button
         {...listeners}
         {...attributes}
-        className="touch-none cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-md p-1.5 -m-1 inline-flex items-center justify-center min-w-[32px] min-h-[32px] focus-visible:ring-2 focus-visible:ring-primary/40 outline-none"
+        className="-m-1 inline-flex min-h-[32px] min-w-[32px] cursor-grab touch-none items-center justify-center rounded-control p-1.5 text-neutral-400 outline-none hover:bg-neutral-50 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 active:cursor-grabbing"
         aria-label="Drag to match onto a planned item"
         title="Drag onto a planned item to match"
         data-testid={`inbox-drag-handle-${card.bank.txn.id}`}
@@ -112,37 +112,31 @@ export function InboxCardView({
         <GripVertical className="w-4 h-4" />
       </button>
       <div className="min-w-0 flex-1">
-        <div className="font-semibold text-sm truncate">
+        <div className="truncate text-body font-semibold text-neutral-700">
           {card.bank.txn.description}
         </div>
         {showDragHint && (
           <div
-            className="text-[11px] text-muted-foreground italic mt-0.5"
+            className="mt-0.5 text-micro text-neutral-400"
             data-testid={`inbox-drag-hint-${card.bank.txn.id}`}
           >
             Drag onto a planned item to match
           </div>
         )}
-        <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-          <span>{formatDate(card.bank.date)}</span>
-          {categoryName && (
-            <Badge
-              variant="outline"
-              className="text-[10px] border-primary/20 text-primary bg-primary/10"
-            >
-              {categoryName}
-            </Badge>
-          )}
-          {!categoryName && (
-            <Badge variant="outline" className="text-[10px] border-muted text-muted-foreground">
-              Uncategorized
-            </Badge>
+        <div className="flex flex-wrap items-center gap-2 text-micro text-neutral-400">
+          <span className="font-mono tabular-nums">
+            {formatDate(card.bank.date)}
+          </span>
+          {categoryName ? (
+            <span className="chip info">{categoryName}</span>
+          ) : (
+            <span className="chip gray">Uncategorized</span>
           )}
         </div>
       </div>
       <span
-        className={`text-base font-semibold tabular-nums ${
-          card.bank.amount < 0 ? "text-destructive" : "text-primary"
+        className={`font-mono text-label font-semibold tabular-nums ${
+          card.bank.amount < 0 ? "text-bad" : "text-brand-navy"
         }`}
       >
         {formatCurrency(card.bank.amount)}
@@ -170,12 +164,12 @@ export function InboxCardView({
               if (p) onMatchPick(p);
             }}
           >
-            <SelectTrigger className="h-8 w-[140px] text-xs">
+            <SelectTrigger className="h-8 w-[140px] text-micro">
               <SelectValue placeholder="Choose a planned item" />
             </SelectTrigger>
             <SelectContent>
               {planRows.length === 0 && (
-                <div className="px-2 py-1 text-xs text-muted-foreground">
+                <div className="px-2 py-1 text-micro text-neutral-400">
                   No planned items this month
                 </div>
               )}
@@ -190,20 +184,19 @@ export function InboxCardView({
             </SelectContent>
           </Select>
           {onAddAsBill && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
+            <button
+              type="button"
+              className={btnLink}
               onClick={onAddAsBill}
               data-testid={`inbox-add-as-bill-${card.bank.txn.id}`}
               title="Promote this transaction into a recurring bill"
             >
               Add as bill
-            </Button>
+            </button>
           )}
-          <Button variant="outline" size="sm" onClick={onUnplanned}>
+          <button type="button" className={btnLink} onClick={onUnplanned}>
             Unplanned
-          </Button>
+          </button>
         </div>
       )}
     </div>

@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import type { PlanLine } from "@/lib/forecastMatch";
 
 // (#456) Shared predicate: a plan row can accept a drag-to-match drop iff
@@ -10,17 +9,27 @@ export function isPlanRowMatchEligible(row: Pick<PlanLine, "status">): boolean {
   return row.status === "pending_plan" || row.status === "future";
 }
 
+/**
+ * Row status as a `.chip` — the kit's one badge shape.
+ *
+ * ⚠️ THE LABEL CARRIES THE STATE, NOT THE COLOUR. On this palette good is
+ * navy and does not shout, "watch" is grey and only `missed` earns the deep
+ * orange; a reader who cannot separate the hues still gets the answer from the
+ * word. That is why every entry below has a written label and why an unknown
+ * status falls through to printing itself rather than to a neutral colour.
+ */
+const CHIP: Record<string, { label: string; tone: string }> = {
+  pending_plan: { label: "Pending plan", tone: "warn" },
+  pending_bank: { label: "Pending bank", tone: "info" },
+  future: { label: "Upcoming", tone: "gray" },
+  matched: { label: "Matched", tone: "ok" },
+  missed: { label: "Missed", tone: "bad" },
+  rescheduled: { label: "Rescheduled", tone: "info" },
+  ignored_unforecasted: { label: "Unplanned", tone: "gray" },
+  unplanned: { label: "Unplanned", tone: "gray" },
+};
+
 export function statusBadge(s: string) {
-  const map: Record<string, { label: string; cls: string }> = {
-    pending_plan: { label: "Pending plan", cls: "bg-warning/15 text-warning border-warning/30" },
-    pending_bank: { label: "Pending bank", cls: "bg-[hsl(var(--chart-2)/0.15)] text-[hsl(var(--chart-2))] border-[hsl(var(--chart-2)/0.3)]" },
-    future: { label: "Upcoming", cls: "bg-muted text-muted-foreground" },
-    matched: { label: "Matched", cls: "bg-primary/15 text-primary border-primary/30" },
-    missed: { label: "Missed", cls: "bg-destructive/10 text-destructive border-destructive/30" },
-    rescheduled: { label: "Rescheduled", cls: "bg-primary/15 text-primary border-primary/30" },
-    ignored_unforecasted: { label: "Unplanned", cls: "bg-muted text-muted-foreground" },
-    unplanned: { label: "Unplanned", cls: "bg-muted text-muted-foreground" },
-  };
-  const v = map[s] ?? { label: s, cls: "bg-muted text-muted-foreground" };
-  return <Badge variant="outline" className={v.cls}>{v.label}</Badge>;
+  const v = CHIP[s] ?? { label: s, tone: "gray" };
+  return <span className={`chip ${v.tone}`}>{v.label}</span>;
 }

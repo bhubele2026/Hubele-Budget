@@ -409,7 +409,14 @@ describe("Forecast — per-card 'Choose a planned' dropdown filter (#463)", () =
     // The "Unplanned" affordance still works on a card with no plan
     // candidates — clicking it fires the upsert mutation with the
     // ignored_unforecasted status for this bank txn.
-    const card = screen.getByText("Acme Charge").closest("div.rounded-md");
+    // Scope to the inbox card by its OWN testid rather than by a rounding
+    // utility class. `div.rounded-md` used to resolve — but to the pinned-inbox
+    // wrapper, not this card, and it broke the moment C2 moved both onto the
+    // kit's `rounded-card`. The testid is the element's identity and cannot
+    // drift with the stylesheet.
+    const card = screen
+      .getByText("Acme Charge")
+      .closest("[data-testid^='inbox-card']");
     expect(card).not.toBeNull();
     const unplannedBtn = within(card as HTMLElement).getByRole("button", {
       name: "Unplanned",
