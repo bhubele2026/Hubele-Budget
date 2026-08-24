@@ -3,26 +3,29 @@ import { renderHook } from "@testing-library/react";
 import { useReviewInboxCount } from "./useReviewInboxCount";
 
 // The counting logic (unmatched current-month bank txns, isBankTxn scoping,
-// resolution exclusion) moved server-side to GET /forecast/review-count —
-// covered by api-server/src/__tests__/badgeCounts.integration.test.ts. The
-// hook is now a thin read; these tests pin its two remaining contracts:
-// the passthrough shape and the deliberate query key that keeps the badge
-// inside the '/api/forecast' invalidation prefix.
+// resolution exclusion) lives server-side in `lib/reviewCount.ts`, shared by
+// GET /forecast/review-count and GET /spine — covered by
+// api-server/src/__tests__/badgeCounts.integration.test.ts and pinned to agree
+// by spineParity.integration.test.ts.
+//
+// The hook itself is now a thin read OFF THE SPINE rather than off its own
+// endpoint. That is the contract these tests pin: the badge in the nav and the
+// bell on the landing must be the same fetch, so they can never disagree.
 
-const captured: { queryKey?: unknown } = {};
-const mockData: { current: { count: number } | undefined } = {
+const mockData: { current: { reviewCount: number } | undefined } = {
   current: undefined,
 };
-vi.mock("@workspace/api-client-react", () => ({
-  useGetForecastReviewCount: (opts?: { query?: { queryKey?: unknown } }) => {
-    captured.queryKey = opts?.query?.queryKey;
-    return { data: mockData.current };
+let spineCallCount = 0;
+vi.mock("@/hooks/useSpine", () => ({
+  useSpine: () => {
+    spineCallCount++;
+    return { data: mockData.current, isLoading: false };
   },
 }));
 
-describe("useReviewInboxCount (server-count passthrough)", () => {
-  it("returns the server count", () => {
-    mockData.current = { count: 3 };
+describe("useReviewInboxCount (reads the shared spine)", () => {
+  it("returns the count the spine carries", () => {
+    mockData.current = { reviewCount: 3 };
     const { result } = renderHook(() => useReviewInboxCount());
     expect(result.current).toBe(3);
   });
@@ -33,9 +36,12 @@ describe("useReviewInboxCount (server-count passthrough)", () => {
     expect(result.current).toBe(0);
   });
 
-  it("keys the query under the '/api/forecast' prefix so existing forecast invalidations refresh the badge", () => {
-    mockData.current = { count: 1 };
+  it("sources the badge from the spine, not a second request", () => {
+    mockData.current = { reviewCount: 1 };
+    spineCallCount = 0;
     renderHook(() => useReviewInboxCount());
-    expect(captured.queryKey).toEqual(["/api/forecast", "review-count"]);
+    // The point of the change: one shared snapshot feeds the badge. If this
+    // ever goes back to its own endpoint, the nav and the landing can drift.
+    expect(spineCallCount).toBeGreaterThan(0);
   });
 });

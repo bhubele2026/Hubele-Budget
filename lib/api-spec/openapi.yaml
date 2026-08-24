@@ -22,6 +22,7 @@ tags:
   - name: auth
   - name: invitations
   - name: members
+  - name: spine
 paths:
   /healthz:
     get:
@@ -1899,6 +1900,28 @@ paths:
         "403":
           description: Forbidden
 
+  /spine:
+    get:
+      operationId: getSpine
+      tags: [spine]
+      summary: One shared snapshot of the household's core numbers (the spine)
+      description: >-
+        Every figure the app's headline surfaces show, read once at one instant
+        so no two tiles can quote different moments. Each field is produced by
+        the same function the owning page's endpoint calls — bank/forecast from
+        computeCashSignal, spend from buildSpendingFacts, bills from
+        buildBillsSummary, payoff from @workspace/avalanche-core, review count
+        from computeReviewCount — and an integration test asserts each one
+        equals the owning endpoint's value to the cent. The debt field carries a
+        PERCENTAGE ONLY; this response never contains a balance or an amount
+        owed, because it is what the landing page paints.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Spine" }
+
 components:
   schemas:
     HealthStatus:
@@ -1912,6 +1935,54 @@ components:
       required: [count]
       properties:
         count: { type: integer }
+
+    SpineNextBill:
+      type: object
+      required: [name, amount, dueDate]
+      properties:
+        name: { type: string }
+        amount: { type: string }
+        dueDate: { type: string }
+
+    Spine:
+      type: object
+      required:
+        [asOf, bank, spentMonth, spentWeek, nextBill, billsDueCount, forecast, debt, reviewCount]
+      properties:
+        asOf: { type: string, description: ISO timestamp the snapshot was read }
+        bank:
+          type: object
+          required: [balance, asOfDate]
+          properties:
+            balance: { type: string, description: computeCashSignal().bankToday — snapshot rolled forward through the ledger }
+            asOfDate: { type: ["string", "null"], description: computeCashSignal().snapshotAt — when the bank snapshot was taken }
+        spentMonth: { type: number, description: buildSpendingFacts(monthStart..today).realSpend.total }
+        spentWeek: { type: number, description: buildSpendingFacts(weekStart..weekEnd).realSpend.total }
+        nextBill:
+          oneOf:
+            - $ref: "#/components/schemas/SpineNextBill"
+            - type: "null"
+          description: Earliest upcoming bill or debt minimum on/after today; null when nothing is scheduled
+        billsDueCount: { type: integer, description: Upcoming bills + debt minimums still landing inside the current month }
+        forecast:
+          type: object
+          required: [lowPoint, lowPointDate, runwayDays]
+          properties:
+            lowPoint: { type: string, description: computeCashSignal().lowestProjected over the 90-day horizon }
+            lowPointDate: { type: ["string", "null"] }
+            runwayDays: { type: ["integer", "null"], description: Days until the projection first goes negative; null when it never does }
+        debt:
+          type: object
+          required: [payoffPct]
+          properties:
+            payoffPct:
+              type: ["number", "null"]
+              description: >-
+                Percent of anchored debt paid off, 0–100. ⚠️ PERCENT ONLY — no
+                balance or amount owed may ever be added to this object; the
+                landing page renders it and the standing rule is that the front
+                door never shows what is owed. null = no debt carries an anchor.
+        reviewCount: { type: integer, description: computeReviewCount() — unmatched forecast-flagged bank txns this month }
 
     VersionInfo:
       type: object

@@ -27,6 +27,7 @@ import {
   expandAvalancheExtra,
 } from "../lib/debtMinSchedule";
 import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
+import { computeReviewCount } from "../lib/reviewCount";
 import {
   plaid,
   isValidPlaidAccessToken,
@@ -490,69 +491,15 @@ router.get(
   "/forecast/review-count",
   requireAuth,
   async (req, res): Promise<void> => {
-    const householdId = req.householdId!;
-    const ownerUserId = req.householdOwnerId!;
-
-    const [settings] = await db
-      .select({
-        bankSnapshotAccountId: forecastSettingsTable.bankSnapshotAccountId,
-      })
-      .from(forecastSettingsTable)
-      .where(eq(forecastSettingsTable.userId, ownerUserId));
-    let checkingExternalId: string | null = null;
-    if (settings?.bankSnapshotAccountId) {
-      const [acct] = await db
-        .select({ accountId: plaidAccountsTable.accountId })
-        .from(plaidAccountsTable)
-        .where(eq(plaidAccountsTable.id, settings.bankSnapshotAccountId));
-      checkingExternalId = acct?.accountId ?? null;
-    }
-
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const monthStart = `${y}-${pad(m + 1)}-01`;
-    const monthEnd = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
-
-    const txns = await db
-      .select({
-        id: transactionsTable.id,
-        source: transactionsTable.source,
-        plaidAccountId: transactionsTable.plaidAccountId,
-      })
-      .from(transactionsTable)
-      .where(
-        and(
-          eq(transactionsTable.householdId, householdId),
-          eq(transactionsTable.forecastFlag, true),
-          gte(transactionsTable.occurredOn, monthStart),
-          lte(transactionsTable.occurredOn, monthEnd),
-        ),
-      );
-
-    const resolutions = await db
-      .select({ matchedTxnId: forecastResolutionsTable.matchedTxnId })
-      .from(forecastResolutionsTable)
-      .where(eq(forecastResolutionsTable.householdId, householdId));
-    const resolvedTxnIds = new Set(
-      resolutions.map((r) => r.matchedTxnId).filter(Boolean),
+    // ⚠️ The body of this handler now lives in `lib/reviewCount.ts`. It moved
+    // the moment `/api/spine` needed the same integer: the badge in the nav and
+    // the badge on the landing hero are the same claim, and two hand-kept
+    // copies of "how many things need looking at" is precisely the drift the
+    // spine exists to end. Same code, one definition, two callers.
+    const count = await computeReviewCount(
+      req.householdId!,
+      req.householdOwnerId!,
     );
-
-    // isBankTxn semantics: account metadata wins; amex/plaid:* without a
-    // checking match are card-side; manual rows default to bank.
-    let count = 0;
-    for (const t of txns) {
-      if (t.plaidAccountId) {
-        if (!checkingExternalId || t.plaidAccountId !== checkingExternalId)
-          continue;
-      } else {
-        const s = (t.source ?? "manual").toLowerCase();
-        if (s === "amex" || s.startsWith("plaid:")) continue;
-      }
-      if (resolvedTxnIds.has(t.id)) continue;
-      count++;
-    }
     res.json({ count });
   },
 );

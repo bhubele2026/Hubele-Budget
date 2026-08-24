@@ -236,6 +236,44 @@ function r2(n: number): string {
 }
 
 /**
+ * Runway = days until the projected balance first goes negative; `null` when it
+ * never does inside the window (which is the GOOD outcome, so a consumer must
+ * render `null` as "no shortfall in view", never as zero days).
+ *
+ * ⚠️ THIS IS A MOVE, NOT A NEW CALCULATION. Transcribed line-for-line from
+ * `artifacts/h2budget/src/pages/forecast-overview.tsx` (the `runwayDays` useMemo
+ * + its local `daysBetween`), which is where this number is computed for the
+ * screen that shows it today. It moves here so `/api/spine` can serve it
+ * alongside the low point instead of shipping the whole 90-day `daily[]` series
+ * to the client and having each page walk it again — the walks were already
+ * drifting (command-center.tsx walks `/forecast`'s events from the snapshot
+ * balance instead, a different answer from the same question).
+ *
+ * ⚠️ `Date.parse(d + "T00:00:00")` is LOCAL-time on purpose — it is what the
+ * client does, and both endpoints of the subtraction are parsed the same way,
+ * so the difference is timezone-invariant. Do not "fix" this to UTC in
+ * isolation: it would silently put the server one day off from the page.
+ */
+export function runwayDaysFrom(
+  daily: Array<{ date: string; balance: string }> | undefined,
+): number | null {
+  if (!daily || !daily.length) return null;
+  const num = (v: string): number => {
+    const n = parseFloat(String(v ?? ""));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const daysBetween = (from: string, to: string): number => {
+    const a = Date.parse(`${from}T00:00:00`);
+    const b = Date.parse(`${to}T00:00:00`);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+    return Math.max(0, Math.round((b - a) / 86_400_000));
+  };
+  const first = daily[0].date;
+  for (const d of daily) if (num(d.balance) < 0) return daysBetween(first, d.date);
+  return null;
+}
+
+/**
  * Compute the cash signal: today's bank balance + projection of lowest balance.
  *
  * Anchored on the bank snapshot when present:

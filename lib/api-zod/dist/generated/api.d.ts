@@ -9565,4 +9565,104 @@ export declare const RemoveMemberParams: zod.ZodObject<{
 }, {
     id: string;
 }>;
+/**
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * @summary One shared snapshot of the household's core numbers (the spine)
+ */
+export declare const GetSpineResponse: zod.ZodObject<{
+    asOf: zod.ZodString;
+    bank: zod.ZodObject<{
+        balance: zod.ZodString;
+        asOfDate: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        balance: string;
+        asOfDate: string | null;
+    }, {
+        balance: string;
+        asOfDate: string | null;
+    }>;
+    spentMonth: zod.ZodNumber;
+    spentWeek: zod.ZodNumber;
+    nextBill: zod.ZodUnion<[zod.ZodObject<{
+        name: zod.ZodString;
+        amount: zod.ZodString;
+        dueDate: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string;
+        name: string;
+        dueDate: string;
+    }, {
+        amount: string;
+        name: string;
+        dueDate: string;
+    }>, zod.ZodNull]>;
+    billsDueCount: zod.ZodNumber;
+    forecast: zod.ZodObject<{
+        lowPoint: zod.ZodString;
+        lowPointDate: zod.ZodNullable<zod.ZodString>;
+        runwayDays: zod.ZodNullable<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        lowPoint: string;
+        lowPointDate: string | null;
+        runwayDays: number | null;
+    }, {
+        lowPoint: string;
+        lowPointDate: string | null;
+        runwayDays: number | null;
+    }>;
+    debt: zod.ZodObject<{
+        payoffPct: zod.ZodNullable<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        payoffPct: number | null;
+    }, {
+        payoffPct: number | null;
+    }>;
+    reviewCount: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    debt: {
+        payoffPct: number | null;
+    };
+    asOf: string;
+    bank: {
+        balance: string;
+        asOfDate: string | null;
+    };
+    spentMonth: number;
+    spentWeek: number;
+    nextBill: {
+        amount: string;
+        name: string;
+        dueDate: string;
+    } | null;
+    billsDueCount: number;
+    forecast: {
+        lowPoint: string;
+        lowPointDate: string | null;
+        runwayDays: number | null;
+    };
+    reviewCount: number;
+}, {
+    debt: {
+        payoffPct: number | null;
+    };
+    asOf: string;
+    bank: {
+        balance: string;
+        asOfDate: string | null;
+    };
+    spentMonth: number;
+    spentWeek: number;
+    nextBill: {
+        amount: string;
+        name: string;
+        dueDate: string;
+    } | null;
+    billsDueCount: number;
+    forecast: {
+        lowPoint: string;
+        lowPointDate: string | null;
+        runwayDays: number | null;
+    };
+    reviewCount: number;
+}>;
 //# sourceMappingURL=api.d.ts.map

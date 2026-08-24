@@ -126,6 +126,7 @@ import type {
   Settings,
   SettingsInput,
   SpendingFacts,
+  Spine,
   SyncMinimumsResult,
   TestMappingRulesInput,
   TestMappingRulesResult,
@@ -9241,3 +9242,69 @@ export const useRemoveMember = <
 > => {
   return useMutation(getRemoveMemberMutationOptions(options));
 };
+
+/**
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * @summary One shared snapshot of the household's core numbers (the spine)
+ */
+export const getGetSpineUrl = () => {
+  return `/api/spine`;
+};
+
+export const getSpine = async (options?: RequestInit): Promise<Spine> => {
+  return customFetch<Spine>(getGetSpineUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSpineQueryKey = () => {
+  return [`/api/spine`] as const;
+};
+
+export const getGetSpineQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSpine>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getSpine>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSpineQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSpine>>> = ({
+    signal,
+  }) => getSpine({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSpine>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSpineQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSpine>>
+>;
+export type GetSpineQueryError = ErrorType<unknown>;
+
+/**
+ * @summary One shared snapshot of the household's core numbers (the spine)
+ */
+
+export function useGetSpine<
+  TData = Awaited<ReturnType<typeof getSpine>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getSpine>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSpineQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

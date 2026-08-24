@@ -7,10 +7,74 @@
     <meta name="description" content="A focused budgeting app for the Hubele family — track spending, plan bills, and stay ahead of debt." />
     <meta name="theme-color" content="#19315b" />
     <style>
-      /* The platinum ground, before the stylesheet arrives — kills the white
-         flash. Dark mode is gone: the app is light-only on the navy/platinum
-         palette, so there is no pre-hydration theme script any more. */
+      /* ⭐ THE PRE-HYDRATION SHELL — the app's first paint, and it needs ZERO
+         JavaScript to happen.
+
+         Everything below renders from the HTML document alone: the platinum
+         ground and the navy hero band are on screen as soon as the first packet
+         is parsed, before React, before clerk-js, before the font. React
+         replaces the whole thing when it hydrates, so this is never a second
+         source of truth for anything — it is a picture of the frame, and it
+         carries NO numbers, NO copy that could go stale, and no user data.
+
+         ⚠️ KEEP THIS UNDER ~1 KB. It is inlined into every document, so every
+         byte here is paid on every open. Colours are hard-coded hexes on
+         purpose: this has to paint before the stylesheet that defines the
+         tokens has arrived. They mirror --color-brand-navy / the platinum
+         ground in index.css — if those ever move, move these with them. */
       html { background: #f7f9fc; }
+      body { margin: 0; }
+      #boot { min-height: 100vh; background: #f7f9fc; }
+      #boot .band {
+        background: #19315b;
+        padding: 2rem 1rem;
+      }
+      #boot .inner { max-width: 64rem; margin: 0 auto; padding: 0 0.5rem; }
+      #boot .mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-weight: 700;
+        font-size: 30px;
+        letter-spacing: -0.045em;
+        line-height: 1;
+        color: #fff;
+      }
+      #boot .box {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.82);
+        font-size: 15px;
+      }
+      #boot .two { color: #f68d2e; }
+      #boot .word { font-weight: 600; font-size: 17px; letter-spacing: -0.025em; }
+      #boot .sub {
+        margin: 8px 0 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.6);
+      }
+      #boot .grid {
+        max-width: 64rem;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+        display: grid;
+        gap: 1.25rem;
+        grid-template-columns: 1fr;
+      }
+      @media (min-width: 640px) { #boot .grid { grid-template-columns: 1fr 1fr; } }
+      @media (min-width: 1024px) { #boot .grid { grid-template-columns: 1fr 1fr 1fr; } }
+      #boot .tile {
+        min-height: 154px;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 0 0 1px #e6edf5;
+      }
     </style>
     <!--
       The tab mark. Both files are the square half of the h2-wordmark lockup
@@ -40,7 +104,31 @@
     <link rel="preload" href="__INTER_WOFF2__" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Static pre-hydration shell. React replaces this entire subtree on
+           mount; it exists so the navy hero is on screen before any script
+           runs. aria-hidden + role=presentation so a screen reader is never
+           handed this placeholder as content. -->
+      <div id="boot" role="presentation" aria-hidden="true">
+        <div class="band">
+          <div class="inner">
+            <span class="mark"
+              ><span class="box">H<span class="two">2</span></span
+              ><span class="word">Budget</span></span
+            >
+            <p class="sub">Every dollar, one place.</p>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+          <div class="tile"></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

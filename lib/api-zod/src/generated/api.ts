@@ -3953,3 +3953,72 @@ export const ListMembersResponse = zod.array(ListMembersResponseItem);
 export const RemoveMemberParams = zod.object({
   id: zod.coerce.string(),
 });
+
+/**
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * @summary One shared snapshot of the household's core numbers (the spine)
+ */
+export const GetSpineResponse = zod.object({
+  asOf: zod.string().describe("ISO timestamp the snapshot was read"),
+  bank: zod.object({
+    balance: zod
+      .string()
+      .describe(
+        "computeCashSignal().bankToday — snapshot rolled forward through the ledger",
+      ),
+    asOfDate: zod
+      .string()
+      .nullable()
+      .describe(
+        "computeCashSignal().snapshotAt — when the bank snapshot was taken",
+      ),
+  }),
+  spentMonth: zod
+    .number()
+    .describe("buildSpendingFacts(monthStart..today).realSpend.total"),
+  spentWeek: zod
+    .number()
+    .describe("buildSpendingFacts(weekStart..weekEnd).realSpend.total"),
+  nextBill: zod
+    .union([
+      zod.object({
+        name: zod.string(),
+        amount: zod.string(),
+        dueDate: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .describe(
+      "Earliest upcoming bill or debt minimum on\/after today; null when nothing is scheduled",
+    ),
+  billsDueCount: zod
+    .number()
+    .describe(
+      "Upcoming bills + debt minimums still landing inside the current month",
+    ),
+  forecast: zod.object({
+    lowPoint: zod
+      .string()
+      .describe("computeCashSignal().lowestProjected over the 90-day horizon"),
+    lowPointDate: zod.string().nullable(),
+    runwayDays: zod
+      .number()
+      .nullable()
+      .describe(
+        "Days until the projection first goes negative; null when it never does",
+      ),
+  }),
+  debt: zod.object({
+    payoffPct: zod
+      .number()
+      .nullable()
+      .describe(
+        "Percent of anchored debt paid off, 0–100. ⚠️ PERCENT ONLY — no balance or amount owed may ever be added to this object; the landing page renders it and the standing rule is that the front door never shows what is owed. null = no debt carries an anchor.",
+      ),
+  }),
+  reviewCount: zod
+    .number()
+    .describe(
+      "computeReviewCount() — unmatched forecast-flagged bank txns this month",
+    ),
+});

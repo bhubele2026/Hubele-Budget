@@ -24,7 +24,11 @@ vi.mock("@clerk/react", () => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
-  useGetForecastReviewCount: () => ({ data: { count: reviewCount } }),
+  // The Review badge reads the shared spine now, not its own endpoint, so the
+  // nav count and the landing bell can never disagree (see hooks/useSpine.ts).
+  useGetSpine: () => ({ data: { reviewCount }, isLoading: false }),
+  getGetSpineQueryKey: () => ["/api/spine"],
+  getSpine: vi.fn(),
   getDashboard: vi.fn(),
   getGetDashboardQueryKey: () => ["/api/dashboard"],
   getForecast: vi.fn(),

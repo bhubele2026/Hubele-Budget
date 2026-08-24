@@ -7,12 +7,14 @@ import {
   useLocation,
 } from "wouter";
 import {
+  MutationCache,
   QueryClient,
   QueryClientProvider,
   keepPreviousData,
   useQueryClient,
 } from "@tanstack/react-query";
-import { ClerkProvider, Show, useClerk } from "@clerk/react";
+import { ClerkProvider, Show, useAuth, useClerk } from "@clerk/react";
+import { getSpine, getGetSpineQueryKey } from "@workspace/api-client-react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 
@@ -26,13 +28,18 @@ import { PageErrorBoundary } from "@/components/page-error-boundary";
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
 import { SignInPage, SignUpPage } from "./pages/auth";
+// ⚠️ THE LANDING IS EAGER, NOT `lazy()`. It is where every open lands, so
+// splitting it into its own chunk bought nothing but a guaranteed extra network
+// round trip on the one screen that has to feel instant. It is cheap to carry
+// in the entry precisely because it holds zero charts and one query.
+import LandingPage from "./pages/landing";
+import { LandingSkeleton } from "./pages/landing";
 import { PageSkeleton } from "@/components/page-skeleton";
 // (#perf) Route-chunk importers live in one shared module so the hover/idle
 // prefetch map (lib/routePrefetch) and these lazy() calls can never point at
 // different chunks. Consuming the exact same importer functions here is what
 // guarantees a hover warms precisely the chunk the route will render.
 import {
-  importLanding,
   importCommandCenter,
   importForecast,
   importForecastOverview,
@@ -60,7 +67,6 @@ import {
 // chunk, which is cached for subsequent visits. Behavior is unchanged —
 // a brief <Suspense> fallback shows while a route's chunk streams in.
 const CommandCenterPage = lazy(importCommandCenter);
-const LandingPage = lazy(importLanding);
 const ForecastPage = lazy(importForecast);
 const ForecastOverviewPage = lazy(importForecastOverview);
 const ReportsPage = lazy(importReports);
@@ -83,7 +89,32 @@ const PlaidOAuthPage = lazy(() => import("./pages/plaid-oauth"));
 const DevComponentsPage = lazy(() => import("./pages/dev-components"));
 const NotFound = lazy(() => import("./pages/not-found"));
 
+/**
+ * ⭐ ONE INVALIDATION RULE FOR THE SPINE, NOT THIRTY.
+ *
+ * `/api/spine` is fed by cash-signal, bills, spending facts, debts and the
+ * review count — so almost any write in this app can move one of its numbers.
+ * The obvious implementation is to add `invalidateQueries(["/api/spine"])` to
+ * every mutation that touches those namespaces. There are 34 files with
+ * invalidations in them; wiring each by hand guarantees that the 35th, written
+ * six months from now, forgets — and a stale spine is the exact failure mode
+ * this endpoint was built to eliminate (two surfaces, two moments, two
+ * answers).
+ *
+ * So the rule lives in ONE place: any successful mutation, anywhere, marks the
+ * spine stale. This cannot drift, cannot be forgotten, and costs almost
+ * nothing — `invalidateQueries` only triggers a network refetch for a query
+ * that is currently MOUNTED, so a write on the Settings page simply marks it
+ * stale and the next screen that reads the spine picks up fresh numbers.
+ */
+const mutationCache = new MutationCache({
+  onSuccess: () => {
+    void queryClient.invalidateQueries({ queryKey: getGetSpineQueryKey() });
+  },
+});
+
 const queryClient = new QueryClient({
+  mutationCache,
   defaultOptions: {
     queries: {
       // Cached responses stay "fresh" for 5 min, so revisiting a page
@@ -194,6 +225,67 @@ if (typeof window !== "undefined") {
   (window as unknown as { __qc?: QueryClient }).__qc = queryClient;
 }
 
+// ── Instant open ────────────────────────────────────────────────────────────
+//
+// ⭐ "I want to open it and it just opens."
+//
+// The app used to render NOTHING until clerk-js had downloaded, initialised and
+// round-tripped a session. On a warm, already-signed-in open that is a blank
+// screen for the entire cost of an auth handshake, for a household of two
+// people who are always signed in.
+//
+// `h2:auth-hint` records that this browser has resolved to a signed-in session
+// before. When it is set we paint the shell immediately and let Clerk catch up.
+// It is a HINT, never an authorisation: it gates pixels, not data. The shell it
+// unlocks contains zero numbers, and every byte of real data still requires the
+// server to accept the session cookie — so the worst case for a stale hint is
+// that a signed-out visitor sees an empty navy frame for a moment before being
+// redirected to /sign-in.
+const AUTH_HINT_KEY = "h2:auth-hint";
+
+function readAuthHint(): boolean {
+  try {
+    return window.localStorage.getItem(AUTH_HINT_KEY) === "1";
+  } catch {
+    // Safari private mode / storage disabled: fall back to the slow-but-correct
+    // path rather than breaking the front door.
+    return false;
+  }
+}
+
+function writeAuthHint(on: boolean): void {
+  try {
+    if (on) window.localStorage.setItem(AUTH_HINT_KEY, "1");
+    else window.localStorage.removeItem(AUTH_HINT_KEY);
+  } catch {
+    /* storage unavailable — the hint is an optimisation, never a requirement */
+  }
+}
+
+// ⚠️ FIRED AT MODULE SCOPE, IN PARALLEL WITH CLERK-JS — NOT AFTER IT.
+// The API authenticates web requests with the same-origin `__session` cookie
+// (the bearer path is Expo-only), which means this request is already
+// authenticated before clerk-js has finished booting. Waiting for Clerk to
+// resolve before asking for data would serialise two independent round trips
+// for no reason.
+//
+// `retry: false` on purpose: if the session JWT has expired the server answers
+// 401, and the right response is to drop it silently — the normal `useQuery`
+// refetches once Clerk has refreshed the cookie. Retrying would just spend the
+// open on doomed requests.
+if (typeof window !== "undefined" && readAuthHint()) {
+  void queryClient
+    .prefetchQuery({
+      queryKey: getGetSpineQueryKey(),
+      queryFn: ({ signal }) => getSpine({ signal }),
+      staleTime: 60_000,
+      retry: false,
+    })
+    .catch(() => {
+      /* 401 before Clerk refreshes the cookie — the mounted query refetches */
+    });
+}
+
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
@@ -290,12 +382,52 @@ function RouteFallback() {
   );
 }
 
+// Captured ONCE, at module load, before the effect below can write it — this
+// has to mean "was this browser signed in on a previous open", not "has Clerk
+// answered during this render".
+const HAD_AUTH_HINT = typeof window !== "undefined" && readAuthHint();
+
 function ProtectedShell() {
   const [location] = useLocation();
+  const { isLoaded, isSignedIn } = useAuth();
+
+  // Keep the hint honest: set on a real signed-in resolve, cleared on sign-out
+  // so the next open of a signed-out browser goes straight to the front door
+  // instead of flashing a shell it isn't entitled to.
+  useEffect(() => {
+    if (!isLoaded) return;
+    writeAuthHint(Boolean(isSignedIn));
+  }, [isLoaded, isSignedIn]);
+
+  // ⭐ THE OPTIMISTIC SHELL. Clerk hasn't answered yet, but this browser has
+  // been signed in before — so paint the frame and the tile skeletons now
+  // instead of holding a blank screen for the auth handshake.
+  //
+  // ⚠️ ZERO NUMBERS IN THE SKELETON, BY CONSTRUCTION. Nothing here reads a
+  // query, so there is no way for a figure to paint for someone whose session
+  // turns out to be invalid. The only thing an unauthorised viewer can see is
+  // the shape of the app.
+  if (!isLoaded) {
+    if (!HAD_AUTH_HINT) return null;
+    return (
+      <AppLayout>
+        {location === "/home" ? (
+          <LandingSkeleton />
+        ) : (
+          <div data-testid="route-loading">
+            <PageSkeleton />
+          </div>
+        )}
+      </AppLayout>
+    );
+  }
+
+  // Clerk has answered and the answer is no. Same redirect as before — it just
+  // happens after the shell has painted rather than instead of it.
+  if (!isSignedIn) return <Redirect to="/sign-in" />;
+
   return (
-    <>
-      <Show when="signed-in">
-        <AppLayout>
+    <AppLayout>
           <PageErrorBoundary resetKey={location}>
           <Suspense fallback={<RouteFallback />}>
           <Switch>
@@ -338,12 +470,7 @@ function ProtectedShell() {
           </Switch>
           </Suspense>
           </PageErrorBoundary>
-        </AppLayout>
-      </Show>
-      <Show when="signed-out">
-        <Redirect to="/sign-in" />
-      </Show>
-    </>
+    </AppLayout>
   );
 }
 
