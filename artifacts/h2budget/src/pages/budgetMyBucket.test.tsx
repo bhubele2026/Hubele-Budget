@@ -72,6 +72,12 @@ const noopMutation = { mutate: vi.fn(), isPending: false };
 vi.mock("wouter", () => ({
   useSearch: () => `month=${TEST_MONTH}`,
   useLocation: () => ["/budget", vi.fn()],
+  // The page renders a <Link> in the allowances card. This fixture does not
+  // reach it, which is precisely why it belongs in the mock: a future page
+  // edit should fail on an assertion, not on "Link is not a function".
+  Link: (p: { children?: React.ReactNode; href?: string }) => (
+    <a href={p.href}>{p.children}</a>
+  ),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({

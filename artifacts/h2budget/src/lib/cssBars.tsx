@@ -34,6 +34,83 @@ import {
  * over the curve later without an inline style overriding it.
  */
 
+/**
+ * `CssFillMeter` — ONE quantity against ONE ceiling, as a single CSS bar.
+ *
+ * `CssBars` above answers "which of these is biggest". This answers a different
+ * question — "how far through its plan is this one" — and so it is a different
+ * shape: no rank, no scale shared with siblings, just a value, its plan, and
+ * the distance between them. Budget envelopes, allowance caps, payoff progress.
+ *
+ * ⚠️ COLOUR IS NEVER THE ONLY SIGNAL. Under plan is navy, which is the same
+ * navy as body text because good is the resting state and must not shout; over
+ * plan is the one deep orange. Since "navy" and "unremarkable" look alike by
+ * design, THE CALLER MUST PUT THE STATE IN WORDS beside the bar (a `.chip`).
+ * This paints the quantity; it never carries the verdict on its own.
+ *
+ * ⭐ THE PLAN MARKER IS THE WHOLE IDEA. A bar that merely saturates at 100%
+ * says "over" and then stops saying anything — $5 over and $500 over draw the
+ * identical full bar. So once actual passes plan the track rescales to ACTUAL
+ * and a hairline drops where the plan ran out: the overshoot becomes a length
+ * you can compare down the column instead of a binary.
+ *
+ * Motion is two classes already in `index.css` and no JavaScript: `.grow-x`
+ * sweeps the fill on first paint, `.bar-sweep` tweens every later width change
+ * (editing a planned amount re-measures this same bar rather than rebuilding
+ * it). Both are covered by the global reduced-motion switch. No rAF and no
+ * timers is also what makes it render identically under a test's fake clock.
+ *
+ * `aria-hidden` is deliberate: every number this encodes — plan, actual, the
+ * difference, the percentage — is already text in the same row, so announcing
+ * the bar as well would read the row twice to a screen reader.
+ */
+export function CssFillMeter({
+  value,
+  ceiling,
+  title,
+  className,
+}: {
+  /** The actual, as a positive magnitude. */
+  value: number;
+  /** The plan. Zero or less means "no plan set" and the track draws empty. */
+  ceiling: number;
+  title?: string;
+  className?: string;
+}) {
+  const v = Math.max(0, Number(value) || 0);
+  const plan = Number(ceiling) || 0;
+  const ratio = plan > 0 ? v / plan : 0;
+  const over = ratio > 1;
+  const fillPct = plan <= 0 ? 0 : over ? 100 : Math.min(100, ratio * 100);
+  // Where the plan sits once the track has rescaled to the actual.
+  const planPct = over ? (1 / ratio) * 100 : null;
+
+  return (
+    <div
+      aria-hidden="true"
+      title={title}
+      className={cn(
+        "relative h-1.5 w-full overflow-hidden rounded-full bg-brand-line",
+        className,
+      )}
+    >
+      <span
+        className="bar-sweep grow-x absolute inset-y-0 left-0 rounded-full"
+        style={{
+          width: `${fillPct}%`,
+          background: over ? CHART.orangeDeep : CHART.navy,
+        }}
+      />
+      {planPct != null && (
+        <span
+          className="absolute inset-y-0 w-px bg-white/75"
+          style={{ left: `${planPct}%` }}
+        />
+      )}
+    </div>
+  );
+}
+
 /** One row. `id` must be STABLE across renders — it is the DOM identity that
  *  makes the glide work; never key on array position. */
 export interface CssBarRow {
