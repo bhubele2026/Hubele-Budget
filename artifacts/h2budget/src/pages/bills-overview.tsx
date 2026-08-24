@@ -1,14 +1,13 @@
 import { useMemo } from "react";
-import { ArrowUpCircle, ArrowDownCircle, Repeat } from "lucide-react";
 import {
   useGetBillsSummary,
   getGetBillsSummaryQueryKey,
 } from "@workspace/api-client-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { SectionHeader, RingMeter } from "@/components/stat";
-import { StackBar } from "@/components/viz";
-import { StatTile } from "@/components/stat-tile";
-import { formatCurrency } from "@/lib/utils";
+import { useSpine } from "@/hooks/useSpine";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { CssBars, type CssBarRow } from "@/lib/cssBars";
+import { card, cardHead, emptyNote, Foot, Help, Stat, td, tdNum } from "@/ui";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
 const num = (v: string | number | null | undefined): number => {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
@@ -16,14 +15,28 @@ const num = (v: string | number | null | undefined): number => {
 };
 
 /**
- * Bills → Overview tab. A clean, at-a-glance read on the month's money: income,
- * recurring bills, debt minimums, and net. Every figure is computed
- * server-side (`/bills/summary`).
+ * Bills → Overview tab. The month's money in one read: what is due next, what
+ * recurs, and what is left.
+ *
+ * ⚠️ THE HEADLINE IS THE SPINE'S, NOT OURS. `nextBill` and `billsDueCount` are
+ * read straight from `useSpine()` and never re-derived from the summary rows —
+ * the landing, this page and the forecast quote one snapshot, so they cannot
+ * describe the same household at two different moments. The month table below
+ * is server-computed by `/bills/summary`; it carries figures the spine does not.
  */
 export default function BillsOverviewPage() {
   const { data: summary } = useGetBillsSummary(undefined, {
     query: { queryKey: getGetBillsSummaryQueryKey(), staleTime: 5 * 60_000 },
   });
+  const { data: spine } = useSpine();
+  // ⚠️ `CssBars` sizes its label and value columns in pixels. At the desktop
+  // widths those columns leave the bar ~900px; on a 390px phone they leave it
+  // about 40px, and a bar that short stops carrying the magnitude it exists to
+  // show. Narrow them on small screens instead.
+  const isMobile = useIsMobile();
+
+  const nextBill = spine?.nextBill ?? null;
+  const billsDueCount = spine?.billsDueCount;
 
   const m = summary?.monthly;
   const income = num(m?.income);
@@ -32,136 +45,172 @@ export default function BillsOverviewPage() {
   const outflow = num(m?.totalOutflow);
   const net = num(m?.net);
 
-  const topBills = useMemo(
+  // Stable identity order (by id) — `CssBars` derives rank itself and slides
+  // rows to it; re-sorting the array between renders would defeat the glide.
+  const billRows = useMemo<CssBarRow[]>(
     () =>
       (summary?.bills ?? [])
-        .map((r) => ({ name: r.item.name, monthly: num(r.monthlyAmount) }))
-        .filter((b) => b.monthly > 0)
-        .sort((a, b) => b.monthly - a.monthly)
-        .slice(0, 6),
+        .map((r) => ({
+          id: r.item.id,
+          label: r.item.name,
+          value: num(r.monthlyAmount),
+        }))
+        .filter((b) => b.value > 0)
+        .sort((a, b) => a.id.localeCompare(b.id)),
     [summary],
   );
 
   const outflowRatio = income > 0 ? outflow / income : 0;
-  const netStatus = net >= 0 ? "good" : "danger";
+  const committedPct = income > 0 ? Math.round(outflowRatio * 100) : 0;
+  const short = net < 0;
 
   return (
-    <div className="space-y-4" data-testid="bills-overview">
-      <SectionHeader
-        eyebrow="Bills"
-        title="Overview"
-        sub="Your month at a glance — income in, bills out."
-      />
+    <div className="space-y-5" data-testid="bills-overview">
+      {/* The ribbon above already says "Bills · Overview" — a second copy of it
+          as an <h1> is a word the page does not need. Screen readers still get
+          one. */}
+      <h1 className="sr-only">Bills overview</h1>
 
-      {/* Hero KPIs */}
-      <div className="stagger-children grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <StatTile
-          label="Income"
-          value={formatCurrency(income)}
-          sub="/ month"
-          icon={<ArrowUpCircle />}
+      {/* ── Headline: the spine's two numbers ──────────────────────────────── */}
+      <div className="flex flex-wrap gap-3">
+        <Stat
+          index={0}
+          data-testid="stat-next-bill"
+          label="Next bill"
+          value={nextBill ? formatCurrency(nextBill.amount) : "—"}
+          hint={
+            nextBill
+              ? `${nextBill.name} · ${formatDate(nextBill.dueDate)}`
+              : "nothing scheduled"
+          }
         />
-        <StatTile
-          label="Recurring bills"
-          value={formatCurrency(bills)}
-          sub={`+ ${formatCurrency(debtMin)} debt minimums`}
-          icon={<Repeat />}
-        />
-        <StatTile
-          label="Net"
-          value={formatCurrency(net)}
-          sub={net >= 0 ? "kept each month" : "short each month"}
-          icon={<ArrowDownCircle />}
+        <Stat
+          index={1}
+          data-testid="stat-bills-due"
+          label="Bills due"
+          value={billsDueCount ?? "—"}
+          hint="rest of this month"
         />
       </div>
 
-      {/* Graphics */}
-      <div className="stagger-children grid gap-4 lg:grid-cols-3">
-        {/* Income vs outflow ring */}
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center gap-3 p-5">
-            <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Income vs outflow
-            </div>
-            <RingMeter
-              ratio={outflowRatio}
-              status={netStatus}
-              centerTop={formatCurrency(net)}
-              centerBottom={net >= 0 ? "net / mo" : "short / mo"}
-              size={120}
-              stroke={8}
-            />
-            <div className="text-center text-xs text-muted-foreground">
-              {formatCurrency(outflow)} out of {formatCurrency(income)} in —{" "}
-              {income > 0 ? Math.round(outflowRatio * 100) : 0}% committed
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Top recurring bills */}
-        <Card className="lg:col-span-2">
-          <CardContent className="flex flex-col gap-3 p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Biggest recurring bills
-              </div>
-              <div className="text-xs text-muted-foreground tabular-nums">
-                per month
-              </div>
-            </div>
-            {topBills.length ? (
-              (() => {
-                const max = Math.max(...topBills.map((b) => b.monthly), 1);
-                return (
-                  <div className="grid gap-x-8 gap-y-2.5 sm:grid-cols-2">
-                    {topBills.map((b) => (
-                      <div key={b.name}>
-                        <div className="flex items-baseline justify-between gap-3 text-xs">
-                          <span className="truncate text-muted-foreground">{b.name}</span>
-                          <span className="shrink-0 font-semibold tabular-nums text-foreground">
-                            {formatCurrency(b.monthly)}
-                          </span>
-                        </div>
-                        {/* Thin proportional meter — quiet magnitude, no slabs. */}
-                        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full transition-[width] duration-700 ease-out"
-                            style={{
-                              width: `${(b.monthly / max) * 100}%`,
-                              background: "hsl(var(--chart-1))",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()
-            ) : (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                No recurring bills yet.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Where the outflow goes */}
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-5">
-          <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Where the money goes
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* ── This month ──────────────────────────────────────────────────── */}
+        <div className={card} data-testid="bills-month-card">
+          <div className={cardHead}>
+            <h2 className="text-label font-semibold text-brand-navy">This month</h2>
+            <Help>
+              Recurring income and bills at their monthly rate plus debt
+              minimums, computed server-side by /bills/summary. Net is income
+              less everything that goes out.
+            </Help>
+            <span
+              className={`chip ml-auto ${short ? "bad" : "ok"}`}
+              data-testid="chip-net-state"
+            >
+              {short ? "Short" : "Surplus"}
+            </span>
           </div>
-          <StackBar
-            segments={[
-              { label: "Recurring bills", value: bills, color: "hsl(var(--chart-1))" },
-              { label: "Debt minimums", value: debtMin, color: "hsl(var(--negative))" },
-            ]}
-            height={10}
-            money
-          />
-        </CardContent>
-      </Card>
+
+          <table className="w-full">
+            <tbody>
+              <tr>
+                <td className={td}>Income</td>
+                <td className={tdNum} data-testid="text-overview-income">
+                  {formatCurrency(income)}
+                </td>
+              </tr>
+              <tr>
+                <td className={td}>Recurring bills</td>
+                <td className={tdNum} data-testid="text-overview-bills">
+                  {formatCurrency(bills)}
+                </td>
+              </tr>
+              <tr>
+                <td className={td}>Debt minimums</td>
+                <td className={tdNum} data-testid="text-overview-debt-min">
+                  {formatCurrency(debtMin)}
+                </td>
+              </tr>
+              <tr>
+                <td className={`${td} text-neutral-500`}>Total out</td>
+                <td
+                  className={`${tdNum} text-neutral-500`}
+                  data-testid="text-overview-outflow"
+                >
+                  {formatCurrency(outflow)}
+                </td>
+              </tr>
+              <tr>
+                <td className={`${td} border-b-0 font-semibold text-brand-navy`}>
+                  Net
+                </td>
+                <td
+                  className={`${tdNum} border-b-0 text-title font-semibold ${
+                    short ? "text-bad" : "text-brand-navy"
+                  }`}
+                  data-testid="text-overview-net"
+                >
+                  {formatCurrency(net)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Where the outflow sits against income. A meter, not a ring — the
+              magnitude is the only thing being said. */}
+          <div className="px-4 pb-3">
+            <div className="flex items-baseline justify-between">
+              <span className="text-micro font-semibold uppercase tracking-wide text-neutral-500">
+                Committed
+              </span>
+              <span
+                className="font-mono text-label font-semibold tabular-nums text-brand-navy"
+                data-testid="text-overview-committed"
+              >
+                {committedPct}%
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-brand-line">
+              <div
+                className={`bar-sweep h-full rounded-full ${short ? "bg-bad" : "bg-brand-navy"}`}
+                style={{ width: `${Math.min(100, Math.max(0, committedPct))}%` }}
+              />
+            </div>
+          </div>
+
+          <Foot>Of every income dollar, {committedPct}¢ is already spoken for.</Foot>
+        </div>
+
+        {/* ── Biggest recurring bills ─────────────────────────────────────── */}
+        <div className={`${card} lg:col-span-2`} data-testid="bills-biggest-card">
+          <div className={cardHead}>
+            <h2 className="text-label font-semibold text-brand-navy">
+              Biggest recurring bills
+            </h2>
+            <Help>
+              Each bill at its monthly rate, ranked. Paused items and debt
+              minimums are not in this list.
+            </Help>
+            <span className="ml-auto text-micro text-neutral-400">per month</span>
+          </div>
+          {billRows.length ? (
+            <div className="px-4 py-3">
+              <CssBars
+                rows={billRows}
+                topN={6}
+                ramp
+                format={(v) => formatCurrency(v)}
+                labelWidth={isMobile ? 92 : 150}
+                valueWidth={isMobile ? 78 : 96}
+                rowHeight={30}
+                ariaLabel="Biggest recurring bills, per month"
+              />
+            </div>
+          ) : (
+            <p className={emptyNote}>No recurring bills</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,13 +1,6 @@
-import { useMemo, useState } from "react";
-import {
-  ChevronDown,
-  AlertTriangle,
-  CheckCircle2,
-  CalendarX,
-} from "lucide-react";
+import { useMemo } from "react";
 import type { BillsSummary } from "@workspace/api-client-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { card, cardHead, Help, Stat, td } from "@/ui";
 
 // Sentinel debtId for the synthetic "Avalanche extra payment" row — it's not a
 // real obligation to dedup against, so we exclude it from the checks.
@@ -37,10 +30,14 @@ type Issue = {
  * linked (so both hit the forecast), and a debt minimum with no due date
  * (which gets forecast on the 1st). Pure client-side over the Bills summary;
  * no new endpoint.
+ *
+ * ⭐ WHERE THE PARAGRAPHS WENT. This used to open with two sentences of prose
+ * and repeat a third under every flagged row. The state is now a two-number
+ * `Stat` row, each finding is a `.chip` whose LABEL says what is wrong, and the
+ * sentence explaining the fix hangs off a `Help` chip one hover away. Nothing
+ * was deleted — a check that hides what it is checking is worse than no check.
  */
 export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
-  const [open, setOpen] = useState(true);
-
   const { issues, obligationCount } = useMemo(() => {
     const out: Issue[] = [];
     const bills = summary.bills ?? [];
@@ -69,7 +66,7 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
           seenDup.add(key);
           out.push({
             kind: "duplicate",
-            title: `Possible double-count: "${item.name}" + "${dm.debtName}"`,
+            title: `${item.name} + ${dm.debtName}`,
             detail:
               "A recurring bill and a debt minimum look like the same obligation but aren't linked — both hit your forecast. Link the bill to the debt (on the Debts page) or delete one so it only counts once.",
           });
@@ -85,7 +82,7 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
       if (dm.dueDay == null) {
         out.push({
           kind: "no-date",
-          title: `"${dm.debtName}" has no due date`,
+          title: `${dm.debtName} minimum`,
           detail:
             "Without a due day this minimum is forecast on the 1st of each month. Set its due day on the Debts page so it lands on the right date.",
         });
@@ -98,65 +95,69 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
   const clean = issues.length === 0;
 
   return (
-    <Card data-testid="bills-health-check">
-      <CardContent className="p-4">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="w-full flex items-center gap-2 text-left"
-          aria-expanded={open}
-        >
-          {clean ? (
-            <CheckCircle2 className="w-4 h-4 text-positive shrink-0" />
-          ) : (
-            <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-          )}
-          <span className="text-sm font-semibold flex-1">
-            Forecast health check
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {obligationCount} obligation{obligationCount === 1 ? "" : "s"} ·{" "}
-              {clean ? "all clear" : `${issues.length} to review`}
-            </span>
-          </span>
-          <ChevronDown
-            className={cn(
-              "w-4 h-4 text-muted-foreground transition-transform",
-              !open && "-rotate-90",
-            )}
-          />
-        </button>
+    <section className="space-y-3" data-testid="bills-health-check">
+      <div className="flex items-center gap-2">
+        <h2 className="text-label font-semibold text-brand-navy">Forecast health</h2>
+        <Help>
+          Audits what Bills sends to the cash forecast. It flags a recurring bill
+          and a debt minimum that look like one obligation but aren't linked (so
+          both hit the forecast), and a debt minimum with no due day (which gets
+          forecast on the 1st).
+        </Help>
+      </div>
 
-        {open && (
-          <div className="mt-3 space-y-2">
-            {clean ? (
-              <p className="text-sm text-muted-foreground">
-                Every bill and minimum payment feeds the forecast exactly once,
-                with a real due date. Nothing looks doubled or mis-dated.
-              </p>
-            ) : (
-              issues.map((iss, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2 rounded-md border border-warning/50 bg-warning/10 px-3 py-2"
-                  data-testid={`health-issue-${iss.kind}`}
-                >
-                  {iss.kind === "duplicate" ? (
-                    <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
-                  ) : (
-                    <CalendarX className="w-4 h-4 text-warning mt-0.5 shrink-0" />
-                  )}
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{iss.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {iss.detail}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+      <div className="flex flex-wrap gap-3">
+        <Stat
+          index={0}
+          data-testid="stat-obligations"
+          label="Obligations"
+          value={obligationCount}
+          hint="bills + minimums"
+        />
+        <Stat
+          index={1}
+          data-testid="stat-to-review"
+          label="To review"
+          value={issues.length}
+          tone={clean ? "ok" : "bad"}
+          hint={clean ? "none flagged" : "fix on Debts"}
+        />
+      </div>
+
+      {/* Findings are never collapsed. A flagged double-count behind a chevron
+          is the same as no check at all — the card only exists when there is
+          something to read. */}
+      {!clean && (
+        <div className={card}>
+          <div className={cardHead}>
+            <h3 className="text-label font-semibold text-brand-navy">Findings</h3>
+            <span className="ml-auto text-micro text-neutral-400">
+              {issues.length} flagged
+            </span>
           </div>
-        )}
-      </CardContent>
-    </Card>
+          <table className="w-full">
+            <tbody>
+              {issues.map((iss, i) => (
+                <tr key={i} data-testid={`health-issue-${iss.kind}`}>
+                  <td className={`${td} w-px whitespace-nowrap align-top`}>
+                    <span
+                      className={`chip ${iss.kind === "duplicate" ? "bad" : "warn"}`}
+                    >
+                      {iss.kind === "duplicate" ? "Double-count" : "No due date"}
+                    </span>
+                  </td>
+                  <td className={td}>
+                    <span className="flex items-center gap-1.5">
+                      <span className="min-w-0 truncate">{iss.title}</span>
+                      <Help>{iss.detail}</Help>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

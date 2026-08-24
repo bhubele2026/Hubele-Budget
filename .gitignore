@@ -78,3 +78,6 @@ Thumbs.db
 
 # Claude Code agent worktrees (transient)
 .claude/worktrees/
+
+# Review artifacts (PR screenshots) — kept on disk, never committed.
+.screenshots/
