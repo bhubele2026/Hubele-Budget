@@ -108,6 +108,25 @@ export function ProjectedBalanceChart({
   const xtk = useXTicks(series as unknown as Array<Record<string, unknown>>, "rawDate");
   const scale = useScale(series, cashBuffer);
 
+  /**
+   * ⚠️ ANCHOR THE LOW-POINT LABEL AWAY FROM THE EDGE IT SITS ON.
+   *
+   * `position="top"` centres the text on the dot, and the low point is very
+   * often day ONE (a big bill lands immediately, or the horizon opens at the
+   * trough). Centred on x=0 the label runs off the left of the svg and the
+   * reader sees "t $4,218.55 · Aug 23" — the word "Lowest" clipped clean off.
+   * Anchor it inward whenever the point falls in the outer fifth.
+   */
+  const lowIdx = lowestPoint
+    ? series.findIndex((d) => d.rawDate === lowestPoint.rawDate)
+    : -1;
+  const lowFrac = lowIdx >= 0 && series.length > 1 ? lowIdx / (series.length - 1) : 0.5;
+  // `position="insideTopLeft"` does nothing useful on a ReferenceDot — its
+  // viewBox is the 10px circle, so every "inside" variant lands in the same
+  // place as "top". Anchoring has to be done on the <text> itself.
+  const lowAnchor: "start" | "middle" | "end" =
+    lowFrac <= 0.2 ? "start" : lowFrac >= 0.8 ? "end" : "middle";
+
   return (
     // `.chart-in` fades the wrapper up; `.area-draw` sweeps a feathered mask
     // left→right so the curve reads as being plotted across the horizon.
@@ -268,9 +287,12 @@ export function ProjectedBalanceChart({
               ifOverflow="extendDomain"
               data-testid="ref-cash-buffer"
             >
+              {/* Left, not right: the buffer sits low in the plot, so a
+                  right-anchored label lands on the last x tick and gets
+                  clipped by the svg edge. */}
               <RechartsLabel
                 value={`Cash buffer ${formatCurrency(cashBuffer)}`}
-                position="insideTopRight"
+                position="insideTopLeft"
                 fill={CHART.orangeDeep}
                 fontSize={10}
               />
@@ -309,12 +331,30 @@ export function ProjectedBalanceChart({
               isFront
               data-testid="ref-lowest-point"
             >
+              {/* `value` is kept so anything reading the label as a prop still
+                  sees the text; `content` is what actually paints, because the
+                  anchor has to move when the low point sits on an edge. */}
               <RechartsLabel
                 value={`Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
-                position="top"
-                fill={CHART.orangeDeep}
-                fontSize={11}
-                fontWeight={600}
+                content={(p: unknown) => {
+                  const vb =
+                    (p as { viewBox?: { cx?: number; cy?: number; x?: number; y?: number } })
+                      ?.viewBox ?? {};
+                  const cx = vb.cx ?? vb.x ?? 0;
+                  const cy = vb.cy ?? vb.y ?? 0;
+                  return (
+                    <text
+                      x={cx}
+                      y={cy - 12}
+                      textAnchor={lowAnchor}
+                      fill={CHART.orangeDeep}
+                      fontSize={11}
+                      fontWeight={600}
+                    >
+                      {`Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
+                    </text>
+                  );
+                }}
               />
             </ReferenceDot>
           )}

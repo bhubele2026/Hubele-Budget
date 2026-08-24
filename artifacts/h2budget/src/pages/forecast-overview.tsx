@@ -49,6 +49,17 @@ function barMoney(n: number): string {
   return `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
 }
 
+/** "Sep 1" from a date-only ISO.
+ *  ⚠️ The `T00:00:00` suffix is load-bearing: a bare `new Date("2026-09-01")`
+ *  parses as UTC midnight and renders as Aug 31 west of Greenwich. */
+function shortDate(iso: string | null | undefined): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? undefined
+    : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export default function ForecastOverviewPage() {
   const { data: spine } = useSpine();
   const { data: signal } = useGetForecastCashSignal(
@@ -89,6 +100,11 @@ export default function ForecastOverviewPage() {
           id: `${e.date}|${e.label}|${i}`,
           label: e.label,
           value: Math.abs(e.amount),
+          // ⚠️ The date is load-bearing, not decoration. A recurring bill
+          // appears once per OCCURRENCE, so a 90-day window lists "Rent"
+          // three times — without the date those read as one bill triplicated
+          // rather than three months of rent.
+          hint: shortDate(e.date),
         })),
     [signal],
   );

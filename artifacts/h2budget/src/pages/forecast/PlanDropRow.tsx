@@ -102,7 +102,12 @@ export function PlanDropRow({
       // ⚠️ `ring-primary` is the NAVY focus treatment — B1 rebound `--primary`
       // to #19315b. Keep the token name: the drag tests assert on it, and it
       // already resolves to the right colour.
-      className={`flex w-full cursor-pointer items-center justify-between px-4 py-2.5 text-left transition-colors ${
+      // ⭐ ONE MARKUP, TWO SHAPES. On a phone the label, the amount and two
+      // buttons cannot share a line: the name collapses to "Pa…" and the date
+      // wraps to three lines. Below `sm` the row breaks — name and date own
+      // the first line, status/amount/actions the second, right-aligned. Same
+      // DOM, no second mobile render, no duplicated testids.
+      className={`flex w-full cursor-pointer flex-wrap items-center justify-between gap-y-2 px-4 py-2.5 text-left transition-colors ${
         isOverEligible
           ? "bg-primary/10 ring-2 ring-primary ring-inset"
           : isOverBlocked
@@ -118,7 +123,7 @@ export function PlanDropRow({
                     : "hover:bg-neutral-50"
       }`}
     >
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-auto">
         <div className="min-w-0">
           <div className="flex items-center gap-2 truncate text-body font-medium text-neutral-700">
             <span className="truncate">{row.label}</span>
@@ -138,12 +143,12 @@ export function PlanDropRow({
               </TooltipProvider>
             )}
           </div>
-          <div className="font-mono text-micro tabular-nums text-neutral-400">
+          <div className="whitespace-nowrap font-mono text-micro tabular-nums text-neutral-400">
             {formatDate(row.date)}
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex w-full items-center justify-end gap-3 sm:w-auto sm:gap-4">
         {statusBadge(row.status)}
         <span
           className={`font-mono text-label tabular-nums ${
@@ -155,7 +160,10 @@ export function PlanDropRow({
         {canMove && (
           <button
             type="button"
-            className={btnLink}
+            // Local `whitespace-nowrap`, not a kit change: the kit is frozen
+            // for the Phase C page passes, and "Move to…" is the only label in
+            // it long enough to break across two lines in a phone-width row.
+            className={`${btnLink} whitespace-nowrap`}
             onClick={(e) => {
               e.stopPropagation();
               onMove?.(row);
@@ -169,7 +177,7 @@ export function PlanDropRow({
         {canMarkMissed && (
           <button
             type="button"
-            className={btnLink}
+            className={`${btnLink} whitespace-nowrap`}
             onClick={(e) => {
               e.stopPropagation();
               onMarkMissed?.(row);
