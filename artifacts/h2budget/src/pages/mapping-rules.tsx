@@ -36,12 +36,8 @@ import {
   type RuleMatchesPreviewState,
 } from "@/components/rule-matches-preview-dialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageSkeleton } from "@/components/page-skeleton";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -49,18 +45,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import {
   Plus,
   Trash2,
   Search,
   Check,
   X,
-  Beaker,
   GripVertical,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
+import {
+  card,
+  cardHead,
+  btn,
+  btnSm,
+  btnLink,
+  btnLinkDanger,
+  input,
+  fieldLabel,
+  Field,
+  Help,
+  emptyNote,
+} from "@/ui";
+
+/** Card heading — the same string budget.tsx and bills.tsx inline. */
+const cardTitle = "text-title font-semibold text-brand-navy";
+/**
+ * The "this is what will happen" panel above Add / below an edit row. Quiet
+ * platinum, NOT the alarm orange it used to wear: a preview of an action the
+ * user is about to take on purpose is information, and spending the only
+ * alarm colour on it makes a real error unreadable.
+ */
+const previewPanel =
+  "flex items-center justify-between gap-3 rounded-control bg-platinum-2 px-3 py-2 text-micro text-neutral-600 ring-1 ring-brand-line";
 import { useToast } from "@/hooks/use-toast";
 import {
   DndContext,
@@ -1710,51 +1728,52 @@ export default function MappingRulesPage() {
   const sortableIds = sorted.map((r) => r.id);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground">
-          Mapping Rules
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-display font-semibold text-brand-navy">
+          Mapping rules
         </h1>
-        <p className="text-muted-foreground mt-1">
-          Auto-categorize transactions based on description patterns. Higher
-          priority rules win when more than one matches. New rules are also
-          added automatically when you categorize a transaction.
-        </p>
+        <Help>
+          A rule categorizes a transaction from its description. When more than
+          one matches, the highest priority wins. Categorizing a transaction by
+          hand also creates one.
+        </Help>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Add New Rule</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row items-end md:items-center gap-4">
-            <div className="flex-1 w-full space-y-1">
-              <label className="text-xs font-medium">If description</label>
+      <section className={card}>
+        <div className={cardHead}>
+          <h2 className={cardTitle}>Add a rule</h2>
+        </div>
+        <div className="p-4">
+          <div className="grid gap-x-3 md:grid-cols-[1fr_2fr_1fr_auto] md:items-start">
+            <Field label="If description">
               <Select value={matchType} onValueChange={setMatchType}>
-                <SelectTrigger aria-label="If description match type">
+                <SelectTrigger className={input} aria-label="If description match type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="contains">Contains</SelectItem>
-                  <SelectItem value="exact">Equals Exactly</SelectItem>
-                  <SelectItem value="starts_with">Starts With</SelectItem>
+                  <SelectItem value="exact">Equals exactly</SelectItem>
+                  <SelectItem value="starts_with">Starts with</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="flex-[2] w-full space-y-1">
-              <label className="text-xs font-medium">Text Pattern</label>
-              <Input
-                placeholder="e.g. STARBUCKS"
+            </Field>
+            <Field label="Text pattern">
+              <input
+                className={`${input} font-mono`}
+                placeholder="STARBUCKS"
                 value={pattern}
                 onChange={(e) => setPattern(e.target.value)}
                 data-testid="input-add-pattern"
                 aria-label="Text pattern"
               />
-            </div>
-            <div className="flex-1 w-full space-y-1">
-              <label className="text-xs font-medium">Assign to Category</label>
+            </Field>
+            <Field label="Assign to">
               <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger aria-label="Assign to category">
+                {/* ⚠️ Placeholder text is load-bearing: the drag/preview e2e
+                    specs locate this trigger with
+                    `.filter({ hasText: "Select Category" })`. */}
+                <SelectTrigger className={input} aria-label="Assign to category">
                   <SelectValue placeholder="Select Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1765,15 +1784,17 @@ export default function MappingRulesPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <Button
-              className="w-full md:w-auto"
+            </Field>
+            <button
+              type="button"
+              className={`${btn} mb-3 w-full md:mt-[1.375rem] md:w-auto`}
               onClick={handleAddRule}
               disabled={!pattern || !categoryId || createRule.isPending}
               data-testid="btn-add-rule"
             >
-              <Plus className="w-4 h-4 mr-2" /> Add
-            </Button>
+              <Plus className="mr-1 inline h-4 w-4 align-[-3px]" />
+              Add
+            </button>
           </div>
           {/*
             * Task #220 / Task #243 — preview banner for the unsaved
@@ -1792,13 +1813,13 @@ export default function MappingRulesPage() {
             addPreview.matchType === matchType &&
             addPreview.candidateCount > 0 && (
               <div
-                className="mt-3 flex items-center justify-between gap-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning"
+                className={`mt-1 ${previewPanel}`}
                 data-testid="rule-add-preview"
               >
                 {categoryId ? (
                   <span>
                     <span
-                      className="font-medium"
+                      className="font-mono font-semibold text-brand-navy"
                       data-testid="rule-add-preview-count"
                     >
                       {addPreview.candidateCount}
@@ -1806,7 +1827,7 @@ export default function MappingRulesPage() {
                     past transaction
                     {addPreview.candidateCount === 1 ? "" : "s"} will move
                     into{" "}
-                    <span className="font-medium">
+                    <span className="font-medium text-brand-navy">
                       {catById.get(categoryId)?.name ?? "the new category"}
                     </span>{" "}
                     when you add this rule.
@@ -1815,7 +1836,7 @@ export default function MappingRulesPage() {
                   <span>
                     This would match{" "}
                     <span
-                      className="font-medium"
+                      className="font-mono font-semibold text-brand-navy"
                       data-testid="rule-add-preview-count"
                     >
                       {addPreview.candidateCount}
@@ -1827,7 +1848,7 @@ export default function MappingRulesPage() {
                 )}
                 <button
                   type="button"
-                  className="shrink-0 underline underline-offset-2 hover:text-foreground"
+                  className={`${btnLink} shrink-0`}
                   data-testid="link-show-rule-matches-add"
                   onClick={() =>
                     setMatchesDialog({
@@ -1851,20 +1872,22 @@ export default function MappingRulesPage() {
                 </button>
               </div>
             )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Beaker className="w-4 h-4 text-muted-foreground" />
-            Test a description
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
-            <Input
-              placeholder='e.g. "AMAZON FRESH 4732 SEATTLE WA"'
+      <section className={card}>
+        <div className={cardHead}>
+          <h2 className={cardTitle}>Test a description</h2>
+          <Help>
+            Runs the rules against a description without saving anything, so
+            you can see which one would win.
+          </Help>
+        </div>
+        <div className="p-4">
+          <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center">
+            <input
+              className={`${input} font-mono`}
+              placeholder="AMAZON FRESH 4732 SEATTLE WA"
               value={testInput}
               onChange={(e) => setTestInput(e.target.value)}
               onKeyDown={(e) => {
@@ -1874,16 +1897,19 @@ export default function MappingRulesPage() {
               aria-label="Test a description"
             />
             <div className="flex gap-2">
-              <Button
+              <button
+                type="button"
+                className={btn}
                 onClick={handleRunTest}
                 disabled={!testInput.trim() || testRules.isPending}
                 data-testid="btn-run-test"
               >
                 Test
-              </Button>
+              </button>
               {testRules.data && (
-                <Button
-                  variant="ghost"
+                <button
+                  type="button"
+                  className={btnLink}
                   onClick={() => {
                     testRules.reset();
                     setTestInput("");
@@ -1891,36 +1917,34 @@ export default function MappingRulesPage() {
                   data-testid="btn-clear-test"
                 >
                   Clear
-                </Button>
+                </button>
               )}
             </div>
           </div>
           {testRules.data && (
             <div
-              className="mt-3 text-sm"
+              className="mt-3 text-body text-neutral-600"
               data-testid="test-result"
             >
               {testRules.data.matches.length === 0 ? (
-                <p className="text-muted-foreground">
-                  No rules match this description.
-                </p>
+                <p className="text-neutral-400">No rule matches this.</p>
               ) : (
                 <p>
-                  <span className="font-medium">
+                  <span className="font-mono font-semibold text-brand-navy">
                     {testRules.data.matches.length}
                   </span>{" "}
                   matching {testRules.data.matches.length === 1 ? "rule" : "rules"}.{" "}
                   {testRules.data.winningCategoryId ? (
                     <>
                       Winner:{" "}
-                      <span className="font-medium text-positive">
+                      <span className="font-medium text-brand-navy">
                         {catById.get(testRules.data.winningCategoryId)?.name ??
                           "(unknown category)"}
                       </span>
                       .
                     </>
                   ) : (
-                    <span className="text-muted-foreground">
+                    <span className="text-neutral-400">
                       No matching rule has a category set.
                     </span>
                   )}
@@ -1928,24 +1952,23 @@ export default function MappingRulesPage() {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       {showFocusPill && (
-        <div
-          className="flex items-center gap-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
-          data-testid="focus-pill"
-        >
+        <div className={previewPanel} data-testid="focus-pill">
           <span className="flex-1">
-            <span className="font-medium" data-testid="focus-pill-count">
+            <span
+              className="font-mono font-semibold text-brand-navy"
+              data-testid="focus-pill-count"
+            >
               {matchedFocusIds.length}
             </span>{" "}
-            rule{matchedFocusIds.length === 1 ? "" : "s"} matched your recent
-            sync/import
+            rule{matchedFocusIds.length === 1 ? "" : "s"} matched your last sync
           </span>
           <button
             type="button"
-            className="text-xs font-medium underline underline-offset-2 hover:text-foreground"
+            className={btnLink}
             onClick={() => setShowOnlyFocused((v) => !v)}
             data-testid="focus-pill-toggle"
           >
@@ -1954,39 +1977,39 @@ export default function MappingRulesPage() {
           <button
             type="button"
             aria-label="Dismiss matched-rules pill"
-            className="text-warning hover:text-foreground"
+            title="Dismiss"
+            className={btnLink}
             onClick={dismissFocusPill}
             data-testid="focus-pill-dismiss"
           >
-            <X className="w-4 h-4" />
+            <X className="h-3 w-3" />
           </button>
         </div>
       )}
 
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search rules by pattern, category, or match type..."
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+        <input
+          className={`${input} pl-9`}
+          placeholder="Search by pattern, category, or match type"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
           data-testid="input-search-rules"
           aria-label="Search rules by pattern, category, or match type"
         />
         {searchQuery && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-micro tabular-nums text-neutral-400">
             {filtered.length} result{filtered.length === 1 ? "" : "s"}
           </span>
         )}
       </div>
 
       {sorted.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center text-muted-foreground">
-            No mapping rules yet. Categorize a transaction on the Chase page and
-            a rule will be created automatically.
-          </CardContent>
-        </Card>
+        <section className={card}>
+          <p className={emptyNote}>
+            No rules yet. Categorizing a transaction creates one.
+          </p>
+        </section>
       ) : (
         // Task #282 — the previously single "Rules in priority order"
         // card is now split into a controls card (summary + bulk bar +
@@ -2002,17 +2025,14 @@ export default function MappingRulesPage() {
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-base">
-                <span>Rules grouped by category</span>
-                <div className="flex items-center gap-3">
+          <section className={card}>
+            <div className={cardHead}>
+              <h2 className={cardTitle}>Grouped by category</h2>
+              <span className="ml-auto flex items-center gap-2">
                   {cardGroups.length > 0 && (
-                    <Button
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs font-normal"
+                      className={btnLink}
                       onClick={() => {
                         // If every visible group is collapsed, treat
                         // the button as Expand all; otherwise Collapse
@@ -2039,20 +2059,19 @@ export default function MappingRulesPage() {
                       )
                         ? "Expand all"
                         : "Collapse all"}
-                    </Button>
+                    </button>
                   )}
-                  <span className="text-xs font-normal text-muted-foreground">
+                  <span className="font-mono text-micro tabular-nums text-neutral-400">
                     {sorted.length} total{" "}
                     {searchQuery || focusFilterActive
                       ? `· ${filtered.length} shown`
                       : ""}
                   </span>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
+              </span>
+            </div>
+            <div>
               <div
-                className="flex items-center gap-3 px-4 py-2 border-b bg-muted/30"
+                className="flex items-center gap-2.5 border-b border-brand-line bg-platinum-2 px-4 py-2"
                 data-testid="rule-bulk-bar"
               >
                 <Checkbox
@@ -2062,7 +2081,7 @@ export default function MappingRulesPage() {
                   disabled={visibleRules.length === 0}
                   data-testid="rule-select-all"
                 />
-                <span className="text-xs text-muted-foreground">
+                <span className={fieldLabel}>
                   {selected.size > 0
                     ? `${selected.size} selected`
                     : searchQuery || visibleRules.length !== sorted.length
@@ -2081,11 +2100,11 @@ export default function MappingRulesPage() {
                         disabled={bulkDeleting || bulkUpdating}
                       >
                         <SelectTrigger
-                          className="h-7 w-[180px] text-xs"
+                          className={`${input} h-7 w-[180px] py-0 text-micro`}
                           data-testid="rule-bulk-change-category"
                           aria-label="Change category for selected rules"
                         >
-                          <SelectValue placeholder="Change category…" />
+                          <SelectValue placeholder="Move to…" />
                         </SelectTrigger>
                         <SelectContent>
                           {categories?.map((cat) => (
@@ -2100,38 +2119,37 @@ export default function MappingRulesPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="h-7"
+                    <button
+                      type="button"
+                      className={btnLinkDanger}
                       onClick={handleBulkDelete}
                       disabled={bulkDeleting || bulkUpdating}
                       data-testid="rule-bulk-delete"
                     >
-                      <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                      <Trash2 className="h-3 w-3" />
+                      {/* e2e asserts this label verbatim ("Delete selected (2)"). */}
                       Delete selected ({selected.size})
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7"
+                    </button>
+                    <button
+                      type="button"
+                      className={btnLink}
                       onClick={clearSelection}
                       disabled={bulkDeleting || bulkUpdating}
                       data-testid="rule-bulk-clear"
                     >
                       Clear
-                    </Button>
+                    </button>
                   </>
                 )}
               </div>
               {(categories?.length ?? 0) > 0 && (
                 <div
                   className={`px-4 py-3 transition-colors ${
-                    activeDragId ? "bg-primary/5" : ""
+                    activeDragId ? "bg-platinum-3" : ""
                   }`}
                   data-testid="category-drop-strip"
                 >
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">
+                  <div className={`mb-2 ${fieldLabel}`}>
                     {activeDragId
                       ? "Drop on a category to reassign"
                       : "Drag a rule onto a category to reassign it"}
@@ -2150,19 +2168,17 @@ export default function MappingRulesPage() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           <SortableContext
             items={sortableIds}
             strategy={verticalListSortingStrategy}
           >
             {filtered.length === 0 ? (
-              <Card>
-                <CardContent className="p-6 text-center text-muted-foreground text-sm">
-                  No rules match your search.
-                </CardContent>
-              </Card>
+              <section className={card}>
+                <p className={emptyNote}>No rules match your search.</p>
+              </section>
             ) : (
               <div className="space-y-4" data-testid="rule-category-cards">
                 {cardGroups.map((group) => {
@@ -2182,49 +2198,46 @@ export default function MappingRulesPage() {
                     !filterActive &&
                     !groupHasFocusTarget;
                   return (
-                  <Card
+                  <section
                     key={group.key}
+                    className={card}
                     data-testid={`rule-category-card-${group.key}`}
                     data-collapsed={isCollapsed ? "true" : undefined}
                   >
-                    <CardHeader className="pb-2">
-                      <CardTitle className="flex items-center justify-between text-base">
-                        <button
-                          type="button"
-                          onClick={() => toggleCategoryCollapsed(group.key)}
-                          className="flex items-center gap-2 text-left hover:text-foreground/80 -ml-1 px-1 py-0.5 rounded"
-                          aria-expanded={!isCollapsed}
-                          aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${group.name}`}
-                          data-testid={`rule-category-card-toggle-${group.key}`}
-                        >
-                          {isCollapsed ? (
-                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                          )}
-                          <span
-                            data-testid={`rule-category-card-name-${group.key}`}
-                          >
-                            {group.name}
-                          </span>
-                        </button>
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] tabular-nums"
-                          data-testid={`rule-category-card-count-${group.key}`}
-                        >
-                          {group.rules.length} rule
-                          {group.rules.length === 1 ? "" : "s"}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
+                    <button
+                      type="button"
+                      onClick={() => toggleCategoryCollapsed(group.key)}
+                      className={`${cardHead} press w-full text-left hover:bg-platinum-2`}
+                      aria-expanded={!isCollapsed}
+                      aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${group.name}`}
+                      data-testid={`rule-category-card-toggle-${group.key}`}
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-neutral-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-neutral-400" />
+                      )}
+                      <span
+                        className={cardTitle}
+                        data-testid={`rule-category-card-name-${group.key}`}
+                      >
+                        {group.name}
+                      </span>
+                      <span
+                        className="chip gray ml-auto"
+                        data-testid={`rule-category-card-count-${group.key}`}
+                      >
+                        {group.rules.length} rule
+                        {group.rules.length === 1 ? "" : "s"}
+                      </span>
+                    </button>
                     {!isCollapsed && (
-                    <CardContent className="p-0">
+                    <div>
                       {/* Fixed-height scroll box per spec — keeps very
                         * large categories from dominating the page while
                         * still allowing the user to scan + edit any rule. */}
                       <div
-                        className="max-h-80 overflow-y-auto divide-y divide-border"
+                        className="max-h-80 divide-y divide-brand-line/70 overflow-y-auto"
                         data-testid={`rule-category-card-list-${group.key}`}
                       >
                         {group.rules.map((rule, idxInGroup) => {
@@ -2241,25 +2254,25 @@ export default function MappingRulesPage() {
                             return (
                               <div
                                 key={rule.id}
-                                className="flex flex-col gap-2 px-4 py-3 bg-muted/20"
+                                className="flex flex-col gap-2 bg-platinum-2 px-4 py-3"
                                 data-testid={`rule-edit-${rule.id}`}
                               >
-                                <Input
+                                <input
                                   value={editPattern}
                                   onChange={(e) =>
                                     setEditPattern(e.target.value)
                                   }
-                                  className="h-8 text-sm font-mono"
+                                  className={`${input} py-1 font-mono`}
                                   autoFocus
                                   aria-label="Rule pattern"
                                 />
-                                <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex flex-wrap items-center gap-2">
                                   <Select
                                     value={editMatchType}
                                     onValueChange={setEditMatchType}
                                   >
                                     <SelectTrigger
-                                      className="h-8 text-xs flex-1 min-w-[120px]"
+                                      className={`${input} h-8 min-w-[120px] flex-1 py-0 text-micro`}
                                       aria-label="Rule match type"
                                     >
                                       <SelectValue />
@@ -2272,7 +2285,7 @@ export default function MappingRulesPage() {
                                         Exact
                                       </SelectItem>
                                       <SelectItem value="starts_with">
-                                        Starts With
+                                        Starts with
                                       </SelectItem>
                                     </SelectContent>
                                   </Select>
@@ -2281,7 +2294,7 @@ export default function MappingRulesPage() {
                                     onValueChange={handleEditCategoryChange}
                                   >
                                     <SelectTrigger
-                                      className="h-8 text-xs flex-[2] min-w-[160px]"
+                                      className={`${input} h-8 min-w-[160px] flex-[2] py-0 text-micro`}
                                       data-testid={`rule-edit-category-${rule.id}`}
                                       aria-label="Rule category"
                                     >
@@ -2298,25 +2311,24 @@ export default function MappingRulesPage() {
                                       ))}
                                     </SelectContent>
                                   </Select>
-                                  <div className="flex items-center gap-1">
-                                    <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                  <div className="flex items-center gap-1.5">
+                                    <label className={fieldLabel}>
                                       Priority
                                     </label>
-                                    <Input
+                                    <input
                                       type="number"
                                       value={editPriority}
                                       onChange={(e) =>
                                         setEditPriority(e.target.value)
                                       }
-                                      className="h-8 w-20 text-xs"
+                                      className={`${input} h-8 w-20 py-0 font-mono text-micro tabular-nums`}
                                       data-testid={`rule-edit-priority-${rule.id}`}
                                       aria-label="Rule priority"
                                     />
                                   </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
+                                  <button
+                                    type="button"
+                                    className={btnSm}
                                     onClick={() => saveEdit(rule.id)}
                                     disabled={
                                       !editPattern ||
@@ -2326,29 +2338,29 @@ export default function MappingRulesPage() {
                                     data-testid={`rule-save-${rule.id}`}
                                     aria-label="Save rule"
                                   >
-                                    <Check className="w-4 h-4 text-positive" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
+                                    <Check className="mr-1 inline h-3 w-3 align-[-1px]" />
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={btnLink}
                                     onClick={cancelEdit}
                                     aria-label="Cancel editing rule"
                                   >
-                                    <X className="w-4 h-4" />
-                                  </Button>
+                                    Cancel
+                                  </button>
                                 </div>
                                 {editPreview &&
                                   editPreview.toCategoryId ===
                                     editCategoryId &&
                                   editPreview.candidateCount > 0 && (
                                     <div
-                                      className="flex items-center justify-between gap-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning"
+                                      className={previewPanel}
                                       data-testid={`rule-edit-preview-${rule.id}`}
                                     >
                                       <span>
                                         <span
-                                          className="font-medium"
+                                          className="font-mono font-semibold text-brand-navy"
                                           data-testid={`rule-edit-preview-count-${rule.id}`}
                                         >
                                           {editPreview.candidateCount}
@@ -2358,7 +2370,7 @@ export default function MappingRulesPage() {
                                           ? ""
                                           : "s"}{" "}
                                         will move into{" "}
-                                        <span className="font-medium">
+                                        <span className="font-medium text-brand-navy">
                                           {catById.get(
                                             editPreview.toCategoryId,
                                           )?.name ?? "the new category"}
@@ -2367,7 +2379,7 @@ export default function MappingRulesPage() {
                                       </span>
                                       <button
                                         type="button"
-                                        className="shrink-0 underline underline-offset-2 hover:text-foreground"
+                                        className={`${btnLink} shrink-0`}
                                         data-testid={`link-show-rule-matches-edit-${rule.id}`}
                                         onClick={() =>
                                           setMatchesDialog({
@@ -2421,9 +2433,9 @@ export default function MappingRulesPage() {
                           );
                         })}
                       </div>
-                    </CardContent>
+                    </div>
                     )}
-                  </Card>
+                  </section>
                   );
                 })}
               </div>
@@ -2432,14 +2444,14 @@ export default function MappingRulesPage() {
           <DragOverlay>
             {activeDragRule ? (
               <div
-                className="flex items-center gap-2 px-3 py-2 rounded-md border bg-card shadow-lg ring-2 ring-primary/40"
+                className="surface flex items-center gap-2 rounded-control px-3 py-2 shadow-lift ring-2 ring-brand-navy/40"
                 data-testid="rule-drag-overlay"
               >
-                <GripVertical className="w-4 h-4 text-muted-foreground" />
-                <span className="font-mono text-xs bg-muted/60 px-2 py-0.5 rounded">
+                <GripVertical className="h-4 w-4 text-neutral-400" />
+                <span className="rounded bg-platinum-3 px-2 py-0.5 font-mono text-micro text-brand-navy">
                   {activeDragRule.pattern}
                 </span>
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span className={fieldLabel}>
                   {activeDragRule.matchType.replace("_", " ")}
                 </span>
               </div>

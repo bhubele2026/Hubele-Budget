@@ -25,12 +25,15 @@ export function CategoryDropTarget({
       aria-label={`Drop rule onto ${category.name}`}
       data-testid={`category-drop-${category.id}`}
       data-drop-over={showHover ? "true" : undefined}
-      className={`px-2.5 py-1 rounded-full border text-xs whitespace-nowrap transition-colors select-none ${
+      // ⚠️ Ring only — no border/size change between states. A drop target that
+      // grows on hover shifts every chip after it in the wrapped strip, and the
+      // row you were aiming at moves out from under the cursor mid-drag.
+      className={`press select-none whitespace-nowrap rounded-full px-2.5 py-1 text-micro font-medium ${
         showHover
-          ? "bg-primary text-primary-foreground border-primary ring-2 ring-primary/40"
+          ? "bg-brand-navy text-white ring-2 ring-brand-navy/40"
           : isCurrent
-            ? "bg-positive/10 border-positive/30 text-positive"
-            : "bg-muted/40 border-border text-foreground hover:bg-muted"
+            ? "bg-platinum-3 text-brand-navy ring-1 ring-brand-navy/30"
+            : "bg-white text-neutral-600 ring-1 ring-brand-line hover:bg-neutral-50 hover:text-brand-navy"
       }`}
     >
       {category.name}

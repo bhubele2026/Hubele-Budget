@@ -26,14 +26,7 @@ import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync
 import { useQueryClient } from "@tanstack/react-query";
 import { ToastAction } from "@/components/ui/toast";
 import { buildRuleAttributionSummary } from "@/lib/rule-attribution-summary";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { SectionHeader } from "@/components/stat";
 import { PageSkeleton } from "@/components/page-skeleton";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,7 +41,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus, GitMerge, ChevronRight, ShieldCheck, Zap } from "lucide-react";
+import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus, GitMerge, ChevronRight, Zap } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import {
@@ -82,6 +75,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  card,
+  cardHead,
+  btn,
+  btnSecondary,
+  btnSecondarySm,
+  btnDanger,
+  btnLink,
+  btnLinkDanger,
+  input,
+  fieldLabel,
+  Field,
+  Foot,
+  Help,
+  emptyNote,
+  errorBanner,
+} from "@/ui";
+
+/** Card heading — the same string budget.tsx and bills.tsx inline. */
+const cardTitle = "text-title font-semibold text-brand-navy";
+/** A settings row: label on the left, its control hard right. */
+const settingRow =
+  "flex flex-wrap items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0";
 
 const settingsSchema = z.object({
   weeklyAllowanceAmount: z.string().min(1),
@@ -510,791 +526,799 @@ export default function SettingsPage() {
     return <PageSkeleton />;
   }
 
-  return (
-    <div className="space-y-6 max-w-3xl">
-      <SectionHeader
-        eyebrow="Setup"
-        title="Settings"
-        sub="Allowances, mapping rules, connected banks, and data import."
-      />
+  const errors = form.formState.errors;
 
-      <Link href="/mapping-rules">
-        <Card
-          className="cursor-pointer transition-colors hover:bg-accent/40"
+  return (
+    <div className="mx-auto w-full max-w-3xl space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-display font-semibold text-brand-navy">Settings</h1>
+        {plaidEnv?.env && (
+          <span
+            className={`chip ${plaidEnv.env === "production" ? "ok" : "warn"}`}
+            data-testid="badge-plaid-env"
+            title={`Plaid is running in ${plaidEnv.env} mode`}
+          >
+            Plaid: {plaidEnv.env}
+          </span>
+        )}
+      </div>
+
+      <Link href="/mapping-rules" className="block">
+        <div
+          className={`${card} press flex items-center gap-3 px-4 py-3 hover:ring-brand-navy/25`}
           data-testid="card-mapping-rules"
         >
-          <CardContent className="flex items-center gap-4 p-5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0">
-              <GitMerge className="h-5 w-5" />
+          <GitMerge className="h-4 w-4 shrink-0 text-brand-navy" />
+          <div className="min-w-0 flex-1">
+            <div className="text-body font-semibold text-brand-navy">
+              Mapping rules
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold">Mapping Rules</div>
-              <p className="text-sm text-muted-foreground">
-                How merchants auto-categorize — review, add, and clean up your rules.
-              </p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
-          </CardContent>
-        </Card>
+            <div className="text-micro text-neutral-400">Merchant → category</div>
+          </div>
+          <Help>
+            Rules that auto-categorize a transaction from its description. Open
+            the page to review, add, reorder, or delete them.
+          </Help>
+          <ChevronRight className="h-4 w-4 shrink-0 text-neutral-400" />
+        </div>
       </Link>
 
       <OwnerInvitationsSection />
 
       <OwnerBankHealthSweepSection />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Allowance Budgets</CardTitle>
-          <CardDescription>Set the target amounts for discretionary allowances.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField control={form.control} name="weeklyAllowanceAmount" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Weekly Allowance ($)</FormLabel>
-                  <FormControl><Input type="number" step="1" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="monthlyAllowanceAmount" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Monthly Allowance ($)</FormLabel>
-                  <FormControl><Input type="number" step="1" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="unplannedAllowanceAmount" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Unplanned Allowance ($)</FormLabel>
-                  <FormControl><Input type="number" step="1" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <div className="pt-4">
-                <Button type="submit" disabled={updateSettings.isPending}>Save Settings</Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              Linked Accounts
-              {plaidEnv?.env && (
-                <span
-                  className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${
-                    plaidEnv.env === "production"
-                      ? "border-positive/40 text-positive"
-                      : "border-warning/40 text-warning"
-                  }`}
-                  data-testid="badge-plaid-env"
-                  title={`Plaid is running in ${plaidEnv.env} mode`}
-                >
-                  Plaid: {plaidEnv.env}
-                </span>
-              )}
-            </CardTitle>
-            <CardDescription>
-              Connect your bank and credit card accounts via Plaid to auto-import transactions.
-              {plaidEnv && !plaidEnv.configured && (
-                <span className="block mt-1 text-destructive" data-testid="text-plaid-not-configured">
-                  Plaid is not configured. Set <code>PLAID_CLIENT_ID</code>,{" "}
-                  <code>PLAID_SECRET</code>, and <code>PLAID_ENV</code> in Secrets to
-                  enable bank linking.
-                </span>
-              )}
-              {plaidEnv?.configError && (
-                <span className="block mt-1 text-destructive">{plaidEnv.configError}</span>
-              )}
-            </CardDescription>
+      <section className={card}>
+        <div className={cardHead}>
+          <h2 className={cardTitle}>Allowances</h2>
+          <Help>
+            Target dollar amounts for discretionary spending. Changes flow into
+            the Budget page's bucket caps for any month without an override.
+          </Help>
+        </div>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="p-4">
+          <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-3">
+            <Field label="Weekly">
+              <input
+                className={input}
+                type="number"
+                step="1"
+                aria-label="Weekly allowance"
+                {...form.register("weeklyAllowanceAmount")}
+              />
+            </Field>
+            <Field label="Monthly">
+              <input
+                className={input}
+                type="number"
+                step="1"
+                aria-label="Monthly allowance"
+                {...form.register("monthlyAllowanceAmount")}
+              />
+            </Field>
+            <Field label="Unplanned">
+              <input
+                className={input}
+                type="number"
+                step="1"
+                aria-label="Unplanned allowance"
+                {...form.register("unplannedAllowanceAmount")}
+              />
+            </Field>
           </div>
-          <PlaidLinkButton />
-        </CardHeader>
+          {(errors.weeklyAllowanceAmount ||
+            errors.monthlyAllowanceAmount ||
+            errors.unplannedAllowanceAmount) && (
+            <p className="mb-3 text-micro text-bad" data-testid="allowance-form-error">
+              Every allowance needs an amount.
+            </p>
+          )}
+          <button type="submit" className={btn} disabled={updateSettings.isPending}>
+            Save
+          </button>
+        </form>
+      </section>
+
+      <section className={card}>
+        <div className={cardHead}>
+          <h2 className={cardTitle}>Banks</h2>
+          <Help>
+            Linked through Plaid. Transactions and balances import
+            automatically; your bank login is never seen or stored here.
+          </Help>
+          <div className="ml-auto">
+            <PlaidLinkButton />
+          </div>
+        </div>
+
+        {plaidEnv && !plaidEnv.configured && (
+          <div className="px-4 pt-3">
+            <p className={errorBanner} data-testid="text-plaid-not-configured">
+              Plaid is not configured. Set <code>PLAID_CLIENT_ID</code>,{" "}
+              <code>PLAID_SECRET</code>, and <code>PLAID_ENV</code> in Secrets to
+              enable bank linking.
+            </p>
+          </div>
+        )}
+        {plaidEnv?.configError && (
+          <div className="px-4 pt-3">
+            <p className={errorBanner}>{plaidEnv.configError}</p>
+          </div>
+        )}
+
         {import.meta.env.DEV && plaidEnv && plaidEnv.nonProdItemCount > 0 && (
-          <CardContent className="pt-0">
+          <div className="px-4 pt-3">
             <div
-              className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"
+              className="rounded-control bg-bad-bg px-3 py-2.5 ring-1 ring-bad/15"
               data-testid="banner-non-prod-cleanup"
             >
-              <div className="font-medium">
-                {plaidEnv.nonProdItemCount} linked institution
-                {plaidEnv.nonProdItemCount === 1 ? "" : "s"} from a non-production
-                Plaid environment
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="chip bad">Wrong environment</span>
+                <span className="text-body font-medium text-brand-navy">
+                  {plaidEnv.nonProdItemCount} link
+                  {plaidEnv.nonProdItemCount === 1 ? "" : "s"} not from Plaid
+                  Production
+                </span>
+                <Help>
+                  Their access tokens will not work against Plaid Production and
+                  will fail to sync. Remove them so only real, Production-linked
+                  banks remain.
+                </Help>
               </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Their access tokens won't work against Plaid Production and will
-                fail to sync. Remove them so only real, Production-linked banks
-                remain.
-              </div>
-              <ul className="mt-2 text-xs list-disc list-inside text-muted-foreground">
+              <ul className="mt-1.5 text-micro text-neutral-500">
                 {plaidEnv.nonProdItems.map((it) => (
                   <li key={it.id}>
                     {it.institutionName ?? "Unnamed institution"}{" "}
-                    <span className="uppercase tracking-wider">({it.env ?? "unknown"})</span>
+                    <span className="uppercase tracking-wide">
+                      ({it.env ?? "unknown"})
+                    </span>
                   </li>
                 ))}
               </ul>
-              <div className="mt-2">
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={cleanupNonProd.isPending}
-                  onClick={() => {
-                    if (
-                      !confirm(
-                        `Permanently remove ${plaidEnv.nonProdItemCount} non-production Plaid link(s)? Imported transactions stay; new syncs from these institutions will stop.`,
-                      )
+              <button
+                type="button"
+                className={`${btnDanger} mt-2.5`}
+                disabled={cleanupNonProd.isPending}
+                onClick={() => {
+                  if (
+                    !confirm(
+                      `Permanently remove ${plaidEnv.nonProdItemCount} non-production Plaid link(s)? Imported transactions stay; new syncs from these institutions will stop.`,
                     )
-                      return;
-                    cleanupNonProd.mutate(undefined, {
-                      onSuccess: (res) => {
-                        queryClient.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
-                        queryClient.invalidateQueries({ queryKey: getGetPlaidEnvironmentQueryKey() });
-                        toast({
-                          title: "Cleanup complete",
-                          description: `Removed ${res.removed} non-production link(s).`,
-                        });
-                      },
-                      onError: (err) =>
-                        toast({
-                          title: "Cleanup failed",
-                          description: String(err),
-                          variant: "destructive",
-                        }),
-                    });
-                  }}
-                  data-testid="button-cleanup-non-prod"
-                >
-                  Remove non-production links
-                </Button>
-              </div>
+                  )
+                    return;
+                  cleanupNonProd.mutate(undefined, {
+                    onSuccess: (res) => {
+                      queryClient.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
+                      queryClient.invalidateQueries({ queryKey: getGetPlaidEnvironmentQueryKey() });
+                      toast({
+                        title: "Cleanup complete",
+                        description: `Removed ${res.removed} non-production link(s).`,
+                      });
+                    },
+                    onError: (err) =>
+                      toast({
+                        title: "Cleanup failed",
+                        description: String(err),
+                        variant: "destructive",
+                      }),
+                  });
+                }}
+                data-testid="button-cleanup-non-prod"
+              >
+                Remove these links
+              </button>
             </div>
-          </CardContent>
+          </div>
         )}
-        <CardContent className="space-y-3">
-          {(plaidItems ?? []).length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No accounts linked yet. Click "Link a Bank or Card" to get started.
-            </p>
-          )}
-          {(plaidItems ?? []).length > 0 && (
-            // (#261) Manual entry point for the cron-driven consent
-            // refresh job. Rendered above the rows so the action is in
-            // sight when users hover the "Disconnect date checked"
-            // sublines they're trying to verify, but only once at least
-            // one bank is linked (no items = nothing to refresh).
-            <div
-              className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/10 p-3"
-              data-testid="row-refresh-consent-expirations"
+
+        {(plaidItems ?? []).length === 0 && (
+          <p className={emptyNote}>No banks linked yet.</p>
+        )}
+
+        {(plaidItems ?? []).length > 0 && (
+          // (#261) Manual entry point for the cron-driven consent
+          // refresh job. Rendered above the rows so the action is in
+          // sight when users hover the "Disconnect date checked"
+          // sublines they're trying to verify, but only once at least
+          // one bank is linked (no items = nothing to refresh).
+          <div className={settingRow} data-testid="row-refresh-consent-expirations">
+            <span className="flex items-center gap-1.5">
+              <span className={fieldLabel}>Disconnect dates</span>
+              <Help>
+                Refreshed once a day on their own. Check now if a countdown
+                looks stale.
+              </Help>
+            </span>
+            <button
+              type="button"
+              className={btnSecondarySm}
+              onClick={handleRefreshConsentExpirations}
+              disabled={refreshConsentExpirations.isPending}
+              data-testid="button-refresh-consent-expirations"
             >
-              <div className="text-xs text-muted-foreground">
-                Disconnect dates auto-refresh once a day. Use this to
-                check now if a countdown looks stale.
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefreshConsentExpirations}
-                disabled={refreshConsentExpirations.isPending}
-                data-testid="button-refresh-consent-expirations"
+              <RefreshCw
+                className={`mr-1.5 inline h-3 w-3 align-[-1px] ${
+                  refreshConsentExpirations.isPending ? "animate-spin" : ""
+                }`}
+              />
+              Check now
+            </button>
+          </div>
+        )}
+
+        {(plaidItems ?? []).length > 0 && duplicateCount > 0 && (
+          // (#458) Surfaces the /forecast/dedupe-transactions cleanup
+          // so users with pre-fix duplicate Chase/Plaid rows can fix
+          // their own ledger without contacting support. Sits next to
+          // the consent-refresh row so all "maintenance" actions on
+          // linked accounts are co-located.
+          // (#470) Hidden entirely when the read-only count returns
+          // zero so a clean ledger doesn't show a perpetual "Clean
+          // up" nudge — the badge next to the button shows the
+          // exact count when there is something to clean.
+          <div className={settingRow} data-testid="row-dedupe-transactions">
+            <span className="flex items-center gap-1.5">
+              <span className={fieldLabel}>Duplicate transactions</span>
+              <Help>
+                Merges rows that arrived twice across linked accounts into one.
+                Safe to run more than once.
+              </Help>
+            </span>
+            <span className="flex items-center gap-2">
+              <span
+                className="chip bad"
+                data-testid="badge-duplicate-transaction-count"
+                title="Approximate number of rows the cleanup would merge into their twins."
+              >
+                {duplicateCount} duplicate{duplicateCount === 1 ? "" : "s"} found
+              </span>
+              <button
+                type="button"
+                className={btnSecondarySm}
+                onClick={handleDedupeTransactions}
+                disabled={dedupeTransactions.isPending}
+                data-testid="button-dedupe-transactions"
               >
                 <RefreshCw
-                  className={`w-3.5 h-3.5 mr-1.5 ${
-                    refreshConsentExpirations.isPending ? "animate-spin" : ""
+                  className={`mr-1.5 inline h-3 w-3 align-[-1px] ${
+                    dedupeTransactions.isPending ? "animate-spin" : ""
                   }`}
                 />
-                Refresh disconnect dates
-              </Button>
-            </div>
-          )}
-          {(plaidItems ?? []).length > 0 && duplicateCount > 0 && (
-            // (#458) Surfaces the /forecast/dedupe-transactions cleanup
-            // so users with pre-fix duplicate Chase/Plaid rows can fix
-            // their own ledger without contacting support. Sits next to
-            // the consent-refresh row so all "maintenance" actions on
-            // linked accounts are co-located.
-            // (#470) Hidden entirely when the read-only count returns
-            // zero so a clean ledger doesn't show a perpetual "Clean
-            // up" nudge — the badge next to the button shows the
-            // exact count when there is something to clean.
+                Merge duplicates
+              </button>
+            </span>
+          </div>
+        )}
+
+        {(plaidItems ?? []).map((item) => {
+          const isSyncing = isSyncPending && syncingItemId === item.id;
+          const isAnySyncing = isSyncPending;
+          // (#710) Synthetic seed rows (item_id like 'seed-…') aren't real
+          // Plaid links — Reconnect would no-op. Hide the badge + CTA for
+          // them so the user isn't pushed to relink a placeholder.
+          const needsReconnect =
+            isPlaidReauthCode(item.lastSyncErrorCode) &&
+            !isSyntheticPlaidItem({ itemId: item.itemId });
+          return (
             <div
-              className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/10 p-3"
-              data-testid="row-dedupe-transactions"
+              key={item.id}
+              className="border-b border-brand-line/70 px-4 py-3 last:border-b-0"
+              data-testid={`plaid-item-${item.id}`}
             >
-              <div className="text-xs text-muted-foreground">
-                Find and merge duplicate transactions across your linked
-                accounts. Safe to run any time.
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-warning/40 text-warning"
-                  data-testid="badge-duplicate-transaction-count"
-                  title="Approximate number of rows the cleanup would merge into their twins."
-                >
-                  {duplicateCount} duplicate{duplicateCount === 1 ? "" : "s"} found
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDedupeTransactions}
-                  disabled={dedupeTransactions.isPending}
-                  data-testid="button-dedupe-transactions"
-                >
-                  <RefreshCw
-                    className={`w-3.5 h-3.5 mr-1.5 ${
-                      dedupeTransactions.isPending ? "animate-spin" : ""
-                    }`}
-                  />
-                  Clean up duplicate transactions
-                </Button>
-              </div>
-            </div>
-          )}
-          {(plaidItems ?? []).map((item) => {
-            const isSyncing = isSyncPending && syncingItemId === item.id;
-            const isAnySyncing = isSyncPending;
-            // (#710) Synthetic seed rows (item_id like 'seed-…') aren't real
-            // Plaid links — Reconnect would no-op. Hide the badge + CTA for
-            // them so the user isn't pushed to relink a placeholder.
-            const needsReconnect =
-              isPlaidReauthCode(item.lastSyncErrorCode) &&
-              !isSyntheticPlaidItem({ itemId: item.itemId });
-            return (
-              <div
-                key={item.id}
-                className="rounded-md border border-border bg-muted/20 p-4"
-                data-testid={`plaid-item-${item.id}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <Building2 className="w-5 h-5 mt-0.5 text-muted-foreground" />
-                    <div>
-                      <div className="font-medium flex items-center gap-2 flex-wrap">
-                        <span>{item.institutionName || "Linked institution"}</span>
-                        {needsReconnect && (
-                          <span
-                            className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-destructive/50 text-destructive bg-destructive/10"
-                            data-testid={`badge-needs-reconnect-${item.id}`}
-                            // (#228) Use the per-code reason so the tooltip
-                            // explains *why* (saved login expired vs.
-                            // consent expiring vs. pending disconnect)
-                            // before the user clicks Reconnect.
-                            // (#238) Pass the item's
-                            // `consent_expiration_time` cutoff so
-                            // PENDING_EXPIRATION / PENDING_DISCONNECT
-                            // tooltips name the actual disconnect date
-                            // ("Chase will disconnect on May 21 —
-                            // reconnect now to keep it linked.")
-                            // instead of vague "soon" copy.
-                            title={`${plaidReauthReason(item.lastSyncErrorCode, {
-                              consentExpirationAt: item.consentExpirationAt,
-                              institutionName: item.institutionName,
-                            })} Click Reconnect to fix it.`}
-                          >
-                            Needs reconnect
-                          </span>
-                        )}
-                        {item.stillPreparing && (
-                          <span
-                            className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-warning/40 text-warning"
-                            data-testid={`badge-still-preparing-${item.id}`}
-                            title="Plaid is still staging the historical batch for this freshly linked bank — try Sync again in a minute."
-                          >
-                            {(() => {
-                              const elapsed = formatPreparingElapsed(item.stillPreparingSince, nowTick);
-                              return elapsed
-                                ? `Still preparing · ${elapsed}`
-                                : "Still preparing";
-                            })()}
-                          </span>
-                        )}
-                      </div>
-                      <div
-                        className="text-xs text-muted-foreground"
-                        data-testid={`text-last-synced-${item.id}`}
-                      >
-                        {item.lastSyncedAt
-                          ? (() => {
-                              // (#723) Append a scannable relative-time
-                              // hint ("· 4h ago") next to the absolute
-                              // timestamp so the user can tell at a
-                              // glance whether the bank tile is fresh —
-                              // without doing the date math themselves.
-                              // Plaid's data is the "as of" anchor; we
-                              // word it that way explicitly so the user
-                              // stops expecting every click on Sync to
-                              // produce instantly fresh pending data on
-                              // items whose institutions only update on
-                              // Plaid's ~6 h scheduled poll. Re-uses the
-                              // `nowTick` from the surrounding component
-                              // so the hint advances live without an
-                              // additional setInterval.
-                              const ts = new Date(item.lastSyncedAt);
-                              return `Plaid data as of ${ts.toLocaleString()} · ${formatRelativeTimeFromNow(ts, nowTick)}`;
-                            })()
-                          : "Not yet synced"}
-                      </div>
-                      {/* (#258) Show when the disconnect-cutoff was last
-                          verified against Plaid so users (and support)
-                          can confirm the countdown above the "Needs
-                          reconnect" badge is fresh — distinct from the
-                          last-synced timestamp, which only reflects the
-                          /transactions/sync call. Hidden until the row
-                          has been refreshed at least once (e.g. items
-                          linked before this column existed). */}
-                      {item.consentExpirationLastRefreshedAt && (() => {
-                        // (#260) Once the daily refresh hasn't advanced this
-                        // timestamp in ~3 days, surface an amber chip so the
-                        // user can hit Sync and confirm whether the
-                        // disconnect cutoff above is still trustworthy.
-                        const isStale = isConsentRefreshStale(
-                          item.consentExpirationLastRefreshedAt,
-                          nowTick,
-                        );
-                        const age = formatConsentRefreshAge(
-                          item.consentExpirationLastRefreshedAt,
-                          nowTick,
-                        );
-                        return (
-                          <div
-                            className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap"
-                            data-testid={`text-consent-refreshed-${item.id}`}
-                            title={
-                              item.consentExpirationAt
-                                ? `Disconnect date on file: ${new Date(
-                                    item.consentExpirationAt,
-                                  ).toLocaleString()}`
-                                : "Plaid does not report a disconnect date for this item."
-                            }
-                          >
-                            <span>
-                              Disconnect date checked{" "}
-                              {new Date(
-                                item.consentExpirationLastRefreshedAt,
-                              ).toLocaleString()}
-                            </span>
-                            {isStale && (
-                              <span
-                                className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-warning/40 text-warning"
-                                data-testid={`badge-consent-refresh-stale-${item.id}`}
-                                title={`The daily check hasn't advanced this timestamp in ${age ?? "several days"}. The disconnect date above may be out of date — click Sync to re-verify with Plaid.`}
-                              >
-                                Disconnect date stale
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                      {item.stillPreparing && isPreparingStalled(item.stillPreparingSince, nowTick) && (
-                        <div
-                          className="text-xs text-warning mt-1"
-                          data-testid={`text-preparing-stalled-${item.id}`}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-body font-semibold text-brand-navy">
+                        {item.institutionName || "Linked institution"}
+                      </span>
+                      {needsReconnect && (
+                        <span
+                          className="chip bad"
+                          data-testid={`badge-needs-reconnect-${item.id}`}
+                          // (#228) Use the per-code reason so the tooltip
+                          // explains *why* (saved login expired vs.
+                          // consent expiring vs. pending disconnect)
+                          // before the user clicks Reconnect.
+                          // (#238) Pass the item's
+                          // `consent_expiration_time` cutoff so
+                          // PENDING_EXPIRATION / PENDING_DISCONNECT
+                          // tooltips name the actual disconnect date
+                          // ("Chase will disconnect on May 21 —
+                          // reconnect now to keep it linked.")
+                          // instead of vague "soon" copy.
+                          title={`${plaidReauthReason(item.lastSyncErrorCode, {
+                            consentExpirationAt: item.consentExpirationAt,
+                            institutionName: item.institutionName,
+                          })} Click Reconnect to fix it.`}
                         >
-                          This is taking longer than usual. Try unlinking and
-                          relinking this bank.
-                        </div>
+                          Needs reconnect
+                        </span>
                       )}
-                      {item.lastSyncError && (
-                        <div
-                          className="text-xs text-destructive mt-1"
-                          data-testid={`text-last-sync-error-${item.id}`}
+                      {item.stillPreparing && (
+                        <span
+                          className="chip gray"
+                          data-testid={`badge-still-preparing-${item.id}`}
+                          title="Plaid is still staging the historical batch for this freshly linked bank — try Sync again in a minute."
                         >
-                          {formatPlaidErrorForDisplay(item.lastSyncError)}
-                        </div>
-                      )}
-                      {/* (#725) Surface a "Re-enable refresh" link when
-                          the server has the INVALID_PRODUCT short-circuit
-                          stamp set on this item. Clicking it clears the
-                          stamp + immediately triggers a Sync so the user
-                          gets confirmation in one click. The server-side
-                          self-heal also clears the stamp on the first
-                          successful refresh, so this link is the explicit
-                          user-driven escape hatch when the user has just
-                          enabled the `transactions_refresh` add-on. */}
-                      {item.refreshProductDisabledAt && (
-                        <div
-                          className="text-xs text-muted-foreground mt-1"
-                          data-testid={`text-refresh-disabled-${item.id}`}
-                        >
-                          Real-time refresh is paused for this bank.{" "}
-                          <button
-                            type="button"
-                            className="underline text-primary hover:no-underline disabled:opacity-50"
-                            disabled={
-                              clearRefreshDisabled.isPending || isAnySyncing
-                            }
-                            data-testid={`button-reenable-refresh-${item.id}`}
-                            onClick={async () => {
-                              try {
-                                await clearRefreshDisabled.mutateAsync({
-                                  id: item.id,
-                                });
-                                await queryClient.invalidateQueries({
-                                  queryKey: getListPlaidItemsQueryKey(),
-                                });
-                                // Re-enabling a rate-limited/disabled item is
-                                // a deliberate "pull fresh now" action — force
-                                // the billable refresh so it actually recovers
-                                // current data.
-                                await handleSync(item.id, { force: true });
-                              } catch (e) {
-                                toast({
-                                  title: "Couldn't re-enable refresh",
-                                  description:
-                                    e instanceof Error
-                                      ? e.message
-                                      : "Try again in a moment.",
-                                  variant: "destructive",
-                                });
-                              }
-                            }}
-                          >
-                            Re-enable refresh
-                          </button>
-                        </div>
-                      )}
-                      {/* (#265) Latest /item/get failure captured during the
-                          consent-refresh path (manual button, on-sync
-                          PENDING_EXPIRATION refresh, or daily cron). Rendered
-                          inline under the "Disconnect date checked …" line so
-                          a user who walks away after running the refresh can
-                          still see *why* this bank's check failed without
-                          having to re-trigger it. Styled like lastSyncError. */}
-                      {item.consentExpirationLastRefreshError && (
-                        <div
-                          className="text-xs text-destructive mt-1"
-                          data-testid={`text-consent-refresh-error-${item.id}`}
-                        >
-                          Couldn't verify disconnect date:{" "}
-                          {formatPlaidErrorForDisplay(
-                            item.consentExpirationLastRefreshError,
-                          )}
-                        </div>
+                          {(() => {
+                            const elapsed = formatPreparingElapsed(item.stillPreparingSince, nowTick);
+                            return elapsed
+                              ? `Still preparing · ${elapsed}`
+                              : "Still preparing";
+                          })()}
+                        </span>
                       )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {needsReconnect && (
-                      <PlaidReconnectButton
-                        itemId={item.id}
-                        institutionName={item.institutionName ?? null}
-                        size="sm"
-                      />
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSync(item.id)}
-                      disabled={isAnySyncing}
-                      data-testid={`button-sync-${item.id}`}
+                    <div
+                      className="text-micro text-neutral-400"
+                      data-testid={`text-last-synced-${item.id}`}
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />
-                      Sync
-                    </Button>
-                    {/* Deliberate paid pull. Plain "Sync" now uses Plaid's
-                        free cursor endpoint; this forces a billable
-                        /transactions/refresh for the "a pending charge
-                        hasn't shown up yet" case. Kept off the global header
-                        so it's never fired by muscle memory. */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleSync(item.id, { force: true })}
-                      disabled={isAnySyncing}
-                      title="Pulls fresh from your bank — uses a paid Plaid refresh. Use when a pending charge hasn't shown up yet."
-                      data-testid={`button-force-refresh-${item.id}`}
-                    >
-                      <Zap className="w-3.5 h-3.5 mr-1.5" />
-                      Force refresh
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() =>
-                        handleUnlink(
-                          item.id,
-                          item.institutionName,
-                          needsReconnect,
-                        )
-                      }
-                      disabled={deletePlaidItem.isPending}
-                      aria-label="Unlink bank connection"
-                      data-testid={`button-unlink-${item.id}`}
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-2 ml-8">
-                  <PlaidSyncHistory
-                    itemId={item.id}
-                    institutionName={item.institutionName}
-                  />
-                </div>
-                {item.accounts.length > 0 && (
-                  <ul className="mt-3 ml-8 text-sm text-muted-foreground space-y-2">
-                    {item.accounts.map((a) => (
-                      <li key={a.id} className="space-y-1">
-                        <div>
-                          {a.name || a.officialName || "Account"}
-                          {a.mask ? ` ••${a.mask}` : ""}
-                          {a.subtype ? ` · ${a.subtype}` : ""}
+                      {item.lastSyncedAt
+                        ? (() => {
+                            // (#723) Append a scannable relative-time
+                            // hint ("· 4h ago") next to the absolute
+                            // timestamp so the user can tell at a
+                            // glance whether the bank tile is fresh —
+                            // without doing the date math themselves.
+                            // Plaid's data is the "as of" anchor; we
+                            // word it that way explicitly so the user
+                            // stops expecting every click on Sync to
+                            // produce instantly fresh pending data on
+                            // items whose institutions only update on
+                            // Plaid's ~6 h scheduled poll. Re-uses the
+                            // `nowTick` from the surrounding component
+                            // so the hint advances live without an
+                            // additional setInterval.
+                            const ts = new Date(item.lastSyncedAt);
+                            return `Plaid data as of ${ts.toLocaleString()} · ${formatRelativeTimeFromNow(ts, nowTick)}`;
+                          })()
+                        : "Not yet synced"}
+                    </div>
+                    {/* (#258) Show when the disconnect-cutoff was last
+                        verified against Plaid so users (and support)
+                        can confirm the countdown above the "Needs
+                        reconnect" badge is fresh — distinct from the
+                        last-synced timestamp, which only reflects the
+                        /transactions/sync call. Hidden until the row
+                        has been refreshed at least once (e.g. items
+                        linked before this column existed). */}
+                    {item.consentExpirationLastRefreshedAt && (() => {
+                      // (#260) Once the daily refresh hasn't advanced this
+                      // timestamp in ~3 days, surface a chip so the
+                      // user can hit Sync and confirm whether the
+                      // disconnect cutoff above is still trustworthy.
+                      const isStale = isConsentRefreshStale(
+                        item.consentExpirationLastRefreshedAt,
+                        nowTick,
+                      );
+                      const age = formatConsentRefreshAge(
+                        item.consentExpirationLastRefreshedAt,
+                        nowTick,
+                      );
+                      return (
+                        <div
+                          className="flex flex-wrap items-center gap-2 text-micro text-neutral-400"
+                          data-testid={`text-consent-refreshed-${item.id}`}
+                          title={
+                            item.consentExpirationAt
+                              ? `Disconnect date on file: ${new Date(
+                                  item.consentExpirationAt,
+                                ).toLocaleString()}`
+                              : "Plaid does not report a disconnect date for this item."
+                          }
+                        >
+                          <span>
+                            Disconnect date checked{" "}
+                            {new Date(
+                              item.consentExpirationLastRefreshedAt,
+                            ).toLocaleString()}
+                          </span>
+                          {isStale && (
+                            <span
+                              className="chip warn"
+                              data-testid={`badge-consent-refresh-stale-${item.id}`}
+                              title={`The daily check hasn't advanced this timestamp in ${age ?? "several days"}. The disconnect date above may be out of date — click Sync to re-verify with Plaid.`}
+                            >
+                              Disconnect date stale
+                            </span>
+                          )}
                         </div>
-                        {/* (#361) First-sync dedupe gate. Once the
-                            account has completed its first sync the
-                            override is no longer accepted, so we hide
-                            the picker entirely (server returns 409 on
-                            late writes anyway). Until then the user
-                            can shift the auto-detected cutoff earlier
-                            (pull more history) or later (skip more
-                            potential duplicates). */}
-                        {!a.firstSyncCompletedAt && (
-                          <PlaidImportCutoffPicker
-                            accountId={a.id}
-                            initialValue={a.importCutoffDate ?? null}
-                          />
+                      );
+                    })()}
+                    {item.stillPreparing && isPreparingStalled(item.stillPreparingSince, nowTick) && (
+                      <div
+                        className="mt-1 text-micro text-neutral-500"
+                        data-testid={`text-preparing-stalled-${item.id}`}
+                      >
+                        Taking longer than usual. Try unlinking and relinking
+                        this bank.
+                      </div>
+                    )}
+                    {item.lastSyncError && (
+                      <div
+                        className="mt-1 text-micro text-bad"
+                        data-testid={`text-last-sync-error-${item.id}`}
+                      >
+                        {formatPlaidErrorForDisplay(item.lastSyncError)}
+                      </div>
+                    )}
+                    {/* (#725) Surface a "Re-enable refresh" link when
+                        the server has the INVALID_PRODUCT short-circuit
+                        stamp set on this item. Clicking it clears the
+                        stamp + immediately triggers a Sync so the user
+                        gets confirmation in one click. The server-side
+                        self-heal also clears the stamp on the first
+                        successful refresh, so this link is the explicit
+                        user-driven escape hatch when the user has just
+                        enabled the `transactions_refresh` add-on. */}
+                    {item.refreshProductDisabledAt && (
+                      <div
+                        className="mt-1 flex items-center gap-2 text-micro text-neutral-500"
+                        data-testid={`text-refresh-disabled-${item.id}`}
+                      >
+                        <span>Real-time refresh paused</span>
+                        <button
+                          type="button"
+                          className={btnLink}
+                          disabled={
+                            clearRefreshDisabled.isPending || isAnySyncing
+                          }
+                          data-testid={`button-reenable-refresh-${item.id}`}
+                          onClick={async () => {
+                            try {
+                              await clearRefreshDisabled.mutateAsync({
+                                id: item.id,
+                              });
+                              await queryClient.invalidateQueries({
+                                queryKey: getListPlaidItemsQueryKey(),
+                              });
+                              // Re-enabling a rate-limited/disabled item is
+                              // a deliberate "pull fresh now" action — force
+                              // the billable refresh so it actually recovers
+                              // current data.
+                              await handleSync(item.id, { force: true });
+                            } catch (e) {
+                              toast({
+                                title: "Couldn't re-enable refresh",
+                                description:
+                                  e instanceof Error
+                                    ? e.message
+                                    : "Try again in a moment.",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                        >
+                          Re-enable
+                        </button>
+                      </div>
+                    )}
+                    {/* (#265) Latest /item/get failure captured during the
+                        consent-refresh path (manual button, on-sync
+                        PENDING_EXPIRATION refresh, or daily cron). Rendered
+                        inline under the "Disconnect date checked …" line so
+                        a user who walks away after running the refresh can
+                        still see *why* this bank's check failed without
+                        having to re-trigger it. Styled like lastSyncError. */}
+                    {item.consentExpirationLastRefreshError && (
+                      <div
+                        className="mt-1 text-micro text-bad"
+                        data-testid={`text-consent-refresh-error-${item.id}`}
+                      >
+                        Couldn't verify disconnect date:{" "}
+                        {formatPlaidErrorForDisplay(
+                          item.consentExpirationLastRefreshError,
                         )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {needsReconnect && (
+                    <PlaidReconnectButton
+                      itemId={item.id}
+                      institutionName={item.institutionName ?? null}
+                      size="sm"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    className={btnLink}
+                    onClick={() => handleSync(item.id)}
+                    disabled={isAnySyncing}
+                    data-testid={`button-sync-${item.id}`}
+                  >
+                    <RefreshCw className={`h-3 w-3 ${isSyncing ? "animate-spin" : ""}`} />
+                    Sync
+                  </button>
+                  {/* Deliberate paid pull. Plain "Sync" now uses Plaid's
+                      free cursor endpoint; this forces a billable
+                      /transactions/refresh for the "a pending charge
+                      hasn't shown up yet" case. Kept off the global header
+                      so it's never fired by muscle memory. */}
+                  <button
+                    type="button"
+                    className={btnLink}
+                    onClick={() => handleSync(item.id, { force: true })}
+                    disabled={isAnySyncing}
+                    title="Pulls fresh from your bank — uses a paid Plaid refresh. Use when a pending charge hasn't shown up yet."
+                    data-testid={`button-force-refresh-${item.id}`}
+                  >
+                    <Zap className="h-3 w-3" />
+                    Force refresh
+                  </button>
+                  <button
+                    type="button"
+                    className={btnLinkDanger}
+                    onClick={() =>
+                      handleUnlink(
+                        item.id,
+                        item.institutionName,
+                        needsReconnect,
+                      )
+                    }
+                    disabled={deletePlaidItem.isPending}
+                    aria-label="Unlink bank connection"
+                    title="Unlink — stops new transactions, keeps synced ones"
+                    data-testid={`button-unlink-${item.id}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+              <div className="ml-6 mt-2">
+                <PlaidSyncHistory
+                  itemId={item.id}
+                  institutionName={item.institutionName}
+                />
+              </div>
+              {item.accounts.length > 0 && (
+                <ul className="ml-6 mt-2 space-y-1.5 text-micro text-neutral-500">
+                  {item.accounts.map((a) => (
+                    <li key={a.id} className="space-y-1">
+                      <div>
+                        {a.name || a.officialName || "Account"}
+                        {a.mask ? ` ••${a.mask}` : ""}
+                        {a.subtype ? ` · ${a.subtype}` : ""}
+                      </div>
+                      {/* (#361) First-sync dedupe gate. Once the
+                          account has completed its first sync the
+                          override is no longer accepted, so we hide
+                          the picker entirely (server returns 409 on
+                          late writes anyway). Until then the user
+                          can shift the auto-detected cutoff earlier
+                          (pull more history) or later (skip more
+                          potential duplicates). */}
+                      {!a.firstSyncCompletedAt && (
+                        <PlaidImportCutoffPicker
+                          accountId={a.id}
+                          initialValue={a.importCutoffDate ?? null}
+                        />
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Weekly Sub-Bucket Names</CardTitle>
-          <CardDescription>
-            Rename the four weekly spending sub-buckets. The underlying tags
-            (groceries / dining / entertainment / misc) stay the same so existing
-            transactions keep their bucket — only the labels you see change.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <section className={card}>
+        <div className={cardHead}>
+          <h2 className={cardTitle}>Weekly bucket names</h2>
+          <Help>
+            Renames the four weekly spending buckets on screen. The underlying
+            tags stay the same, so existing transactions keep their bucket.
+          </Help>
+        </div>
+        <div className="p-4">
+          <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
             {SUB_BUCKETS.map((b) => (
-              <div key={b} className="space-y-1.5">
-                <Label htmlFor={`bucket-${b}`} className="text-xs uppercase tracking-widest text-muted-foreground">
-                  {b}
-                </Label>
-                <Input
+              <Field key={b} label={b}>
+                <input
                   id={`bucket-${b}`}
+                  className={input}
                   value={bucketLabels[b] ?? ""}
                   placeholder={DEFAULT_WEEKLY_BUCKET_LABELS[b]}
                   onChange={(e) =>
                     setBucketLabels((prev) => ({ ...prev, [b]: e.target.value }))
                   }
                 />
+              </Field>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={btn}
+              onClick={saveBucketLabels}
+              disabled={updateSettings.isPending}
+            >
+              Save
+            </button>
+            <button type="button" className={btnSecondary} onClick={resetBucketLabels}>
+              Reset to defaults
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className={card}>
+        <div className={cardHead}>
+          <h2 className={cardTitle}>Trackers</h2>
+          <Help>
+            The "days since last…" tiles on Reports → Behavior. Match a category
+            name or a keyword in the description; separate keywords with a pipe
+            for an "or" match, e.g. starbucks|coffee|cafe.
+          </Help>
+        </div>
+        <div className="p-4">
+          {trackers.length === 0 && (
+            <p className={emptyNote}>No trackers yet.</p>
+          )}
+          <div className="space-y-2">
+            {trackers.map((t) => (
+              <div
+                key={t.id}
+                className="grid grid-cols-1 items-end gap-2 rounded-control bg-platinum-2 p-3 md:grid-cols-[1fr_140px_1fr_auto]"
+                data-testid={`tracker-row-${t.id}`}
+              >
+                <Field label="Tile label" className="mb-0">
+                  <input
+                    className={input}
+                    value={t.label}
+                    placeholder="Takeout"
+                    onChange={(e) => updateTracker(t.id, { label: e.target.value })}
+                    data-testid={`input-tracker-label-${t.id}`}
+                  />
+                </Field>
+                <Field label="Match by" className="mb-0">
+                  <Select
+                    value={t.matchType}
+                    onValueChange={(v) =>
+                      updateTracker(t.id, { matchType: v as "category" | "keyword" })
+                    }
+                  >
+                    <SelectTrigger className={input} data-testid={`select-tracker-type-${t.id}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="keyword">Keyword</SelectItem>
+                      <SelectItem value="category">Category</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field
+                  label={t.matchType === "category" ? "Category contains" : "Description contains"}
+                  className="mb-0"
+                >
+                  <input
+                    className={input}
+                    value={t.matchValue}
+                    placeholder={t.matchType === "category" ? "dining" : "amazon"}
+                    list={t.matchType === "category" ? "tracker-category-suggestions" : undefined}
+                    onChange={(e) => updateTracker(t.id, { matchValue: e.target.value })}
+                    data-testid={`input-tracker-value-${t.id}`}
+                    aria-invalid={trackerErrors[t.id] ? true : undefined}
+                  />
+                  {trackerErrors[t.id] && (
+                    <span
+                      className="text-micro text-bad"
+                      data-testid={`tracker-value-error-${t.id}`}
+                      title={trackerErrors[t.id] ?? undefined}
+                    >
+                      Couldn't read this rule
+                    </span>
+                  )}
+                </Field>
+                <button
+                  type="button"
+                  className={`${btnLinkDanger} mb-1`}
+                  onClick={() => removeTracker(t.id)}
+                  aria-label="Remove tracker"
+                  title="Remove this tracker"
+                  data-testid={`button-remove-tracker-${t.id}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             ))}
           </div>
-          <div className="flex items-center gap-2 pt-2">
-            <Button onClick={saveBucketLabels} disabled={updateSettings.isPending}>
-              Save Bucket Names
-            </Button>
-            <Button type="button" variant="outline" onClick={resetBucketLabels}>
-              Reset to defaults
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Behavior Trackers</CardTitle>
-          <CardDescription>
-            Pick the "days since last…" tiles you want on the Reports → Behavior
-            tab. Match by category name or by a keyword in the description
-            (separate keywords with <code>|</code> for an "or" match,
-            e.g. <code>starbucks|coffee|cafe</code>).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {trackers.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No trackers yet. Add one to start tracking a habit.
-            </p>
-          )}
-          {trackers.map((t) => (
-            <div
-              key={t.id}
-              className="grid grid-cols-1 md:grid-cols-[1fr_140px_1fr_auto] gap-2 items-end rounded-md border border-border bg-muted/20 p-3"
-              data-testid={`tracker-row-${t.id}`}
-            >
-              <div className="space-y-1">
-                <Label className="text-xs uppercase tracking-widest text-muted-foreground">
-                  Tile label
-                </Label>
-                <Input
-                  value={t.label}
-                  placeholder="e.g. Takeout"
-                  onChange={(e) => updateTracker(t.id, { label: e.target.value })}
-                  data-testid={`input-tracker-label-${t.id}`}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs uppercase tracking-widest text-muted-foreground">
-                  Match by
-                </Label>
-                <Select
-                  value={t.matchType}
-                  onValueChange={(v) =>
-                    updateTracker(t.id, { matchType: v as "category" | "keyword" })
-                  }
-                >
-                  <SelectTrigger data-testid={`select-tracker-type-${t.id}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="keyword">Keyword</SelectItem>
-                    <SelectItem value="category">Category</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs uppercase tracking-widest text-muted-foreground">
-                  {t.matchType === "category" ? "Category name contains" : "Description contains"}
-                </Label>
-                <Input
-                  value={t.matchValue}
-                  placeholder={t.matchType === "category" ? "dining" : "amazon"}
-                  list={t.matchType === "category" ? "tracker-category-suggestions" : undefined}
-                  onChange={(e) => updateTracker(t.id, { matchValue: e.target.value })}
-                  data-testid={`input-tracker-value-${t.id}`}
-                  aria-invalid={trackerErrors[t.id] ? true : undefined}
-                />
-                {trackerErrors[t.id] && (
-                  <p
-                    className="text-xs text-warning"
-                    data-testid={`tracker-value-error-${t.id}`}
-                    title={trackerErrors[t.id] ?? undefined}
-                  >
-                    Couldn't read this rule
-                  </p>
-                )}
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => removeTracker(t.id)}
-                aria-label="Remove tracker"
-                data-testid={`button-remove-tracker-${t.id}`}
-              >
-                <Trash2 className="w-4 h-4 text-destructive" />
-              </Button>
-            </div>
-          ))}
           <datalist id="tracker-category-suggestions">
             {(categories ?? []).map((c) => (
               <option key={c.id} value={c.name} />
             ))}
           </datalist>
-          <div className="flex items-center gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={addTracker} data-testid="button-add-tracker">
-              <Plus className="w-4 h-4 mr-1.5" /> Add tracker
-            </Button>
-            <Button
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={btnSecondary}
+              onClick={addTracker}
+              data-testid="button-add-tracker"
+            >
+              <Plus className="mr-1 inline h-4 w-4 align-[-3px]" />
+              Add tracker
+            </button>
+            <button
+              type="button"
+              className={btn}
               onClick={saveTrackers}
               disabled={updateSettings.isPending || hasInvalidTracker}
               data-testid="button-save-trackers"
             >
-              Save Trackers
-            </Button>
-            {hasInvalidTracker && (
-              <p
-                className="text-xs text-warning"
-                data-testid="tracker-save-blocked"
-              >
-                Fix the invalid rule before saving.
-              </p>
-            )}
-            <Button type="button" variant="ghost" onClick={resetTrackers}>
+              Save
+            </button>
+            <button type="button" className={btnSecondary} onClick={resetTrackers}>
               Reset to defaults
-            </Button>
+            </button>
+            {hasInvalidTracker && (
+              <span className="text-micro text-bad" data-testid="tracker-save-blocked">
+                Fix the invalid rule before saving.
+              </span>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Spreadsheet Import</CardTitle>
-          <CardDescription>Migrate your legacy Hubele Family Budget Excel file.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div>
-            <a href={`${import.meta.env.BASE_URL}sample/Hubele_Family_Budget_v36.xlsx`} download className="text-primary font-medium hover:underline flex items-center gap-2 mb-4">
-              <Download className="w-4 h-4" /> Download Sample Workbook
-            </a>
-            <p className="text-sm text-muted-foreground mb-2">Upload a populated workbook to bootstrap your ledger. We'll extract transactions, debts, recurring bills, and configuration.</p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <Button variant="outline" className="relative cursor-pointer" disabled={importWorkbook.isPending}>
-              <UploadCloud className="w-4 h-4 mr-2" />
-              {importWorkbook.isPending ? "Importing..." : "Upload .xlsx File"}
-              <input 
-                type="file" 
-                accept=".xlsx" 
-                className="absolute inset-0 opacity-0 cursor-pointer" 
-                onChange={handleFileUpload}
-                disabled={importWorkbook.isPending}
-              />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <section className={card}>
+        <div className={cardHead}>
+          <h2 className={cardTitle}>Workbook import</h2>
+          <Help>
+            Bootstraps the ledger from a populated Hubele Family Budget
+            spreadsheet — transactions, debts, recurring bills, and settings.
+          </Help>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 p-4">
+          <span className={`${btnSecondary} relative inline-flex cursor-pointer items-center`}>
+            <UploadCloud className="mr-1.5 inline h-4 w-4 align-[-3px]" />
+            {importWorkbook.isPending ? "Importing…" : "Upload .xlsx"}
+            <input
+              type="file"
+              accept=".xlsx"
+              aria-label="Upload workbook"
+              className="absolute inset-0 cursor-pointer opacity-0"
+              onChange={handleFileUpload}
+              disabled={importWorkbook.isPending}
+            />
+          </span>
+          <a
+            href={`${import.meta.env.BASE_URL}sample/Hubele_Family_Budget_v36.xlsx`}
+            download
+            className={btnLink}
+          >
+            <Download className="h-3 w-3" />
+            Sample workbook
+          </a>
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-primary" />
-            Privacy &amp; security
-          </CardTitle>
-          <CardDescription>How your financial data is handled.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
+      <section className={card}>
+        <div className={cardHead}>
+          <h2 className={cardTitle}>Privacy</h2>
+        </div>
+        <div className="space-y-2 p-4 text-body text-neutral-600">
           <p>
-            <span className="font-medium text-foreground">
-              Bank connections run through Plaid.
+            <span className="font-medium text-brand-navy">
+              Plaid brokers the bank connection.
             </span>{" "}
-            Your bank login is never seen or stored by this app — Plaid brokers a
-            read-only connection and we receive transactions and balances only.
+            Your bank login is never seen or stored by this app — we receive
+            transactions and balances only, read-only.
           </p>
           <p>
-            <span className="font-medium text-foreground">
+            <span className="font-medium text-brand-navy">
               Your data stays in your household.
             </span>{" "}
             Every record is scoped to your household and visible only to members
-            you invite. Disconnect any bank above, or export/delete your data
-            below, whenever you want.
+            you invite. Unlink any bank above whenever you want.
           </p>
-          <p>
-            <span className="font-medium text-foreground">
-              The AI coach describes your own numbers.
-            </span>{" "}
-            It never sees your bank credentials, and every figure it shows is
-            computed by the app — not made up by the model. Anything it can change
-            is proposed for your confirmation first and is undoable.
-          </p>
-          <div className="rounded-md border border-card-border bg-muted/40 p-3 text-xs">
-            <span className="font-medium text-foreground">
-              Not financial advice.
-            </span>{" "}
-            H2 Budget is a personal budgeting tool. Its coach comments on your own
-            spending and debt to help you build habits — it does not provide
-            individualized investment, tax, or legal advice. Verify anything
-            important before acting on it.
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+        <Foot>
+          H2 Budget is a personal budgeting tool. It does not provide investment,
+          tax, or legal advice.
+        </Foot>
+      </section>
 
       <AlertDialog
         open={disconnectGuardItem !== null}
@@ -1310,10 +1334,9 @@ export default function SettingsPage() {
               instead?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              If you remove this, you'll lose Plaid's transaction cursor and
-              any future sync starts from scratch. Reconnecting via Plaid
-              keeps your history intact and resumes where the broken
-              connection left off.
+              Removing this bank drops Plaid's transaction cursor, so a future
+              sync would start from scratch. Reconnecting keeps your history and
+              resumes where the broken connection left off.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1399,27 +1422,25 @@ function PlaidImportCutoffPicker({
     );
   };
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <Label htmlFor={`cutoff-${accountId}`} className="text-xs">
-        Import history after
-      </Label>
-      <Input
+    <div className="flex items-center gap-2">
+      <label htmlFor={`cutoff-${accountId}`} className={fieldLabel}>
+        Import after
+      </label>
+      <input
         id={`cutoff-${accountId}`}
         type="date"
+        className={`${input} w-36 py-1 text-micro`}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="h-7 w-36 text-xs"
       />
-      <Button
+      <button
         type="button"
-        size="sm"
-        variant="outline"
-        className="h-7 px-2 text-xs"
+        className={btnLink}
         disabled={!dirty || mutation.isPending}
         onClick={onSave}
       >
         Save
-      </Button>
+      </button>
     </div>
   );
 }
