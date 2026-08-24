@@ -99,7 +99,7 @@ test.describe("Bills celebratory 'Stops at payoff' row after auto-archive (Task 
     await expect(row).toHaveCount(0, { timeout: 10_000 });
 
     // Now navigate to Bills and assert the celebratory row.
-    await page.goto("/bills");
+    await page.goto("/bills/all");
     await expect(
       page.getByRole("heading", { name: /bills/i }),
     ).toBeVisible({ timeout: 15_000 });

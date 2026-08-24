@@ -236,7 +236,7 @@ test.describe("Forecast inbox 'Add as bill' dialog (#526)", () => {
     await expect(planRow).toContainText(billName);
 
     // Bills page: the new recurring item shows as a row keyed by its id.
-    await page.goto("/bills");
+    await page.goto("/bills/all");
     const billRow = page.getByTestId(`row-bill-${recurring.id}`);
     await expect(billRow).toBeVisible({ timeout: 15_000 });
     await expect(billRow).toContainText(billName);

@@ -97,7 +97,7 @@ test.describe("Bills locked-row affordance + Avalanche deep-link (Task #70)", ()
 
     const context = await browser.newContext();
     const page = await context.newPage();
-    await signInAndOpen(page, email, password, "/bills");
+    await signInAndOpen(page, email, password, "/bills/all");
 
     await expect(
       page.getByRole("heading", { name: /bills/i }),

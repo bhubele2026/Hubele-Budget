@@ -25,18 +25,18 @@ test.describe("Bills → Avalanche navigation (#76)", () => {
     // then seed a debt via API so the Bills page is guaranteed to render
     // a debt-min row to click. Without this the spec would degrade into
     // a no-op for fresh users with no data.
-    await signInAndOpen(page, email, password, "/bills");
+    await signInAndOpen(page, email, password, "/bills/all");
     const debt = await seedDebt(page);
 
     // Re-open Bills so the freshly-seeded debt is included in the page's
     // initial query payload (the page only refetches on its own clock).
-    await page.goto("/bills");
+    await page.goto("/bills/all");
 
     await expect(
       page.getByRole("heading", { name: /bills/i }),
     ).toBeVisible({ timeout: 15_000 });
 
-    expect(new URL(page.url()).pathname).toBe("/bills");
+    expect(new URL(page.url()).pathname).toBe("/bills/all");
 
     const row = page.getByTestId(`row-debt-min-${debt.id}`);
     await expect(row).toBeVisible({ timeout: 15_000 });

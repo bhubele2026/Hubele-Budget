@@ -58,9 +58,14 @@ const ACCT_BALANCES = [1000, 500, 300] as const;
 // External Plaid account_id for each row. Chase transactions store
 // the external account_id (not the internal row uuid) in
 // `plaidAccountId`, which is what `scopeChaseTransactions` filters on.
-const ACCT_EXTERNAL_IDS = ACCT_MASKS.map(
-  (m) => `${CHASE_ITEM_EXTERNAL_ID}-acct-${m}`,
-) as readonly [string, string, string];
+// Written out as a literal tuple rather than `ACCT_MASKS.map(...)`: mapping a
+// readonly tuple widens to `string[]`, and the cast back to a 3-tuple is one
+// TypeScript rejects outright. Same three strings, same order.
+const ACCT_EXTERNAL_IDS: readonly [string, string, string] = [
+  `${CHASE_ITEM_EXTERNAL_ID}-acct-${ACCT_MASKS[0]}`,
+  `${CHASE_ITEM_EXTERNAL_ID}-acct-${ACCT_MASKS[1]}`,
+  `${CHASE_ITEM_EXTERNAL_ID}-acct-${ACCT_MASKS[2]}`,
+];
 
 // The duplicate's plaid_accounts row id — a different uuid for the
 // same physical account A (mask 1111). Distinguishing feature of

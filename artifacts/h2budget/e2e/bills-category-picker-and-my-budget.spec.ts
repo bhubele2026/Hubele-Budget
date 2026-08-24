@@ -101,7 +101,7 @@ test.describe("Category picker + My budget bucket (#690)", () => {
     // select-category dropdown, and pick the category by its testid.
     // This is the regression risk the task explicitly calls out: we want
     // to lock in the picker → save → rollup path, not just the API.
-    await page.goto("/bills?month=2026-05-01");
+    await page.goto("/bills/all?month=2026-05-01");
     await expect(
       page.getByRole("heading", { name: /^bills$/i }),
     ).toBeVisible({ timeout: 15_000 });
@@ -290,7 +290,7 @@ test.describe("Category picker + My budget bucket (#690)", () => {
       .set({ balance: "0", minPayment: "0", status: "paidoff" })
       .where(eq(debtsTable.id, debt.id));
 
-    await page.goto("/bills?month=2026-05-01");
+    await page.goto("/bills/all?month=2026-05-01");
     await expect(
       page.getByRole("heading", { name: /^bills$/i }),
     ).toBeVisible({ timeout: 15_000 });
