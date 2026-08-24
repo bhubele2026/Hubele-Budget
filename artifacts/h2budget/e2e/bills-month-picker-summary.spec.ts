@@ -146,7 +146,7 @@ test.describe("Bills month picker — right-side summaries (#540)", () => {
 
     const context = await browser.newContext();
     const page = await context.newPage();
-    await signInAndOpen(page, email, password, "/bills?month=2026-05-01");
+    await signInAndOpen(page, email, password, "/bills/all?month=2026-05-01");
 
     await expect(
       page.getByRole("heading", { name: /^bills$/i }),

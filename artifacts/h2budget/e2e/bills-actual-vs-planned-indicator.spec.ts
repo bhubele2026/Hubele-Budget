@@ -160,7 +160,7 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
 
     const context = await browser.newContext();
     const page = await context.newPage();
-    await signInAndOpen(page, email, password, "/bills");
+    await signInAndOpen(page, email, password, "/bills/all");
 
     await expect(
       page.getByRole("heading", { name: /bills/i }),

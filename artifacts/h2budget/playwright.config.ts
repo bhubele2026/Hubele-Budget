@@ -1,10 +1,10 @@
 import { defineConfig } from "@playwright/test";
 
-const baseURL =
-  process.env.PLAYWRIGHT_BASE_URL ??
-  (process.env.REPLIT_DEV_DOMAIN
-    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-    : "http://localhost:20333");
+// Point the suite at a running dev/preview server. The app deploys on Render
+// now, so there is no Replit dev domain to infer — start the web package with
+// an explicit PORT (vite.config.ts requires one when serving) and pass the
+// matching PLAYWRIGHT_BASE_URL, or rely on Vite's own default port below.
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173";
 
 export default defineConfig({
   testDir: "./e2e",

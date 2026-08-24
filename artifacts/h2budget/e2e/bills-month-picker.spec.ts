@@ -74,7 +74,7 @@ test.describe("Bills month picker (#538)", () => {
     const page = await context.newPage();
     // Anchor the picker explicitly so the spec is independent of the
     // server's wall-clock month.
-    await signInAndOpen(page, email, password, "/bills?month=2026-05-01");
+    await signInAndOpen(page, email, password, "/bills/all?month=2026-05-01");
 
     await expect(
       page.getByRole("heading", { name: /^bills$/i }),

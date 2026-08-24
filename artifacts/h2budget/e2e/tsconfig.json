@@ -1,0 +1,24 @@
+{
+  // The e2e suite was invisible to every gate: the package tsconfig includes
+  // only `src/**/*`, and CI keeps the Playwright job behind `E2E_ENABLED`.
+  // Nothing compiled these files, so they drifted against the app for months
+  // (specs still driving testids and routes that no longer exist).
+  //
+  // This config makes the suite typecheckable on its own — `pnpm --filter
+  // @workspace/h2budget run typecheck:e2e` — so the drift is caught by the
+  // compiler even while the browser job stays opt-in.
+  "extends": "../../../tsconfig.base.json",
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"],
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "preserve",
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "resolveJsonModule": true,
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "paths": {
+      "@/*": ["../src/*"]
+    }
+  }
+}

@@ -32,6 +32,13 @@ out-tsc
 # dependencies
 node_modules
 
+# Secrets. Real env files never belong in git — every value in .env.example
+# is a placeholder, and the live values live in the Render dashboard
+# (see render.yaml, `sync: false`) or a local untracked .env.
+.env
+.env.*
+!.env.example
+
 # IDEs and editors
 /.idea
 .project
