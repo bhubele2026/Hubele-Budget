@@ -81,6 +81,7 @@ export function CssBars({
   format,
   topN,
   ramp = false,
+  rankBy,
   onPick,
   selectedId = null,
   rowHeight = 28,
@@ -104,6 +105,19 @@ export function CssBars({
   topN?: number;
   /** Colour "level" bars by rank on the sequential NAVY_RAMP instead of by sign. */
   ramp?: boolean;
+  /**
+   * Rank the rows by a DOMAIN ORDER instead of by bar length. Return a sort key
+   * per row; the lowest key ranks first (row 0, darkest ramp stop).
+   *
+   * ⚠️ The default — rank by |value| — is right when the bar length IS the
+   * ranking. It is wrong when the order is a fact about the data rather than a
+   * property of the bar: a debt payoff list is ordered by the month each debt
+   * dies, so the debt being attacked first sits at the top and takes the
+   * darkest navy even when its bar is not the longest one. Without this, the
+   * list would silently re-sort itself into a different plan than the one the
+   * simulator actually runs.
+   */
+  rankBy?: (row: CssBarRow) => number;
   onPick?: (id: string) => void;
   selectedId?: string | null;
   rowHeight?: number;
@@ -117,11 +131,15 @@ export function CssBars({
 
   // Rank + visibility, derived from magnitude. Keyed on a value fingerprint so
   // the memo survives a caller that rebuilds its rows array every render.
-  const fp = rows.map((r) => `${r.id}:${r.value}`).join("|");
+  const fp = rows
+    .map((r) => `${r.id}:${r.value}:${rankBy ? rankBy(r) : ""}`)
+    .join("|");
   const { rankOf, activeIds, max, visibleCount } = useMemo(() => {
-    const ranked = [...rows].sort(
-      (a, b) => Math.abs(Number(b.value)) - Math.abs(Number(a.value)),
-    );
+    const ranked = rankBy
+      ? [...rows].sort((a, b) => rankBy(a) - rankBy(b))
+      : [...rows].sort(
+          (a, b) => Math.abs(Number(b.value)) - Math.abs(Number(a.value)),
+        );
     const limit = topN == null ? ranked.length : Math.max(0, Math.min(topN, ranked.length));
     const shown = ranked.slice(0, limit);
     return {

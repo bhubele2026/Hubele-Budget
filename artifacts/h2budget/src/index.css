@@ -73,9 +73,15 @@
   --color-info-bg: #eef3fa;
 
   /* ── TYPE SCALE ──────────────────────────────────────────────────────────
-     Five steps and no more. Ad-hoc font sizes are the single loudest
+     Six steps and no more. Ad-hoc font sizes are the single loudest
      "nobody designed this" signal on a screen, because nothing lines up and
-     every card invents its own hierarchy. */
+     every card invents its own hierarchy.
+
+     ⚠️ `hero` IS NOT A HEADING SIZE. It is reserved for THE ONE NUMBER a
+     screen exists to answer — today that is the debt payoff percentage, which
+     is the whole point of the app. A second hero on a page means neither is
+     the hero, so a screen gets one or none. */
+  --text-hero: 3.25rem;     /* 52 — the one number a screen is about */
   --text-display: 1.5rem;   /* 24 — page titles */
   --text-title: 1.125rem;   /* 18 — card headings */
   --text-body: 0.875rem;    /* 14 — everything ordinary */

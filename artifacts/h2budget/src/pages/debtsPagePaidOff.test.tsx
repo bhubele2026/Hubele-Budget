@@ -140,12 +140,16 @@ describe("killMonthForHistory", () => {
   });
 });
 
-describe("Debts page — paid-off card celebration", () => {
-  it("shows the celebration with the kill month for a $0 debt that has a recorded transition", () => {
+describe("Debts page — paid-off rows", () => {
+  it("marks a $0 debt paid off and names the kill month when the transition was recorded", () => {
     renderPage();
     const headlines = screen.getAllByTestId("debt-card-paid-off-headline");
     expect(headlines.length).toBe(2);
-    expect(headlines[0].textContent).toContain("Paid off!");
+    // C5 word diet: the status is a chip that states the fact. The old
+    // "Paid off!" exclamation went with the celebration styling — the app does
+    // not cheer at the reader any more.
+    expect(headlines[0].textContent).toContain("Paid off");
+    expect(headlines[0].textContent).not.toContain("!");
 
     const monthRows = screen.getAllByTestId("debt-card-paid-off-month");
     const withHistory = monthRows.find(
