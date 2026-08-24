@@ -40,8 +40,12 @@ import { AMEX_BALANCE_DISTINCTION } from "../src/lib/reportsBalances";
  *     1009) nor the Capital One Platinum row, and
  *   - still leaves the Capital One Platinum debt untouched on /debts.
  *
- * The HeroTile component has no test id, so the tile is located by its
- * label text inside the rounded card wrapper.
+ * (C9) The tile is now located by `data-testid="reports-tile-amex"`. It used
+ * to be matched with `div.rounded-2xl` + label text, which had silently
+ * stopped matching anything: the tile moved from `HeroTile` (rounded-lg card,
+ * `title` prop) to `StatTile` (rounded-xl, no title prop), so both the
+ * locator AND the tooltip assertion below were failing against main. The
+ * tooltip is restored on the tile wrapper in `reportsShared.tsx`.
  */
 
 const provisionedUserIds: string[] = [];
@@ -65,9 +69,7 @@ test.afterAll(async () => {
 });
 
 function amexTile(page: import("@playwright/test").Page) {
-  return page
-    .locator("div.rounded-2xl")
-    .filter({ hasText: "Amex (Blue Cash + Platinum)" });
+  return page.getByTestId("reports-tile-amex");
 }
 
 type SeedAcct = {

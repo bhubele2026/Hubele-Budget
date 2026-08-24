@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearch } from "wouter";
-import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban, Split, Flame, Wallet, CalendarDays, ShoppingBag } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Split } from "lucide-react";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import {
   useListTransactions,
@@ -13,21 +12,6 @@ import {
   type Transaction,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { MiniBars } from "@/components/viz";
-import {
-  SectionHeader,
-  RingMeter,
-  StatusPill,
-  FillMeter,
-  WhyExpander,
-  TrendSparkline,
-  spendStatus,
-  type TrendPoint,
-} from "@/components/stat";
-import { StatTile, StatTileRow } from "@/components/stat-tile";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Collapsible,
   CollapsibleContent,
@@ -45,9 +29,26 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, cn } from "@/lib/utils";
+import {
+  card,
+  cardHead,
+  btnSm,
+  btnSecondarySm,
+  btnLink,
+  input,
+  fieldLabel,
+  th,
+  td,
+  tdNum,
+  emptyNote,
+  Field,
+  Help,
+  Foot,
+} from "@/ui";
+// CSS bars, not recharts — this page has no charting library in its chunk.
+import { CssBars, CssFillMeter, type CssBarRow } from "@/lib/cssBars";
 import {
   SUB_BUCKETS,
   type SubBucket,
@@ -76,9 +77,6 @@ function firstOfMonth(d: Date): Date {
 function lastOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
-function daysInMonthOf(d: Date): number {
-  return lastOfMonth(d).getDate();
-}
 function formatWeekRange(sun: Date): string {
   const sat = addDays(sun, 6);
   const sameMonth = sun.getMonth() === sat.getMonth();
@@ -88,6 +86,10 @@ function formatWeekRange(sun: Date): string {
     day: "numeric",
   });
   return `${left} – ${right}, ${sat.getFullYear()}`;
+}
+/** Short week stamp for a bar label — "Aug 3". */
+function formatWeekStamp(sun: Date): string {
+  return sun.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 function formatMonth(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -107,7 +109,7 @@ import { expenseMagnitude as expenseAmount } from "@/lib/bucketSpend";
 // How many COMPLETED weeks in a row, ending last week, did they blow the
 // weekly allowance? Walks back week-by-week from the last finished Sun–Sat
 // week and stops the first time a week came in at/under plan. This is the
-// deterministic spine of the over-budget streak banner — no AI required.
+// deterministic spine of the over-budget streak chip.
 function weeklyOverStreak(
   txns: Transaction[],
   weeklyAmt: number,
@@ -140,24 +142,9 @@ function weeklyOverStreak(
   return streak;
 }
 
-// Message for an over-budget streak. Earned and true — only ever shown when
-// the streak is real; firmer the longer it runs.
-function messageForOverStreak(n: number): string {
-  if (n <= 1) return "";
-  if (n === 2)
-    return "Two weeks over your weekly allowance. Let's not make it a habit — tighten it up and that's days off the payoff date.";
-  if (n === 3)
-    return "Three weeks over in a row. The number's right there — rein it in and put the difference on the cards.";
-  if (n <= 5)
-    return `${n} weeks over, back to back. Time to make the budget mean something — small cuts now, big payoff later.`;
-  if (n <= 9)
-    return `${n} weeks over. You're better than this — trim the easy wins and you'll feel it on the debt.`;
-  return `${n} weeks over budget in a row. Deep breath, reset the week — every dollar back is a dollar off the debt.`;
-}
-
-// The positive counterpart to messageForOverStreak — how many COMPLETED weeks in a
+// The positive counterpart to weeklyOverStreak — how many COMPLETED weeks in a
 // row, ending last week, they came in AT or UNDER the weekly allowance. Same
-// deterministic walk-back; drives the "look at you" hype banner.
+// deterministic walk-back.
 function weeklyUnderStreak(
   txns: Transaction[],
   weeklyAmt: number,
@@ -190,19 +177,15 @@ function weeklyUnderStreak(
   return streak;
 }
 
-// Earned praise for an under-budget streak — the encouraging counterpart.
-// Only ever shown when the streak is real.
-function praiseForStreak(n: number): string {
-  if (n <= 1) return "";
-  if (n === 2)
-    return "Two weeks under budget in a row — a solid start.";
-  if (n <= 4)
-    return `${n} weeks under budget, back to back — excellent work. Keep the momentum going.`;
-  return `${n} weeks under budget in a row — outstanding consistency. Keep it up.`;
-}
+/**
+ * A streak is only worth reporting once it is a PATTERN rather than a single
+ * week. Two is the floor — the same threshold the old prose banners used, so
+ * the chips appear on exactly the weeks the sentences used to.
+ */
+const STREAK_MIN = 2;
 
 // Last N completed Sun–Sat weeks' over/under variance (spend − planned) for
-// the weekly allowance — the data behind the 8-week drill bars. Oldest first.
+// the weekly allowance — the data behind the 8-week bars. Oldest first.
 function weeklyVarianceSeries(
   txns: Transaction[],
   weeklyAmt: number,
@@ -230,7 +213,6 @@ function weeklyVarianceSeries(
 // ----- bucket config --------------------------------------------------
 
 type BucketKey = "weekly" | "monthly" | "unplanned";
-type Mode = "week" | "month";
 
 const BUCKETS: { key: BucketKey; name: string; noun: string }[] = [
   { key: "weekly", name: "Weekly allowance", noun: "weekly allowance" },
@@ -250,6 +232,20 @@ type Group = {
   amount: number;
   txns: Transaction[];
 };
+
+/**
+ * The state, in words. Colour reinforces it and never carries it alone — the
+ * chip class only tints a label that already says which side of plan this is.
+ */
+function bucketState(
+  actual: number,
+  planned: number,
+): { label: string; chip: string } {
+  if (planned <= 0) return { label: "No target", chip: "gray" };
+  if (actual > planned) return { label: "Over", chip: "bad" };
+  if (actual / planned >= 0.85) return { label: "Near cap", chip: "warn" };
+  return { label: "Under", chip: "ok" };
+}
 
 // ----- drill-down rows ------------------------------------------------
 
@@ -273,23 +269,23 @@ function TxnRow({
     : "misc";
   return (
     <div
-      className="flex items-center justify-between gap-3 px-3 py-1.5 pl-9 text-sm"
+      className="flex items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-1.5 pl-10 text-body last:border-b-0"
       data-testid={`allowance-txn-${t.id}`}
     >
-      <div className="flex items-baseline gap-3 min-w-0">
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-12 shrink-0 tabular-nums">
+      <div className="flex min-w-0 items-baseline gap-3">
+        <span className="w-12 shrink-0 font-mono text-micro tabular-nums text-neutral-400">
           {formatTxnDate(t.occurredOn)}
         </span>
-        <span className="truncate">{t.description}</span>
+        <span className="truncate text-neutral-700">{t.description}</span>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex shrink-0 items-center gap-2">
         {onChangeBucket && subLabels && (
           <Select
             value={current}
             onValueChange={(v) => onChangeBucket(t, v as SubBucket)}
           >
             <SelectTrigger
-              className="h-7 w-[120px] text-xs"
+              className="h-7 w-[120px] text-micro"
               aria-label="Allowance bucket"
               data-testid={`allowance-bucket-select-${t.id}`}
             >
@@ -297,7 +293,7 @@ function TxnRow({
             </SelectTrigger>
             <SelectContent>
               {SUB_BUCKETS.map((s) => (
-                <SelectItem key={s} value={s} className="text-xs">
+                <SelectItem key={s} value={s} className="text-micro">
                   {subLabels[s]}
                 </SelectItem>
               ))}
@@ -310,7 +306,7 @@ function TxnRow({
             onValueChange={(v) => onChangeCategory(t, v)}
           >
             <SelectTrigger
-              className="h-7 w-[160px] text-xs"
+              className="h-7 w-[160px] text-micro"
               aria-label="Category"
               data-testid={`allowance-category-select-${t.id}`}
             >
@@ -318,7 +314,7 @@ function TxnRow({
             </SelectTrigger>
             <SelectContent>
               {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="text-xs">
+                <SelectItem key={c.id} value={c.id} className="text-micro">
                   {c.name}
                 </SelectItem>
               ))}
@@ -326,20 +322,18 @@ function TxnRow({
           </Select>
         )}
         {onSplit && (
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs w-[74px] justify-center shrink-0"
+            className={cn(btnLink, "w-[74px] justify-center")}
             onClick={() => onSplit(t)}
             data-testid={`allowance-split-${t.id}`}
             title="Split this purchase across weekly buckets"
           >
-            <Split className="w-3.5 h-3.5 mr-1.5" />
+            <Split className="h-3 w-3" />
             Split
-          </Button>
+          </button>
         )}
-        <span className="tabular-nums whitespace-nowrap font-mono w-24 text-right shrink-0">
+        <span className="w-24 shrink-0 text-right font-mono text-label tabular-nums">
           {formatCurrency(expenseAmount(t))}
         </span>
       </div>
@@ -370,25 +364,25 @@ function CategoryGroupRow({
         <button
           type="button"
           className={cn(
-            "flex w-full items-center justify-between gap-2 px-3 py-1.5 text-sm focus:outline-none",
-            expandable ? "hover:bg-muted/50 cursor-pointer" : "cursor-default",
+            "flex w-full items-center justify-between gap-2 px-4 py-1.5 text-body focus:outline-none",
+            expandable ? "cursor-pointer hover:bg-brand-tint" : "cursor-default",
           )}
           data-testid={`allowance-group-${group.key}`}
         >
-          <span className="flex min-w-0 items-center gap-1 font-medium">
+          <span className="flex min-w-0 items-center gap-1.5 font-medium text-neutral-700">
             <ChevronDown
               className={cn(
-                "h-3.5 w-3.5 shrink-0 transition-transform",
+                "h-3.5 w-3.5 shrink-0",
                 open ? "" : "-rotate-90",
                 !expandable && "opacity-0",
               )}
             />
             <span className="truncate">{group.label}</span>
-            <span className="text-[11px] text-muted-foreground">
-              ({group.txns.length})
+            <span className="font-mono text-micro tabular-nums text-neutral-400">
+              {group.txns.length}
             </span>
           </span>
-          <span className="tabular-nums whitespace-nowrap">
+          <span className="whitespace-nowrap font-mono text-label tabular-nums">
             {formatCurrency(group.amount)}
           </span>
         </button>
@@ -410,28 +404,16 @@ function CategoryGroupRow({
   );
 }
 
-// ----- bucket summary card --------------------------------------------
-
-// At-a-glance verdict on how much of the planned allowance is spent.
-function paceVerdict(actual: number, planned: number): string | null {
-  if (planned <= 0) return null;
-  const r = actual / planned;
-  if (r <= 0.4) return "Well under budget — plenty of room left.";
-  if (r <= 0.75) return "On track, with room to spare.";
-  if (r < 0.95) return "Getting close to the cap — keep an eye on it.";
-  if (r <= 1.05) return "Right at the cap — hold steady.";
-  if (r <= 1.2) return "Slightly over budget this period.";
-  return "Well over budget — worth tightening up next period.";
-}
+// ----- bucket card ----------------------------------------------------
 
 function BucketCard({
   name,
+  help,
   actual,
   planned,
   expanded,
   onToggle,
   onSavePlanned,
-  trend,
   periodLabel,
   periodSub,
   onPrevPeriod,
@@ -439,13 +421,12 @@ function BucketCard({
   canNextPeriod,
 }: {
   name: string;
+  help: string;
   actual: number;
   planned: number;
   expanded: boolean;
   onToggle: () => void;
   onSavePlanned?: (amount: number) => void;
-  /** Optional 8-week over/under variance strip (spend − planned per week). */
-  trend?: TrendPoint[];
   /** Per-card date cycler (weekly cycles weeks; monthly/unplanned cycle months). */
   periodLabel?: string;
   periodSub?: string;
@@ -455,10 +436,8 @@ function BucketCard({
 }) {
   const variance = actual - planned;
   const over = variance > 0;
-  const ratio = planned > 0 ? actual / planned : 0;
-  const status = planned > 0 ? spendStatus(ratio) : "neutral";
-  const statusLabel =
-    planned <= 0 ? "No target" : over ? "Over" : ratio >= 0.85 ? "On track" : "Under";
+  const state = bucketState(actual, planned);
+  const pct = planned > 0 ? Math.round((actual / planned) * 100) : 0;
   const slug = name.split(" ")[0].toLowerCase();
   const [editOpen, setEditOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -470,78 +449,82 @@ function BucketCard({
     }
   };
   return (
-    <Card className={cn("transition-colors", expanded && "ring-2 ring-primary/40")}>
-      <CardContent className="p-5 space-y-3">
-        {/* Per-card date cycler — kept OUTSIDE the expand button so ◀▶ don't
-            toggle the drill-down. */}
-        {onPrevPeriod && (
-          <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={onPrevPeriod}
-              aria-label="Previous period"
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-card-border text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <div className="min-w-0 text-center leading-tight">
-              <div className="flex items-center justify-center gap-1.5 text-xs font-medium tabular-nums">
-                {periodLabel}
-              </div>
-              <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
-                {periodSub}
-              </div>
+    <div className={cn(card, expanded && "ring-brand-navy/30")}>
+      <div className={cardHead}>
+        <span className={cn(fieldLabel, "flex-1 truncate")}>{name}</span>
+        <span className={`chip ${state.chip}`} data-testid={`allowance-state-${slug}`}>
+          {state.label}
+        </span>
+        <Help>{help}</Help>
+      </div>
+
+      {/* Date cycler — kept OUTSIDE the expand button so ◀▶ don't toggle the
+          drill-down. */}
+      {onPrevPeriod && (
+        <div className="flex items-center justify-between gap-2 border-b border-brand-line px-4 py-1.5">
+          <button
+            type="button"
+            onClick={onPrevPeriod}
+            aria-label="Previous period"
+            className="press grid h-6 w-6 shrink-0 place-items-center rounded-control text-neutral-400 ring-1 ring-brand-line hover:text-brand-navy"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <div className="min-w-0 text-center leading-tight">
+            <div className="truncate font-mono text-micro tabular-nums text-neutral-600">
+              {periodLabel}
             </div>
-            <button
-              type="button"
-              onClick={onNextPeriod}
-              disabled={!canNextPeriod}
-              aria-label="Next period"
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-card-border text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+            <div className={fieldLabel}>{periodSub}</div>
           </div>
-        )}
-        {/* Header + actual are the expand toggle. The planned line below
-            stays outside the button so the edit popover isn't nested in it. */}
+          <button
+            type="button"
+            onClick={onNextPeriod}
+            disabled={!canNextPeriod}
+            aria-label="Next period"
+            className="press grid h-6 w-6 shrink-0 place-items-center rounded-control text-neutral-400 ring-1 ring-brand-line hover:text-brand-navy disabled:opacity-40"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      <div className="px-4 py-3">
+        {/* The number is the expand toggle. The planned line below stays
+            outside the button so the edit popover isn't nested in it. */}
         <button
           type="button"
           onClick={onToggle}
-          className="w-full text-left focus:outline-none"
+          className="flex w-full items-baseline justify-between gap-2 text-left focus:outline-none"
           data-testid={`allowance-card-${slug}`}
           aria-expanded={expanded}
         >
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-              {name}
-            </span>
-            <div className="flex items-center gap-2">
-              {planned > 0 && <StatusPill status={status}>{statusLabel}</StatusPill>}
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 text-muted-foreground transition-transform",
-                  expanded ? "" : "-rotate-90",
-                )}
-              />
-            </div>
-          </div>
-          <div className="mt-2 flex items-center gap-3">
-            <RingMeter
-              ratio={ratio}
-              status={status}
-              size={64}
-              stroke={7}
-              centerTop={`${Math.round(ratio * 100)}%`}
-              centerBottom="used"
+          <span
+            className={cn(
+              "font-mono text-display font-semibold tabular-nums",
+              over ? "text-bad" : "text-brand-navy",
+            )}
+          >
+            {formatCurrency(actual)}
+          </span>
+          <span className="flex items-center gap-1.5">
+            {planned > 0 && (
+              <span className="font-mono text-micro tabular-nums text-neutral-400">
+                {pct}%
+              </span>
+            )}
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 text-neutral-400",
+                expanded ? "" : "-rotate-90",
+              )}
             />
-            <div className="text-3xl font-bold tracking-tight tabular-nums">
-              {formatCurrency(actual)}
-            </div>
-          </div>
+          </span>
         </button>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
-          <span>of {formatCurrency(planned)} planned</span>
+
+        <div className="mt-1 flex items-center gap-1.5">
+          <span className="font-mono text-micro tabular-nums text-neutral-500">
+            of {formatCurrency(planned)} planned
+          </span>
           {onSavePlanned && (
             <Popover
               open={editOpen}
@@ -551,23 +534,20 @@ function BucketCard({
               }}
             >
               <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                <button
+                  type="button"
+                  className="press grid h-5 w-5 place-items-center rounded text-neutral-400 hover:text-brand-navy"
                   aria-label="Edit planned amount"
                   title="Edit planned amount"
                   data-testid={`allowance-edit-planned-${slug}`}
                 >
                   <Pencil className="h-3 w-3" />
-                </Button>
+                </button>
               </PopoverTrigger>
               <PopoverContent className="w-56 p-3" align="start">
-                <div className="space-y-2">
-                  <div className="text-xs font-medium">
-                    Planned {name.toLowerCase()}
-                  </div>
-                  <Input
+                <Field label={`Planned ${name.toLowerCase()}`}>
+                  <input
+                    className={cn(input, "font-mono tabular-nums")}
                     type="number"
                     step="0.01"
                     inputMode="decimal"
@@ -583,37 +563,44 @@ function BucketCard({
                     autoFocus
                     data-testid={`input-planned-${slug}`}
                   />
-                  <div className="flex justify-end gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setEditOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button size="sm" onClick={save} disabled={!draft.trim()}>
-                      Save
-                    </Button>
-                  </div>
+                </Field>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className={btnSecondarySm}
+                    onClick={() => setEditOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className={btnSm}
+                    onClick={save}
+                    disabled={!draft.trim()}
+                  >
+                    Save
+                  </button>
                 </div>
               </PopoverContent>
             </Popover>
           )}
         </div>
-        {planned > 0 && (
-          <FillMeter
-            value={actual}
-            ceiling={planned}
-            status={status}
-            floorLabel="$0"
-            ceilingLabel={formatCurrency(planned)}
-            format={(n) => formatCurrency(n)}
-          />
-        )}
+
+        <CssFillMeter
+          value={actual}
+          ceiling={planned}
+          className="mt-2.5"
+          title={`${formatCurrency(actual)} of ${formatCurrency(planned)}`}
+        />
+
         <div
           className={cn(
-            "text-sm font-medium tabular-nums",
-            over ? "text-destructive" : "text-positive",
+            "mt-2 font-mono text-label tabular-nums",
+            planned <= 0
+              ? "text-neutral-400"
+              : over
+                ? "text-bad"
+                : "text-brand-navy",
           )}
           data-testid={`allowance-variance-${slug}`}
         >
@@ -623,28 +610,8 @@ function BucketCard({
               ? `${formatCurrency(variance)} over`
               : `${formatCurrency(Math.abs(variance))} under`}
         </div>
-        <WhyExpander>
-          <p className="leading-snug">
-            You&apos;ve spent{" "}
-            <span className="font-medium text-foreground">{formatCurrency(actual)}</span>{" "}
-            of your {formatCurrency(planned)} {name.toLowerCase()} —{" "}
-            {planned <= 0
-              ? "set a target to start tracking."
-              : over
-                ? `${formatCurrency(variance)} over plan.`
-                : `${formatCurrency(Math.abs(variance))} still in the tank.`}
-          </p>
-          {trend && trend.length > 0 && (
-            <div className="mt-3">
-              <div className="text-[10px] uppercase tracking-widest mb-1.5">
-                Last {trend.length} weeks · over / under
-              </div>
-              <TrendSparkline data={trend} height={32} />
-            </div>
-          )}
-        </WhyExpander>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -652,8 +619,8 @@ function BucketCard({
 
 export default function AllowancesPage() {
   const today = useMemo(() => new Date(), []);
-  // Each card owns its own period now (no shared Week/Month mode): the Weekly
-  // card cycles Sun–Sat weeks; Monthly + Unplanned cycle whole calendar months.
+  // Each card owns its own period (no shared Week/Month mode): the Weekly card
+  // cycles Sun–Sat weeks; Monthly + Unplanned cycle whole calendar months.
   const [weekStart, setWeekStart] = useState<Date>(() => sundayOf(new Date()));
   const [monthStart, setMonthStart] = useState<Date>(() =>
     firstOfMonth(new Date()),
@@ -699,7 +666,7 @@ export default function AllowancesPage() {
   // Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO).
   // Stored HOUSEHOLD-SIDE in settings.preferences so an edit by one partner
   // shows up for the other (the old localStorage version only lived in the
-  // editor's own browser — which is why "my wife changed it and mine didn't").
+  // editor's own browser).
   const weeklyOverrides = useMemo<Record<string, number>>(() => {
     const raw = settings?.preferences?.weeklyAllowanceOverrides ?? {};
     const out: Record<string, number> = {};
@@ -869,11 +836,7 @@ export default function AllowancesPage() {
   // Planned allowance for the window. Each allowance is held at its native
   // cadence (weekly vs monthly) and pro-rated by day count to the selected
   // window, so a weekly card in WEEK mode reads the raw weekly allowance and
-  // a monthly card in MONTH mode reads the raw monthly allowance, while
-  // cross-cadence views (e.g. monthly allowance scoped to one week) get a
-  // fair, deterministic slice. Monthly-cadence allowances are summed per day
-  // using each day's own month length, so a week straddling a month boundary
-  // is prorated exactly across both months.
+  // a monthly card in MONTH mode reads the raw monthly allowance.
   const planned = useMemo<Record<BucketKey, number>>(() => {
     // A per-week override (set while viewing that week) wins over the global
     // weekly default; other weeks keep using the default.
@@ -930,7 +893,7 @@ export default function AllowancesPage() {
     return out;
   }, [windowTxns, monthScopeTxns]);
 
-  // The consecutive-weeks-over streak — drives the warning banner up top.
+  // The consecutive-weeks-over streak — drives the warning chip.
   const overStreak = useMemo(
     () =>
       weeklyOverStreak(
@@ -942,7 +905,7 @@ export default function AllowancesPage() {
     [txns, settings, weeklyOverrides, today],
   );
 
-  // The positive counterpart — drives the "look at you" hype banner.
+  // The positive counterpart.
   const underStreak = useMemo(
     () =>
       weeklyUnderStreak(
@@ -954,7 +917,7 @@ export default function AllowancesPage() {
     [txns, settings, weeklyOverrides, today],
   );
 
-  // Last 8 completed weeks' over/under — the drill bars under the week nav.
+  // Last 8 completed weeks' over/under — the variance bars.
   const varianceSeries = useMemo(
     () =>
       weeklyVarianceSeries(
@@ -966,6 +929,48 @@ export default function AllowancesPage() {
       ),
     [txns, settings, weeklyOverrides, today],
   );
+
+  /**
+   * Stable row identities (the week's Sunday) so the CSS bars glide between
+   * renders instead of tearing down and rebuilding.
+   *
+   * ⚠️ THE SIGN IS FLIPPED ON PURPOSE, at the render boundary only.
+   * `weeklyVarianceSeries` returns spend − plan, so OVER is positive. But
+   * `CssBars` colours a delta by sign via `barColorForSign` — navy up, deep
+   * orange down — which would paint an under-budget week orange and an
+   * over-budget week navy: the palette law exactly inverted.
+   *
+   * So the bar encodes MONEY LEFT (plan − spend) instead. Same magnitudes,
+   * and now the signs line up with the palette: money left is navy and runs
+   * right of the zero line, overspending is deep orange and runs left. "Left"
+   * is also the word the Banking dashboard already uses for this quantity.
+   * The underlying series is untouched.
+   */
+  const varianceRows = useMemo<CssBarRow[]>(
+    () =>
+      varianceSeries.map((s) => ({
+        id: s.weekISO,
+        label: formatWeekStamp(s.weekSun),
+        value: -s.variance,
+      })),
+    [varianceSeries],
+  );
+
+  /**
+   * Rank the bars CHRONOLOGICALLY, not by length.
+   *
+   * `CssBars` ranks by |value| by default, which is right when the bar length
+   * IS the ranking. Here it is not: this is a time series, and sorting it by
+   * magnitude shuffles the weeks into a meaningless order (Jun 28, Jul 5,
+   * Aug 16, Jul 26 …), which reads as a ranked list of weeks rather than a
+   * history. `varianceSeries` is already oldest-first, so position in that
+   * array is the domain order.
+   */
+  const weekOrder = useMemo(() => {
+    const m = new Map<string, number>();
+    varianceSeries.forEach((s, i) => m.set(s.weekISO, i));
+    return m;
+  }, [varianceSeries]);
 
   // Per-bucket drill-down groups. Weekly groups by its sub-bucket enum
   // (all four shown); monthly/unplanned group by category.
@@ -1038,74 +1043,48 @@ export default function AllowancesPage() {
   const labelFor = (key: BucketKey) =>
     key === "weekly" ? weeklyLabel : monthlyLabel;
 
+  const helpFor = (key: BucketKey) =>
+    key === "weekly"
+      ? "Spend flagged weekly in the selected Sun–Sat week, against the weekly allowance prorated to that week."
+      : key === "monthly"
+        ? "Spend flagged monthly in the selected calendar month, against the full monthly allowance."
+        : "Spend flagged unplanned in the selected calendar month, against the full unplanned allowance.";
+
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        eyebrow="Spending"
-        title="Allowances"
-        sub="Where your weekly, monthly, and unplanned spending actually goes."
-      />
-
-      {/* At-a-glance: spend vs plan for each allowance bucket. */}
-      <StatTileRow className="lg:grid-cols-3">
-        {BUCKETS.map((b) => {
-          const Icon =
-            b.key === "weekly"
-              ? Wallet
-              : b.key === "monthly"
-                ? CalendarDays
-                : ShoppingBag;
-          return (
-            <StatTile
-              key={b.key}
-              label={b.name}
-              value={formatCurrency(actual[b.key])}
-              sub={`of ${formatCurrency(planned[b.key])} planned`}
-              icon={<Icon />}
-            />
-          );
-        })}
-      </StatTileRow>
-
-      {messageForOverStreak(overStreak) ? (
-        <div
-          className="rounded-md border-2 px-4 py-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300"
-          style={{ background: "hsl(var(--negative) / 0.08)", borderColor: "hsl(var(--negative) / 0.5)" }}
-          data-testid="allowance-over-streak"
-        >
-          <Ban className="w-5 h-5 mt-0.5 shrink-0 text-[hsl(var(--negative))] animate-pulse" />
-          <div className="min-w-0">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-[hsl(var(--negative))]">
-              ⚠ Over budget · {overStreak} weeks running
-            </div>
-            <div className="text-sm font-bold text-foreground mt-1 leading-snug">
-              {messageForOverStreak(overStreak)}
-            </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-display font-semibold text-brand-navy">Allowances</h1>
+        {/* Streak state, in words. The chip is the whole message — the prose
+            banners it replaces said this same fact in a paragraph. */}
+        {(overStreak >= STREAK_MIN || underStreak >= STREAK_MIN) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {overStreak >= STREAK_MIN ? (
+              <span className="chip bad" data-testid="allowance-over-streak">
+                Over budget · {overStreak} weeks running
+              </span>
+            ) : (
+              <span className="chip ok" data-testid="allowance-praise">
+                Under budget · {underStreak} weeks running
+              </span>
+            )}
+            <Help>
+              Consecutive completed Sun–Sat weeks, ending last week, where
+              weekly spend was over (or at/under) the weekly allowance for that
+              week.
+            </Help>
           </div>
-        </div>
-      ) : praiseForStreak(underStreak) ? (
-        <div
-          className="rounded-md border-2 border-[hsl(var(--positive)/0.5)] bg-[hsl(var(--positive)/0.08)] px-4 py-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300"
-          data-testid="allowance-praise"
-        >
-          <Flame className="w-5 h-5 mt-0.5 shrink-0 text-[hsl(var(--positive))]" />
-          <div className="min-w-0">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-[hsl(var(--positive))]">
-              🟢 Under budget · {underStreak} weeks running
-            </div>
-            <div className="text-sm font-bold mt-1 leading-snug">
-              {praiseForStreak(underStreak)}
-            </div>
-          </div>
-        </div>
-      ) : null}
+        )}
+      </div>
 
-      {/* Bucket summary cards — each carries its own ◀▶ date cycler */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">
+      {/* One card per bucket. There is deliberately no combined total: weekly
+          is scoped to a week and monthly/unplanned to a calendar month, so a
+          sum of the three would mix time windows. */}
+      <div className="stagger grid grid-cols-1 gap-4 md:grid-cols-3">
         {BUCKETS.map((b) => (
           <BucketCard
             key={b.key}
             name={b.name}
+            help={helpFor(b.key)}
             actual={actual[b.key]}
             planned={planned[b.key]}
             expanded={expanded.has(b.key)}
@@ -1126,122 +1105,168 @@ export default function AllowancesPage() {
             canNextPeriod={
               b.key === "weekly" ? !weekAtCurrent : !monthAtCurrent
             }
-            // The 8-week over/under history exists for the weekly allowance.
-            trend={
-              b.key === "weekly"
-                ? varianceSeries.map((s) => ({
-                    value: s.variance,
-                    label: formatWeekRange(s.weekSun),
-                  }))
-                : undefined
-            }
           />
         ))}
       </div>
 
+      {/* Weekly history — CSS bars diverging from a centre zero line, so a
+          week that came in under and a week that ran over read as opposite
+          directions and not merely as two colours. */}
+      <div className={card}>
+        <div className={cardHead}>
+          <span className={cn(fieldLabel, "flex-1")}>
+            Weekly money left · last {varianceRows.length} weeks
+          </span>
+          <Help>
+            The planned weekly allowance minus what was spent, for each
+            completed Sun–Sat week. Right of the line is money left over; left
+            of the line is over plan.
+          </Help>
+        </div>
+        <div className="px-4 py-3">
+          {varianceRows.length === 0 ? (
+            <div className={emptyNote}>No completed weeks yet</div>
+          ) : (
+            <CssBars
+              rows={varianceRows}
+              mode="delta"
+              rankBy={(r) => weekOrder.get(r.id) ?? 0}
+              format={(v) => formatCurrency(v)}
+              labelWidth={64}
+              valueWidth={92}
+              ariaLabel="Weekly allowance money left or over plan, by week"
+            />
+          )}
+        </div>
+      </div>
+
       {/* Drill-down breakdown — one collapsible group per bucket, driven by
           the card's expanded state. */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Transaction breakdown</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {BUCKETS.map((b) => {
-            const open = expanded.has(b.key);
-            const groups = groupsByBucket[b.key];
-            const total = actual[b.key];
-            return (
-              <Collapsible
-                key={b.key}
-                open={open}
-                onOpenChange={() => toggle(b.key)}
-              >
-                <CollapsibleTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-2 px-2 py-2 text-sm font-medium hover:bg-muted/50 rounded-md focus:outline-none"
-                    data-testid={`allowance-bucket-${b.key}`}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <ChevronDown
-                        className={cn(
-                          "h-4 w-4 shrink-0 transition-transform",
-                          open ? "" : "-rotate-90",
-                        )}
+      <div className={card}>
+        <div className={cardHead}>
+          <span className={cn(fieldLabel, "flex-1")}>Transaction breakdown</span>
+        </div>
+        {BUCKETS.map((b) => {
+          const open = expanded.has(b.key);
+          const groups = groupsByBucket[b.key];
+          const total = actual[b.key];
+          return (
+            <Collapsible
+              key={b.key}
+              open={open}
+              onOpenChange={() => toggle(b.key)}
+            >
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-2 border-b border-brand-line px-4 py-2 text-body font-medium hover:bg-brand-tint focus:outline-none"
+                  data-testid={`allowance-bucket-${b.key}`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 shrink-0 text-neutral-400",
+                        open ? "" : "-rotate-90",
+                      )}
+                    />
+                    {b.name}
+                  </span>
+                  <span className="font-mono text-label tabular-nums">
+                    {formatCurrency(total)}
+                  </span>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="bg-brand-tint/40">
+                  {groups.length === 0 ||
+                  groups.every((g) => g.txns.length === 0) ? (
+                    <div className={emptyNote}>
+                      No {b.noun} transactions in this{" "}
+                      {b.key === "weekly" ? "week" : "month"}
+                    </div>
+                  ) : (
+                    groups.map((g) => (
+                      <CategoryGroupRow
+                        key={g.key}
+                        group={g}
+                        subLabels={b.key === "weekly" ? SUB_LABEL : undefined}
+                        onChangeBucket={
+                          b.key === "weekly" ? changeWeeklyBucket : undefined
+                        }
+                        categories={
+                          b.key !== "weekly" ? categories ?? [] : undefined
+                        }
+                        onChangeCategory={
+                          b.key !== "weekly" ? changeCategory : undefined
+                        }
+                        onSplit={setSplitTx}
                       />
-                      {b.name}
-                    </span>
-                    <span className="tabular-nums">{formatCurrency(total)}</span>
-                  </button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="border-l ml-4 pl-1 py-1">
-                    {groups.length === 0 ||
-                    groups.every((g) => g.txns.length === 0) ? (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">
-                        No {b.noun} transactions in this{" "}
-                        {b.key === "weekly" ? "week" : "month"}.
-                      </div>
-                    ) : (
-                      groups.map((g) => (
-                        <CategoryGroupRow
-                          key={g.key}
-                          group={g}
-                          subLabels={b.key === "weekly" ? SUB_LABEL : undefined}
-                          onChangeBucket={
-                            b.key === "weekly" ? changeWeeklyBucket : undefined
-                          }
-                          categories={
-                            b.key !== "weekly" ? categories ?? [] : undefined
-                          }
-                          onChangeCategory={
-                            b.key !== "weekly" ? changeCategory : undefined
-                          }
-                          onSplit={setSplitTx}
-                        />
-                      ))
-                    )}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            );
-          })}
-        </CardContent>
-      </Card>
+                    ))
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })}
+      </div>
 
-      {/* Over/under summary */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Over/under summary</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1.5">
-          {BUCKETS.map((b) => {
-            const a = actual[b.key];
-            const p = planned[b.key];
-            const variance = a - p;
-            const label = labelFor(b.key);
-            let text: string;
-            if (p <= 0) {
-              text = `${label} you spent ${formatCurrency(a)} (no ${b.noun} set).`;
-            } else if (variance === 0) {
-              text = `${label} you spent exactly your ${formatCurrency(p)} ${b.noun}.`;
-            } else if (variance < 0) {
-              text = `${label} you came in ${formatCurrency(Math.abs(variance))} under your ${formatCurrency(p)} ${b.noun}.`;
-            } else {
-              text = `${label} you went ${formatCurrency(variance)} over your ${formatCurrency(p)} ${b.noun}.`;
-            }
-            return (
-              <p
-                key={b.key}
-                className="text-sm text-muted-foreground"
-                data-testid={`allowance-summary-${b.key}`}
-              >
-                {text}
-              </p>
-            );
-          })}
-        </CardContent>
-      </Card>
+      {/* Over/under summary — the three sentences this used to print, as the
+          table they were describing. */}
+      <div className={card}>
+        <div className={cardHead}>
+          <span className={cn(fieldLabel, "flex-1")}>Over / under summary</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px]">
+            <thead>
+              <tr>
+                <th className={th}>Allowance</th>
+                <th className={th}>Period</th>
+                <th className={cn(th, "text-right")}>Spent</th>
+                <th className={cn(th, "text-right")}>Planned</th>
+                <th className={cn(th, "text-right")}>Variance</th>
+                <th className={th}>State</th>
+              </tr>
+            </thead>
+            <tbody>
+              {BUCKETS.map((b) => {
+                const a = actual[b.key];
+                const p = planned[b.key];
+                const variance = a - p;
+                const state = bucketState(a, p);
+                return (
+                  <tr key={b.key} data-testid={`allowance-summary-${b.key}`}>
+                    <td className={cn(td, "font-medium")}>{b.name}</td>
+                    <td className={cn(td, "text-neutral-500")}>
+                      {labelFor(b.key)}
+                    </td>
+                    <td className={tdNum}>{formatCurrency(a)}</td>
+                    <td className={tdNum}>
+                      {p > 0 ? formatCurrency(p) : "—"}
+                    </td>
+                    <td
+                      className={cn(
+                        tdNum,
+                        p > 0 && variance > 0 && "text-bad",
+                      )}
+                    >
+                      {p > 0 ? formatCurrency(Math.abs(variance)) : "—"}
+                    </td>
+                    <td className={td}>
+                      <span className={`chip ${state.chip}`}>{state.label}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <Foot>
+          Variance is spend minus plan for each row's own period. Weekly is
+          scoped to the selected Sun–Sat week; monthly and unplanned to the
+          selected calendar month.
+        </Foot>
+      </div>
 
       <SplitTransactionDialog
         tx={splitTx}

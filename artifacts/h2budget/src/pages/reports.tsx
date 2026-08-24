@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
+import { Link } from "wouter";
+import { ChevronRight } from "lucide-react";
 import {
   useListTransactions,
   useListCategories,
@@ -6,21 +8,52 @@ import {
   useListDebtBalanceHistory,
   useGetForecast,
 } from "@workspace/api-client-react";
-import { DrillCard } from "@/components/drill-card";
 import { Sparkline, StackBar, MiniBars, RingStat, MoneyText } from "@/components/viz";
 import { fmtISO } from "@/lib/reportsAnalytics";
 import { effectiveDebtBalance } from "@/lib/debtBalance";
+// Tokens only — no recharts on the hub. `viz` is plain SVG/CSS, so this whole
+// route stays chart-library-free.
+import { CHART, catColor } from "@/lib/chartTokens";
+import { cardButton, fieldLabel } from "@/ui";
 import { ReportsBalanceTiles } from "./reports/reportsShared";
 
-// Summer chart palette for the spend-mix stack on the index.
-const MIX_COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-5))",
-];
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** One drill destination. Label above, the figure, then the shape of it. */
+function ReportTile({
+  label,
+  value,
+  sub,
+  href,
+  visual,
+  index,
+}: {
+  label: string;
+  value: ReactNode;
+  sub: string;
+  href: string;
+  visual: ReactNode;
+  index: number;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`${cardButton} p-4`}
+      style={{ animationDelay: `calc(${index} * var(--stagger))` }}
+      data-testid={`report-tile-${href.split("/").pop()}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className={fieldLabel}>{label}</span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-neutral-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-orange" />
+      </div>
+      <div className="mt-1 font-mono text-title font-semibold tabular-nums text-brand-navy">
+        {value}
+      </div>
+      <div className="mt-0.5 text-micro text-neutral-400">{sub}</div>
+      <div className="mt-3">{visual}</div>
+    </Link>
+  );
+}
 
 export default function ReportsPage() {
   // (#a8 per-page fetch) The hub mounts only what its tiles render: a 30-day
@@ -106,7 +139,8 @@ export default function ReportsPage() {
       .map(([, v]) => v);
   }, [rangeTxns]);
 
-  // Spend mix — top categories by outflow this range.
+  // Spend mix — top categories by outflow this range. A colour marks an ITEM,
+  // so these come off CAT8 in rank order rather than a sequential navy ramp.
   const spendMix = useMemo(() => {
     const totals = new Map<string, number>();
     for (const t of rangeTxns) {
@@ -119,7 +153,7 @@ export default function ReportsPage() {
     return Array.from(totals.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-      .map(([label, value], i) => ({ label, value, color: MIX_COLORS[i % MIX_COLORS.length] }));
+      .map(([label, value], i) => ({ label, value, color: catColor(i) }));
   }, [rangeTxns, catNameById, excludedCategoryIds]);
 
   // Income vs spend — the budget glance ring.
@@ -136,7 +170,7 @@ export default function ReportsPage() {
   }, [rangeTxns, excludedCategoryIds]);
   const spendRatio = income > 0 ? spent / income : spent > 0 ? 1 : 0;
 
-  // Spend by weekday — the behavior cadence.
+  // Spend by weekday — the spending cadence.
   const dowSpend = useMemo(() => {
     const buckets = [0, 0, 0, 0, 0, 0, 0];
     for (const t of rangeTxns) {
@@ -149,99 +183,114 @@ export default function ReportsPage() {
     return buckets.map((value, i) => ({ value, label: DOW[i] }));
   }, [rangeTxns, excludedCategoryIds]);
 
+  const noteClass = "text-micro text-neutral-400";
+
   return (
-    <div className="space-y-6">
-      {/* Editorial header */}
-      <div>
-        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Insights
-        </div>
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mt-0.5 leading-tight">
-          Reports
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Your money, told as a story. Pick a thread and drill in.
-        </p>
-        <div className="border-t border-border mt-5" />
-      </div>
+    <div className="space-y-4">
+      <h1 className="text-display font-semibold text-brand-navy">Reports</h1>
 
       {/* At-a-glance balance tiles — the household's live vitals */}
       <ReportsBalanceTiles forecast={forecast} />
 
-      {/* The five threads — each drills to its own page */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
-        <DrillCard
-          eyebrow="Debt Payoff"
+      {/* The five drill destinations */}
+      <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ReportTile
+          index={0}
+          label="Debt payoff"
           href="/reports/debt"
-          value="The avalanche"
-          sub="Momentum, next target, freedom date"
+          value="Balance trend"
+          sub="Momentum, next target, payoff date"
           visual={
             debtSeries.length > 1 ? (
-              <Sparkline data={debtSeries} variant="area" color="hsl(var(--negative))" height={36} />
+              // Total debt is the thing being attacked, so it takes the one
+              // deep orange rather than the resting navy.
+              <Sparkline
+                data={debtSeries}
+                variant="area"
+                color={CHART.orangeDeep}
+                height={36}
+              />
             ) : (
-              <div className="text-xs text-muted-foreground">No history yet</div>
+              <div className={noteClass}>No history yet</div>
             )
           }
         />
-        <DrillCard
-          eyebrow="Cash Flow"
+        <ReportTile
+          index={1}
+          label="Cash flow"
           href="/reports/cashflow"
-          value="In vs out"
-          sub="The gap, day by day"
+          value="Daily net"
+          sub="What came in against what went out"
           visual={
             cashSeries.length > 1 ? (
-              <Sparkline data={cashSeries} variant="line" color="hsl(var(--chart-1))" height={36} />
+              <Sparkline
+                data={cashSeries}
+                variant="line"
+                color={CHART.navy}
+                height={36}
+              />
             ) : (
-              <div className="text-xs text-muted-foreground">No activity in range</div>
+              <div className={noteClass}>No activity in range</div>
             )
           }
         />
-        <DrillCard
-          eyebrow="Spending"
+        <ReportTile
+          index={2}
+          label="Spending"
           href="/reports/spending"
           value={<MoneyText countUp amount={spent} />}
-          sub="Where it all went"
+          sub="Last 30 days, by category"
           visual={
             spendMix.length ? (
               <StackBar segments={spendMix} legendMax={3} />
             ) : (
-              <div className="text-xs text-muted-foreground">No spend in range</div>
+              <div className={noteClass}>No spend in range</div>
             )
           }
         />
-        <DrillCard
-          eyebrow="Budget"
+        <ReportTile
+          index={3}
+          label="Budget"
           href="/reports/budget"
-          value="Plan vs actual"
-          sub={`${Math.round(spendRatio * 100)}% of income spent`}
+          value={`${Math.round(spendRatio * 100)}%`}
+          sub="Of income spent, last 30 days"
           visual={
             <div className="flex items-center gap-3">
               <RingStat
                 value={spendRatio}
-                size={56}
-                color={spendRatio > 1 ? "hsl(var(--negative))" : "hsl(var(--primary))"}
+                size={48}
+                color={spendRatio > 1 ? CHART.orangeDeep : CHART.navy}
                 centerSub="spent"
               />
-              <div className="text-xs text-muted-foreground leading-snug">
-                <div>
-                  In <MoneyText amount={income} className="font-medium text-foreground" />
-                </div>
-                <div>
-                  Out <MoneyText amount={spent} className="font-medium text-foreground" />
-                </div>
+              <div className="flex flex-col gap-0.5 text-micro text-neutral-400">
+                <span>
+                  In{" "}
+                  <MoneyText
+                    amount={income}
+                    className="font-mono tabular-nums text-neutral-700"
+                  />
+                </span>
+                <span>
+                  Out{" "}
+                  <MoneyText
+                    amount={spent}
+                    className="font-mono tabular-nums text-neutral-700"
+                  />
+                </span>
               </div>
             </div>
           }
         />
-        <DrillCard
-          eyebrow="Behavior & Fun"
+        <ReportTile
+          index={4}
+          label="Habits"
           href="/reports/behavior"
-          value="The patterns"
+          value="Weekday rhythm"
           sub="When you spend, and how often"
           visual={
             <div>
-              <MiniBars data={dowSpend} height={36} accent="hsl(var(--chart-5))" />
-              <div className="mt-1 flex justify-between text-[9px] uppercase tracking-wider text-muted-foreground">
+              <MiniBars data={dowSpend} height={36} accent={CHART.navy} />
+              <div className="mt-1 flex justify-between text-micro uppercase tracking-wide text-neutral-400">
                 {DOW.map((day) => (
                   <span key={day}>{day[0]}</span>
                 ))}
