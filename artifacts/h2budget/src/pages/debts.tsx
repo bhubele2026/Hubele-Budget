@@ -29,6 +29,8 @@ import {
   type SimDebt,
   type Strategy,
 } from "@/lib/avalanche";
+import { effectiveDebtBalance } from "@/lib/debtBalance";
+import { DebtPendingHint } from "@/components/debt-pending-hint";
 
 const MANUAL_EXTRA_CAP = 5000;
 
@@ -88,12 +90,16 @@ export function killMonthForHistory(
   return parseRecordedOn(sorted[firstZeroIdx].recordedOn);
 }
 
+// ⚠️ `effectiveDebtBalance`, NOT `Number(d.balance)`. This page used to feed
+// the payoff simulation raw posted balances while /avalanche fed it netted
+// ones, so the two screens projected different payoff months for the same
+// debt. Same function, same basis, same answer — see `@/lib/debtBalance`.
 function debtToSim(d: Debt): SimDebt {
   return {
     id: d.id,
     name: d.name,
     apr: Number(d.apr),
-    balance: Number(d.balance),
+    balance: effectiveDebtBalance(d),
     minPayment: Number(d.minPayment),
     status: d.status,
   };
@@ -194,7 +200,11 @@ export default function DebtsPage() {
 
   // Sort by APR descending (avalanche)
   const sortedDebts = [...(debts || [])].sort((a, b) => parseFloat(b.apr) - parseFloat(a.apr));
-  const paidOffCount = sortedDebts.filter((d) => isPaidOff(Number(d.balance))).length;
+  // Netted, so a debt whose tagged payments already clear it counts as
+  // cleared here exactly as it does in the /avalanche active-debt filter.
+  const paidOffCount = sortedDebts.filter((d) =>
+    isPaidOff(effectiveDebtBalance(d)),
+  ).length;
   const activeCount = sortedDebts.length - paidOffCount;
 
   const payoffFor = (debtId: string): { date: Date | null; reason: string } => {
@@ -253,7 +263,7 @@ export default function DebtsPage() {
             </thead>
             <tbody>
               {sortedDebts.map((debt) => {
-                const balanceNum = Number(debt.balance);
+                const balanceNum = effectiveDebtBalance(debt);
                 const paidOff = isPaidOff(balanceNum);
                 const originalNum = Number(debt.originalBalance ?? 0);
                 const paidRatio =
@@ -322,7 +332,13 @@ export default function DebtsPage() {
                       )}
                     </td>
                     <td className={tdNum}>{fmtPct(Number(debt.apr))}</td>
-                    <td className={tdNum}>{formatCurrency(balanceNum)}</td>
+                    <td className={tdNum}>
+                      <div>{formatCurrency(balanceNum)}</div>
+                      {/* The balance above already nets tagged payments the
+                          creditor hasn't reported; disclose the delta so the
+                          figure can be reconciled against a statement. */}
+                      <DebtPendingHint debt={debt} fmt={formatCurrency} />
+                    </td>
                     <td className={tdNum}>{formatCurrency(debt.minPayment)}</td>
                     <td
                       className={`${td} whitespace-nowrap text-right font-mono text-label tabular-nums`}

@@ -9,6 +9,7 @@ export type {
   BalanceSeriesPoint,
 } from "./balance-trend-chart";
 export { DayGroup, formatDayHeader } from "./day-group";
+export { LedgerColumns } from "./ledger-columns";
 export {
   MonthNavigator,
   monthKeyOf,

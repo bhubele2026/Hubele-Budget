@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Wand2, X } from "lucide-react";
 import type { Transaction } from "@workspace/api-client-react";
-import { Badge } from "@/components/ui/badge";
 import {
   Popover,
   PopoverContent,
@@ -22,13 +21,16 @@ import {
 
 export type TxRowCategory = { id: string; name: string };
 
-// (#868) Single consistent muted-outline chip style shared across the row
-// cluster, replacing the earlier multi-color rainbow. Keeps the
-// cluster calm and scannable; interactive chips add their own hover/cursor.
-// Exported so the Transactions page can style the source + status chips it
-// renders alongside this cluster with the exact same baseline.
-export const CHIP_BASE = "border-border text-muted-foreground bg-transparent";
-export const CHIP_INTERACTIVE = `${CHIP_BASE} cursor-pointer hover:bg-muted transition-colors`;
+// (#868) One chip style across the whole row cluster, replacing the earlier
+// multi-colour rainbow. Now the kit's `.chip` token, so a ledger chip and a
+// chip anywhere else in the app are the same object.
+//
+// ⚠️ `gray` IS THE RIGHT TONE FOR ALL OF THESE. Under the palette rule deep
+// orange means something is wrong, and a category name or a Transfer marker
+// is not a problem — spending the alarm colour on them is what makes a real
+// alarm unreadable. The chip's TEXT carries the state.
+export const CHIP_BASE = "chip gray";
+export const CHIP_INTERACTIVE = `${CHIP_BASE} press cursor-pointer hover:bg-platinum-5`;
 
 // (#742) Keyword → list of category-name substrings to surface as suggestions
 // when a transaction is uncategorized. The first existing category whose name
@@ -113,16 +115,15 @@ function InlineCategoryPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Badge
-          variant="outline"
+        <span
           role="button"
           tabIndex={0}
-          className={`text-xs font-medium ${CHIP_INTERACTIVE}`}
+          className={`${CHIP_INTERACTIVE} max-w-[13rem] truncate`}
           data-testid={`badge-category-${tx.id}`}
           title="Change category"
         >
           {currentName}
-        </Badge>
+        </span>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
         <Command>
@@ -152,8 +153,8 @@ function InlineCategoryPicker({
               ))}
             </CommandGroup>
           </CommandList>
-          <div className="border-t px-2 py-1.5 text-[11px] text-muted-foreground">
-            Picking a category will remember this merchant.
+          <div className="border-t border-brand-line px-2 py-1.5 text-micro text-neutral-400">
+            Remembers this merchant.
           </div>
         </Command>
       </PopoverContent>
@@ -179,24 +180,26 @@ function CategorizeChip({
   if (top) {
     return (
       <span className="inline-flex items-center gap-1">
-        <Badge
-          variant="outline"
-          className={`text-xs ${CHIP_INTERACTIVE}`}
+        <button
+          type="button"
+          className={`${CHIP_INTERACTIVE} inline-flex items-center gap-1`}
           onClick={() => onPick(top.id)}
           title="Categorize and remember this merchant"
           data-testid={`badge-suggest-${tx.id}`}
         >
-          <Wand2 className="w-3 h-3 mr-1" /> Categorize as {top.name}
-        </Badge>
+          {/* The verb stays: without it this chip is indistinguishable from
+              the applied-category chip on the row above it. */}
+          <Wand2 className="h-3 w-3" /> Use {top.name}
+        </button>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <Badge
-              variant="outline"
-              className={`text-xs ${CHIP_INTERACTIVE}`}
+            <button
+              type="button"
+              className={CHIP_INTERACTIVE}
               data-testid={`badge-uncategorized-${tx.id}`}
             >
               Other…
-            </Badge>
+            </button>
           </PopoverTrigger>
           <PopoverContent className="w-64 p-0" align="start">
             <Command>
@@ -232,8 +235,8 @@ function CategorizeChip({
                   ))}
                 </CommandGroup>
               </CommandList>
-              <div className="border-t px-2 py-1.5 text-[11px] text-muted-foreground">
-                Picking a category will remember this merchant.
+              <div className="border-t border-brand-line px-2 py-1.5 text-micro text-neutral-400">
+                Remembers this merchant.
               </div>
             </Command>
           </PopoverContent>
@@ -244,13 +247,13 @@ function CategorizeChip({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Badge
-          variant="outline"
-          className={`text-xs ${CHIP_INTERACTIVE}`}
+        <button
+          type="button"
+          className={`${CHIP_INTERACTIVE} inline-flex items-center gap-1`}
           data-testid={`badge-uncategorized-${tx.id}`}
         >
-          <Wand2 className="w-3 h-3 mr-1" /> Categorize
-        </Badge>
+          <Wand2 className="h-3 w-3" /> Categorize
+        </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
         <Command>
@@ -271,8 +274,8 @@ function CategorizeChip({
               ))}
             </CommandGroup>
           </CommandList>
-          <div className="border-t px-2 py-1.5 text-[11px] text-muted-foreground">
-            Picking a category will remember this merchant.
+          <div className="border-t border-brand-line px-2 py-1.5 text-micro text-neutral-400">
+            Remembers this merchant.
           </div>
         </Command>
       </PopoverContent>
@@ -333,19 +336,17 @@ export function TransactionRowChips({
         />
       )}
       {!tx.isTransfer && tx.isTransferUserOverridden && (
-        <Badge
-          variant="outline"
-          className={`inline-flex items-center text-[11px] font-normal ${CHIP_BASE}`}
+        <span
+          className={CHIP_BASE}
           data-testid={`badge-transfer-overridden-cleared-${tx.id}`}
           title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
         >
           Manually set
-        </Badge>
+        </span>
       )}
       {tx.isTransfer && (
-        <Badge
-          variant="outline"
-          className={`inline-flex items-center gap-1 text-xs ${CHIP_BASE}`}
+        <span
+          className={`${CHIP_BASE} inline-flex items-center gap-1`}
           data-testid={`badge-transfer-${tx.id}`}
           title={
             tx.isTransferUserOverridden
@@ -358,7 +359,7 @@ export function TransactionRowChips({
             <span
               aria-hidden="true"
               data-testid={`badge-transfer-overridden-${tx.id}`}
-              className="text-muted-foreground -ml-0.5"
+              className="-ml-0.5"
             >
               *
             </span>
@@ -367,15 +368,15 @@ export function TransactionRowChips({
             type="button"
             aria-label="Clear Transfer flag"
             data-testid={`button-clear-transfer-${tx.id}`}
-            className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="press -mr-0.5 ml-0.5 inline-flex items-center justify-center rounded hover:text-brand-navy focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-navy"
             onClick={(e) => {
               e.stopPropagation();
               onClearTransfer(tx);
             }}
           >
-            <X className="w-3 h-3" />
+            <X className="h-3 w-3" />
           </button>
-        </Badge>
+        </span>
       )}
       <BucketBubbles
         flags={{
@@ -389,14 +390,7 @@ export function TransactionRowChips({
         }
         disabled={isPending}
       />
-      {tx.reimbursed && (
-        <Badge
-          variant="outline"
-          className={`text-xs ${CHIP_BASE}`}
-        >
-          Reimbursed
-        </Badge>
-      )}
+      {tx.reimbursed && <span className={CHIP_BASE}>Reimbursed</span>}
     </>
   );
 }

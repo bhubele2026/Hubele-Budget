@@ -31,6 +31,17 @@ import { cn } from "@/lib/utils";
  * so they look identical on both pages. Chase just lights up fewer
  * allowance bubbles; the skeleton is the same.
  */
+/**
+ * ⭐ THE LEDGER'S COLUMN GEOMETRY, IN ONE PLACE.
+ *
+ * The row is a flex wrap on narrow screens and a fixed-column grid from `xl`
+ * up. Exported because `LedgerColumns` renders the column HEADS against the
+ * same track list — a header whose columns are declared separately from the
+ * rows it labels is a header that drifts one edit later.
+ */
+export const LEDGER_GRID =
+  "xl:grid-cols-[1.75rem_minmax(0,1fr)_7rem_13.5rem_8rem_7rem_12.5rem]";
+
 export type AccountTransactionRowProps = {
   tx: Transaction;
   selected: boolean;
@@ -76,15 +87,17 @@ export function AccountTransactionRow({
   return (
     <div
       className={cn(
-        "px-3 py-1.5 hover:bg-muted/30 transition-colors",
+        // `td` spacing, so a ledger row and a table row in this app are the
+        // same object at the same rhythm.
+        "px-4 py-2 text-body transition-colors hover:bg-brand-tint",
         // Narrow: wrap (never a horizontal scrollbar). Wide (xl+): a
         // fixed-column grid so every row's source / category / bubbles /
         // amount / actions line up in true columns. Only the merchant column
         // flexes (1fr), so the fixed columns sit at the same x on every row.
         // xl (not md) is the threshold so the fixed columns always have room.
         "flex flex-wrap items-center gap-x-3 gap-y-1",
-        "xl:grid xl:gap-y-0 xl:items-center",
-        "xl:grid-cols-[1.75rem_minmax(0,1fr)_7rem_13.5rem_8rem_7rem_12.5rem]",
+        "xl:grid xl:items-center xl:gap-y-0",
+        LEDGER_GRID,
         dimmed && "opacity-50",
       )}
       data-testid={testId}
@@ -97,9 +110,9 @@ export function AccountTransactionRow({
         className="shrink-0"
       />
       {/* Merchant (flex column) + inline status chip (metaNode). */}
-      <div className="flex min-w-0 items-center gap-x-2 gap-y-0.5 flex-wrap">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
         <span
-          className="font-medium truncate max-w-full"
+          className="max-w-full truncate font-medium text-neutral-700"
           title={tx.description}
         >
           {tx.displayName || tx.description}
@@ -109,7 +122,7 @@ export function AccountTransactionRow({
       </div>
       {/* Card / source */}
       <div
-        className="shrink-0 truncate text-xs text-muted-foreground"
+        className="shrink-0 truncate text-micro text-neutral-500"
         data-testid={`text-card-${tx.id}`}
       >
         {cardLabel || "—"}
@@ -137,7 +150,9 @@ export function AccountTransactionRow({
           />
         )}
       </div>
-      <div className="shrink-0 text-right font-mono tabular-nums whitespace-nowrap xl:justify-self-end">
+      {/* `tdNum`: money is mono, tabular and right-aligned so a column of it
+          lines up and never reflows as it updates. */}
+      <div className="shrink-0 whitespace-nowrap text-right font-mono text-label tabular-nums xl:justify-self-end">
         {amountNode}
       </div>
       <div className="shrink-0 flex gap-0.5 items-center xl:justify-self-end">

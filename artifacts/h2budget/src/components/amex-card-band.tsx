@@ -14,6 +14,7 @@ import {
   effectiveBrand,
 } from "@/lib/amexBrand";
 import { cn } from "@/lib/utils";
+import { fieldLabel } from "@/ui";
 
 /**
  * Per-card brand header band for the Amex page: brand-colored tiles each with
@@ -56,28 +57,25 @@ export function AmexCardBand({
         type="button"
         onClick={() => onSelect("all")}
         className={cn(
-          "rounded-2xl border bg-card p-4 text-left transition-colors",
+          "press surface rounded-card p-4 text-left ring-1",
           selected === "all"
-            ? "border-primary ring-1 ring-primary/30"
-            : "border-card-border hover:border-primary/40",
+            ? "ring-brand-navy/40"
+            : "ring-brand-line hover:ring-brand-navy/25",
         )}
         data-testid="amex-tile-all"
+        aria-pressed={selected === "all"}
       >
-        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-          All cards
-        </div>
-        <div className="mt-2 text-2xl font-bold leading-none tabular-nums">
+        <div className={fieldLabel}>All cards</div>
+        <div className="mt-2 font-mono text-title font-semibold leading-none tabular-nums text-brand-navy">
           <MoneyText amount={data?.combinedStatementBalance ?? 0} />
         </div>
-        <div className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-          combined balance
-        </div>
-        <div className="mt-3 border-t border-card-border pt-2 text-xs text-muted-foreground">
+        <div className="mt-1 text-micro text-neutral-400">Combined balance</div>
+        <div className="mt-3 border-t border-brand-line pt-2 text-micro text-neutral-500">
           <MoneyText
             amount={data?.combinedWeekCharges ?? 0}
-            className="font-semibold text-foreground"
+            className="font-mono font-semibold tabular-nums text-brand-navy"
           />{" "}
-          charged this week
+          this week
         </div>
       </button>
 
@@ -89,24 +87,25 @@ export function AmexCardBand({
           <div
             key={c.accountId}
             className={cn(
-              "rounded-2xl border bg-card p-4",
-              active ? "ring-1 ring-inset ring-primary/30" : "",
+              "surface rounded-card ring-1",
+              active ? "ring-brand-navy/40" : "ring-brand-line",
             )}
-            style={{
-              borderColor: active ? color : "hsl(var(--card-border))",
-              borderLeftColor: color,
-              borderLeftWidth: 3,
-            }}
+            // ⚠️ THE ONLY NON-NAVY DECISION ON THIS PAGE, AND IT IS IDENTITY,
+            // NOT STATUS. The left rule tells two Amex cards apart at a
+            // glance; `--card-blue`/`--card-silver` are already inside the
+            // navy/platinum ramp, so this spends no new colour.
+            style={{ borderLeftColor: color, borderLeftWidth: 3 }}
             data-testid={`amex-tile-${tier}`}
           >
             <button
               type="button"
               onClick={() => onSelect(c.accountId)}
-              className="w-full text-left transition-opacity hover:opacity-90"
+              className="press w-full p-4 text-left"
+              aria-pressed={active}
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                  <span className={cn(fieldLabel, "flex items-center gap-1.5")}>
                     <span
                       className="h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ background: color }}
@@ -115,28 +114,45 @@ export function AmexCardBand({
                       {names[c.accountId] || BRAND_LABEL[tier] || c.name}
                     </span>
                   </span>
-                  <div className="mt-2 text-2xl font-bold leading-none tabular-nums">
+                  <div className="mt-2 font-mono text-title font-semibold leading-none tabular-nums text-brand-navy">
                     <MoneyText amount={c.statementBalance} />
                   </div>
-                  <div className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                    statement balance
+                  <div className="mt-1 text-micro text-neutral-400">
+                    Statement balance
                   </div>
                 </div>
-                <RingStat
-                  value={c.pctOfStatementThisWeek}
-                  size={52}
-                  stroke={5}
-                  color={color}
-                  centerText={`${Math.round((c.pctOfStatementThisWeek ?? 0) * 100)}%`}
-                  centerSub="cleared"
-                />
+                {/* Progress is progress everywhere in this app — navy, not the
+                    card's identity colour, or "% cleared" would read as which
+                    card it is rather than how far along it is.
+
+                    ⚠️ THE CAPTION SITS UNDER THE RING, NOT INSIDE IT. At 9px
+                    with the widest tracking, "cleared" is wider than a 52px
+                    ring, so as `centerSub` it spilled past the tile's right
+                    edge and read as clipped text. The label still ships —
+                    under the palette rule a number like this may not go
+                    unlabelled — it just sits where it fits. */}
+                <div className="flex shrink-0 flex-col items-center gap-1">
+                  <RingStat
+                    value={c.pctOfStatementThisWeek}
+                    size={52}
+                    stroke={5}
+                    color="var(--color-brand-navy)"
+                    centerText={`${Math.round((c.pctOfStatementThisWeek ?? 0) * 100)}%`}
+                  />
+                  <span className="text-micro uppercase tracking-wide text-neutral-400">
+                    cleared
+                  </span>
+                </div>
               </div>
-              <div className="mt-3 border-t border-card-border pt-2 text-xs text-muted-foreground">
-                <MoneyText amount={c.weekCharges} className="font-semibold text-foreground" />{" "}
-                charged this week
+              <div className="mt-3 border-t border-brand-line pt-2 text-micro text-neutral-500">
+                <MoneyText
+                  amount={c.weekCharges}
+                  className="font-mono font-semibold tabular-nums text-brand-navy"
+                />{" "}
+                this week
               </div>
             </button>
-            <div className="mt-2">
+            <div className="px-4 pb-4">
               <AddToAvalanche card={c} onCreated={refreshAfterCreate} />
             </div>
           </div>

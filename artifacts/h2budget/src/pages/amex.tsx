@@ -26,7 +26,7 @@ import {
 } from "@/hooks/use-bulk-recategorize-prompt";
 import { customFetch } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
+import { btnSm, card, emptyNote } from "@/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +86,7 @@ import {
 import {
   AccountPageHeader,
   AccountFilterBar,
+  LedgerColumns,
   BalanceTrendChart,
   DayGroup,
   MonthNavigator,
@@ -157,27 +158,26 @@ function ExternalCardChip({
 }) {
   if (t.isExternalCardPayment) {
     return (
-      <Badge
-        variant="outline"
-        className="inline-flex items-center gap-1 text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
+      <span
+        className="chip gray inline-flex items-center gap-1"
         title="Excluded from avalanche actuals and every dashboard bucket"
         data-testid={`badge-external-card-${testIdSuffix}`}
       >
-        <ExternalLink className="w-3 h-3" />
+        <ExternalLink className="h-3 w-3" />
         Not in avalanche
         <button
           type="button"
           aria-label="Clear external card flag"
           data-testid={`button-clear-external-card-${testIdSuffix}`}
-          className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-muted"
+          className="press -mr-0.5 ml-0.5 inline-flex items-center justify-center rounded hover:text-brand-navy"
           onClick={(e) => {
             e.stopPropagation();
             onToggle(false);
           }}
         >
-          <X className="w-3 h-3" />
+          <X className="h-3 w-3" />
         </button>
-      </Badge>
+      </span>
     );
   }
   // Only offer the affordance on rows that look like card payments —
@@ -190,13 +190,13 @@ function ExternalCardChip({
       type="button"
       data-testid={`button-mark-external-card-${testIdSuffix}`}
       title="Mark this payment as going to a card outside our avalanche"
-      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground hover:underline"
+      className="chip gray press inline-flex items-center gap-1 opacity-70 hover:opacity-100 hover:text-brand-navy"
       onClick={(e) => {
         e.stopPropagation();
         onToggle(true);
       }}
     >
-      <ExternalLink className="w-3 h-3" />
+      <ExternalLink className="h-3 w-3" />
       Not in avalanche
     </button>
   );
@@ -1800,7 +1800,7 @@ export default function AmexPage() {
       <PostLinkProgressBanner viewTransactionsPath="/amex" />
       <div
         ref={paneRef}
-        className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-3 md:pt-4 pb-3 bg-background border-b shadow-sm space-y-3"
+        className="sticky top-0 z-30 -mx-4 -mt-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pt-3 pb-3 md:-mx-8 md:-mt-8 md:px-8 md:pt-4"
       >
         <AccountPageHeader
           title="American Express"
@@ -1849,10 +1849,10 @@ export default function AmexPage() {
       {/* Bulk action bar */}
       {selected.size > 0 && (
         <div
-          className="sticky z-20 flex items-center gap-3 rounded-md border border-border bg-muted px-4 py-2 shadow-sm"
+          className="surface sticky z-20 flex items-center gap-3 rounded-control px-4 py-2 ring-1 ring-brand-navy/25"
           style={{ top: "var(--pinned-pane-h, 0px)" }}
         >
-          <span className="text-sm font-medium text-foreground">
+          <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
             {selected.size} selected
           </span>
           <BulkCategoryPicker
@@ -1860,7 +1860,7 @@ export default function AmexPage() {
             onPick={bulkSetCategory}
           />
           <div className="flex items-center gap-1">
-            <span className="text-xs text-foreground mr-1">Bucket:</span>
+            <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Bucket:</span>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("")}>
               —
             </Button>
@@ -1875,7 +1875,7 @@ export default function AmexPage() {
             </Button>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-xs text-foreground mr-1">Reimb:</span>
+            <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Reimb:</span>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetReimbursable(true)}>
               Mark
             </Button>
@@ -1884,7 +1884,7 @@ export default function AmexPage() {
             </Button>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-xs text-foreground mr-1">Reviewed:</span>
+            <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Reviewed:</span>
             <Button
               size="sm"
               variant="outline"
@@ -1905,7 +1905,7 @@ export default function AmexPage() {
             </Button>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-xs text-foreground mr-1">Owed by:</span>
+            <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Owed by:</span>
             <Input
               placeholder="Owed by…"
               list={owedByListId}
@@ -1952,12 +1952,12 @@ export default function AmexPage() {
           and retry just those, instead of guessing from a toast. */}
       {bulkFailures && (
         <div
-          className="rounded-md border border-destructive/30 bg-destructive/10 p-3 space-y-2"
+          className="space-y-2 rounded-card bg-bad-bg p-3 ring-1 ring-bad/25"
           data-testid="panel-bulk-failures"
           role="alert"
         >
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-destructive">
+            <span className="text-label font-semibold text-bad">
               {bulkFailures.label}
             </span>
             <div className="ml-auto flex items-center gap-1">
@@ -1987,19 +1987,19 @@ export default function AmexPage() {
             </div>
           </div>
           <ul
-            className="max-h-40 overflow-auto text-xs text-destructive space-y-1"
+            className="max-h-40 space-y-1 overflow-auto text-micro text-bad"
             data-testid="list-bulk-failures"
           >
             {bulkFailures.failures.map((f) => (
               <li
                 key={f.id}
-                className="flex items-baseline gap-2 border-t border-destructive/20 pt-1 first:border-t-0 first:pt-0"
+                className="flex items-baseline gap-2 border-t border-bad/20 pt-1 first:border-t-0 first:pt-0"
                 data-testid={`row-bulk-failure-${f.id}`}
               >
-                <span className="font-medium truncate max-w-[40%]" title={f.description}>
+                <span className="max-w-[40%] truncate font-medium" title={f.description}>
                   {f.description}
                 </span>
-                <span className="text-destructive/80 truncate" title={f.error}>
+                <span className="truncate text-neutral-600" title={f.error}>
                   {f.error}
                 </span>
               </li>
@@ -2009,13 +2009,13 @@ export default function AmexPage() {
       )}
       {/* Day groups */}
       {groups.length === 0 && (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">
-          No transactions match these filters.
-        </CardContent></Card>
+        <div className={card}>
+          <div className={emptyNote}>No transactions match these filters.</div>
+        </div>
       )}
       <DayGroupsList
         groups={groups}
-        renderGroup={([dayKey, items]) => {
+        renderGroup={([dayKey, items], groupIndex) => {
         const dayTotal = items.reduce((s, t) => s + parseAbs(t.amount), 0);
         const ids = items.map((t) => t.id);
         const allSelected = ids.every((id) => selected.has(id));
@@ -2034,9 +2034,11 @@ export default function AmexPage() {
             selectionState={allSelected ? true : someSelected ? "indeterminate" : false}
             onToggleAll={(on) => toggleDay(ids, on)}
             totalNode={formatCurrency(dayTotal)}
+            // Once per ledger, on the first day only.
+            columnHeader={groupIndex === 0 ? <LedgerColumns /> : undefined}
           >
               {/* Mobile: stacked card layout (below md) */}
-              <div className="md:hidden divide-y divide-border">
+              <div className="divide-y divide-brand-line/70 md:hidden">
                 {items.map((t) => {
                   // (#629) Either reviewed OR Ignore'd dims the row — same
                   // visual treatment, so the bubble lights don't make a
@@ -2047,7 +2049,7 @@ export default function AmexPage() {
                   <div
                     key={t.id}
                     className={cn(
-                      "p-3 flex flex-col gap-2 hover:bg-muted/30 transition-colors",
+                      "flex flex-col gap-2 p-4 text-body transition-colors hover:bg-brand-tint",
                       (t.reviewed || isIgnored) && "opacity-50",
                     )}
                     data-reviewed={t.reviewed ? "true" : "false"}
@@ -2072,12 +2074,12 @@ export default function AmexPage() {
                           <MerchantRenamePopover tx={t} />
                         </div>
                         {t.notes && (
-                          <div className="text-[11px] text-muted-foreground break-words" title={t.notes}>
+                          <div className="break-words text-micro text-neutral-500" title={t.notes}>
                             {t.notes}
                           </div>
                         )}
                         <div
-                          className="text-[11px] text-muted-foreground mt-0.5"
+                          className="mt-0.5 text-micro text-neutral-500"
                           data-testid={`text-card-mobile-${t.id}`}
                         >
                           {(t.plaidAccountId &&
@@ -2086,12 +2088,12 @@ export default function AmexPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
-                        <div className="text-sm font-mono tabular-nums whitespace-nowrap font-semibold">
+                        <div className="whitespace-nowrap font-mono text-label font-semibold tabular-nums text-brand-navy">
                           {formatCurrency(parseAbs(t.amount))}
                         </div>
                         {runningBalanceMap.has(t.id) && (
                           <span
-                            className="text-[11px] tabular-nums text-muted-foreground"
+                            className="font-mono text-micro tabular-nums text-neutral-400"
                             data-testid={`text-running-balance-mobile-${t.id}`}
                           >
                             bal {formatCurrency(runningBalanceMap.get(t.id)!)}
@@ -2133,19 +2135,17 @@ export default function AmexPage() {
                         />
                       )}
                       {!t.isTransfer && t.isTransferUserOverridden && (
-                        <Badge
-                          variant="outline"
-                          className="inline-flex items-center text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
+                        <span
+                          className="chip gray"
                           title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
                           data-testid={`badge-transfer-overridden-cleared-mobile-${t.id}`}
                         >
                           Manually set
-                        </Badge>
+                        </span>
                       )}
                       {t.isTransfer && (
-                        <Badge
-                          variant="outline"
-                          className="inline-flex items-center gap-1 text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
+                        <span
+                          className="chip gray inline-flex items-center gap-1"
                           title={
                             t.isTransferUserOverridden
                               ? "Manually set — won't be re-flagged on the next sync"
@@ -2158,7 +2158,7 @@ export default function AmexPage() {
                             <span
                               aria-hidden="true"
                               data-testid={`badge-transfer-overridden-mobile-${t.id}`}
-                              className="text-neutral-500 -ml-0.5"
+                              className="-ml-0.5"
                             >
                               *
                             </span>
@@ -2167,7 +2167,7 @@ export default function AmexPage() {
                             type="button"
                             aria-label="Clear Transfer flag"
                             data-testid={`button-clear-transfer-mobile-${t.id}`}
-                            className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-secondary"
+                            className="press -mr-0.5 ml-0.5 inline-flex items-center justify-center rounded hover:text-brand-navy"
                             onClick={(e) => {
                               e.stopPropagation();
                               updateTx.mutate(
@@ -2187,9 +2187,9 @@ export default function AmexPage() {
                               );
                             }}
                           >
-                            <X className="w-3 h-3" />
+                            <X className="h-3 w-3" />
                           </button>
-                        </Badge>
+                        </span>
                       )}
                       <ExternalCardChip
                         t={t}
@@ -2225,7 +2225,7 @@ export default function AmexPage() {
                 })}
               </div>
               {/* Desktop: compact row list (md and up) */}
-              <div className="hidden md:block divide-y divide-border">
+              <div className="hidden divide-y divide-brand-line/70 md:block">
                     {items.map((t) => {
                       // (#629) Either reviewed OR Ignore'd dims the row.
                       const isIgnored =
@@ -2258,7 +2258,7 @@ export default function AmexPage() {
                         metaNode={
                           t.notes ? (
                             <div
-                              className="text-[11px] text-muted-foreground truncate"
+                              className="truncate text-micro text-neutral-500"
                               title={t.notes}
                             >
                               {t.notes}
@@ -2267,9 +2267,8 @@ export default function AmexPage() {
                         }
                         chipsNode={
                           t.isTransfer ? (
-                            <Badge
-                              variant="outline"
-                              className="inline-flex items-center gap-1 text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
+                            <span
+                              className="chip gray inline-flex items-center gap-1"
                               title={
                                 t.isTransferUserOverridden
                                   ? "Manually set — won't be re-flagged on the next sync"
@@ -2282,7 +2281,7 @@ export default function AmexPage() {
                                 type="button"
                                 aria-label="Clear Transfer flag"
                                 data-testid={`button-clear-transfer-${t.id}`}
-                                className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-secondary"
+                                className="press -mr-0.5 ml-0.5 inline-flex items-center justify-center rounded hover:text-brand-navy"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   updateTx.mutate(
@@ -2302,19 +2301,19 @@ export default function AmexPage() {
                                   );
                                 }}
                               >
-                                <X className="w-3 h-3" />
+                                <X className="h-3 w-3" />
                               </button>
-                            </Badge>
+                            </span>
                           ) : null
                         }
                         amountNode={
                           <div className="flex flex-col items-end">
-                            <span className="font-semibold">
+                            <span className="font-semibold text-brand-navy">
                               {formatCurrency(parseAbs(t.amount))}
                             </span>
                             {runningBalanceMap.has(t.id) && (
                               <span
-                                className="text-[11px] text-muted-foreground"
+                                className="font-mono text-micro tabular-nums text-neutral-400"
                                 data-testid={`text-running-balance-${t.id}`}
                               >
                                 bal {formatCurrency(runningBalanceMap.get(t.id)!)}
@@ -2354,13 +2353,14 @@ function DayGroupsList<G>({
   renderGroup,
 }: {
   groups: [string, G[]][];
-  renderGroup: (entry: [string, G[]]) => React.ReactNode;
+  /** `index` lets the caller head only the FIRST group's columns. */
+  renderGroup: (entry: [string, G[]], index: number) => React.ReactNode;
 }) {
   return (
     <div className="space-y-6">
-      {groups.map((entry) => (
+      {groups.map((entry, index) => (
         <div key={entry[0]} data-day-group-key={entry[0]}>
-          {renderGroup(entry)}
+          {renderGroup(entry, index)}
         </div>
       ))}
     </div>
@@ -2378,9 +2378,9 @@ function BulkCategoryPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" className="bg-primary hover:bg-primary/90">
+        <button type="button" className={btnSm}>
           Set category
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-0" align="start">
         <Command>

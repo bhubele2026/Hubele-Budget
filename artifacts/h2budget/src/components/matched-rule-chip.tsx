@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Wand2, UserRound } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -56,17 +57,19 @@ export function MatchedRuleChip({
         <TooltipTrigger asChild>
           <Link
             href={`/mapping-rules?focus=${encodeURIComponent(matched.id)}`}
-            className={
-              compact
-                ? "inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2 max-w-[200px] truncate"
-                : "inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2 max-w-[280px] truncate"
-            }
+            // `.chip` — but `normal-case` so the stored pattern reads as it
+            // was actually written; upper-casing it would misrepresent the
+            // rule the user has to go and find.
+            className={cn(
+              "chip gray press inline-flex max-w-[200px] items-center gap-1 truncate normal-case hover:bg-platinum-5 hover:text-brand-navy",
+              !compact && "max-w-[280px]",
+            )}
             data-testid={`link-matched-rule-${testIdSuffix}`}
             data-matched-rule-id={matched.id}
             title={`Matched by rule "${matched.pattern}" (${label}). Jump to it.`}
           >
-            <Wand2 className={compact ? "w-2.5 h-2.5 shrink-0" : "w-3 h-3 shrink-0"} />
-            <span className="truncate font-mono">{matched.pattern}</span>
+            <Wand2 className={compact ? "h-2.5 w-2.5 shrink-0" : "h-3 w-3 shrink-0"} />
+            <span className="truncate font-mono font-normal">{matched.pattern}</span>
           </Link>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="text-[11px] max-w-xs">
@@ -83,15 +86,11 @@ export function MatchedRuleChip({
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className={
-            compact
-              ? "inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
-              : "inline-flex items-center gap-1 text-[11px] text-muted-foreground"
-          }
+          className="chip gray inline-flex items-center gap-1"
           data-testid={`text-no-rule-${testIdSuffix}`}
         >
-          <UserRound className={compact ? "w-2.5 h-2.5" : "w-3 h-3"} />
-          manually categorized
+          <UserRound className={compact ? "h-2.5 w-2.5" : "h-3 w-3"} />
+          Manual
         </span>
       </TooltipTrigger>
       <TooltipContent side="bottom" className="text-[11px] max-w-xs">
