@@ -8,8 +8,7 @@ import {
   getListDebtsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MoneyText } from "@/components/viz";
+import { card, cardHead, th, td, tdNum, inputInline, Help } from "@/ui";
 import {
   BRAND_LABEL,
   brandColor,
@@ -18,12 +17,12 @@ import {
   AMEX_TIERS,
   type AmexTier,
 } from "@/lib/amexBrand";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { AddToAvalanche } from "@/components/add-card-to-avalanche";
 
 type Cadence = "weekly" | "monthly";
 
-/** Three small swatches to assign a card's tier (Blue / Platinum). */
+/** Swatches to assign a card's tier (Blue / Platinum). */
 function TierPicker({
   value,
   onChange,
@@ -33,9 +32,6 @@ function TierPicker({
 }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        Tier
-      </span>
       {AMEX_TIERS.map((t) => (
         <button
           key={t}
@@ -46,10 +42,10 @@ function TierPicker({
           aria-pressed={value === t}
           data-testid={`amex-tier-set-${t}`}
           className={cn(
-            "h-4 w-4 rounded-full ring-offset-1 transition-all",
+            "press h-4 w-4 rounded-full ring-offset-1",
             value === t
-              ? "ring-2 ring-foreground scale-110"
-              : "opacity-50 hover:opacity-100",
+              ? "ring-2 ring-brand-navy"
+              : "opacity-45 hover:opacity-100",
           )}
           style={{ background: brandColor(t) }}
         />
@@ -58,8 +54,8 @@ function TierPicker({
   );
 }
 
-/** Per-card custom name (saved on blur). Cadence is no longer toggled here — it
- *  is derived from the tier (Blue = monthly, Platinum = weekly). */
+/** Per-card custom name (saved on blur). Cadence is derived from the tier
+ *  (Blue = monthly, Platinum = weekly), so there is no separate toggle. */
 function CardConfig({
   name,
   placeholder,
@@ -80,15 +76,15 @@ function CardConfig({
       }}
       placeholder={placeholder}
       aria-label="Card name"
-      className="w-full rounded-md border border-card-border bg-background px-2 py-1 text-xs"
+      className={cn(inputInline, "w-full font-sans")}
     />
   );
 }
 
 /**
- * Avalanche-page card configuration: assign each Amex card's tier + name +
- * cadence, and add it to the payoff engine as a real debt. Moved off the Amex
- * page so the Amex band is display-only. Tier/name settings live in the shared
+ * Avalanche-page card configuration: assign each Amex card's tier + name, and
+ * add it to the payoff engine as a real debt. Moved off the Amex page so the
+ * Amex band is display-only. Tier/name settings live in the shared
  * settings.preferences (amexCardBrands / amexCardNames / amexCardCadence).
  */
 export function AvalancheCardConfig() {
@@ -136,56 +132,59 @@ export function AvalancheCardConfig() {
   if (cards.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Amex cards</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {cards.map((c) => {
-        const tier = effectiveBrand(c.accountId, c.brand, overrides);
-        const color = brandColor(tier);
-        return (
-          <div
-            key={c.accountId}
-            className="rounded-xl border border-card-border p-3"
-            style={{ borderLeftColor: color, borderLeftWidth: 3 }}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1.5 text-xs font-medium">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: color }}
-                />
-                {names[c.accountId] || BRAND_LABEL[tier] || c.name}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                <MoneyText amount={c.statementBalance} />
-              </span>
-            </div>
-            <div className="mt-2 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <TierPicker
-                  value={tier}
-                  onChange={(t) => void setTier(c.accountId, t)}
-                />
-                <span
-                  className="rounded-md border border-card-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-                  title="Cadence is set by the tier: Blue = monthly, Platinum = weekly"
-                >
-                  {tier === "blue" ? "Monthly card" : "Weekly card"}
-                </span>
-              </div>
-              <CardConfig
-                name={names[c.accountId] ?? ""}
-                placeholder={BRAND_LABEL[tier]}
-                onName={(v) => void setName(c.accountId, v)}
-              />
-              <AddToAvalanche card={c} onCreated={refreshAfterCreate} />
-            </div>
-          </div>
-          );
-        })}
-      </CardContent>
-    </Card>
+    <div className={card}>
+      <div className={cardHead}>
+        <span className="text-title font-semibold text-brand-navy">Amex cards</span>
+        <Help className="ml-auto">
+          Tier sets the cadence — Blue is a monthly card, Platinum is weekly.
+          Adding a card to the plan creates it as a debt the avalanche can
+          target.
+        </Help>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th className={th}>Card</th>
+              <th className={`${th} text-right`}>Statement</th>
+              <th className={th}>Tier</th>
+              <th className={th}>Cadence</th>
+              <th className={th}>In plan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cards.map((c) => {
+              const tier = effectiveBrand(c.accountId, c.brand, overrides);
+              return (
+                <tr key={c.accountId}>
+                  <td className={`${td} min-w-[180px]`}>
+                    <CardConfig
+                      name={names[c.accountId] ?? ""}
+                      placeholder={BRAND_LABEL[tier]}
+                      onName={(v) => void setName(c.accountId, v)}
+                    />
+                  </td>
+                  <td className={tdNum}>{formatCurrency(c.statementBalance)}</td>
+                  <td className={td}>
+                    <TierPicker
+                      value={tier}
+                      onChange={(t) => void setTier(c.accountId, t)}
+                    />
+                  </td>
+                  <td className={`${td} whitespace-nowrap`}>
+                    <span className="chip gray">
+                      {tier === "blue" ? "Monthly" : "Weekly"}
+                    </span>
+                  </td>
+                  <td className={`${td} whitespace-nowrap`}>
+                    <AddToAvalanche card={c} onCreated={refreshAfterCreate} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

@@ -192,9 +192,14 @@ export function Help(props: { children: string; className?: string }) {
  * word somebody would otherwise ask about. Two sentences is the cap; a third
  * means the content belongs in the card subtitle or nowhere.
  */
-export function Foot(props: { children: ReactNode; className?: string }) {
+export function Foot(props: {
+  children: ReactNode;
+  className?: string;
+  "data-testid"?: string;
+}) {
   return (
     <p
+      data-testid={props["data-testid"]}
       className={`border-t border-brand-line px-4 py-2 text-micro text-neutral-400 ${props.className ?? ""}`}
     >
       {props.children}

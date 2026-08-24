@@ -173,11 +173,17 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
     await expect(page.getByTestId(`row-bill-${partialBill.id}`)).toBeVisible();
     await expect(page.getByTestId(`row-bill-${unmatchedBill.id}`)).toBeVisible();
 
-    // --- Fully-paid case: green "$1,200.00 paid" with the Check svg.
+    // --- Fully-paid case: "$1,200.00 paid" in navy, with the Check svg.
+    // ⚠️ The palette has no green. Under the navy/platinum system "good" is the
+    // RESTING state and does not shout, so paid is `text-brand-navy` and the
+    // word "paid" — not the colour — is what says it. (These two class
+    // assertions used to name `text-emerald-700` / `text-amber-600`, which
+    // stopped existing when the tokens flipped; they are re-pinned here to the
+    // classes the page actually emits.)
     const paidLabel = page.getByTestId(`text-actual-${paidBill.id}`);
     await expect(paidLabel).toBeVisible();
     await expect(paidLabel).toHaveText(/\$1,200\.00 paid/);
-    await expect(paidLabel).toHaveClass(/text-emerald-700/);
+    await expect(paidLabel).toHaveClass(/text-brand-navy/);
     await expect(paidLabel).toHaveAttribute(
       "title",
       /Paid \$1,200\.00 of \$1,200\.00 planned/,
@@ -186,11 +192,12 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
     // so a future refactor that drops the icon would fail the test.
     await expect(paidLabel.locator("svg")).toHaveCount(1);
 
-    // --- Partial case: amber "$140.00 so far", no check icon.
+    // --- Partial case: "$140.00 so far" in grey, no check icon. "Watch" is
+    // grey on this palette; the words "so far" carry the state.
     const partialLabel = page.getByTestId(`text-actual-${partialBill.id}`);
     await expect(partialLabel).toBeVisible();
     await expect(partialLabel).toHaveText(/\$140\.00 so far/);
-    await expect(partialLabel).toHaveClass(/text-amber-600/);
+    await expect(partialLabel).toHaveClass(/text-neutral-500/);
     await expect(partialLabel).toHaveAttribute(
       "title",
       /Partial — \$140\.00 of \$300\.00 planned/,

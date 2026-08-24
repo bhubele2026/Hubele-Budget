@@ -1,34 +1,30 @@
-// (#826) Avalanche extra-payment schedule card for /forecast.
+// (#826) Avalanche extra-payment schedule — the dated plan of extra payments
+// the forecast says are safe to make: 4–12 payments (date, amount, why,
+// confidence), the current avalanche target, and a footer total.
 //
-// A multi-date extra-payment schedule: 4-12 dated payments (amount, rationale,
-// confidence badge), the avalanche-target debt, and a footer total. All numbers
-// are deterministic (server-computed).
+// Every number here is server-computed and deterministic. This file is
+// PRESENTATION ONLY — it reads `useGetForecastAvalancheSchedule()` and renders
+// it; it does not derive, round, or re-sum anything.
 
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { card, cardHead, th, td, tdNum, Help, Foot } from "@/ui";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useGetForecastAvalancheSchedule } from "@workspace/api-client-react";
-import { Mountain, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
+/**
+ * Confidence, as a `.chip`.
+ *
+ * ⚠️ THE WORD CARRIES THE STATE, NOT THE COLOUR. `ok` is the same navy as body
+ * text on purpose — under the palette rule good is the resting state and does
+ * not shout, so "High" has to be legible as high without the chip's fill doing
+ * any work. Only `low` spends the one alarm colour the app has.
+ */
 const CONFIDENCE_META = {
-  high: {
-    label: "High",
-    className:
-      "border-positive/40 text-positive",
-  },
-  medium: {
-    label: "Medium",
-    className:
-      "border-warning/40 text-warning",
-  },
-  low: {
-    label: "Low",
-    className:
-      "border-destructive/50 text-destructive",
-  },
+  high: { label: "High", tone: "ok" },
+  medium: { label: "Medium", tone: "gray" },
+  low: { label: "Low", tone: "bad" },
 } as const;
 
 export function AvalancheScheduleCard() {
@@ -37,21 +33,16 @@ export function AvalancheScheduleCard() {
 
   if (isLoading || !data) {
     return (
-      <Card data-testid="card-avalanche-schedule">
-        <CardContent className="p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-5 w-44" />
-            <Skeleton className="h-8 w-20" />
-          </div>
-          <Skeleton className="h-12 w-full" />
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-          <Skeleton className="h-4 w-56" />
-        </CardContent>
-      </Card>
+      <div className={card} data-testid="card-avalanche-schedule">
+        <div className={cardHead}>
+          <Skeleton className="h-4 w-44" />
+        </div>
+        <div className="space-y-2 p-4">
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      </div>
     );
   }
 
@@ -60,127 +51,104 @@ export function AvalancheScheduleCard() {
   const target = data.currentAvalancheTarget;
 
   return (
-    <Card className="border-2" data-testid="card-avalanche-schedule">
-      <CardContent className="p-5 space-y-4">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Mountain className="w-5 h-5 text-primary" />
-            <div>
-              <div className="text-xs font-bold tracking-widest uppercase text-primary">
-                Avalanche Schedule
-              </div>
-              {target && (
-                <div className="text-xs text-muted-foreground">
-                  Targeting{" "}
-                  <span className="font-medium text-foreground">
-                    {target.debtName}
-                  </span>{" "}
-                  · {(target.apr * 100).toFixed(2)}% APR
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+    <div className={card} data-testid="card-avalanche-schedule">
+      <div className={cardHead}>
+        <span className="text-title font-semibold text-brand-navy">Schedule</span>
+        {target && (
+          <span className="truncate text-micro uppercase tracking-wide text-neutral-400">
+            {target.debtName} · {(target.apr * 100).toFixed(2)}% APR
+          </span>
+        )}
+        <Help className="ml-auto">
+          Dated extra payments the cash forecast says clear without dipping the
+          projected balance. Amounts and dates are computed on the server.
+        </Help>
+      </div>
 
-        <Separator />
-
-        {/* Payment schedule (collapsed by default) */}
-        {hasPayments ? (
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              aria-expanded={expanded}
-              data-testid="button-toggle-avalanche-schedule"
-              className="flex w-full items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <span>
-                {payments.length} payment{payments.length === 1 ? "" : "s"}{" "}
-                totaling{" "}
-                <span className="font-semibold tabular-nums text-foreground">
-                  {formatCurrency(data.totalProposed)}
-                </span>
-              </span>
-              <span aria-hidden="true">·</span>
-              <span className="font-medium text-foreground">
-                {expanded ? "Hide schedule" : "Show schedule"}
-              </span>
+      {hasPayments ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            data-testid="button-toggle-avalanche-schedule"
+            className="press flex w-full items-center gap-2 px-4 py-2.5 text-left text-body text-neutral-600 hover:text-brand-navy"
+          >
+            <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+              {formatCurrency(data.totalProposed)}
+            </span>
+            <span className="text-micro uppercase tracking-wide text-neutral-400">
+              over {payments.length} payment{payments.length === 1 ? "" : "s"}
+            </span>
+            <span className="ml-auto inline-flex items-center gap-1 text-micro font-semibold uppercase tracking-wide">
+              {expanded ? "Hide" : "Show"}
               {expanded ? (
-                <ChevronUp className="h-4 w-4" />
+                <ChevronUp className="h-3.5 w-3.5" />
               ) : (
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="h-3.5 w-3.5" />
               )}
-            </button>
+            </span>
+          </button>
 
-            {expanded && (
-              <>
-                <ul
-                  className="space-y-2"
+          {expanded && (
+            <>
+              <div className="overflow-x-auto">
+                <table
+                  className="w-full border-t border-brand-line"
                   data-testid="list-avalanche-payments"
                 >
-                  {payments.map((p, i) => {
-                    const meta = CONFIDENCE_META[p.confidence];
-                    return (
-                      <li
-                        key={`${p.date}-${i}`}
-                        className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3"
-                        data-testid={`row-avalanche-payment-${i}`}
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold tabular-nums">
-                              {formatCurrency(p.amount)}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {formatDate(p.date)}
-                            </span>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {p.rationale}
-                          </div>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={`shrink-0 text-[10px] ${meta.className}`}
-                        >
-                          {meta.label}
-                        </Badge>
-                      </li>
-                    );
-                  })}
-                </ul>
-
-                {/* Footer total */}
-                <Separator />
-                <div
-                  className="flex items-center justify-between text-sm"
-                  data-testid="text-avalanche-total"
-                >
-                  <span className="text-muted-foreground">
-                    Total across {payments.length} payment
-                    {payments.length === 1 ? "" : "s"}
-                    {data.scheduleThroughDate && (
-                      <> through {formatDate(data.scheduleThroughDate)}</>
-                    )}
-                  </span>
-                  <span className="font-bold tabular-nums text-primary">
-                    {formatCurrency(data.totalProposed)}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
-          <div
-            className="text-sm text-muted-foreground"
-            data-testid="text-avalanche-empty"
-          >
-            No safe extra-payment windows over the next 12 months. Keep an eye
-            on your projected balance — windows open up as bills clear.
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                  <thead>
+                    <tr>
+                      <th className={th}>Date</th>
+                      <th className={`${th} text-right`}>Amount</th>
+                      <th className={th}>Why</th>
+                      <th className={th}>Confidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payments.map((p, i) => {
+                      const meta = CONFIDENCE_META[p.confidence];
+                      return (
+                        <tr key={`${p.date}-${i}`} data-testid={`row-avalanche-payment-${i}`}>
+                          <td className={`${td} whitespace-nowrap text-neutral-500`}>
+                            {formatDate(p.date)}
+                          </td>
+                          <td className={tdNum}>{formatCurrency(p.amount)}</td>
+                          <td className={`${td} text-neutral-500`}>{p.rationale}</td>
+                          <td className={td}>
+                            <span className={`chip ${meta.tone}`}>{meta.label}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr data-testid="text-avalanche-total">
+                      <td className={`${td} text-micro font-semibold uppercase tracking-wide text-neutral-400`}>
+                        Total
+                      </td>
+                      <td className={`${tdNum} font-semibold`}>
+                        {formatCurrency(data.totalProposed)}
+                      </td>
+                      <td className={`${td} text-neutral-400`} colSpan={2}>
+                        {payments.length} payment{payments.length === 1 ? "" : "s"}
+                        {data.scheduleThroughDate && (
+                          <> through {formatDate(data.scheduleThroughDate)}</>
+                        )}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        <Foot data-testid="text-avalanche-empty">
+          No safe payment window in the next 12 months. Windows open as bills
+          clear.
+        </Foot>
+      )}
+    </div>
   );
 }

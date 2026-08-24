@@ -24,20 +24,12 @@ import {
 } from "@workspace/api-client-react";
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
 import { BillsHealthCheck } from "@/components/bills-health-check";
-import { StatTile, StatTileRow } from "@/components/stat-tile";
-import { RingMeter, SectionHeader } from "@/components/stat";
-import { TrendingUp, Receipt, Landmark, Scale } from "lucide-react";
 import { formatBillRowAmount } from "@/lib/billsRowAmount";
 import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
-import { Lock, PartyPopper } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { MoneyText } from "@/components/viz";
+import { Lock } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { rangeForMode, type RangeMode } from "@/lib/timeRange";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -55,8 +47,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ArrowDownCircle,
-  ArrowUpCircle,
   ArrowRight,
   Check,
   ChevronLeft,
@@ -67,6 +57,24 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
+import {
+  btn,
+  btnDanger,
+  btnLink,
+  btnLinkDanger,
+  card,
+  cardHead,
+  emptyNote,
+  Field,
+  fieldLabel,
+  Foot,
+  Help,
+  input,
+  Stat,
+  td,
+  tdNum,
+  th,
+} from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 
@@ -144,12 +152,6 @@ function frequencyLabel(item: RecurringItem): string {
   }
 }
 
-function metaLine(item: RecurringItem): string {
-  const left = frequencyLabel(item);
-  const right = item.kind === "income" ? "Income" : "Bill";
-  return `${left} · ${right}`;
-}
-
 const isActive = (item: RecurringItem): boolean => item.active === "true";
 
 // Task #690 — name of the dedicated manual bucket on /budget. Bills must
@@ -160,6 +162,28 @@ const isActive = (item: RecurringItem): boolean => item.active === "true";
 // and the frontend Budget page.
 const MY_BUDGET_GROUP = "My budget";
 
+/**
+ * ⚠️ ROW TABLES SCROLL THEMSELVES, THEY DO NOT COMPRESS.
+ *
+ * Squeezed into a 390px phone these tables re-wrap every cell — the amount
+ * breaks across three lines, the date column detaches from its row and the
+ * action buttons clip off the card. A min-width inside an `overflow-x-auto`
+ * keeps each row at its designed proportions and lets the narrow screen pan,
+ * which is the one thing that stays readable. The PAGE never scrolls sideways;
+ * only the box does.
+ */
+const scrollX = "overflow-x-auto";
+
+/** The due-date cell shared by every row table on this page. */
+function DueCell({ iso }: { iso: string | null }) {
+  const pill = formatDatePill(iso);
+  if (!pill) return <span className="text-neutral-300">—</span>;
+  return (
+    <span className="whitespace-nowrap font-mono text-label tabular-nums text-brand-navy">
+      {pill.month} {pill.day}
+    </span>
+  );
+}
 
 const DEFAULT_FORM: FormState = {
   name: "",
@@ -534,7 +558,8 @@ export default function BillsPage() {
   if (!summary) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-9 w-40" />
+        <Skeleton className="h-20 w-full" />
         <Skeleton className="h-96 w-full" />
       </div>
     );
@@ -563,6 +588,8 @@ export default function BillsPage() {
   );
   const totalOutflow = billsMonthly + debtMin;
   const net = incomeMonthly - totalOutflow;
+  const committedPct =
+    incomeMonthly > 0 ? Math.round((totalOutflow / incomeMonthly) * 100) : 0;
 
   // #303 — actual-so-far totals per group, mirroring the per-row
   // "$X paid / $X so far" labels. Sum BillsSummaryRow.actualAmount across
@@ -577,22 +604,38 @@ export default function BillsPage() {
   const incomeActual = sumActiveActual(incomeRows);
   const billsActual = sumActiveActual(billRows);
 
+  // Weekly-first lead: exactly what's due in the selected window (this week by
+  // default). Same expressions as before, hoisted out of the JSX so the
+  // headline Stat can quote the total the list below sums to.
+  const dueRange = rangeForMode(dueMode);
+  const dueRows = billRows.filter(
+    (r) =>
+      r.nextOccurrence &&
+      r.nextOccurrence >= dueRange.from &&
+      r.nextOccurrence <= dueRange.to,
+  );
+  const dueTotal = dueRows.reduce(
+    (s, r) => s + Math.abs(Number(r.item.amount) || 0),
+    0,
+  );
+  const windowWord =
+    dueMode === "wk" ? "this week" : dueMode === "mo" ? "this month" : "this year";
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-start gap-4 flex-wrap">
-        <div>
-          <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground tracking-tight">
-            Bills
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Every recurring dollar in and out. Edits here flow into the Forecast.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-md border border-border">
-            <Button
-              variant="ghost"
-              size="icon"
+    <div className="space-y-5">
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* ⚠️ EXACTLY "Bills". Five e2e specs gate on
+            getByRole("heading", { name: /^bills$/i }), and four more on the
+            loose /bills/i — which is also why no other heading on this page may
+            contain the word. */}
+        <h1 className="text-display font-semibold text-brand-navy">Bills</h1>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-control bg-white px-1 py-0.5 ring-1 ring-brand-line">
+            <button
+              type="button"
+              className={btnLink}
               onClick={() => changeMonth(-1)}
               disabled={atFloor}
               aria-disabled={atFloor}
@@ -600,157 +643,116 @@ export default function BillsPage() {
               title={atFloor ? "April 2026 is the earliest month" : undefined}
               data-testid="button-prev-month"
             >
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
+              <ChevronLeft className="h-4 w-4" />
+            </button>
             <span
-              className="font-medium text-lg w-32 text-center"
+              className="w-32 text-center text-label font-semibold text-brand-navy"
               data-testid="text-current-month"
             >
               {monthName}
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
+            <button
+              type="button"
+              className={btnLink}
               onClick={() => changeMonth(1)}
               aria-label="Next month"
               data-testid="button-next-month"
             >
-              <ChevronRight className="w-5 h-5" />
-            </Button>
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-          <Button onClick={openNew} data-testid="button-add-bill">
-            <Plus className="w-4 h-4 mr-2" /> Add income or bill
-          </Button>
+          <button
+            type="button"
+            className={btn}
+            onClick={openNew}
+            data-testid="button-add-bill"
+          >
+            <Plus className="mr-1 inline h-4 w-4 align-[-2px]" />
+            Add
+          </button>
         </div>
       </div>
 
-      {/* At-a-glance monthly summary — Net is the hero. */}
-      <SectionHeader
-        eyebrow="This month"
-        title="Where the money stands"
-        sub="Income in, bills out, and what's left over."
-      />
-      <StatTileRow>
-        <StatTile
-          label="Income"
-          value={<MoneyText amount={incomeMonthly} />}
-          sub="monthly in"
-          icon={<TrendingUp className="h-4 w-4" />}
+      {/* ── Headline ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-3">
+        <Stat
+          index={0}
+          label={`Due ${windowWord}`}
+          value={formatCurrency(dueTotal)}
+          hint={`${dueRows.length} item${dueRows.length === 1 ? "" : "s"} · ${dueRange.label}`}
         />
-        <StatTile
-          label="Bills & expenses"
-          value={<MoneyText amount={-billsMonthly} abs />}
-          sub="recurring out"
-          icon={<Receipt className="h-4 w-4" />}
+        <Stat
+          index={1}
+          label={net >= 0 ? "Net this month" : "Net · short"}
+          value={formatCurrency(net)}
+          tone={net >= 0 ? "ok" : "bad"}
+          hint={`${committedPct}% of income committed`}
         />
-        <StatTile
-          label="Debt minimums"
-          value={<MoneyText amount={debtMin} abs />}
-          sub="monthly mins"
-          icon={<Landmark className="h-4 w-4" />}
+        <Stat
+          index={2}
+          label="Active items"
+          value={activeCount}
+          hint="income + bills"
         />
-        <StatTile
-          active
-          label={net >= 0 ? "Net · left over" : "Net · shortfall"}
-          value={<MoneyText amount={net} signed />}
-          sub={net >= 0 ? "breathing room" : "tighten up"}
-          icon={<Scale className="h-4 w-4" />}
-        />
-      </StatTileRow>
+      </div>
 
-      {/* Income-vs-outflow ring for the month (server-computed figures). */}
-      <Card data-testid="bills-commitment">
-        <CardContent className="flex items-center gap-5 p-5">
-          <RingMeter
-            ratio={incomeMonthly > 0 ? (billsMonthly + debtMin) / incomeMonthly : 0}
-            status={net >= 0 ? "good" : "danger"}
-            centerTop={<MoneyText amount={net} signed />}
-            centerBottom="net / mo"
-            size={104}
-            stroke={9}
-          />
-          <div className="text-sm text-muted-foreground">
-            {incomeMonthly > 0
-              ? Math.round(((billsMonthly + debtMin) / incomeMonthly) * 100)
-              : 0}
-            % of income committed
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Weekly-first lead: exactly what's due in the selected window (this
-          week by default). The monthly detail lives below. */}
-      {(() => {
-        const dueRange = rangeForMode(dueMode);
-        const dueRows = billRows.filter(
-          (r) =>
-            r.nextOccurrence &&
-            r.nextOccurrence >= dueRange.from &&
-            r.nextOccurrence <= dueRange.to,
-        );
-        const dueTotal = dueRows.reduce(
-          (s, r) => s + Math.abs(Number(r.item.amount) || 0),
-          0,
-        );
-        const windowWord =
-          dueMode === "wk" ? "this week" : dueMode === "mo" ? "this month" : "this year";
-        return (
-          <Card className="focus-glow" data-testid="bills-due-lead">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                    Due {windowWord}
-                  </div>
-                  <MoneyText amount={-dueTotal} className="text-2xl font-bold" />
-                  <div className="text-xs text-muted-foreground tabular-nums">
-                    {dueRows.length} item{dueRows.length === 1 ? "" : "s"} · {dueRange.label}
-                  </div>
-                </div>
-                <TimeRangeToggle value={dueMode} onChange={setDueMode} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          {/* ── Due window ───────────────────────────────────────────────── */}
+          <div className={card} data-testid="bills-due-lead">
+            <div className={cardHead}>
+              <div className="text-label font-semibold text-brand-navy">
+                Due {windowWord}
               </div>
-              {dueRows.length ? (
-                <div className="divide-y divide-border">
-                  {dueRows.map((r) => {
-                    const pill = formatDatePill(r.nextOccurrence);
-                    return (
-                      <div
-                        key={r.item.id}
-                        className="flex items-center justify-between gap-3 py-2"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {pill && (
-                            <span className="flex flex-col items-center justify-center rounded-md border border-border px-2 py-1 leading-none shrink-0">
-                              <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
-                                {pill.month}
-                              </span>
-                              <span className="text-sm font-bold tabular-nums">{pill.day}</span>
-                            </span>
-                          )}
-                          <span className="truncate text-sm font-medium">{r.item.name}</span>
-                        </div>
-                        <MoneyText
-                          amount={-Math.abs(Number(r.item.amount) || 0)}
-                          className="font-semibold shrink-0"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="py-4 text-sm text-muted-foreground">
-                  Nothing due {windowWord} — breathe. Don't get used to it.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })()}
+              <Help>
+                {`Recurring bills whose next occurrence lands inside ${dueRange.label}. Debt minimums are listed separately below.`}
+              </Help>
+              {/* ⚠️ `-my-1` is an optical correction, not a nudge: the
+                  segmented control is taller than a line of head text, and
+                  without it this card's head grows ~6px and its title stops
+                  sharing a baseline with the sibling card beside it. */}
+              <TimeRangeToggle
+                value={dueMode}
+                onChange={setDueMode}
+                className="-my-1 ml-auto"
+              />
+            </div>
+            {dueRows.length ? (
+              <div className={scrollX}>
+              <table className="w-full min-w-[22rem]">
+                <thead>
+                  <tr>
+                    <th className={th}>Due</th>
+                    <th className={th}>Item</th>
+                    <th className={`${th} text-right`}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dueRows.map((r) => (
+                    <tr key={r.item.id}>
+                      <td className={`${td} w-px`}>
+                        <DueCell iso={r.nextOccurrence} />
+                      </td>
+                      <td className={td}>
+                        <span className="block max-w-[26rem] truncate">
+                          {r.item.name}
+                        </span>
+                      </td>
+                      <td className={`${tdNum} whitespace-nowrap`}>
+                        −{formatCurrency(Math.abs(Number(r.item.amount) || 0))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+            ) : (
+              <p className={emptyNote}>Nothing due {windowWord}</p>
+            )}
+          </div>
 
-      <BillsHealthCheck summary={summary} />
+          <BillsHealthCheck summary={summary} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
           <BillGroupCard
             title="Income"
             total={incomeMonthly}
@@ -792,148 +794,151 @@ export default function BillsPage() {
             />
           ) : null}
           {archivedDebtsList.length > 0 && (
-            <Card data-testid="card-archived-debts">
-              <CardContent className="p-0">
-                <div className="px-5 py-4 flex items-center justify-between border-b border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                      <Lock className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <div className="text-base font-display font-semibold text-muted-foreground">
-                        Archived debts
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {archivedDebtsList.length} paid off · manage on Avalanche
-                      </div>
-                    </div>
-                  </div>
+            <div className={card} data-testid="card-archived-debts">
+              <div className={cardHead}>
+                <Lock className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
+                <div className="text-label font-semibold text-neutral-500">
+                  Archived debts
                 </div>
-                <ul className="divide-y divide-border">
+                <span className="chip gray">Paid off</span>
+                <span className="ml-auto text-micro text-neutral-400">
+                  manage on Future Goal
+                </span>
+              </div>
+              <div className={scrollX}>
+              <table className="w-full min-w-[18rem]">
+                <tbody>
                   {archivedDebtsList.map((d) => (
-                    <li
+                    <tr
                       key={d.id}
-                      className="px-5 py-3 flex items-center gap-4 opacity-60 cursor-pointer hover:opacity-80 transition-opacity"
+                      className="cursor-pointer hover:bg-brand-tint"
                       onClick={() => setLocation(`/avalanche?focus=${d.id}`)}
                       data-testid={`row-archived-debt-${d.id}`}
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate text-muted-foreground line-through">
-                          {d.name}
-                        </div>
-                      </div>
-                      <div className="text-sm tabular-nums text-muted-foreground">
+                      <td className={`${td} text-neutral-500`}>
+                        {d.name}
+                      </td>
+                      <td className={`${tdNum} text-neutral-500`}>
                         {formatCurrency(d.balance)}
-                      </div>
-                    </li>
+                      </td>
+                    </tr>
                   ))}
-                </ul>
-              </CardContent>
-            </Card>
+                </tbody>
+              </table>
+              </div>
+            </div>
           )}
         </div>
 
+        {/* ── Side column ────────────────────────────────────────────────── */}
         <div className="space-y-4">
-          <Card>
-            <CardContent className="p-6 space-y-4">
-              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                Per month
-              </div>
-              <SummaryRow
-                label="Income"
-                amount={incomeMonthly}
-                tone="income"
-                actual={incomeActual}
-                actualTestId="text-income-actual"
-                valueTestId="text-summary-income"
-              />
-              <SummaryRow
-                label="Bills"
-                amount={-billsMonthly}
-                tone="bill"
-                actual={billsActual}
-                actualTestId="text-bills-actual"
-                valueTestId="text-summary-bills"
-              />
-              <SummaryRow label="Debt minimums" amount={-debtMin} tone="bill" />
-              <div className="border-t pt-3 space-y-3">
+          <div className={card}>
+            <div className={cardHead}>
+              <div className="text-label font-semibold text-brand-navy">Per month</div>
+              <Help>
+                Recurring items at their monthly rate. The smaller figure beside
+                income and bills is what has actually been matched to those items
+                so far this month.
+              </Help>
+            </div>
+            <div className={scrollX}><table className="w-full min-w-[20rem]">
+              <tbody>
+                <SummaryRow
+                  label="Income"
+                  amount={incomeMonthly}
+                  tone="income"
+                  actual={incomeActual}
+                  actualTestId="text-income-actual"
+                  valueTestId="text-summary-income"
+                />
+                <SummaryRow
+                  label="Bills"
+                  amount={-billsMonthly}
+                  tone="bill"
+                  actual={billsActual}
+                  actualTestId="text-bills-actual"
+                  valueTestId="text-summary-bills"
+                />
+                <SummaryRow label="Debt minimums" amount={-debtMin} tone="bill" />
                 <SummaryRow label="Total outflow" amount={-totalOutflow} tone="bill" />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">Net</span>
-                  <span
-                    className={`text-lg font-bold tabular-nums ${net >= 0 ? "text-positive" : "text-destructive"}`}
+                <tr>
+                  <td className={`${td} border-b-0 font-semibold text-brand-navy`}>
+                    Net
+                  </td>
+                  <td
+                    className={`${tdNum} border-b-0 text-title font-semibold ${
+                      net >= 0 ? "text-brand-navy" : "text-bad"
+                    }`}
                     data-testid="text-net-monthly"
                   >
                     {net >= 0 ? "+" : ""}
                     {formatCurrency(net)}
-                  </span>
-                </div>
-              </div>
-              <div className="text-xs text-muted-foreground border-t pt-3">
-                {activeCount} active item{activeCount === 1 ? "" : "s"}
-              </div>
-            </CardContent>
-          </Card>
+                  </td>
+                </tr>
+              </tbody>
+            </table></div>
+          </div>
 
-          <Card data-testid="card-actual-this-month">
-            <CardContent className="p-6 space-y-4">
-              <div className="flex items-baseline justify-between">
-                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                  Actual this month
-                </div>
-                <div
-                  className="text-[10px] text-muted-foreground"
-                  data-testid="text-actual-month-label"
-                >
-                  {new Date(currentMonth + "T00:00:00").toLocaleDateString(
-                    "en-US",
-                    { month: "long" },
-                  )}{" "}
-                  so far
-                </div>
-              </div>
-              <SummaryRow
-                label="Income"
-                amount={actualThisMonth.income}
-                tone="income"
-                valueTestId="text-actual-income"
-              />
-              <SummaryRow
-                label="Spend"
-                amount={-actualThisMonth.spend}
-                tone="bill"
-                valueTestId="text-actual-spend"
-              />
-              <div className="border-t pt-3 flex items-center justify-between">
-                <span className="text-sm font-semibold">Net</span>
-                <span
-                  className={`text-lg font-bold tabular-nums ${actualThisMonth.net >= 0 ? "text-positive" : "text-destructive"}`}
-                  data-testid="text-actual-net"
-                >
-                  {actualThisMonth.net >= 0 ? "+" : ""}
-                  {formatCurrency(actualThisMonth.net)}
-                </span>
-              </div>
-              <div className="text-xs text-muted-foreground border-t pt-3">
-                Real transactions, transfers excluded.
-              </div>
-            </CardContent>
-          </Card>
+          <div className={card} data-testid="card-actual-this-month">
+            <div className={cardHead}>
+              <div className="text-label font-semibold text-brand-navy">Actual</div>
+              <Help>
+                Every real transaction in the month, not just the ones matched to
+                a bill. Transfers are excluded.
+              </Help>
+              <span
+                className="ml-auto text-micro text-neutral-400"
+                data-testid="text-actual-month-label"
+              >
+                {new Date(currentMonth + "T00:00:00").toLocaleDateString("en-US", {
+                  month: "long",
+                })}{" "}
+                so far
+              </span>
+            </div>
+            <div className={scrollX}><table className="w-full min-w-[20rem]">
+              <tbody>
+                <SummaryRow
+                  label="Income"
+                  amount={actualThisMonth.income}
+                  tone="income"
+                  valueTestId="text-actual-income"
+                />
+                <SummaryRow
+                  label="Spend"
+                  amount={-actualThisMonth.spend}
+                  tone="bill"
+                  valueTestId="text-actual-spend"
+                />
+                <tr>
+                  <td className={`${td} border-b-0 font-semibold text-brand-navy`}>
+                    Net
+                  </td>
+                  <td
+                    className={`${tdNum} border-b-0 text-title font-semibold ${
+                      actualThisMonth.net >= 0 ? "text-brand-navy" : "text-bad"
+                    }`}
+                    data-testid="text-actual-net"
+                  >
+                    {actualThisMonth.net >= 0 ? "+" : ""}
+                    {formatCurrency(actualThisMonth.net)}
+                  </td>
+                </tr>
+              </tbody>
+            </table></div>
+            <Foot>Real transactions, transfers excluded.</Foot>
+          </div>
 
-          <Link href="/forecast" className="block group">
-            <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                    Next
-                  </div>
-                  <div className="text-sm font-semibold text-foreground">
-                    See cash forecast
-                  </div>
+          <Link href="/forecast" className={`${card} block`}>
+            <div className="flex items-center justify-between px-4 py-3">
+              <div>
+                <div className={fieldLabel}>Next</div>
+                <div className="text-body font-semibold text-brand-navy">
+                  Cash forecast
                 </div>
-                <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-              </CardContent>
-            </Card>
+              </div>
+              <ArrowRight className="h-4 w-4 text-neutral-400" />
+            </div>
           </Link>
         </div>
       </div>
@@ -950,12 +955,10 @@ export default function BillsPage() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {editing ? "Edit item" : "Add income or bill"}
-            </DialogTitle>
+            <DialogTitle>{editing ? "Edit item" : "Add income or bill"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
+          <form onSubmit={onSubmit} className="space-y-1">
+            <div className="mb-3 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() =>
@@ -968,10 +971,15 @@ export default function BillsPage() {
                     categoryId: "",
                   }))
                 }
-                className={`px-3 py-2 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors ${form.kind === "income" ? "border-positive bg-positive/10 text-positive" : "border-border text-muted-foreground hover:bg-muted"}`}
+                className={
+                  form.kind === "income"
+                    ? "press rounded-control bg-brand-navy px-3 py-2 text-body font-medium text-white"
+                    : "press rounded-control bg-white px-3 py-2 text-body font-medium text-neutral-600 ring-1 ring-brand-line hover:bg-neutral-50"
+                }
+                aria-pressed={form.kind === "income"}
                 data-testid="toggle-income"
               >
-                <ArrowUpCircle className="w-4 h-4" /> Income
+                Income
               </button>
               <button
                 type="button"
@@ -985,29 +993,34 @@ export default function BillsPage() {
                     categoryId: "",
                   }))
                 }
-                className={`px-3 py-2 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors ${form.kind === "bill" ? "border-destructive bg-destructive/10 text-destructive" : "border-border text-muted-foreground hover:bg-muted"}`}
+                className={
+                  form.kind === "bill"
+                    ? "press rounded-control bg-brand-navy px-3 py-2 text-body font-medium text-white"
+                    : "press rounded-control bg-white px-3 py-2 text-body font-medium text-neutral-600 ring-1 ring-brand-line hover:bg-neutral-50"
+                }
+                aria-pressed={form.kind === "bill"}
                 data-testid="toggle-bill"
               >
-                <ArrowDownCircle className="w-4 h-4" /> Bill
+                Bill
               </button>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="bill-name">Name</Label>
-              <Input
+            <Field label="Name">
+              <input
                 id="bill-name"
+                className={input}
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder={form.kind === "income" ? "Paycheck" : "Electric bill"}
                 data-testid="input-name"
               />
-            </div>
+            </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="bill-amount">Amount</Label>
-                <Input
+              <Field label="Amount">
+                <input
                   id="bill-amount"
+                  className={input}
                   type="number"
                   step="0.01"
                   min="0"
@@ -1015,16 +1028,15 @@ export default function BillsPage() {
                   onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                   data-testid="input-amount"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label>Frequency</Label>
+              </Field>
+              <Field label="Frequency">
                 <Select
                   value={form.frequency}
                   onValueChange={(v) =>
                     setForm((f) => ({ ...f, frequency: v as Frequency }))
                   }
                 >
-                  <SelectTrigger data-testid="select-frequency">
+                  <SelectTrigger className={input} data-testid="select-frequency">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1035,14 +1047,14 @@ export default function BillsPage() {
                     <SelectItem value="onetime">One time</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
             </div>
 
             {form.frequency === "monthly" || form.frequency === "semimonthly" ? (
-              <div className="space-y-2">
-                <Label htmlFor="bill-day">Day of month</Label>
-                <Input
+              <Field label="Day of month">
+                <input
                   id="bill-day"
+                  className={input}
                   type="number"
                   min="1"
                   max="31"
@@ -1052,12 +1064,12 @@ export default function BillsPage() {
                   }
                   data-testid="input-day-of-month"
                 />
-              </div>
+              </Field>
             ) : form.frequency === "onetime" ? (
-              <div className="space-y-2">
-                <Label htmlFor="bill-onetime-date">Date</Label>
-                <Input
+              <Field label="Date">
+                <input
                   id="bill-onetime-date"
+                  className={input}
                   type="date"
                   value={form.oneTimeDate}
                   onChange={(e) =>
@@ -1065,12 +1077,12 @@ export default function BillsPage() {
                   }
                   data-testid="input-onetime-date"
                 />
-              </div>
+              </Field>
             ) : (
-              <div className="space-y-2">
-                <Label htmlFor="bill-anchor">Anchor date (first occurrence)</Label>
-                <Input
+              <Field label="First occurrence">
+                <input
                   id="bill-anchor"
+                  className={input}
                   type="date"
                   value={form.anchorDate}
                   onChange={(e) =>
@@ -1078,7 +1090,7 @@ export default function BillsPage() {
                   }
                   data-testid="input-anchor-date"
                 />
-              </div>
+              </Field>
             )}
 
             {/* (#690) Category picker — links this bill/income item to a
@@ -1117,8 +1129,7 @@ export default function BillsPage() {
               // user sees what's wired) but read-only with a hint.
               const debtLinked = !!editing?.debtId;
               return (
-                <div className="space-y-2">
-                  <Label htmlFor="bill-category">Category</Label>
+                <Field label="Category">
                   <Select
                     value={form.categoryId ? form.categoryId : NO_CATEGORY}
                     onValueChange={(v) =>
@@ -1131,20 +1142,18 @@ export default function BillsPage() {
                   >
                     <SelectTrigger
                       id="bill-category"
+                      className={input}
                       data-testid="select-category"
                     >
                       <SelectValue placeholder="— None —" />
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
-                      <SelectItem
-                        value={NO_CATEGORY}
-                        data-testid="select-category-none"
-                      >
+                      <SelectItem value={NO_CATEGORY} data-testid="select-category-none">
                         — None —
                       </SelectItem>
                       {Array.from(grouped.entries()).map(([groupName, cats]) => (
                         <SelectGroup key={groupName}>
-                          <SelectLabel className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          <SelectLabel className={`px-2 pb-1 pt-2 ${fieldLabel}`}>
                             {groupName}
                           </SelectLabel>
                           {cats.map((c) => (
@@ -1160,29 +1169,28 @@ export default function BillsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {/* ⚠️ These two captions are MUTUALLY EXCLUSIVE and an e2e spec
+                      asserts it: when the item is debt-linked the envelope
+                      sentence must have count 0 on the page. */}
                   {debtLinked ? (
-                    <p className="text-xs text-muted-foreground">
-                      Linked to a debt — its category comes from the
-                      matching Debt — Minimum Payments row on the Budget
-                      page.
+                    <p className="text-micro text-neutral-500">
+                      Linked to a debt — category comes from its Debt — Minimum
+                      Payments row.
                     </p>
                   ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Optional. Pick an envelope to roll this item into
-                      on the Budget page.
+                    <p className="text-micro text-neutral-500">
+                      Pick an envelope to roll this item into on the Budget page.
                     </p>
                   )}
-                </div>
+                </Field>
               );
             })()}
 
-            <label className="flex items-center gap-2 text-sm">
+            <label className="mb-3 flex items-center gap-2 text-body text-neutral-700">
               <input
                 type="checkbox"
                 checked={form.active}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, active: e.target.checked }))
-                }
+                onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
                 data-testid="checkbox-active"
               />
               Active
@@ -1190,25 +1198,25 @@ export default function BillsPage() {
 
             <DialogFooter className="!justify-between gap-2">
               {editing ? (
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
+                  className={btnDanger}
                   onClick={onDelete}
-                  className="text-destructive"
                   data-testid="button-delete"
                 >
-                  <Trash2 className="w-4 h-4 mr-1" /> Delete
-                </Button>
+                  Delete
+                </button>
               ) : (
                 <span />
               )}
-              <Button
+              <button
                 type="submit"
+                className={btn}
                 disabled={createItem.isPending || updateItem.isPending}
                 data-testid="button-save"
               >
                 {editing ? "Save changes" : "Add item"}
-              </Button>
+              </button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -1217,6 +1225,14 @@ export default function BillsPage() {
   );
 }
 
+/**
+ * One line of the Per month / Actual tables.
+ *
+ * ⚠️ THE SIGN LOGIC IS PINNED BY E2E. `text-summary-bills` reads "-$300.00"
+ * (ASCII hyphen, from Intl) while the group-card totals read "−$300.00"
+ * (U+2212, an explicit sign character). Both are asserted with exact-text
+ * matchers, so neither may be "tidied" into the other.
+ */
 function SummaryRow({
   label,
   amount,
@@ -1233,30 +1249,26 @@ function SummaryRow({
   valueTestId?: string;
 }) {
   const positive = amount >= 0;
-  const colorClass = tone === "income" ? "text-positive" : "text-destructive";
   const sign = positive && tone === "income" ? "+" : "";
   return (
-    <div className="flex items-center justify-between text-sm gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <div className="flex items-baseline gap-2 min-w-0">
-        <span
-          className={`tabular-nums font-medium ${colorClass}`}
-          data-testid={valueTestId}
-        >
+    <tr>
+      <td className={`${td} whitespace-nowrap text-neutral-500`}>{label}</td>
+      <td className={`${tdNum} whitespace-nowrap`}>
+        <span data-testid={valueTestId}>
           {sign}
           {formatCurrency(amount)}
         </span>
         {actual !== undefined ? (
           <span
-            className="text-[11px] tabular-nums text-muted-foreground"
+            className="ml-1.5 text-micro text-neutral-400"
             data-testid={actualTestId}
             title={`${formatCurrency(actual)} actual so far this month`}
           >
             / {formatCurrency(actual)} so far
           </span>
         ) : null}
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 }
 
@@ -1297,231 +1309,233 @@ function BillGroupCard({
     for (const d of debts) m.set(d.id, d);
     return m;
   }, [debts]);
-  const Icon = tone === "income" ? ArrowUpCircle : ArrowDownCircle;
-  const tint = tone === "income" ? "text-positive" : "text-destructive";
-  const tintBg = tone === "income" ? "bg-positive/10" : "bg-destructive/10";
   const sign = tone === "income" ? "+" : "−";
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="px-5 py-4 flex items-center justify-between border-b border-border">
-          <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-full ${tintBg} flex items-center justify-center`}>
-              <Icon className={`w-5 h-5 ${tint}`} />
-            </div>
-            <div>
-              <div className="text-base font-display font-semibold text-foreground">
-                {title}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {rows.length} item{rows.length === 1 ? "" : "s"} · per month
-              </div>
-            </div>
-          </div>
-          <div
-            className={`text-base font-semibold tabular-nums ${tint}`}
-            data-testid={`text-group-total-${tone}`}
-          >
-            {sign}
-            {formatCurrency(total)}
-          </div>
-        </div>
+    <div className={card}>
+      {/* ⚠️ The title is a <div>, not a heading: four e2e specs match
+          getByRole("heading", { name: /bills/i }) and a second heading
+          containing "Bills" would be a strict-mode violation. */}
+      <div className={cardHead}>
+        <div className="text-label font-semibold text-brand-navy">{title}</div>
+        <span className="text-micro text-neutral-400">
+          {rows.length} item{rows.length === 1 ? "" : "s"}
+        </span>
+        <span
+          className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy"
+          data-testid={`text-group-total-${tone}`}
+        >
+          {sign}
+          {formatCurrency(total)}
+        </span>
+      </div>
 
-        {rows.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-            No {title.toLowerCase()} yet.
-          </div>
-        ) : (
-          <ul className="divide-y divide-border">
-            {rows.map(({ item, nextOccurrence, monthlyAmount, actualAmount }) => {
-              const pill = formatDatePill(nextOccurrence);
-              const active = isActive(item);
-              // (#691) Resolve the chip shown under the row name so users
-              // can see at a glance which Budget envelope this item feeds.
-              // Debt-linked bills are driven by the Debt Tracker (their
-              // category comes from the matching Debt — Minimum Payments
-              // row), so we mark them with a lock + the debt's name.
-              // Plain categorized bills show "Group · Name". Uncategorized
-              // bills surface a muted "No category" hint that opens the
-              // edit modal so the wiring is one click away.
-              const linkedDebt = item.debtId ? debtById.get(item.debtId) : null;
-              const linkedCategory = item.categoryId
-                ? categoryById.get(item.categoryId)
-                : null;
-              const amt = Number(monthlyAmount) || 0;
-              const actual = Number(actualAmount) || 0;
-              // (#413) Display the per-event amount the user entered (e.g.
-              // "+$4,050.00 biweekly") instead of the smoothed monthly
-              // projection. The badge below still compares actual vs.
-              // monthlyAmount so paid/partial status is unchanged.
-              const perEvent = Number(item.amount) || 0;
-              // (#492) Use the API's calendar-expanded monthlyAmount for the
-              // hint so it always equals the Budget page's "Budgeted" column
-              // for the same line and same viewed month (e.g. a 3-paycheck
-              // biweekly month shows the 3× total, not the smoothed 26/12).
-              const display = formatBillRowAmount(perEvent, item.frequency, sign, amt);
-              // (#70) Status of the actual vs. planned amount this month.
-              // - "paid": actual covers ≥99% of planned (a small float fudge)
-              // - "partial": some money has moved but not the full plan
-              // - "none": nothing matched yet — keep the row neutral
-              const planned = amt;
-              const ratio = planned > 0 ? actual / planned : actual > 0 ? 1 : 0;
-              const status: "paid" | "partial" | "none" =
-                actual <= 0
-                  ? "none"
-                  : ratio >= 0.99
-                    ? "paid"
-                    : "partial";
-              return (
-                <li
-                  key={item.id}
-                  className={`px-5 py-3 flex items-center gap-4 hover:bg-muted/40 cursor-pointer transition-colors ${active ? "" : "opacity-60"}`}
-                  onClick={() => onEdit(item)}
-                  data-testid={`row-bill-${item.id}`}
-                >
-                  <div className="w-12 shrink-0 text-center">
-                    {pill ? (
-                      <>
-                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                          {pill.month}
-                        </div>
-                        <div className="text-lg font-semibold text-foreground leading-tight">
-                          {pill.day}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        —
+      {rows.length === 0 ? (
+        <p className={emptyNote}>No {title.toLowerCase()} yet</p>
+      ) : (
+        <div className={scrollX}>
+          <table className="w-full min-w-[26rem]">
+            <thead>
+              <tr>
+                <th className={th}>Due</th>
+                <th className={th}>Item</th>
+                <th className={`${th} text-right`}>Amount</th>
+                <th className={`${th} text-right`}>
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ item, nextOccurrence, monthlyAmount, actualAmount }) => {
+                const active = isActive(item);
+                // (#691) Resolve the chip shown under the row name so users
+                // can see at a glance which Budget envelope this item feeds.
+                // Debt-linked bills are driven by the Debt Tracker (their
+                // category comes from the matching Debt — Minimum Payments
+                // row), so we mark them with a lock + the debt's name.
+                // Plain categorized bills show the envelope name.
+                // Uncategorized bills surface a muted "No category" hint that
+                // opens the edit modal so the wiring is one click away.
+                const linkedDebt = item.debtId ? debtById.get(item.debtId) : null;
+                const linkedCategory = item.categoryId
+                  ? categoryById.get(item.categoryId)
+                  : null;
+                const amt = Number(monthlyAmount) || 0;
+                const actual = Number(actualAmount) || 0;
+                // (#413) Display the per-event amount the user entered (e.g.
+                // "+$4,050.00 biweekly") instead of the smoothed monthly
+                // projection. The badge below still compares actual vs.
+                // monthlyAmount so paid/partial status is unchanged.
+                const perEvent = Number(item.amount) || 0;
+                // (#492) Use the API's calendar-expanded monthlyAmount for the
+                // hint so it always equals the Budget page's "Budgeted" column
+                // for the same line and same viewed month (e.g. a 3-paycheck
+                // biweekly month shows the 3× total, not the smoothed 26/12).
+                const display = formatBillRowAmount(perEvent, item.frequency, sign, amt);
+                // (#70) Status of the actual vs. planned amount this month.
+                // - "paid": actual covers ≥99% of planned (a small float fudge)
+                // - "partial": some money has moved but not the full plan
+                // - "none": nothing matched yet — keep the row neutral
+                const planned = amt;
+                const ratio = planned > 0 ? actual / planned : actual > 0 ? 1 : 0;
+                const status: "paid" | "partial" | "none" =
+                  actual <= 0
+                    ? "none"
+                    : ratio >= 0.99
+                      ? "paid"
+                      : "partial";
+                return (
+                  <tr
+                    key={item.id}
+                    className="cursor-pointer hover:bg-brand-tint"
+                    onClick={() => onEdit(item)}
+                    data-testid={`row-bill-${item.id}`}
+                  >
+                    <td className={`${td} w-px align-top`}>
+                      <DueCell iso={nextOccurrence} />
+                    </td>
+                    {/* ⚠️ NOT `max-w-0`. The usual table truncation trick
+                        collapses this cell's flex rows and chews the frequency
+                        label down to "monthly · …"; the name gets a bounded
+                        width of its own instead, and the meta line never
+                        truncates. */}
+                    <td className={td}>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`max-w-[26rem] truncate font-medium ${
+                            active ? "text-brand-ink" : "text-neutral-400 line-through"
+                          }`}
+                        >
+                          {item.name}
+                        </span>
+                        {!active && <span className="chip gray">Paused</span>}
                       </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-medium truncate ${active ? "text-foreground" : "line-through"}`}>
-                      {item.name}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {metaLine(item)}
-                      {!active ? " · paused" : ""}
-                    </div>
-                    {/* (#691) Category chip — exposes the bill's Budget
-                        wiring on the list itself so users don't have to
-                        open the edit modal to see (or fix) it. */}
-                    <div className="mt-1">
-                      {linkedDebt ? (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
-                          title="Managed by the Debt Tracker — category comes from the matching Debt — Minimum Payments row."
-                          data-testid={`chip-category-${item.id}`}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-micro text-neutral-400">
+                        <span className="whitespace-nowrap">{frequencyLabel(item)}</span>
+                        {linkedDebt ? (
+                          <span
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600"
+                            title="Managed by the Debt Tracker — category comes from the matching Debt — Minimum Payments row."
+                            data-testid={`chip-category-${item.id}`}
+                          >
+                            <Lock className="h-3 w-3" aria-hidden />
+                            Debt · {linkedDebt.name}
+                          </span>
+                        ) : linkedCategory ? (
+                          // ⚠️ EXACTLY ONE TEXT NODE. A unit test asserts
+                          // textContent === the category name, so no icon, no
+                          // group prefix, no separator may live in here.
+                          <span
+                            className="inline-flex shrink-0 items-center rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600"
+                            title={`${linkedCategory.groupName} · ${linkedCategory.name}`}
+                            data-testid={`chip-category-${item.id}`}
+                          >
+                            {linkedCategory.name}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="press shrink-0 rounded-full border border-dashed border-brand-line px-2 py-0.5 text-neutral-500 hover:border-brand-navy/40 hover:text-brand-navy"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEdit(item, { focus: "category" });
+                            }}
+                            title="Link this bill to a Budget category"
+                            data-testid={`chip-category-none-${item.id}`}
+                          >
+                            No category
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className={`${tdNum} whitespace-nowrap align-top`}>
+                      <div className="font-semibold text-brand-navy">
+                        {display.amountText}
+                      </div>
+                      {display.monthlyHint ? (
+                        <div className="text-micro text-neutral-400">
+                          {display.monthlyHint}
+                        </div>
+                      ) : null}
+                      {/* ⚠️ E2E pins the trailing words ("paid" / "so far"), the
+                          title sentences, AND the icon count: paid has exactly
+                          one <svg>, partial has none. */}
+                      {active && status !== "none" ? (
+                        <div
+                          className={`flex items-center justify-end gap-1 text-micro ${
+                            status === "paid" ? "text-brand-navy" : "text-neutral-500"
+                          }`}
+                          data-testid={`text-actual-${item.id}`}
+                          title={
+                            status === "paid"
+                              ? `Paid ${formatCurrency(actual)} of ${formatCurrency(planned)} planned`
+                              : `Partial — ${formatCurrency(actual)} of ${formatCurrency(planned)} planned`
+                          }
                         >
-                          <Lock className="w-3 h-3" aria-hidden />
-                          Debt · {linkedDebt.name}
-                        </span>
-                      ) : linkedCategory ? (
-                        <span
-                          className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
-                          title={`${linkedCategory.groupName} · ${linkedCategory.name}`}
-                          data-testid={`chip-category-${item.id}`}
-                        >
-                          {linkedCategory.name}
-                        </span>
-                      ) : (
+                          {status === "paid" ? (
+                            <Check className="h-3 w-3" aria-hidden />
+                          ) : null}
+                          {status === "paid"
+                            ? `${formatCurrency(actual)} paid`
+                            : `${formatCurrency(actual)} so far`}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className={`${td} w-px whitespace-nowrap align-top text-right`}>
+                      <span className="inline-flex gap-1">
                         <button
                           type="button"
-                          className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-foreground/40"
+                          className={btnLink}
                           onClick={(e) => {
                             e.stopPropagation();
-                            onEdit(item, { focus: "category" });
+                            onToggleActive(item);
                           }}
-                          title="Link this bill to a Budget category"
-                          data-testid={`chip-category-none-${item.id}`}
+                          disabled={togglingId === item.id}
+                          aria-label={active ? `Pause ${item.name}` : `Resume ${item.name}`}
+                          title={active ? "Pause" : "Resume"}
+                          data-testid={`button-toggle-active-${item.id}`}
                         >
-                          No category
+                          {active ? (
+                            <Pause className="h-3.5 w-3.5" />
+                          ) : (
+                            <Play className="h-3.5 w-3.5" />
+                          )}
                         </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-0.5">
-                    <div className={`text-sm font-semibold tabular-nums ${tint}`}>
-                      {display.amountText}
-                    </div>
-                    {display.monthlyHint ? (
-                      <div className="text-[11px] text-muted-foreground tabular-nums">
-                        {display.monthlyHint}
-                      </div>
-                    ) : null}
-                    {active && status !== "none" ? (
-                      <div
-                        className={`text-[11px] tabular-nums flex items-center gap-1 ${
-                          status === "paid"
-                            ? "text-positive"
-                            : "text-warning"
-                        }`}
-                        data-testid={`text-actual-${item.id}`}
-                        title={
-                          status === "paid"
-                            ? `Paid ${formatCurrency(actual)} of ${formatCurrency(planned)} planned`
-                            : `Partial — ${formatCurrency(actual)} of ${formatCurrency(planned)} planned`
-                        }
-                      >
-                        {status === "paid" ? (
-                          <Check className="w-3 h-3" aria-hidden />
-                        ) : null}
-                        {status === "paid"
-                          ? `${formatCurrency(actual)} paid`
-                          : `${formatCurrency(actual)} so far`}
-                      </div>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="p-1.5 rounded hover:bg-background disabled:opacity-50"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleActive(item);
-                    }}
-                    disabled={togglingId === item.id}
-                    aria-label={active ? `Pause ${item.name}` : `Resume ${item.name}`}
-                    title={active ? "Pause" : "Resume"}
-                    data-testid={`button-toggle-active-${item.id}`}
-                  >
-                    {active ? (
-                      <Pause className="w-4 h-4 text-muted-foreground" />
-                    ) : (
-                      <Play className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    className="p-1.5 rounded hover:bg-background"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEdit(item);
-                    }}
-                    aria-label={`Edit ${item.name}`}
-                  >
-                    <Pencil className="w-4 h-4 text-muted-foreground" />
-                  </button>
-                  <button
-                    type="button"
-                    className="p-1.5 rounded hover:bg-background"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteRow(item);
-                    }}
-                    aria-label={`Delete ${item.name}`}
-                    title="Delete"
-                    data-testid={`button-delete-row-${item.id}`}
-                  >
-                    <Trash2 className="w-4 h-4 text-muted-foreground" />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+                        <button
+                          type="button"
+                          className={btnLink}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(item);
+                          }}
+                          aria-label={`Edit ${item.name}`}
+                          title="Edit"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          className={btnLinkDanger}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteRow(item);
+                          }}
+                          aria-label={`Delete ${item.name}`}
+                          title="Delete"
+                          data-testid={`button-delete-row-${item.id}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1535,110 +1549,103 @@ function DebtMinimumsCard({
   onOpen: (debtId: string) => void;
 }) {
   return (
-    <Card data-testid="card-debt-minimums">
-      <CardContent className="p-0">
-        <div className="px-5 py-4 flex items-center justify-between border-b border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-              <Lock className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <div>
-              <div className="text-base font-display font-semibold text-foreground">
-                Debt minimums
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {rows.length} item{rows.length === 1 ? "" : "s"} · synced from Debts ·
-                edit on Avalanche
-              </div>
-            </div>
-          </div>
-          <div className="text-base font-semibold tabular-nums text-destructive">
-            −{formatCurrency(total)}
-          </div>
-        </div>
-        <ul className="divide-y divide-border">
+    <div className={card} data-testid="card-debt-minimums">
+      <div className={cardHead}>
+        <Lock className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
+        <div className="text-label font-semibold text-brand-navy">Debt minimums</div>
+        <Help>
+          Synced from Debts and edited on Future Goal, never here. Each minimum
+          stops on the month the avalanche pays that debt off.
+        </Help>
+        <span className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy">
+          −{formatCurrency(total)}
+        </span>
+      </div>
+      <div className={scrollX}>
+      <table className="w-full min-w-[24rem]">
+        <thead>
+          <tr>
+            <th className={th}>Due</th>
+            <th className={th}>Debt</th>
+            <th className={`${th} text-right`}>Amount</th>
+            <th className={`${th} text-right`}>
+              <span className="sr-only">Locked</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
           {rows.map((r) => {
-            const pill = formatDatePill(r.nextOccurrence ?? null);
             const min = Number(r.minPayment) || 0;
             const amt = Math.abs(Number(r.amount) || 0);
             const endsThisCycle = r.endsThisCycle === true;
             if (endsThisCycle) {
               return (
-                <li
+                <tr
                   key={r.debtId}
-                  className="px-5 py-3 flex items-center gap-4 opacity-70 hover:opacity-100 hover:bg-muted/40 cursor-pointer transition-all"
+                  className="cursor-pointer hover:bg-brand-tint"
                   onClick={() => onOpen(r.debtId)}
                   data-testid={`row-debt-min-paid-${r.debtId}`}
                 >
-                  <div className="w-12 shrink-0 text-center">
-                    <PartyPopper
-                      className="w-5 h-5 mx-auto text-positive"
-                      aria-hidden="true"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate text-muted-foreground line-through">
-                      {r.debtName} minimum
+                  {/* ⚠️ The date column stays a date column. Putting the chip
+                      here instead widened it for every row in the table and
+                      knocked the Debt column out of line with the bill tables
+                      above. */}
+                  <td className={`${td} w-px`}>
+                    <DueCell iso={r.nextOccurrence ?? null} />
+                  </td>
+                  <td className={td}>
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-neutral-500 line-through">
+                        {r.debtName} minimum
+                      </span>
+                      <span className="chip ok">Paid off</span>
                     </div>
-                    <div className="text-xs text-positive truncate font-medium">
+                    <div className="mt-0.5 truncate text-micro text-neutral-500">
                       Stops at payoff · was {formatCurrency(min)}/mo
                     </div>
-                  </div>
-                  <div className="text-sm font-semibold tabular-nums text-muted-foreground line-through">
+                  </td>
+                  <td className={`${tdNum} text-neutral-400 line-through`}>
                     −{formatCurrency(min)}
-                  </div>
-                  <Lock
-                    className="w-4 h-4 text-muted-foreground"
-                    aria-label="Locked — managed by Debts"
-                  />
-                </li>
+                  </td>
+                  <td className={`${td} w-px text-right`}>
+                    <Lock
+                      className="inline h-3.5 w-3.5 text-neutral-400"
+                      aria-label="Locked — managed by Debts"
+                    />
+                  </td>
+                </tr>
               );
             }
             return (
-              <li
+              <tr
                 key={r.debtId}
-                className="px-5 py-3 flex items-center gap-4 hover:bg-muted/40 cursor-pointer transition-colors"
+                className="cursor-pointer hover:bg-brand-tint"
                 onClick={() => onOpen(r.debtId)}
                 data-testid={`row-debt-min-${r.debtId}`}
               >
-                <div className="w-12 shrink-0 text-center">
-                  {pill ? (
-                    <>
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                        {pill.month}
-                      </div>
-                      <div className="text-lg font-semibold text-foreground leading-tight">
-                        {pill.day}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      —
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate text-foreground">
-                    {r.debtName} minimum
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    linked to {r.debtName} · min {formatCurrency(min)}/mo · stops at
-                    payoff
+                <td className={`${td} w-px`}>
+                  <DueCell iso={r.nextOccurrence ?? null} />
+                </td>
+                <td className={td}>
+                  <div className="truncate text-brand-ink">{r.debtName} minimum</div>
+                  <div className="mt-0.5 truncate text-micro text-neutral-400">
+                    min {formatCurrency(min)}/mo · stops at payoff
                     {r.source === "plaid" ? " · synced from Plaid" : ""}
                   </div>
-                </div>
-                <div className="text-sm font-semibold tabular-nums text-destructive">
-                  −{formatCurrency(amt)}
-                </div>
-                <Lock
-                  className="w-4 h-4 text-muted-foreground"
-                  aria-label="Locked — managed by Debts"
-                />
-              </li>
+                </td>
+                <td className={tdNum}>−{formatCurrency(amt)}</td>
+                <td className={`${td} w-px text-right`}>
+                  <Lock
+                    className="inline h-3.5 w-3.5 text-neutral-400"
+                    aria-label="Locked — managed by Debts"
+                  />
+                </td>
+              </tr>
             );
           })}
-        </ul>
-      </CardContent>
-    </Card>
+        </tbody>
+      </table>
+      </div>
+    </div>
   );
 }
