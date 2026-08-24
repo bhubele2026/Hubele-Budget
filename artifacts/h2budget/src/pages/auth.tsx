@@ -3,7 +3,7 @@ import { Redirect } from "wouter";
 import { SignIn, SignUp, Show } from "@clerk/react";
 import { useCheckInvitation } from "@workspace/api-client-react";
 import { Mail, LineChart, Layers, ShieldCheck } from "lucide-react";
-import { H2Logo } from "@/components/h2-logo";
+import { H2Wordmark } from "@/components/h2-wordmark";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -108,12 +108,9 @@ function MarketingHero() {
       className="hidden lg:flex flex-col justify-between h-full p-12 xl:p-16"
       data-testid="auth-marketing-hero"
     >
-      <div className="flex items-center gap-3">
-        <H2Logo className="w-9 h-9 rounded-md" />
-        <span className="text-base font-semibold tracking-tight text-foreground">
-          H2 Budget
-        </span>
-      </div>
+      {/* The lockup says "H2 Budget" itself — the mark and a span repeating it
+          beside it was the same name twice. */}
+      <H2Wordmark tone="navy" size={30} />
 
       <div className="space-y-6 max-w-md">
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
@@ -177,11 +174,8 @@ function MobileBrandHeader() {
       className="lg:hidden flex flex-col items-center gap-3 text-center"
       data-testid="auth-brand-header"
     >
-      <H2Logo className="w-11 h-11 rounded-lg" />
+      <H2Wordmark tone="navy" size={34} />
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          H2 Budget
-        </h1>
         <p className="text-sm text-muted-foreground max-w-xs">
           Your money, tracked and forecast. Built for the two of you.
         </p>
