@@ -76,20 +76,27 @@ type BudgetLineWithActual = {
   sourceBreakdown?: SourceBreakdownEntry[] | null;
   plannedSource?: PlannedSource | null;
 };
-import { Card, CardContent } from "@/components/ui/card";
-import { RingStat, StackBar, MoneyText } from "@/components/viz";
-import { PillBadge } from "@/components/pill-badge";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { formatCurrency, cn } from "@/lib/utils";
 import { useGetSettings } from "@workspace/api-client-react";
-import { FillMeter } from "@/components/stat/fill-meter";
-import { SectionHeader } from "@/components/stat";
-import { StatTile, StatTileRow } from "@/components/stat-tile";
-import { spendStatus } from "@/lib/statusThresholds";
+import {
+  card,
+  cardHead,
+  btnLink,
+  btnSm,
+  btnSecondarySm,
+  emptyNote,
+  fieldLabel,
+  input as inputControl,
+  inputInline,
+  Foot,
+  Help,
+  Stat,
+} from "@/ui";
+// `@/lib/cssBars` and NOT `@/lib/charts`: the latter statically imports
+// recharts, and this page draws no chart. Reaching for the barrel would put
+// ~450 KB behind a route that needs a coloured `<span>`.
+import { CssFillMeter } from "@/lib/cssBars";
 import { bucketSpendInWindow } from "@/lib/bucketSpend";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
 import {
   ChevronLeft,
   ChevronRight,
@@ -100,7 +107,6 @@ import {
   Pencil,
   Pin,
   PinOff,
-  Tag,
   CreditCard,
   Landmark,
   MoreHorizontal,
@@ -144,33 +150,244 @@ import { ToastAction } from "@/components/ui/toast";
 
 type SourceKind = "manual" | "auto_bills" | "auto_debts";
 
-const SOURCE_LABEL: Record<SourceKind, string> = {
-  manual: "Editable",
-  auto_bills: "Auto-pulled from Income/Bills",
-  auto_debts: "Auto-pulled from Debts",
-};
+/**
+ * ⭐ ONE DOM, TWO SHAPES — the envelope row.
+ *
+ * Below `sm` each figure stacks under the envelope name carrying its own
+ * micro-cap label; from `sm` up the same nodes lock into fixed columns so
+ * every plan, every actual and every meter in the card shares a vertical
+ * edge. Rendering two different trees for the two widths is what makes a
+ * table and its phone layout drift apart, and it doubles the number of
+ * places a testid has to be kept alive.
+ *
+ * The columns are: envelope · plan · actual · used · left/over.
+ */
+// ⚠️ The meter column is CAPPED, not `1fr`. Left to grow it takes every pixel
+// the card has spare and the bar stops reading as a measure and starts reading
+// as a loading bar — while the envelope name, which is the column that
+// actually has variable content (long names, source chips, row controls), gets
+// squeezed. The slack belongs to the name.
+const ROW_GRID =
+  "grid grid-cols-1 gap-x-3 gap-y-1 px-4 py-2 sm:grid-cols-[minmax(9rem,1fr)_6.5rem_6.5rem_minmax(6rem,11rem)_7.25rem] sm:items-center sm:gap-y-0";
+const headCell =
+  "text-micro font-semibold uppercase tracking-wide text-neutral-400";
+/** Money, everywhere it renders: mono, tabular, and it must not reflow. */
+const num = "font-mono text-label tabular-nums";
 
-function SourceBadge({ kind }: { kind: SourceKind }) {
-  const variant =
-    kind === "manual"
-      ? "secondary"
-      : kind === "auto_bills"
-        ? "outline"
-        : "outline";
+/**
+ * The month stepper's two arrows, and the shape every quiet icon control on
+ * this page takes. Keyboard focus is the navy ring from `index.css`, stated
+ * again here so the control keeps it when it sits on a tinted row.
+ */
+const monthStep =
+  "press grid h-6 w-6 place-items-center rounded-control text-neutral-500 ring-1 ring-brand-line hover:bg-neutral-50 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:opacity-30";
+/**
+ * The row-level affordances: rename, reorder, pin, delete. They fade in on
+ * hover on a pointer device and are always present on touch.
+ *
+ * ⚠️ DISABLED IS A COLOUR HERE, NOT AN OPACITY. `disabled:opacity-30` and the
+ * hover-reveal both set `opacity`, and the disabled variant wins the cascade —
+ * so at rest the ONLY control visible on a row was the one you cannot use
+ * (the greyed "move up" on every first row), while its working siblings sat
+ * invisible at 0. Opacity belongs to the reveal alone; unavailability says so
+ * in a lighter ink.
+ */
+const rowIcon =
+  "press inline-flex h-6 w-6 items-center justify-center rounded-control text-neutral-400 hover:bg-neutral-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:text-neutral-300 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
+
+/**
+ * A figure and the word for its column, on the phone. On `sm` and up the
+ * column head above says it once for the whole card and this label goes away.
+ */
+function Cell({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <Badge
-      variant={variant}
+    <div
       className={cn(
-        "text-[10px] font-normal uppercase tracking-wide",
-        kind === "auto_bills" &&
-          "border-border text-muted-foreground",
-        kind === "auto_debts" &&
-          "border-warning/40 text-warning",
+        "flex items-center justify-between gap-2 sm:block sm:text-right",
+        className,
       )}
-      data-testid={`badge-source-${kind}`}
     >
-      {SOURCE_LABEL[kind]}
-    </Badge>
+      <span className={`${fieldLabel} sm:hidden`}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A group's head: its name, how many lines it holds, its two totals, and the
+ * one thing a reader came for — whether the group is inside its plan, SAID IN
+ * WORDS. The old head put that in the sign and the colour of a `Δ` figure,
+ * which is nothing at all to a reader who cannot separate navy from orange and
+ * close to nothing to everyone else at a glance.
+ *
+ * The magnitude is the same number as before; only its sign moved out of a
+ * glyph and into a word.
+ */
+function GroupHead({
+  groupName,
+  sub,
+  collapsed,
+  onToggle,
+  plannedTotal,
+  actualTotal,
+  isIncomeGroup,
+}: {
+  groupName: string;
+  sub: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  plannedTotal: string;
+  actualTotal: string;
+  isIncomeGroup: boolean;
+}) {
+  const planned = parseFloat(plannedTotal) || 0;
+  const actual = parseFloat(actualTotal) || 0;
+  // Unchanged convention: income is ahead when it beats plan, an expense group
+  // is ahead when it comes in under.
+  const delta = isIncomeGroup ? actual - planned : planned - actual;
+  const word = isIncomeGroup
+    ? delta < 0
+      ? "short"
+      : "above plan"
+    : delta < 0
+      ? "over"
+      : "left";
+  return (
+    <button
+      type="button"
+      className={`${cardHead} press w-full text-left hover:bg-platinum-2`}
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      data-testid={`button-toggle-${groupName}`}
+    >
+      {collapsed ? (
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+      ) : (
+        <ChevronUp className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+      )}
+      <span className="min-w-0">
+        <span className="block truncate text-title font-semibold text-brand-navy">
+          {groupName}
+        </span>
+        <span className="block text-micro text-neutral-400">{sub}</span>
+      </span>
+      <span className="ml-auto flex items-center gap-3 sm:gap-5">
+        <span className="hidden text-right sm:block">
+          <span className={`block ${fieldLabel}`}>Plan</span>
+          <span className={`block ${num} text-neutral-700`}>
+            {formatCurrency(plannedTotal)}
+          </span>
+        </span>
+        <span className="hidden text-right sm:block">
+          <span className={`block ${fieldLabel}`}>Actual</span>
+          <span className={`block ${num} text-neutral-700`}>
+            {formatCurrency(actualTotal)}
+          </span>
+        </span>
+        <span className={`chip ${delta < 0 ? "bad" : "gray"}`}>
+          {delta === 0
+            ? "on plan"
+            : `${formatCurrency(Math.abs(delta))} ${word}`}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The column heads, from `sm` up. They exist so the numeric cells below can
+ * drop their own labels on a wide screen — the name is said once per card
+ * instead of once per row — and they are derived from `ROW_GRID` itself so a
+ * column can never be added to the rows without appearing here too.
+ */
+function ColumnHeads() {
+  return (
+    <div
+      role="row"
+      className={`hidden border-b border-brand-line bg-platinum-2 sm:grid ${ROW_GRID.replace(
+        "grid ",
+        "",
+      ).replace("py-2", "py-1.5")}`}
+    >
+      <span className={headCell}>Envelope</span>
+      <span className={`${headCell} text-right`}>Plan</span>
+      <span className={`${headCell} text-right`}>Actual</span>
+      <span className={`${headCell} text-right`}>Used</span>
+      <span className={`${headCell} text-right`}>Left / over</span>
+    </div>
+  );
+}
+
+/** The one control at the foot of every group card. */
+function AddLineFooter({
+  groupName,
+  placeholder,
+  adding,
+  value,
+  onChange,
+  onCommit,
+  onOpen,
+  onCancel,
+  commitDisabled,
+}: {
+  groupName: string;
+  placeholder: string;
+  adding: boolean;
+  value: string;
+  onChange: (next: string) => void;
+  onCommit: () => void;
+  onOpen: () => void;
+  onCancel: () => void;
+  commitDisabled: boolean;
+}) {
+  return (
+    <div className="border-t border-brand-line px-4 py-2.5">
+      {adding ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            autoFocus
+            placeholder={placeholder}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onCommit();
+              if (e.key === "Escape") onCancel();
+            }}
+            className={`${inputControl} max-w-[16rem]`}
+            data-testid={`input-new-line-${groupName}`}
+          />
+          <button
+            type="button"
+            className={btnSm}
+            onClick={onCommit}
+            disabled={commitDisabled}
+            data-testid={`button-confirm-add-${groupName}`}
+          >
+            Add
+          </button>
+          <button type="button" className={btnSecondarySm} onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className={btnLink}
+          onClick={onOpen}
+          data-testid={`button-add-line-${groupName}`}
+        >
+          <Plus className="h-3 w-3" /> Add line
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -880,9 +1097,9 @@ export default function BudgetPage() {
   if ((isLoadingBudget && !budgetData) || (isLoadingCategories && !categories)) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-64 w-full" />
+        <div className="skeleton h-8 w-40" />
+        <div className="skeleton h-24 w-full" />
+        <div className="skeleton h-64 w-full" />
       </div>
     );
   }
@@ -903,18 +1120,14 @@ export default function BudgetPage() {
   const summary = budgetData?.summary;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <SectionHeader
-          eyebrow="Plan"
-          title="Budget"
-          sub="A plan for every dollar this month."
-        />
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-md border border-border">
-            <Button
-              variant="ghost"
-              size="icon"
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-display font-semibold text-brand-navy">Budget</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5">
+            <button
+              type="button"
+              className={monthStep}
               onClick={() => changeMonth(-1)}
               disabled={atFloor}
               aria-disabled={atFloor}
@@ -922,24 +1135,23 @@ export default function BudgetPage() {
               title={atFloor ? "April 2026 is the earliest month" : undefined}
               data-testid="button-prev-month"
             >
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <span className="font-medium text-lg w-32 text-center">
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <span className="min-w-[8.5rem] text-center text-label font-medium text-neutral-700">
               {monthName}
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
+            <button
+              type="button"
+              className={monthStep}
               onClick={() => changeMonth(1)}
               aria-label="Next month"
               data-testid="button-next-month"
             >
-              <ChevronRight className="w-5 h-5" />
-            </Button>
-          </div>
-          <Button
-            variant={monthPinned ? "default" : "outline"}
-            size="sm"
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </span>
+          <button
+            type="button"
             onClick={handleTogglePinMonth}
             disabled={pinMonth.isPending}
             title={
@@ -948,268 +1160,200 @@ export default function BudgetPage() {
                 : "Lock planned amounts so they don't shift with Bills/Debts."
             }
             data-testid="button-toggle-pin-month"
+            className={
+              monthPinned
+                ? "press inline-flex items-center gap-1 rounded-control bg-brand-navy px-2.5 py-1 text-micro font-semibold text-white hover:bg-brand-navy2 disabled:pointer-events-none disabled:opacity-55"
+                : btnLink
+            }
           >
-            {monthPinned ? (
-              <>
-                <Pin className="w-4 h-4 mr-1 fill-current" />
-                Pinned
-              </>
-            ) : (
-              <>
-                <Pin className="w-4 h-4 mr-1" />
-                Pin month
-              </>
-            )}
-          </Button>
+            <Pin className={cn("h-3 w-3", monthPinned && "fill-current")} />
+            {monthPinned ? "Pinned" : "Pin month"}
+          </button>
         </div>
       </div>
 
-      {/* At-a-glance hero — leads with the projected month-end (what the plan
-          says the month SHOULD end at = planned income − expenses), then the
-          budget-vs-actual read for net, income and expenses. All figures come
-          straight from the server summary (CLAUDE.md §1 — no client math). */}
+      {/* The month, in five figures and one bar. Every number here is a field
+          of the server's `summary` object read verbatim — the page does no
+          money arithmetic of its own (CLAUDE.md §1), which is also why the
+          percentage is rendered as the string the server sent rather than
+          re-derived from the two figures beside it. */}
       {summary && (() => {
-        const plannedNet = parseFloat(summary.net.budget) || 0;
-        const actualNet = parseFloat(summary.net.actual) || 0;
-        const incomeActual = parseFloat(summary.income.actual) || 0;
-        const incomeBudget = parseFloat(summary.income.budget) || 0;
-        const expActual = parseFloat(summary.expenses.actual) || 0;
-        const expBudget = parseFloat(summary.expenses.budget) || 0;
-        return (
-          <StatTileRow>
-            <StatTile
-              active
-              label="Projected month-end"
-              value={formatCurrency(plannedNet)}
-              sub="Planned income − expenses"
-            />
-            <StatTile
-              label="Net so far"
-              value={<MoneyText amount={actualNet} colored />}
-              sub={`of ${formatCurrency(plannedNet)} planned`}
-            />
-            <StatTile
-              label="Income"
-              value={formatCurrency(incomeActual)}
-              sub={`of ${formatCurrency(incomeBudget)} budgeted`}
-            />
-            <StatTile
-              label="Expenses"
-              value={formatCurrency(expActual)}
-              sub={`of ${formatCurrency(expBudget)} budgeted`}
-            />
-          </StatTileRow>
-        );
-      })()}
-
-      <div className="flex flex-wrap gap-2">
-        <SourceBadge kind="manual" />
-        <SourceBadge kind="auto_debts" />
-        <SourceBadge kind="auto_bills" />
-      </div>
-
-      {summary && (() => {
-        // Visual summary replaces the flat tile row: a "% spent" ring, the
-        // three real figures, an income-vs-expense split bar, and a weekly
-        // pace line (the weekly-first lens on this monthly plan).
         const pctSpent = parseFloat(summary.percentSpent.actual) || 0;
         const incomeActual = parseFloat(summary.income.actual) || 0;
         const incomeBudget = parseFloat(summary.income.budget) || 0;
         const expActual = parseFloat(summary.expenses.actual) || 0;
         const expBudget = parseFloat(summary.expenses.budget) || 0;
         const netActual = parseFloat(summary.net.actual) || 0;
+        const plannedNet = parseFloat(summary.net.budget) || 0;
         const weeklyExpenseBudget = expBudget > 0 ? (expBudget * 7) / 30.44 : 0;
-        const figure = (
-          label: string,
-          actual: number,
-          budget: number,
-          colored?: boolean,
-        ) => (
-          <div className="min-w-0" data-testid={`tile-${label.toLowerCase()}`}>
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-              {label}
-            </div>
-            <MoneyText amount={actual} colored={colored} className="text-lg font-bold" />
-            <div className="text-[11px] text-muted-foreground tabular-nums">
-              of {formatCurrency(budget)}
-            </div>
-          </div>
-        );
+        // Unchanged thresholds, unchanged basis: the verdict has always been
+        // driven by percentSpent, and the meter below plots that same ratio so
+        // the word and the picture cannot disagree.
         const status =
           pctSpent > 100
-            ? { tone: "danger" as const, label: "Over budget" }
+            ? { tone: "bad", label: "Over budget" }
             : pctSpent > 90
-              ? { tone: "warning" as const, label: "At risk" }
-              : { tone: "good" as const, label: "On track" };
+              ? { tone: "warn", label: "At risk" }
+              : { tone: "ok", label: "On track" };
         return (
-          <Card data-testid="budget-summary">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                  This month
-                </span>
-                <PillBadge tone={status.tone}>{status.label}</PillBadge>
-              </div>
-              <div className="flex flex-wrap items-center gap-6">
-                <RingStat
-                  value={pctSpent / 100}
-                  size={76}
-                  stroke={7}
-                  color={pctSpent > 100 ? "hsl(var(--negative))" : "hsl(var(--primary))"}
-                  centerSub="spent"
-                />
-                <div className="grid grid-cols-3 gap-x-8 gap-y-2 flex-1 min-w-[16rem]">
-                  {figure("Income", incomeActual, incomeBudget)}
-                  {figure("Expenses", expActual, expBudget)}
-                  {figure("Net", netActual, parseFloat(summary.net.budget) || 0, true)}
-                </div>
-              </div>
-              <div className="mt-4">
-                <StackBar
-                  showLegend={false}
-                  segments={[
-                    { label: "Income", value: incomeActual, color: "hsl(var(--positive))" },
-                    { label: "Expenses", value: expActual, color: "hsl(var(--negative))" },
-                  ]}
-                />
-              </div>
-              <div className="mt-3 text-xs text-muted-foreground">
-                That's ≈{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatCurrency(weeklyExpenseBudget)}/week
-                </span>{" "}
-                budgeted for expenses — this week is the one to win.
-              </div>
-            </CardContent>
-          </Card>
+          <section className={card} data-testid="budget-summary">
+            <div className={cardHead}>
+              <h2 className="text-title font-semibold text-brand-navy">
+                This month
+              </h2>
+              <Help>
+                Percent spent is expenses actual as a share of income actual, so
+                it passes 100% when the month spends more than it earned.
+              </Help>
+              <span className={`chip ${status.tone} ml-auto`}>
+                {status.label}
+              </span>
+            </div>
+
+            <div className="stagger grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-5">
+              <Stat
+                index={0}
+                data-testid="tile-projected"
+                label="Projected month-end"
+                value={formatCurrency(plannedNet)}
+                hint="Planned income − expenses"
+              />
+              <Stat
+                index={1}
+                data-testid="tile-net"
+                label="Net so far"
+                value={formatCurrency(netActual)}
+                tone={netActual < 0 ? "bad" : "navy"}
+                hint={`of ${formatCurrency(plannedNet)} planned`}
+              />
+              <Stat
+                index={2}
+                data-testid="tile-income"
+                label="Income"
+                value={formatCurrency(incomeActual)}
+                hint={`of ${formatCurrency(incomeBudget)} planned`}
+              />
+              <Stat
+                index={3}
+                data-testid="tile-expenses"
+                label="Expenses"
+                value={formatCurrency(expActual)}
+                hint={`of ${formatCurrency(expBudget)} planned`}
+              />
+              <Stat
+                index={4}
+                data-testid="tile-percent-spent"
+                label="Spent of income"
+                value={`${summary.percentSpent.actual}%`}
+                tone={pctSpent > 100 ? "bad" : "navy"}
+                hint="Expenses ÷ income"
+              />
+            </div>
+
+            <div className="px-4 pb-4">
+              <CssFillMeter
+                value={expActual}
+                ceiling={incomeActual}
+                title={`${formatCurrency(expActual)} of ${formatCurrency(incomeActual)} income`}
+              />
+            </div>
+
+            <Foot>
+              ≈ {formatCurrency(weeklyExpenseBudget)}/week budgeted for expenses.
+            </Foot>
+          </section>
         );
       })()}
 
       {allowanceHasData && (
-        <Card data-testid="budget-allowances-group" className="mb-4">
-          <CardContent className="p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                  Allowances · this month
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Weekly / Monthly / Unplanned
-                </div>
-              </div>
-              <Link
-                href="/allowances"
-                className="shrink-0 text-xs font-medium text-primary hover:underline"
-                data-testid="budget-allowances-manage"
-              >
-                Manage →
-              </Link>
-            </div>
-            <div className="space-y-3">
-              {allowanceLines.map((l) => {
-                const ratio = l.planned > 0 ? l.actual / l.planned : 0;
-                return (
-                  <div key={l.key}>
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-sm font-medium">{l.label}</span>
-                      <span className="text-sm tabular-nums text-muted-foreground">
-                        <MoneyText
-                          amount={l.actual}
-                          className="font-semibold text-foreground"
-                        />{" "}
-                        of{" "}
-                        {l.planned > 0 ? (
-                          <MoneyText amount={l.planned} />
-                        ) : (
-                          "no cap"
-                        )}
+        <section className={card} data-testid="budget-allowances-group">
+          <div className={cardHead}>
+            <h2 className="text-title font-semibold text-brand-navy">
+              Allowances
+            </h2>
+            <Help>
+              Counts only transactions filed into a bucket on the Allowances
+              page; anything unfiled counts nowhere.
+            </Help>
+            <Link
+              href="/allowances"
+              className={`${btnLink} ml-auto`}
+              data-testid="budget-allowances-manage"
+            >
+              Manage
+            </Link>
+          </div>
+          <div>
+            {allowanceLines.map((l) => {
+              const over = l.planned > 0 && l.actual > l.planned;
+              return (
+                <div
+                  key={l.key}
+                  className="grid grid-cols-1 gap-x-3 gap-y-1.5 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0 sm:grid-cols-[minmax(8rem,1fr)_minmax(5rem,1fr)_9rem_6rem] sm:items-center"
+                >
+                  <span className="text-body font-medium text-brand-navy">
+                    {l.label}
+                  </span>
+                  <CssFillMeter
+                    value={l.actual}
+                    ceiling={l.planned}
+                    title={`${formatCurrency(l.actual)} of ${
+                      l.planned > 0 ? formatCurrency(l.planned) : "no cap"
+                    }`}
+                  />
+                  <span className={`${num} text-neutral-700 sm:text-right`}>
+                    {formatCurrency(l.actual)}
+                    <span className="text-neutral-400">
+                      {" / "}
+                      {l.planned > 0 ? formatCurrency(l.planned) : "no cap"}
+                    </span>
+                  </span>
+                  <span className="sm:justify-self-end">
+                    {l.planned > 0 ? (
+                      <span className={`chip ${over ? "bad" : "gray"}`}>
+                        {over
+                          ? `${formatCurrency(l.actual - l.planned)} over`
+                          : `${formatCurrency(l.planned - l.actual)} left`}
                       </span>
-                    </div>
-                    <div className="mt-1">
-                      <FillMeter
-                        value={l.actual}
-                        ceiling={l.planned > 0 ? l.planned : Math.max(l.actual, 1)}
-                        status={l.planned > 0 ? spendStatus(ratio) : "neutral"}
-                        floorLabel="$0"
-                        ceilingLabel={
-                          l.planned > 0 ? formatCurrency(l.planned) : "—"
-                        }
-                        format={(n) => formatCurrency(n)}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                    ) : (
+                      <span className="text-micro text-neutral-400">
+                        no cap set
+                      </span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       <div className="space-y-4">
         {groups.map((group) => {
           const isCollapsed = collapsed.has(group.groupName);
-          const planned = parseFloat(group.plannedTotal) || 0;
-          const actual = parseFloat(group.actualTotal) || 0;
           const isIncomeGroup = group.lines[0]?.kind === "income";
-          // Income: positive delta = surplus (actual > budget); Expense: positive delta = under budget.
-          const delta = isIncomeGroup ? actual - planned : planned - actual;
-          const deltaColor =
-            delta < 0
-              ? "text-destructive"
-              : delta > 0
-                ? "text-positive"
-                : "text-muted-foreground";
 
           return (
-            <Card key={group.groupName} data-testid={`group-${group.groupName}`}>
-              <CardContent className="p-0">
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-between gap-4 p-4 border-b border-border hover:bg-muted/20 text-left"
-                  onClick={() => toggleCollapse(group.groupName)}
-                  data-testid={`button-toggle-${group.groupName}`}
-                >
-                  <div className="flex items-center gap-3">
-                    {isCollapsed ? (
-                      <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                    )}
-                    <div>
-                      <div className="font-display font-semibold text-lg">
-                        {group.groupName}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {group.lines.length}{" "}
-                        {group.lines.length === 1 ? "line" : "lines"}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="hidden md:flex items-center gap-6 text-sm font-mono">
-                    <div>
-                      <span className="text-muted-foreground mr-1">Budget</span>
-                      {formatCurrency(group.plannedTotal)}
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground mr-1">Actual</span>
-                      {formatCurrency(group.actualTotal)}
-                    </div>
-                    <div className={cn("font-medium w-28 text-right", deltaColor)}>
-                      Δ {delta >= 0 ? "+" : ""}
-                      {formatCurrency(delta)}
-                    </div>
-                  </div>
-                </button>
+            <section
+              key={group.groupName}
+              className={card}
+              data-testid={`group-${group.groupName}`}
+            >
+              <GroupHead
+                groupName={group.groupName}
+                sub={`${group.lines.length} ${
+                  group.lines.length === 1 ? "line" : "lines"
+                }`}
+                collapsed={isCollapsed}
+                onToggle={() => toggleCollapse(group.groupName)}
+                plannedTotal={group.plannedTotal}
+                actualTotal={group.actualTotal}
+                isIncomeGroup={isIncomeGroup}
+              />
 
                 {!isCollapsed && (
                   <>
-                    <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 border-b border-border bg-muted/20 text-xs uppercase tracking-wide text-muted-foreground">
-                      <div className="col-span-5">Category</div>
-                      <div className="col-span-2 text-right">Budgeted</div>
-                      <div className="col-span-2 text-right">Actual</div>
-                      <div className="col-span-2 text-right">Difference</div>
-                      <div className="col-span-1 text-right">% Spent</div>
-                    </div>
+                    <ColumnHeads />
                     <DndContext
                       sensors={dragSensors}
                       collisionDetection={closestCenter}
@@ -1219,11 +1363,9 @@ export default function BudgetPage() {
                         items={group.lines.map((l) => l.categoryId)}
                         strategy={verticalListSortingStrategy}
                       >
-                    <div className="divide-y divide-border">
+                    <div className="divide-y divide-brand-line/70">
                       {group.lines.length === 0 && (
-                        <div className="px-4 py-6 text-sm text-muted-foreground italic">
-                          All clear — no categories in this group yet.
-                        </div>
+                        <div className={emptyNote}>No lines yet.</div>
                       )}
                       {group.lines.map((line, idx) => {
                         const prev = idx > 0 ? group.lines[idx - 1] : null;
@@ -1290,62 +1432,26 @@ export default function BudgetPage() {
                       </SortableContext>
                     </DndContext>
 
-                    <div className="p-3 border-t border-border bg-muted/10">
-                      {addingFor === group.groupName ? (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            autoFocus
-                            placeholder="New line name"
-                            value={newName}
-                            onChange={(e) => setNewName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter")
-                                handleAddCategory(group.groupName);
-                              if (e.key === "Escape") {
-                                setAddingFor(null);
-                                setNewName("");
-                              }
-                            }}
-                            className="max-w-xs"
-                            data-testid={`input-new-line-${group.groupName}`}
-                          />
-                          <Button
-                            size="sm"
-                            onClick={() => handleAddCategory(group.groupName)}
-                            disabled={!newName.trim() || createCat.isPending}
-                            data-testid={`button-confirm-add-${group.groupName}`}
-                          >
-                            Add
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setAddingFor(null);
-                              setNewName("");
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setAddingFor(group.groupName);
-                            setNewName("");
-                          }}
-                          data-testid={`button-add-line-${group.groupName}`}
-                        >
-                          <Plus className="w-4 h-4 mr-1" /> Add line
-                        </Button>
-                      )}
-                    </div>
+                    <AddLineFooter
+                      groupName={group.groupName}
+                      placeholder="New line name"
+                      adding={addingFor === group.groupName}
+                      value={newName}
+                      onChange={setNewName}
+                      onCommit={() => handleAddCategory(group.groupName)}
+                      onOpen={() => {
+                        setAddingFor(group.groupName);
+                        setNewName("");
+                      }}
+                      onCancel={() => {
+                        setAddingFor(null);
+                        setNewName("");
+                      }}
+                      commitDisabled={!newName.trim() || createCat.isPending}
+                    />
                   </>
                 )}
-              </CardContent>
-            </Card>
+            </section>
           );
         })}
 
@@ -1359,71 +1465,24 @@ export default function BudgetPage() {
             bill info icon or auto-pull/pin badge. Their actuals roll
             up the same way as every other manual envelope (any
             transaction the user categorizes into them counts). */}
-        <Card
+        <section
           key={myBudgetGroup.groupName}
+          className={card}
           data-testid={`group-${myBudgetGroup.groupName}`}
-          className="border-primary/30"
         >
-          <CardContent className="p-0">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between gap-4 p-4 border-b border-border hover:bg-muted/20 text-left"
-              onClick={() => toggleCollapse(myBudgetGroup.groupName)}
-              data-testid={`button-toggle-${myBudgetGroup.groupName}`}
-            >
-              <div className="flex items-center gap-3">
-                {collapsed.has(myBudgetGroup.groupName) ? (
-                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                ) : (
-                  <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                )}
-                <div>
-                  <div className="font-display font-semibold text-lg">
-                    My budget
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Goals not tied to a bill
-                  </div>
-                </div>
-              </div>
-              {(() => {
-                const planned = parseFloat(myBudgetGroup.plannedTotal) || 0;
-                const actual = parseFloat(myBudgetGroup.actualTotal) || 0;
-                const delta = planned - actual;
-                const deltaColor =
-                  delta < 0
-                    ? "text-destructive"
-                    : delta > 0
-                      ? "text-positive"
-                      : "text-muted-foreground";
-                return (
-                  <div className="hidden md:flex items-center gap-6 text-sm font-mono">
-                    <div>
-                      <span className="text-muted-foreground mr-1">Budget</span>
-                      {formatCurrency(myBudgetGroup.plannedTotal)}
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground mr-1">Actual</span>
-                      {formatCurrency(myBudgetGroup.actualTotal)}
-                    </div>
-                    <div className={cn("font-medium w-28 text-right", deltaColor)}>
-                      Δ {delta >= 0 ? "+" : ""}
-                      {formatCurrency(delta)}
-                    </div>
-                  </div>
-                );
-              })()}
-            </button>
+            <GroupHead
+              groupName={myBudgetGroup.groupName}
+              sub="Goals not tied to a bill"
+              collapsed={collapsed.has(myBudgetGroup.groupName)}
+              onToggle={() => toggleCollapse(myBudgetGroup.groupName)}
+              plannedTotal={myBudgetGroup.plannedTotal}
+              actualTotal={myBudgetGroup.actualTotal}
+              isIncomeGroup={false}
+            />
 
             {!collapsed.has(myBudgetGroup.groupName) && (
               <>
-                <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 border-b border-border bg-muted/20 text-xs uppercase tracking-wide text-muted-foreground">
-                  <div className="col-span-5">Category</div>
-                  <div className="col-span-2 text-right">Budgeted</div>
-                  <div className="col-span-2 text-right">Actual</div>
-                  <div className="col-span-2 text-right">Difference</div>
-                  <div className="col-span-1 text-right">% Spent</div>
-                </div>
+                <ColumnHeads />
                 <DndContext
                   sensors={dragSensors}
                   collisionDetection={closestCenter}
@@ -1433,14 +1492,10 @@ export default function BudgetPage() {
                     items={myBudgetGroup.lines.map((l) => l.categoryId)}
                     strategy={verticalListSortingStrategy}
                   >
-                <div className="divide-y divide-border">
+                <div className="divide-y divide-brand-line/70">
                   {myBudgetGroup.lines.length === 0 && (
-                    <div
-                      className="px-4 py-6 text-sm text-muted-foreground italic"
-                      data-testid="empty-my-budget"
-                    >
-                      Add a line below to start a personal envelope —
-                      e.g. "Birthday gifts" or "Kid's soccer".
+                    <div className={emptyNote} data-testid="empty-my-budget">
+                      No envelopes yet.
                     </div>
                   )}
                   {myBudgetGroup.lines.map((line, idx) => (
@@ -1480,64 +1535,26 @@ export default function BudgetPage() {
                   </SortableContext>
                 </DndContext>
 
-                <div className="p-3 border-t border-border bg-muted/10">
-                  {addingFor === myBudgetGroup.groupName ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        autoFocus
-                        placeholder="New envelope name"
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter")
-                            handleAddCategory(myBudgetGroup.groupName);
-                          if (e.key === "Escape") {
-                            setAddingFor(null);
-                            setNewName("");
-                          }
-                        }}
-                        className="max-w-xs"
-                        data-testid={`input-new-line-${myBudgetGroup.groupName}`}
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          handleAddCategory(myBudgetGroup.groupName)
-                        }
-                        disabled={!newName.trim() || createCat.isPending}
-                        data-testid={`button-confirm-add-${myBudgetGroup.groupName}`}
-                      >
-                        Add
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setAddingFor(null);
-                          setNewName("");
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setAddingFor(myBudgetGroup.groupName);
-                        setNewName("");
-                      }}
-                      data-testid={`button-add-line-${myBudgetGroup.groupName}`}
-                    >
-                      <Plus className="w-4 h-4 mr-1" /> Add line
-                    </Button>
-                  )}
-                </div>
+                <AddLineFooter
+                  groupName={myBudgetGroup.groupName}
+                  placeholder="New envelope name"
+                  adding={addingFor === myBudgetGroup.groupName}
+                  value={newName}
+                  onChange={setNewName}
+                  onCommit={() => handleAddCategory(myBudgetGroup.groupName)}
+                  onOpen={() => {
+                    setAddingFor(myBudgetGroup.groupName);
+                    setNewName("");
+                  }}
+                  onCancel={() => {
+                    setAddingFor(null);
+                    setNewName("");
+                  }}
+                  commitDisabled={!newName.trim() || createCat.isPending}
+                />
               </>
             )}
-          </CardContent>
-        </Card>
+        </section>
       </div>
     </div>
   );
@@ -1588,21 +1605,30 @@ function PlannedAmountCell({
   if (isAvalanchePayment) {
     // Read-only: this row is managed by the Avalanche page slider.
     return (
-      <div className="font-mono text-sm py-1 pr-3 text-right tabular-nums">
+      <div className={`${num} pr-1.5 text-right text-neutral-700`}>
         {formatCurrency(line.plannedAmount)}
       </div>
     );
   }
 
+  // ⭐ AN EDITABLE FIELD THAT DOES NOT LOOK LIKE A FORM. At rest it is the
+  // same mono figure as the column beside it; the ring only appears under the
+  // pointer, and the navy one on focus. A page of boxed number inputs reads as
+  // data entry, and this is a table you mostly just read.
+  // ⚠️ The `$` rides NEXT TO the field, not pinned to the far edge of the
+  // column. Anchored left it left a visible gap in front of every short
+  // figure, and it was the only money on the row whose symbol did not sit
+  // against its digits.
   const input = (
-    <div className="relative w-28">
-      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-        $
-      </span>
-      <Input
+    <div className="flex items-center justify-end gap-px">
+      <span className="text-micro text-neutral-400">$</span>
+      <input
         type="number"
         step="0.01"
-        className="h-7 pl-5 text-right bg-transparent border-transparent hover:border-input focus:bg-background font-mono tabular-nums"
+        // ⚠️ Wide enough for a five-figure plan. At 4.75rem a mortgage line
+        // rendered "1980.0" with the last digit clipped inside the field —
+        // a budget that silently hides a digit is worse than no budget.
+        className={`${inputInline} w-[5.5rem] text-right`}
         defaultValue={planned.toFixed(2)}
         key={`${line.categoryId}-${line.plannedAmount}`}
         onBlur={(e) => handleBlur(e.target.value)}
@@ -1616,58 +1642,58 @@ function PlannedAmountCell({
   }
 
   return (
-    <div className="group/planned flex items-center justify-end gap-1">
+    <div className="group/planned flex items-center justify-end gap-0.5">
       <Popover>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="text-muted-foreground hover:text-foreground p-1 opacity-0 transition-opacity group-hover:opacity-100 group-hover/planned:opacity-100 focus-visible:opacity-100"
+            className="press rounded-control p-1 text-neutral-400 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover/planned:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
             title="Where did this amount come from?"
             data-testid={`button-planned-source-${line.categoryId}`}
           >
             <Info className="h-3.5 w-3.5" />
           </button>
         </PopoverTrigger>
+        {/* ⭐ WHERE THE PROSE IS ALLOWED TO LIVE. The word diet demotes
+            explanations, it does not delete them — and provenance is exactly
+            the disclosure the drills-must-tie rule says a figure owes the
+            reader. One hover away, in full sentences, is the right place for
+            it; the row face keeps a number and a word. */}
         <PopoverContent className="w-80 p-3" align="end">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-xs font-medium">{line.categoryName}</div>
-            <div className="text-[10px] text-muted-foreground">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-label font-semibold text-brand-navy">
+              {line.categoryName}
+            </div>
+            <div className={`${num} text-neutral-500`}>
               {formatCurrency(line.plannedAmount)}
             </div>
           </div>
           {kind === "pinned" && (
-            <div className="text-xs text-muted-foreground space-y-2">
+            <div className="space-y-2 text-micro text-neutral-500">
               <p>
-                This amount is <span className="font-medium">pinned</span> —
-                it holds at this value instead of tracking the live
-                Bills/Debts derivation.
+                Pinned — it holds at this value instead of tracking the live
+                Bills/Debts derivation. Use the pin beside the row name to let
+                it track again.
               </p>
               {(source?.bills ?? []).length > 0 && (
                 <BillList bills={source!.bills} />
               )}
-              <p className="text-[10px]">
-                Use the pin icon next to the row name to unpin and let it
-                track again.
-              </p>
             </div>
           )}
           {kind === "derived" && (
-            <div className="text-xs text-muted-foreground">
-              <p>
-                Pulled from the linked debt's current minimum payment. Edit
-                this row to override; it will be auto-pinned so the override
-                sticks.
-              </p>
-            </div>
+            <p className="text-micro text-neutral-500">
+              Pulled from the linked debt's current minimum payment. Edit this
+              row to override; it will be auto-pinned so the override sticks.
+            </p>
           )}
           {kind === "bills" && (
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-micro text-neutral-500">
                 Sum of {(source?.bills ?? []).length} bill
-                {(source?.bills ?? []).length === 1 ? "" : "s"} linked to
-                this category. Edit this row to override; it will be
-                auto-pinned so the override sticks. Reassign a bill on the
-                Bills page to change where it lands.
+                {(source?.bills ?? []).length === 1 ? "" : "s"} linked to this
+                category. Edit this row to override; it will be auto-pinned so
+                the override sticks. Reassign a bill on the Bills page to
+                change where it lands.
               </p>
               <BillList bills={source!.bills} />
             </div>
@@ -1682,25 +1708,27 @@ function PlannedAmountCell({
 function BillList({ bills }: { bills: LinkedBillEntry[] }) {
   if (bills.length === 0) {
     return (
-      <div className="text-xs text-muted-foreground py-1">
+      <div className="py-1 text-micro text-neutral-400">
         No linked bills hit this month.
       </div>
     );
   }
   return (
     <div
-      className="space-y-0.5 max-h-64 overflow-y-auto pr-1"
+      className="max-h-64 space-y-0.5 overflow-y-auto pr-1"
       data-testid="planned-source-bill-list"
     >
       {bills.map((b) => (
         <div
           key={b.id}
-          className="flex items-start justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted/40"
+          className="flex items-start justify-between gap-2 rounded-control px-2 py-1.5 hover:bg-platinum-3"
           data-testid={`planned-source-bill-${b.id}`}
         >
           <div className="min-w-0 flex-1">
-            <div className="text-xs font-medium truncate">{b.name}</div>
-            <div className="text-[10px] text-muted-foreground">
+            <div className="truncate text-label font-medium text-neutral-700">
+              {b.name}
+            </div>
+            <div className="text-micro text-neutral-400">
               {b.frequency}
               {b.eventCount === 0
                 ? " · no events this month"
@@ -1709,7 +1737,7 @@ function BillList({ bills }: { bills: LinkedBillEntry[] }) {
                   : ""}
             </div>
           </div>
-          <div className="text-xs font-mono tabular-nums whitespace-nowrap">
+          <div className={`${num} whitespace-nowrap text-neutral-700`}>
             {formatCurrency(b.amount)}
           </div>
         </div>
@@ -1719,7 +1747,7 @@ function BillList({ bills }: { bills: LinkedBillEntry[] }) {
 }
 
 // Single uncategorized-transaction row inside the inline-categorize popover.
-// `highlight` adds a subtle teal tint when the row is in the "Suggested"
+// `highlight` adds a subtle navy tint when the row is in the "Suggested"
 // section (matched a rule or category-name substring).
 function UncategorizedRow({
   tx,
@@ -1741,24 +1769,24 @@ function UncategorizedRow({
       disabled={assigning}
       onClick={() => onAssign(tx.id, categoryId)}
       className={cn(
-        "w-full flex items-start justify-between gap-2 text-left px-2 py-1.5 rounded hover:bg-muted/50 disabled:opacity-50",
-        highlight && "bg-primary/10",
+        "press flex w-full items-start justify-between gap-2 rounded-control px-2 py-1.5 text-left hover:bg-platinum-3 disabled:pointer-events-none disabled:opacity-50",
+        highlight && "bg-ok-bg",
       )}
       data-testid={`button-assign-${tx.id}-to-${categoryId}`}
     >
       <div className="min-w-0 flex-1">
-        <div className="text-xs font-medium truncate">{tx.description}</div>
-        <div className="text-[10px] text-muted-foreground">
+        <div className="truncate text-label font-medium text-neutral-700">
+          {tx.description}
+        </div>
+        <div className="text-micro text-neutral-400">
           {tx.occurredOn}
           {tx.source ? ` · ${tx.source}` : ""}
         </div>
       </div>
-      <div
-        className={cn(
-          "text-xs font-mono tabular-nums whitespace-nowrap",
-          amt < 0 ? "text-destructive" : "text-positive",
-        )}
-      >
+      {/* The minus sign already says which way the money went; spending the
+          one alarm colour on every ordinary debit would leave nothing to say
+          "this is wrong" with. */}
+      <div className={`${num} whitespace-nowrap text-neutral-700`}>
         {formatCurrency(amt)}
       </div>
     </button>
@@ -1805,18 +1833,17 @@ function ActualsRowReassignPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground -mr-1"
+        <button
+          type="button"
+          className="press -mr-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-control text-neutral-400 hover:bg-neutral-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:pointer-events-none disabled:opacity-50"
           disabled={assigning}
           onClick={(e) => e.stopPropagation()}
           title="Re-categorize this transaction"
           data-testid={`button-reassign-${tx.id}`}
           aria-label="Re-categorize this transaction"
         >
-          <MoreHorizontal className="w-3 h-3" />
-        </Button>
+          <MoreHorizontal className="h-3 w-3" />
+        </button>
       </PopoverTrigger>
       <PopoverContent
         className="w-64 p-0"
@@ -1970,12 +1997,20 @@ function BudgetLineRow({
   const isIncome = line.kind === "income";
   // Income: positive diff = surplus (actual > budget). Expense: positive diff = under budget.
   const diff = isIncome ? actual - planned : planned - actual;
-  const diffColor =
-    diff < 0
-      ? "text-destructive"
-      : diff > 0
-        ? "text-positive"
-        : "text-muted-foreground";
+  // Under the palette rule good is the resting state, so only the wrong side
+  // of the plan takes a colour — which is precisely why the figure needs the
+  // chip beside it: navy and "no opinion" are the same navy.
+  const diffColor = diff < 0 ? "text-bad" : "text-neutral-700";
+  const state =
+    diff === 0
+      ? { word: "on plan", aria: "on plan" }
+      : isIncome
+        ? diff < 0
+          ? { word: "short", aria: "short of plan" }
+          : { word: "above plan", aria: "above plan" }
+        : diff < 0
+          ? { word: "over", aria: "over plan" }
+          : { word: "left", aria: "under plan" };
   const pct = planned > 0 ? Math.round((actual / planned) * 100) : null;
   const sourceKind = line.sourceKind as SourceKind;
   // The "Avalanche payment" line is system-managed: created/updated by the
@@ -2026,18 +2061,18 @@ function BudgetLineRow({
     <div
       ref={setSortableRef}
       style={sortableStyle}
-      className="group px-4 py-1.5 hover:bg-muted/10"
+      className={`group ${ROW_GRID} hover:bg-platinum-2`}
       data-testid={`row-budget-${line.categoryId}`}
+      role="row"
     >
-    <div className="grid grid-cols-12 gap-4 items-center">
-      <div className="col-span-12 md:col-span-5 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="min-w-0" role="cell">
+        <div className="flex flex-wrap items-center gap-1.5">
           {renameDraft !== null && onRename ? (
             // (#692) Inline rename input — replaces the drill-down name
             // button while editing. Enter commits, Esc cancels, blur
             // commits if the value changed (so clicking away mirrors
             // Enter rather than dropping the edit silently).
-            <Input
+            <input
               autoFocus
               value={renameDraft}
               onChange={(e) => setRenameDraft(e.target.value)}
@@ -2059,7 +2094,7 @@ function BudgetLineRow({
                 }
                 setRenameDraft(null);
               }}
-              className="h-7 max-w-[220px] text-sm"
+              className={`${inputControl} max-w-[14rem] py-1`}
               data-testid={`input-rename-${line.categoryId}`}
             />
           ) : null}
@@ -2069,22 +2104,26 @@ function BudgetLineRow({
             return (
               <button
                 type="button"
-                className="font-medium truncate hover:underline decoration-dotted underline-offset-2 text-left inline-flex items-center gap-1"
+                className="press inline-flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-left text-body font-medium text-brand-navy hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-brand-navy/40"
                 title={`View ${line.categoryName} transactions — Opens in ${destLabel}`}
                 onClick={() => navigate(drillDownHref)}
                 data-testid={`button-category-name-${line.categoryId}`}
                 data-drilldown-target={opensInAmex ? "amex" : "transactions"}
               >
                 <span className="truncate">{line.categoryName}</span>
+                {/* Both marks are the same neutral: which ledger a drill opens
+                    is a destination, not a verdict, so it must not spend a
+                    palette colour. `aria-hidden` keeps the button's accessible
+                    name exactly the category name. */}
                 {opensInAmex ? (
                   <CreditCard
-                    className="w-3 h-3 shrink-0 text-muted-foreground"
+                    className="h-3 w-3 shrink-0 text-neutral-400"
                     aria-hidden="true"
                     data-testid={`icon-drilldown-amex-${line.categoryId}`}
                   />
                 ) : (
                   <Landmark
-                    className="w-3 h-3 shrink-0 text-positive"
+                    className="h-3 w-3 shrink-0 text-neutral-400"
                     aria-hidden="true"
                     data-testid={`icon-drilldown-transactions-${line.categoryId}`}
                   />
@@ -2093,19 +2132,18 @@ function BudgetLineRow({
             );
           })()}
           {(line.sourceBreakdown ?? []).map((b) => (
-            <Badge
+            <span
               key={b.source}
-              variant="outline"
-              className="text-[10px] font-normal text-muted-foreground border-muted-foreground/30"
+              className="chip gray"
               title={`${b.count} txn${b.count === 1 ? "" : "s"} · ${formatCurrency(b.amount)}`}
               data-testid={`badge-source-${b.source.toLowerCase()}-${line.categoryId}`}
             >
               {b.source} · {b.count}
-            </Badge>
+            </span>
           ))}
           {line.pinned && (
             <span
-              className="text-muted-foreground"
+              className="text-neutral-400"
               title={
                 monthPinned
                   ? "This month is pinned — every auto-pulled line is locked to its persisted planned amount."
@@ -2114,7 +2152,7 @@ function BudgetLineRow({
               aria-label="Pinned"
               data-testid={`badge-pinned-${line.categoryId}`}
             >
-              <Pin className="w-3 h-3" />
+              <Pin className="h-3 w-3" />
             </span>
           )}
           {/* #90 / #176 / #417 — inline categorize from Budget. Surfaces
@@ -2128,26 +2166,25 @@ function BudgetLineRow({
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 text-[10px] font-normal text-muted-foreground hover:text-foreground cursor-pointer"
+                  className="chip info press cursor-pointer hover:brightness-95 focus-visible:ring-2 focus-visible:ring-brand-navy/40"
                   title={`${suggestedTxns.length} uncategorized transaction${suggestedTxns.length === 1 ? "" : "s"} look like ${line.categoryName} (rule or name match) — click to assign.`}
                   data-testid={`button-categorize-${line.categoryId}`}
                   data-suggested-count={suggestedTxns.length}
                 >
-                  <Tag className="w-3 h-3" />
                   {`${suggestedTxns.length} match${suggestedTxns.length === 1 ? "" : "es"}`}
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-80 p-3" align="start">
-                <div className="text-xs font-medium mb-2">
+                <div className="mb-2 text-label font-semibold text-brand-navy">
                   Assign to {line.categoryName}
                 </div>
                 <div
-                  className="space-y-3 max-h-72 overflow-y-auto pr-1"
+                  className="max-h-72 space-y-3 overflow-y-auto pr-1"
                   data-testid={`uncategorized-list-${line.categoryId}`}
                 >
                   {suggestedTxns.length > 0 && (
                     <div>
-                      <div className="text-[10px] uppercase tracking-wide text-primary mb-1">
+                      <div className={`mb-1 ${headCell}`}>
                         Suggested · matches rule or name
                       </div>
                       <div className="space-y-1">
@@ -2166,7 +2203,7 @@ function BudgetLineRow({
                   )}
                   {otherTxns.length > 0 && (
                     <div>
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                      <div className={`mb-1 ${headCell}`}>
                         {suggestedTxns.length > 0 ? "Other uncategorized" : "Uncategorized this month"}
                       </div>
                       <div className="space-y-1">
@@ -2180,7 +2217,7 @@ function BudgetLineRow({
                           />
                         ))}
                         {otherTxns.length > 50 && (
-                          <div className="text-[10px] text-muted-foreground text-center pt-1">
+                          <div className="pt-1 text-center text-micro text-neutral-400">
                             Showing 50 of {otherTxns.length}
                           </div>
                         )}
@@ -2192,15 +2229,14 @@ function BudgetLineRow({
             </Popover>
           )}
           {isAvalanchePayment ? (
-            <Badge
-              variant="outline"
-              className="text-[10px] font-normal ml-auto md:ml-0 border-warning/40 text-warning"
+            <span
+              className="chip gray ml-auto sm:ml-0"
               title="Edit this on the Avalanche page slider — both stay in sync."
             >
               Managed by Avalanche
-            </Badge>
+            </span>
           ) : (
-            <div className="ml-auto md:ml-0 flex items-center gap-1">
+            <div className="ml-auto flex items-center gap-0.5 sm:ml-0">
               {/* Task #696 — drag handle. Present on every non-Avalanche
                   row so power users can shuffle 10+ envelopes in one
                   motion. Listeners live on this button only so other
@@ -2213,13 +2249,13 @@ function BudgetLineRow({
                   type="button"
                   {...dragAttributes}
                   {...dragListeners}
-                  className="h-6 w-6 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 cursor-grab active:cursor-grabbing touch-none transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                  className={`${rowIcon} cursor-grab touch-none active:cursor-grabbing disabled:cursor-not-allowed`}
                   disabled={reorderDisabled || renaming}
                   title="Drag to reorder"
                   aria-label="Drag to reorder"
                   data-testid={`drag-handle-${line.categoryId}`}
                 >
-                  <GripVertical className="w-3 h-3" />
+                  <GripVertical className="h-3 w-3" />
                 </button>
               )}
               {/* Task #692 — reorder this category within its group.
@@ -2228,37 +2264,34 @@ function BudgetLineRow({
                   (disabled) at the top/bottom of the group. */}
               {!isAvalanchePayment && !onMove && (
                 <>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 disabled:opacity-30"
+                  <button
+                    type="button"
+                    className={rowIcon}
                     onClick={() => onMoveUp?.()}
                     disabled={!onMoveUp || reorderDisabled}
                     title="Move up"
                     aria-label="Move up"
                     data-testid={`button-move-up-${line.categoryId}`}
                   >
-                    <ArrowUp className="w-3 h-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 disabled:opacity-30"
+                    <ArrowUp className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    className={rowIcon}
                     onClick={() => onMoveDown?.()}
                     disabled={!onMoveDown || reorderDisabled}
                     title="Move down"
                     aria-label="Move down"
                     data-testid={`button-move-down-${line.categoryId}`}
                   >
-                    <ArrowDown className="w-3 h-3" />
-                  </Button>
+                    <ArrowDown className="h-3 w-3" />
+                  </button>
                 </>
               )}
               {isReadOnly && !isAvalanchePayment && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 disabled:opacity-50"
+                <button
+                  type="button"
+                  className={rowIcon}
                   onClick={() => onTogglePin(line.categoryId, line.pinned)}
                   disabled={pinDisabled || monthPinned}
                   data-testid={`button-toggle-pin-${line.categoryId}`}
@@ -2272,11 +2305,11 @@ function BudgetLineRow({
                   }
                 >
                   {line.pinned ? (
-                    <PinOff className="w-3 h-3" />
+                    <PinOff className="h-3 w-3" />
                   ) : (
-                    <Pin className="w-3 h-3" />
+                    <Pin className="h-3 w-3" />
                   )}
-                </Button>
+                </button>
               )}
               {/* (#692) Rename + reorder controls — only shown when the
                   parent wires up onRename / onMove (i.e. inside the My
@@ -2284,51 +2317,47 @@ function BudgetLineRow({
                   pattern so they don't add visual noise on the rest of
                   the budget rows. */}
               {onRename && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+                <button
+                  type="button"
+                  className={rowIcon}
                   onClick={() => setRenameDraft(line.categoryName)}
                   disabled={renaming}
                   data-testid={`button-rename-${line.categoryId}`}
                   aria-label="Rename this envelope"
                   title="Rename this envelope"
                 >
-                  <Pencil className="w-3 h-3" />
-                </Button>
+                  <Pencil className="h-3 w-3" />
+                </button>
               )}
               {onMove && (
                 <>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 disabled:opacity-30"
+                  <button
+                    type="button"
+                    className={rowIcon}
                     onClick={() => onMove(line.categoryId, "up")}
                     disabled={!canMoveUp || renaming}
                     data-testid={`button-move-up-${line.categoryId}`}
                     aria-label="Move up"
                     title="Move up"
                   >
-                    <ChevronUp className="w-3 h-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 disabled:opacity-30"
+                    <ChevronUp className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    className={rowIcon}
                     onClick={() => onMove(line.categoryId, "down")}
                     disabled={!canMoveDown || renaming}
                     data-testid={`button-move-down-${line.categoryId}`}
                     aria-label="Move down"
                     title="Move down"
                   >
-                    <ChevronDown className="w-3 h-3" />
-                  </Button>
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
                 </>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+              <button
+                type="button"
+                className={`${rowIcon} hover:bg-bad-bg hover:text-bad`}
                 onClick={() => onDelete(line.categoryId)}
                 data-testid={`button-delete-${line.categoryId}`}
                 aria-label="Delete this line"
@@ -2338,13 +2367,13 @@ function BudgetLineRow({
                     : "Delete this line"
                 }
               >
-                <Trash2 className="w-3 h-3" />
-              </Button>
+                <Trash2 className="h-3 w-3" />
+              </button>
             </div>
           )}
         </div>
       </div>
-      <div className="col-span-3 md:col-span-2 text-right">
+      <Cell label="Plan">
         <PlannedAmountCell
           line={line}
           planned={planned}
@@ -2352,12 +2381,13 @@ function BudgetLineRow({
           onUpdatePlanned={onUpdatePlanned}
           onPinLine={onTogglePin}
         />
-      </div>
-      <div className="col-span-3 md:col-span-2 text-right font-mono text-sm tabular-nums">
+      </Cell>
+      <Cell label="Actual">
         <Popover>
           <PopoverTrigger asChild>
             <button
-              className="hover:underline decoration-dotted underline-offset-2 cursor-pointer tabular-nums"
+              type="button"
+              className={`press ${num} rounded px-1 py-0.5 text-neutral-700 hover:bg-neutral-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40`}
               title="View contributing transactions"
               data-testid={`button-actuals-${line.categoryId}`}
             >
@@ -2369,14 +2399,19 @@ function BudgetLineRow({
               month (newest first), plus a deep link into the Transactions
               page filtered to the same category + month for the full view. */}
           <PopoverContent className="w-80 p-3" align="end">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-medium">{line.categoryName}</div>
-              <div className="text-[10px] text-muted-foreground">
+            {/* ⭐ THE DRILL TIES TO THE ROW THAT OPENED IT. The head restates
+                the row's own actual beside the count, so a reader can see the
+                list below sums to the figure they clicked. */}
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-label font-semibold text-brand-navy">
+                {line.categoryName}
+              </div>
+              <div className={`${num} text-neutral-500`}>
                 {contributingTxns.length} txn{contributingTxns.length === 1 ? "" : "s"} · {formatCurrency(line.actualAmount)}
               </div>
             </div>
             {contributingTxns.length === 0 ? (
-              <div className="text-xs text-muted-foreground py-2">
+              <div className="py-2 text-micro text-neutral-400">
                 No transactions contributed to this line this month.
               </div>
             ) : (
@@ -2404,12 +2439,14 @@ function BudgetLineRow({
                       return (
                         <div
                           key={t.id}
-                          className="flex items-start justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted/40"
+                          className="flex items-start justify-between gap-2 rounded-control px-2 py-1.5 hover:bg-platinum-3"
                           data-testid={`actuals-row-${t.id}`}
                         >
                           <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium truncate">{t.description}</div>
-                            <div className="text-[10px] text-muted-foreground">
+                            <div className="truncate text-label font-medium text-neutral-700">
+                              {t.description}
+                            </div>
+                            <div className="text-micro text-neutral-400">
                               {t.occurredOn}
                               {(() => {
                                 const lbl = friendlySourceLabel(t.source);
@@ -2418,16 +2455,11 @@ function BudgetLineRow({
                             </div>
                           </div>
                           <div className="flex flex-col items-end whitespace-nowrap">
-                            <div
-                              className={cn(
-                                "text-xs font-mono tabular-nums",
-                                amt < 0 ? "text-destructive" : "text-positive",
-                              )}
-                            >
+                            <div className={`${num} text-neutral-700`}>
                               {formatCurrency(amt)}
                             </div>
                             <div
-                              className="text-[10px] font-mono tabular-nums text-muted-foreground"
+                              className={`${num} text-neutral-400`}
                               title="Running total of this category (oldest through this row)"
                               data-testid={`actuals-running-${t.id}`}
                             >
@@ -2457,19 +2489,19 @@ function BudgetLineRow({
                     const hiddenSum = hidden.reduce((s, t) => s + Number(t.amount), 0);
                     return (
                       <div
-                        className="flex items-start justify-between gap-2 px-2 py-1.5 rounded bg-muted/30 border-t mt-1"
+                        className="mt-1 flex items-start justify-between gap-2 rounded-control border-t border-brand-line bg-platinum-3 px-2 py-1.5"
                         data-testid={`actuals-hidden-tail-${line.categoryId}`}
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="text-[11px] font-medium text-muted-foreground">
+                          <div className="text-micro font-semibold text-neutral-500">
                             + {hidden.length} earlier transaction{hidden.length === 1 ? "" : "s"}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">
+                          <div className="text-micro text-neutral-400">
                             Included in the running total above
                           </div>
                         </div>
                         <div
-                          className="text-xs font-mono tabular-nums text-muted-foreground"
+                          className={`${num} text-neutral-500`}
                           data-testid={`actuals-hidden-tail-sum-${line.categoryId}`}
                         >
                           {formatCurrency(hiddenSum)}
@@ -2478,10 +2510,10 @@ function BudgetLineRow({
                     );
                   })()}
                 </div>
-                <div className="border-t mt-2 pt-2">
+                <div className="mt-2 border-t border-brand-line pt-2">
                   <button
                     type="button"
-                    className="text-xs text-primary hover:underline"
+                    className={btnLink}
                     onClick={() => navigate(drillDownHref)}
                     data-testid={`button-view-all-${line.categoryId}`}
                   >
@@ -2493,11 +2525,14 @@ function BudgetLineRow({
             {/* Source split — kept for at-a-glance Bank vs Amex parity but
                 now subordinate to the txn list above. */}
             {(line.sourceBreakdown ?? []).length > 0 && (
-              <div className="border-t mt-2 pt-2 space-y-1">
+              <div className="mt-2 space-y-1 border-t border-brand-line pt-2">
                 {(line.sourceBreakdown ?? []).map((b) => (
-                  <div key={b.source} className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <div
+                    key={b.source}
+                    className="flex items-center justify-between text-micro text-neutral-400"
+                  >
                     <span>{b.source}</span>
-                    <span className="tabular-nums font-mono">
+                    <span className={num}>
                       {b.count} txn · {formatCurrency(b.amount)}
                     </span>
                   </div>
@@ -2506,40 +2541,54 @@ function BudgetLineRow({
             )}
           </PopoverContent>
         </Popover>
-      </div>
-      <div
-        className={cn(
-          "col-span-3 md:col-span-2 text-right font-mono text-sm font-medium tabular-nums",
-          diffColor,
-        )}
-      >
-        {diff >= 0 ? "+" : ""}
-        {formatCurrency(diff)}
-      </div>
-      <div className="col-span-3 md:col-span-1 text-right font-mono text-sm text-muted-foreground tabular-nums">
-        <span className="inline-flex items-center justify-end gap-1">
-          {planned > 0 && actual !== planned && (
-            actual > planned ? (
-              <ArrowUp
-                className={cn("w-3 h-3 shrink-0", diffColor)}
-                aria-label="over plan"
-                data-testid={`pct-direction-${line.categoryId}`}
-              />
-            ) : (
-              <ArrowDown
-                className={cn("w-3 h-3 shrink-0", diffColor)}
-                aria-label="under plan"
-                data-testid={`pct-direction-${line.categoryId}`}
-              />
-            )
+      </Cell>
+
+      {/* ── Used ── the bar and the ratio it draws. */}
+      {/* ⚠️ The bar and its percentage stay ON ONE LINE. Stacking the number
+          under the bar drops it off the row's shared baseline, so it no longer
+          lines up with the plan, actual and difference figures beside it —
+          which is the one thing a table of money has to get right. */}
+      <Cell label="Used">
+        <div className="flex w-full min-w-0 items-center gap-2">
+          <CssFillMeter
+            className="min-w-[2.5rem] flex-1"
+            value={actual}
+            ceiling={planned}
+            title={`${formatCurrency(line.actualAmount)} of ${formatCurrency(
+              line.plannedAmount,
+            )} planned`}
+          />
+          <span className={`${num} w-[2.75rem] shrink-0 text-right text-neutral-500`}>
+            {pct === null ? "—" : `${pct}%`}
+          </span>
+        </div>
+      </Cell>
+
+      {/* ── Left / over ── the figure, and the WORD for which side of the plan
+          it falls on. The arrow that used to live here said "up" and "down",
+          which is not the same statement as "over" and "left", and it said it
+          in colour alone. */}
+      <Cell label="Left / over">
+        <div className="flex items-center gap-1.5 sm:flex-col sm:items-end sm:gap-0.5">
+          <span className={`${num} font-medium ${diffColor}`}>
+            {diff >= 0 ? "+" : ""}
+            {formatCurrency(diff)}
+          </span>
+          {planned > 0 && (
+            <span
+              className={`chip ${diff < 0 ? "bad" : "gray"}`}
+              aria-label={state.aria}
+              data-testid={`pct-direction-${line.categoryId}`}
+            >
+              {state.word}
+            </span>
           )}
-          {pct === null ? "—" : `${pct}%`}
-        </span>
-      </div>
-    </div>
+        </div>
+      </Cell>
+
     {contributingTxns.length > 0 && (
       <div
-        className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums"
+        className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-micro text-neutral-400 tabular-nums sm:col-span-5"
         data-testid={`analysis-strip-${line.categoryId}`}
       >
         {planned > 0 && !isIncome && (() => {
@@ -2561,14 +2610,17 @@ function BudgetLineRow({
               : aheadBy > 0
                 ? `${aheadBy}% ahead of pace`
                 : `${Math.abs(aheadBy)}% under pace`;
-          const paceColor =
-            Math.abs(aheadBy) <= 5
-              ? "text-muted-foreground"
-              : aheadBy > 0
-                ? "text-warning"
-                : "text-positive";
+          // Unchanged severity: burning through an envelope faster than the
+          // calendar has always been a WATCH here, never an alarm — the month
+          // can still end inside plan. Grey for that, navy for comfortably
+          // behind, and the label carries the meaning either way.
+          const paceTone =
+            Math.abs(aheadBy) <= 5 ? "gray" : aheadBy > 0 ? "warn" : "ok";
           return (
-            <span className={paceColor} data-testid={`analysis-pace-${line.categoryId}`}>
+            <span
+              className={`chip ${paceTone}`}
+              data-testid={`analysis-pace-${line.categoryId}`}
+            >
               {paceLabel}
             </span>
           );
