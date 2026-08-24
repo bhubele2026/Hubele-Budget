@@ -21,12 +21,12 @@ export function AccountPageHeader({
   // (the decorative piggy/sparkle icons elsewhere are what got stripped).
   void accentBorderClass;
   return (
-    <div className="flex items-start justify-between gap-4 flex-wrap">
-      <div className="flex items-center gap-3 min-w-0">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-3">
         {icon ? (
           <span
             className={cn(
-              "inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-card",
+              "surface inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-control ring-1 ring-brand-line",
               iconClass,
             )}
           >
@@ -34,16 +34,18 @@ export function AccountPageHeader({
           </span>
         ) : null}
         <div className="min-w-0">
-          <h1 className="text-[1.7rem] font-semibold tracking-tight text-foreground leading-tight">
+          {/* `Page`'s display step — an account page is a page, so its title
+              is the same size as every other page title in the app. */}
+          <h1 className="text-display leading-tight font-semibold text-brand-navy">
             {title}
           </h1>
           {subtitle ? (
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
+            <p className="text-label text-neutral-500">{subtitle}</p>
           ) : null}
         </div>
       </div>
       {actions ? (
-        <div className="flex items-start gap-2 flex-wrap">{actions}</div>
+        <div className="flex flex-wrap items-start gap-2">{actions}</div>
       ) : null}
     </div>
   );

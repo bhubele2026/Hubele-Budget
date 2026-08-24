@@ -33,7 +33,6 @@ import {
   bulkRuleFromRuleAction,
 } from "@/hooks/use-bulk-recategorize-prompt";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { rangeForMode, type RangeMode } from "@/lib/timeRange";
 import { Sparkline, StackBar, DeltaPill, MoneyText } from "@/components/viz";
@@ -90,11 +89,13 @@ import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { PostLinkProgressBanner } from "@/components/post-link-progress";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { SyncButton } from "@/components/sync-button";
+import { card, cardHead, emptyNote, fieldLabel, Help } from "@/ui";
 import {
   AccountPageHeader,
   AccountFilterBar,
   BalanceTrendChart,
   DayGroup,
+  LedgerColumns,
   MonthNavigator,
   monthKeyOf,
   monthKeyFromISO,
@@ -1248,26 +1249,29 @@ export default function TransactionsPage() {
   const renderForecastChip = (tx: Transaction) => {
     if (!tx.forecastFlag) return null;
     const r = resolutionByTxnId.get(tx.id);
+    // Tone follows the palette rule: navy for the resting states, grey for
+    // "not planned". None of them is an alarm, so none of them is orange —
+    // THE LABEL is what says which state the row is in.
     const state =
       r?.status === "matched"
-        ? { attr: "matched", label: "Matched", icon: Check }
+        ? { attr: "matched", label: "Matched", icon: Check, tone: "ok" }
         : r?.status === "ignored_unforecasted" || r?.status === "unplanned"
-          ? { attr: "unplanned", label: "Not planned", icon: Inbox }
-          : { attr: "in-review-bucket", label: "In Review", icon: Inbox };
+          ? { attr: "unplanned", label: "Not planned", icon: Inbox, tone: "gray" }
+          : { attr: "in-review-bucket", label: "In Review", icon: Inbox, tone: "info" };
     const StateIcon = state.icon;
     return (
       <span
-        className={`inline-flex items-center rounded-full border text-[10px] font-normal ${CHIP_BASE}`}
+        className="inline-flex items-center gap-1"
         data-forecast-state={state.attr}
         data-testid={`badge-forecast-state-${tx.id}`}
       >
         <Link
           href="/forecast#bucket"
-          className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-l-full press hover:bg-secondary"
+          className={`chip ${state.tone} press inline-flex items-center gap-1 hover:bg-platinum-5`}
           title="Match this in the Forecast Review Bucket"
           data-testid={`link-forecast-state-${tx.id}`}
         >
-          <StateIcon className="w-3 h-3" /> {state.label}
+          <StateIcon className="h-3 w-3" /> {state.label}
         </Link>
         <button
           type="button"
@@ -1275,10 +1279,10 @@ export default function TransactionsPage() {
           disabled={updateTx.isPending}
           title="Remove from forecast"
           aria-label="Remove from forecast"
-          className="inline-flex items-center pr-1.5 pl-0.5 py-0.5 rounded-r-full text-muted-foreground press hover:bg-secondary disabled:opacity-50"
+          className="press inline-flex items-center rounded-control p-0.5 text-neutral-400 hover:text-brand-navy disabled:opacity-50"
           data-testid={`button-remove-forecast-${tx.id}`}
         >
-          <X className="w-3 h-3" />
+          <X className="h-3 w-3" />
         </button>
       </span>
     );
@@ -1300,10 +1304,15 @@ export default function TransactionsPage() {
           title="Categorize this transaction first to send it to Forecast"
           data-testid={`button-send-forecast-${tx.id}`}
         >
-          <Send className="w-4 h-4 text-muted-foreground/40" />
+          <Send className="h-4 w-4 text-neutral-300" />
         </Button>
       );
     }
+    // ⚠️ ONE CLICK, NO GATE. This is the whole Send-to-Forecast flow: the
+    // plane calls `handleToggleForecast` directly and the row is on the
+    // curve. Never put a confirm dialog, a review step, or a second button
+    // in front of it — that gate existed once (#762) and was deliberately
+    // deleted. STYLE ONLY BELOW THIS LINE.
     return (
       <Button
         variant="ghost"
@@ -1313,7 +1322,7 @@ export default function TransactionsPage() {
         title="Send to Forecast"
         data-testid={`button-send-forecast-${tx.id}`}
       >
-        <Send className="w-4 h-4 text-primary" />
+        <Send className="h-4 w-4 text-brand-navy" />
       </Button>
     );
   };
@@ -2073,7 +2082,7 @@ export default function TransactionsPage() {
       <PostLinkProgressBanner viewTransactionsPath="/transactions" />
       <div
         ref={paneRef}
-        className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-3 md:pt-4 pb-3 bg-background border-b shadow-sm space-y-3"
+        className="sticky top-0 z-30 -mx-4 -mt-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pt-3 pb-3 md:-mx-8 md:-mt-8 md:px-8 md:pt-4"
       >
       <AccountPageHeader
         title="Chase"
@@ -2108,14 +2117,21 @@ export default function TransactionsPage() {
         </div>
 
         {hasLinkedChecking ? (
-          <div className="grid gap-3 lg:grid-cols-2 items-start stagger-children">
+          <div className="stagger-children grid items-start gap-3 lg:grid-cols-2">
             {/* Money in vs out + net */}
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-baseline justify-between gap-2 mb-3">
-                  <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                    Money in vs out
-                  </span>
+            <div className={card}>
+              <div className={cardHead}>
+                <span className="text-title font-semibold text-brand-navy">
+                  Money in vs out
+                </span>
+                <Help className="ml-auto">
+                  Deposits against withdrawals for the selected range, from the
+                  same rows the ledger below renders.
+                </Help>
+              </div>
+              <div className="p-4">
+                <div className="mb-3 flex items-baseline justify-between gap-2">
+                  <span className={fieldLabel}>Change</span>
                   <DeltaPill
                     value={
                       rangeBalances.startBal && rangeBalances.startBal !== 0
@@ -2132,31 +2148,29 @@ export default function TransactionsPage() {
                   legendMax={2}
                 />
                 <div className="mt-3 flex items-baseline gap-2">
-                  <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                    Net
-                  </span>
+                  <span className={fieldLabel}>Net</span>
                   <MoneyText
                     amount={rangeTotals.net}
                     colored
                     signed
-                    className="text-xl font-bold"
+                    className="font-mono text-title font-semibold tabular-nums"
                   />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             {/* Checking balance trend across the range */}
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-baseline justify-between gap-2 mb-2">
-                  <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                    Checking balance
-                  </span>
-                  <MoneyText
-                    amount={rangeBalances.endBal ?? endingBalance ?? 0}
-                    className="text-xl font-bold"
-                  />
-                </div>
+            <div className={card}>
+              <div className={cardHead}>
+                <span className="text-title font-semibold text-brand-navy">
+                  Checking balance
+                </span>
+                <MoneyText
+                  amount={rangeBalances.endBal ?? endingBalance ?? 0}
+                  className="ml-auto font-mono text-title font-semibold tabular-nums text-brand-navy"
+                />
+              </div>
+              <div className="p-4">
                 {rangeBalances.series.length > 1 ? (
                   <Sparkline
                     data={rangeBalances.series}
@@ -2169,35 +2183,33 @@ export default function TransactionsPage() {
                     height={40}
                   />
                 ) : (
-                  <div className="h-10 grid place-items-center text-xs text-muted-foreground">
-                    Not enough history for a trend yet
+                  <div className="grid h-10 place-items-center text-micro text-neutral-400">
+                    No trend yet
                   </div>
                 )}
-                <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                  <span>
+                <div className="mt-2 flex justify-between text-micro text-neutral-500">
+                  <span className={fieldLabel}>
                     Start{" "}
                     <MoneyText
                       amount={rangeBalances.startBal ?? 0}
-                      className="text-foreground"
+                      className="font-mono tabular-nums text-brand-navy"
                     />
                   </span>
-                  <span>
+                  <span className={fieldLabel}>
                     End{" "}
                     <MoneyText
                       amount={rangeBalances.endBal ?? 0}
-                      className="text-foreground"
+                      className="font-mono tabular-nums text-brand-navy"
                     />
                   </span>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         ) : (
-          <Card>
-            <CardContent className="p-5 text-sm text-muted-foreground">
-              Connect a checking account to see your weekly money flow.
-            </CardContent>
-          </Card>
+          <div className={card}>
+            <div className={emptyNote}>No checking account linked.</div>
+          </div>
         )}
       </div>
 
@@ -2208,10 +2220,14 @@ export default function TransactionsPage() {
           background auto-updates are disabled. */}
       {!usingSnapshotAccount && isManualAccount && (
         <div
-          className="text-xs text-muted-foreground"
+          className="flex items-center gap-1.5 text-micro text-neutral-500"
           data-testid="text-snapshot-meta"
         >
-          Manual entries · No bank balance is tracked for hand-entered rows.
+          <span className={fieldLabel}>Manual entries</span>
+          <Help>
+            Hand-entered rows carry no bank balance, so no snapshot anchors
+            this view.
+          </Help>
         </div>
       )}
       {/* (#422) Header pending-count chip — at-a-glance signal of how
@@ -2223,22 +2239,22 @@ export default function TransactionsPage() {
           <Link
             href="/forecast#bucket"
             data-testid="link-bucket-pending-count"
-            className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 text-warning px-2.5 py-0.5 text-xs font-medium press hover:bg-secondary"
+            className="chip warn press inline-flex items-center gap-1.5 hover:bg-platinum-5 hover:text-brand-navy"
             title="Open the Forecast Review Bucket to match these"
           >
-            <Inbox className="w-3 h-3" />
+            <Inbox className="h-3 w-3" />
+            {/* Wording is asserted by e2e/transactions-bucket-badge.spec.ts and
+                is already a label, not a sentence — restyled, not reworded. */}
             <span>
-              Match <span className="tabular-nums">{awaitingMatchCount}</span>{" "}
+              Match{" "}
+              <span className="font-mono tabular-nums">{awaitingMatchCount}</span>{" "}
               {awaitingMatchCount === 1 ? "item" : "items"} in Review
             </span>
-            <ArrowRight className="w-3 h-3" />
+            <ArrowRight className="h-3 w-3" />
           </Link>
         ) : (
-          <span
-            className="text-xs text-muted-foreground"
-            data-testid="text-bucket-empty"
-          >
-            All sent items reconciled.
+          <span className="chip gray" data-testid="text-bucket-empty">
+            All reconciled
           </span>
         )}
       </div>
@@ -2253,7 +2269,7 @@ export default function TransactionsPage() {
         return chaseOnlyPlaidCheckingAccounts.length > 1;
       })() && (
         <div className="flex items-center gap-2" data-testid="chase-account-picker">
-          <span className="text-xs text-muted-foreground">View account:</span>
+          <span className={fieldLabel}>Account</span>
           <Select
             value={effectiveAccountKey}
             onValueChange={(v) => setSelectedAccountKey(v)}
@@ -2322,11 +2338,11 @@ export default function TransactionsPage() {
 
       {selected.size > 0 && (
         <div
-          className="sticky z-20 flex items-center gap-3 rounded-md border border-positive/30 bg-positive/10 px-4 py-2 shadow-sm"
+          className="surface sticky z-20 flex items-center gap-3 rounded-control px-4 py-2 ring-1 ring-brand-navy/25"
           style={{ top: "var(--pinned-pane-h, 0px)" }}
           data-testid="bulk-bar"
         >
-          <span className="text-sm font-medium text-positive">
+          <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
             {selected.size} selected
           </span>
           <Button
@@ -2357,11 +2373,9 @@ export default function TransactionsPage() {
       )}
 
       {groups.length === 0 && pendingItems.length === 0 && (
-        <Card>
-          <CardContent className="p-8 text-center text-muted-foreground">
-            No transactions match these filters.
-          </CardContent>
-        </Card>
+        <div className={card}>
+          <div className={emptyNote}>No transactions match these filters.</div>
+        </div>
       )}
 
       {/* (#728) Pinned "Pending" section above the dated day-groups.
@@ -2401,9 +2415,10 @@ export default function TransactionsPage() {
             }
             onToggleAll={(on) => toggleDay(ids, on)}
             totalNode={dayNetNode}
+            columnHeader={<LedgerColumns />}
           >
             <div
-              className="divide-y divide-border"
+              className="divide-y divide-brand-line/70"
               data-testid="group-pending"
             >
                 {items.map((tx) => {
@@ -2448,7 +2463,7 @@ export default function TransactionsPage() {
         );
       })()}
 
-      {groups.map(([dayKey, items]) => {
+      {groups.map(([dayKey, items], groupIndex) => {
         const ids = items.map((t) => t.id);
         const allSelected = ids.every((id) => selected.has(id));
         const someSelected = !allSelected && ids.some((id) => selected.has(id));
@@ -2477,8 +2492,15 @@ export default function TransactionsPage() {
             }
             onToggleAll={(on) => toggleDay(ids, on)}
             totalNode={dayNetNode}
+            // Once per ledger. The pinned Pending group above already carries
+            // the column heads when it is present.
+            columnHeader={
+              groupIndex === 0 && pendingItems.length === 0 ? (
+                <LedgerColumns />
+              ) : undefined
+            }
           >
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-brand-line/70">
                 {items.map((tx) => {
                   // (#629) Dim Ignore'd rows the same way forecast-sent rows
                   // are dimmed, so the bubble lights don't make a held-out
@@ -2516,7 +2538,7 @@ export default function TransactionsPage() {
                           />
                           {runningBalanceMap.has(tx.id) && (
                             <span
-                              className="text-[11px] tabular-nums text-muted-foreground"
+                              className="font-mono text-micro tabular-nums text-neutral-400"
                               data-testid={`text-running-balance-${tx.id}`}
                             >
                               bal {formatCurrency(runningBalanceMap.get(tx.id)!)}

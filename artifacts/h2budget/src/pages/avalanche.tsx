@@ -42,11 +42,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSpine } from "@/hooks/useSpine";
@@ -95,20 +90,15 @@ import {
   type SimDebt,
   type Strategy,
 } from "@/lib/avalanche";
+import { effectiveDebtBalance } from "@/lib/debtBalance";
+import { DebtPendingHint } from "@/components/debt-pending-hint";
 import { Trash2, Plus, RefreshCw, X, ClipboardPaste } from "lucide-react";
 
 const MANUAL_EXTRA_CAP = 5000;
 
-// (#421) Tagged checking-account payments to a debt show up immediately even
-// before the creditor reports the new balance via Plaid. We subtract any
-// pendingPaymentTotal from the reported balance so the avalanche math, the
-// totals, and the projected payoff dates reflect what the user has already
-// paid — clamped at zero so a tagging mistake can't push the balance below 0.
-function effectiveDebtBalance(d: Debt): number {
-  const reported = Number(d.balance) || 0;
-  const pending = d.pendingPaymentTotal != null ? Number(d.pendingPaymentTotal) || 0 : 0;
-  return Math.max(0, reported - pending);
-}
+// (#421) The pending-payment netting basis now lives in `@/lib/debtBalance`
+// so the Debts page reads balances off the exact same function instead of the
+// raw posted number — see that module's header for why.
 
 function debtToSim(d: Debt): SimDebt {
   return {
@@ -1341,44 +1331,10 @@ export default function AvalanchePage() {
                         <td className={tdNum}>{fmtPct(d.apr)}</td>
                         <td className={tdNum}>
                           <div>{fmtMoney(d.balance)}</div>
-                          {(() => {
-                            // (#421) Show a "−$X pending" hint when the user has
-                            // tagged checking-account payments this debt's
-                            // creditor hasn't reflected yet. The displayed
-                            // balance already nets these out.
-                            const pendingTotal = dbt.pendingPaymentTotal != null
-                              ? Number(dbt.pendingPaymentTotal) || 0
-                              : 0;
-                            const pendingCount = dbt.pendingPaymentCount ?? 0;
-                            if (pendingTotal <= 0) return null;
-                            const reported = Number(dbt.balance) || 0;
-                            return (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => e.stopPropagation()}
-                                    data-testid={`debt-pending-${dbt.id}`}
-                                    className="mt-0.5 cursor-help font-mono text-micro tabular-nums text-neutral-400 underline decoration-dotted underline-offset-2"
-                                  >
-                                    −{fmtMoney(pendingTotal)} pending
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="max-w-[260px] text-left">
-                                  <div className="space-y-1">
-                                    <div>
-                                      {pendingCount === 1
-                                        ? "1 tagged payment hasn't reached the creditor yet."
-                                        : `${pendingCount} tagged payments haven't reached the creditor yet.`}
-                                    </div>
-                                    <div className="opacity-90">
-                                      Reported {fmtMoney(reported)} − pending {fmtMoney(pendingTotal)} = {fmtMoney(Math.max(0, reported - pendingTotal))}
-                                    </div>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            );
-                          })()}
+                          {/* (#421) The displayed balance already nets tagged
+                              payments the creditor hasn't reflected; the hint
+                              shows the delta and the arithmetic. */}
+                          <DebtPendingHint debt={dbt} fmt={fmtMoney} />
                         </td>
                         <td className={tdNum}>{fmtMoney(d.minPayment)}</td>
                         <td className={td}>{dueChip}</td>
@@ -2050,7 +2006,13 @@ function PayDialog({
           <tbody>
             <tr>
               <td className={cn(td, "text-neutral-500")}>Current balance</td>
-              <td className={tdNum}>{debt ? fmtMoney(Number(debt.balance)) : "—"}</td>
+              {/* Same netted basis as the row this dialog was opened from —
+                  it used to print the RAW balance, so the dialog contradicted
+                  the table one click away from it. */}
+              <td className={tdNum}>
+                {debt ? fmtMoney(effectiveDebtBalance(debt)) : "—"}
+                {debt ? <DebtPendingHint debt={debt} fmt={fmtMoney} /> : null}
+              </td>
             </tr>
             <tr>
               <td className={cn(td, "text-neutral-500")}>Minimum</td>

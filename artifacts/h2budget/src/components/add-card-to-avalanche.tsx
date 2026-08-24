@@ -38,15 +38,18 @@ export function AddToAvalanche({
 
   if (card.debtId) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-positive">
-        ✓ In avalanche
-      </span>
+      <span className="chip ok">In avalanche</span>
     );
   }
   if (!card.plaidAccountId) {
+    // Word diet: the chip states the condition; the sentence explaining what
+    // to do about it moves to the hover.
     return (
-      <span className="text-[10px] text-muted-foreground">
-        Link this card via Plaid to add it to the avalanche
+      <span
+        className="chip gray"
+        title="Link this card via Plaid to add it to the avalanche."
+      >
+        Not linked
       </span>
     );
   }
