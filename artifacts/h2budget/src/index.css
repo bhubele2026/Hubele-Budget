@@ -552,7 +552,7 @@
      across, so there is no hard clip line — and it reveals the already-painted
      chart, one cheap animation regardless of series count. Never dash-animate a
      non-scaling-stroke path: dashes compute in screen pixels and shred the line
-     into confetti. */
+     into loose specks. */
   @keyframes areaFill {
     from { --reveal: -7%; }
     to { --reveal: 100%; }
@@ -672,15 +672,6 @@
   .anim-sheet-top[data-state="closed"] { animation: sheetOutTop var(--dur-page) var(--ease-move); }
   .anim-sheet-bottom[data-state="open"] { animation: sheetInBottom var(--dur-in) var(--ease-out); }
   .anim-sheet-bottom[data-state="closed"] { animation: sheetOutBottom var(--dur-page) var(--ease-move); }
-
-  /* Confetti fall — kept only so the keyframe the gamification layer names
-     still resolves until that layer is deleted. */
-  @keyframes cc-fall {
-    to {
-      transform: translate(var(--cc-drift, 0), 100vh) rotate(var(--cc-rot, 360deg));
-      opacity: 0;
-    }
-  }
 
   /* ── ONE SWITCH FOR THE WHOLE SYSTEM ─────────────────────────────────────
      Someone who has asked their machine for less motion gets a working app

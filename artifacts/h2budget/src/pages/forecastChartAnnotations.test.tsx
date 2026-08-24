@@ -12,8 +12,6 @@ class ResizeObserverStub {
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??
   ResizeObserverStub;
 
-vi.mock("canvas-confetti", () => ({ default: () => undefined }));
-
 vi.mock("wouter", () => ({
   Link: ({ children }: { children?: React.ReactNode }) => <a>{children}</a>,
 }));

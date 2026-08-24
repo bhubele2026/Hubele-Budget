@@ -4,6 +4,7 @@ import {
   type PlaidItemDetail,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { btnSecondarySm } from "@/ui";
 import {
   Popover,
   PopoverContent,
@@ -19,9 +20,19 @@ export function SyncButton({
   size = "sm",
   variant = "outline",
   relevantItemIds,
+  compact = false,
+  asKit = false,
 }: {
   size?: "default" | "sm" | "lg" | "icon";
   variant?: "default" | "outline" | "ghost" | "secondary" | "destructive" | "link";
+  /**
+   * Hide the visible "Last synced …" line (it stays in the button's tooltip).
+   * For heads that already carry a freshness label — two timestamps stacked on
+   * top of each other read as a duplicate, not as two facts.
+   */
+  compact?: boolean;
+  /** Render as the kit's `btnSecondarySm` instead of the shadcn Button. */
+  asKit?: boolean;
   /**
    * (#357) Optional allow-list of Plaid item ids this Sync chip should
    * surface inline error / Reconnect state for. When provided, only items
@@ -143,20 +154,36 @@ export function SyncButton({
         {reauthItems.length > 0 ? (
           <ReauthPopover items={reauthItems} size={size} />
         ) : null}
-        <Button
-          type="button"
-          variant={variant}
-          size={size}
-          onClick={() => {
-            void runSync();
-          }}
-          disabled={isPending}
-          title={displayError ?? relative}
-          data-testid="button-sync-plaid"
-        >
-          <RefreshCw className={`w-4 h-4 mr-1.5 ${isPending ? "animate-spin" : ""}`} />
-          {isPending ? "Syncing…" : "Sync"}
-        </Button>
+        {asKit ? (
+          <button
+            type="button"
+            className={`${btnSecondarySm} inline-flex items-center`}
+            onClick={() => {
+              void runSync();
+            }}
+            disabled={isPending}
+            title={displayError ?? relative}
+            data-testid="button-sync-plaid"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isPending ? "animate-spin" : ""}`} />
+            {isPending ? "Syncing…" : "Sync"}
+          </button>
+        ) : (
+          <Button
+            type="button"
+            variant={variant}
+            size={size}
+            onClick={() => {
+              void runSync();
+            }}
+            disabled={isPending}
+            title={displayError ?? relative}
+            data-testid="button-sync-plaid"
+          >
+            <RefreshCw className={`w-4 h-4 mr-1.5 ${isPending ? "animate-spin" : ""}`} />
+            {isPending ? "Syncing…" : "Sync"}
+          </Button>
+        )}
       </div>
       {isPending ? (
         <div className="w-[180px] mt-1" data-testid="sync-progress">
@@ -170,7 +197,7 @@ export function SyncButton({
             Pulling live from your bank… {Math.round(elapsed)}s
           </span>
         </div>
-      ) : (
+      ) : compact ? null : (
         <span className="text-[10px] text-muted-foreground mt-1">{relative}</span>
       )}
       {displayError ? (

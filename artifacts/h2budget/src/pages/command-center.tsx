@@ -1,334 +1,226 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { CHART_ANIM } from "@/lib/chartAnim";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  ReferenceLine,
-  Tooltip as RechartsTooltip,
-} from "recharts";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
-  Flame,
-  Trophy,
-  PiggyBank,
-  Sparkles,
-  TrendingUp,
-  TrendingDown,
-  Wallet,
-  Receipt,
-  CreditCard,
-  BarChart3,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  CalendarDays,
-  CalendarRange,
-  Zap,
-} from "lucide-react";
-import { SyncButton } from "@/components/sync-button";
-import {
-  useGetForecast,
-  useGetForecastCashSignal,
-  useGetDashboard,
   useGetSettings,
   useListTransactions,
   useListRecurringItems,
-  useListCategories,
-  useGetBudgetMonth,
-  useUpdateTransaction,
-  getGetBudgetMonthQueryKey,
+  useGetForecastCashSignal,
   getGetForecastCashSignalQueryKey,
-  getListTransactionsQueryKey,
-  getGetDashboardQueryKey,
-  TransactionWeeklyBucket,
   type Transaction,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  weeklyBudgetStreak,
-  isoDaysAgo,
-  todayISO,
-  currentWeekBounds,
-} from "@/lib/weeklyStreak";
+import { useSpine } from "@/hooks/useSpine";
+import { SyncButton } from "@/components/sync-button";
+import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
+import { ChaseInsightStrip } from "@/components/chase-insight-strip";
+import { CssBars, type CssBarRow } from "@/lib/cssBars";
+import { card, cardHead, emptyNote, Foot, Help, Stat } from "@/ui";
+import { currentMonthRange } from "@/lib/timeRange";
+import { isoDaysAgo, todayISO, currentWeekBounds } from "@/lib/weeklyStreak";
 import {
   isSplurge,
   makeRecurringMatcher,
   merchantKey,
   recurringMerchantsFrom,
 } from "@/lib/discretionarySpend";
-import { CategoryDonut } from "@/components/category-donut";
-import { HealthScore } from "@/components/health-score";
-import { SavingsGoal } from "@/components/savings-goal";
-import { DrillCard } from "@/components/drill-card";
-import { StatTile, StatTileRow } from "@/components/stat-tile";
-import { SectionHeader, Callout } from "@/components/stat";
-import { BiggestCharges } from "@/components/biggest-charges";
-import { PillBadge } from "@/components/pill-badge";
-import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@/components/viz";
-import { useUser } from "@clerk/react";
-import { cn, formatCurrency } from "@/lib/utils";
-import { effectiveBucket } from "@/lib/weeklyBuckets";
-import { bucketSpendInWindow, bucketTxnsInWindow } from "@/lib/bucketSpend";
-import { Card, CardContent } from "@/components/ui/card";
-import { MonthlyWrapped } from "@/components/monthly-wrapped";
-import { Confetti } from "@/components/confetti";
-import { PaceGauge } from "@/components/pace-gauge";
-import { SpendScoreboard } from "@/components/spend-scoreboard";
+import { bucketSpendInWindow } from "@/lib/bucketSpend";
+import { formatCurrency } from "@/lib/utils";
 
-const MIX_COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-5))",
-];
+/**
+ * ⭐ BANKING — one screen, four surfaces, no scroll-story.
+ *
+ * This page used to be 1,633 lines of celebration: a health score, a pace
+ * gauge, a paper-scrap burst on a positive month, a "Wrapped" modal, check-in
+ * streaks, podium medals and a spending "persona" with an emoji. All of that
+ * is gone (C1). What is left is the four things somebody opens Banking for:
+ * where the money stands, how the month is tracking, what the allowance
+ * buckets have left, and what the biggest charges were.
+ *
+ * ⚠️ THE SPINE RULE. Every headline figure comes from `useSpine()` and is
+ * never recomputed here — see `hooks/useSpine.ts`. The one number this page
+ * still derives locally is the allowance-bucket spend, which the spine does
+ * not carry (it is an explicit user-marked bucket, not a spending fact); that
+ * math is `lib/bucketSpend` unchanged, shared byte-for-byte with /allowances.
+ */
 
-// Neutral label for the month's top spend category.
-function moneyPersona(cat: string | undefined): { label: string; emoji: string } {
-  const c = (cat || "").toLowerCase();
-  if (/dining|restaurant|coffee|doordash|takeout|food/.test(c))
-    return { label: "Dining out", emoji: "🍽️" };
-  if (/subscription|stream|netflix|spotify|hulu/.test(c))
-    return { label: "Subscriptions & streaming", emoji: "📺" };
-  if (/grocer/.test(c)) return { label: "Groceries", emoji: "🥦" };
-  if (/amazon|shop|retail|clothing|target/.test(c))
-    return { label: "Shopping & retail", emoji: "📦" };
-  if (/alcohol|bar|liquor|wine|beer/.test(c))
-    return { label: "Dining & drinks", emoji: "🍷" };
-  if (/travel|flight|hotel|airbnb|vacation/.test(c))
-    return { label: "Travel", emoji: "✈️" };
-  if (/gas|fuel|auto|car|uber|lyft/.test(c))
-    return { label: "Auto & transport", emoji: "🚗" };
-  if (/pet|dog|cat|vet/.test(c)) return { label: "Pets", emoji: "🐾" };
-  if (/kid|child|daycare|school/.test(c))
-    return { label: "Kids & family", emoji: "🍼" };
-  if (!c) return { label: "Uncategorized", emoji: "💳" };
-  return { label: cat ?? "Top category", emoji: "💳" };
+// ── formatting ──────────────────────────────────────────────────────────────
+
+/** Money for a Stat face. `null` reads as an em dash, never as $0. */
+function money(v: string | number | null | undefined): string {
+  if (v == null || v === "") return "—";
+  const n = Number(v);
+  return Number.isFinite(n) ? formatCurrency(n) : "—";
 }
 
-// The Banking area's sub-destinations. The global top nav is hidden on the
-// landing, so this ribbon is how Chase / Amex / Budget / Allowance stay one
-// tap away from Banking. Pill style matches the app's badge/pill language —
-// no new card styles.
-function greetingFor(hour: number): string {
-  if (hour < 5) return "Still up";
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  if (hour < 22) return "Good evening";
-  return "Burning the midnight oil";
+/** "Aug 21" from a date-only or timestamp ISO string.
+ *  ⚠️ The `T00:00:00` suffix is load-bearing: a bare `new Date("2026-08-21")`
+ *  parses as UTC midnight and renders as the 20th west of Greenwich. */
+function shortDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? null
+    : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// ── Drill-panel plumbing ────────────────────────────────────────────────────
-// The three mutually-exclusive allowance buckets a spend can live in. Mirrors
-// /amex's setRowBucket: picking one sets its flag true and clears the other
-// two in the SAME PATCH, so a txn can never sit in two buckets at once.
-type BucketKey = "weekly" | "monthly" | "unplanned";
-const BUCKET_OPTIONS: { key: BucketKey; label: string }[] = [
-  { key: "weekly", label: "Weekly" },
-  { key: "monthly", label: "Monthly" },
-  { key: "unplanned", label: "Unplanned" },
-];
-
-// EXPLICIT selection — a txn is weekly/monthly/unplanned only if the user marked
-// it that bucket; otherwise it's unassigned (null). Shared definition in
-// lib/weeklyBuckets so Banking and the Allowances page agree.
-function currentBucket(
-  t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowance" | "unplannedAllowance">,
-): BucketKey | null {
-  return effectiveBucket(t);
+/** Compact money for the bar list, where the column is ~90px wide. */
+function barMoney(n: number): string {
+  return `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
 }
 
-// Same category→weekly-sub-bucket default the Amex review flow uses, so a
-// spend moved INTO Weekly from here lands in a sensible sub-bucket instead of
-// always "misc".
-function defaultWeeklyBucketFor(
-  categoryName: string,
-): (typeof TransactionWeeklyBucket)[keyof typeof TransactionWeeklyBucket] {
-  const n = categoryName.toLowerCase();
-  if (n.includes("grocer")) return TransactionWeeklyBucket.groceries;
-  if (n.includes("dining") || n.includes("restaurant") || n.includes("food"))
-    return TransactionWeeklyBucket.dining;
-  if (n.includes("entertain")) return TransactionWeeklyBucket.entertainment;
-  return TransactionWeeklyBucket.misc;
-}
+// ── allowance rows ──────────────────────────────────────────────────────────
 
-function formatTxnDate(iso: string): string {
-  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-/** One transaction inside the Week / Month / Unplanned drill panel:
- *  date · merchant · amount, plus the two re-file controls (category picker +
- *  bucket mover). Reuses the exact Select pattern from /allowances' TxnRow —
- *  no new control styles. */
-function DrillTxnRow({
-  t,
-  categories,
-  pending,
-  onMoveBucket,
-  onChangeCategory,
-}: {
-  t: Transaction;
-  categories: { id: string; name: string }[];
-  pending: boolean;
-  onMoveBucket: (t: Transaction, bucket: BucketKey | "none") => void;
-  onChangeCategory: (t: Transaction, categoryId: string) => void;
-}) {
-  const bucket = currentBucket(t) ?? "none";
-  return (
-    <div
-      className={cn("py-2.5", pending && "opacity-50 pointer-events-none")}
-      data-testid={`cc-drill-txn-${t.id}`}
-    >
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <span className="w-12 shrink-0 text-[10px] uppercase tracking-widest text-muted-foreground tabular-nums">
-            {formatTxnDate(t.occurredOn)}
-          </span>
-          <span className="truncate text-sm font-medium">
-            {t.description || "Mystery charge"}
-          </span>
-        </div>
-        <MoneyText
-          amount={Number(t.amount) || 0}
-          abs
-          className="shrink-0 text-sm font-semibold tabular-nums"
-        />
-      </div>
-      <div className="mt-1.5 flex items-center gap-2 pl-[3.75rem]">
-        <Select
-          value={bucket}
-          onValueChange={(v) => onMoveBucket(t, v as BucketKey | "none")}
-        >
-          <SelectTrigger
-            className="h-7 w-[118px] text-xs"
-            aria-label="Allowance bucket"
-            data-testid={`cc-drill-bucket-${t.id}`}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none" className="text-xs">
-              Not counted
-            </SelectItem>
-            {BUCKET_OPTIONS.map((b) => (
-              <SelectItem key={b.key} value={b.key} className="text-xs">
-                {b.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={t.categoryId ?? undefined}
-          onValueChange={(v) => onChangeCategory(t, v)}
-        >
-          <SelectTrigger
-            className="h-7 min-w-[140px] flex-1 text-xs"
-            aria-label="Category"
-            data-testid={`cc-drill-category-${t.id}`}
-          >
-            <SelectValue placeholder="Uncategorized" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((c) => (
-              <SelectItem key={c.id} value={c.id} className="text-xs">
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  );
-}
-
-/** Small ◀ ▶ pager chip used inside a StatTile label — matches the tile's
- *  on-gradient white styling; no new card style. */
-function PeriodPager({
-  icon,
-  title,
+/** ◀ ▶ across periods. The pager is the only control on this page, so it is
+ *  quiet: hairline ghost buttons, no fill, disabled past the fetched window. */
+function Pager({
+  label,
   period,
   onPrev,
   onNext,
   canPrev,
   canNext,
 }: {
-  icon: ReactNode;
-  title: string;
+  label: string;
   period: string;
   onPrev: () => void;
   onNext: () => void;
   canPrev: boolean;
   canNext: boolean;
 }) {
-  const btn =
-    "flex h-6 w-6 items-center justify-center rounded-md bg-muted text-muted-foreground transition hover:bg-muted/70 disabled:opacity-30 disabled:cursor-not-allowed";
+  const step =
+    "press grid h-6 w-6 place-items-center rounded-control text-neutral-500 ring-1 ring-brand-line hover:bg-neutral-50 hover:text-brand-navy disabled:pointer-events-none disabled:opacity-30";
   return (
-    <span className="flex items-center gap-2 normal-case tracking-normal">
-      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-        {icon}
-        {title}
+    <span className="flex items-center gap-1.5">
+      <button
+        type="button"
+        className={step}
+        onClick={onPrev}
+        disabled={!canPrev}
+        aria-label={`Previous ${label.toLowerCase()}`}
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      <span className="min-w-[5.5rem] text-center text-label text-neutral-600">
+        {period}
       </span>
-      <span className="ml-auto flex items-center gap-1">
-        {/* The tile around this pager is itself clickable (opens the drill),
-            so the steppers stop propagation — ◀ ▶ only move the period. */}
-        <button
-          type="button"
-          className={btn}
-          onClick={(e) => {
-            e.stopPropagation();
-            onPrev();
-          }}
-          disabled={!canPrev}
-          aria-label={`Previous ${title.toLowerCase()}`}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <span className="min-w-[4.5rem] text-center text-[11px] font-semibold text-foreground">
-          {period}
-        </span>
-        <button
-          type="button"
-          className={btn}
-          onClick={(e) => {
-            e.stopPropagation();
-            onNext();
-          }}
-          disabled={!canNext}
-          aria-label={`Next ${title.toLowerCase()}`}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </span>
+      <button
+        type="button"
+        className={step}
+        onClick={onNext}
+        disabled={!canNext}
+        aria-label={`Next ${label.toLowerCase()}`}
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
     </span>
   );
 }
 
+/**
+ * ⭐ ONE MARKUP, TWO SHAPES. The five cells are a 5-column table row on `sm+`
+ * and a 2×2 block on a phone — same DOM, laid out by grid, so there is no
+ * second mobile render to drift out of sync and no duplicated testids. Source
+ * order is name → period → spent → cap → status, which reads correctly BOTH
+ * ways: across as a row, and as `name / period` over `spent / status` once the
+ * cap cell drops out below `sm`.
+ *
+ * ⚠️ The status cell survives on the phone and the CAP is what goes. A cap the
+ * reader cannot see costs them nothing — "$147.15 left" already implies it —
+ * but a table that pushes "over/left" off the right edge hides the one thing
+ * the card exists to say.
+ */
+const ROW_GRID =
+  "grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 px-4 py-3 sm:grid-cols-[6.5rem_minmax(8rem,1fr)_7rem_7rem_8rem] sm:gap-y-0";
+
+/** Column head styling, matching the kit's `th` without the table element. */
+const headCell = "text-micro font-semibold uppercase tracking-wide text-neutral-400";
+
+/**
+ * True on phone widths. The bar list sizes its label and value columns in
+ * PIXELS (they must line up down the list, so they cannot be percentages), and
+ * the desktop widths leave a 390px screen with almost no track left — the bars
+ * become stubs and stop encoding anything. One media query, two size sets.
+ */
+function useNarrow(): boolean {
+  const query = "(max-width: 640px)";
+  const read = () =>
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(query).matches;
+  const [narrow, setNarrow] = useState(read);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia(query);
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
+
+/** One allowance bucket: spent, cap, and what is left — with the LABEL saying
+ *  which, because on this palette colour alone never carries the meaning. */
+function AllowanceRow({
+  name,
+  href,
+  testid,
+  period,
+  spend,
+  cap,
+}: {
+  name: string;
+  href: string;
+  testid: string;
+  period: React.ReactNode;
+  spend: number;
+  cap: number;
+}) {
+  const over = cap > 0 && spend > cap;
+  const num = "font-mono text-label tabular-nums text-neutral-700";
+  return (
+    <div role="row" className={`${ROW_GRID} border-b border-brand-line/70 last:border-b-0`}>
+      <div role="cell">
+        <Link
+          href={href}
+          data-testid={testid}
+          className="press rounded px-1 py-0.5 text-body font-medium text-brand-navy hover:bg-neutral-100"
+        >
+          {name}
+        </Link>
+      </div>
+      <div role="cell" className="justify-self-end whitespace-nowrap sm:justify-self-start">
+        {period}
+      </div>
+      <div role="cell" className={`${num} justify-self-start sm:justify-self-end`}>
+        {formatCurrency(spend)}
+      </div>
+      <div role="cell" className={`hidden ${num} sm:block sm:justify-self-end`}>
+        {cap > 0 ? formatCurrency(cap) : "—"}
+      </div>
+      <div role="cell" className="justify-self-end">
+        {cap > 0 ? (
+          <span className={`chip ${over ? "bad" : "gray"}`}>
+            {over
+              ? `${formatCurrency(spend - cap)} over`
+              : `${formatCurrency(cap - spend)} left`}
+          </span>
+        ) : (
+          <span className="text-micro text-neutral-400">no cap set</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── page ────────────────────────────────────────────────────────────────────
+
 export default function CommandCenterPage() {
-  const { data: forecast } = useGetForecast({ days: 90 });
-  const { data: dash } = useGetDashboard();
+  // ⭐ Every headline number on this page. One request, one instant.
+  const { data: spine } = useSpine();
+  const narrow = useNarrow();
+
   const { data: settings } = useGetSettings();
-  const { data: categories } = useListCategories();
   const nowRef = new Date();
   const { data: weeklyTxns } = useListTransactions({
     from: isoDaysAgo(nowRef, 90),
@@ -341,136 +233,48 @@ export default function CommandCenterPage() {
   // subscriptions are excluded — it should surface one-off splurges,
   // not the mortgage.
   const { data: recurringItemsData } = useListRecurringItems();
-  // Current month's budget plan-vs-actual — feeds the four insight buckets
-  // (under/over budget + spend-with-no-line). Same generated hook the Budget
-  // page uses; slow-changing, so a generous staleTime.
-  const currentMonthStart = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-  }, []);
-  const { data: budgetMonth } = useGetBudgetMonth(currentMonthStart, {
-    query: {
-      queryKey: getGetBudgetMonthQueryKey(currentMonthStart),
-      staleTime: 5 * 60_000,
-      gcTime: 30 * 60_000,
-    },
-  });
   const recurringNames = useMemo(
     () => (recurringItemsData ?? []).map((r) => r.name),
     [recurringItemsData],
   );
-  const catNameById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const c of categories ?? []) m.set(c.id, c.name);
-    return m;
-  }, [categories]);
-  const [wrappedOpen, setWrappedOpen] = useState(false);
-  const [celebrate, setCelebrate] = useState(false);
-  const [openStreak, setOpenStreak] = useState(0);
-  // "Spending detail" — the secondary surfaces live in a collapsible below the
-  // spending-control + act-on-it zones, so the top of the page stays calm.
-  // Remembers its open/closed state across visits.
-  const [damageOpen, setDamageOpen] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("h2:cc-damage-open:v1") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const toggleDamage = () =>
-    setDamageOpen((v) => {
-      const n = !v;
-      try {
-        localStorage.setItem("h2:cc-damage-open:v1", n ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return n;
-    });
-  // Period pickers for the two focal spend readouts. 0 = current period;
-  // negative = back in time. Forward is capped at 0 (can't spend the future).
+
+  /**
+   * ⚠️ NOT A NUMBER SOURCE. The balance on screen comes from the spine; this
+   * existing (cached, 5-minute) query is read ONLY for the snapshot's source
+   * and timestamp, which the freshness label needs and the spine does not
+   * carry. Nothing here is rendered as money.
+   */
+  const { data: cashSignal } = useGetForecastCashSignal(
+    { horizonDays: 90 },
+    {
+      query: {
+        queryKey: getGetForecastCashSignalQueryKey({ horizonDays: 90 }),
+        staleTime: 5 * 60_000,
+      },
+    },
+  );
+
+  const now = new Date();
+  const monthRange = useMemo(() => currentMonthRange(now), [now.getMonth()]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Period pickers for the two allowance buckets that have one. 0 = current
+  // period; negative = back in time. Forward is capped at 0.
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
-  // Which drill panel is open (click a tile / the Unplanned strip), and which
-  // row currently has a PATCH in flight (dimmed while saving).
-  const [drill, setDrill] = useState<null | "week" | "month" | "unplanned">(null);
-  const [pendingTxnId, setPendingTxnId] = useState<string | null>(null);
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const updateTx = useUpdateTransaction();
 
-  const { user } = useUser();
-  const who = user?.firstName?.trim() || "Hubeles";
-  const now = new Date();
-  const greeting = greetingFor(now.getHours());
-  const dayOfMonth = now.getDate();
-  const daysInMonth = new Date(
-    now.getFullYear(),
-    now.getMonth() + 1,
-    0,
-  ).getDate();
-
-  const netMonth = dash ? Number(dash.netCashflow) : null;
-  const income = dash ? Number(dash.monthlyIncome) : 0;
-  const spend = dash ? Number(dash.monthlySpend) : 0;
-  const paidThisMonth = dash ? Number(dash.paidThisMonth) : 0;
-  const persona = moneyPersona(dash?.topCategories?.[0]?.categoryName);
-
-  // The one, shared discretionary-spend definition for the focal readouts:
-  // isSplurge() from lib/discretionarySpend — the SAME filter the biggest-charges
-  // list uses. It drops income, reimbursables, transfers, external card
-  // payments, debt payments, bill/payment bank-noise, and any known recurring
-  // merchant (so no double-counting of transfers/card payments). Returns the
-  // absolute dollars spent for whichever txns pass the filter in a window.
-  const isRecurring = useMemo(
-    () => makeRecurringMatcher(recurringNames),
-    [recurringNames],
-  );
-  const recurringMerchants = useMemo(
-    () => recurringMerchantsFrom(weeklyTxns ?? []),
-    [weeklyTxns],
-  );
-  // The txns behind the number: the drill panel lists EXACTLY this set, so
-  // its rows always sum to what the tile shows (same filter, same window).
-  const discretionaryTxnsInWindow = useMemo(() => {
-    return (startISO: string, endISO: string): Transaction[] => {
-      const out: Transaction[] = [];
-      for (const t of weeklyTxns ?? []) {
-        if (!t.occurredOn || t.occurredOn < startISO || t.occurredOn > endISO)
-          continue;
-        if (!isSplurge(t, isRecurring)) continue;
-        if (recurringMerchants.has(merchantKey(t.description ?? ""))) continue;
-        out.push(t);
-      }
-      return out;
-    };
-  }, [weeklyTxns, isRecurring, recurringMerchants]);
-  const discretionaryInWindow = useMemo(() => {
-    return (startISO: string, endISO: string) =>
-      discretionaryTxnsInWindow(startISO, endISO).reduce(
-        (s, t) => s + -(Number(t.amount) || 0),
-        0,
-      );
-  }, [discretionaryTxnsInWindow]);
   // Explicit-bucket spend (weekly / monthly / unplanned). A txn counts ONLY if
   // the user marked it that bucket; blank counts nowhere. Shared with
   // /allowances via lib/bucketSpend so both surfaces show the identical number.
-  // (NOTE: no isSplurge filter here — explicit selection IS the gate now, so a
-  // recurring charge the user marked weekly still counts and can be re-filed.)
   const bucketSum = useMemo(() => {
-    return (bucket: BucketKey, startISO: string, endISO: string): number =>
+    return (bucket: "weekly" | "monthly" | "unplanned", startISO: string, endISO: string): number =>
       bucketSpendInWindow(weeklyTxns ?? [], bucket, startISO, endISO);
-  }, [weeklyTxns]);
-  const bucketTxns = useMemo(() => {
-    return (bucket: BucketKey, startISO: string, endISO: string): Transaction[] =>
-      bucketTxnsInWindow(weeklyTxns ?? [], bucket, startISO, endISO);
   }, [weeklyTxns]);
 
   // Earliest ISO date we actually have transactions for (query fetched 90 days).
   // Used to disable the ◀ button once a period would fall outside the window.
   const earliestFetchedISO = isoDaysAgo(now, 90);
 
-  // ── A) Selected WEEK (Sun–Sat) discretionary spend ─────────────────────────
+  // ── A) Selected WEEK (Sun–Sat) allowance spend ─────────────────────────────
   const weekView = useMemo(() => {
     const base = currentWeekBounds(now);
     const baseSun = new Date(`${base.startISO}T00:00:00`);
@@ -490,8 +294,6 @@ export default function CommandCenterPage() {
       override != null
         ? Number(override)
         : Number(settings?.weeklyAllowanceAmount) || 0;
-    // Full "Jul 6–12" range (month repeated across a month boundary) — used
-    // for the drill-panel title even when the short label says "This week".
     const range = `${sun.toLocaleDateString("en-US", { month: "short", day: "numeric" })}–${sat.toLocaleDateString(
       "en-US",
       {
@@ -506,7 +308,7 @@ export default function CommandCenterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekOffset, bucketSum, settings]);
 
-  // ── B) Selected calendar MONTH discretionary spend ─────────────────────────
+  // ── B) Selected calendar MONTH allowance spend ─────────────────────────────
   const monthView = useMemo(() => {
     const m = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
     const pad = (n: number) => String(n).padStart(2, "0");
@@ -527,9 +329,7 @@ export default function CommandCenterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthOffset, bucketSum, settings]);
 
-  // ── C) Unplanned-allowance spend, CURRENT month — the bucket that was
-  //      invisible from Banking. Sums the txns flagged `unplannedAllowance`
-  //      (the same flag /allowances uses) against the unplanned cap. ───────
+  // ── C) Unplanned-allowance spend, CURRENT month. ───────────────────────────
   const unplannedView = useMemo(() => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const iso = (d: Date) =>
@@ -538,471 +338,157 @@ export default function CommandCenterPage() {
     const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     const startISO = iso(first);
     const endISO = iso(last);
-    const txns = bucketTxns("unplanned", startISO, endISO);
     const spend = bucketSum("unplanned", startISO, endISO);
     const cap = Number(settings?.unplannedAllowanceAmount) || 0;
-    return { txns, spend, cap };
+    return { spend, cap };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bucketTxns, bucketSum, settings]);
+  }, [bucketSum, settings]);
 
-  // Projected checking balance walk — the runway sparkline + forecast area.
-  const { series, runwayDays } = useMemo(() => {
-    if (!forecast) return { series: [], runwayDays: null as number | null };
-    const start =
-      Number(forecast.bankSnapshot?.balance) ||
-      Number(forecast.settings?.startingBalance) ||
-      0;
-    const startISO = forecast.bankSnapshot?.at
-      ? forecast.bankSnapshot.at.slice(0, 10)
-      : forecast.fromDate;
-    const evs = [...(forecast.events ?? [])]
-      .filter((e) => e.date >= startISO)
-      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-    let bal = start;
-    const pts: { date: string; balance: number }[] = [
-      { date: startISO, balance: Math.round(bal) },
-    ];
-    let firstNegISO: string | null = null;
-    for (const e of evs) {
-      bal += Number(e.amount) || 0;
-      const r = Math.round(bal);
-      pts.push({ date: e.date, balance: r });
-      if (firstNegISO == null && r < 0) firstNegISO = e.date;
-    }
-    let runway: number | null = null;
-    if (firstNegISO) {
-      const ms = new Date(firstNegISO).getTime() - new Date(startISO).getTime();
-      runway = Math.max(0, Math.round(ms / 86_400_000));
-    }
-    return { series: pts, runwayDays: runway };
-  }, [forecast]);
-
-  const lowPoint = useMemo(
-    () =>
-      series.length
-        ? series.reduce((m, p) => (p.balance < m ? p.balance : m), Infinity)
-        : null,
-    [series],
-  );
-
-  // --- Command-box mini-visuals (derived from data already on the page) ----
-  const spendMix = useMemo(
-    () =>
-      (dash?.topCategories ?? []).slice(0, 5).map((c, i) => ({
-        label: c.categoryName,
-        value: Number(c.total) || 0,
-        color: MIX_COLORS[i % MIX_COLORS.length],
-      })),
-    [dash],
-  );
-
-  // Cumulative cash movement over the last 30 days — a "recent trend" shape.
-  const chaseSpark = useMemo(() => {
-    const fromISO = isoDaysAgo(now, 30);
-    const byDay = new Map<string, number>();
-    for (const t of weeklyTxns ?? []) {
-      if (!t.occurredOn || t.occurredOn < fromISO) continue;
-      byDay.set(t.occurredOn, (byDay.get(t.occurredOn) ?? 0) + (Number(t.amount) || 0));
-    }
-    const days = [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-    let run = 0;
-    return days.map(([, v]) => (run += v));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyTxns]);
-
-  const runwaySpark = useMemo(() => series.map((p) => p.balance), [series]);
-
-  // Daily spend heat — last 14 days.
-  const dailyHeat = useMemo(() => {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const vals: number[] = [];
-    const labels: string[] = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const iso = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      let s = 0;
-      for (const t of weeklyTxns ?? []) {
-        if (t.occurredOn !== iso) continue;
-        const a = Number(t.amount) || 0;
-        if (a < 0 && !t.reimbursable) s += -a;
-      }
-      vals.push(s);
-      labels.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
-    }
-    return { vals, labels };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyTxns]);
-
-  // This-month spend grouped by household member → the scoreboard.
-  const memberSpend = useMemo(() => {
+  /**
+   * The month's largest one-off charges. Same filter the page has always used
+   * (`isSplurge` + the recurring-merchant screen from lib/discretionarySpend),
+   * so bills, transfers, card payments and subscriptions stay out of it.
+   *
+   * ⚠️ Rows are keyed by transaction id and sorted ONCE, by id — `CssBars`
+   * derives rank itself and moves rows by transform. Re-sorting this array
+   * between renders would swap DOM nodes and defeat the glide.
+   */
+  const chargeRows = useMemo<CssBarRow[]>(() => {
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const map = new Map<string, number>();
-    for (const t of weeklyTxns ?? []) {
-      if (!t.occurredOn || !t.occurredOn.startsWith(ym)) continue;
-      const a = Number(t.amount) || 0;
-      if (a >= 0) continue;
-      if (t.reimbursable) continue;
-      const w = (t.member ?? "").trim() || "Unassigned";
-      map.set(w, (map.get(w) ?? 0) + -a);
-    }
-    return [...map.entries()]
-      .map(([name, s]) => ({ name, spend: s }))
-      .sort((a, b) => b.spend - a.spend);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyTxns]);
-
-  // This week's weekly-allowance pace (spend vs planned, this Sun–Sat).
-  const thisWeek = useMemo(() => {
-    const { startISO, endISO } = currentWeekBounds(now);
-    let s = 0;
-    for (const t of weeklyTxns ?? []) {
-      if (!t.weeklyAllowance) continue;
-      if (t.occurredOn >= startISO && t.occurredOn <= endISO) {
-        const a = Number(t.amount) || 0;
-        if (a < 0) s += -a;
-      }
-    }
-    const override = settings?.preferences?.weeklyAllowanceOverrides?.[startISO];
-    const planned =
-      override != null
-        ? Number(override)
-        : Number(settings?.weeklyAllowanceAmount) || 0;
-    return { spend: s, planned };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyTxns, settings]);
-  const allowanceRatio =
-    thisWeek.planned > 0 ? thisWeek.spend / thisWeek.planned : 0;
-
-  // This month vs last month at the SAME point in the month.
-  const momCompare = useMemo(() => {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const ymThis = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const ymPrev = `${prev.getFullYear()}-${pad(prev.getMonth() + 1)}`;
-    let cur = 0;
-    let last = 0;
-    for (const t of weeklyTxns ?? []) {
-      const a = Number(t.amount) || 0;
-      if (a >= 0 || t.reimbursable || !t.occurredOn) continue;
-      const day = Number(t.occurredOn.slice(8, 10));
-      if (t.occurredOn.startsWith(ymThis)) cur += -a;
-      else if (t.occurredOn.startsWith(ymPrev) && day <= dayOfMonth) last += -a;
-    }
-    const pctChange = last > 0 ? ((cur - last) / last) * 100 : null;
-    return { cur, last, pctChange };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyTxns, dayOfMonth]);
-
-  // Biggest single expense this month.
-  const biggestSplurge = useMemo(() => {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const ym = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-    let worst: { desc: string; amt: number; member: string | null; date: string } | null =
-      null;
-    for (const t of weeklyTxns ?? []) {
-      const a = Number(t.amount) || 0;
-      if (a >= 0 || t.reimbursable || !t.occurredOn?.startsWith(ym)) continue;
-      if (!worst || a < worst.amt) {
-        worst = {
-          desc: t.description || "Something",
-          amt: a,
-          member: t.member ?? null,
-          date: t.occurredOn,
-        };
-      }
-    }
-    return worst;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyTxns]);
-
-  const streak = useMemo(
-    () =>
-      weeklyBudgetStreak(
-        weeklyTxns ?? [],
-        Number(settings?.weeklyAllowanceAmount) || 0,
-        settings?.preferences?.weeklyAllowanceOverrides ?? undefined,
-        now,
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [weeklyTxns, settings],
-  );
-
-  const healthScore = useMemo(() => {
-    let s = 50;
-    if (netMonth != null && income > 0) {
-      const r = netMonth / income;
-      s += r >= 0.2 ? 20 : r > 0 ? 10 : r > -0.1 ? -8 : -18;
-    } else if (netMonth != null) {
-      s += netMonth > 0 ? 10 : -12;
-    }
-    if (lowPoint != null) s += lowPoint > 0 ? 15 : -12;
-    if (runwayDays != null && runwayDays < 14) s -= 10;
-    if (paidThisMonth > 0) s += 6;
-    if (streak.direction === "under") s += Math.min(15, streak.weeks * 5);
-    else if (streak.direction === "over") s -= Math.min(15, streak.weeks * 5);
-    if (thisWeek.planned > 0) s += thisWeek.spend <= thisWeek.planned ? 8 : -8;
-    return Math.max(2, Math.min(100, Math.round(s)));
-  }, [netMonth, income, lowPoint, runwayDays, paidThisMonth, streak, thisWeek]);
-
-  const health = useMemo(() => {
-    const s = healthScore;
-    if (s >= 80)
-      return {
-        color: "hsl(var(--positive))",
-        label: "Thriving",
-        blurb: "Spending and bills are well under control. Keep the current pace.",
-      };
-    if (s >= 60)
-      return {
-        color: "hsl(var(--primary))",
-        label: "Solid",
-        blurb: "Good shape — a couple of small tweaks would make it stronger.",
-      };
-    if (s >= 40)
-      return {
-        color: "hsl(var(--warning))",
-        label: "Shaky",
-        blurb: "Trending over in a few areas — small cuts now will steady the month.",
-      };
-    return {
-      color: "hsl(var(--negative))",
-      label: "Critical",
-      blurb: "Spending is well over plan — slow discretionary purchases this week.",
-    };
-  }, [healthScore]);
-
-  const projectedNet = useMemo(() => {
-    const elapsed = daysInMonth > 0 ? dayOfMonth / daysInMonth : 0;
-    if (elapsed <= 0.05 || income <= 0) return null;
-    const projectedSpend = spend / elapsed;
-    return income - projectedSpend;
-  }, [spend, income, dayOfMonth, daysInMonth]);
-  const monthName = now.toLocaleDateString("en-US", { month: "long" });
-
-  // ── Drill-panel edits — one PATCH via the generated useUpdateTransaction,
-  //    then invalidate every reader of this data so tiles, list, insights and
-  //    the budget buckets all repaint from the server's truth. ─────────────
-  const invalidateAfterTxnEdit = () => {
-    queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-    queryClient.invalidateQueries({
-      queryKey: getGetBudgetMonthQueryKey(currentMonthStart),
-    });
-  };
-
-  // Move a spend between the Weekly / Monthly / Unplanned buckets. Mirrors
-  // /amex's setRowBucket: the chosen flag goes true and the other two go
-  // false in the SAME PATCH (mutual exclusivity is enforced by the payload),
-  // weeklyBucket is kept/derived when entering Weekly and cleared otherwise,
-  // and picking a bucket counts as reviewing the row (#615).
-  const moveBucket = async (t: Transaction, bucket: BucketKey | "none") => {
-    if ((currentBucket(t) ?? "none") === bucket) return;
-    const wb =
-      bucket === "weekly"
-        ? (t.weeklyBucket ??
-          defaultWeeklyBucketFor(catNameById.get(t.categoryId ?? "") ?? ""))
-        : null;
-    setPendingTxnId(t.id);
-    try {
-      await updateTx.mutateAsync({
+    const isRecurring = makeRecurringMatcher(recurringNames);
+    const recurringMerchants = recurringMerchantsFrom(weeklyTxns ?? []);
+    return (weeklyTxns ?? [])
+      .filter(
+        (t: Transaction) =>
+          t.occurredOn?.startsWith(ym) &&
+          isSplurge(t, isRecurring) &&
+          !recurringMerchants.has(merchantKey(t.description ?? "")),
+      )
+      .map((t: Transaction) => ({
         id: t.id,
-        data: {
-          weeklyAllowance: bucket === "weekly",
-          monthlyAllowance: bucket === "monthly",
-          unplannedAllowance: bucket === "unplanned",
-          weeklyBucket: wb,
-          reviewed: true,
-        },
-      });
-      invalidateAfterTxnEdit();
-      toast({
-        title:
-          bucket === "none"
-            ? "Left out of the buckets"
-            : `Filed under ${BUCKET_OPTIONS.find((b) => b.key === bucket)?.label ?? bucket}`,
-      });
-    } catch (e) {
-      toast({
-        title: "Couldn't move it",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
-    } finally {
-      setPendingTxnId(null);
-    }
-  };
+        label: t.description || "Uncategorized charge",
+        value: Math.abs(Number(t.amount) || 0),
+        hint: shortDate(t.occurredOn) ?? undefined,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyTxns, recurringNames]);
 
-  // Recategorize straight from the drill — same PATCH shape as /allowances.
-  const changeCategory = async (t: Transaction, categoryId: string) => {
-    if ((t.categoryId ?? "") === categoryId) return;
-    setPendingTxnId(t.id);
-    try {
-      await updateTx.mutateAsync({ id: t.id, data: { categoryId } });
-      invalidateAfterTxnEdit();
-      toast({ title: "Recategorized" });
-    } catch (e) {
-      toast({
-        title: "Couldn't recategorize",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
-    } finally {
-      setPendingTxnId(null);
-    }
-  };
-
-  // What the open drill shows. Week/Month list the EXACT set the tile summed
-  // (discretionaryTxnsInWindow over the same window), so rows always tie to
-  // the tile's number. Unplanned lists the flagged-unplanned txns behind the
-  // strip. Newest first.
-  const drillData = useMemo(() => {
-    if (!drill) return null;
-    const newestFirst = (a: Transaction, b: Transaction) =>
-      b.occurredOn.localeCompare(a.occurredOn);
-    if (drill === "week" || drill === "month") {
-      const v = drill === "week" ? weekView : monthView;
-      const txns = bucketTxns(
-        drill === "week" ? "weekly" : "monthly",
-        v.startISO,
-        v.endISO,
-      ).sort(newestFirst);
-      const total = bucketSum(
-        drill === "week" ? "weekly" : "monthly",
-        v.startISO,
-        v.endISO,
-      );
-      const title =
-        drill === "week"
-          ? weekOffset === 0
-            ? `This week · ${weekView.range}`
-            : `Week of ${weekView.range}`
-          : monthOffset === 0
-            ? `This month · ${monthView.name}`
-            : monthView.name;
-      return {
-        title,
-        txns,
-        total,
-        blurb:
-          "The exact transactions behind that number. Re-file any that belong in a different bucket.",
-      };
-    }
-    return {
-      title: `Unplanned · ${monthName}`,
-      txns: [...unplannedView.txns].sort(newestFirst),
-      total: unplannedView.spend,
-      blurb: "Unplanned spending this month — worth reviewing so it doesn't become a habit.",
-    };
-  }, [
-    drill,
-    weekView,
-    monthView,
-    unplannedView,
-    bucketTxns,
-    bucketSum,
-    weekOffset,
-    monthOffset,
-    monthName,
-  ]);
-
-  const badges = useMemo(() => {
-    const out: { icon: typeof Trophy; label: string }[] = [];
-    if (netMonth != null && netMonth > 0)
-      out.push({ icon: TrendingUp, label: "In the black" });
-    if (weekView.cap > 0 && weekView.spend <= weekView.cap)
-      out.push({ icon: Trophy, label: "Under the weekly cap" });
-    if (income > 0 && spend > 0 && spend < income * 0.8)
-      out.push({ icon: PiggyBank, label: "Under 80% spend" });
-    if (lowPoint != null && lowPoint > 0)
-      out.push({ icon: Flame, label: "Stays in the green" });
-    return out;
-  }, [netMonth, income, spend, lowPoint, weekView]);
-
-  // Daily check-in streak — consecutive days the app was opened.
-  useEffect(() => {
-    const KEY = "h2:open-streak:v1";
-    const iso = (dd: Date) =>
-      `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(
-        dd.getDate(),
-      ).padStart(2, "0")}`;
-    try {
-      const t = new Date();
-      const tISO = iso(t);
-      const yISO = iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1));
-      const raw = localStorage.getItem(KEY);
-      const prev = raw ? (JSON.parse(raw) as { last: string; count: number }) : null;
-      let count: number;
-      if (prev?.last === tISO) {
-        count = prev.count;
-      } else {
-        count = prev?.last === yISO ? prev.count + 1 : 1;
-        localStorage.setItem(KEY, JSON.stringify({ last: tISO, count }));
-      }
-      setOpenStreak(count);
-    } catch {
-      setOpenStreak(1);
-    }
-  }, []);
-
-  // Celebrate a net-positive month — confetti once per session per month.
-  useEffect(() => {
-    if (netMonth == null || netMonth <= 0) return;
-    const key = `h2:cc-celebrated:${new Date().toISOString().slice(0, 7)}`;
-    try {
-      if (sessionStorage.getItem(key)) return;
-      sessionStorage.setItem(key, "1");
-    } catch {
-      /* ignore */
-    }
-    setCelebrate(true);
-    const t = window.setTimeout(() => setCelebrate(false), 4200);
-    return () => window.clearTimeout(t);
-  }, [netMonth]);
-
-  // Rolled-forward bank balance (snapshot + ledger since anchor) — same
-  // derivation the Chase page and the Forecast "Bank today" tile use, so the
-  // three surfaces always agree.
-  const { data: cashSignal } = useGetForecastCashSignal(
-    { horizonDays: 90 },
-    {
-      query: {
-        queryKey: getGetForecastCashSignalQueryKey({ horizonDays: 90 }),
-        staleTime: 5 * 60_000,
-      },
-    },
-  );
-  const cashNow = cashSignal?.bankToday != null ? Number(cashSignal.bankToday) : null;
+  const snapshotAt = cashSignal?.snapshotAt ?? null;
+  const snapshotSource = cashSignal?.snapshotSource === "plaid" ? "plaid" : "manual";
+  const bankAsOf = shortDate(spine?.bank?.asOfDate);
+  const nextBill = spine?.nextBill ?? null;
+  const lowPoint = spine?.forecast?.lowPoint ?? null;
+  const runwayDays = spine?.forecast?.runwayDays ?? null;
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <Confetti fire={celebrate} />
+    <div className="space-y-4">
+      {/* ── The spine row. Five figures, one request, one instant. ────────── */}
+      <div
+        data-testid="cc-spine-stats"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+      >
+        <Stat
+          index={0}
+          data-testid="cc-stat-bank"
+          label="Bank balance"
+          value={money(spine?.bank?.balance)}
+          hint={bankAsOf ? `as of ${bankAsOf}` : undefined}
+        />
+        <Stat
+          index={1}
+          data-testid="cc-stat-spent-month"
+          label="Spent this month"
+          value={money(spine?.spentMonth)}
+          hint="so far"
+        />
+        <Stat
+          index={2}
+          data-testid="cc-stat-spent-week"
+          label="Spent this week"
+          value={money(spine?.spentWeek)}
+          hint="so far"
+        />
+        <Stat
+          index={3}
+          data-testid="cc-stat-next-bill"
+          label="Next bill"
+          value={money(nextBill?.amount)}
+          hint={
+            nextBill
+              ? `${nextBill.name} · ${shortDate(nextBill.dueDate) ?? nextBill.dueDate}`
+              : "none scheduled"
+          }
+        />
+        <Stat
+          index={4}
+          data-testid="cc-stat-low-point"
+          label="Cash low point"
+          value={money(lowPoint)}
+          tone={lowPoint != null && Number(lowPoint) < 0 ? "bad" : "navy"}
+          hint={
+            runwayDays != null ? `negative in ${runwayDays} days` : "next 90 days"
+          }
+        />
+      </div>
 
-      {/* ── At-a-glance StatTile row — the "how are we spending, right now"
-             focal readouts (week + month, navigable) plus cash & net. ─────── */}
-      <SectionHeader
-        eyebrow={`${greeting}, ${who}`}
-        title="Where things stand"
-        sub="This week, this month, cash and net."
+      {/* ── Spend this month vs last, and where it went. Pure math, server
+             classified — the same spending-facts basis the spine uses. The
+             sync controls dock in this card's head, beside the freshness of
+             the balance they refresh. ─────────────────────────────────────── */}
+      <ChaseInsightStrip
+        range={monthRange}
+        actions={
+          <>
+            {snapshotAt && (
+              <span className="hidden text-micro text-neutral-400 sm:block">
+                <BankSnapshotFreshness source={snapshotSource} at={snapshotAt} />
+              </span>
+            )}
+            {/* `compact` because the head already carries a timestamp — the
+                button's own "Last synced" line would stack a second one under
+                it and read as a duplicate. It stays in the tooltip. */}
+            <SyncButton asKit compact />
+          </>
+        }
       />
-      <StatTileRow>
-        {/* A) This week (Sun–Sat) discretionary spend, ◀ ▶ to cycle weeks.
-            The whole tile is a drill target (opens the txn list behind the
-            number) — a div[role=button] wrapper so the pager's real <button>s
-            stay valid HTML inside it. Tones are set explicitly because the
-            wrapper hides these from StatTileRow's auto-rotation. */}
-        <Link
-          href="/allowances?view=week"
-          aria-label="Review and edit this week's spend on the Allowances page"
-          className="block h-full cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          data-testid="cc-week-tile"
-        >
-          <StatTile
-            active
-            tone={0}
-            label={
-              <PeriodPager
-                icon={<CalendarDays className="w-3.5 h-3.5" />}
-                title="Week"
+
+      {/* ── Allowance buckets ─────────────────────────────────────────────── */}
+      <section className={card} data-testid="cc-allowances">
+        <div className={cardHead}>
+          <h2 className="text-title font-semibold text-brand-navy">Allowances</h2>
+          <Help>
+            Counts only transactions you explicitly filed into a bucket on the
+            Allowances page; anything unfiled counts nowhere. Weekly runs
+            Sunday to Saturday.
+          </Help>
+          <Link
+            href="/allowances"
+            className="press ml-auto rounded-control px-2 py-1 text-micro font-semibold text-neutral-500 ring-1 ring-brand-line hover:bg-neutral-50 hover:text-brand-navy"
+          >
+            Open
+          </Link>
+        </div>
+        <div role="table" aria-label="Allowance buckets">
+          {/* Column heads are a desktop affordance; the phone layout labels
+              itself, so a header row there would be four words of noise. */}
+          <div
+            role="row"
+            className={`hidden border-b border-brand-line sm:grid ${ROW_GRID.replace("grid ", "").replace("py-3", "py-2")}`}
+          >
+            <div role="columnheader" className={headCell}>Bucket</div>
+            <div role="columnheader" className={headCell}>Period</div>
+            <div role="columnheader" className={`${headCell} justify-self-end`}>Spent</div>
+            <div role="columnheader" className={`${headCell} justify-self-end`}>Cap</div>
+            <div role="columnheader" className={`${headCell} justify-self-end`}>Status</div>
+          </div>
+          <AllowanceRow
+            name="Weekly"
+            href="/allowances?view=week"
+            testid="cc-week-tile"
+            period={
+              <Pager
+                label="week"
                 period={weekView.label}
                 onPrev={() => setWeekOffset((o) => o - 1)}
                 onNext={() => setWeekOffset((o) => Math.min(0, o + 1))}
@@ -1010,39 +496,16 @@ export default function CommandCenterPage() {
                 canNext={weekOffset < 0}
               />
             }
-            value={<MoneyText countUp amount={weekView.spend} />}
-            sub={
-              weekView.cap > 0 ? (
-                <span
-                  className={
-                    weekView.spend > weekView.cap
-                      ? "text-[hsl(var(--negative))]"
-                      : "text-[hsl(var(--positive))]"
-                  }
-                >
-                  {weekView.spend > weekView.cap
-                    ? `${formatCurrency(weekView.spend - weekView.cap)} over the ${formatCurrency(weekView.cap)} cap`
-                    : `${formatCurrency(weekView.cap - weekView.spend)} left of ${formatCurrency(weekView.cap)}`}
-                </span>
-              ) : (
-                "spent, no cap set"
-              )
-            }
+            spend={weekView.spend}
+            cap={weekView.cap}
           />
-        </Link>
-        {/* B) Selected calendar month spend — links to Allowances to edit. */}
-        <Link
-          href="/allowances?view=month"
-          aria-label="Review and edit this month's spend on the Allowances page"
-          className="block h-full cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          data-testid="cc-month-tile"
-        >
-          <StatTile
-            tone={1}
-            label={
-              <PeriodPager
-                icon={<CalendarRange className="w-3.5 h-3.5" />}
-                title="Month"
+          <AllowanceRow
+            name="Monthly"
+            href="/allowances?view=month"
+            testid="cc-month-tile"
+            period={
+              <Pager
+                label="month"
                 period={monthView.label}
                 onPrev={() => setMonthOffset((o) => o - 1)}
                 onNext={() => setMonthOffset((o) => Math.min(0, o + 1))}
@@ -1050,584 +513,59 @@ export default function CommandCenterPage() {
                 canNext={monthOffset < 0}
               />
             }
-            value={<MoneyText countUp amount={monthView.spend} />}
-            sub={
-              monthView.cap > 0 ? (
-                <span
-                  className={
-                    monthView.spend > monthView.cap
-                      ? "text-[hsl(var(--negative))]"
-                      : "text-[hsl(var(--positive))]"
-                  }
-                >
-                  {monthView.spend > monthView.cap
-                    ? `${formatCurrency(monthView.spend - monthView.cap)} over the ${formatCurrency(monthView.cap)} cap`
-                    : `${formatCurrency(monthView.cap - monthView.spend)} left of ${formatCurrency(monthView.cap)}`}
-                </span>
-              ) : (
-                "monthly bucket · review on Allowances"
-              )
+            spend={monthView.spend}
+            cap={monthView.cap}
+          />
+          <AllowanceRow
+            name="Unplanned"
+            href="/allowances?view=unplanned"
+            testid="cc-unplanned-tile"
+            period={
+              <span className="text-label text-neutral-600">{monthRange.label}</span>
             }
+            spend={unplannedView.spend}
+            cap={unplannedView.cap}
           />
-        </Link>
-        <StatTile
-          tone={2}
-          icon={<PiggyBank className="w-4 h-4" />}
-          label="Cash on hand"
-          value={cashNow != null ? <MoneyText countUp amount={cashNow} /> : "—"}
-          sub={forecast?.bankSnapshot?.name ?? "Checking"}
-          href="/transactions"
-        />
-        <StatTile
-          tone={3}
-          icon={<Zap className="w-4 h-4" />}
-          label={`Unplanned · ${monthName}`}
-          value={<MoneyText countUp amount={unplannedView.spend} />}
-          sub={
-            unplannedView.cap > 0 ? (
-              <span
-                className={
-                  unplannedView.spend > unplannedView.cap
-                    ? "text-[hsl(var(--negative))]"
-                    : "text-[hsl(var(--positive))]"
-                }
-              >
-                {unplannedView.spend > unplannedView.cap
-                  ? `${formatCurrency(unplannedView.spend - unplannedView.cap)} over the ${formatCurrency(unplannedView.cap)} cap`
-                  : `${formatCurrency(unplannedView.cap - unplannedView.spend)} left of ${formatCurrency(unplannedView.cap)}`}
-              </span>
-            ) : (
-              "spent, no cap set"
-            )
-          }
-          href="/allowances?view=unplanned"
-        />
-      </StatTileRow>
+        </div>
+      </section>
 
-      {/* ── Largest single purchases this month (consolidated) ───────────── */}
-      <BiggestCharges transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
-
-      {/* ── Spending detail — everything secondary, collapsed by default so the
-             spending-control + act-on-it zones above stay the focus. ──────── */}
-      <div className="rounded-2xl border border-card-border bg-card/40">
-        <button
-          type="button"
-          onClick={toggleDamage}
-          aria-expanded={damageOpen}
-          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
-          data-testid="cc-damage-toggle"
-        >
-          <span className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Spending detail
-            </span>
-            <span className="text-xs text-muted-foreground">
-              reports, trends, streaks & the deeper cuts
-            </span>
+      {/* ── Biggest charges ───────────────────────────────────────────────── */}
+      <section className={card} data-testid="cc-biggest-charges">
+        <div className={cardHead}>
+          <h2 className="text-title font-semibold text-brand-navy">
+            Biggest charges
+          </h2>
+          <Help>
+            One-off purchases this calendar month, largest first. Bills,
+            subscriptions, transfers, card payments and reimbursables are
+            excluded, so this is discretionary spend only.
+          </Help>
+          <span className="ml-auto text-micro uppercase tracking-wider text-neutral-400">
+            {monthRange.label}
           </span>
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform",
-              damageOpen && "rotate-180",
-            )}
-          />
-        </button>
-        {damageOpen && (
-          <div className="space-y-4 px-3 pb-4 sm:px-4">
-      {/* ── The five command boxes ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 stagger-children">
-        <DrillCard
-          href="/reports"
-          eyebrow={<span className="inline-flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" />Overview</span>}
-          value="Reports"
-          visual={spendMix.length ? <StackBar segments={spendMix} showLegend={false} /> : undefined}
-          sub={!spendMix.length ? "No spend yet" : undefined}
-        />
-        <DrillCard
-          href="/transactions"
-          eyebrow={<span className="inline-flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5" />Chase</span>}
-          value="Bank"
-          visual={
-            chaseSpark.length > 1 ? (
-              <Sparkline data={chaseSpark} variant="area" color="hsl(var(--chart-1))" height={32} />
-            ) : undefined
-          }
-          sub={!chaseSpark.length ? "No recent flow" : undefined}
-        />
-        <DrillCard
-          href="/amex"
-          eyebrow={<span className="inline-flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5" />Amex</span>}
-          value="Cards"
-          sub="statements & spend"
-          visual={
-            <div className="flex items-center gap-1.5">
-              {["blue", "silver"].map((b) => (
-                <span
-                  key={b}
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: `hsl(var(--card-${b}))` }}
-                />
-              ))}
-            </div>
-          }
-        />
-        <DrillCard
-          href="/allowances"
-          eyebrow={<span className="inline-flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5" />Allowance</span>}
-          value="This week"
-          visual={
-            thisWeek.planned > 0 ? (
-              <RingStat
-                value={allowanceRatio}
-                size={52}
-                color={allowanceRatio > 1 ? "hsl(var(--negative))" : "hsl(var(--positive))"}
-                centerSub="used"
+        </div>
+        {chargeRows.length ? (
+          <>
+            <div className="px-4 py-3">
+              <CssBars
+                rows={chargeRows}
+                topN={8}
+                ramp
+                format={barMoney}
+                labelWidth={narrow ? 104 : 170}
+                valueWidth={narrow ? 78 : 104}
+                ariaLabel="Biggest charges this month, largest first"
               />
-            ) : undefined
-          }
-          sub={
-            thisWeek.planned > 0
-              ? `${formatCurrency(thisWeek.spend)} / ${formatCurrency(thisWeek.planned)}`
-              : "Set an allowance"
-          }
-        />
-        <DrillCard
-          href="/forecast/overview"
-          eyebrow={<span className="inline-flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" />Forecast</span>}
-          value="Runway"
-          visual={
-            runwaySpark.length > 1 ? (
-              <Sparkline
-                data={runwaySpark}
-                variant="area"
-                color={lowPoint != null && lowPoint < 0 ? "hsl(var(--negative))" : "hsl(var(--chart-3))"}
-                height={32}
-              />
-            ) : undefined
-          }
-          sub={
-            runwayDays != null
-              ? `Dips below $0 in ~${runwayDays}d`
-              : lowPoint != null
-                ? `Low ${formatCurrency(lowPoint)}`
-                : "next 90 days"
-          }
-        />
-      </div>
-
-      {/* ── Health score ───────────────────────────────────────────────── */}
-      <HealthScore
-        score={healthScore}
-        label={health.label}
-        color={health.color}
-        blurb={health.blurb}
-      />
-
-      {/* ── Supporting grid ────────────────────────────────────────────── */}
-      <div className="grid lg:grid-cols-2 gap-4 items-start">
-        {/* Spend-pace gauge */}
-        <Card>
-          <CardContent className="p-5">
-            <PaceGauge
-              spend={spend}
-              income={income}
-              dayOfMonth={dayOfMonth}
-              daysInMonth={daysInMonth}
-            />
-            {projectedNet != null ? (
-              <div className="mt-4 pt-3 border-t border-border text-sm">
-                <span className="text-muted-foreground">
-                  At this rate you finish {monthName} at{" "}
-                </span>
-                <MoneyText
-                  amount={projectedNet}
-                  colored
-                  signed
-                  className="font-bold"
-                />
-                <span className="text-muted-foreground">
-                  {projectedNet >= 0 ? " — on track." : " — worth easing off."}
-                </span>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        {/* Daily spend heat */}
-        <Card>
-          <CardContent className="p-5">
-            <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-              Daily spend · last 14 days
             </div>
-            <HeatStrip data={dailyHeat.vals} labels={dailyHeat.labels} height={28} />
-            <div className="mt-2 text-xs text-muted-foreground">
-              Darker = heavier day. Hover for details.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Forecast area — where the cash is headed */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-baseline justify-between mb-1">
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Where your cash is headed
-            </span>
-            <span className="text-[11px] text-muted-foreground">
-              {runwayDays != null
-                ? `Dips below $0 in ~${runwayDays} days`
-                : lowPoint != null
-                  ? `Low point ${formatCurrency(lowPoint)}`
-                  : "next 90 days"}
-            </span>
-          </div>
-          <div className="h-[170px] w-full">
-            {series.length > 1 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={series} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id="ccFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.28} />
-                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={false}
-                    interval="preserveStartEnd"
-                    minTickGap={40}
-                    tickFormatter={(v: string) => {
-                      const [, m, d] = v.split("-");
-                      return `${Number(m)}/${Number(d)}`;
-                    }}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10 }}
-                    width={44}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
-                  />
-                  <RechartsTooltip
-                    contentStyle={{
-                      background: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--card-border))",
-                      color: "hsl(var(--card-foreground))",
-                      borderRadius: 6,
-                      fontSize: 12,
-                    }}
-                    formatter={(v: number) => [formatCurrency(v), "Projected"]}
-                  />
-                  <ReferenceLine y={0} stroke="hsl(var(--negative))" strokeDasharray="3 3" strokeOpacity={0.5} />
-                  <Area
-                    type="monotone"
-                    dataKey="balance"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2.5}
-                    fill="url(#ccFill)"
-                    {...CHART_ANIM}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full grid place-items-center text-sm text-muted-foreground">
-                Sync your bank to see your cash trajectory.
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Savings goal */}
-      <SavingsGoal />
-
-      <div className="grid lg:grid-cols-2 gap-4 items-start">
-        {/* Spending personality */}
-        {dash?.topCategories?.[0] ? (
-          <Card>
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="text-4xl leading-none shrink-0" aria-hidden>
-                {persona.emoji}
-              </div>
-              <div className="min-w-0">
-                <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Top spending category this month
-                </div>
-                <div className="text-lg font-bold tracking-tight">{persona.label}</div>
-                <div className="text-sm text-muted-foreground">
-                  Most of it went to{" "}
-                  <span className="text-foreground font-medium">
-                    {dash.topCategories[0].categoryName}
-                  </span>{" "}
-                  · {formatCurrency(Number(dash.topCategories[0].total) || 0)}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* Biggest splurge this month */}
-        {biggestSplurge ? (
-          <Card>
-            <CardContent className="p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Biggest splurge this month
-              </div>
-              <div className="mt-1.5 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-lg font-bold truncate">{biggestSplurge.desc}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {biggestSplurge.date}
-                    {biggestSplurge.member ? ` · ${biggestSplurge.member}` : ""}
-                  </div>
-                </div>
-                <MoneyText
-                  amount={biggestSplurge.amt}
-                  abs
-                  className="text-2xl font-extrabold text-[hsl(var(--negative))] shrink-0"
-                />
-              </div>
-              <div className="mt-1.5 text-sm text-muted-foreground">
-                {-biggestSplurge.amt > 500
-                  ? "A significant one-off — worth a quick review."
-                  : -biggestSplurge.amt > 200
-                    ? "One of the larger purchases this month."
-                    : -biggestSplurge.amt > 100
-                      ? "A mid-sized one-off purchase."
-                      : "A small one-off — nothing unusual."}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* This vs last month */}
-        {momCompare.pctChange != null ? (
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Vs last month · same point
-                </div>
-                <PillBadge tone={momCompare.pctChange > 0 ? "danger" : "good"}>
-                  {momCompare.pctChange > 0 ? "Spending faster" : "On track"}
-                </PillBadge>
-              </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                {momCompare.pctChange > 0 ? (
-                  <TrendingUp className="w-5 h-5 text-[hsl(var(--negative))]" />
-                ) : (
-                  <TrendingDown className="w-5 h-5 text-positive" />
-                )}
-                <span
-                  className={cn(
-                    "text-2xl font-bold tabular-nums",
-                    momCompare.pctChange > 0
-                      ? "text-[hsl(var(--negative))]"
-                      : "text-positive",
-                  )}
-                >
-                  {momCompare.pctChange > 0 ? "+" : ""}
-                  {Math.round(momCompare.pctChange)}%
-                </span>
-              </div>
-              <div className="text-sm text-muted-foreground mt-0.5">
-                {formatCurrency(momCompare.cur)} so far vs {formatCurrency(momCompare.last)} by
-                this day last month —{" "}
-                {momCompare.pctChange > 0
-                  ? "the pace is up — worth keeping an eye on."
-                  : "the pace is down from last month."}
-              </div>
-              <div className="mt-3">
-                <MiniBars
-                  height={24}
-                  data={[
-                    // Reference series stays recessive (light neutral), the
-                    // current month carries the color — a dark slab here read
-                    // as a gray blob on the bright canvas.
-                    { value: momCompare.last, label: `Last month: ${formatCurrency(momCompare.last)}`, color: "hsl(var(--border))" },
-                    {
-                      value: momCompare.cur,
-                      label: `This month: ${formatCurrency(momCompare.cur)}`,
-                      color: momCompare.pctChange > 0 ? "hsl(var(--negative))" : "hsl(var(--positive))",
-                    },
-                  ]}
-                />
-                <div className="mt-1 flex justify-between text-[9px] uppercase tracking-wider text-muted-foreground">
-                  <span>Last</span>
-                  <span>This</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* Latest activity */}
-        {(dash?.recentTransactions?.length ?? 0) > 0 ? (
-          <Card>
-            <CardContent className="p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                Latest activity
-              </div>
-              <div className="divide-y divide-border">
-                {dash!.recentTransactions.slice(0, 5).map((t) => {
-                  const a = Number(t.amount) || 0;
-                  return (
-                    <div key={t.id} className="flex items-center justify-between gap-3 py-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">
-                          {t.description || "Transaction"}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {t.occurredOn}
-                          {t.member ? ` · ${t.member}` : ""}
-                        </div>
-                      </div>
-                      <MoneyText
-                        amount={a}
-                        signed
-                        className={cn(
-                          "text-sm font-semibold shrink-0",
-                          a >= 0 ? "text-positive" : "text-foreground",
-                        )}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* Category donut */}
-        <CategoryDonut categories={dash?.topCategories ?? []} />
-
-        {/* Him-vs-her scoreboard */}
-        <SpendScoreboard entries={memberSpend} />
-
-        {/* What's coming — next bills at a glance */}
-        {(dash?.upcomingBills?.length ?? 0) > 0 ? (
-          <Card>
-            <CardContent className="p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                What&apos;s coming
-              </div>
-              <div className="divide-y divide-border">
-                {dash!.upcomingBills.slice(0, 5).map((b) => (
-                  <div key={b.id} className="flex items-center justify-between gap-3 py-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">{b.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {b.dayOfMonth ? `Around day ${b.dayOfMonth}` : b.frequency}
-                      </div>
-                    </div>
-                    <MoneyText
-                      amount={-Math.abs(Number(b.amount) || 0)}
-                      className="text-sm font-semibold text-[hsl(var(--negative))]"
-                    />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-      </div>
-
-      {/* Badges + Wrapped */}
-      <div className="flex flex-wrap items-center gap-2">
-        {openStreak >= 2 ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--chart-3))]/30 bg-[hsl(var(--chart-3))]/10 px-3 py-1.5 text-xs font-bold text-[hsl(var(--chart-3))]">
-            <Flame className="w-3.5 h-3.5" />
-            {openStreak}-day check-in streak
-          </span>
-        ) : null}
-        {streak.weeks >= 2 ? (
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold border",
-              streak.direction === "under"
-                ? "bg-positive/15 text-positive border-positive/30"
-                : "bg-[hsl(var(--negative)/0.15)] text-[hsl(var(--negative))] border-[hsl(var(--negative)/0.3)]",
-            )}
-            data-testid="weekly-streak-chip"
-          >
-            <Flame className="w-3.5 h-3.5" />
-            {streak.weeks} weeks {streak.direction === "under" ? "under budget" : "over budget"}
-          </span>
-        ) : null}
-        {badges.map((b) => (
-          <span
-            key={b.label}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium"
-          >
-            <b.icon className="w-3.5 h-3.5 text-primary" />
-            {b.label}
-          </span>
-        ))}
-        <button
-          type="button"
-          onClick={() => setWrappedOpen(true)}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-primary text-primary-foreground px-4 py-1.5 text-xs font-bold hover:opacity-90 transition-opacity"
-          data-testid="open-wrapped"
-        >
-          <Sparkles className="w-3.5 h-3.5" /> View this month, Wrapped
-        </button>
-      </div>
-          </div>
+            <Foot>
+              Darkest bar is the largest charge. Amounts are the posted
+              transaction totals.
+            </Foot>
+          </>
+        ) : (
+          <div className={emptyNote}>No one-off charges this month.</div>
         )}
-      </div>
-
-      <MonthlyWrapped open={wrappedOpen} onOpenChange={setWrappedOpen} dashboard={dash ?? null} />
-
-      {/* ── The drill panel — every txn behind the clicked tile/strip, with
-             per-row recategorize + bucket-move. The list is the SAME set the
-             tile summed, so the header total always matches the tile. ────── */}
-      <Dialog
-        open={drill != null}
-        onOpenChange={(o) => {
-          if (!o) setDrill(null);
-        }}
-      >
-        <DialogContent className="max-w-2xl" data-testid="cc-drill-dialog">
-          {drillData ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>{drillData.title}</DialogTitle>
-                <DialogDescription>
-                  {drillData.txns.length === 0 ? (
-                    "No transactions in this group yet."
-                  ) : (
-                    <>
-                      <span className="font-semibold text-foreground">
-                        {drillData.txns.length}
-                      </span>{" "}
-                      hit{drillData.txns.length === 1 ? "" : "s"} ·{" "}
-                      <span className="font-semibold text-foreground tabular-nums">
-                        {formatCurrency(drillData.total)}
-                      </span>{" "}
-                      — {drillData.blurb}
-                    </>
-                  )}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="max-h-[60vh] divide-y divide-border overflow-y-auto pr-1">
-                {drillData.txns.map((t) => (
-                  <DrillTxnRow
-                    key={t.id}
-                    t={t}
-                    categories={categories ?? []}
-                    pending={pendingTxnId === t.id}
-                    onMoveBucket={moveBucket}
-                    onChangeCategory={changeCategory}
-                  />
-                ))}
-              </div>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      </section>
     </div>
   );
 }

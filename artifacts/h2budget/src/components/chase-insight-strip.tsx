@@ -1,17 +1,27 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   useGetReportsSpendingFacts,
   getGetReportsSpendingFactsQueryKey,
 } from "@workspace/api-client-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { StackBar, DeltaPill, MoneyText } from "@/components/viz";
+import { StackBar } from "@/components/viz";
+import { card, cardHead, fieldLabel, Help } from "@/ui";
 import { rangeDays, type DateRange } from "@/lib/timeRange";
+import { formatCurrency } from "@/lib/utils";
 
+/**
+ * Category-mix colours, DARKEST FIRST.
+ *
+ * ⚠️ These are the navy ramp (`--chart-1..5` were rebound to it in B1), and a
+ * mix is rank-ordered — the server returns `byCategory` largest first. So the
+ * array must walk the ramp monotonically dark → light, or the biggest category
+ * draws lighter than the third biggest and the ramp stops meaning anything
+ * (chart law 2: sequential data is indexed by RANK).
+ */
 const MIX_COLORS = [
   "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
   "hsl(var(--chart-3))",
   "hsl(var(--chart-4))",
-  "hsl(var(--chart-2))",
   "hsl(var(--chart-5))",
 ];
 
@@ -39,14 +49,24 @@ const PERIOD_WORD: Record<DateRange["mode"], string> = {
 };
 
 /**
- * Compact visual strip for the Chase page: a period-over-period spend DeltaPill
- * + a StackBar of the window's category mix. Both are scoped to the page's date
- * selector (`range`) and pull the server's real-spend classification
+ * Period spend and where it went: the window's real-spend total against the
+ * equal-length window before it, plus the category mix.
+ *
+ * Both halves pull the server's real-spend classification
  * (`GET /reports/spending-facts` → `isRealSpend`), so transfers, debt/loan
- * payments, and uncategorized rows are excluded — the totals match the Spending
- * tab exactly. This component computes no money the server owns (CLAUDE.md §1).
+ * payments, and uncategorized rows are excluded — the totals match the
+ * Spending tab exactly, and the same basis the spine's `spentMonth` uses. This
+ * component computes no money the server owns (CLAUDE.md §1).
+ *
+ * `actions` docks page controls (sync, freshness) in the card head.
  */
-export function ChaseInsightStrip({ range }: { range: DateRange }) {
+export function ChaseInsightStrip({
+  range,
+  actions,
+}: {
+  range: DateRange;
+  actions?: ReactNode;
+}) {
   const prior = useMemo(() => priorWindow(range), [range]);
 
   const { data: cur } = useGetReportsSpendingFacts(
@@ -91,39 +111,62 @@ export function ChaseInsightStrip({ range }: { range: DateRange }) {
     [cur],
   );
 
-  // Hide the strip only once we have data and there's genuinely nothing to show.
-  if (cur && curTotal === 0 && !mix.length) return null;
+  // Hide the strip only once we have data and there's genuinely nothing to
+  // show — unless the head is carrying page controls, which must not vanish.
+  if (cur && curTotal === 0 && !mix.length && !actions) return null;
+
+  // ⚠️ Rounded to whole percent for the chip, so the WORD and the number agree:
+  // a +0.4% move reads "0%", and calling that "up" would be a lie.
+  const pctRounded = pct == null ? null : Math.round(pct);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-              Spend this {period}
+    <section className={card} data-testid="chase-insight-strip">
+      <div className={cardHead}>
+        <h2 className="text-title font-semibold text-brand-navy">
+          Spend this {period}
+        </h2>
+        <Help>
+          Real spend only, classified by the server: transfers, debt and loan
+          payments, and uncategorized rows are excluded. Compared against the
+          equal-length window immediately before this one.
+        </Help>
+        {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+      </div>
+
+      <div className="grid gap-5 p-4 sm:grid-cols-[minmax(0,15rem)_1fr] sm:gap-8">
+        <div>
+          <div
+            className="font-mono text-display font-semibold tabular-nums text-brand-navy"
+            data-testid="strip-spend-total"
+          >
+            {formatCurrency(curTotal)}
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            {pctRounded != null && (
+              <span className={`chip ${pctRounded > 0 ? "bad" : "gray"}`}>
+                {pctRounded > 0 ? "up" : pctRounded < 0 ? "down" : "flat"}{" "}
+                {Math.abs(pctRounded)}%
+              </span>
+            )}
+            <span className="text-micro text-neutral-400">
+              vs {formatCurrency(prevTotal)} last {period}
             </span>
-            {pct != null && <DeltaPill value={pct} invert />}
           </div>
-          <div className="text-2xl font-bold">
-            <MoneyText amount={curTotal} />
+        </div>
+
+        <div className="min-w-0">
+          <div className={fieldLabel}>Category mix</div>
+          <div className="mt-2.5">
+            {mix.length ? (
+              <StackBar segments={mix} legendMax={4} />
+            ) : (
+              <span className="text-micro text-neutral-400">
+                No categorized spend yet.
+              </span>
+            )}
           </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            vs <MoneyText amount={prevTotal} className="text-foreground" /> last {period}
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="p-5">
-          <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mb-3">
-            {range.label} · category mix
-          </div>
-          {mix.length ? (
-            <StackBar segments={mix} legendMax={4} />
-          ) : (
-            <div className="text-xs text-muted-foreground">No categorized spend yet.</div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </section>
   );
 }

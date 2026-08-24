@@ -178,11 +178,6 @@ function writeReconciledMap(map: Record<string, boolean>) {
   }
 }
 
-function fireConfetti() {
-  // Confetti celebration removed by request — the clear/reconcile gating
-  // logic stays so behavior is otherwise unchanged.
-}
-
 type HorizonOpt = { label: string; days: number };
 const HORIZON_OPTS: HorizonOpt[] = [
   // Opens on a 30-day horizon; longer horizons stay one click away. (The old
@@ -976,8 +971,8 @@ export default function ForecastPage({
     return m;
   }, [bankInbox, register, today]);
 
-  // Window key for confetti persistence: YYYY-MM (current calendar month).
-  // One-shot per session per month per task spec.
+  // Window key for reconciled-state persistence: YYYY-MM (current calendar
+  // month). One-shot per session per month per task spec.
   const windowKey = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -987,11 +982,11 @@ export default function ForecastPage({
   const prevClearedRef = useRef<boolean | null>(null);
 
   // Single effect handles both hydration and transition so ordering is
-  // deterministic regardless of cache timing. Confetti is one-shot per
-  // session per YYYY-MM (sessionStorage), only fires on overall mode, and
-  // is also fired on first overall observation of a cleared state — so a
-  // user who finishes triage on /review and lands on /forecast still sees
-  // it. Once the session key is set it is never cleared (true one-shot).
+  // deterministic regardless of cache timing. The month is marked reconciled
+  // once per YYYY-MM (sessionStorage), only on overall mode, and also on the
+  // first overall observation of a cleared state — so a user who finishes
+  // triage on /review and lands on /forecast still records it. Once the
+  // session key is set it is never cleared (true one-shot).
   useEffect(() => {
     if (!windowKey) return;
     const prev = prevClearedRef.current;
@@ -1005,7 +1000,6 @@ export default function ForecastPage({
         !alreadyFired &&
         (firstObservation || prev === false);
       if (shouldFire) {
-        fireConfetti();
         map[windowKey] = true;
         writeReconciledMap(map);
       }
