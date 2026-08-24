@@ -173,3 +173,12 @@ overrides:
   # which can produce duplicated schema instances and "two different types
   # with this name exist" errors at runtime/typecheck.
   zod: "^3.25.76"
+  # SECURITY pin. lodash reaches us only transitively, via recharts@2.x
+  # (recharts declares `lodash: ^4.17.21`). Everything <=4.17.23 is vulnerable
+  # to GHSA-r5fr-rjxr-66jc (code injection via `_.template` import key names,
+  # high) and GHSA-f23m-r3pf-42rh (prototype pollution via array-path bypass in
+  # `_.unset`/`_.omit`, moderate). 4.18.x is the patched line and satisfies
+  # recharts' own range, so this pin fixes both without moving recharts (a
+  # recharts 3.x major is explicitly NOT wanted — the chart kit targets 2.x).
+  # Remove this pin only once every lodash consumer requires >=4.18.0 itself.
+  lodash: "^4.18.0"
