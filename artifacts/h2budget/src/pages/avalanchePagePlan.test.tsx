@@ -58,7 +58,20 @@ const SEEDED_DEBTS: Debt[] = [
   } as Debt,
 ];
 
-vi.mock("wouter", () => ({ useSearch: () => "" }));
+vi.mock("wouter", () => ({
+  useSearch: () => "",
+  // The shared kit (`@/ui`) imports Link for its breadcrumb trail. This page
+  // never renders one, but the named import still has to resolve or vi.mock
+  // throws on the missing export.
+  Link: () => null,
+}));
+// The hero's "% paid" is read from the shared spine snapshot, never recomputed
+// on the page. These tests assert the plan and the table, not the headline, so
+// the snapshot is simply absent — the hero renders its em-dash placeholder.
+// avalancheHeroPayoff.test.tsx is where the number itself is pinned.
+vi.mock("@/hooks/useSpine", () => ({
+  useSpine: () => ({ data: undefined, isLoading: false }),
+}));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/components/debt-plaid-link", () => ({
   DebtPlaidActions: () => null,
@@ -67,15 +80,9 @@ vi.mock("@/components/debt-plaid-link", () => ({
   DebtPlaidSource: () => null,
   DebtReauthBanner: () => null,
 }));
-vi.mock("recharts", () => ({
-  LineChart: () => null,
-  Line: () => null,
-  XAxis: () => null,
-  YAxis: () => null,
-  Tooltip: () => null,
-  ResponsiveContainer: () => null,
-  Legend: () => null,
-}));
+// One shared stub, so a page picking up another recharts primitive does not
+// break four test files at once. See src/test-recharts-stub.tsx.
+vi.mock("recharts", () => import("@/test-recharts-stub"));
 vi.mock("@workspace/api-client-react", () => {
   const noop = () => {};
   const asyncNoop = async () => undefined;

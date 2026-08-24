@@ -82,13 +82,15 @@ beforeEach(() => {
   cleanup();
 });
 
-// The debt status grid's legend always renders a static "Target" swatch
-// label, so scope badge counts to the actual PillBadge pills on the cards
-// (rounded-full is the pill primitive's signature class).
+// C5: the page is a table now, and the status-grid legend that used to render
+// a second, static "Target" swatch label is gone — so every "Target" on the
+// screen is a real status chip on a real row. The filter is kept (scoped to the
+// `.chip` primitive instead of the retired pill's `rounded-full`) so a future
+// legend or column head named "Target" cannot quietly inflate this count.
 function getTargetBadges() {
   return screen
     .getAllByText("Target")
-    .filter((el) => el.className.includes("rounded-full"));
+    .filter((el) => el.className.includes("chip"));
 }
 
 describe("Debts page — multi-target month (extra wipes 2+ debts)", () => {

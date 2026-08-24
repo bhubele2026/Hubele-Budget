@@ -6,16 +6,21 @@ import {
   useListDebtBalanceHistory,
 } from "@workspace/api-client-react";
 import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react";
-import { TrendingDown, CheckCircle2, Coins } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SectionHeader } from "@/components/stat";
-import { StatTile, StatTileRow } from "@/components/stat-tile";
-import { RingStat, MoneyText } from "@/components/viz";
-import { PillBadge } from "@/components/pill-badge";
-import { cn, formatCurrency } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
+import {
+  Page,
+  Stat,
+  Help,
+  Foot,
+  card,
+  cardHead,
+  th,
+  td,
+  tdNum,
+  emptyNote,
+} from "@/ui";
+import { cn, formatCurrency } from "@/lib/utils";
 import {
   simulateWithSolvableFallback,
   sortDebts,
@@ -147,7 +152,7 @@ export default function DebtsPage() {
   // Mirror the /avalanche planner: every debt the simulator pays extra to
   // this month is a "current target." When month 0 has no extra to spill
   // (e.g. $0 extra), fall back to the strategy's first solvable debt so
-  // the UI always highlights one card.
+  // the UI always highlights one row.
   const planTargetIds = useMemo(() => {
     const monthTargets = sim.months[0]?.targets ?? [];
     if (monthTargets.length > 0) {
@@ -205,187 +210,122 @@ export default function DebtsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <Page title="Debts">
       <DebtReauthBanner debts={debts} />
-      <SectionHeader
-        eyebrow="Debt"
-        title="Debt Avalanche"
-        sub="Sorted by APR to minimize interest paid."
-      />
 
-      <StatTileRow>
-        <StatTile
-          label="Active cards"
-          value={activeCount}
-          sub="still carrying a balance"
-          icon={<TrendingDown />}
-        />
-        <StatTile
-          label="Paid off"
-          value={paidOffCount}
-          sub={paidOffCount === 1 ? "card crushed" : "cards crushed"}
-          icon={<CheckCircle2 />}
-        />
-        <StatTile
+      <div className="mb-5 flex flex-wrap gap-3">
+        <Stat index={0} label="Active" value={activeCount} hint="carrying a balance" />
+        <Stat index={1} label="Cleared" value={paidOffCount} hint="paid in full" />
+        <Stat
+          index={2}
           label="Extra / month"
           value={formatCurrency(resolvedExtraAmount)}
-          sub="fuel on the avalanche"
-          icon={<Coins />}
+          hint="on top of minimums"
         />
-      </StatTileRow>
+      </div>
 
-      {/* Debt status grid — one cell per card, colored by state. */}
-      {sortedDebts.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-card-border bg-card p-3">
-          <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mr-1">
-            Cards
+      <div className={card}>
+        <div className={cardHead}>
+          <span className="text-title font-semibold text-brand-navy">Creditors</span>
+          <span className="text-micro uppercase tracking-wide text-neutral-400">
+            Highest APR first
           </span>
-          {sortedDebts.map((debt) => {
-            const paid = isPaidOff(Number(debt.balance));
-            const target = !paid && planTargetIds.has(debt.id);
-            const color = paid
-              ? "hsl(var(--positive))"
-              : target
-                ? "hsl(var(--primary))"
-                : "hsl(var(--chart-2))";
-            return (
-              <span
-                key={debt.id}
-                className="h-3 w-3 rounded-sm"
-                style={{ background: color }}
-                title={`${debt.name}: ${paid ? "paid off" : target ? "target" : "active"}`}
-              />
-            );
-          })}
-          <span className="ml-auto flex items-center gap-3 text-[10px] uppercase tracking-wider text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[hsl(var(--positive))]" />Paid</span>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-primary" />Target</span>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[hsl(var(--chart-2))]" />Active</span>
-          </span>
+          <Help className="ml-auto">
+            Ordered by APR, highest first — the avalanche order, which pays the
+            least total interest. Target marks the debt this month's extra goes
+            to; payoff months come from the same simulation the planner runs.
+          </Help>
         </div>
-      )}
 
-      <div className="stagger-children grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sortedDebts.map((debt) => {
-          const balanceNum = Number(debt.balance);
-          const paidOff = isPaidOff(balanceNum);
-          const originalNum = Number(debt.originalBalance ?? 0);
-          const paidRatio =
-            originalNum > 0
-              ? Math.max(0, Math.min(1, (originalNum - balanceNum) / originalNum))
-              : 0;
-          const isTarget = !paidOff && planTargetIds.has(debt.id);
-          const { date: payoffDate, reason: payoffReason } = payoffFor(debt.id);
-          const payoffLabel = payoffDate ? fmtMonth(payoffDate) : "—";
-          const targetExtra = extraByTargetId.get(debt.id) ?? 0;
-          if (paidOff) {
-            const killDate = killMonthByDebtId.get(debt.id) ?? null;
-            const killLabel = killDate ? fmtMonth(killDate) : null;
-            return (
-              <Card
-                key={debt.id}
-                className="border-positive/60 bg-positive/10"
-                data-testid="debt-card-paid-off"
-                data-debt-id={debt.id}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start gap-2">
-                    <CardTitle className="text-lg">{debt.name}</CardTitle>
-                    <PillBadge tone="good">Paid off</PillBadge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{debt.type || "General"}</p>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-col items-center justify-center text-center py-3 gap-2">
-                    <RingStat
-                      value={1}
-                      size={68}
-                      stroke={7}
-                      color="hsl(var(--positive))"
-                      centerText="✓"
-                    />
-                    <div
-                      className="text-2xl font-semibold text-positive"
-                      data-testid="debt-card-paid-off-headline"
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th className={th}>Creditor</th>
+                <th className={th}>Status</th>
+                <th className={`${th} text-right`}>APR</th>
+                <th className={`${th} text-right`}>Balance</th>
+                <th className={`${th} text-right`}>Min</th>
+                <th className={`${th} text-right`}>Payoff</th>
+                <th className={`${th} text-right`}>Target payoff</th>
+                <th className={`${th} text-right`}>Extra</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedDebts.map((debt) => {
+                const balanceNum = Number(debt.balance);
+                const paidOff = isPaidOff(balanceNum);
+                const originalNum = Number(debt.originalBalance ?? 0);
+                const paidRatio =
+                  originalNum > 0
+                    ? Math.max(0, Math.min(1, (originalNum - balanceNum) / originalNum))
+                    : 0;
+                const isTarget = !paidOff && planTargetIds.has(debt.id);
+                const { date: payoffDate, reason: payoffReason } = payoffFor(debt.id);
+                const payoffLabel = payoffDate ? fmtMonth(payoffDate) : "—";
+                const targetExtra = extraByTargetId.get(debt.id) ?? 0;
+
+                if (paidOff) {
+                  const killDate = killMonthByDebtId.get(debt.id) ?? null;
+                  const killLabel = killDate ? fmtMonth(killDate) : null;
+                  return (
+                    <tr
+                      key={debt.id}
+                      data-testid="debt-card-paid-off"
+                      data-debt-id={debt.id}
                     >
-                      <span aria-hidden="true">🎉</span> Paid off!
-                    </div>
-                    {killLabel ? (
-                      <div
-                        className="text-sm text-positive tabular-nums"
+                      <td className={td}>
+                        <div className="font-medium text-neutral-700">{debt.name}</div>
+                        <div className="text-micro capitalize text-neutral-400">
+                          {debt.type || "General"}
+                        </div>
+                      </td>
+                      <td className={td}>
+                        <span className="chip ok" data-testid="debt-card-paid-off-headline">
+                          Paid off
+                        </span>
+                      </td>
+                      <td className={`${tdNum} text-neutral-400`}>{fmtPct(Number(debt.apr))}</td>
+                      <td className={`${tdNum} text-neutral-400`}>{formatCurrency(0)}</td>
+                      <td className={`${tdNum} text-neutral-400`}>—</td>
+                      <td
+                        className={`${td} whitespace-nowrap text-right text-label text-neutral-500`}
                         data-testid="debt-card-paid-off-month"
                         data-debt-id={debt.id}
                       >
-                        Paid off {killLabel}
+                        {killLabel ? `Paid off ${killLabel}` : "Paid off"}
+                      </td>
+                      <td className={td} />
+                      <td className={td} />
+                    </tr>
+                  );
+                }
+
+                return (
+                  <tr key={debt.id} className={cn(isTarget && "bg-brand-tint")}>
+                    <td className={td}>
+                      <div className="font-medium text-neutral-700">{debt.name}</div>
+                      <div className="flex items-center gap-1.5 text-micro text-neutral-400">
+                        <span className="capitalize">{debt.type || "General"}</span>
+                        {originalNum > 0 && (
+                          <span className="font-mono tabular-nums">
+                            · {Math.round(paidRatio * 100)}% paid
+                          </span>
+                        )}
                       </div>
-                    ) : (
-                      <div
-                        className="text-sm text-muted-foreground"
-                        data-testid="debt-card-paid-off-month"
-                        data-debt-id={debt.id}
-                      >
-                        Paid off
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          }
-          return (
-            <Card key={debt.id} className={isTarget ? "border-primary" : ""}>
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start gap-2">
-                  <CardTitle className="text-lg">{debt.name}</CardTitle>
-                  {isTarget && <PillBadge tone="info">Target</PillBadge>}
-                </div>
-                <p className="text-xs text-muted-foreground">{debt.type || "General"}</p>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-3 mb-3">
-                  <RingStat
-                    value={paidRatio}
-                    size={56}
-                    stroke={6}
-                    color={isTarget ? "hsl(var(--primary))" : "hsl(var(--chart-2))"}
-                    centerSub="paid"
-                  />
-                  <div className="min-w-0 text-xs text-muted-foreground leading-snug">
-                    {originalNum > 0 ? (
-                      <>
-                        <span className="font-semibold text-foreground tabular-nums">
-                          {Math.round(paidRatio * 100)}%
-                        </span>{" "}
-                        crushed of{" "}
-                        <MoneyText
-                          amount={originalNum}
-                          className="text-foreground"
-                        />
-                      </>
-                    ) : (
-                      "Tracking payoff from here"
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2 mt-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Balance</span>
-                    <span className="text-sm font-medium tabular-nums">
-                      <MoneyText amount={balanceNum} />
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">APR</span>
-                    <span className="text-sm font-medium">{fmtPct(Number(debt.apr))}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Min Payment</span>
-                    <span className="text-sm font-medium">{formatCurrency(debt.minPayment)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Payoff</span>
-                    <span
-                      className="text-sm font-medium tabular-nums"
+                    </td>
+                    <td className={td}>
+                      {isTarget ? (
+                        <span className="chip bg-brand-navy text-white">Target</span>
+                      ) : (
+                        <span className="chip gray">Active</span>
+                      )}
+                    </td>
+                    <td className={tdNum}>{fmtPct(Number(debt.apr))}</td>
+                    <td className={tdNum}>{formatCurrency(balanceNum)}</td>
+                    <td className={tdNum}>{formatCurrency(debt.minPayment)}</td>
+                    <td
+                      className={`${td} whitespace-nowrap text-right font-mono text-label tabular-nums`}
                       data-testid="debt-card-payoff-date"
                       data-debt-id={debt.id}
                       title={payoffDate ? "Projected payoff month" : payoffReason}
@@ -396,90 +336,74 @@ export default function DebtsPage() {
                       }
                     >
                       {payoffLabel}
-                    </span>
-                  </div>
-                  {/* (#639) Reserve the same vertical footprint for the
-                      Target-only "Target payoff" row even on non-target
-                      cards, so flipping isTarget (e.g. when avalanche
-                      extra changes) can't grow/shrink the card and
-                      stretch the surrounding CSS-grid row. Mirrors the
-                      reserved-slot pattern #626 used on the Amex
-                      virtualized rows. The testid is only attached in
-                      the visible case so existing assertions that count
-                      target rows by testid stay accurate. */}
-                  <div
-                    className={cn(
-                      "flex justify-between pt-2 border-t border-border/60",
-                      !isTarget && "invisible",
-                    )}
-                    aria-hidden={!isTarget}
-                    data-testid={
-                      isTarget ? undefined : "debt-card-target-payoff-slot"
-                    }
-                  >
-                    <span className="text-sm text-muted-foreground">Target payoff</span>
-                    <span
-                      className="text-sm font-semibold tabular-nums text-primary"
+                    </td>
+                    {/* (#639) The Target-only cells keep a reserved footprint on
+                        every row, so flipping isTarget (e.g. when the avalanche
+                        extra changes) can't resize the table. The testid is only
+                        attached in the visible case, so assertions that count
+                        target rows by testid stay accurate. */}
+                    <td
+                      className={cn(
+                        `${td} whitespace-nowrap text-right font-mono text-label font-semibold tabular-nums text-brand-navy`,
+                        !isTarget && "invisible",
+                      )}
+                      aria-hidden={!isTarget}
+                      data-testid={isTarget ? undefined : "debt-card-target-payoff-slot"}
+                    >
+                      <span
+                        data-testid={isTarget ? "debt-card-target-payoff-date" : undefined}
+                        data-debt-id={debt.id}
+                        title={payoffDate ? "Projected target payoff month" : payoffReason}
+                        aria-label={
+                          payoffDate
+                            ? `Target payoff ${payoffLabel}`
+                            : `No projected target payoff: ${payoffReason}`
+                        }
+                      >
+                        {payoffLabel}
+                      </span>
+                    </td>
+                    <td
+                      className={cn(
+                        `${td} whitespace-nowrap text-right font-mono text-label font-semibold tabular-nums text-brand-navy`,
+                        !(isTarget && targetExtra > 0) && "invisible",
+                      )}
+                      aria-hidden={!(isTarget && targetExtra > 0)}
                       data-testid={
-                        isTarget ? "debt-card-target-payoff-date" : undefined
-                      }
-                      data-debt-id={debt.id}
-                      title={payoffDate ? "Projected target payoff month" : payoffReason}
-                      aria-label={
-                        payoffDate
-                          ? `Target payoff ${payoffLabel}`
-                          : `No projected target payoff: ${payoffReason}`
+                        isTarget && targetExtra > 0 ? undefined : "debt-card-target-extra-slot"
                       }
                     >
-                      {payoffLabel}
-                    </span>
-                  </div>
-                  {/* (#639) Same reserved-slot pattern for the per-target
-                      "Extra this month" row. The placeholder shows the
-                      same dollar string so its line height matches the
-                      rendered case exactly, with `invisible` keeping it
-                      off-screen on non-targets / $0-extra cards. */}
-                  <div
-                    className={cn(
-                      "flex justify-between",
-                      !(isTarget && targetExtra > 0) && "invisible",
-                    )}
-                    aria-hidden={!(isTarget && targetExtra > 0)}
-                    data-testid={
-                      isTarget && targetExtra > 0
-                        ? undefined
-                        : "debt-card-target-extra-slot"
-                    }
-                  >
-                    <span className="text-sm text-muted-foreground">Extra this month</span>
-                    <span
-                      className="text-sm font-semibold tabular-nums text-primary"
-                      data-testid={
-                        isTarget && targetExtra > 0
-                          ? "debt-card-target-extra"
-                          : undefined
-                      }
-                      data-debt-id={debt.id}
-                      title="Avalanche extra applied to this target this month"
-                      aria-label={`Extra this month ${formatCurrency(Math.max(targetExtra, 0))}`}
-                    >
-                      {formatCurrency(Math.max(targetExtra, 0))}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-      {sortedDebts.length === 0 && (
-        <div
-          className="text-center py-12 text-muted-foreground"
-          data-testid="text-debts-empty-state"
-        >
-          No debts recorded. You're debt free!
+                      <span
+                        data-testid={
+                          isTarget && targetExtra > 0 ? "debt-card-target-extra" : undefined
+                        }
+                        data-debt-id={debt.id}
+                        title="Avalanche extra applied to this target this month"
+                        aria-label={`Extra this month ${formatCurrency(Math.max(targetExtra, 0))}`}
+                      >
+                        {formatCurrency(Math.max(targetExtra, 0))}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      )}
-    </div>
+
+        {sortedDebts.length === 0 && (
+          <div className={emptyNote} data-testid="text-debts-empty-state">
+            No debts recorded.
+          </div>
+        )}
+
+        {sortedDebts.length > 0 && (
+          <Foot>
+            Target payoff and Extra show only on the debt (or debts) this month's
+            extra payment goes to.
+          </Foot>
+        )}
+      </div>
+    </Page>
   );
 }

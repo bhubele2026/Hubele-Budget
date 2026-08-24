@@ -119,6 +119,82 @@ describe("CssBars — rank is a transform, not a reorder", () => {
   });
 });
 
+describe("CssBars — rankBy: a domain order instead of bar length", () => {
+  // The debt payoff list is ordered by the month each debt dies, which has
+  // nothing to do with how big its bar is. Without an explicit rank the list
+  // would silently re-sort itself into a different plan than the one the
+  // simulator runs.
+  const PAYOFF_ORDER: Record<string, number> = {
+    dining: 0,
+    flat: 1,
+    groceries: 2,
+    fuel: 3,
+  };
+  const rankBy = (r: CssBarRow) => PAYOFF_ORDER[r.id] ?? 99;
+
+  it("positions rows by the supplied rank, not by magnitude", () => {
+    const { container } = render(
+      <CssBars rows={ROWS} format={money} rowHeight={28} rankBy={rankBy} />,
+    );
+    // Magnitude order would be Groceries, Fuel, Dining, Flat. The supplied
+    // order wins.
+    expect((rowByLabel(container, "Dining") as HTMLElement).style.transform)
+      .toBe("translateY(0px)");
+    expect((rowByLabel(container, "Flat") as HTMLElement).style.transform)
+      .toBe("translateY(28px)");
+    expect((rowByLabel(container, "Groceries") as HTMLElement).style.transform)
+      .toBe("translateY(56px)");
+    expect((rowByLabel(container, "Fuel") as HTMLElement).style.transform)
+      .toBe("translateY(84px)");
+  });
+
+  it("colours the ramp by the supplied rank, so the first item to be paid is darkest", () => {
+    const rows: CssBarRow[] = [
+      { id: "big", label: "Big", value: 900 },
+      { id: "small", label: "Small", value: 100 },
+    ];
+    const { container } = render(
+      <CssBars
+        rows={rows}
+        format={money}
+        ramp
+        // "Small" dies first, so it takes the darkest navy even though its bar
+        // is the shorter one.
+        rankBy={(r) => (r.id === "small" ? 0 : 1)}
+      />,
+    );
+    expectColor(barIn(rowByLabel(container, "Small")), CHART.navy);
+    expect(bgOf(barIn(rowByLabel(container, "Big")))).not.toBe(
+      bgOf(barIn(rowByLabel(container, "Small"))),
+    );
+  });
+
+  it("still keeps DOM order stable when the rank changes", () => {
+    const { container, rerender } = render(
+      <CssBars rows={ROWS} format={money} rowHeight={28} rankBy={rankBy} />,
+    );
+    const orderBefore = mountedRows(container).map(labelOf);
+
+    // A payment lands and Fuel is now first to be paid off.
+    const reRanked = (r: CssBarRow) => (r.id === "fuel" ? -1 : rankBy(r));
+    rerender(
+      <CssBars rows={ROWS} format={money} rowHeight={28} rankBy={reRanked} />,
+    );
+
+    expect(mountedRows(container).map(labelOf)).toEqual(orderBefore);
+    expect((rowByLabel(container, "Fuel") as HTMLElement).style.transform)
+      .toBe("translateY(0px)");
+  });
+
+  it("defaults to magnitude rank when no rankBy is given", () => {
+    const { container } = render(
+      <CssBars rows={ROWS} format={money} rowHeight={28} />,
+    );
+    expect((rowByLabel(container, "Groceries") as HTMLElement).style.transform)
+      .toBe("translateY(0px)");
+  });
+});
+
 describe("CssBars — value to width", () => {
   it("scales bar widths against the largest visible magnitude", () => {
     const { container } = render(<CssBars rows={ROWS} format={money} />);
