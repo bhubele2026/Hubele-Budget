@@ -9,6 +9,8 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { findMatchedRuleId, loadUserRules } from "../lib/autoCategorize";
+import { withPendingPayments } from "../lib/debtPending";
+import { effectiveDebtBalance } from "@workspace/avalanche-core";
 
 const router: IRouter = Router();
 
@@ -23,15 +25,33 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     .toISOString()
     .slice(0, 10);
 
-  const [debtAgg] = await db
-    .select({
-      total: sql<string>`coalesce(sum(${debtsTable.balance})::text, '0')`,
-      cnt: sql<number>`count(*)::int`,
-      activeCnt: sql<number>`coalesce(sum(case when ${debtsTable.status} = 'active' then 1 else 0 end), 0)::int`,
-      activeBalance: sql<string>`coalesce(sum(case when ${debtsTable.status} = 'active' then ${debtsTable.balance} else 0 end)::text, '0')`,
-    })
+  // (C10) `totalDebt` feeds the Reports "Total Debt" hero tile. It used to be
+  // a raw `sum(debts.balance)` in SQL, which is why that tile could quote a
+  // household several hundred dollars higher than the Debts and Avalanche
+  // pages standing right next to it — SQL cannot see the tagged-but-unposted
+  // payments those pages net out. Brad's 2026-08-23 call is to net everywhere,
+  // so the aggregate moved out of SQL and onto the shared basis: select the
+  // household's debt rows (a handful, and the spine already reads them the
+  // same way), enrich them with pending, and sum `effectiveDebtBalance`.
+  // ⚠️ The COUNTS are unchanged and deliberately still count rows, not
+  // dollars — a debt with a fully-covering pending payment is still a debt
+  // you have until the creditor says otherwise.
+  const debtRows = await db
+    .select()
     .from(debtsTable)
     .where(eq(debtsTable.householdId, householdId));
+  const debtRowsWithPending = await withPendingPayments(householdId, debtRows);
+  const debtAgg = {
+    total: debtRowsWithPending
+      .reduce((s, d) => s + effectiveDebtBalance(d), 0)
+      .toFixed(2),
+    cnt: debtRowsWithPending.length,
+    activeCnt: debtRowsWithPending.filter((d) => d.status === "active").length,
+    activeBalance: debtRowsWithPending
+      .filter((d) => d.status === "active")
+      .reduce((s, d) => s + effectiveDebtBalance(d), 0)
+      .toFixed(2),
+  };
 
   // A transaction counts toward debt-paid totals via two paths:
   //   (a) Canonical: `transactions.debt_id` is non-null. This is set by

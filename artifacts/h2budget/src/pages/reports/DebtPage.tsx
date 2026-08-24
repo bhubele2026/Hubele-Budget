@@ -10,6 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageSkeleton } from "@/components/page-skeleton";
+import { DebtPendingHint } from "@/components/debt-pending-hint";
 import { formatCurrency } from "@/lib/utils";
 import { Trophy, Calendar, TrendingDown } from "lucide-react";
 import { SectionHeader } from "@/components/stat";
@@ -122,6 +123,14 @@ function DebtSection({
       ? minOnlyInterest - sim.totalInterestPaid
       : 0;
   const gauge = useMemo(() => payoffProjectionGauge(sim, 12), [sim]);
+  // (C10) Every balance on this page is now netted, so every balance on this
+  // page owes the reader the same disclosure the Debts and Avalanche tables
+  // give. `perDebtProgress` returns numbers, not rows, so the source debt is
+  // looked up here rather than widening that function's return shape.
+  const debtById = useMemo(
+    () => new Map(debts.map((d) => [d.id, d] as const)),
+    [debts],
+  );
   const [gaugeFill, setGaugeFill] = useState(0);
   useEffect(() => {
     setGaugeFill(0);
@@ -489,14 +498,20 @@ function DebtSection({
                 p.monthsLeft !== null
                   ? Math.max(4, (p.monthsLeft / maxMonthsLeft) * 100)
                   : 100;
+              const sourceDebt = debtById.get(p.id);
               return (
                 <div key={p.id}>
                   <div className="flex items-baseline justify-between text-xs mb-1">
                     <div className="font-medium truncate">{p.name}</div>
-                    <div className="font-mono tabular-nums text-muted-foreground">
-                      {p.monthsLeft !== null ? `${p.monthsLeft} mo` : "∞"}
-                      {" · "}
-                      {formatCurrency(p.balance)}
+                    <div className="flex flex-col items-end">
+                      <div className="font-mono tabular-nums text-muted-foreground">
+                        {p.monthsLeft !== null ? `${p.monthsLeft} mo` : "∞"}
+                        {" · "}
+                        {formatCurrency(p.balance)}
+                      </div>
+                      {sourceDebt ? (
+                        <DebtPendingHint debt={sourceDebt} fmt={formatCurrency} />
+                      ) : null}
                     </div>
                   </div>
                   <div className="h-3 rounded-full bg-muted overflow-hidden">

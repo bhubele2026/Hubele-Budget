@@ -9,6 +9,7 @@ import {
 import { DrillCard } from "@/components/drill-card";
 import { Sparkline, StackBar, MiniBars, RingStat, MoneyText } from "@/components/viz";
 import { fmtISO } from "@/lib/reportsAnalytics";
+import { effectiveDebtBalance } from "@/lib/debtBalance";
 import { ReportsBalanceTiles } from "./reports/reportsShared";
 
 // Summer chart palette for the spend-mix stack on the index.
@@ -66,7 +67,15 @@ export default function ReportsPage() {
   const debtSeries = useMemo(() => {
     const hist = debtBalanceHistory ?? [];
     if (hist.length < 2) {
-      const total = (debts ?? []).reduce((s, x) => s + (Number(x.balance) || 0), 0);
+      // (C10) Netted: this flat fallback line stands in for "what you owe
+      // now", and it sits directly under the Total Debt tile, which is netted
+      // server-side. The recorded-history branch below stays as recorded —
+      // past snapshots are creditor-reported and we hold no pending history
+      // for past days.
+      const total = (debts ?? []).reduce(
+        (s, x) => s + effectiveDebtBalance(x),
+        0,
+      );
       return total > 0 ? [total, total] : [];
     }
     const sorted = [...hist].sort((a, b) => a.recordedOn.localeCompare(b.recordedOn));

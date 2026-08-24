@@ -1,4 +1,9 @@
 import type { Debt } from "@workspace/api-client-react";
+import type { SimDebt } from "@workspace/avalanche-core";
+import {
+  effectiveDebtBalance as effectiveDebtBalanceCore,
+  pendingPaymentTotalOf as pendingPaymentTotalOfCore,
+} from "@workspace/avalanche-core";
 
 /**
  * ⭐ THE ONE DEBT-BALANCE BASIS FOR THE WHOLE APP.
@@ -15,11 +20,16 @@ import type { Debt } from "@workspace/api-client-react";
  * function here — body unchanged — is what makes "everywhere" enforceable
  * instead of aspirational. Import it; never re-derive a balance inline.
  *
- * ⚠️ Nothing here is new math. `effectiveDebtBalance` is the #421 helper
- * verbatim; `pendingPaymentTotalOf` is the identical field-parse that used to
- * be written out twice (once inside the helper, once inline in the Avalanche
- * page's "pending" hint), factored so a future edit cannot change one copy and
- * miss the other.
+ * ⚠️ (C10) THE MATH ITSELF NOW LIVES IN `@workspace/avalanche-core`, and this
+ * module is a thin, `Debt`-typed façade over it. It moved because the SERVER
+ * has the same disagreement: `/api/spine`'s `debt.payoffPct` (the landing's
+ * "% paid" and the Avalanche hero) and `/api/dashboard`'s `totalDebt` (the
+ * Reports "Total Debt" tile) were summing raw balances in SQL while these
+ * pages netted. Client and server now share ONE implementation instead of two
+ * that agree only until someone edits one of them.
+ *
+ * ⚠️ Nothing here is new math. Every re-export below is the #421 helper
+ * verbatim, one indirection further away.
  */
 
 /**
@@ -27,7 +37,7 @@ import type { Debt } from "@workspace/api-client-react";
  * creditor has not reported yet — server-computed, rides on the Debt payload.
  */
 export function pendingPaymentTotalOf(d: Debt): number {
-  return d.pendingPaymentTotal != null ? Number(d.pendingPaymentTotal) || 0 : 0;
+  return pendingPaymentTotalOfCore(d);
 }
 
 /** How many tagged payments make up {@link pendingPaymentTotalOf}. */
@@ -43,7 +53,29 @@ export function pendingPaymentCountOf(d: Debt): number {
  * paid — clamped at zero so a tagging mistake can't push the balance below 0.
  */
 export function effectiveDebtBalance(d: Debt): number {
-  const reported = Number(d.balance) || 0;
-  const pending = pendingPaymentTotalOf(d);
-  return Math.max(0, reported - pending);
+  return effectiveDebtBalanceCore(d);
+}
+
+/**
+ * ⭐ THE ONE `Debt` → `SimDebt` MAPPER.
+ *
+ * ⚠️ This existed as THREE hand-copied functions — `pages/avalanche.tsx`,
+ * `pages/debts.tsx`, and `lib/reportsAnalytics.ts` — identical but for the one
+ * line that matters: the first two netted, and the Reports one did not. That
+ * is why the Reports Debt page projected a different debt-free date than the
+ * Avalanche page for the same household, off the same `/debts` payload. One
+ * copy cannot drift from itself.
+ *
+ * Every payoff simulation in the app enters through here, so the sim, the
+ * per-debt bars, the countdowns and the projected dates all share a basis.
+ */
+export function debtToSim(d: Debt): SimDebt {
+  return {
+    id: d.id,
+    name: d.name,
+    apr: Number(d.apr),
+    balance: effectiveDebtBalance(d),
+    minPayment: Number(d.minPayment),
+    status: d.status,
+  };
 }

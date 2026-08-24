@@ -90,26 +90,15 @@ import {
   type SimDebt,
   type Strategy,
 } from "@/lib/avalanche";
-import { effectiveDebtBalance } from "@/lib/debtBalance";
+import { debtToSim, effectiveDebtBalance } from "@/lib/debtBalance";
 import { DebtPendingHint } from "@/components/debt-pending-hint";
 import { Trash2, Plus, RefreshCw, X, ClipboardPaste } from "lucide-react";
 
 const MANUAL_EXTRA_CAP = 5000;
 
-// (#421) The pending-payment netting basis now lives in `@/lib/debtBalance`
-// so the Debts page reads balances off the exact same function instead of the
-// raw posted number — see that module's header for why.
-
-function debtToSim(d: Debt): SimDebt {
-  return {
-    id: d.id,
-    name: d.name,
-    apr: Number(d.apr),
-    balance: effectiveDebtBalance(d),
-    minPayment: Number(d.minPayment),
-    status: d.status,
-  };
-}
+// (#421/C10) The pending-payment netting basis and the `Debt` → `SimDebt`
+// mapper both live in `@/lib/debtBalance` now, so every page's simulation
+// enters through the same function — see that module's header for why.
 
 // Single, row-level source chip for the Debts table. The source is shown once
 // per row in the creditor cell, never repeated in the APR/Balance/Min columns.
@@ -1528,7 +1517,11 @@ export default function AvalanchePage() {
                   {archivedDebts.map((d) => (
                     <tr key={d.id}>
                       <td className={td}>{d.name}</td>
-                      <td className={tdNum}>{fmtMoney(Number(d.balance))}</td>
+                      {/* (C10) Netted like every other balance cell in the app —
+                          an archived row is still a debt row, and a reader
+                          comparing it to the active table must not find two
+                          bases side by side. */}
+                      <td className={tdNum}>{fmtMoney(effectiveDebtBalance(d))}</td>
                       <td className={cn(td, "text-right")}>
                         <button
                           type="button"

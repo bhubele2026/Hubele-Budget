@@ -8,6 +8,7 @@ import type {
   DebtBalanceHistoryEntry,
 } from "@workspace/api-client-react";
 import { simulate, type SimResult, type Strategy, type SimDebt } from "./avalanche";
+import { effectiveDebtBalance } from "./debtBalance";
 
 // H2 chart palette: anchored to the Slate Professional design tokens
 // (--chart-1..5 + --positive/--negative/--warning) so charts re-tone
@@ -359,16 +360,16 @@ export function reimbursableSplit(
 
 // -- Debt --------------------------------------------------------------------
 
-export function debtToSim(d: Debt): SimDebt {
-  return {
-    id: d.id,
-    name: d.name,
-    apr: Number(d.apr),
-    balance: Number(d.balance),
-    minPayment: Number(d.minPayment),
-    status: d.status,
-  };
-}
+/**
+ * ⚠️ (C10) RE-EXPORT, NOT A COPY. This was the third hand-written `debtToSim`,
+ * and the only one that fed the simulation RAW posted balances — which is why
+ * the Reports Debt page projected a different debt-free date, a different
+ * "months left" and a different per-debt ring than the Avalanche and Debts
+ * pages showed for the same household off the same `/debts` payload.
+ * The survivor lives in `@/lib/debtBalance`; this name is kept so the Reports
+ * page's imports stay put.
+ */
+export { debtToSim } from "./debtBalance";
 
 export function payoffStackedSeries(
   sim: SimResult,
@@ -468,7 +469,12 @@ export function perDebtProgress(
     .filter((d) => d.status === "active" || histById.has(d.id))
     .map((d) => {
       const kill = killById.get(d.id);
-      const balance = Number(d.balance);
+      // (C10) Netted, matching the Debts/Avalanche rows this table sits beside.
+      // `startingBalance` keeps its own basis: a RECORDED snapshot is a
+      // creditor-reported figure and stays exactly as recorded. Only the
+      // no-history fallback follows the balance, which preserves the old
+      // "nothing recorded yet ⇒ 0% paid" behaviour to the cent.
+      const balance = effectiveDebtBalance(d);
       const hist = histById.get(d.id) ?? [];
       const first = hist[0];
       const startingBalance = first ? Number(first.balance) : balance;
@@ -555,8 +561,14 @@ export function totalBalanceHistory(
       if (day === latestDay) {
         // True current balance wins on the final point so paid-off /
         // archived debts drop to $0 instead of freezing at a stale value.
+        // (C10) NETTED — and only here. Every earlier point on this curve is a
+        // recorded creditor snapshot, and we hold no pending history for past
+        // days, so netting them would invent data. The final point is the one
+        // that means "today", and today is netted everywhere else in the app.
         const d = debtById.get(id);
-        v = d ? Number(d.balance) : (last.get(id) ?? baselineByDebt.get(id) ?? 0);
+        v = d
+          ? effectiveDebtBalance(d)
+          : (last.get(id) ?? baselineByDebt.get(id) ?? 0);
       } else if (last.has(id)) {
         v = last.get(id)!;
       } else {
@@ -589,9 +601,14 @@ export function totalPaidOffSoFar(
     // no idea what their starting balance was, so they shouldn't pull the
     // denominator either way.
     if (!first && d.status !== "active") continue;
-    const start = first ? Number(first.balance) : Number(d.balance);
+    // (C10) Same split as `perDebtProgress`: recorded snapshots stay as
+    // reported, "what you owe now" is netted. The no-history fallback uses the
+    // netted figure on BOTH sides so such a debt still contributes exactly 0
+    // to `paidOff`, as it did before.
+    const effective = effectiveDebtBalance(d);
+    const start = first ? Number(first.balance) : effective;
     startingBalance += start;
-    currentBalance += Number(d.balance);
+    currentBalance += effective;
     if (first && (!earliest || first.recordedOn < earliest)) {
       earliest = first.recordedOn;
     }
@@ -926,7 +943,12 @@ export function totalsForDebts(debts: Debt[]) {
   let totalMin = 0;
   for (const d of debts) {
     if (d.status !== "active") continue;
-    totalBalance += Number(d.balance);
+    // (C10) Netted — this is the Reports Debt page's "Total debt" hero, which
+    // sat next to the Avalanche page's netted "Total debt" Stat and disagreed
+    // with it by exactly the pending amount.
+    // ⚠️ `totalMin` is deliberately NOT netted: a pending payment does not
+    // reduce next month's minimum. Minimums are an obligation, not a balance.
+    totalBalance += effectiveDebtBalance(d);
     totalMin += Number(d.minPayment);
   }
   return { totalBalance, totalMin };

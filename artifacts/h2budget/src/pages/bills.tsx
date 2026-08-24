@@ -23,6 +23,7 @@ import {
   type Debt,
 } from "@workspace/api-client-react";
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
+import { debtToSim, effectiveDebtBalance } from "@/lib/debtBalance";
 import { BillsHealthCheck } from "@/components/bills-health-check";
 import { formatBillRowAmount } from "@/lib/billsRowAmount";
 import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
@@ -487,14 +488,12 @@ export default function BillsPage() {
   }, [resolvedExtra?.amount, avaSettings?.manualExtra]);
 
   const payoffsByDebt = useMemo(() => {
-    const simDebts: SimDebt[] = (debts ?? []).map((d) => ({
-      id: d.id,
-      name: d.name,
-      apr: Number(d.apr),
-      balance: Number(d.balance),
-      minPayment: Number(d.minPayment),
-      status: d.status,
-    }));
+    // (C10) `debtToSim` nets tagged-unposted payments. Inline and raw, this
+    // sim disagreed with the Avalanche page about when each debt dies, so a
+    // debt-minimum row could keep showing here for months after /avalanche had
+    // already called it paid off — the opposite of the "Bills and Forecast
+    // agree on which debts are still alive" promise above.
+    const simDebts: SimDebt[] = (debts ?? []).map(debtToSim);
     const sim = simulate({ debts: simDebts, extraPerMonth, strategy });
     return computePayoffsByDebt(sim);
   }, [debts, extraPerMonth, strategy]);
@@ -818,8 +817,11 @@ export default function BillsPage() {
                       <td className={`${td} text-neutral-500`}>
                         {d.name}
                       </td>
+                      {/* (C10) Netted — this row deep-links to /avalanche, and
+                          the two screens must not quote different numbers for
+                          the debt the reader just clicked. */}
                       <td className={`${tdNum} text-neutral-500`}>
-                        {formatCurrency(d.balance)}
+                        {formatCurrency(effectiveDebtBalance(d))}
                       </td>
                     </tr>
                   ))}

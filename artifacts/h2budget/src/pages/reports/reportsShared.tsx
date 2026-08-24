@@ -36,9 +36,11 @@ import {
 import {
   useGetDashboard,
   useGetForecastCashSignal,
+  useListDebts,
   useListPlaidLiabilityAccounts,
   type ForecastBundle,
 } from "@workspace/api-client-react";
+import { pendingPaymentTotalOf } from "@/lib/debtBalance";
 import { ArrowRight, PiggyBank, CreditCard, TrendingDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -281,12 +283,28 @@ export function ReportsBalanceTiles({
     ? "Link an Amex card to track your revolving balance"
     : describeReportsAmexTileSub(amex);
 
+  // (C10) `dashboard.totalDebt` is now NETTED server-side — it used to be a
+  // raw `sum(debts.balance)` in SQL, which is why this tile could sit on the
+  // same screen as the netted Debts/Avalanche figures and quote a bigger
+  // number. Since it nets, it discloses: the same "−$X pending" phrasing the
+  // per-debt `DebtPendingHint` uses, aggregated, because this tile is a total
+  // and there is no single debt to hang the per-row hint on.
+  // ⚠️ `useListDebts` here costs no request: the only caller of this component
+  // (`pages/reports.tsx`) already holds that query, so this reads its cache.
+  const { data: debtsForPending } = useListDebts();
+  const pendingTotal = useMemo(
+    () =>
+      (debtsForPending ?? []).reduce((s, d) => s + pendingPaymentTotalOf(d), 0),
+    [debtsForPending],
+  );
   const totalDebtValue =
     dashboard != null ? formatCurrency(dashboard.totalDebt) : "—";
   const activeDebtCount = dashboard?.activeDebtCount ?? 0;
   const totalDebtSub =
     dashboard != null
-      ? `${activeDebtCount} active debt${activeDebtCount === 1 ? "" : "s"}`
+      ? `${activeDebtCount} active debt${activeDebtCount === 1 ? "" : "s"}${
+          pendingTotal > 0 ? ` · −${formatCurrency(pendingTotal)} pending` : ""
+        }`
       : "Across active debts";
 
   const status = (cashSignal?.status ?? "no_data") as CashSignalStatus;

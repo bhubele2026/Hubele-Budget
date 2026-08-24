@@ -29,7 +29,7 @@ import {
   type SimDebt,
   type Strategy,
 } from "@/lib/avalanche";
-import { effectiveDebtBalance } from "@/lib/debtBalance";
+import { debtToSim, effectiveDebtBalance } from "@/lib/debtBalance";
 import { DebtPendingHint } from "@/components/debt-pending-hint";
 
 const MANUAL_EXTRA_CAP = 5000;
@@ -90,20 +90,11 @@ export function killMonthForHistory(
   return parseRecordedOn(sorted[firstZeroIdx].recordedOn);
 }
 
-// ⚠️ `effectiveDebtBalance`, NOT `Number(d.balance)`. This page used to feed
-// the payoff simulation raw posted balances while /avalanche fed it netted
-// ones, so the two screens projected different payoff months for the same
-// debt. Same function, same basis, same answer — see `@/lib/debtBalance`.
-function debtToSim(d: Debt): SimDebt {
-  return {
-    id: d.id,
-    name: d.name,
-    apr: Number(d.apr),
-    balance: effectiveDebtBalance(d),
-    minPayment: Number(d.minPayment),
-    status: d.status,
-  };
-}
+// ⚠️ `debtToSim` nets via `effectiveDebtBalance`, NOT `Number(d.balance)`.
+// This page used to feed the payoff simulation raw posted balances while
+// /avalanche fed it netted ones, so the two screens projected different payoff
+// months for the same debt. C10 collapsed the three hand-copied mappers into
+// the one in `@/lib/debtBalance` — same function, same basis, same answer.
 
 export default function DebtsPage() {
   const { data: debts, isLoading } = useListDebts();

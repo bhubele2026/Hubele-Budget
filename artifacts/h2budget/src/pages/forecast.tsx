@@ -108,6 +108,7 @@ import {
   type RecurringLite,
 } from "@/lib/forecastDebts";
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
+import { debtToSim } from "@/lib/debtBalance";
 import {
   Lock,
   Unlock,
@@ -596,14 +597,9 @@ export default function ForecastPage({
   }, [resolvedExtra?.amount, avaSettings?.manualExtra]);
 
   const sim = useMemo(() => {
-    const simDebts: SimDebt[] = (debts ?? []).map((d) => ({
-      id: d.id,
-      name: d.name,
-      apr: Number(d.apr),
-      balance: Number(d.balance),
-      minPayment: Number(d.minPayment),
-      status: d.status,
-    }));
+    // (C10) Netted via `debtToSim`, so this page's payoff dates match the ones
+    // /avalanche and /debts show for the same debts.
+    const simDebts: SimDebt[] = (debts ?? []).map(debtToSim);
     return simulate({ debts: simDebts, extraPerMonth, strategy });
   }, [debts, extraPerMonth, strategy]);
 

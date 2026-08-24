@@ -514,6 +514,59 @@ export function sortDebts<T extends SimDebt>(debts: T[], strat: Strategy): T[] {
   });
 }
 
+// ── The debt-balance basis ──────────────────────────────────────────────────
+
+/**
+ * ⭐ THE ONE DEBT-BALANCE BASIS FOR THE WHOLE PRODUCT — CLIENT *AND* SERVER.
+ *
+ * ⚠️ THIS IS A MOVE, NOT A NEW CALCULATION. The body is the #421 helper
+ * verbatim, which shipped file-local inside `pages/avalanche.tsx`, moved to
+ * `artifacts/h2budget/src/lib/debtBalance.ts` in C3, and lands here in C10.
+ * Each move widened who could reach it; nothing changed what it computes.
+ *
+ * It lives in `avalanche-core` — not in the web app, not in an api-server lib —
+ * because this package is already the single isomorphic math engine both sides
+ * import (see the file header, and `payoffPct` below). A copy on each side
+ * would agree the day it was written and drift the first time one was edited;
+ * that drift is the exact bug this PR closes. The client's
+ * `lib/debtBalance.ts` now re-exports these, so "one implementation on the
+ * client and one on the server" is satisfied by there being **one, shared**.
+ *
+ * Brad's call (2026-08-23): **net the pending payments everywhere.**
+ *
+ * ⚠️ STRUCTURAL, NOT NOMINAL, TYPES. A caller may hand us an API `Debt`
+ * (strings, `pendingPaymentTotal` present) or a raw Drizzle debt row (no such
+ * column). A row that cannot carry pending simply nets zero and returns its
+ * reported balance — the same number it returned before — so passing an
+ * un-enriched row is safe, merely un-netted. Server callers that want the
+ * netting must enrich first (`lib/debtPending.ts`).
+ */
+export type PendingAwareDebt = {
+  balance: number | string;
+  pendingPaymentTotal?: number | string | null;
+};
+
+/**
+ * The portion of a debt's reported balance the user has already paid but the
+ * creditor has not reported yet.
+ */
+export function pendingPaymentTotalOf(d: PendingAwareDebt): number {
+  return d.pendingPaymentTotal != null ? Number(d.pendingPaymentTotal) || 0 : 0;
+}
+
+/**
+ * (#421) Tagged checking-account payments to a debt show up immediately even
+ * before the creditor reports the new balance via Plaid. We subtract any
+ * pendingPaymentTotal from the reported balance so the avalanche math, the
+ * totals, and the projected payoff dates reflect what the user has already
+ * paid — clamped at zero so a tagging mistake can't push the balance below 0.
+ */
+export function effectiveDebtBalance(d: PendingAwareDebt): number {
+  const reported = Number(d.balance) || 0;
+  const pending = pendingPaymentTotalOf(d);
+  return Math.max(0, reported - pending);
+}
+
 // ── Payoff progress ─────────────────────────────────────────────────────────
 
 /**
@@ -539,15 +592,24 @@ export function sortDebts<T extends SimDebt>(debts: T[], strat: Strategy): T[] {
  * counted as 0% paid. A debt we have no "original" for is unknown, not
  * unstarted, and treating it as unstarted would understate real progress.
  *
+ * ⚠️ (C10) THE BALANCE SIDE IS THE **NETTED** BALANCE. A payment you have
+ * already made and tagged counts as progress the moment you tag it, not weeks
+ * later when the creditor gets around to reporting it — that is Brad's
+ * 2026-08-23 call, applied here so the landing's "% paid" and the Avalanche
+ * hero (both of which read this one number off the spine) move the moment a
+ * payment is recorded. Callers must pass rows carrying `pendingPaymentTotal`
+ * to get the netting; a row without it nets zero and behaves exactly as before.
+ *
  * Returns percent in [0, 100] (NOT a 0–1 fraction), or `null` when no debt
  * carries an anchor — `null` means "nothing to show", never "0% paid".
  */
 export function payoffPct(
-  debts: Array<{
-    balance: number | string;
-    originalBalance?: number | string | null;
-    status?: string | null;
-  }>,
+  debts: Array<
+    PendingAwareDebt & {
+      originalBalance?: number | string | null;
+      status?: string | null;
+    }
+  >,
 ): number | null {
   // `status !== "paid_off"` — the landing's own filter. A retired debt must not
   // keep inflating the numerator forever after it is gone.
@@ -555,7 +617,7 @@ export function payoffPct(
   let sumOrig = 0;
   let sumBal = 0;
   for (const d of active) {
-    const bal = Number(d.balance) || 0;
+    const bal = effectiveDebtBalance(d);
     const orig = Number(d.originalBalance ?? 0) || 0;
     if (orig > 0) {
       sumOrig += orig;
