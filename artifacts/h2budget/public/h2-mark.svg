@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="H2 Budget">
+  <!--
+    The square half of the h2-wordmark lockup, as a file — for the two places
+    that need a URL rather than a React component: the browser tab and Clerk's
+    sign-in card. Same geometry as `src/components/h2-wordmark.tsx`
+    (radius = 0.28 x box, glyphs at 0.5 x box, -0.045em tracking) and the same
+    rule about colour: navy ground, white H, and the 2 in brand orange because
+    the 2 is the part of the name that means something.
+
+    It replaced a 39 KB violet-and-orange PNG that the navy palette left
+    stranded — off-palette in the one place every user sees before they have
+    even signed in.
+
+    NOTE: an SVG rendered inside <img> cannot reach the page's self-hosted
+    Inter, so this names a system-sans fallback stack. At 16px in a tab the
+    difference between Inter and the platform grotesque is not resolvable;
+    where it would be (Clerk's card) the PNG beside it is rendered from the
+    real font.
+  -->
+  <rect width="64" height="64" rx="18" fill="#19315b"/>
+  <text x="32" y="33.5" text-anchor="middle" dominant-baseline="central"
+        font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="32" font-weight="700" letter-spacing="-1.44" fill="#ffffff">H<tspan fill="#f68d2e">2</tspan></text>
+</svg>

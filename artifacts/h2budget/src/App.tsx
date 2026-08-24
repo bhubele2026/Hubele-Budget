@@ -217,7 +217,12 @@ const clerkAppearance = {
   options: {
     logoPlacement: "inside" as const,
     logoLinkUrl: basePath || "/",
-    logoImageUrl: `${window.location.origin}${basePath}/logo.png`,
+    // ⚠️ THE PNG, NOT THE SVG, AND DELIBERATELY. Clerk renders this through an
+    // <img>, and an SVG in an <img> cannot reach the page's self-hosted Inter —
+    // it would fall back to the platform grotesque at a size where that is
+    // visible, on the one screen every user sees before they are signed in.
+    // The PNG is rasterised from the real font.
+    logoImageUrl: `${window.location.origin}${basePath}/h2-mark.png`,
   },
   // ⚠️ THE FRONT DOOR READS THESE. Every colour points at the app's own CSS
   // tokens, so the sign-in card is navy/platinum for free — and a bridge-layer

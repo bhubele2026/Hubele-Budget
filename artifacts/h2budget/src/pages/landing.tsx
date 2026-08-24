@@ -22,7 +22,7 @@ import {
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { MoneyText } from "@/components/viz/MoneyText";
-import { H2Logo } from "@/components/h2-logo";
+import { H2Wordmark } from "@/components/h2-wordmark";
 
 /**
  * Front door (/home). Deliberately plain and professional: a top border bar
@@ -287,7 +287,7 @@ export default function LandingPage() {
       {/* Top border bar: brand logo + account controls. */}
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4 sm:px-6">
-          <H2Logo className="h-7 w-auto" />
+          <H2Wordmark tone="navy" size={24} />
           <div className="flex items-center gap-1.5">
             <Link
               href="/review"
@@ -334,9 +334,13 @@ export default function LandingPage() {
       {/* Faint brand watermark, bottom-right. Non-interactive. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed bottom-4 right-4 z-0 select-none opacity-[0.05] grayscale"
+        /* ⚠️ NOT `grayscale` any more. The old watermark was a raster that had
+           to be desaturated to sit under the page; the lockup is type, so
+           opacity alone does it — and greying it out would have printed a mark
+           whose one accent colour had been removed. */
+        className="pointer-events-none fixed bottom-4 right-4 z-0 select-none opacity-[0.06]"
       >
-        <H2Logo className="h-24 w-auto sm:h-28" />
+        <H2Wordmark tone="navy" size={96} />
       </div>
     </div>
   );
