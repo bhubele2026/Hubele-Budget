@@ -13,6 +13,7 @@ import {
 import { buildSpendingFacts } from "../lib/spendingFacts";
 import { buildBillsSummary, pickNextBill, todayDate } from "../lib/billsSummary";
 import { computeReviewCount } from "../lib/reviewCount";
+import { withPendingPayments } from "../lib/debtPending";
 
 const router: IRouter = Router();
 
@@ -36,6 +37,7 @@ const router: IRouter = Router();
  *   spentMonth / spentWeek        → buildSpendingFacts().realSpend.total
  *   nextBill / billsDueCount      → pickNextBill(buildBillsSummary())  [lib/billsSummary]
  *   debt.payoffPct                → payoffPct()          [@workspace/avalanche-core]
+ *                                   over withPendingPayments() rows [lib/debtPending]
  *   reviewCount                   → computeReviewCount()  [lib/reviewCount]
  *
  * `spine.integration.test.ts` asserts every one of those equals what the owning
@@ -76,6 +78,15 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
 
   const { nextBill, billsDueCount } = pickNextBill(billsSummary, today);
 
+  // (C10) Net tagged-but-unposted payments before deriving the percentage.
+  // `payoffPct` nets whatever `pendingPaymentTotal` it is handed, and a plain
+  // `debtsTable` row has no such column — so without this enrichment the spine
+  // would silently fall back to raw balances and quote a lower "% paid" than
+  // the Debts and Avalanche pages, which is the exact disagreement C10 exists
+  // to end. One extra read of already-visible transaction rows, on the same
+  // household, off the same connection.
+  const debtRowsWithPending = await withPendingPayments(householdId, debtRows);
+
   res.json({
     asOf: new Date().toISOString(),
     bank: {
@@ -92,7 +103,7 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       runwayDays: runwayDaysFrom(signal.daily),
     },
     debt: {
-      payoffPct: payoffPct(debtRows),
+      payoffPct: payoffPct(debtRowsWithPending),
     },
     reviewCount,
   });

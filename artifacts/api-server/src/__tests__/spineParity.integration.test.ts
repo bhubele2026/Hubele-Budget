@@ -22,6 +22,8 @@ import { eq } from "drizzle-orm";
 
 const TEST_USER = `spine-parity-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 let TEST_HOUSEHOLD_ID: string;
+/** The debt carrying the tagged-but-unposted payment (see the C10 seed). */
+let VISA_DEBT_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (
@@ -53,7 +55,7 @@ import {
   plaidAccountsTable,
   plaidItemsTable,
 } from "@workspace/db";
-import { payoffPct } from "@workspace/avalanche-core";
+import { effectiveDebtBalance, payoffPct } from "@workspace/avalanche-core";
 import { runwayDaysFrom } from "../lib/cashSignal";
 import { pickNextBill, type BillsSummary } from "../lib/billsSummary";
 import spineRouter from "../routes/spine";
@@ -61,6 +63,9 @@ import forecastRouter from "../routes/forecast";
 import billsRouter from "../routes/bills";
 import reportsRouter from "../routes/reports";
 import debtsRouter from "../routes/debts";
+// (C10) `/dashboard` owns the Reports "Total Debt" tile, so it joins the
+// parity set — its debt figure must agree with `/debts` on the same basis.
+import dashboardRouter from "../routes/dashboard";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
@@ -74,6 +79,7 @@ app.use(forecastRouter);
 app.use(billsRouter);
 app.use(reportsRouter);
 app.use(debtsRouter);
+app.use(dashboardRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -291,7 +297,7 @@ beforeAll(async () => {
 
   // ── Debts: two anchored actives, one paid-off, one with NO anchor (which
   // must be excluded from both sides of the ratio rather than counted as 0%).
-  await db.insert(debtsTable).values([
+  const seededDebts = await db.insert(debtsTable).values([
     {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
@@ -324,7 +330,32 @@ beforeAll(async () => {
       minPayment: "0.00",
       status: "paid_off",
     },
-  ]);
+  ]).returning();
+  VISA_DEBT_ID = seededDebts.find((d) => d.name === "Visa")!.id;
+
+  // ── (C10) A tagged payment the creditor has NOT reported yet.
+  //
+  // ⭐ THIS ROW IS THE POINT OF THE DEBT PARITY TEST. Without it both sides of
+  // the assertion below net zero, the test passes on raw balances, and it
+  // cannot tell a netted server from an un-netted one — which is exactly how
+  // the spine shipped a "% paid" that disagreed with the Debts page.
+  //
+  // Neither seeded debt sets `lastBalanceUpdate` or `plaidLastSyncedAt`, so
+  // `pendingCutoffForDebt` returns null and every tagged payment counts as
+  // pending. Shape copied from `debtsPendingPaymentDecrement.integration.test`:
+  // debt-tagged, positive (payment-direction), `source: "manual"`, and
+  // deliberately NOT on the checking account — this is the creditor side of
+  // the payment, so it must not disturb the bank roll-forward or spend facts
+  // the other parity assertions in this file depend on.
+  await db.insert(transactionsTable).values({
+    userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
+    occurredOn: dayThisMonth(6),
+    description: "Payment — Visa",
+    amount: "300.00",
+    debtId: VISA_DEBT_ID,
+    source: "manual",
+  });
 
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -447,16 +478,90 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
 
   it("debt.payoffPct matches the derivation over /debts' own rows", async () => {
     const spine = await get<Spine>("/spine");
+    // ⚠️ `pendingPaymentTotal` IS PART OF THIS SHAPE. It used to be annotated
+    // away here, which quietly defeated the whole assertion: `payoffPct` nets
+    // whatever pending it is handed, so stripping the field made the expected
+    // side fall back to raw balances and agree with a raw spine. The type must
+    // carry every field the basis depends on or the parity is theatre.
     const debts = await get<
-      Array<{ balance: string; originalBalance?: string | null; status?: string }>
+      Array<{
+        id: string;
+        balance: string;
+        originalBalance?: string | null;
+        status?: string;
+        pendingPaymentTotal?: string | null;
+      }>
     >("/debts");
 
     expect(spine.debt.payoffPct).toBe(payoffPct(debts));
 
-    // Not vacuous: 17,000 anchored, 10,250.40 still owed => ~39.7% paid.
+    // Not vacuous: 17,000 anchored; 10,250.40 posted less a 300.00 tagged-
+    // unposted payment => 9,950.40 effectively owed => ~41.47% paid.
     expect(spine.debt.payoffPct).not.toBeNull();
     expect(spine.debt.payoffPct!).toBeGreaterThan(0);
     expect(spine.debt.payoffPct!).toBeLessThan(100);
+    expect(spine.debt.payoffPct!).toBeCloseTo(41.4682, 3);
+  });
+
+  it("⭐ debt.payoffPct NETS tagged-unposted payments — the C10 basis", async () => {
+    // Brad's 2026-08-23 call: net pending payments on every surface. The spine
+    // feeds the landing's "% paid" and the Avalanche hero, and it reads debt
+    // rows with a plain SELECT that cannot see tagged payments — so unless it
+    // enriches them first it quotes a LOWER percentage than the Debts and
+    // Avalanche pages standing next to it. This test fails if that enrichment
+    // is removed.
+    const spine = await get<Spine>("/spine");
+    const debts = await get<
+      Array<{
+        id: string;
+        balance: string;
+        originalBalance?: string | null;
+        status?: string;
+        pendingPaymentTotal?: string | null;
+      }>
+    >("/debts");
+
+    // The fixture's pending payment is actually visible on the owning endpoint.
+    const visa = debts.find((d) => d.id === VISA_DEBT_ID);
+    expect(visa).toBeDefined();
+    expect(Number(visa!.pendingPaymentTotal)).toBeCloseTo(300, 2);
+
+    // ⭐ THE DISCRIMINATING ASSERTION. Re-derive on the OLD raw basis by
+    // blanking the pending field, and require the spine to disagree with it.
+    // A spine that forgot to net would land exactly on `rawBasis` and fail.
+    const rawBasis = payoffPct(
+      debts.map((d) => ({ ...d, pendingPaymentTotal: null })),
+    );
+    expect(rawBasis).toBeCloseTo(39.7035, 3);
+    expect(spine.debt.payoffPct!).toBeGreaterThan(rawBasis!);
+    expect(spine.debt.payoffPct!).toBeCloseTo(41.4682, 3);
+  });
+
+  it("dashboard.totalDebt is netted too, and ties to /debts to the cent", async () => {
+    // `/api/dashboard` feeds the Reports "Total Debt" tile. It summed
+    // `debts.balance` in SQL, which cannot see pending — so that tile quoted a
+    // household MORE than it owed while /avalanche quoted less, on numbers a
+    // reader can hold side by side.
+    const dashboard = await get<{ totalDebt: string; activeDebtCount: number }>(
+      "/dashboard",
+    );
+    const debts = await get<
+      Array<{
+        balance: string;
+        status?: string;
+        pendingPaymentTotal?: string | null;
+      }>
+    >("/debts");
+
+    const expected = debts
+      .filter((d) => d.status === "active")
+      .reduce((s, d) => s + effectiveDebtBalance(d), 0);
+    expect(Number(dashboard.totalDebt)).toBeCloseTo(expected, 2);
+
+    // Not vacuous, and specifically netted: 3000 + 7250.40 posted, less the
+    // 300.00 pending payment.
+    expect(Number(dashboard.totalDebt)).toBeCloseTo(9950.4, 2);
+    expect(dashboard.activeDebtCount).toBe(2);
   });
 
   it("reviewCount matches /forecast/review-count", async () => {

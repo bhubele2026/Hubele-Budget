@@ -7,6 +7,7 @@ import {
   type DebtBalanceHistoryEntry,
 } from "@workspace/api-client-react";
 import { PageSkeleton } from "@/components/page-skeleton";
+import { DebtPendingHint } from "@/components/debt-pending-hint";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
   ANIM_AREA,
@@ -140,6 +141,14 @@ function DebtSection({
       ? minOnlyInterest - sim.totalInterestPaid
       : 0;
   const gauge = useMemo(() => payoffProjectionGauge(sim, 12), [sim]);
+  // (C10) Every balance on this page is now netted, so every balance on this
+  // page owes the reader the same disclosure the Debts and Avalanche tables
+  // give. `perDebtProgress` returns numbers, not rows, so the source debt is
+  // looked up here rather than widening that function's return shape.
+  const debtById = useMemo(
+    () => new Map(debts.map((d) => [d.id, d] as const)),
+    [debts],
+  );
 
   const activeDebts = simDebts.filter((d) => (d.status ?? "active") === "active");
   const maxMonthsLeft = Math.max(
@@ -445,9 +454,20 @@ function DebtSection({
                     <span className="truncate font-medium text-neutral-700">
                       {p.name}
                     </span>
-                    <span className="shrink-0 font-mono tabular-nums text-neutral-500">
-                      {p.monthsLeft !== null ? `${p.monthsLeft} mo` : "∞"} ·{" "}
-                      {formatCurrency(p.balance)}
+                    {/* (C10) `p.balance` is netted now, so the row discloses the
+                        netting with the same component and the same words the
+                        Debts and Avalanche tables use. */}
+                    <span className="flex shrink-0 flex-col items-end">
+                      <span className="font-mono tabular-nums text-neutral-500">
+                        {p.monthsLeft !== null ? `${p.monthsLeft} mo` : "∞"} ·{" "}
+                        {formatCurrency(p.balance)}
+                      </span>
+                      {debtById.has(p.id) ? (
+                        <DebtPendingHint
+                          debt={debtById.get(p.id)!}
+                          fmt={formatCurrency}
+                        />
+                      ) : null}
                     </span>
                   </div>
                   <div
