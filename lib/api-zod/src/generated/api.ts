@@ -3679,6 +3679,25 @@ export const SyncPlaidTransactionsResponse = zod.object({
       refreshDisabledReason: zod.string().nullish(),
       lastSyncedAt: zod.string().nullish(),
       addedDescriptions: zod.array(zod.string()).optional(),
+      balanceDrift: zod
+        .object({
+          bank: zod
+            .string()
+            .describe(
+              "Plaid's live available balance for the checking account",
+            ),
+          ledger: zod
+            .string()
+            .describe(
+              "The prior anchor rolled forward through every row we hold",
+            ),
+          unexplained: zod
+            .string()
+            .describe(
+              "bank − ledger; positive when the bank holds money our rows cannot account for",
+            ),
+        })
+        .nullish(),
     }),
   ),
 });

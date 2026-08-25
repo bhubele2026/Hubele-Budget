@@ -8694,6 +8694,19 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         refreshDisabledReason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         lastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         addedDescriptions: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
+        balanceDrift: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
+            bank: zod.ZodString;
+            ledger: zod.ZodString;
+            unexplained: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            bank: string;
+            ledger: string;
+            unexplained: string;
+        }, {
+            bank: string;
+            ledger: string;
+            unexplained: string;
+        }>>>;
     }, "strip", zod.ZodTypeAny, {
         itemId: string;
         added: number;
@@ -8723,6 +8736,11 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         lastOccurredOn?: string | null | undefined;
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
+        balanceDrift?: {
+            bank: string;
+            ledger: string;
+            unexplained: string;
+        } | null | undefined;
     }, {
         itemId: string;
         added: number;
@@ -8752,6 +8770,11 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         lastOccurredOn?: string | null | undefined;
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
+        balanceDrift?: {
+            bank: string;
+            ledger: string;
+            unexplained: string;
+        } | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     items: {
@@ -8783,6 +8806,11 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         lastOccurredOn?: string | null | undefined;
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
+        balanceDrift?: {
+            bank: string;
+            ledger: string;
+            unexplained: string;
+        } | null | undefined;
     }[];
 }, {
     items: {
@@ -8814,6 +8842,11 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         lastOccurredOn?: string | null | undefined;
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
+        balanceDrift?: {
+            bank: string;
+            ledger: string;
+            unexplained: string;
+        } | null | undefined;
     }[];
 }>;
 export declare const GetPlaidEnvironmentResponse: zod.ZodObject<{

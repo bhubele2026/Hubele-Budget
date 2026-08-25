@@ -16,6 +16,7 @@ import {
 } from "@/lib/rule-attribution-summary";
 import { dispatchPlaidReconnect } from "@/components/plaid-reconnect-listener";
 import { formatRelativeTimeFromNow } from "@/lib/plaidPreparing";
+import { formatCurrency } from "@/lib/utils";
 
 /**
  * (#357) Per-item Plaid failure detail surfaced through the sync response.
@@ -203,6 +204,27 @@ export function usePlaidSync() {
           {
             onSuccess: (res) => {
               const items = res.items ?? [];
+              // (2026-08-25) ⚠️ THE LEDGER DOESN'T TIE. When the server's
+              // reconciliation finds the bank holding an amount our rows can't
+              // account for, say so — in its own toast, independent of the
+              // added/updated counts, because the most common shape of this is
+              // "Added 0" plus a balance that has been quietly wrong for days.
+              // Naming both sides is what makes it actionable: the user is the
+              // only one who can look at the bank and say which row is missing.
+              const drifted = items.find((r) => r.balanceDrift);
+              if (drifted?.balanceDrift) {
+                const d = drifted.balanceDrift;
+                const money = (v: string) => formatCurrency(v);
+                const shortfall = Number(d.unexplained) > 0;
+                toast({
+                  title: `${drifted.institutionName ?? "Your bank"} doesn't match our records`,
+                  description: `${drifted.institutionName ?? "The bank"} says ${money(d.bank)}; our transactions add up to ${money(d.ledger)} — ${money(String(Math.abs(Number(d.unexplained))))} ${
+                    shortfall
+                      ? "we can't account for. A deposit or credit is probably missing from the ledger."
+                      : "more than the bank shows. A charge is probably counted twice, or was reversed."
+                  }`,
+                });
+              }
               // Aggregate per-rule attribution counts across every item.
               // Two items that both auto-categorized via the same ruleId
               // (e.g. shared "STARBUCKS" rule across two banks) collapse

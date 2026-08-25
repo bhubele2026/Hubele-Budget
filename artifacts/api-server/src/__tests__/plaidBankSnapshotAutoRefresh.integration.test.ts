@@ -80,6 +80,13 @@ vi.mock("../lib/plaid", async () => {
       itemGet: async () => ({
         data: { item: { item_id: "item-default", consent_expiration_time: null } },
       }),
+      // The reconciliation below fires a /transactions/get gap-backfill when
+      // the ledger and the bank disagree. Empty is the honest answer here:
+      // Plaid has nothing more to give, so the difference stays unexplained
+      // and gets reported rather than silently swallowed.
+      transactionsGet: async () => ({
+        data: { transactions: [], total_transactions: 0 },
+      }),
     }),
   };
 });
@@ -172,6 +179,153 @@ async function configureSnapshot(plaidAccountRowId: string, name: string): Promi
     bankSnapshotSource: "manual",
   });
 }
+
+/**
+ * A snapshot taken RECENTLY — the reconciliation deliberately ignores anchors
+ * older than 45 days, and the fixture above is dated 2026-01-01 precisely so
+ * the existing cases never trip it.
+ */
+async function configureRecentSnapshot(opts: {
+  plaidAccountRowId: string | null;
+  balance: string;
+  daysAgo: number;
+  mask?: string;
+}): Promise<void> {
+  await db.insert(forecastSettingsTable).values({
+    userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
+    bankSnapshotAccountId: opts.plaidAccountRowId,
+    bankSnapshotName: "Chase Checking",
+    bankSnapshotMask: opts.mask ?? "1234",
+    bankSnapshotBalance: opts.balance,
+    bankSnapshotAt: new Date(Date.now() - opts.daysAgo * 86_400_000),
+    bankSnapshotSource: "plaid",
+  });
+}
+
+async function addBankRow(opts: {
+  externalAccountId: string;
+  occurredOn: string;
+  amount: string;
+}): Promise<void> {
+  await db.insert(transactionsTable).values({
+    userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
+    occurredOn: opts.occurredOn,
+    description: "ledger row",
+    amount: opts.amount,
+    plaidAccountId: opts.externalAccountId,
+    source: "plaid:chase",
+  });
+}
+
+function isoDaysAgo(n: number): string {
+  return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+}
+
+describe("bank reconciliation on a manual Sync (2026-08-25)", () => {
+  it("⭐ reports the amount the ledger cannot explain", async () => {
+    // Brad's case in miniature: an anchor, one charge we know about, and a bank
+    // holding $169.90 more than those two facts predict — because a deposit
+    // never arrived. Before this check, the app just showed the smaller number.
+    const { itemRowId, plaidAccountRowId, externalAccountId } =
+      await seedItemAndCheckingAccount({ institutionName: "Chase" });
+    await configureRecentSnapshot({
+      plaidAccountRowId,
+      balance: "1000.00",
+      daysAgo: 3,
+    });
+    await addBankRow({
+      externalAccountId,
+      occurredOn: isoDaysAgo(1),
+      amount: "-100.00",
+    });
+    accountsBalanceGetMock = async () => ({
+      data: {
+        accounts: [
+          {
+            account_id: externalAccountId,
+            balances: { available: 1069.9, current: 1069.9 },
+          },
+        ],
+      },
+    });
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      syncOrigin: "manual",
+    });
+
+    expect(result.balanceDrift).toEqual({
+      bank: "1069.90",
+      ledger: "900.00",
+      unexplained: "169.90",
+    });
+  });
+
+  it("stays silent when the ledger ties to the bank", async () => {
+    const { itemRowId, plaidAccountRowId, externalAccountId } =
+      await seedItemAndCheckingAccount({ institutionName: "Chase" });
+    await configureRecentSnapshot({
+      plaidAccountRowId,
+      balance: "1000.00",
+      daysAgo: 3,
+    });
+    await addBankRow({
+      externalAccountId,
+      occurredOn: isoDaysAgo(1),
+      amount: "-100.00",
+    });
+    accountsBalanceGetMock = async () => ({
+      data: {
+        accounts: [
+          {
+            account_id: externalAccountId,
+            balances: { available: 900, current: 900 },
+          },
+        ],
+      },
+    });
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      syncOrigin: "manual",
+    });
+    expect(result.balanceDrift ?? null).toBeNull();
+  });
+
+  it("⚠️ heals a dangling snapshot pointer instead of skipping the refresh", async () => {
+    // The pointer names a plaid_accounts row that no longer exists — what the
+    // re-link dedupe leaves behind. This used to disable the balance refresh
+    // silently and forever; the mask still identifies the account, so the sync
+    // re-anchors AND writes the pointer back.
+    const { itemRowId, plaidAccountRowId, externalAccountId } =
+      await seedItemAndCheckingAccount({ institutionName: "Chase" });
+    await configureRecentSnapshot({
+      plaidAccountRowId: randomUUID(), // dangling
+      balance: "1000.00",
+      daysAgo: 3,
+    });
+    accountsBalanceGetMock = async () => ({
+      data: {
+        accounts: [
+          {
+            account_id: externalAccountId,
+            balances: { available: 1000, current: 1000 },
+          },
+        ],
+      },
+    });
+
+    await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });
+
+    expect(accountsBalanceGetCalls).toHaveLength(1);
+    const [settings] = await db
+      .select()
+      .from(forecastSettingsTable)
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+    expect(settings!.bankSnapshotAccountId).toBe(plaidAccountRowId);
+    expect(settings!.bankSnapshotSource).toBe("plaid");
+  });
+});
 
 describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
   it("happy path: refreshes the snapshot when syncing the item that owns the checking account", async () => {
