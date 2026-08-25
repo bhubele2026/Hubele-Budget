@@ -6,11 +6,22 @@ pnpm install --frozen-lockfile
 # on a fresh checkout / CI environment.
 pnpm --filter @workspace/h2budget exec playwright install chromium
 pnpm --filter db push
-# Task #623 — backfill the households + household_members tables and
-# stamp household_id on every user-scoped row. Idempotent; no-op once
-# the data is converged.
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f "$(dirname "$0")/backfill_households.sql"
+# Task #623 — the households backfill USED to run from here, unconditionally.
+# It has been removed, and it must not come back.
+#
+# ⚠️ scripts/backfill_households.sql opens with "DANGER — DO NOT RUN AGAINST
+# PRODUCTION": it turns every distinct user_id into its own household, and when
+# the requireAuth identity key churned that manufactured tens of thousands of
+# phantom households (the July 2026 bloat). It has already been applied. This
+# script runs with a production DATABASE_URL after every merge, so the wiring
+# contradicted the warning outright.
+#
+# It was harmless in practice — the script self-refuses without ALLOW_BACKFILL=1
+# — but a line that invokes a "do not run against production" migration on every
+# production merge is a trap for whoever reads it next, and it costs nothing to
+# remove. Run it by hand, against a non-production database, if it is ever
+# needed again:
+#   psql "$DATABASE_URL" -v ALLOW_BACKFILL=1 -f scripts/backfill_households.sql
 # Task #56 — keep generated API types fresh after every merge.
 # Step 1: nuke any stale build outputs / tsbuildinfo so `tsc --build`
 # can't incorrectly skip the rebuild. (Stale dist + new openapi.yaml

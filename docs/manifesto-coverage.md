@@ -1,10 +1,27 @@
-> **SUPERSEDED — AI removed 2026-08.** All advisor/AI sections below are
-> historical; the app now contains no AI. Kept for context only.
+> # ⚠️ HISTORICAL DOCUMENT — DO NOT ACT ON THE "FIXES" BELOW
 >
-> **Weekly Debrief removed 2026-08.** The Debrief feature (pages/debrief.tsx,
-> lib/weeklyDebrief.ts, routes/weeklyDebrief.ts, the /debrief endpoints) no
-> longer exists — rows and sections below that cite those files (M17, M22–M28,
-> M47) describe the app as it was when this audit was written.
+> This is an audit of the app **as it stood in Phase 5**, before the 2026-08
+> overhaul. Large parts of the app it describes no longer exist, and every
+> recommendation in "Gaps & recommended fixes" has been **closed by removal**
+> rather than by implementation. Read it as a record of what was once true.
+>
+> **Deleted since this was written** — anything citing these is describing a
+> feature that is gone, not a gap to fill:
+>
+> | Removed | By | Cited in |
+> | --- | --- | --- |
+> | The whole AI/advisor framework (`lib/advisorTools.ts`, `routes/advisorProposals.ts`, `routes/advisorUndo.ts`, `components/advisor-chat.tsx`, `components/advisor-nudge.tsx`, `advisorAudit.integration.test.ts`) | A3 / A4 | M5, M39, M40 |
+> | Weekly Debrief (`pages/debrief.tsx`, `lib/weeklyDebrief.ts`, `routes/weeklyDebrief.ts`, the `/debrief` endpoints) | A5 | M17, M22–M28, M47 |
+> | The standalone Expo mobile app (`artifacts/h2budget-mobile/`) | overhaul | M42–M45 |
+> | Gamification — confetti, Wrapped, health score, savings goal | C1 | M5 and the health-card rows |
+> | Dark mode | overhaul | theming rows |
+>
+> **Still real** and safe to trust: `lib/avalanche-core/src/index.ts`,
+> `lib/weeklyStreak.ts`, `lib/behaviorFacts.ts`, and the forecast/avalanche
+> rows generally. When in doubt, check the file exists before believing a row.
+>
+> A fresh audit against the post-overhaul app would be worth doing. This
+> document is not it, and should not be quietly edited into it.
 
 # H2 Budget — Manifesto Coverage Audit (Phase 5)
 
@@ -82,75 +99,24 @@ app (M42–M45) has **no** tests at all.
 
 ---
 
-## Gaps & recommended fixes
+## Gaps & recommended fixes — ALL CLOSED BY REMOVAL (2026-08)
 
-### M5 — make the habit easy/sticky ⚠️
-- **Files:** `artifacts/h2budget/src/components/advisor-nudge.tsx`,
-  `artifacts/h2budget/src/lib/weeklyStreak.ts`,
-  `artifacts/api-server/src/lib/behaviorFacts.ts`.
-- **What's missing:** The pieces exist (streaks, an advisor nudge card, behavior
-  facts), but there's no cohesive "stickiness" loop — no reminder/cadence, no
-  streak-protection prompt, and the nudge is a single dashboard card. This is a
-  judgment-call ⚠️: the mechanics are present but the deliberate habit design is
-  thin. Recommend a short stickiness spec (re-engagement nudge + streak-at-risk
-  warning) before flipping green.
+⚠️ **Every gap this section once listed pointed at a feature that has since been
+deleted.** They were closed by the overhaul deciding the feature should not
+exist, not by anyone implementing the fix. The original tally read
+"✅ 44 · ⚠️ 5 (M5, M28, M42, M45, M47) · ❌ 0"; here is what actually became of
+those five:
 
-### M28 — debrief shows ONLY open items needing a decision ⚠️
-- **Files:** `artifacts/api-server/src/lib/weeklyDebrief.ts` (`openItemsCount`),
-  `artifacts/h2budget/src/pages/debrief.tsx`.
-- **What's missing:** The backend correctly computes which items are open
-  (unmatched plans + unreviewed unplanned txns) and surfaces a count, but the
-  debrief UI still renders the full week (all matched + planned rows). There is
-  no "open items only" view mode. Fix: add a decision-only filter/section to
-  `debrief.tsx` driven by the already-computed open set, so the page defaults to
-  surfacing only rows that need a user decision.
+| Gap | Recommended fix at the time | What happened |
+| --- | --- | --- |
+| **M5** — habit stickiness | "add a re-engagement nudge + streak-at-risk warning" | The nudge card it was built on (`components/advisor-nudge.tsx`) was deleted with the AI strip (A3), and gamification went in C1. `weeklyStreak.ts` and `behaviorFacts.ts` survive; no nudge was ever built. **Not a gap — a scope decision.** |
+| **M28** — debrief shows only open items | "add a decision-only filter to `debrief.tsx`" | Weekly Debrief was removed entirely (A5). `debrief.tsx` and `weeklyDebrief.ts` do not exist. **Moot.** |
+| **M42** — iPhone home glance | "build a WidgetKit widget, or scope M42 to the in-app glance" | `artifacts/h2budget-mobile/` was deleted. There is no mobile app to widget. **Moot.** |
+| **M45** — web↔phone sync | "add a mobile/web contract test" | Same — there is no second client to hold a contract with. **Moot.** |
+| **M47** — debrief reports freed ammo | "add a freed-for-the-avalanche figure to the debrief" | The debrief is gone. Freed minimums still surface on the avalanche page via `minFreed`. **Moot.** |
 
-### M42 — iPhone home glance + quick categorize ⚠️ (and untested)
-- **Files:** `artifacts/h2budget-mobile/app/(tabs)/home.tsx`,
-  `artifacts/h2budget-mobile/app/(tabs)/transactions.tsx`.
-- **What's missing:** Quick-categorize (the Categorize tab) and an in-app home
-  glance (total debt + pace bars + streak chip) both exist, but there is no true
-  iOS home-screen widget / lock-screen glance — "home glance" is only the
-  in-app home tab. Also no tests. Fix: either build a real iOS widget
-  (WidgetKit) or explicitly scope M42 to the in-app glance, and add at least a
-  smoke test for the categorize flow.
+The M40 entry below (advisor audit log, ✅ + tested) is likewise historical: the
+audit machinery and its integration test were removed with the advisor
+framework, so nothing in the app writes an advisor audit log any more — because
+nothing in the app is an advisor.
 
-### M45 — web↔phone sync ⚠️ (partial / untested)
-- **Files:** `artifacts/h2budget-mobile/lib/api.ts`,
-  `artifacts/api-server/src/routes/*`.
-- **What's missing:** Sync is "correct by construction" — both clients hit the
-  same household-scoped backend with a Clerk token, so there's no divergence —
-  but there's no automated proof (no parity/contract test) and no
-  push/real-time invalidation; mobile relies on pull-to-refresh. Fix: add a
-  contract test asserting the mobile client and web client read the same
-  endpoints/shapes, and consider query invalidation on focus.
-
-### M47 — debrief tells how much ammo was freed ⚠️
-- **Files:** present on `artifacts/h2budget/src/pages/avalanche.tsx` (freed
-  minimums via `minFreed` from `lib/avalanche-core/src/index.ts`); **absent**
-  from `artifacts/h2budget/src/pages/debrief.tsx` and
-  `artifacts/api-server/src/lib/weeklyDebrief.ts` (grep for
-  `avalanche|freed|ammo|surplus` in the debrief returns nothing).
-- **What's missing:** The manifesto wants the **weekly debrief** to report how
-  much avalanche ammo the week freed. Today the debrief computes net variance
-  but never converts the week's surplus into a "freed ammo this week" line, and
-  freed-minimum messaging lives only on the avalanche page. Fix: add a "freed
-  for the avalanche" figure to the debrief (week surplus + any minimums freed by
-  a payoff that landed this week) and test it in
-  `weeklyDebrief.integration.test.ts`.
-
-### M40 — advisor audit log + proposals ✅ (implemented + tested)
-- **Files:** `artifacts/api-server/src/lib/advisorTools.ts`,
-  `artifacts/api-server/src/routes/advisorProposals.ts`,
-  `artifacts/api-server/src/routes/advisorUndo.ts`,
-  `artifacts/api-server/src/__tests__/advisorAudit.integration.test.ts`.
-- **Coverage:** The proposal → confirm → audit-log → undo machinery is fully
-  implemented (destructive tools intercepted, `beforeSnapshot` captured, 5-min
-  undo window) **and** exercised by `advisorAudit.integration.test.ts`: it
-  registers/classifies the full destructive + reversible tool set, proves each
-  reversible write is audited and undoable, proves each destructive tool creates
-  a pending proposal (no mutation) until confirmed then is undoable, that
-  cancelling never executes, that a confirmed proposal can't be replayed, and
-  that confirmation is household-scoped. Satisfies the Phase 8 DoD ("no write
-  path bypasses the audit log"). *(This entry previously read "no test" — that
-  was stale; the test exists.)*

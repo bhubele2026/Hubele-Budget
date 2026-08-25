@@ -33,6 +33,33 @@
 --
 -- Idempotent: every drop is IF EXISTS, so a second run is a no-op that still
 -- prints the row counts it found (zero).
+--
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ✅ RUN AGAINST PRODUCTION 2026-08-25. This script is DONE.
+--
+-- ⚠️ THE STAMP IS THE POINT. Before it existed, a sweep of this repo concluded
+-- this script had never run — reasoning, correctly, that its sibling
+-- apply_bill_corrections.sql carries a post-run block and this one did not.
+-- An operator script that does not record its own execution will mislead the
+-- next reader, and did. Any future one-shot in scripts/ gets a block like this
+-- the day it runs.
+--
+-- What it did, verified after the fact:
+--   advisor_audit_log       13 rows  → dropped
+--   advisor_proposals        0 rows  → dropped
+--   advisor_memory           0 rows  → dropped
+--   budget_health_history   41 rows  → dropped
+--   weekly_debriefs          1 row   → dropped
+--   forecast_settings       4 advisor columns dropped; table INTACT at 215
+--                           rows, bank_snapshot_balance non-null on all 215
+--
+-- Pre-flight checks that passed: zero foreign keys from outside the drop set
+-- pointed into it, and the no-flag refusal was exercised first to prove the
+-- guard was live.
+--
+-- Backup (the only undo): ~/Desktop/h2budget-backup-2026-08-25/
+--   advisor-and-forecast-settings.sql · recurring-items.sql
+-- ═══════════════════════════════════════════════════════════════════════════
 
 \set ON_ERROR_STOP on
 

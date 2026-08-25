@@ -1,3 +1,8 @@
+-- ⚠️ SUPERSEDED. The Send-to-Review gate this column backed was REMOVED on
+-- 2026-06-18 (b09c46b); the column is vestigial and decides nothing. The
+-- "grandfather backfill" this migration's note deferred is CANCELLED, not
+-- pending — see the comment on `sentToReviewAt` in lib/db/src/schema/index.ts.
+-- Measured in production 2026-08-25: 897 rows NULL, 0 stamped.
 -- (#762 — Phase B) Manual Send-to-Review gate. NULL = the row has not
 -- been promoted into the Review workflow yet; a timestamp = the moment
 -- the user clicked "Send to Review". Source-of-truth views
