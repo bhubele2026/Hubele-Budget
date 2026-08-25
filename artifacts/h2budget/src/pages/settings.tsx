@@ -62,6 +62,7 @@ import {
 import { OwnerInvitationsSection } from "@/components/owner-invitations";
 import { OwnerBankHealthSweepSection } from "@/components/owner-bank-health-sweep";
 import { PlaidSyncHistory } from "@/components/plaid-sync-history";
+import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 import {
   DEFAULT_DAYS_SINCE_TRACKERS,
   compileMatcher,
@@ -264,7 +265,7 @@ export default function SettingsPage() {
     dedupeTransactions.mutate(undefined, {
       onSuccess: (res) => {
         queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+        invalidateForecastFamily(queryClient);
         // (#470) Refresh the badge so it drops to "No duplicates"
         // immediately after a successful cleanup instead of waiting
         // for the next page load.

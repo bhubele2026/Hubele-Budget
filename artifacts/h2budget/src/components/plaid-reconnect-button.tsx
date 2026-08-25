@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Link2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
+import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 
 // Plaid error codes that mean "the user must re-authenticate this item via
 // Plaid Link in update mode". Mirrors PLAID_REAUTH_ERROR_CODES on the server
@@ -343,7 +344,7 @@ export function PlaidReconnectButton({
     // the inline DebtPlaidActions refresh path uses.
     qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
-    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    invalidateForecastFamily(qc);
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
     if (totals.added + totals.modified + totals.removed > 0) {
       qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });

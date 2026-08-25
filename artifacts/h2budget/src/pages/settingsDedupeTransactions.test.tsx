@@ -119,7 +119,7 @@ vi.mock("@workspace/api-client-react", () => {
     getGetPlaidEnvironmentQueryKey: () => ["plaid-env"],
     getListPlaidItemsQueryKey: () => ["plaid-items"],
     getListTransactionsQueryKey: () => ["transactions"],
-    getGetForecastQueryKey: () => ["forecast"],
+    getGetForecastQueryKey: () => ["/api/forecast"],
     useListPlaidSyncAttempts: () => ({ data: undefined, isLoading: false, isError: false }),
     getListPlaidSyncAttemptsQueryKey: (id: string) => ["plaid-sync-attempts", id],
     // Hooks SettingsPage (and its unconditionally-rendered children) call at
@@ -163,6 +163,21 @@ afterEach(() => {
   confirmSpy.mockRestore();
 });
 
+/** Did any invalidateQueries call cover the whole /api/forecast family? */
+function forecastFamilyInvalidated(spy: {
+  mock: { calls: unknown[][] };
+}): boolean {
+  const target = ["/api/forecast/cash-signal", { horizonDays: 90 }] as const;
+  return spy.mock.calls.some((c) => {
+    const arg = c[0] as {
+      queryKey?: readonly unknown[];
+      predicate?: (q: { queryKey: readonly unknown[] }) => boolean;
+    };
+    if (arg?.predicate) return arg.predicate({ queryKey: target });
+    return false;
+  });
+}
+
 describe("(#458) Settings — Clean up duplicate transactions button", () => {
   it("on success with merges: invalidates transactions + forecast and toasts the merged-count copy", () => {
     h.mode.current = {
@@ -181,7 +196,10 @@ describe("(#458) Settings — Clean up duplicate transactions button", () => {
     expect(h.dedupeMutate).toHaveBeenCalledTimes(1);
 
     expect(h.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["transactions"] });
-    expect(h.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["forecast"] });
+    // Forecast is invalidated by FAMILY (bundle + cash-signal): merging
+    // duplicate transactions changes the projection, and refreshing only the
+    // bundle left the ending balance quoting pre-merge numbers.
+    expect(forecastFamilyInvalidated(h.invalidateQueries)).toBe(true);
 
     expect(h.toast).toHaveBeenCalledTimes(1);
     const arg = h.toast.mock.calls[0][0];
@@ -226,7 +244,10 @@ describe("(#458) Settings — Clean up duplicate transactions button", () => {
     fireEvent.click(screen.getByTestId("button-dedupe-transactions"));
 
     expect(h.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["transactions"] });
-    expect(h.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["forecast"] });
+    // Forecast is invalidated by FAMILY (bundle + cash-signal): merging
+    // duplicate transactions changes the projection, and refreshing only the
+    // bundle left the ending balance quoting pre-merge numbers.
+    expect(forecastFamilyInvalidated(h.invalidateQueries)).toBe(true);
 
     const arg = h.toast.mock.calls[0][0];
     expect(arg.title).toBe("No duplicates found");

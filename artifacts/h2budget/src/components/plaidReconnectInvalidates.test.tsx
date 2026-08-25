@@ -72,16 +72,36 @@ describe("(#211) PlaidReconnectButton invalidates debt-consuming queries on reco
       force: true,
     });
 
-    const invalidatedKeys = invalidateSpy.mock.calls.map(
-      (c) => (c[0] as { queryKey: unknown }).queryKey,
+    const calls = invalidateSpy.mock.calls.map(
+      (c) =>
+        c[0] as {
+          queryKey?: readonly unknown[];
+          predicate?: (q: { queryKey: readonly unknown[] }) => boolean;
+        },
     );
+    const invalidatedKeys = calls
+      .map((c) => c.queryKey)
+      .filter((k): k is readonly unknown[] => !!k);
+    /** Exact key OR a predicate that would have matched it. */
+    const invalidated = (key: readonly unknown[]): boolean =>
+      calls.some((c) =>
+        c.predicate
+          ? c.predicate({ queryKey: key })
+          : !!c.queryKey && c.queryKey.every((seg, i) => seg === key[i]),
+      );
     expect(invalidatedKeys).toContainEqual(["/api/plaid/items"]);
     // The critical one for the banner — without it the stale debts cache
     // keeps `plaidLastSyncErrorCode` set and the banner sticks around.
     expect(invalidatedKeys).toContainEqual(["/api/debts"]);
     // Plus the other debt consumers, mirroring the inline refresh path.
     expect(invalidatedKeys).toContainEqual(["/api/bills/summary"]);
-    expect(invalidatedKeys).toContainEqual(["/api/forecast"]);
+    // Forecast is invalidated by FAMILY now (bundle + cash-signal), because
+    // refreshing one and not the other is what left a changed projection
+    // showing its old ending balance.
+    expect(invalidated(["/api/forecast"])).toBe(true);
+    expect(invalidated(["/api/forecast/cash-signal", { horizonDays: 90 }])).toBe(
+      true,
+    );
     expect(invalidatedKeys).toContainEqual(["/api/dashboard"]);
 
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());

@@ -14,6 +14,7 @@ import {
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
+import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 
 export const PLAID_RECONNECT_EVENT = "plaid:reconnect";
 
@@ -162,7 +163,7 @@ export function PlaidReconnectListener() {
     qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
     qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
-    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    invalidateForecastFamily(qc);
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
     if (totals.added + totals.modified + totals.removed > 0) {
       qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
