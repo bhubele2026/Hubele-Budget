@@ -51,6 +51,29 @@
 --   The row had moved to 442.00. Actual charges ran 425.65 / 425.35 / 425.45 /
 --   434.47 / 429.92 — drifting UP, so 425.45 was below every charge but June's
 --   and 442.00 sat ~12 above the latest. Owner priced it at 430.00 instead.
+--
+-- 2026-08-25 — the rest of the batch. ✅ ALL APPLIED, owner-authorized verbatim.
+--   verizon      442.00 → 430.00     UPDATE 1
+--   state farm   121.54 → 159.96     UPDATE 1   (charges: 121.54 → 136.75 →
+--                                     159.95 → 159.96; the OTHER State Farm
+--                                     policy held steady at 128.59, untouched)
+--   playstation  no-op, DELETE 0     only ONE row existed in production; the
+--                                     duplicate the July audit saw was already
+--                                     gone. The assertion (exactly 1 remains)
+--                                     passed, which is why a no-op is safe here
+--                                     rather than silent.
+--   kwik trip    DELETE 2            both rows removed — gas is variable spend,
+--                                     already tracked as allowance, so keeping
+--                                     it in the bill schedule committed the
+--                                     same money twice.
+--   heloc        SKIPPED by the owner. ⚠️ AND THE AUDIT'S NUMBER WAS STALE:
+--                the row read 1130.00, not the 677.40 recorded in July.
+--                Charges ran 677.40 / 677.40 / 600.00 / 1185.19, so the
+--                "latest charge" rule would have been meaningless here. He had
+--                already priced it himself. Do not "fix" this row.
+--
+--   Bills went 20 → 18. Verified by independent re-read of all 21 recurring
+--   items afterwards; nothing outside the named set moved.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 \set ON_ERROR_STOP off

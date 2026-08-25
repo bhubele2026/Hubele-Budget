@@ -354,13 +354,27 @@ export const transactionsTable = pgTable(
     // from notes in the same pass. Plaid sync now writes the boolean and
     // flips it back to false on the pending→posted modified path.
     pending: boolean("pending").notNull().default(false),
-    // (#762 — Phase B) Manual Send-to-Review gate. NULL = the row has
-    // not been promoted into the Review workflow yet; a timestamp = the
-    // moment the user clicked "Send to Review". Source-of-truth views
-    // (Chase / Amex) keep showing every row; only the Review pipeline
-    // on /forecast filters on this column. Backfill of historical rows
-    // is intentionally deferred to a follow-up grandfather task so the
-    // gate can be exercised in production in isolation first.
+    // (#762 — Phase B) ⚠️ VESTIGIAL. NOT LOAD-BEARING. DO NOT BUILD ON IT.
+    //
+    // This was a manual Send-to-Review gate: NULL meant "not promoted into
+    // Review yet", a timestamp meant the user had clicked "Send to Review".
+    // **The gate was REMOVED on 2026-06-18 (b09c46b)** — `/forecast` no longer
+    // filters on it, and the per-row/bulk buttons and "Not in review" badge are
+    // gone. Forecast and Review are ONE flow again: a forecast-flagged checking
+    // transaction IS in Review and IS on the curve. That is the owner's
+    // standing call, after the second gate silently hid rows and got patched
+    // around repeatedly (#812). **Never reintroduce a gate between "Send to
+    // Forecast" and appearing in Review.**
+    //
+    // ⚠️ AND THE GRANDFATHER BACKFILL THIS COMMENT USED TO PROMISE IS CANCELLED,
+    // not pending. It said backfilling historical rows was "intentionally
+    // deferred… so the gate can be exercised in production in isolation first".
+    // The gate it was going to grandfather no longer exists. Measured in
+    // production 2026-08-25: 897 rows NULL, **0 stamped** — nothing has ever
+    // been written here, because nothing writes here any more. Running a
+    // backfill now would stamp 897 historical rows for a pipeline that does not
+    // read the column. The endpoints in routes/transactions.ts survive and are
+    // still tested, so the column stays; it just decides nothing.
     sentToReviewAt: timestamp("sent_to_review_at", {
       withTimezone: true,
       mode: "string",

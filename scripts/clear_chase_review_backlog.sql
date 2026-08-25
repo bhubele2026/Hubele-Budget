@@ -1,3 +1,17 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠️ MEASURED 2026-08-25 AND DELIBERATELY NOT RUN.
+--
+-- Production carries 57 plaid:chase rows with forecast_flag = true and an
+-- occurred_on in the past. Under the single-flow model (the #762 gate was
+-- removed in b09c46b — forecast-flagged IS in Review IS on the curve) those 57
+-- are the owner's LIVE review queue, not the #828 backlog this script was
+-- written for. Flipping forecast_flag on them would empty a queue he is using.
+--
+-- Run this only if someone can point at a specific stuck backlog again, and
+-- re-measure first. Left in place because the scoping guards below are the
+-- right shape if that day comes.
+-- ═══════════════════════════════════════════════════════════════════════════
+
 -- Task #828 — one-time operator cleanup: clear the Chase "Review Bucket"
 -- backlog for a single household by flipping forecast_flag = false on the
 -- genuinely-stuck, already-occurred, non-terminally-resolved plaid:chase
