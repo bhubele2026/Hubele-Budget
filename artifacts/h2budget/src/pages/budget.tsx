@@ -77,7 +77,6 @@ type BudgetLineWithActual = {
   plannedSource?: PlannedSource | null;
 };
 import { formatCurrency, cn } from "@/lib/utils";
-import { useGetSettings } from "@workspace/api-client-react";
 import {
   card,
   cardHead,
@@ -96,42 +95,29 @@ import {
 // recharts, and this page draws no chart. Reaching for the barrel would put
 // ~450 KB behind a route that needs a coloured `<span>`.
 import { CssFillMeter } from "@/lib/cssBars";
-import { bucketSpendInWindow } from "@/lib/bucketSpend";
+import { MoneyText } from "@/components/viz";
+import { PlanStrip } from "./budget/planStrip";
+import { AllowanceCard } from "./budget/allowanceCard";
+import {
+  PLAN_SECTIONS,
+  splitBySource,
+  sectionVerdict,
+  type PlanSectionDef,
+  type BudgetLine,
+} from "./budget/planSources";
 import {
   ChevronLeft,
   ChevronRight,
   Plus,
   Trash2,
-  ChevronDown,
-  ChevronUp,
   Pencil,
   Pin,
-  PinOff,
   CreditCard,
   Landmark,
   MoreHorizontal,
   Check,
   Info,
-  ArrowUp,
-  ArrowDown,
-  GripVertical,
 } from "lucide-react";
-import {
-  DndContext,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  arrayMove,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { useToast } from "@/hooks/use-toast";
 import {
   Popover,
@@ -171,6 +157,34 @@ const ROW_GRID =
   "grid grid-cols-1 gap-x-3 gap-y-1 px-4 py-2 sm:grid-cols-[minmax(9rem,1fr)_6.5rem_6.5rem_minmax(6rem,11rem)_7.25rem] sm:items-center sm:gap-y-0";
 const headCell =
   "text-micro font-semibold uppercase tracking-wide text-neutral-400";
+
+/**
+ * ⚠️ THE COLUMNS HAVE TO BE NAMED. A row reads
+ * `$ 460.00  $512.88  ▓▓▓ 111%  −$52.88 OVER` — five figures, and without a
+ * head above them the reader has to infer which is the plan and which is the
+ * spend from their size. It sits inside each source card rather than once at
+ * the top of the page, because the cards scroll independently of it.
+ *
+ * `sm`+ only: below that the row stacks and each figure carries its own label
+ * from `Cell`.
+ */
+function ColumnHeads() {
+  return (
+    <div
+      role="row"
+      className={`hidden border-b border-brand-line bg-platinum-2 sm:grid ${ROW_GRID.replace(
+        "grid ",
+        "",
+      ).replace("py-2", "py-1.5")}`}
+    >
+      <span className={headCell}>Envelope</span>
+      <span className={`${headCell} text-right`}>Plan</span>
+      <span className={`${headCell} text-right`}>Spent</span>
+      <span className={`${headCell} text-right`}>Used</span>
+      <span className={`${headCell} text-right`}>Left / over</span>
+    </div>
+  );
+}
 /** Money, everywhere it renders: mono, tabular, and it must not reflow. */
 const num = "font-mono text-label tabular-nums";
 
@@ -217,176 +231,6 @@ function Cell({
     >
       <span className={`${fieldLabel} sm:hidden`}>{label}</span>
       {children}
-    </div>
-  );
-}
-
-/**
- * A group's head: its name, how many lines it holds, its two totals, and the
- * one thing a reader came for — whether the group is inside its plan, SAID IN
- * WORDS. The old head put that in the sign and the colour of a `Δ` figure,
- * which is nothing at all to a reader who cannot separate navy from orange and
- * close to nothing to everyone else at a glance.
- *
- * The magnitude is the same number as before; only its sign moved out of a
- * glyph and into a word.
- */
-function GroupHead({
-  groupName,
-  sub,
-  collapsed,
-  onToggle,
-  plannedTotal,
-  actualTotal,
-  isIncomeGroup,
-}: {
-  groupName: string;
-  sub: string;
-  collapsed: boolean;
-  onToggle: () => void;
-  plannedTotal: string;
-  actualTotal: string;
-  isIncomeGroup: boolean;
-}) {
-  const planned = parseFloat(plannedTotal) || 0;
-  const actual = parseFloat(actualTotal) || 0;
-  // Unchanged convention: income is ahead when it beats plan, an expense group
-  // is ahead when it comes in under.
-  const delta = isIncomeGroup ? actual - planned : planned - actual;
-  const word = isIncomeGroup
-    ? delta < 0
-      ? "short"
-      : "above plan"
-    : delta < 0
-      ? "over"
-      : "left";
-  return (
-    <button
-      type="button"
-      className={`${cardHead} press w-full text-left hover:bg-platinum-2`}
-      onClick={onToggle}
-      aria-expanded={!collapsed}
-      data-testid={`button-toggle-${groupName}`}
-    >
-      {collapsed ? (
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
-      ) : (
-        <ChevronUp className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
-      )}
-      <span className="min-w-0">
-        <span className="block truncate text-title font-semibold text-brand-navy">
-          {groupName}
-        </span>
-        <span className="block text-micro text-neutral-400">{sub}</span>
-      </span>
-      <span className="ml-auto flex items-center gap-3 sm:gap-5">
-        <span className="hidden text-right sm:block">
-          <span className={`block ${fieldLabel}`}>Plan</span>
-          <span className={`block ${num} text-neutral-700`}>
-            {formatCurrency(plannedTotal)}
-          </span>
-        </span>
-        <span className="hidden text-right sm:block">
-          <span className={`block ${fieldLabel}`}>Actual</span>
-          <span className={`block ${num} text-neutral-700`}>
-            {formatCurrency(actualTotal)}
-          </span>
-        </span>
-        <span className={`chip ${delta < 0 ? "bad" : "gray"}`}>
-          {delta === 0
-            ? "on plan"
-            : `${formatCurrency(Math.abs(delta))} ${word}`}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-/**
- * The column heads, from `sm` up. They exist so the numeric cells below can
- * drop their own labels on a wide screen — the name is said once per card
- * instead of once per row — and they are derived from `ROW_GRID` itself so a
- * column can never be added to the rows without appearing here too.
- */
-function ColumnHeads() {
-  return (
-    <div
-      role="row"
-      className={`hidden border-b border-brand-line bg-platinum-2 sm:grid ${ROW_GRID.replace(
-        "grid ",
-        "",
-      ).replace("py-2", "py-1.5")}`}
-    >
-      <span className={headCell}>Envelope</span>
-      <span className={`${headCell} text-right`}>Plan</span>
-      <span className={`${headCell} text-right`}>Actual</span>
-      <span className={`${headCell} text-right`}>Used</span>
-      <span className={`${headCell} text-right`}>Left / over</span>
-    </div>
-  );
-}
-
-/** The one control at the foot of every group card. */
-function AddLineFooter({
-  groupName,
-  placeholder,
-  adding,
-  value,
-  onChange,
-  onCommit,
-  onOpen,
-  onCancel,
-  commitDisabled,
-}: {
-  groupName: string;
-  placeholder: string;
-  adding: boolean;
-  value: string;
-  onChange: (next: string) => void;
-  onCommit: () => void;
-  onOpen: () => void;
-  onCancel: () => void;
-  commitDisabled: boolean;
-}) {
-  return (
-    <div className="border-t border-brand-line px-4 py-2.5">
-      {adding ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            autoFocus
-            placeholder={placeholder}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onCommit();
-              if (e.key === "Escape") onCancel();
-            }}
-            className={`${inputControl} max-w-[16rem]`}
-            data-testid={`input-new-line-${groupName}`}
-          />
-          <button
-            type="button"
-            className={btnSm}
-            onClick={onCommit}
-            disabled={commitDisabled}
-            data-testid={`button-confirm-add-${groupName}`}
-          >
-            Add
-          </button>
-          <button type="button" className={btnSecondarySm} onClick={onCancel}>
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          className={btnLink}
-          onClick={onOpen}
-          data-testid={`button-add-line-${groupName}`}
-        >
-          <Plus className="h-3 w-3" /> Add line
-        </button>
-      )}
     </div>
   );
 }
@@ -493,7 +337,6 @@ export default function BudgetPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [addingFor, setAddingFor] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
 
@@ -523,15 +366,6 @@ export default function BudgetPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoadingCategories, categories?.length]);
-
-  const toggleCollapse = (groupName: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupName)) next.delete(groupName);
-      else next.add(groupName);
-      return next;
-    });
-  };
 
   const changeMonth = (offset: number) => {
     // Anchor the date to the 1st at noon UTC so DST/offset edge cases never
@@ -634,18 +468,20 @@ export default function BudgetPage() {
     );
   };
 
-  const handleTogglePinLine = (categoryId: string, currentlyPinned: boolean) => {
-    const next = !currentlyPinned;
+  /**
+   * ⚠️ NOT A CONTROL — THE MECHANISM BEHIND AN OVERRIDE.
+   *
+   * The per-line pin button is gone, but the behaviour it backed is not: when
+   * you type a plan into a bill- or debt-derived row, the line has to be pinned
+   * or the next Bills/Debts recompute silently overwrites what you just typed.
+   * `PlannedAmountCell` calls this on commit. It stays quiet — no toast — since
+   * the user did not ask to pin anything, they asked for their number to stick.
+   */
+  const handleAutoPinLine = (categoryId: string, currentlyPinned: boolean) => {
+    if (currentlyPinned) return;
     pinLine.mutate(
-      { data: { monthStart: currentMonth, categoryId, pinned: next } },
-      {
-        onSuccess: () => {
-          invalidate();
-          toast({
-            title: next ? "Line pinned" : "Line unpinned",
-          });
-        },
-      },
+      { data: { monthStart: currentMonth, categoryId, pinned: true } },
+      { onSuccess: () => invalidate() },
     );
   };
 
@@ -658,51 +494,6 @@ export default function BudgetPage() {
     const end = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
     return { start, end };
   }, [currentMonth]);
-
-  // (P8) The weekly/monthly/unplanned allowance buckets as budget lines. Planned
-  // = the caps from Settings (weekly cap × weeks in the month); actual = the SAME
-  // shared bucketSpend numbers the dashboard + Allowances show, so the buckets
-  // read consistently inside the Budget. Discretionary spend the household
-  // explicitly filed — kept as its own group so it doesn't double-count category
-  // envelopes.
-  const { data: budgetSettings } = useGetSettings();
-  const allowanceLines = useMemo(() => {
-    const d = new Date(currentMonth + "T00:00:00");
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const lastDay = new Date(y, m + 1, 0).getDate();
-    const first = `${y}-${pad(m + 1)}-01`;
-    const last = `${y}-${pad(m + 1)}-${pad(lastDay)}`;
-    const weeksInMonth = lastDay / 7;
-    const txns = allTxns ?? [];
-    const wCap = Number(budgetSettings?.weeklyAllowanceAmount) || 0;
-    const mCap = Number(budgetSettings?.monthlyAllowanceAmount) || 0;
-    const uCap = Number(budgetSettings?.unplannedAllowanceAmount) || 0;
-    return [
-      {
-        key: "weekly",
-        label: "Weekly allowance",
-        planned: wCap * weeksInMonth,
-        actual: bucketSpendInWindow(txns, "weekly", first, last),
-      },
-      {
-        key: "monthly",
-        label: "Monthly allowance",
-        planned: mCap,
-        actual: bucketSpendInWindow(txns, "monthly", first, last),
-      },
-      {
-        key: "unplanned",
-        label: "Unplanned",
-        planned: uCap,
-        actual: bucketSpendInWindow(txns, "unplanned", first, last),
-      },
-    ];
-  }, [currentMonth, allTxns, budgetSettings]);
-  const allowanceHasData = allowanceLines.some(
-    (l) => l.planned > 0 || l.actual > 0,
-  );
 
   // #90 — uncategorized transactions in the currently viewed budget month,
   // skipping transfers (they're excluded from budget actuals server-side
@@ -826,53 +617,6 @@ export default function BudgetPage() {
     }
   };
 
-  // Task #692 — swap a category's sortOrder with its neighbor inside
-  // the same group. The server orders categories by sortOrder ASC then
-  // name, so swapping the two persisted sortOrders is enough to flip
-  // the displayed order. We fire both PATCHes in parallel and only
-  // invalidate once both settle so the list doesn't redraw mid-swap.
-  const handleMoveCategory = async (
-    a: { id: string; sortOrder: number },
-    b: { id: string; sortOrder: number },
-  ) => {
-    // If two rows somehow share a sortOrder (legacy data, or a fresh
-    // seed where every row in a group sits at the same base offset),
-    // a straight swap is a no-op. Push the target row to neighbor+1
-    // (or -1 if moving up) so the swap still produces a visible change.
-    const aOrder = a.sortOrder === b.sortOrder ? b.sortOrder + 1 : b.sortOrder;
-    const bOrder = a.sortOrder === b.sortOrder ? b.sortOrder : a.sortOrder;
-    try {
-      await Promise.all([
-        updateCat.mutateAsync({ id: a.id, data: { sortOrder: aOrder } }),
-        updateCat.mutateAsync({ id: b.id, data: { sortOrder: bOrder } }),
-      ]);
-      queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
-      invalidate();
-    } catch (e) {
-      toast({
-        title: "Couldn't reorder",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteCategory = (id: string) => {
-    if (!confirm("Delete this category?")) return;
-    deleteCat.mutate(
-      { id },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({
-            queryKey: getListCategoriesQueryKey(),
-          });
-          invalidate();
-          toast({ title: "Category deleted" });
-        },
-      },
-    );
-  };
-
   // (#698) Delete a "My budget" envelope with a tailored confirm when
   // the envelope has already absorbed real spending this month. The
   // default DELETE just removes the category row, which silently
@@ -958,130 +702,6 @@ export default function BudgetPage() {
     );
   };
 
-  // (#692) Swap a "My budget" envelope's sortOrder with its neighbor in
-  // the supplied ordered list to move it up/down one slot. We compute the
-  // swap pair here (rather than persisting absolute positions) so the
-  // existing sortOrder column drives display order without needing a
-  // dedicated "position" field. The optimistic invalidate refreshes the
-  // budget month query so the row appears in its new position on the
-  // next render.
-  const handleMoveMyBudgetCategory = (
-    orderedLines: { categoryId: string }[],
-    categoryId: string,
-    direction: "up" | "down",
-  ) => {
-    const idx = orderedLines.findIndex((l) => l.categoryId === categoryId);
-    if (idx < 0) return;
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= orderedLines.length) return;
-    const here = categories?.find((c) => c.id === orderedLines[idx].categoryId);
-    const there = categories?.find(
-      (c) => c.id === orderedLines[swapIdx].categoryId,
-    );
-    if (!here || !there) return;
-    const hereOrder = here.sortOrder;
-    const thereOrder = there.sortOrder;
-    // Direction-aware fallback for the equal-sortOrder case (very common
-    // since newly-created categories are all seeded at 9999): plain swap
-    // would leave order unchanged. Bump whichever side needs to end up
-    // later so the move is actually observable.
-    let nextHere: number;
-    let nextThere: number;
-    if (hereOrder === thereOrder) {
-      if (direction === "down") {
-        nextThere = thereOrder;
-        nextHere = thereOrder + 1;
-      } else {
-        nextHere = hereOrder;
-        nextThere = hereOrder + 1;
-      }
-    } else {
-      nextHere = thereOrder;
-      nextThere = hereOrder;
-    }
-    Promise.all([
-      updateCat.mutateAsync({
-        id: here.id,
-        data: { sortOrder: nextHere },
-      }),
-      updateCat.mutateAsync({
-        id: there.id,
-        data: { sortOrder: nextThere },
-      }),
-    ])
-      .then(() => {
-        queryClient.invalidateQueries({
-          queryKey: getListCategoriesQueryKey(),
-        });
-        invalidate();
-      })
-      .catch((err: unknown) => {
-        const msg =
-          err instanceof Error ? err.message : "Could not reorder category";
-        toast({
-          title: "Reorder failed",
-          description: msg,
-          variant: "destructive",
-        });
-      });
-  };
-
-  // Task #696 — drag-and-drop reorder. We keep the up/down buttons for
-  // keyboard / a11y / discoverability, and add a grip handle that drives
-  // a real dnd-kit sortable. The PointerSensor's 5px activation distance
-  // prevents accidental drags while clicking nearby controls; the
-  // TouchSensor's 150ms press-delay keeps touch scrolling from getting
-  // hijacked while still feeling responsive on mobile.
-  const dragSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 5 },
-    }),
-  );
-
-  // Persist a drag-end as normalized sortOrder values for the affected
-  // group. We rewrite every line in the group to a fresh 10-stride slot
-  // (10, 20, 30, …) so the new visual order survives a server reorder
-  // by-name tiebreak, and so ties from the seed (every row at 9999)
-  // get cleaned up the first time the user touches the group.
-  const handleDragReorder = async (
-    orderedLines: BudgetLineWithActual[],
-    event: DragEndEvent,
-  ) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const fromIdx = orderedLines.findIndex(
-      (l) => l.categoryId === active.id,
-    );
-    const toIdx = orderedLines.findIndex((l) => l.categoryId === over.id);
-    if (fromIdx < 0 || toIdx < 0) return;
-    const reordered = arrayMove(orderedLines, fromIdx, toIdx);
-    try {
-      await Promise.all(
-        reordered.map((line, i) => {
-          const desired = (i + 1) * 10;
-          const cat = categories?.find((c) => c.id === line.categoryId);
-          if (cat && cat.sortOrder === desired) return Promise.resolve();
-          return updateCat.mutateAsync({
-            id: line.categoryId,
-            data: { sortOrder: desired },
-          });
-        }),
-      );
-      queryClient.invalidateQueries({
-        queryKey: getListCategoriesQueryKey(),
-      });
-      invalidate();
-    } catch (err) {
-      toast({
-        title: "Couldn't reorder",
-        description:
-          err instanceof Error ? err.message : "Could not reorder category",
-        variant: "destructive",
-      });
-    }
-  };
-
   const monthName = useMemo(() => {
     const d = new Date(currentMonth + "T00:00:00");
     return new Intl.DateTimeFormat("en-US", {
@@ -1104,20 +724,26 @@ export default function BudgetPage() {
     );
   }
 
-  const allGroups = budgetData?.groups ?? [];
-  // (#690) Split off the "My budget" group so the standard groups list
-  // renders unchanged (bill-backed envelopes with their info icon and
-  // auto-pull behavior) and the manual bucket gets its own card below.
-  const groups = allGroups.filter((g) => g.groupName !== MY_BUDGET_GROUP);
-  const myBudgetGroup = allGroups.find(
-    (g) => g.groupName === MY_BUDGET_GROUP,
-  ) ?? {
-    groupName: MY_BUDGET_GROUP,
-    plannedTotal: "0",
-    actualTotal: "0",
-    lines: [],
-  };
+  const lines = budgetData?.lines ?? [];
+  const plan = budgetData?.planBySource;
+  const allowance = budgetData?.allowance;
+  const bySource = splitBySource(lines);
   const summary = budgetData?.summary;
+
+  // ⭐ THE HERO IS THE PLAN, NOT THE SPEND. The page exists to answer "what am
+  // I committed to this month, and where does it come from" — so the figure at
+  // the top is `plannedTotal` (bills + debt payments) read against planned
+  // income, both straight off the server's `planBySource`. The page does no
+  // money arithmetic of its own (CLAUDE.md §1); these three `Number(...)` calls
+  // parse a decimal string the server already settled, they do not compute one.
+  const plannedTotal = Number(plan?.plannedTotal ?? 0);
+  const plannedIncome = Number(plan?.income.planned ?? 0);
+  const actualTotal = Number(plan?.actualTotal ?? 0);
+  const committedPct =
+    plannedIncome > 0
+      ? Math.min(100, Math.round((plannedTotal / plannedIncome) * 100))
+      : 0;
+  const overCommitted = plannedIncome > 0 && plannedTotal > plannedIncome;
 
   return (
     <div className="space-y-4">
@@ -1172,390 +798,304 @@ export default function BudgetPage() {
         </div>
       </div>
 
-      {/* The month, in five figures and one bar. Every number here is a field
-          of the server's `summary` object read verbatim — the page does no
-          money arithmetic of its own (CLAUDE.md §1), which is also why the
-          percentage is rendered as the string the server sent rather than
-          re-derived from the two figures beside it. */}
-      {summary && (() => {
-        const pctSpent = parseFloat(summary.percentSpent.actual) || 0;
-        const incomeActual = parseFloat(summary.income.actual) || 0;
-        const incomeBudget = parseFloat(summary.income.budget) || 0;
-        const expActual = parseFloat(summary.expenses.actual) || 0;
-        const expBudget = parseFloat(summary.expenses.budget) || 0;
-        const netActual = parseFloat(summary.net.actual) || 0;
-        const plannedNet = parseFloat(summary.net.budget) || 0;
-        const weeklyExpenseBudget = expBudget > 0 ? (expBudget * 7) / 30.44 : 0;
-        // Unchanged thresholds, unchanged basis: the verdict has always been
-        // driven by percentSpent, and the meter below plots that same ratio so
-        // the word and the picture cannot disagree.
-        const status =
-          pctSpent > 100
-            ? { tone: "bad", label: "Over budget" }
-            : pctSpent > 90
-              ? { tone: "warn", label: "At risk" }
-              : { tone: "ok", label: "On track" };
-        return (
-          <section className={card} data-testid="budget-summary">
-            <div className={cardHead}>
-              <h2 className="text-title font-semibold text-brand-navy">
-                This month
-              </h2>
-              <Help>
-                Percent spent is expenses actual as a share of income actual, so
-                it passes 100% when the month spends more than it earned.
-              </Help>
-              <span className={`chip ${status.tone} ml-auto`}>
-                {status.label}
-              </span>
+      {/* ── The hero ─────────────────────────────────────────────────────────
+          One figure, the sentence that qualifies it, and the same ratio drawn
+          flush to the card's bottom edge — the avalanche hero's shape, which is
+          the strongest anchor the app has. The old page's biggest type was a
+          `Stat` inside a five-up grid, so nothing on it was the point. */}
+      {plan && (
+        <section className={card} data-testid="budget-hero">
+          <div className="flex flex-col gap-4 px-5 pb-5 pt-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <div className={fieldLabel}>Planned this month</div>
+              <div
+                className="mt-1 font-mono text-hero font-semibold leading-none tabular-nums text-brand-navy"
+                data-testid="hero-planned"
+              >
+                <MoneyText countUp amount={plannedTotal} />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-label text-neutral-500">
+                <span data-testid="hero-basis">
+                  {plannedIncome > 0
+                    ? `${committedPct}% of ${formatCurrency(plannedIncome)} income · bills and debt payments`
+                    : "bills and debt payments"}
+                </span>
+                <Help>
+                  Bills plus debt payments, and nothing else. The allowance is
+                  already inside the bills that fund it, and envelopes planned
+                  by hand are listed but not added — so the same dollar is only
+                  counted once.
+                </Help>
+              </div>
             </div>
-
-            <div className="stagger grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="flex flex-wrap gap-3">
               <Stat
                 index={0}
-                data-testid="tile-projected"
-                label="Projected month-end"
-                value={formatCurrency(plannedNet)}
-                hint="Planned income − expenses"
+                data-testid="tile-spent"
+                label="Spent so far"
+                value={formatCurrency(actualTotal)}
+                hint={`of ${formatCurrency(plannedTotal)} planned`}
               />
               <Stat
                 index={1}
-                data-testid="tile-net"
-                label="Net so far"
-                value={formatCurrency(netActual)}
-                tone={netActual < 0 ? "bad" : "navy"}
-                hint={`of ${formatCurrency(plannedNet)} planned`}
+                data-testid="tile-left-to-earn"
+                label="Left over"
+                value={formatCurrency(Number(plan.net))}
+                tone={Number(plan.net) < 0 ? "bad" : "navy"}
+                hint="income less the plan"
               />
               <Stat
                 index={2}
                 data-testid="tile-income"
                 label="Income"
-                value={formatCurrency(incomeActual)}
-                hint={`of ${formatCurrency(incomeBudget)} planned`}
-              />
-              <Stat
-                index={3}
-                data-testid="tile-expenses"
-                label="Expenses"
-                value={formatCurrency(expActual)}
-                hint={`of ${formatCurrency(expBudget)} planned`}
-              />
-              <Stat
-                index={4}
-                data-testid="tile-percent-spent"
-                label="Spent of income"
-                value={`${summary.percentSpent.actual}%`}
-                tone={pctSpent > 100 ? "bad" : "navy"}
-                hint="Expenses ÷ income"
+                value={formatCurrency(plannedIncome)}
+                hint={`${formatCurrency(plan.income.actual)} in so far`}
               />
             </div>
-
-            <div className="px-4 pb-4">
-              <CssFillMeter
-                value={expActual}
-                ceiling={incomeActual}
-                title={`${formatCurrency(expActual)} of ${formatCurrency(incomeActual)} income`}
-              />
-            </div>
-
-            <Foot>
-              ≈ {formatCurrency(weeklyExpenseBudget)}/week budgeted for expenses.
-            </Foot>
-          </section>
-        );
-      })()}
-
-      {allowanceHasData && (
-        <section className={card} data-testid="budget-allowances-group">
-          <div className={cardHead}>
-            <h2 className="text-title font-semibold text-brand-navy">
-              Allowances
-            </h2>
-            <Help>
-              Counts only transactions filed into a bucket on the Allowances
-              page; anything unfiled counts nowhere.
-            </Help>
-            <Link
-              href="/allowances"
-              className={`${btnLink} ml-auto`}
-              data-testid="budget-allowances-manage"
-            >
-              Manage
-            </Link>
           </div>
-          <div>
-            {allowanceLines.map((l) => {
-              const over = l.planned > 0 && l.actual > l.planned;
-              return (
-                <div
-                  key={l.key}
-                  className="grid grid-cols-1 gap-x-3 gap-y-1.5 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0 sm:grid-cols-[minmax(8rem,1fr)_minmax(5rem,1fr)_9rem_6rem] sm:items-center"
-                >
-                  <span className="text-body font-medium text-brand-navy">
-                    {l.label}
-                  </span>
-                  <CssFillMeter
-                    value={l.actual}
-                    ceiling={l.planned}
-                    title={`${formatCurrency(l.actual)} of ${
-                      l.planned > 0 ? formatCurrency(l.planned) : "no cap"
-                    }`}
-                  />
-                  <span className={`${num} text-neutral-700 sm:text-right`}>
-                    {formatCurrency(l.actual)}
-                    <span className="text-neutral-400">
-                      {" / "}
-                      {l.planned > 0 ? formatCurrency(l.planned) : "no cap"}
-                    </span>
-                  </span>
-                  <span className="sm:justify-self-end">
-                    {l.planned > 0 ? (
-                      <span className={`chip ${over ? "bad" : "gray"}`}>
-                        {over
-                          ? `${formatCurrency(l.actual - l.planned)} over`
-                          : `${formatCurrency(l.planned - l.actual)} left`}
-                      </span>
-                    ) : (
-                      <span className="text-micro text-neutral-400">
-                        no cap set
-                      </span>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
+          {/* The ratio, drawn. Flush to the bottom edge — no radius, no gap. */}
+          <div
+            className="h-1.5 w-full bg-platinum-4"
+            role="img"
+            aria-label={`${committedPct} percent of income is committed`}
+          >
+            <div
+              className={`bar-sweep h-full ${overCommitted ? "bg-bad" : "bg-brand-navy"}`}
+              style={{ width: `${committedPct}%` }}
+              data-testid="hero-committed-bar"
+            />
           </div>
         </section>
       )}
 
-      <div className="space-y-4">
-        {groups.map((group) => {
-          const isCollapsed = collapsed.has(group.groupName);
-          const isIncomeGroup = group.lines[0]?.kind === "income";
+      {plan && allowance && (
+        <PlanStrip
+          plan={plan}
+          allowanceActual={Number(allowance.actual)}
+          allowancePlanned={Number(allowance.planned)}
+        />
+      )}
 
-          return (
-            <section
-              key={group.groupName}
-              className={card}
-              data-testid={`group-${group.groupName}`}
-            >
-              <GroupHead
-                groupName={group.groupName}
-                sub={`${group.lines.length} ${
-                  group.lines.length === 1 ? "line" : "lines"
-                }`}
-                collapsed={isCollapsed}
-                onToggle={() => toggleCollapse(group.groupName)}
-                plannedTotal={group.plannedTotal}
-                actualTotal={group.actualTotal}
-                isIncomeGroup={isIncomeGroup}
-              />
-
-                {!isCollapsed && (
-                  <>
-                    <ColumnHeads />
-                    <DndContext
-                      sensors={dragSensors}
-                      collisionDetection={closestCenter}
-                      onDragEnd={(e: DragEndEvent) => handleDragReorder(group.lines, e)}
-                    >
-                      <SortableContext
-                        items={group.lines.map((l) => l.categoryId)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                    <div className="divide-y divide-brand-line/70">
-                      {group.lines.length === 0 && (
-                        <div className={emptyNote}>No lines yet.</div>
-                      )}
-                      {group.lines.map((line, idx) => {
-                        const prev = idx > 0 ? group.lines[idx - 1] : null;
-                        const next =
-                          idx < group.lines.length - 1
-                            ? group.lines[idx + 1]
-                            : null;
-                        return (
-                          <BudgetLineRow
-                            key={line.categoryId}
-                            line={line}
-                            monthPinned={monthPinned}
-                            monthStart={currentMonth}
-                            onUpdatePlanned={handleUpdatePlanned}
-                            onDelete={handleDeleteCategory}
-                            onMoveUp={
-                              prev
-                                ? () =>
-                                    handleMoveCategory(
-                                      {
-                                        id: line.categoryId,
-                                        sortOrder: line.sortOrder,
-                                      },
-                                      {
-                                        id: prev.categoryId,
-                                        sortOrder: prev.sortOrder,
-                                      },
-                                    )
-                                : null
-                            }
-                            onMoveDown={
-                              next
-                                ? () =>
-                                    handleMoveCategory(
-                                      {
-                                        id: line.categoryId,
-                                        sortOrder: line.sortOrder,
-                                      },
-                                      {
-                                        id: next.categoryId,
-                                        sortOrder: next.sortOrder,
-                                      },
-                                    )
-                                : null
-                            }
-                            reorderDisabled={updateCat.isPending}
-                            onTogglePin={handleTogglePinLine}
-                            pinDisabled={pinLine.isPending}
-                            uncategorizedTxns={uncategorizedThisMonth}
-                            categoryRules={
-                              rulesByCategory.get(line.categoryId) ?? []
-                            }
-                            contributingTxns={
-                              txnsByCategoryThisMonth.get(line.categoryId) ?? []
-                            }
-                            onAssignTxn={handleAssignTxn}
-                            onReassignTxn={handleReassignTxn}
-                            allCategories={categories ?? []}
-                            assigning={updateTx.isPending}
-                          />
-                        );
-                      })}
-                    </div>
-                      </SortableContext>
-                    </DndContext>
-
-                    <AddLineFooter
-                      groupName={group.groupName}
-                      placeholder="New line name"
-                      adding={addingFor === group.groupName}
-                      value={newName}
-                      onChange={setNewName}
-                      onCommit={() => handleAddCategory(group.groupName)}
-                      onOpen={() => {
-                        setAddingFor(group.groupName);
-                        setNewName("");
-                      }}
-                      onCancel={() => {
-                        setAddingFor(null);
-                        setNewName("");
-                      }}
-                      commitDisabled={!newName.trim() || createCat.isPending}
-                    />
-                  </>
-                )}
-            </section>
-          );
-        })}
-
-        {/* (#690) "My budget" — a dedicated card for personal envelopes
-            that aren't tied to a bill. Rendered separately from the
-            bill-backed groups above so users have an obvious place to
-            stand up one-off categories ("Birthday gifts", "Kid's
-            soccer"). Always visible, even when empty. These lines are
-            plain manual categories (sourceKind = "manual", no linked
-            recurring items), so they naturally render without the
-            bill info icon or auto-pull/pin badge. Their actuals roll
-            up the same way as every other manual envelope (any
-            transaction the user categorizes into them counts). */}
-        <section
-          key={myBudgetGroup.groupName}
-          className={card}
-          data-testid={`group-${myBudgetGroup.groupName}`}
-        >
-            <GroupHead
-              groupName={myBudgetGroup.groupName}
-              sub="Goals not tied to a bill"
-              collapsed={collapsed.has(myBudgetGroup.groupName)}
-              onToggle={() => toggleCollapse(myBudgetGroup.groupName)}
-              plannedTotal={myBudgetGroup.plannedTotal}
-              actualTotal={myBudgetGroup.actualTotal}
-              isIncomeGroup={false}
+      {/* ── The sections, by source ──────────────────────────────────────── */}
+      {PLAN_SECTIONS.map((section, i) => (
+        <PlanSection
+          key={section.key}
+          def={section}
+          index={i}
+          bucket={plan?.[section.key]}
+          lines={bySource[section.key]}
+          renderLine={(line) => (
+            <BudgetLineRow
+              key={line.categoryId}
+              line={line}
+              monthPinned={monthPinned}
+              monthStart={currentMonth}
+              onUpdatePlanned={handleUpdatePlanned}
+              onAutoPinLine={handleAutoPinLine}
+              // ⚠️ DELETE ONLY WHERE DELETE MEANS SOMETHING. A bill-backed or
+              // debt-backed row is rebuilt from its source on the next read, so
+              // deleting it only un-files its transactions for a moment and then
+              // the row comes back. Those are managed on Bills and Debts.
+              onDelete={
+                section.key === "unbacked"
+                  ? (catId) => handleDeleteMyBudgetCategory(catId, line.actualAmount)
+                  : undefined
+              }
+              onRename={section.key === "unbacked" ? handleRenameMyBudgetCategory : undefined}
+              uncategorizedTxns={uncategorizedThisMonth}
+              categoryRules={rulesByCategory.get(line.categoryId) ?? []}
+              contributingTxns={txnsByCategoryThisMonth.get(line.categoryId) ?? []}
+              onAssignTxn={handleAssignTxn}
+              onReassignTxn={handleReassignTxn}
+              allCategories={categories ?? []}
+              assigning={updateTx.isPending}
+              renaming={updateCat.isPending}
             />
+          )}
+          footer={
+            section.key === "unbacked" ? (
+              <AddEnvelope
+                adding={addingFor === MY_BUDGET_GROUP}
+                value={newName}
+                onChange={setNewName}
+                onCommit={() => handleAddCategory(MY_BUDGET_GROUP)}
+                onOpen={() => {
+                  setAddingFor(MY_BUDGET_GROUP);
+                  setNewName("");
+                }}
+                onCancel={() => {
+                  setAddingFor(null);
+                  setNewName("");
+                }}
+                commitDisabled={!newName.trim() || createCat.isPending}
+              />
+            ) : null
+          }
+        />
+      ))}
 
-            {!collapsed.has(myBudgetGroup.groupName) && (
-              <>
-                <ColumnHeads />
-                <DndContext
-                  sensors={dragSensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={(e: DragEndEvent) => handleDragReorder(myBudgetGroup.lines, e)}
-                >
-                  <SortableContext
-                    items={myBudgetGroup.lines.map((l) => l.categoryId)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                <div className="divide-y divide-brand-line/70">
-                  {myBudgetGroup.lines.length === 0 && (
-                    <div className={emptyNote} data-testid="empty-my-budget">
-                      No envelopes yet.
-                    </div>
-                  )}
-                  {myBudgetGroup.lines.map((line, idx) => (
-                    <BudgetLineRow
-                      key={line.categoryId}
-                      line={line}
-                      monthPinned={monthPinned}
-                      monthStart={currentMonth}
-                      onUpdatePlanned={handleUpdatePlanned}
-                      onDelete={(catId) =>
-                        handleDeleteMyBudgetCategory(catId, line.actualAmount)
-                      }
-                      onTogglePin={handleTogglePinLine}
-                      pinDisabled={pinLine.isPending}
-                      uncategorizedTxns={uncategorizedThisMonth}
-                      categoryRules={rulesByCategory.get(line.categoryId) ?? []}
-                      contributingTxns={
-                        txnsByCategoryThisMonth.get(line.categoryId) ?? []
-                      }
-                      onAssignTxn={handleAssignTxn}
-                      onReassignTxn={handleReassignTxn}
-                      allCategories={categories ?? []}
-                      assigning={updateTx.isPending}
-                      onMoveUp={null}
-                      onMoveDown={null}
-                      reorderDisabled={updateCat.isPending}
-                      onRename={handleRenameMyBudgetCategory}
-                      onMove={(catId, dir) =>
-                        handleMoveMyBudgetCategory(myBudgetGroup.lines, catId, dir)
-                      }
-                      canMoveUp={idx > 0}
-                      canMoveDown={idx < myBudgetGroup.lines.length - 1}
-                      renaming={updateCat.isPending}
-                    />
-                  ))}
-                </div>
-                  </SortableContext>
-                </DndContext>
+      {allowance && (
+        <AllowanceCard
+          allowance={allowance}
+          rowGrid={ROW_GRID}
+          index={PLAN_SECTIONS.length}
+        />
+      )}
 
-                <AddLineFooter
-                  groupName={myBudgetGroup.groupName}
-                  placeholder="New envelope name"
-                  adding={addingFor === myBudgetGroup.groupName}
-                  value={newName}
-                  onChange={setNewName}
-                  onCommit={() => handleAddCategory(myBudgetGroup.groupName)}
-                  onOpen={() => {
-                    setAddingFor(myBudgetGroup.groupName);
-                    setNewName("");
-                  }}
-                  onCancel={() => {
-                    setAddingFor(null);
-                    setNewName("");
-                  }}
-                  commitDisabled={!newName.trim() || createCat.isPending}
-                />
-              </>
+      {summary && (
+        <Foot data-testid="budget-basis-note">
+          Every figure on this page is the server's, for {monthName}. Spend is
+          what has cleared — {formatCurrency(summary.expenses.actual)} against
+          all envelopes, of which {formatCurrency(actualTotal)} sits against the
+          plan.
+        </Foot>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One source, one card. The head carries the source's name, its two figures
+ * and the verdict IN WORDS — good is navy on this palette and so is "no
+ * opinion", which means the colour cannot be the statement.
+ */
+function PlanSection({
+  def,
+  index,
+  bucket,
+  lines,
+  renderLine,
+  footer,
+}: {
+  def: PlanSectionDef;
+  index: number;
+  bucket: { planned: string; actual: string; lineCount: number } | undefined;
+  lines: BudgetLine[];
+  renderLine: (line: BudgetLine) => React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  const planned = Number(bucket?.planned ?? 0);
+  const actual = Number(bucket?.actual ?? 0);
+  // An empty section with nothing to add is a card that says nothing. The
+  // unbacked one stays put even when empty, because "nothing is planned by
+  // hand" is the good outcome and worth being able to read.
+  if (lines.length === 0 && def.key !== "unbacked") return null;
+  const verdict = sectionVerdict(def.key, planned, actual);
+
+  return (
+    <section
+      className={`${card} tile-in`}
+      style={{ animationDelay: `calc(${Math.min(index, 12)} * var(--stagger))` }}
+      data-testid={def.testId}
+    >
+      <div className={cardHead}>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-title font-semibold text-brand-navy">
+              {def.title}
+            </span>
+            {/* ⚠️ ONLY ON THE HAND-PLANNED CARD. Income is not in the expense
+                plan either, but saying so there reads as a criticism of the
+                paychecks rather than as the caveat it is. */}
+            {def.key === "unbacked" && (
+              <span className="chip gray" data-testid={`${def.testId}-not-in-plan`}>
+                not in the plan
+              </span>
             )}
-        </section>
+          </div>
+          <div className="text-micro text-neutral-400">{def.sub}</div>
+        </div>
+        <Help>{def.help}</Help>
+        <div className="text-right">
+          <div
+            className="font-mono text-label font-semibold tabular-nums text-brand-navy"
+            data-testid={`${def.testId}-planned`}
+          >
+            {formatCurrency(planned)}
+          </div>
+          <div className="font-mono text-micro tabular-nums text-neutral-400">
+            {formatCurrency(actual)} in
+          </div>
+        </div>
+        <span className={`chip ${verdict.tone}`} data-testid={`${def.testId}-verdict`}>
+          {verdict.word}
+        </span>
       </div>
+
+      {lines.length === 0 ? (
+        <div className={emptyNote}>Nothing planned by hand. Good.</div>
+      ) : (
+        <>
+          <ColumnHeads />
+          <div className="divide-y divide-brand-line/70">{lines.map(renderLine)}</div>
+        </>
+      )}
+
+      {footer}
+      <Foot>{def.foot}</Foot>
+    </section>
+  );
+}
+
+/** The one add control left on the page, and the only place a new envelope
+ *  can be created — which is the point: an envelope with no bill behind it is
+ *  the exception now, not the default way to plan. */
+function AddEnvelope({
+  adding,
+  value,
+  onChange,
+  onCommit,
+  onOpen,
+  onCancel,
+  commitDisabled,
+}: {
+  adding: boolean;
+  value: string;
+  onChange: (next: string) => void;
+  onCommit: () => void;
+  onOpen: () => void;
+  onCancel: () => void;
+  commitDisabled: boolean;
+}) {
+  return (
+    <div className="border-t border-brand-line px-4 py-2.5">
+      {adding ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            autoFocus
+            placeholder="New envelope name"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onCommit();
+              if (e.key === "Escape") onCancel();
+            }}
+            className={`${inputControl} max-w-[16rem]`}
+            data-testid="input-new-line-My budget"
+          />
+          <button
+            type="button"
+            className={btnSm}
+            onClick={onCommit}
+            disabled={commitDisabled}
+            data-testid="button-confirm-add-My budget"
+          >
+            Add
+          </button>
+          <button type="button" className={btnSecondarySm} onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className={btnLink}
+          onClick={onOpen}
+          data-testid="button-add-line-My budget"
+        >
+          <Plus className="h-3 w-3" /> Add envelope
+        </button>
+      )}
     </div>
   );
 }
@@ -1672,8 +1212,8 @@ function PlannedAmountCell({
             <div className="space-y-2 text-micro text-neutral-500">
               <p>
                 Pinned — it holds at this value instead of tracking the live
-                Bills/Debts derivation. Use the pin beside the row name to let
-                it track again.
+                Bills/Debts derivation. Unpin the month to let it track Bills
+                and Debts again.
               </p>
               {(source?.bills ?? []).length > 0 && (
                 <BillList bills={source!.bills} />
@@ -1905,13 +1445,9 @@ function BudgetLineRow({
   monthPinned,
   monthStart,
   onUpdatePlanned,
+  onAutoPinLine,
   onDelete,
   onRename,
-  onMoveUp,
-  onMoveDown,
-  reorderDisabled,
-  onTogglePin,
-  pinDisabled,
   uncategorizedTxns,
   categoryRules,
   contributingTxns,
@@ -1919,26 +1455,21 @@ function BudgetLineRow({
   onReassignTxn,
   allCategories,
   assigning,
-  onMove,
-  canMoveUp,
-  canMoveDown,
   renaming,
 }: {
   line: BudgetLineWithActual;
   monthPinned: boolean;
   monthStart: string;
   onUpdatePlanned: (categoryId: string, amount: string) => void;
-  onDelete: (id: string) => void;
+  /** See `handleAutoPinLine` — this is how a typed override survives the next
+   *  Bills/Debts recompute, not a user-facing pin control. */
+  onAutoPinLine: (categoryId: string, currentlyPinned: boolean) => void;
+  onDelete?: (id: string) => void;
   // (#692) Optional inline-rename hook. Provided only by the "My
   // budget" card; the bill-/debt-backed rows omit it so the pencil
   // affordance never appears on rows the server would reject the
   // rename for.
   onRename?: (categoryId: string, nextName: string) => void;
-  onMoveUp: (() => void) | null;
-  onMoveDown: (() => void) | null;
-  reorderDisabled: boolean;
-  onTogglePin: (categoryId: string, currentlyPinned: boolean) => void;
-  pinDisabled: boolean;
   uncategorizedTxns: Transaction[];
   categoryRules: MappingRule[];
   contributingTxns: Transaction[];
@@ -1950,12 +1481,6 @@ function BudgetLineRow({
   ) => void;
   allCategories: { id: string; name: string }[];
   assigning: boolean;
-  // (#692) Optional reorder hook. Provided only by the
-  // "My budget" card so the standard groups (auto_bills / auto_debts)
-  // never expose controls that the backend would reject anyway.
-  onMove?: (categoryId: string, direction: "up" | "down") => void;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
   renaming?: boolean;
 }) {
   // Task #692 — inline rename. The pencil icon next to the name flips
@@ -2019,31 +1544,6 @@ function BudgetLineRow({
   const isAvalanchePayment = line.categoryName === "Avalanche payment";
   const isReadOnly = sourceKind !== "manual";
 
-  // Task #696 — make the row a sortable item. The Avalanche row is
-  // system-managed (its position is decided by the Debts page), so we
-  // disable drag there. While dragging we lift the row above peers and
-  // dim it so the drop target is obvious. The drag handle below owns
-  // the listeners — pointer-down on the rest of the row (inputs,
-  // popover triggers, drill-down link) still behaves normally.
-  const {
-    attributes: dragAttributes,
-    listeners: dragListeners,
-    setNodeRef: setSortableRef,
-    transform: dragTransform,
-    transition: dragTransition,
-    isDragging,
-  } = useSortable({
-    id: line.categoryId,
-    disabled: isAvalanchePayment || reorderDisabled,
-  });
-  const sortableStyle: React.CSSProperties = {
-    transform: CSS.Transform.toString(dragTransform),
-    transition: dragTransition,
-    opacity: isDragging ? 0.5 : undefined,
-    zIndex: isDragging ? 10 : undefined,
-    position: isDragging ? "relative" : undefined,
-  };
-
   // Task #168 — pick the destination page for category drill-down based on
   // where this line's actuals actually came from. See
   // `pickCategoryDrillDownHref` above for the routing rule.
@@ -2059,8 +1559,6 @@ function BudgetLineRow({
 
   return (
     <div
-      ref={setSortableRef}
-      style={sortableStyle}
       className={`group ${ROW_GRID} hover:bg-platinum-2`}
       data-testid={`row-budget-${line.categoryId}`}
       role="row"
@@ -2237,85 +1735,12 @@ function BudgetLineRow({
             </span>
           ) : (
             <div className="ml-auto flex items-center gap-0.5 sm:ml-0">
-              {/* Task #696 — drag handle. Present on every non-Avalanche
-                  row so power users can shuffle 10+ envelopes in one
-                  motion. Listeners live on this button only so other
-                  controls in the row (inputs, popovers, drill-down
-                  link) still respond to clicks/taps normally. Touch
-                  works via the page-level TouchSensor (150ms press to
-                  start a drag) which keeps mobile scrolling intact. */}
-              {!isAvalanchePayment && (
-                <button
-                  type="button"
-                  {...dragAttributes}
-                  {...dragListeners}
-                  className={`${rowIcon} cursor-grab touch-none active:cursor-grabbing disabled:cursor-not-allowed`}
-                  disabled={reorderDisabled || renaming}
-                  title="Drag to reorder"
-                  aria-label="Drag to reorder"
-                  data-testid={`drag-handle-${line.categoryId}`}
-                >
-                  <GripVertical className="h-3 w-3" />
-                </button>
-              )}
-              {/* Task #692 — reorder this category within its group.
-                  Buttons are present on every non-Avalanche row so power
-                  users can shuffle bill-backed envelopes too; they no-op
-                  (disabled) at the top/bottom of the group. */}
-              {!isAvalanchePayment && !onMove && (
-                <>
-                  <button
-                    type="button"
-                    className={rowIcon}
-                    onClick={() => onMoveUp?.()}
-                    disabled={!onMoveUp || reorderDisabled}
-                    title="Move up"
-                    aria-label="Move up"
-                    data-testid={`button-move-up-${line.categoryId}`}
-                  >
-                    <ArrowUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    className={rowIcon}
-                    onClick={() => onMoveDown?.()}
-                    disabled={!onMoveDown || reorderDisabled}
-                    title="Move down"
-                    aria-label="Move down"
-                    data-testid={`button-move-down-${line.categoryId}`}
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                  </button>
-                </>
-              )}
-              {isReadOnly && !isAvalanchePayment && (
-                <button
-                  type="button"
-                  className={rowIcon}
-                  onClick={() => onTogglePin(line.categoryId, line.pinned)}
-                  disabled={pinDisabled || monthPinned}
-                  data-testid={`button-toggle-pin-${line.categoryId}`}
-                  aria-label={line.pinned ? "Unpin this line" : "Pin this line"}
-                  title={
-                    monthPinned
-                      ? "This month is pinned — unpin the month to control individual lines."
-                      : line.pinned
-                        ? "Unpin this line so it tracks Bills/Debts again."
-                        : "Pin this line to its current planned amount."
-                  }
-                >
-                  {line.pinned ? (
-                    <PinOff className="h-3 w-3" />
-                  ) : (
-                    <Pin className="h-3 w-3" />
-                  )}
-                </button>
-              )}
               {/* (#692) Rename + reorder controls — only shown when the
-                  parent wires up onRename / onMove (i.e. inside the My
-                  budget card). The buttons mirror the existing hover-fade
-                  pattern so they don't add visual noise on the rest of
-                  the budget rows. */}
+                  parent wires up onRename — i.e. inside the "Not from a
+                  bill" card, the only place a rename is legal (the server
+                  rejects a rename on anything but sourceKind "manual"). It
+                  mirrors the hover-fade pattern so it adds no visual noise
+                  on the rest of the rows. */}
               {onRename && (
                 <button
                   type="button"
@@ -2329,46 +1754,18 @@ function BudgetLineRow({
                   <Pencil className="h-3 w-3" />
                 </button>
               )}
-              {onMove && (
-                <>
-                  <button
-                    type="button"
-                    className={rowIcon}
-                    onClick={() => onMove(line.categoryId, "up")}
-                    disabled={!canMoveUp || renaming}
-                    data-testid={`button-move-up-${line.categoryId}`}
-                    aria-label="Move up"
-                    title="Move up"
-                  >
-                    <ChevronUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    className={rowIcon}
-                    onClick={() => onMove(line.categoryId, "down")}
-                    disabled={!canMoveDown || renaming}
-                    data-testid={`button-move-down-${line.categoryId}`}
-                    aria-label="Move down"
-                    title="Move down"
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
-                </>
+              {onDelete && (
+                <button
+                  type="button"
+                  className={`${rowIcon} hover:bg-bad-bg hover:text-bad`}
+                  onClick={() => onDelete(line.categoryId)}
+                  data-testid={`button-delete-${line.categoryId}`}
+                  aria-label="Delete this envelope"
+                  title="Delete this envelope"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
               )}
-              <button
-                type="button"
-                className={`${rowIcon} hover:bg-bad-bg hover:text-bad`}
-                onClick={() => onDelete(line.categoryId)}
-                data-testid={`button-delete-${line.categoryId}`}
-                aria-label="Delete this line"
-                title={
-                  isReadOnly
-                    ? "Delete this auto-pulled line (re-seeding will restore it)"
-                    : "Delete this line"
-                }
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
             </div>
           )}
         </div>
@@ -2379,10 +1776,10 @@ function BudgetLineRow({
           planned={planned}
           isAvalanchePayment={isAvalanchePayment}
           onUpdatePlanned={onUpdatePlanned}
-          onPinLine={onTogglePin}
+          onPinLine={onAutoPinLine}
         />
       </Cell>
-      <Cell label="Actual">
+      <Cell label="Spent">
         <Popover>
           <PopoverTrigger asChild>
             <button

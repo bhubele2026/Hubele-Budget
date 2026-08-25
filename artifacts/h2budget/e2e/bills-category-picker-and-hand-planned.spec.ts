@@ -163,7 +163,7 @@ test.describe("Category picker + My budget bucket (#690)", () => {
     await context.close();
   });
 
-  test('clicking "Add line" under My budget creates a new envelope that survives reload', async ({
+  test('"Add envelope" creates a hand-planned envelope that survives reload', async ({
     browser,
   }) => {
     const { userId, email, password } = await createTestUser(
@@ -181,7 +181,11 @@ test.describe("Category picker + My budget bucket (#690)", () => {
       page.getByRole("heading", { name: /^budget$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
-    const group = page.getByTestId("group-My budget");
+    // A new envelope has no bill and no debt behind it, so it lands in the
+    // "Not from a bill" section — which is the point of putting the only
+    // create control there: standing one up is now the exception, not the
+    // default way to plan.
+    const group = page.getByTestId("section-unbacked");
     await expect(group).toBeVisible({ timeout: 15_000 });
 
     const lineName = `E2E Envelope ${Math.random().toString(36).slice(2, 7)}`;
@@ -192,23 +196,24 @@ test.describe("Category picker + My budget bucket (#690)", () => {
     await input.fill(lineName);
     await page.getByTestId("button-confirm-add-My budget").click();
 
-    // The new envelope should render inside the My budget card.
+    // The new envelope should render inside the hand-planned card.
     await expect(group.getByText(lineName, { exact: true })).toBeVisible({
       timeout: 10_000,
     });
 
-    // Persistence check — a hard reload must keep the envelope inside
-    // the My budget group (not migrate to "Other" or vanish entirely).
+    // Persistence check — a hard reload must keep the envelope in the
+    // hand-planned section (not migrate to "Other" or vanish entirely).
     await page.reload();
     await expect(
       page.getByRole("heading", { name: /^budget$/i }),
     ).toBeVisible({ timeout: 15_000 });
-    const groupAfterReload = page.getByTestId("group-My budget");
+    const groupAfterReload = page.getByTestId("section-unbacked");
     await expect(
       groupAfterReload.getByText(lineName, { exact: true }),
     ).toBeVisible({ timeout: 15_000 });
 
-    // And it landed in the correct group on the server side.
+    // And the server classified it as unbacked, which is what keeps it out
+    // of the planned total.
     const catsResp = await page.request.get("/api/budget/categories");
     expect(catsResp.ok()).toBeTruthy();
     const cats = (await catsResp.json()) as Array<{
@@ -220,6 +225,17 @@ test.describe("Category picker + My budget bucket (#690)", () => {
     expect(created).toBeDefined();
     expect(created!.groupName).toBe("My budget");
     expect(created!.sourceKind).toBe("manual");
+
+    const monthResp = await page.request.get("/api/budget/months/2026-05-01");
+    expect(monthResp.ok()).toBeTruthy();
+    const month = (await monthResp.json()) as {
+      lines: Array<{ categoryName: string; planSource: string }>;
+      planBySource: { unbacked: { lineCount: number } };
+    };
+    expect(
+      month.lines.find((l) => l.categoryName === lineName)?.planSource,
+    ).toBe("unbacked");
+    expect(month.planBySource.unbacked.lineCount).toBeGreaterThan(0);
 
     await context.close();
   });

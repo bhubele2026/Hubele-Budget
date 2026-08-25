@@ -3059,7 +3059,7 @@ components:
         linesPinned: { type: integer }
     BudgetMonthDetail:
       type: object
-      required: [monthStart, monthPinned, lines, groups, summary]
+      required: [monthStart, monthPinned, lines, groups, summary, planBySource, allowance]
       properties:
         monthStart: { type: string }
         note: { type: ["string", "null"] }
@@ -3076,9 +3076,11 @@ components:
           type: array
           items: { $ref: "#/components/schemas/BudgetGroup" }
         summary: { $ref: "#/components/schemas/BudgetSummary" }
+        planBySource: { $ref: "#/components/schemas/BudgetPlanBySource" }
+        allowance: { $ref: "#/components/schemas/BudgetAllowanceRollup" }
     BudgetLineWithActual:
       type: object
-      required: [categoryId, categoryName, plannedAmount, actualAmount, groupName, sourceKind, sortOrder, kind, pinned]
+      required: [categoryId, categoryName, plannedAmount, actualAmount, groupName, sourceKind, sortOrder, kind, pinned, planSource]
       properties:
         id: { type: ["string", "null"] }
         categoryId: { type: string }
@@ -3088,6 +3090,25 @@ components:
         note: { type: ["string", "null"] }
         groupName: { type: string }
         sourceKind: { type: string, enum: [manual, auto_bills, auto_debts] }
+        planSource:
+          type: string
+          enum: [income, bills, debts, unbacked]
+          description: |
+            Where this line's planned money comes from. The Budget page groups
+            by this and sums only `bills` + `debts` into its plan.
+              - `income`   - an income category (the paychecks).
+              - `bills`    - one or more recurring items roll into this
+                             category for the viewed month.
+              - `debts`    - a Debt Tracker minimum, or the Avalanche payment.
+              - `unbacked` - a hand-created envelope with no recurring item and
+                             no debt behind it. Shown and editable, but
+                             deliberately EXCLUDED from
+                             planBySource.plannedTotal so the month is not
+                             planned twice for money that belongs inside a bill
+                             or inside the allowance.
+            Bill-backing beats sourceKind: most expense bills are pointed at a
+            curated envelope on the Bills page, so a bill-backed category still
+            reports sourceKind "manual".
         sortOrder: { type: integer }
         kind: { type: string }
         pinned:
@@ -3172,6 +3193,80 @@ components:
         expenses: { $ref: "#/components/schemas/BudgetSummaryPair" }
         net: { $ref: "#/components/schemas/BudgetSummaryPair" }
         percentSpent: { $ref: "#/components/schemas/BudgetSummaryPair" }
+    BudgetPlanBucket:
+      type: object
+      required: [planned, actual, lineCount]
+      properties:
+        planned: { type: string }
+        actual: { type: string }
+        lineCount: { type: integer }
+    BudgetPlanBySource:
+      type: object
+      required: [income, bills, debts, unbacked, plannedTotal, actualTotal, net]
+      description: |
+        The month rolled up by where each dollar comes from.
+        plannedTotal is bills + debts ONLY. unbacked is reported so the page can
+        show it and offer to give it a source, and income is the other side of
+        the ledger - neither is added to the plan.
+      properties:
+        income: { $ref: "#/components/schemas/BudgetPlanBucket" }
+        bills: { $ref: "#/components/schemas/BudgetPlanBucket" }
+        debts: { $ref: "#/components/schemas/BudgetPlanBucket" }
+        unbacked: { $ref: "#/components/schemas/BudgetPlanBucket" }
+        plannedTotal:
+          type: string
+          description: "bills.planned + debts.planned. Never includes unbacked."
+        actualTotal:
+          type: string
+          description: "bills.actual + debts.actual."
+        net:
+          type: string
+          description: "income.planned minus plannedTotal."
+    BudgetAllowanceSubBucket:
+      type: object
+      required: [bucket, actual, count]
+      properties:
+        bucket:
+          type: string
+          enum: [groceries, dining, alcohol, entertainment, misc]
+        actual: { type: string }
+        count: { type: integer }
+    BudgetAllowanceLine:
+      type: object
+      required: [bucket, planned, actual, count, subBuckets]
+      properties:
+        bucket: { type: string, enum: [weekly, monthly, unplanned] }
+        planned:
+          type: string
+          description: |
+            The cap for the whole month. The weekly cap is stored per week and
+            scaled by daysInMonth / 7. Per-week overrides in
+            settings.preferences.weeklyAllowanceOverrides are NOT applied.
+        actual: { type: string }
+        count: { type: integer }
+        subBuckets:
+          type: array
+          description: |
+            Weekly only - the five slices of the weekly envelope, which
+            partition it rather than adding to it. Weekly spend with no slice
+            chosen is folded into misc so the five always sum to the weekly
+            total. Empty for monthly and unplanned.
+          items: { $ref: "#/components/schemas/BudgetAllowanceSubBucket" }
+    BudgetAllowanceRollup:
+      type: object
+      required: [lines, planned, actual, weeksInMonth]
+      description: |
+        Allowance spend for the month, aggregated server-side.
+        TRACKED, NOT PLANNED. This money is already in planBySource.bills as the
+        recurring items that fund it, so these figures are never added to the
+        plan.
+      properties:
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/BudgetAllowanceLine" }
+        planned: { type: string }
+        actual: { type: string }
+        weeksInMonth: { type: string }
     SeedDefaultBudgetResult:
       type: object
       required: [categoriesInserted, linesInserted, alreadySeeded]

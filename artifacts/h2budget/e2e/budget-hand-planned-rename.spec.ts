@@ -75,8 +75,8 @@ async function apiCall<T>(
   return result.body;
 }
 
-test.describe("Budget My-budget rename + reorder (#692)", () => {
-  test("inline rename persists and up/down swap reflows row order", async ({
+test.describe("Budget — renaming a hand-planned envelope (#692)", () => {
+  test("an inline rename persists across a reload", async ({
     page,
   }) => {
     const { email, password } = await createTestUser(
@@ -138,16 +138,15 @@ test.describe("Budget My-budget rename + reorder (#692)", () => {
     await expect(rowA).toBeVisible({ timeout: 15_000 });
     await expect(rowB).toBeVisible({ timeout: 15_000 });
 
-    // Initial order: A is above B in the My budget card.
-    const myBudgetCard = page.getByTestId("group-My budget");
-    const rowsLoc = myBudgetCard.locator('[data-testid^="row-budget-"]');
+    // Both envelopes have no bill and no debt behind them, so they belong to
+    // the "Not from a bill" section — the only section that offers a rename.
+    const handPlanned = page.getByTestId("section-unbacked");
+    const rowsLoc = handPlanned.locator('[data-testid^="row-budget-"]');
     const initialIds = await rowsLoc.evaluateAll((els) =>
       els.map((e) => (e as HTMLElement).dataset.testid ?? ""),
     );
-    expect(initialIds).toEqual([
-      `row-budget-${catA.id}`,
-      `row-budget-${catB.id}`,
-    ]);
+    expect(initialIds).toContain(`row-budget-${catA.id}`);
+    expect(initialIds).toContain(`row-budget-${catB.id}`);
 
     // ---- 1. Inline rename of A ----
     const renamedA = `E2E Envelope A Renamed ${suffix}`;
@@ -168,35 +167,11 @@ test.describe("Budget My-budget rename + reorder (#692)", () => {
       rowAAfter.getByTestId(`button-category-name-${catA.id}`),
     ).toContainText(renamedA);
 
-    // ---- 2. Reorder: move A down, expect [B, A] ----
-    const moveDownA = rowAAfter.getByTestId(`button-move-down-${catA.id}`);
-    await expect(moveDownA).toBeEnabled();
-    await moveDownA.click();
-
-    // The list re-renders after both PATCHes settle. Poll the rendered
-    // order rather than racing the swap.
-    await expect
-      .poll(
-        async () =>
-          myBudgetCard
-            .locator('[data-testid^="row-budget-"]')
-            .evaluateAll((els) =>
-              els.map((e) => (e as HTMLElement).dataset.testid ?? ""),
-            ),
-        { timeout: 10_000, intervals: [250, 500, 1000] },
-      )
-      .toEqual([`row-budget-${catB.id}`, `row-budget-${catA.id}`]);
-
-    // ---- 3. Edge rows have their respective move buttons disabled ----
-    // Top row (B): "Move up" is disabled.
-    const topRow = page.getByTestId(`row-budget-${catB.id}`);
+    // ⚠️ NO REORDER ASSERTIONS HERE ANY MORE. Drag-to-reorder and the up/down
+    // arrows were removed in the rebuild — order comes from the source, then
+    // from size — so the controls they drove no longer exist to click.
     await expect(
-      topRow.getByTestId(`button-move-up-${catB.id}`),
-    ).toBeDisabled();
-    // Bottom row (A): "Move down" is disabled.
-    const bottomRow = page.getByTestId(`row-budget-${catA.id}`);
-    await expect(
-      bottomRow.getByTestId(`button-move-down-${catA.id}`),
-    ).toBeDisabled();
+      rowAAfter.getByTestId(`button-move-down-${catA.id}`),
+    ).toHaveCount(0);
   });
 });

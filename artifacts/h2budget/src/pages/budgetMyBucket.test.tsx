@@ -5,40 +5,12 @@ import {
   cleanup,
   fireEvent,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
 // --- Mutable per-test state captured by the api-client mock below. -----------
-type BudgetLineFixture = {
-  id: string;
-  categoryId: string;
-  categoryName: string;
-  plannedAmount: string;
-  actualAmount: string;
-  note: string | null;
-  groupName: string;
-  sourceKind: string;
-  sortOrder: number;
-  kind: string;
-  pinned: boolean;
-  sourceBreakdown: Array<{ source: string; count: number; amount: string }>;
-};
-type BudgetMonthFixture = {
-  monthPinned: boolean;
-  summary: {
-    income: { budget: string; actual: string };
-    expenses: { budget: string; actual: string };
-    net: { budget: string; actual: string };
-    percentSpent: { budget: string; actual: string };
-  };
-  groups: Array<{
-    groupName: string;
-    plannedTotal: string;
-    actualTotal: string;
-    lines: BudgetLineFixture[];
-  }>;
-};
 type CategoryFixture = {
   id: string;
   name: string;
@@ -49,7 +21,7 @@ type CategoryFixture = {
 
 const TEST_MONTH = "2026-05-01";
 
-let budgetMonth: BudgetMonthFixture | undefined = undefined;
+let budgetMonth: ReturnType<typeof makeMonth> | undefined = undefined;
 let categories: CategoryFixture[] = [];
 type TxnFixture = {
   id: string;
@@ -120,56 +92,37 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 import BudgetPage from "./budget";
+import {
+  makeBudgetMonth as makeMonth,
+  makeLine,
+} from "./__test-helpers__/budget-month";
 
-function makeMyBudgetMonth(): BudgetMonthFixture {
-  // Two manual envelopes living in the "My budget" group, in the order
-  // the server returns them (already sorted by sortOrder ascending).
-  return {
-    monthPinned: false,
-    summary: {
-      income: { budget: "0", actual: "0" },
-      expenses: { budget: "0", actual: "0" },
-      net: { budget: "0", actual: "0" },
-      percentSpent: { budget: "0", actual: "0" },
-    },
-    groups: [
-      {
+function makeMyBudgetMonth() {
+  // Two hand-made envelopes with no bill and no debt behind them — the only
+  // kind the page still lets you create, and the only kind it lets you rename.
+  return makeMonth({
+    monthStart: TEST_MONTH,
+    lines: [
+      makeLine({
+        id: "line-gifts",
+        categoryId: "cat-gifts",
+        categoryName: "Birthday gifts",
         groupName: "My budget",
-        plannedTotal: "0",
-        actualTotal: "0",
-        lines: [
-          {
-            id: "line-gifts",
-            categoryId: "cat-gifts",
-            categoryName: "Birthday gifts",
-            plannedAmount: "50",
-            actualAmount: "0",
-            note: null,
-            groupName: "My budget",
-            sourceKind: "manual",
-            sortOrder: 0,
-            kind: "expense",
-            pinned: false,
-            sourceBreakdown: [],
-          },
-          {
-            id: "line-soccer",
-            categoryId: "cat-soccer",
-            categoryName: "Kids soccer",
-            plannedAmount: "80",
-            actualAmount: "0",
-            note: null,
-            groupName: "My budget",
-            sourceKind: "manual",
-            sortOrder: 1,
-            kind: "expense",
-            pinned: false,
-            sourceBreakdown: [],
-          },
-        ],
-      },
+        planSource: "unbacked",
+        plannedAmount: "50",
+        sortOrder: 0,
+      }),
+      makeLine({
+        id: "line-soccer",
+        categoryId: "cat-soccer",
+        categoryName: "Kids soccer",
+        groupName: "My budget",
+        planSource: "unbacked",
+        plannedAmount: "80",
+        sortOrder: 1,
+      }),
     ],
-  };
+  });
 }
 
 function renderPage() {
@@ -209,38 +162,29 @@ beforeEach(() => {
   ];
 });
 
-describe("Budget — My budget bucket rename + reorder (#692)", () => {
-  it("only renders rename + move controls inside the My budget card", () => {
+describe("Budget — the hand-planned envelope card", () => {
+  /**
+   * ⚠️ THE REORDER SPECS THAT USED TO LIVE HERE ARE GONE ON PURPOSE.
+   *
+   * Drag-to-reorder and the up/down arrows were removed with the rebuild:
+   * order now comes from the source and then from size, which is the only
+   * ranking a reader of a budget wants and one that does not move between two
+   * renders of the same month. The test below pins their absence so they
+   * cannot creep back in unnoticed.
+   */
+  it("no longer offers any hand-ordering control", () => {
     renderPage();
-
-    // Both envelopes in My budget get the new pencil + arrow controls.
+    for (const id of [
+      "button-move-up-cat-gifts",
+      "button-move-down-cat-gifts",
+      "button-move-up-cat-soccer",
+      "button-move-down-cat-soccer",
+      "drag-handle-cat-gifts",
+    ]) {
+      expect(screen.queryByTestId(id)).toBeNull();
+    }
+    // The rename control, which is not ordering, survives.
     expect(screen.getByTestId("button-rename-cat-gifts")).toBeTruthy();
-    expect(screen.getByTestId("button-rename-cat-soccer")).toBeTruthy();
-    expect(screen.getByTestId("button-move-up-cat-gifts")).toBeTruthy();
-    expect(screen.getByTestId("button-move-down-cat-soccer")).toBeTruthy();
-  });
-
-  it("disables move-up on the first envelope and move-down on the last one", () => {
-    renderPage();
-
-    // The first row can move down but not up; the last row mirrors it.
-    // This is what keeps the user from clicking arrows that would no-op.
-    expect(
-      (screen.getByTestId("button-move-up-cat-gifts") as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
-    expect(
-      (screen.getByTestId("button-move-down-cat-gifts") as HTMLButtonElement)
-        .disabled,
-    ).toBe(false);
-    expect(
-      (screen.getByTestId("button-move-up-cat-soccer") as HTMLButtonElement)
-        .disabled,
-    ).toBe(false);
-    expect(
-      (screen.getByTestId("button-move-down-cat-soccer") as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
   });
 
   it("commits a rename via Enter and calls update-category with the trimmed name", async () => {
@@ -292,40 +236,33 @@ describe("Budget — My budget bucket rename + reorder (#692)", () => {
     expect(updateCategoryMock).not.toHaveBeenCalled();
   });
 
-  it("never exposes the rename control on the bill-/debt-backed groups (reorder is still allowed)", () => {
-    // Add an auto_bills group alongside the My budget group so we can
-    // assert the *rename* control is only wired up inside the manual
-    // envelope card — the server rejects name patches against
-    // auto-sourced categories, so leaking the pencil there would be a
-    // bug. Reordering (move up/down) IS available on the standard
-    // groups, so those buttons are expected to render on bill rows.
-    budgetMonth = {
-      ...makeMyBudgetMonth(),
-      groups: [
-        {
+  it("⚠️ never exposes the rename control on a bill-backed row", () => {
+    // The server rejects a name patch against anything but sourceKind
+    // "manual", so leaking the pencil onto a bill row would be an affordance
+    // that only ever errors. The page passes `onRename` from the
+    // hand-planned section alone.
+    budgetMonth = makeMonth({
+      monthStart: TEST_MONTH,
+      lines: [
+        makeLine({
+          id: "line-power",
+          categoryId: "cat-power",
+          categoryName: "Power",
           groupName: "Bills",
-          plannedTotal: "0",
-          actualTotal: "0",
-          lines: [
-            {
-              id: "line-power",
-              categoryId: "cat-power",
-              categoryName: "Power",
-              plannedAmount: "120",
-              actualAmount: "0",
-              note: null,
-              groupName: "Bills",
-              sourceKind: "auto_bills",
-              sortOrder: 0,
-              kind: "expense",
-              pinned: false,
-              sourceBreakdown: [],
-            },
-          ],
-        },
-        ...makeMyBudgetMonth().groups,
+          sourceKind: "auto_bills",
+          planSource: "bills",
+          plannedAmount: "120",
+        }),
+        makeLine({
+          id: "line-gifts",
+          categoryId: "cat-gifts",
+          categoryName: "Birthday gifts",
+          groupName: "My budget",
+          planSource: "unbacked",
+          plannedAmount: "50",
+        }),
       ],
-    };
+    });
     categories = [
       ...categories,
       {
@@ -339,84 +276,41 @@ describe("Budget — My budget bucket rename + reorder (#692)", () => {
 
     renderPage();
 
-    // My budget envelopes still have the rename + move controls.
     expect(screen.getByTestId("button-rename-cat-gifts")).toBeTruthy();
-    expect(screen.getByTestId("button-move-up-cat-gifts")).toBeTruthy();
-    // The auto_bills row never gets the rename pencil — the parent only
-    // passes onRename from the My budget card, so the BudgetLineRow
-    // renders without it regardless of the underlying category.
     expect(screen.queryByTestId("button-rename-cat-power")).toBeNull();
-    // Reordering is still available on the standard groups, so the bill
-    // row keeps its move buttons (disabled here since it's the only line).
-    expect(screen.getByTestId("button-move-up-cat-power")).toBeTruthy();
-    expect(screen.getByTestId("button-move-down-cat-power")).toBeTruthy();
   });
 
-  it("bumps sortOrder when neighbors are tied so an equal-sort move is observable", async () => {
-    // Both envelopes seeded at 9999 — the common new-category case. A
-    // naive swap would leave both fields unchanged and the row would
-    // silently fail to move on the server.
-    categories = [
-      {
-        id: "cat-gifts",
-        name: "Birthday gifts",
-        groupName: "My budget",
-        sourceKind: "manual",
-        sortOrder: 9999,
-      },
-      {
-        id: "cat-soccer",
-        name: "Kids soccer",
-        groupName: "My budget",
-        sourceKind: "manual",
-        sortOrder: 9999,
-      },
-    ];
-
+  it("puts the two kinds of envelope in different sections", () => {
+    budgetMonth = makeMonth({
+      monthStart: TEST_MONTH,
+      lines: [
+        makeLine({
+          categoryId: "cat-power",
+          categoryName: "Power",
+          planSource: "bills",
+          plannedAmount: "120",
+        }),
+        makeLine({
+          categoryId: "cat-gifts",
+          categoryName: "Birthday gifts",
+          planSource: "unbacked",
+          plannedAmount: "50",
+        }),
+      ],
+    });
     renderPage();
-
-    // Move-down on the first envelope: it should end up with the higher
-    // sortOrder so the rows actually swap after refetch.
-    fireEvent.click(screen.getByTestId("button-move-down-cat-gifts"));
-    await waitFor(() =>
-      expect(updateCategoryMock).toHaveBeenCalledTimes(2),
-    );
-    expect(updateCategoryMock).toHaveBeenCalledWith({
-      id: "cat-gifts",
-      data: { sortOrder: 10000 },
-    });
-    expect(updateCategoryMock).toHaveBeenCalledWith({
-      id: "cat-soccer",
-      data: { sortOrder: 9999 },
-    });
-
-    updateCategoryMock.mockClear();
-
-    // Symmetrically, move-up on the second envelope must leave it with
-    // the lower sortOrder. Without the direction-aware fallback this
-    // case would also no-op.
-    fireEvent.click(screen.getByTestId("button-move-up-cat-soccer"));
-    await waitFor(() =>
-      expect(updateCategoryMock).toHaveBeenCalledTimes(2),
-    );
-    expect(updateCategoryMock).toHaveBeenCalledWith({
-      id: "cat-soccer",
-      data: { sortOrder: 9999 },
-    });
-    expect(updateCategoryMock).toHaveBeenCalledWith({
-      id: "cat-gifts",
-      data: { sortOrder: 10000 },
-    });
+    expect(
+      within(screen.getByTestId("section-bills")).getByTestId(
+        "row-budget-cat-power",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId("section-unbacked")).getByTestId(
+        "row-budget-cat-gifts",
+      ),
+    ).toBeTruthy();
   });
 
-  // (#705) Regression test for the BudgetLineRow `onRename` prop wiring.
-  // The original bug was that a refactor dropped `onRename` from the
-  // BudgetLineRow destructure list while still passing it from the My
-  // budget card. That made `/budget` throw `onRename is not defined` on
-  // first render. Asserting that the inline rename input appears when
-  // the pencil button is clicked is enough to fail fast on any future
-  // regression that drops the prop again — the input only renders when
-  // `onRename` is wired up in the row's branch.
   it("(#705) renders the rename input when the pencil is clicked — guards onRename prop wiring", async () => {
     renderPage();
     fireEvent.click(screen.getByTestId("button-rename-cat-gifts"));
@@ -487,25 +381,4 @@ describe("Budget — My budget bucket rename + reorder (#692)", () => {
     });
   });
 
-  it("swaps sortOrder with the adjacent envelope when the user clicks move-down", async () => {
-    renderPage();
-
-    fireEvent.click(screen.getByTestId("button-move-down-cat-gifts"));
-
-    // Reorder is a two-step swap: each envelope inherits its neighbor's
-    // sortOrder. Asserting on both calls protects against accidentally
-    // collapsing the swap to a single PATCH that would leave the order
-    // unchanged.
-    await waitFor(() => {
-      expect(updateCategoryMock).toHaveBeenCalledTimes(2);
-    });
-    expect(updateCategoryMock).toHaveBeenCalledWith({
-      id: "cat-gifts",
-      data: { sortOrder: 1 },
-    });
-    expect(updateCategoryMock).toHaveBeenCalledWith({
-      id: "cat-soccer",
-      data: { sortOrder: 0 },
-    });
-  });
 });

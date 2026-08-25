@@ -55,21 +55,6 @@ type Tx = {
   isTransfer: boolean;
   source: string | null;
 };
-type Line = {
-  id: string;
-  categoryId: string;
-  categoryName: string;
-  plannedAmount: string;
-  actualAmount: string;
-  note: string | null;
-  groupName: string;
-  sourceKind: string;
-  sortOrder: number;
-  kind: string;
-  pinned: boolean;
-  sourceBreakdown: Array<{ source: string; count: number; amount: string }>;
-};
-
 /** Distinctive figures, so "the page printed the server's number" is provable
  *  rather than a coincidence of round values. */
 const SUMMARY = {
@@ -81,7 +66,6 @@ const SUMMARY = {
 
 let txns: Tx[] = [];
 let budgetMonth: Record<string, unknown> | undefined;
-let settings: Record<string, unknown> | undefined;
 const categories = [
   { id: "cat-over", name: "Groceries" },
   { id: "cat-under", name: "Utilities" },
@@ -126,7 +110,10 @@ vi.mock("@workspace/api-client-react", () => ({
   usePinBudgetMonth: () => noopMutation,
   usePinBudgetLine: () => noopMutation,
   useListTransactions: () => ({ data: txns }),
-  useGetSettings: () => ({ data: settings }),
+  // The allowance card renames its slices through
+  // `settings.preferences.weeklyBucketLabels`, so it reads settings even
+  // though the caps themselves now come from the server.
+  useGetSettings: () => ({ data: undefined }),
   useListMappingRules: () => ({ data: [] }),
   useUpdateTransaction: () => ({
     mutateAsync: vi.fn(async () => undefined),
@@ -139,77 +126,70 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 import BudgetPage from "./budget";
-
-function makeLine(overrides: Partial<Line>): Line {
-  return {
-    id: "line-x",
-    categoryId: "cat-x",
-    categoryName: "Cat X",
-    plannedAmount: "100",
-    actualAmount: "0",
-    note: null,
-    groupName: "Variable",
-    sourceKind: "manual",
-    sortOrder: 0,
-    kind: "expense",
-    pinned: false,
-    sourceBreakdown: [],
-    ...overrides,
-  };
-}
+import {
+  makeBudgetMonth as makeMonth,
+  makeLine,
+  makeAllowance,
+} from "./__test-helpers__/budget-month";
 
 function makeBudgetMonth() {
-  return {
-    monthPinned: false,
+  return makeMonth({
+    monthStart: TEST_MONTH,
     summary: SUMMARY,
-    groups: [
-      {
-        groupName: "Variable",
-        plannedTotal: "500.00",
-        actualTotal: "620.00",
-        lines: [
-          makeLine({
-            id: "l1",
-            categoryId: "cat-over",
-            categoryName: "Groceries",
-            plannedAmount: "400.00",
-            actualAmount: "520.00", // 130% — over plan
-          }),
-          makeLine({
-            id: "l2",
-            categoryId: "cat-under",
-            categoryName: "Utilities",
-            plannedAmount: "100.00",
-            actualAmount: "40.00", // 40% — under plan
-          }),
-          makeLine({
-            id: "l3",
-            categoryId: "cat-noplan",
-            categoryName: "Gifts",
-            plannedAmount: "0",
-            actualAmount: "0", // the empty / zero state
-          }),
-        ],
-      },
-      {
+    lines: [
+      makeLine({
+        id: "l1",
+        categoryId: "cat-over",
+        categoryName: "Groceries",
+        planSource: "bills",
+        plannedAmount: "400.00",
+        actualAmount: "520.00", // 130% — over plan
+      }),
+      makeLine({
+        id: "l2",
+        categoryId: "cat-under",
+        categoryName: "Utilities",
+        planSource: "bills",
+        plannedAmount: "100.00",
+        actualAmount: "40.00", // 40% — under plan
+      }),
+      makeLine({
+        id: "l3",
+        categoryId: "cat-noplan",
+        categoryName: "Gifts",
+        planSource: "unbacked",
+        plannedAmount: "0",
+        actualAmount: "0", // the empty / zero state
+      }),
+      makeLine({
+        id: "l4",
+        categoryId: "cat-income",
+        categoryName: "Salary",
         groupName: "Income",
-        plannedTotal: "1000.00",
-        actualTotal: "800.00",
-        lines: [
-          makeLine({
-            id: "l4",
-            categoryId: "cat-income",
-            categoryName: "Salary",
-            groupName: "Income",
-            kind: "income",
-            plannedAmount: "1000.00",
-            actualAmount: "800.00", // income that fell short
-          }),
+        kind: "income",
+        planSource: "income",
+        plannedAmount: "1000.00",
+        actualAmount: "800.00", // income that fell short
+      }),
+    ],
+    allowance: makeAllowance([
+      {
+        bucket: "weekly",
+        planned: "443.00",
+        actual: "310.00",
+        count: 7,
+        subBuckets: [
+          { bucket: "groceries", actual: "190.00", count: 4 },
+          { bucket: "dining", actual: "120.00", count: 3 },
+          { bucket: "alcohol", actual: "0.00", count: 0 },
+          { bucket: "entertainment", actual: "0.00", count: 0 },
+          { bucket: "misc", actual: "0.00", count: 0 },
         ],
       },
-      { groupName: "Empty", plannedTotal: "0", actualTotal: "0", lines: [] },
-    ],
-  };
+      { bucket: "monthly", planned: "250.00", actual: "0.00", count: 0, subBuckets: [] },
+      { bucket: "unplanned", planned: "0.00", actual: "0.00", count: 0, subBuckets: [] },
+    ]),
+  });
 }
 
 function renderPage() {
@@ -241,7 +221,6 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(TEST_TODAY);
   budgetMonth = makeBudgetMonth();
-  settings = undefined;
   txns = [];
 });
 
@@ -250,21 +229,60 @@ afterEach(() => {
 });
 
 describe("Budget envelope grid — the numbers", () => {
-  it("prints the server summary verbatim in the headline stats", () => {
+  it("⭐ the hero is the PLAN — bills plus debt payments, and nothing else", () => {
     renderPage();
-    const cases: Array<[string, string]> = [
-      ["tile-projected", SUMMARY.net.budget],
-      ["tile-net", SUMMARY.net.actual],
-      ["tile-income", SUMMARY.income.actual],
-      ["tile-expenses", SUMMARY.expenses.actual],
-    ];
-    for (const [testid, value] of cases) {
-      expect(screen.getByTestId(testid).textContent).toContain(usd(value));
-    }
-    // The percentage is the server's own string, not re-divided on the client.
-    expect(screen.getByTestId("tile-percent-spent").textContent).toContain(
-      `${SUMMARY.percentSpent.actual}%`,
+    // Fixture: bills plan 500 (400 + 100), debts 0, income 1000. The two
+    // envelopes that are NOT bill-backed contribute nothing to the headline.
+    expect(screen.getByTestId("hero-planned").textContent).toContain(
+      usd("500.00"),
     );
+    expect(screen.getByTestId("tile-spent").textContent).toContain(
+      usd("560.00"), // 520 + 40, the actuals against the plan
+    );
+    // Income less the plan.
+    expect(screen.getByTestId("tile-left-to-earn").textContent).toContain(
+      usd("500.00"),
+    );
+    expect(screen.getByTestId("tile-income").textContent).toContain(
+      usd("1000.00"),
+    );
+  });
+
+  it("⚠️ a hand-planned envelope is shown but never added to the plan", () => {
+    // The whole reason this page was rebuilt. `Gifts` has no bill and no debt,
+    // so it appears in its own section with its figure intact and stays out of
+    // the headline — the same dollar is not committed twice.
+    budgetMonth = makeMonth({
+      monthStart: TEST_MONTH,
+      lines: [
+        makeLine({
+          categoryId: "cat-bill",
+          categoryName: "Mortgage",
+          planSource: "bills",
+          plannedAmount: "2085.79",
+        }),
+        makeLine({
+          categoryId: "cat-hand",
+          categoryName: "Groceries",
+          planSource: "unbacked",
+          plannedAmount: "460.00",
+        }),
+      ],
+    });
+    renderPage();
+    expect(screen.getByTestId("hero-planned").textContent).toContain(
+      usd("2085.79"),
+    );
+    expect(screen.getByTestId("hero-planned").textContent).not.toContain(
+      usd("2545.79"),
+    );
+    // …and it is on screen, in the section that says it is not in the plan.
+    expect(screen.getByTestId("section-unbacked").textContent).toContain(
+      usd("460.00"),
+    );
+    expect(
+      screen.getByTestId("section-unbacked-not-in-plan").textContent,
+    ).toBe("not in the plan");
   });
 
   it("⚠️ does NOT re-derive any figure from the transaction list", () => {
@@ -281,15 +299,15 @@ describe("Budget envelope grid — the numbers", () => {
     ];
     renderPage();
     for (const testid of [
-      "tile-projected",
-      "tile-net",
+      "hero-planned",
+      "tile-spent",
+      "tile-left-to-earn",
       "tile-income",
-      "tile-expenses",
     ]) {
       expect(screen.getByTestId(testid).textContent).not.toContain("9,999");
     }
-    expect(screen.getByTestId("tile-expenses").textContent).toContain(
-      usd(SUMMARY.expenses.actual),
+    expect(screen.getByTestId("tile-spent").textContent).toContain(
+      usd("560.00"),
     );
     // The row's own actual is the server's line figure, not a client re-sum.
     expect(screen.getByTestId("button-actuals-cat-over").textContent).toBe(
@@ -351,16 +369,25 @@ describe("Budget envelope grid — state is said in words", () => {
     ).toEqual(expect.arrayContaining(["chip", "gray"]));
   });
 
-  it("states each group's position in words on its head", () => {
+  it("states each SOURCE's position in words on its head", () => {
     renderPage();
-    // Variable: planned 500 − actual 620 = 120 over.
-    expect(screen.getByTestId("button-toggle-Variable").textContent).toContain(
-      `${usd("120.00")} over`,
+    // Bills: 560 spent against 500 planned — over.
+    expect(screen.getByTestId("section-bills-verdict").textContent).toBe("over");
+    // ⚠️ Income that fell short is "part in", never "over budget". Grading
+    // both axes on percent-of-plan is what made a bonus read as overspending
+    // and a missed paycheck read as a saving.
+    expect(screen.getByTestId("section-income-verdict").textContent).toBe(
+      "part in",
     );
-    // Income: actual 800 − planned 1000 = 200 short.
-    expect(screen.getByTestId("button-toggle-Income").textContent).toContain(
-      `${usd("200.00")} short`,
-    );
+  });
+
+  it("prints each source's two figures on its head", () => {
+    renderPage();
+    const bills = screen.getByTestId("section-bills");
+    expect(
+      within(bills).getByTestId("section-bills-planned").textContent,
+    ).toBe(usd("500.00"));
+    expect(within(bills).getByTestId("section-bills-verdict")).toBeTruthy();
   });
 });
 
@@ -408,44 +435,71 @@ describe("Budget envelope grid — empty and zero states", () => {
     expect(meterFill("cat-noplan").style.width).toBe("0%");
   });
 
-  it("shows a quiet note for a group with no lines", () => {
+  it("⚠️ hides a source with nothing in it, rather than drawing an empty card", () => {
+    // A card that says nothing is worse than no card. `Debt payments` has no
+    // lines in this fixture, so it is not drawn at all.
     renderPage();
-    expect(screen.getByTestId("group-Empty").textContent).toContain(
-      "No lines yet.",
+    expect(screen.queryByTestId("section-debts")).toBeNull();
+    expect(screen.getByTestId("section-bills")).toBeTruthy();
+  });
+
+  it("keeps the hand-planned section standing even when empty, because empty is the good outcome", () => {
+    budgetMonth = makeMonth({
+      monthStart: TEST_MONTH,
+      lines: [makeLine({ categoryId: "c1", planSource: "bills" })],
+    });
+    renderPage();
+    expect(screen.getByTestId("section-unbacked").textContent).toContain(
+      "Nothing planned by hand",
     );
   });
 
-  it("shows a quiet note for an empty My budget card", () => {
+  it("still renders when the month has not arrived", () => {
+    budgetMonth = undefined;
     renderPage();
-    expect(screen.getByTestId("empty-my-budget").textContent).toContain(
-      "No envelopes yet.",
-    );
-  });
-
-  it("still renders the grid when the month summary has not arrived", () => {
-    budgetMonth = { monthPinned: false, summary: undefined, groups: [] };
-    renderPage();
-    expect(screen.queryByTestId("budget-summary")).toBeNull();
-    // Never a blank route: the My budget card is always standing.
-    expect(screen.getByTestId("group-My budget")).toBeTruthy();
+    // Never a blank route: the title is always standing.
+    expect(screen.getByRole("heading", { name: /^budget$/i })).toBeTruthy();
+    expect(screen.queryByTestId("budget-hero")).toBeNull();
   });
 });
 
-describe("Budget envelope grid — allowances", () => {
-  beforeEach(() => {
-    settings = {
-      weeklyAllowanceAmount: "100",
-      monthlyAllowanceAmount: "250",
-      unplannedAllowanceAmount: "0",
-    };
-  });
-
+describe("Budget envelope grid — the allowance", () => {
   it("states each bucket's headroom in words", () => {
     renderPage();
-    const card = screen.getByTestId("budget-allowances-group");
+    const card = screen.getByTestId("section-allowance");
     expect(card.textContent).toContain(`${usd("250.00")} left`);
     // A bucket with no cap says so rather than showing a meaningless 0%.
     expect(card.textContent).toContain("no cap set");
+  });
+
+  it("⭐ nests the weekly slices UNDER the weekly figure instead of beside it", () => {
+    // Brad: "there is a 1800 weekly, but also weekly in dining and groceries".
+    // Groceries and Dining are parts of the weekly allowance, so they render
+    // inside its row — never as sibling lines that look like more money.
+    renderPage();
+    const weeklyRow = screen.getByTestId("allowance-row-weekly");
+    const slices = within(weeklyRow).getByTestId("allowance-slices-weekly");
+    expect(slices.textContent).toContain(usd("190.00")); // groceries
+    expect(slices.textContent).toContain(usd("120.00")); // dining
+    // …and they are INSIDE the weekly row, not siblings of it.
+    expect(weeklyRow.contains(slices)).toBe(true);
+  });
+
+  it("⚠️ shows a slice only when it has spend, so the list is never five zeros", () => {
+    renderPage();
+    const slices = screen.getByTestId("allowance-slices-weekly");
+    expect(within(slices).queryByTestId("allowance-slice-weekly-alcohol")).toBeNull();
+    expect(within(slices).getByTestId("allowance-slice-weekly-groceries")).toBeTruthy();
+  });
+
+  it("says in words that the allowance is not planned a second time", () => {
+    renderPage();
+    expect(screen.getByTestId("section-allowance").textContent).toContain(
+      "Tracked, not planned again",
+    );
+    expect(screen.getByTestId("plan-strip-allowance").textContent).toContain(
+      "already inside Bills",
+    );
   });
 
   it("links out to the Allowances page", () => {

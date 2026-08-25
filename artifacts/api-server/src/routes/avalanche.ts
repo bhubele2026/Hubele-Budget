@@ -9,6 +9,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
+import { monthEndExclusive } from "../lib/monthBounds";
 import { UpdateAvalancheSettingsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -241,9 +242,7 @@ function currentMonthStart(): string {
 }
 
 function monthEndStr(monthStart: string): string {
-  const d = new Date(monthStart);
-  d.setMonth(d.getMonth() + 1);
-  return d.toISOString().slice(0, 10);
+  return monthEndExclusive(monthStart);
 }
 
 export async function resolveExtraForUser(
