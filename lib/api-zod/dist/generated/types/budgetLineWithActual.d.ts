@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BudgetLineWithActualPlannedSource } from "./budgetLineWithActualPlannedSource";
+import type { BudgetLineWithActualPlanSource } from "./budgetLineWithActualPlanSource";
 import type { BudgetLineWithActualSourceBreakdownItem } from "./budgetLineWithActualSourceBreakdownItem";
 import type { BudgetLineWithActualSourceKind } from "./budgetLineWithActualSourceKind";
 export interface BudgetLineWithActual {
@@ -19,6 +20,23 @@ export interface BudgetLineWithActual {
     note?: string | null;
     groupName: string;
     sourceKind: BudgetLineWithActualSourceKind;
+    /** Where this line's planned money comes from. The Budget page groups
+  by this and sums only `bills` + `debts` into its plan.
+    - `income`   - an income category (the paychecks).
+    - `bills`    - one or more recurring items roll into this
+                   category for the viewed month.
+    - `debts`    - a Debt Tracker minimum, or the Avalanche payment.
+    - `unbacked` - a hand-created envelope with no recurring item and
+                   no debt behind it. Shown and editable, but
+                   deliberately EXCLUDED from
+                   planBySource.plannedTotal so the month is not
+                   planned twice for money that belongs inside a bill
+                   or inside the allowance.
+  Bill-backing beats sourceKind: most expense bills are pointed at a
+  curated envelope on the Bills page, so a bill-backed category still
+  reports sourceKind "manual".
+   */
+    planSource: BudgetLineWithActualPlanSource;
     sortOrder: number;
     kind: string;
     /** True when this line's persisted planned amount is being used in

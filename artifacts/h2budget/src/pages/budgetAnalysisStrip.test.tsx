@@ -19,38 +19,9 @@ type Tx = {
   isTransfer: boolean;
   source: string | null;
 };
-type BudgetLineFixture = {
-  id: string;
-  categoryId: string;
-  categoryName: string;
-  plannedAmount: string;
-  actualAmount: string;
-  note: string | null;
-  groupName: string;
-  sourceKind: string;
-  sortOrder: number;
-  kind: string;
-  pinned: boolean;
-  sourceBreakdown: Array<{ source: string; count: number; amount: string }>;
-};
-type BudgetMonthFixture = {
-  monthPinned: boolean;
-  summary: {
-    income: { budget: string; actual: string };
-    expenses: { budget: string; actual: string };
-    net: { budget: string; actual: string };
-    percentSpent: { budget: string; actual: string };
-  };
-  groups: Array<{
-    groupName: string;
-    plannedTotal: string;
-    actualTotal: string;
-    lines: BudgetLineFixture[];
-  }>;
-};
 
 let txns: Tx[] = [];
-let budgetMonth: BudgetMonthFixture | undefined = undefined;
+let budgetMonth: ReturnType<typeof makeMonth> | undefined = undefined;
 let categories = [
   { id: "cat-1", name: "Groceries" },
   { id: "cat-2", name: "Dining" },
@@ -97,59 +68,34 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 import BudgetPage from "./budget";
+import {
+  makeBudgetMonth as makeMonth,
+  makeLine,
+} from "./__test-helpers__/budget-month";
 
-function makeLine(overrides: Partial<BudgetLineFixture>): BudgetLineFixture {
-  return {
-    id: "line-x",
-    categoryId: "cat-x",
-    categoryName: "Cat X",
-    plannedAmount: "100",
-    actualAmount: "0",
-    note: null,
-    groupName: "Variable",
-    sourceKind: "manual",
-    sortOrder: 0,
-    kind: "expense",
-    pinned: false,
-    sourceBreakdown: [],
-    ...overrides,
-  };
-}
-
-function makeBudgetMonth(): BudgetMonthFixture {
-  return {
-    monthPinned: false,
-    summary: {
-      income: { budget: "0", actual: "0" },
-      expenses: { budget: "100", actual: "40" },
-      net: { budget: "0", actual: "0" },
-      percentSpent: { budget: "0", actual: "0" },
-    },
-    groups: [
-      {
-        groupName: "Variable",
-        plannedTotal: "200",
-        actualTotal: "40",
-        lines: [
-          makeLine({
-            id: "line-1",
-            categoryId: "cat-1",
-            categoryName: "Groceries",
-            plannedAmount: "100",
-            // actualAmount drives what the strip displays for "spent".
-            actualAmount: "40",
-          }),
-          makeLine({
-            id: "line-2",
-            categoryId: "cat-2",
-            categoryName: "Dining",
-            plannedAmount: "100",
-            actualAmount: "0",
-          }),
-        ],
-      },
+function makeBudgetMonth() {
+  return makeMonth({
+    monthStart: TEST_MONTH,
+    lines: [
+      makeLine({
+        id: "line-1",
+        categoryId: "cat-1",
+        categoryName: "Groceries",
+        planSource: "bills",
+        plannedAmount: "100",
+        // actualAmount drives what the strip displays for "spent".
+        actualAmount: "40",
+      }),
+      makeLine({
+        id: "line-2",
+        categoryId: "cat-2",
+        categoryName: "Dining",
+        planSource: "bills",
+        plannedAmount: "100",
+        actualAmount: "0",
+      }),
     ],
-  };
+  });
 }
 
 function renderPage() {
@@ -224,31 +170,25 @@ describe("Budget row analysis strip (#419 — covers strip added in #417)", () =
   // actual exceeds planned, the strip should swap "remaining" wording for the
   // alarm-y "over" wording and the percent-of-plan should read > 100%.
   it("uses 'over' wording (not 'remaining') when an expense line is over budget", () => {
-    budgetMonth = {
-      monthPinned: false,
+    budgetMonth = makeMonth({
+      monthStart: TEST_MONTH,
       summary: {
         income: { budget: "0", actual: "0" },
         expenses: { budget: "100", actual: "150" },
         net: { budget: "0", actual: "0" },
         percentSpent: { budget: "0", actual: "0" },
       },
-      groups: [
-        {
-          groupName: "Variable",
-          plannedTotal: "100",
-          actualTotal: "150",
-          lines: [
-            makeLine({
-              id: "line-1",
-              categoryId: "cat-1",
-              categoryName: "Groceries",
-              plannedAmount: "100",
-              actualAmount: "150",
-            }),
-          ],
-        },
+      lines: [
+        makeLine({
+          id: "line-1",
+          categoryId: "cat-1",
+          categoryName: "Groceries",
+          planSource: "bills",
+          plannedAmount: "100",
+          actualAmount: "150",
+        }),
       ],
-    };
+    });
     txns = [
       {
         id: "tx-1",
@@ -285,42 +225,37 @@ describe("Budget row analysis strip (#419 — covers strip added in #417)", () =
       { id: "cat-inc-under", name: "Salary" },
       { id: "cat-inc-over", name: "Bonus" },
     ];
-    budgetMonth = {
-      monthPinned: false,
+    budgetMonth = makeMonth({
+      monthStart: TEST_MONTH,
       summary: {
         income: { budget: "2000", actual: "1700" },
         expenses: { budget: "0", actual: "0" },
         net: { budget: "0", actual: "0" },
         percentSpent: { budget: "0", actual: "0" },
       },
-      groups: [
-        {
+      lines: [
+        makeLine({
+          id: "line-inc-under",
+          categoryId: "cat-inc-under",
+          categoryName: "Salary",
           groupName: "Income",
-          plannedTotal: "2000",
-          actualTotal: "1700",
-          lines: [
-            makeLine({
-              id: "line-inc-under",
-              categoryId: "cat-inc-under",
-              categoryName: "Salary",
-              groupName: "Income",
-              kind: "income",
-              plannedAmount: "1000",
-              actualAmount: "800",
-            }),
-            makeLine({
-              id: "line-inc-over",
-              categoryId: "cat-inc-over",
-              categoryName: "Bonus",
-              groupName: "Income",
-              kind: "income",
-              plannedAmount: "1000",
-              actualAmount: "1200",
-            }),
-          ],
-        },
+          kind: "income",
+          planSource: "income",
+          plannedAmount: "1000",
+          actualAmount: "800",
+        }),
+        makeLine({
+          id: "line-inc-over",
+          categoryId: "cat-inc-over",
+          categoryName: "Bonus",
+          groupName: "Income",
+          kind: "income",
+          planSource: "income",
+          plannedAmount: "1000",
+          actualAmount: "1200",
+        }),
       ],
-    };
+    });
     txns = [
       {
         id: "tx-inc-1",

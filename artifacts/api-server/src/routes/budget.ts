@@ -44,6 +44,9 @@ import {
   SEED_MAPPING_PRIORITY,
 } from "../lib/mappingSeed";
 import { expandItem, parseISO, addDays } from "../lib/cashSignal";
+import { planSourceOf, rollUpPlanBySource } from "../lib/budgetPlanSource";
+import { buildAllowanceRollup } from "../lib/budgetAllowance";
+import { monthEndExclusive, daysInMonth } from "../lib/monthBounds";
 
 const router: IRouter = Router();
 
@@ -1598,6 +1601,10 @@ router.get(
           net: { budget: "0.00", actual: "0.00" },
           percentSpent: { budget: "0.0", actual: "0.0" },
         },
+        // Below the floor there is nothing to roll up, but the shape must
+        // still be the shape — the page reads these unconditionally.
+        planBySource: rollUpPlanBySource([]),
+        allowance: buildAllowanceRollup([], { weekly: "0", monthly: "0", unplanned: "0" }, 30),
       });
       return;
     }
@@ -1795,9 +1802,7 @@ router.get(
     // on the fly from Bills (recurring_items) and Debts so they always reflect
     // the current source values, regardless of what (if anything) was carried
     // forward into this month's budget_lines.
-    const monthEnd0 = new Date(monthStart);
-    monthEnd0.setMonth(monthEnd0.getMonth() + 1);
-    const monthEndStr0 = monthEnd0.toISOString().slice(0, 10);
+    const monthEndStr0 = monthEndExclusive(monthStart);
     const monthFromDate = parseISO(monthStart);
     const monthToDate = addDays(parseISO(monthEndStr0), -1);
 
@@ -1875,9 +1880,7 @@ router.get(
       }
     }
 
-    const monthEnd = new Date(monthStart);
-    monthEnd.setMonth(monthEnd.getMonth() + 1);
-    const monthEndStr = monthEnd.toISOString().slice(0, 10);
+    const monthEndStr = monthEndExclusive(monthStart);
 
     // Spend / inflow aggregation. Bank-style sources (Plaid bank, manual,
     // import) follow the standard convention: NEGATIVE amounts are spend,
@@ -2005,6 +2008,17 @@ router.get(
         kind: plannedSourceKind,
         bills: linkedBills,
       };
+      // ⭐ WHERE THIS DOLLAR COMES FROM — the Budget page's whole organizing
+      // question. `planSource` is what the page groups by, and what decides
+      // whether the line is in `plannedTotal` at all: `unbacked` lines are
+      // shown and editable but never summed into the plan. See
+      // lib/budgetPlanSource.ts for why bill-backing beats `sourceKind`.
+      const planSource = planSourceOf({
+        kind: c.kind,
+        sourceKind: c.sourceKind,
+        linkedBillCount: linkedBills.length,
+        isAvalanchePayment: c.name === AVALANCHE_PAYMENT_NAME,
+      });
       return {
         id: line?.id ?? null,
         categoryId: c.id,
@@ -2019,6 +2033,7 @@ router.get(
         pinned: usePinnedLine,
         sourceBreakdown,
         plannedSource,
+        planSource,
       };
     });
 
@@ -2111,6 +2126,72 @@ router.get(
       },
     };
 
+    // ── The allowance, tracked ───────────────────────────────────────────
+    // ⚠️ TRACKED, NOT PLANNED, AND NEVER ADDED TO `plannedTotal`. The money is
+    // already in the plan as the recurring items that fund it (`Weekly Spend`,
+    // `Monthly Spend`). Adding the caps on top is what made the same
+    // discretionary dollar appear three times on the old page.
+    //
+    // The filters mirror `isCountableSpend` + `effectiveBucket` on the client
+    // (h2budget/src/lib/bucketSpend.ts, weeklyBuckets.ts) exactly, INCLUDING
+    // the bucket precedence unplanned > monthly > weekly, so the Budget page
+    // and the Allowances page cannot report different spend for one month.
+    const allowanceRows = await db
+      .select({
+        bucket: sql<string | null>`case
+          when ${transactionsTable.unplannedAllowance} then 'unplanned'
+          when ${transactionsTable.monthlyAllowance} then 'monthly'
+          when ${transactionsTable.weeklyAllowance} then 'weekly'
+          else null end`,
+        subBucket: transactionsTable.weeklyBucket,
+        spend: sql<string>`coalesce(sum(case
+          when ${transactionsTable.source} = 'amex' and ${transactionsTable.amount} > 0 then ${transactionsTable.amount}
+          when ${transactionsTable.source} <> 'amex' and ${transactionsTable.amount} < 0 then -${transactionsTable.amount}
+          else 0 end)::text, '0')`,
+        cnt: sql<string>`count(*)::text`,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, householdId),
+          sql`${transactionsTable.occurredOn} >= ${monthStart}`,
+          sql`${transactionsTable.occurredOn} < ${monthEndStr}`,
+          eq(transactionsTable.isTransfer, false),
+          eq(transactionsTable.isExternalCardPayment, false),
+          eq(transactionsTable.reimbursable, false),
+          isNull(transactionsTable.debtId),
+        ),
+      )
+      .groupBy(
+        sql`case
+          when ${transactionsTable.unplannedAllowance} then 'unplanned'
+          when ${transactionsTable.monthlyAllowance} then 'monthly'
+          when ${transactionsTable.weeklyAllowance} then 'weekly'
+          else null end`,
+        transactionsTable.weeklyBucket,
+      );
+
+    const [allowanceSettings] = await db
+      .select({
+        weekly: settingsTable.weeklyAllowanceAmount,
+        monthly: settingsTable.monthlyAllowanceAmount,
+        unplanned: settingsTable.unplannedAllowanceAmount,
+      })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, householdOwnerId));
+
+    const allowance = buildAllowanceRollup(
+      allowanceRows,
+      {
+        weekly: allowanceSettings?.weekly ?? "0",
+        monthly: allowanceSettings?.monthly ?? "0",
+        unplanned: allowanceSettings?.unplanned ?? "0",
+      },
+      daysInMonth(monthStart),
+    );
+
+    const planBySource = rollUpPlanBySource(responseLines);
+
     res.json({
       monthStart,
       note: month?.note ?? null,
@@ -2118,6 +2199,8 @@ router.get(
       lines: responseLines,
       groups,
       summary,
+      planBySource,
+      allowance,
     });
   },
 );
@@ -2200,9 +2283,7 @@ async function snapshotAutoLinesForMonth(
     .from(budgetCategoriesTable)
     .where(eq(budgetCategoriesTable.householdId, householdId));
 
-  const monthEnd0 = new Date(monthStart);
-  monthEnd0.setMonth(monthEnd0.getMonth() + 1);
-  const monthEndStr0 = monthEnd0.toISOString().slice(0, 10);
+  const monthEndStr0 = monthEndExclusive(monthStart);
   const monthFromDate = parseISO(monthStart);
   const monthToDate = addDays(parseISO(monthEndStr0), -1);
 

@@ -1657,6 +1657,11 @@ export const GetBudgetMonthResponse = zod.object({
       note: zod.string().nullish(),
       groupName: zod.string(),
       sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
+      planSource: zod
+        .enum(["income", "bills", "debts", "unbacked"])
+        .describe(
+          'Where this line\'s planned money comes from. The Budget page groups\nby this and sums only `bills` + `debts` into its plan.\n  - `income`   - an income category (the paychecks).\n  - `bills`    - one or more recurring items roll into this\n                 category for the viewed month.\n  - `debts`    - a Debt Tracker minimum, or the Avalanche payment.\n  - `unbacked` - a hand-created envelope with no recurring item and\n                 no debt behind it. Shown and editable, but\n                 deliberately EXCLUDED from\n                 planBySource.plannedTotal so the month is not\n                 planned twice for money that belongs inside a bill\n                 or inside the allowance.\nBill-backing beats sourceKind: most expense bills are pointed at a\ncurated envelope on the Bills page, so a bill-backed category still\nreports sourceKind \"manual\".\n',
+        ),
       sortOrder: zod.number(),
       kind: zod.string(),
       pinned: zod
@@ -1714,6 +1719,11 @@ export const GetBudgetMonthResponse = zod.object({
           note: zod.string().nullish(),
           groupName: zod.string(),
           sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
+          planSource: zod
+            .enum(["income", "bills", "debts", "unbacked"])
+            .describe(
+              'Where this line\'s planned money comes from. The Budget page groups\nby this and sums only `bills` + `debts` into its plan.\n  - `income`   - an income category (the paychecks).\n  - `bills`    - one or more recurring items roll into this\n                 category for the viewed month.\n  - `debts`    - a Debt Tracker minimum, or the Avalanche payment.\n  - `unbacked` - a hand-created envelope with no recurring item and\n                 no debt behind it. Shown and editable, but\n                 deliberately EXCLUDED from\n                 planBySource.plannedTotal so the month is not\n                 planned twice for money that belongs inside a bill\n                 or inside the allowance.\nBill-backing beats sourceKind: most expense bills are pointed at a\ncurated envelope on the Bills page, so a bill-backed category still\nreports sourceKind \"manual\".\n',
+            ),
           sortOrder: zod.number(),
           kind: zod.string(),
           pinned: zod
@@ -1776,6 +1786,75 @@ export const GetBudgetMonthResponse = zod.object({
       actual: zod.string(),
     }),
   }),
+  planBySource: zod
+    .object({
+      income: zod.object({
+        planned: zod.string(),
+        actual: zod.string(),
+        lineCount: zod.number(),
+      }),
+      bills: zod.object({
+        planned: zod.string(),
+        actual: zod.string(),
+        lineCount: zod.number(),
+      }),
+      debts: zod.object({
+        planned: zod.string(),
+        actual: zod.string(),
+        lineCount: zod.number(),
+      }),
+      unbacked: zod.object({
+        planned: zod.string(),
+        actual: zod.string(),
+        lineCount: zod.number(),
+      }),
+      plannedTotal: zod
+        .string()
+        .describe("bills.planned + debts.planned. Never includes unbacked."),
+      actualTotal: zod.string().describe("bills.actual + debts.actual."),
+      net: zod.string().describe("income.planned minus plannedTotal."),
+    })
+    .describe(
+      "The month rolled up by where each dollar comes from.\nplannedTotal is bills + debts ONLY. unbacked is reported so the page can\nshow it and offer to give it a source, and income is the other side of\nthe ledger - neither is added to the plan.\n",
+    ),
+  allowance: zod
+    .object({
+      lines: zod.array(
+        zod.object({
+          bucket: zod.enum(["weekly", "monthly", "unplanned"]),
+          planned: zod
+            .string()
+            .describe(
+              "The cap for the whole month. The weekly cap is stored per week and\nscaled by daysInMonth \/ 7. Per-week overrides in\nsettings.preferences.weeklyAllowanceOverrides are NOT applied.\n",
+            ),
+          actual: zod.string(),
+          count: zod.number(),
+          subBuckets: zod
+            .array(
+              zod.object({
+                bucket: zod.enum([
+                  "groceries",
+                  "dining",
+                  "alcohol",
+                  "entertainment",
+                  "misc",
+                ]),
+                actual: zod.string(),
+                count: zod.number(),
+              }),
+            )
+            .describe(
+              "Weekly only - the five slices of the weekly envelope, which\npartition it rather than adding to it. Weekly spend with no slice\nchosen is folded into misc so the five always sum to the weekly\ntotal. Empty for monthly and unplanned.\n",
+            ),
+        }),
+      ),
+      planned: zod.string(),
+      actual: zod.string(),
+      weeksInMonth: zod.string(),
+    })
+    .describe(
+      "Allowance spend for the month, aggregated server-side.\nTRACKED, NOT PLANNED. This money is already in planBySource.bills as the\nrecurring items that fund it, so these figures are never added to the\nplan.\n",
+    ),
 });
 
 /**

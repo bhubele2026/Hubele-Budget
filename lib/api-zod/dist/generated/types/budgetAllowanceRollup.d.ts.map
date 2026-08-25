@@ -1,0 +1,1 @@
+{"version":3,"file":"budgetAllowanceRollup.d.ts","sourceRoot":"","sources":["../../../src/generated/types/budgetAllowanceRollup.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,mBAAmB,EAAE,MAAM,uBAAuB,CAAC;AAEjE;;;;;;GAMG;AACH,MAAM,WAAW,qBAAqB;IACpC,KAAK,EAAE,mBAAmB,EAAE,CAAC;IAC7B,OAAO,EAAE,MAAM,CAAC;IAChB,MAAM,EAAE,MAAM,CAAC;IACf,YAAY,EAAE,MAAM,CAAC;CACtB"}

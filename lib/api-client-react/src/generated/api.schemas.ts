@@ -1376,6 +1376,34 @@ export const BudgetLineWithActualSourceKind = {
   auto_debts: "auto_debts",
 } as const;
 
+/**
+ * Where this line's planned money comes from. The Budget page groups
+by this and sums only `bills` + `debts` into its plan.
+  - `income`   - an income category (the paychecks).
+  - `bills`    - one or more recurring items roll into this
+                 category for the viewed month.
+  - `debts`    - a Debt Tracker minimum, or the Avalanche payment.
+  - `unbacked` - a hand-created envelope with no recurring item and
+                 no debt behind it. Shown and editable, but
+                 deliberately EXCLUDED from
+                 planBySource.plannedTotal so the month is not
+                 planned twice for money that belongs inside a bill
+                 or inside the allowance.
+Bill-backing beats sourceKind: most expense bills are pointed at a
+curated envelope on the Bills page, so a bill-backed category still
+reports sourceKind "manual".
+
+ */
+export type BudgetLineWithActualPlanSource =
+  (typeof BudgetLineWithActualPlanSource)[keyof typeof BudgetLineWithActualPlanSource];
+
+export const BudgetLineWithActualPlanSource = {
+  income: "income",
+  bills: "bills",
+  debts: "debts",
+  unbacked: "unbacked",
+} as const;
+
 export type BudgetLineWithActualSourceBreakdownItemSource =
   (typeof BudgetLineWithActualSourceBreakdownItemSource)[keyof typeof BudgetLineWithActualSourceBreakdownItemSource];
 
@@ -1447,6 +1475,23 @@ export interface BudgetLineWithActual {
   note?: string | null;
   groupName: string;
   sourceKind: BudgetLineWithActualSourceKind;
+  /** Where this line's planned money comes from. The Budget page groups
+by this and sums only `bills` + `debts` into its plan.
+  - `income`   - an income category (the paychecks).
+  - `bills`    - one or more recurring items roll into this
+                 category for the viewed month.
+  - `debts`    - a Debt Tracker minimum, or the Avalanche payment.
+  - `unbacked` - a hand-created envelope with no recurring item and
+                 no debt behind it. Shown and editable, but
+                 deliberately EXCLUDED from
+                 planBySource.plannedTotal so the month is not
+                 planned twice for money that belongs inside a bill
+                 or inside the allowance.
+Bill-backing beats sourceKind: most expense bills are pointed at a
+curated envelope on the Bills page, so a bill-backed category still
+reports sourceKind "manual".
+ */
+  planSource: BudgetLineWithActualPlanSource;
   sortOrder: number;
   kind: string;
   /** True when this line's persisted planned amount is being used in
@@ -1498,6 +1543,89 @@ export interface BudgetSummary {
   percentSpent: BudgetSummaryPair;
 }
 
+export interface BudgetPlanBucket {
+  planned: string;
+  actual: string;
+  lineCount: number;
+}
+
+/**
+ * The month rolled up by where each dollar comes from.
+plannedTotal is bills + debts ONLY. unbacked is reported so the page can
+show it and offer to give it a source, and income is the other side of
+the ledger - neither is added to the plan.
+
+ */
+export interface BudgetPlanBySource {
+  income: BudgetPlanBucket;
+  bills: BudgetPlanBucket;
+  debts: BudgetPlanBucket;
+  unbacked: BudgetPlanBucket;
+  /** bills.planned + debts.planned. Never includes unbacked. */
+  plannedTotal: string;
+  /** bills.actual + debts.actual. */
+  actualTotal: string;
+  /** income.planned minus plannedTotal. */
+  net: string;
+}
+
+export type BudgetAllowanceLineBucket =
+  (typeof BudgetAllowanceLineBucket)[keyof typeof BudgetAllowanceLineBucket];
+
+export const BudgetAllowanceLineBucket = {
+  weekly: "weekly",
+  monthly: "monthly",
+  unplanned: "unplanned",
+} as const;
+
+export type BudgetAllowanceSubBucketBucket =
+  (typeof BudgetAllowanceSubBucketBucket)[keyof typeof BudgetAllowanceSubBucketBucket];
+
+export const BudgetAllowanceSubBucketBucket = {
+  groceries: "groceries",
+  dining: "dining",
+  alcohol: "alcohol",
+  entertainment: "entertainment",
+  misc: "misc",
+} as const;
+
+export interface BudgetAllowanceSubBucket {
+  bucket: BudgetAllowanceSubBucketBucket;
+  actual: string;
+  count: number;
+}
+
+export interface BudgetAllowanceLine {
+  bucket: BudgetAllowanceLineBucket;
+  /** The cap for the whole month. The weekly cap is stored per week and
+scaled by daysInMonth / 7. Per-week overrides in
+settings.preferences.weeklyAllowanceOverrides are NOT applied.
+ */
+  planned: string;
+  actual: string;
+  count: number;
+  /** Weekly only - the five slices of the weekly envelope, which
+partition it rather than adding to it. Weekly spend with no slice
+chosen is folded into misc so the five always sum to the weekly
+total. Empty for monthly and unplanned.
+ */
+  subBuckets: BudgetAllowanceSubBucket[];
+}
+
+/**
+ * Allowance spend for the month, aggregated server-side.
+TRACKED, NOT PLANNED. This money is already in planBySource.bills as the
+recurring items that fund it, so these figures are never added to the
+plan.
+
+ */
+export interface BudgetAllowanceRollup {
+  lines: BudgetAllowanceLine[];
+  planned: string;
+  actual: string;
+  weeksInMonth: string;
+}
+
 export interface BudgetMonthDetail {
   monthStart: string;
   /** @nullable */
@@ -1510,6 +1638,8 @@ stored value instead of the live Bills/Debts derivation.
   lines: BudgetLineWithActual[];
   groups: BudgetGroup[];
   summary: BudgetSummary;
+  planBySource: BudgetPlanBySource;
+  allowance: BudgetAllowanceRollup;
 }
 
 export interface SeedDefaultBudgetResult {

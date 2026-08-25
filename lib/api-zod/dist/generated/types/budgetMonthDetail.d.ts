@@ -5,8 +5,10 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { BudgetAllowanceRollup } from "./budgetAllowanceRollup";
 import type { BudgetGroup } from "./budgetGroup";
 import type { BudgetLineWithActual } from "./budgetLineWithActual";
+import type { BudgetPlanBySource } from "./budgetPlanBySource";
 import type { BudgetSummary } from "./budgetSummary";
 export interface BudgetMonthDetail {
     monthStart: string;
@@ -20,5 +22,7 @@ export interface BudgetMonthDetail {
     lines: BudgetLineWithActual[];
     groups: BudgetGroup[];
     summary: BudgetSummary;
+    planBySource: BudgetPlanBySource;
+    allowance: BudgetAllowanceRollup;
 }
 //# sourceMappingURL=budgetMonthDetail.d.ts.map

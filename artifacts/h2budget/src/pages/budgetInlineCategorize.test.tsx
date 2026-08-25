@@ -26,35 +26,6 @@ type Rule = {
   matchType: "contains" | "starts_with" | "exact";
   categoryId: string;
 };
-type BudgetLineFixture = {
-  id: string;
-  categoryId: string;
-  categoryName: string;
-  plannedAmount: string;
-  actualAmount: string;
-  note: string | null;
-  groupName: string;
-  sourceKind: string;
-  sortOrder: number;
-  kind: string;
-  pinned: boolean;
-  sourceBreakdown: Array<{ source: string; count: number; amount: string }>;
-};
-type BudgetMonthFixture = {
-  monthPinned: boolean;
-  summary: {
-    income: { budget: string; actual: string };
-    expenses: { budget: string; actual: string };
-    net: { budget: string; actual: string };
-    percentSpent: { budget: string; actual: string };
-  };
-  groups: Array<{
-    groupName: string;
-    plannedTotal: string;
-    actualTotal: string;
-    lines: BudgetLineFixture[];
-  }>;
-};
 type CategoryFixture = { id: string; name: string };
 
 // Pin the page's "current month" deterministically by always passing
@@ -65,7 +36,7 @@ const TEST_MONTH = "2026-05-01";
 
 let txns: Tx[] = [];
 let rules: Rule[] = [];
-let budgetMonth: BudgetMonthFixture | undefined = undefined;
+let budgetMonth: ReturnType<typeof makeMonth> | undefined = undefined;
 let categories: CategoryFixture[] = [{ id: "cat-1", name: "Groceries" }];
 
 const updateTxMock = vi.fn(async (_args: { id: string; data: { categoryId: string } }) => undefined);
@@ -116,40 +87,25 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 import BudgetPage from "./budget";
+import {
+  makeBudgetMonth as makeMonth,
+  makeLine,
+} from "./__test-helpers__/budget-month";
 
 function makeBudgetMonth() {
-  return {
-    monthPinned: false,
-    summary: {
-      income: { budget: "0", actual: "0" },
-      expenses: { budget: "0", actual: "0" },
-      net: { budget: "0", actual: "0" },
-      percentSpent: { budget: "0", actual: "0" },
-    },
-    groups: [
-      {
-        groupName: "Variable",
-        plannedTotal: "100",
-        actualTotal: "0",
-        lines: [
-          {
-            id: "line-1",
-            categoryId: "cat-1",
-            categoryName: "Groceries",
-            plannedAmount: "100",
-            actualAmount: "0",
-            note: null,
-            groupName: "Variable",
-            sourceKind: "manual",
-            sortOrder: 0,
-            kind: "expense",
-            pinned: false,
-            sourceBreakdown: [],
-          },
-        ],
-      },
+  return makeMonth({
+    monthStart: TEST_MONTH,
+    lines: [
+      makeLine({
+        id: "line-1",
+        categoryId: "cat-1",
+        categoryName: "Groceries",
+        planSource: "bills",
+        plannedAmount: "100",
+        actualAmount: "0",
+      }),
     ],
-  };
+  });
 }
 
 function renderPage() {
