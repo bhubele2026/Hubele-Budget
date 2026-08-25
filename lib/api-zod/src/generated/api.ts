@@ -2692,6 +2692,14 @@ export const GetForecastCashSignalResponse = zod.object({
 });
 
 /**
+ * Diagnostic: why the bank balance reads what it reads. Shows the anchor, which Plaid account it resolves to and how, whether the next Sync will re-read it (and if not, why not), and the ledger rows stacked on top. Read-only and free — no Plaid call, no writes. Exists because diagnosing a wrong balance used to require production credentials, which turned a money bug into a guessing game.
+ */
+export const GetForecastBankBalanceExplainResponse = zod.record(
+  zod.string(),
+  zod.unknown(),
+);
+
+/**
  * Returns a deterministic schedule of avalanche extra payments
 across the next ~12 months (one per safe paycheck-to-paycheck
 window). Every date and amount is computed server-side in code.

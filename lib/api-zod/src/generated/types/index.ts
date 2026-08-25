@@ -150,6 +150,7 @@ export * from "./forecastSettings";
 export * from "./forecastSettingsInput";
 export * from "./getAmexWeeklyPayoffParams";
 export * from "./getBillsSummaryParams";
+export * from "./getForecastBankBalanceExplain200";
 export * from "./getForecastCashSignalParams";
 export * from "./getForecastParams";
 export * from "./getReportsBehaviorFactsParams";

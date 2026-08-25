@@ -1164,6 +1164,24 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CashSignal" }
 
+  /forecast/bank-balance-explain:
+    get:
+      operationId: getForecastBankBalanceExplain
+      tags: [forecast]
+      description: >-
+        Diagnostic: why the bank balance reads what it reads. Shows the anchor,
+        which Plaid account it resolves to and how, whether the next Sync will
+        re-read it (and if not, why not), and the ledger rows stacked on top.
+        Read-only and free — no Plaid call, no writes. Exists because
+        diagnosing a wrong balance used to require production credentials, which
+        turned a money bug into a guessing game.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
   /forecast/avalanche-schedule:
     get:
       operationId: getForecastAvalancheSchedule
