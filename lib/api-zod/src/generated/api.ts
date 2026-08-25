@@ -2758,6 +2758,14 @@ export const GetReportsSpendingFactsResponse = zod.object({
     total: zod.number(),
     transactionCount: zod.number(),
   }),
+  realIncome: zod
+    .object({
+      total: zod.number(),
+      transactionCount: zod.number(),
+    })
+    .describe(
+      "The mirror of realSpend — money arriving from outside the household, through the same filter that decides real spending. Transfers between the household's own accounts, reimbursements, debt-payment counterparts and card refunds are all excluded, so this is what was EARNED in the range rather than everything that landed in an account.",
+    ),
   uncategorized: zod.object({
     total: zod.number(),
     transactionCount: zod.number(),
@@ -2800,6 +2808,16 @@ export const GetReportsSpendingFactsResponse = zod.object({
       count: zod.number(),
     }),
   ),
+  dailyNet: zod
+    .array(
+      zod.object({
+        date: zod.string(),
+        net: zod.number(),
+      }),
+    )
+    .describe(
+      "One entry per day the range covers, in date order — realIncome minus real spend for that day. The cash-flow shape, computed on the same filtered rows as every other figure here.",
+    ),
   dayOfWeek: zod.array(
     zod.object({
       dow: zod.number(),
@@ -4006,6 +4024,16 @@ export const GetSpineResponse = zod.object({
       .nullable()
       .describe(
         "Days until the projection first goes negative; null when it never does",
+      ),
+    cashBuffer: zod
+      .string()
+      .describe(
+        "computeCashSignal().cashBuffer — the household's own floor rather than a computed figure",
+      ),
+    status: zod
+      .enum(["ready", "tight", "not_yet", "no_data"])
+      .describe(
+        'computeCashSignal().status. Carried here so a surface that shows the cash-buffer verdict beside the low point reads BOTH from the same instant — quoting the word from one request and the number from another is how a tile comes to say \"Ready\" over a low point that is under the floor.',
       ),
   }),
   debt: zod.object({

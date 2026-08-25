@@ -1966,11 +1966,21 @@ components:
         billsDueCount: { type: integer, description: Upcoming bills + debt minimums still landing inside the current month }
         forecast:
           type: object
-          required: [lowPoint, lowPointDate, runwayDays]
+          required: [lowPoint, lowPointDate, runwayDays, cashBuffer, status]
           properties:
             lowPoint: { type: string, description: computeCashSignal().lowestProjected over the 90-day horizon }
             lowPointDate: { type: ["string", "null"] }
             runwayDays: { type: ["integer", "null"], description: Days until the projection first goes negative; null when it never does }
+            cashBuffer: { type: string, description: computeCashSignal().cashBuffer — the household's own floor rather than a computed figure }
+            status:
+              type: string
+              enum: [ready, tight, not_yet, no_data]
+              description: >-
+                computeCashSignal().status. Carried here so a surface that shows
+                the cash-buffer verdict beside the low point reads BOTH from the
+                same instant — quoting the word from one request and the number
+                from another is how a tile comes to say "Ready" over a low point
+                that is under the floor.
         debt:
           type: object
           required: [payoffPct]
@@ -3706,11 +3716,13 @@ components:
         [
           range,
           realSpend,
+          realIncome,
           uncategorized,
           excluded,
           byCategory,
           byMerchant,
           dailyBuckets,
+          dailyNet,
           dayOfWeek,
           monthlyTrends,
           reimbursable,
@@ -3727,6 +3739,19 @@ components:
             floorApplied: { type: boolean }
         realSpend:
           type: object
+          required: [total, transactionCount]
+          properties:
+            total: { type: number }
+            transactionCount: { type: integer }
+        realIncome:
+          type: object
+          description: >-
+            The mirror of realSpend — money arriving from outside the household,
+            through the same filter that decides real spending. Transfers
+            between the household's own accounts, reimbursements, debt-payment
+            counterparts and card refunds are all excluded, so this is what was
+            EARNED in the range rather than everything that landed in an
+            account.
           required: [total, transactionCount]
           properties:
             total: { type: number }
@@ -3786,6 +3811,18 @@ components:
               date: { type: string }
               total: { type: number }
               count: { type: integer }
+        dailyNet:
+          type: array
+          description: >-
+            One entry per day the range covers, in date order — realIncome minus
+            real spend for that day. The cash-flow shape, computed on the same
+            filtered rows as every other figure here.
+          items:
+            type: object
+            required: [date, net]
+            properties:
+              date: { type: string }
+              net: { type: number }
         dayOfWeek:
           type: array
           items:

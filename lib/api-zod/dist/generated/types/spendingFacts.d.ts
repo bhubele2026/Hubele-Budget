@@ -8,21 +8,27 @@
 import type { SpendingFactsByCategoryItem } from "./spendingFactsByCategoryItem";
 import type { SpendingFactsByMerchantItem } from "./spendingFactsByMerchantItem";
 import type { SpendingFactsDailyBucketsItem } from "./spendingFactsDailyBucketsItem";
+import type { SpendingFactsDailyNetItem } from "./spendingFactsDailyNetItem";
 import type { SpendingFactsDayOfWeekItem } from "./spendingFactsDayOfWeekItem";
 import type { SpendingFactsExcluded } from "./spendingFactsExcluded";
 import type { SpendingFactsMonthlyTrendsItem } from "./spendingFactsMonthlyTrendsItem";
 import type { SpendingFactsRange } from "./spendingFactsRange";
+import type { SpendingFactsRealIncome } from "./spendingFactsRealIncome";
 import type { SpendingFactsRealSpend } from "./spendingFactsRealSpend";
 import type { SpendingFactsReimbursable } from "./spendingFactsReimbursable";
 import type { SpendingFactsUncategorized } from "./spendingFactsUncategorized";
 export interface SpendingFacts {
     range: SpendingFactsRange;
     realSpend: SpendingFactsRealSpend;
+    /** The mirror of realSpend — money arriving from outside the household, through the same filter that decides real spending. Transfers between the household's own accounts, reimbursements, debt-payment counterparts and card refunds are all excluded, so this is what was EARNED in the range rather than everything that landed in an account. */
+    realIncome: SpendingFactsRealIncome;
     uncategorized: SpendingFactsUncategorized;
     excluded: SpendingFactsExcluded;
     byCategory: SpendingFactsByCategoryItem[];
     byMerchant: SpendingFactsByMerchantItem[];
     dailyBuckets: SpendingFactsDailyBucketsItem[];
+    /** One entry per day the range covers, in date order — realIncome minus real spend for that day. The cash-flow shape, computed on the same filtered rows as every other figure here. */
+    dailyNet: SpendingFactsDailyNetItem[];
     dayOfWeek: SpendingFactsDayOfWeekItem[];
     monthlyTrends: SpendingFactsMonthlyTrendsItem[];
     reimbursable: SpendingFactsReimbursable;

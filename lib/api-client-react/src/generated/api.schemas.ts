@@ -29,6 +29,19 @@ export type SpineBank = {
   asOfDate: string | null;
 };
 
+/**
+ * computeCashSignal().status. Carried here so a surface that shows the cash-buffer verdict beside the low point reads BOTH from the same instant — quoting the word from one request and the number from another is how a tile comes to say "Ready" over a low point that is under the floor.
+ */
+export type SpineForecastStatus =
+  (typeof SpineForecastStatus)[keyof typeof SpineForecastStatus];
+
+export const SpineForecastStatus = {
+  ready: "ready",
+  tight: "tight",
+  not_yet: "not_yet",
+  no_data: "no_data",
+} as const;
+
 export type SpineForecast = {
   /** computeCashSignal().lowestProjected over the 90-day horizon */
   lowPoint: string;
@@ -39,6 +52,10 @@ export type SpineForecast = {
    * @nullable
    */
   runwayDays: number | null;
+  /** computeCashSignal().cashBuffer — the household's own floor rather than a computed figure */
+  cashBuffer: string;
+  /** computeCashSignal().status. Carried here so a surface that shows the cash-buffer verdict beside the low point reads BOTH from the same instant — quoting the word from one request and the number from another is how a tile comes to say "Ready" over a low point that is under the floor. */
+  status: SpineForecastStatus;
 };
 
 export type SpineDebt = {
@@ -2057,6 +2074,14 @@ export type SpendingFactsRealSpend = {
   transactionCount: number;
 };
 
+/**
+ * The mirror of realSpend — money arriving from outside the household, through the same filter that decides real spending. Transfers between the household's own accounts, reimbursements, debt-payment counterparts and card refunds are all excluded, so this is what was EARNED in the range rather than everything that landed in an account.
+ */
+export type SpendingFactsRealIncome = {
+  total: number;
+  transactionCount: number;
+};
+
 export type SpendingFactsUncategorizedSampleMerchantsItem = {
   name: string;
   total: number;
@@ -2100,6 +2125,11 @@ export type SpendingFactsDailyBucketsItem = {
   count: number;
 };
 
+export type SpendingFactsDailyNetItem = {
+  date: string;
+  net: number;
+};
+
 export type SpendingFactsDayOfWeekItemTopMerchantsItem = {
   name: string;
   total: number;
@@ -2132,11 +2162,15 @@ export type SpendingFactsReimbursable = {
 export interface SpendingFacts {
   range: SpendingFactsRange;
   realSpend: SpendingFactsRealSpend;
+  /** The mirror of realSpend — money arriving from outside the household, through the same filter that decides real spending. Transfers between the household's own accounts, reimbursements, debt-payment counterparts and card refunds are all excluded, so this is what was EARNED in the range rather than everything that landed in an account. */
+  realIncome: SpendingFactsRealIncome;
   uncategorized: SpendingFactsUncategorized;
   excluded: SpendingFactsExcluded;
   byCategory: SpendingFactsByCategoryItem[];
   byMerchant: SpendingFactsByMerchantItem[];
   dailyBuckets: SpendingFactsDailyBucketsItem[];
+  /** One entry per day the range covers, in date order — realIncome minus real spend for that day. The cash-flow shape, computed on the same filtered rows as every other figure here. */
+  dailyNet: SpendingFactsDailyNetItem[];
   dayOfWeek: SpendingFactsDayOfWeekItem[];
   monthlyTrends: SpendingFactsMonthlyTrendsItem[];
   reimbursable: SpendingFactsReimbursable;

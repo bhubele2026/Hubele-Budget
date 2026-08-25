@@ -34,6 +34,7 @@ const router: IRouter = Router();
  *   bank.balance / bank.asOfDate  → computeCashSignal().bankToday / .snapshotAt
  *   forecast.lowPoint / .lowPointDate → computeCashSignal().lowestProjected / .lowestDate
  *   forecast.runwayDays           → runwayDaysFrom(signal.daily)      [lib/cashSignal]
+ *   forecast.cashBuffer / .status → computeCashSignal().cashBuffer / .status
  *   spentMonth / spentWeek        → buildSpendingFacts().realSpend.total
  *   nextBill / billsDueCount      → pickNextBill(buildBillsSummary())  [lib/billsSummary]
  *   debt.payoffPct                → payoffPct()          [@workspace/avalanche-core]
@@ -101,6 +102,12 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       lowPoint: signal.lowestProjected,
       lowPointDate: signal.lowestDate,
       runwayDays: runwayDaysFrom(signal.daily),
+      // The buffer and the verdict ride along with the low point they judge.
+      // Reports shows all three in one tile; read from two requests they can
+      // land a minute apart and the tile says "Ready" over a low point that is
+      // already under the floor.
+      cashBuffer: signal.cashBuffer,
+      status: signal.status,
     },
     debt: {
       payoffPct: payoffPct(debtRowsWithPending),

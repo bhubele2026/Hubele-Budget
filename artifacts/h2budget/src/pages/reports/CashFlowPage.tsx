@@ -101,6 +101,10 @@ const SERIES = {
   burn: CASHFLOW_SERIES.burn,
 };
 
+// The ceiling on the raw pull behind this page. Named so the number the user
+// is told matches the number that was asked for.
+const TXN_FETCH_LIMIT = 2000;
+
 export default function CashFlowPage() {
   // Weekly-first: opens on the current week; Mo/Yr are opt-in.
   const [mode, setMode] = useState<RangeMode>("wk");
@@ -130,11 +134,17 @@ export default function CashFlowPage() {
     return d;
   }, [today, rangeDays]);
 
+  // ⚠️ The server answers newest-first and cuts at the limit, so a household
+  // busy enough to fill this window loses its OLDEST rows — which is precisely
+  // the previous-period half of a compare. This page reads transactions rather
+  // than an aggregate (it charts them individually), so the cap stays; what it
+  // must never do is stay quiet about it. See `clipped` below.
   const { data: txns, isLoading: txnsLoading } = useListTransactions({
     from: fmtISO(fetchFromDate),
     to: fmtISO(today),
-    limit: 2000,
+    limit: TXN_FETCH_LIMIT,
   });
+  const clipped = (txns?.length ?? 0) >= TXN_FETCH_LIMIT;
   const { data: categories } = useListCategories();
   const { data: recurringItems } = useListRecurringItems();
   const { data: forecast } = useGetForecast({ days: 90 });
@@ -179,6 +189,15 @@ export default function CashFlowPage() {
         />
       }
     >
+      {clipped && (
+        <p
+          className="text-micro text-neutral-500"
+          data-testid="cashflow-clipped-note"
+        >
+          Showing the most recent {TXN_FETCH_LIMIT.toLocaleString()} transactions
+          in this range. Older activity is not counted below.
+        </p>
+      )}
       <CashFlowSection
         txns={rangeTxns}
         prevTxns={prevRangeTxns}

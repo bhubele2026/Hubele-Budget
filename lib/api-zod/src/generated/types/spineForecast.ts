@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { SpineForecastStatus } from "./spineForecastStatus";
 
 export type SpineForecast = {
   /** computeCashSignal().lowestProjected over the 90-day horizon */
@@ -16,4 +17,8 @@ export type SpineForecast = {
    * @nullable
    */
   runwayDays: number | null;
+  /** computeCashSignal().cashBuffer — the household's own floor rather than a computed figure */
+  cashBuffer: string;
+  /** computeCashSignal().status. Carried here so a surface that shows the cash-buffer verdict beside the low point reads BOTH from the same instant — quoting the word from one request and the number from another is how a tile comes to say "Ready" over a low point that is under the floor. */
+  status: SpineForecastStatus;
 };

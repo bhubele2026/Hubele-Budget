@@ -39,11 +39,11 @@ import {
 } from "recharts";
 import {
   useGetDashboard,
-  useGetForecastCashSignal,
   useListDebts,
   useListPlaidLiabilityAccounts,
   type ForecastBundle,
 } from "@workspace/api-client-react";
+import { useSpine } from "@/hooks/useSpine";
 import { pendingPaymentTotalOf } from "@/lib/debtBalance";
 import { Switch } from "@/components/ui/switch";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
@@ -211,19 +211,36 @@ export function PanelCard({
   );
 }
 
-/** Four at-a-glance balance tiles — the household's live vitals. */
+/**
+ * Four at-a-glance balance tiles — the household's live vitals.
+ *
+ * ⚠️ THE MONEY HERE IS READ, NEVER DERIVED. Two of these tiles used to compute
+ * their own figures, and both could disagree with the page they sit above:
+ *
+ *   - Bank showed the raw `bankSnapshot` balance, while everything else in the
+ *     app (landing, Forecast Overview, the spine) shows that snapshot ROLLED
+ *     FORWARD through the ledger. On any day with activity since the snapshot
+ *     was taken, Reports quoted a different bank balance than Forecast did.
+ *   - Cash buffer took its verdict and its buffer from a second cash-signal
+ *     request while the low point beside it came from the spine, so the word
+ *     and the number could describe two different instants.
+ *
+ * Both now read `useSpine()`. The `forecast` bundle stays for the account's
+ * NAME — a label, not a figure.
+ */
 export function ReportsBalanceTiles({
   forecast,
 }: {
   forecast: ForecastBundle | null | undefined;
 }) {
   const { data: dashboard } = useGetDashboard();
-  // Shared {horizonDays: 90} key.
-  const { data: cashSignal } = useGetForecastCashSignal({ horizonDays: 90 });
+  const { data: spine } = useSpine();
 
   const bankSnapshot = forecast?.bankSnapshot ?? null;
   const accountSnapshots = forecast?.accountSnapshots ?? {};
   const plaidCheckingAccounts = forecast?.plaidCheckingAccounts ?? [];
+  // Identity only — which account the figure belongs to, and where it came
+  // from. The BALANCE is the spine's.
   const effective = useMemo(
     () =>
       deriveEffectiveSnapshot({
@@ -235,7 +252,8 @@ export function ReportsBalanceTiles({
     [bankSnapshot, accountSnapshots, plaidCheckingAccounts],
   );
 
-  const bankValue = effective ? formatCurrency(effective.balance) : "—";
+  const bankValue =
+    spine?.bank?.balance != null ? formatCurrency(spine.bank.balance) : "—";
   const bankSub = effective
     ? `${effective.source === "plaid" ? "Plaid" : "Manual"} · ${effective.name ?? "Bank"}${effective.mask ? ` ··${effective.mask}` : ""}`
     : "No checking snapshot yet";
@@ -275,10 +293,10 @@ export function ReportsBalanceTiles({
         }`
       : "Across active debts";
 
-  const status = (cashSignal?.status ?? "no_data") as CashSignalStatus;
+  const status = (spine?.forecast?.status ?? "no_data") as CashSignalStatus;
   const statusMeta = cashBufferStatusMeta(status);
-  const buffer = Number(cashSignal?.cashBuffer ?? 0) || 0;
-  const lowest = Number(cashSignal?.lowestProjected ?? 0) || 0;
+  const buffer = Number(spine?.forecast?.cashBuffer ?? 0) || 0;
+  const lowest = Number(spine?.forecast?.lowPoint ?? 0) || 0;
   const cashSub =
     status === "no_data"
       ? "Set a checking balance on Forecast"
@@ -293,6 +311,9 @@ export function ReportsBalanceTiles({
         hint={totalDebtSub}
         data-testid="reports-tile-total-debt"
       />
+      {/* Same words as the Command Center's tile, because it is now the same
+          figure: the spine's `bank.balance`. The hint keeps the account this
+          belongs to; the number is no longer this page's own. */}
       <Stat
         index={1}
         label="Bank balance"

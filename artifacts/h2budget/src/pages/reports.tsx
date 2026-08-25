@@ -2,8 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { Link } from "wouter";
 import { ChevronRight } from "lucide-react";
 import {
-  useListTransactions,
-  useListCategories,
+  useGetReportsSpendingFacts,
   useListDebts,
   useListDebtBalanceHistory,
   useGetForecast,
@@ -56,44 +55,30 @@ function ReportTile({
 }
 
 export default function ReportsPage() {
-  // (#a8 per-page fetch) The hub mounts only what its tiles render: a 30-day
-  // txn slice for the mini-visuals plus debts/history/forecast. Date-window
-  // derivation lifted verbatim from the old shared reports data hook.
+  // (#a8 per-page fetch) The hub mounts only what its tiles render: the 30-day
+  // spending facts for the mini-visuals plus debts/history/forecast.
+  //
+  // ⚠️ THE HUB DOES NOT READ TRANSACTIONS. It used to pull up to 2,000 rows and
+  // add them up in the browser, which cost a heavy payload on a page that draws
+  // five thumbnails — and, worse, produced its OWN definition of "spent": every
+  // outflow except the excluded categories, transfers and card payments
+  // included. The Spending page one click away answers the same question with
+  // `realSpend`, so the two disagreed by whatever moved between accounts that
+  // month. `/reports/spending-facts` is that same server-side basis, over the
+  // same window, in one aggregate response.
   const today = useMemo(() => new Date(), []);
   const fromDate = useMemo(() => {
     const d = new Date(today);
     d.setDate(d.getDate() - 30);
     return d;
   }, [today]);
-  const { data: txns } = useListTransactions({
+  const { data: facts } = useGetReportsSpendingFacts({
     from: fmtISO(fromDate),
     to: fmtISO(today),
-    limit: 2000,
   });
-  const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
   const { data: debtBalanceHistory } = useListDebtBalanceHistory();
   const { data: forecast } = useGetForecast({ days: 90 });
-
-  const catNameById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const c of categories ?? []) m.set(c.id, c.name);
-    return m;
-  }, [categories]);
-
-  const excludedCategoryIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const c of categories ?? []) {
-      if (c.excludeFromBudget) s.add(c.id);
-    }
-    return s;
-  }, [categories]);
-
-  const rangeTxns = useMemo(() => {
-    if (!txns) return [];
-    const fromIso = fmtISO(fromDate);
-    return txns.filter((t) => t.occurredOn >= fromIso);
-  }, [txns, fromDate]);
 
   // Debt momentum — total debt over time, carrying each debt's last-known
   // balance forward so the curve reads as one declining line.
@@ -128,60 +113,42 @@ export default function ReportsPage() {
     });
   }, [debtBalanceHistory, debts]);
 
-  // Daily net over the range — a quick cash-flow shape.
-  const cashSeries = useMemo(() => {
-    const byDay = new Map<string, number>();
-    for (const t of rangeTxns) {
-      byDay.set(t.occurredOn, (byDay.get(t.occurredOn) ?? 0) + (Number(t.amount) || 0));
-    }
-    return Array.from(byDay.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([, v]) => v);
-  }, [rangeTxns]);
+  // Daily net over the range — a quick cash-flow shape. Every day the window
+  // covers is present, quiet days included, so the line is not squeezed.
+  const cashSeries = useMemo(
+    () => (facts?.dailyNet ?? []).map((d) => d.net),
+    [facts],
+  );
 
-  // Spend mix — top categories by outflow this range. A colour marks an ITEM,
-  // so these come off CAT8 in rank order rather than a sequential navy ramp.
-  const spendMix = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const t of rangeTxns) {
-      const amt = Number(t.amount) || 0;
-      if (amt >= 0) continue;
-      if (t.categoryId && excludedCategoryIds.has(t.categoryId)) continue;
-      const name = (t.categoryId && catNameById.get(t.categoryId)) || "Uncategorized";
-      totals.set(name, (totals.get(name) ?? 0) + Math.abs(amt));
-    }
-    return Array.from(totals.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([label, value], i) => ({ label, value, color: catColor(i) }));
-  }, [rangeTxns, catNameById, excludedCategoryIds]);
+  // Spend mix — top categories by real spend this range. A colour marks an
+  // ITEM, so these come off CAT8 in rank order rather than a sequential ramp.
+  const spendMix = useMemo(
+    () =>
+      (facts?.byCategory ?? []).slice(0, 5).map((c, i) => ({
+        label: c.name,
+        value: c.total,
+        color: catColor(i),
+      })),
+    [facts],
+  );
 
-  // Income vs spend — the budget glance ring.
-  const { spent, income } = useMemo(() => {
-    let s = 0;
-    let inc = 0;
-    for (const t of rangeTxns) {
-      const amt = Number(t.amount) || 0;
-      if (t.categoryId && excludedCategoryIds.has(t.categoryId)) continue;
-      if (amt < 0) s += Math.abs(amt);
-      else inc += amt;
-    }
-    return { spent: s, income: inc };
-  }, [rangeTxns, excludedCategoryIds]);
-  const spendRatio = income > 0 ? spent / income : spent > 0 ? 1 : 0;
+  // Income vs spend — the budget glance ring. Both sides are the server's
+  // filtered figures: money earned against money spent at a merchant, with
+  // transfers and debt payments out of both.
+  const spent = facts?.realSpend.total ?? 0;
+  const income = facts?.realIncome.total ?? 0;
+  const hasIncome = income > 0;
+  const spendRatio = hasIncome ? spent / income : 0;
 
-  // Spend by weekday — the spending cadence.
+  // Spend by weekday — the spending cadence. Seven buckets always, so the
+  // Su–Sa labels underneath keep their columns before the data lands.
   const dowSpend = useMemo(() => {
-    const buckets = [0, 0, 0, 0, 0, 0, 0];
-    for (const t of rangeTxns) {
-      const amt = Number(t.amount) || 0;
-      if (amt >= 0) continue;
-      if (t.categoryId && excludedCategoryIds.has(t.categoryId)) continue;
-      const dow = new Date(`${t.occurredOn}T00:00:00`).getDay();
-      buckets[dow] += Math.abs(amt);
-    }
-    return buckets.map((value, i) => ({ value, label: DOW[i] }));
-  }, [rangeTxns, excludedCategoryIds]);
+    const byDow = facts?.dayOfWeek ?? [];
+    return DOW.map((label, i) => ({
+      value: byDow.find((d) => d.dow === i)?.total ?? 0,
+      label,
+    }));
+  }, [facts]);
 
   const noteClass = "text-micro text-neutral-400";
 
@@ -252,8 +219,12 @@ export default function ReportsPage() {
           index={3}
           label="Budget"
           href="/reports/budget"
-          value={`${Math.round(spendRatio * 100)}%`}
-          sub="Of income spent, last 30 days"
+          value={hasIncome ? `${Math.round(spendRatio * 100)}%` : "—"}
+          sub={
+            hasIncome
+              ? "Of income spent, last 30 days"
+              : "No income recorded, last 30 days"
+          }
           visual={
             <div className="flex items-center gap-3">
               <RingStat
