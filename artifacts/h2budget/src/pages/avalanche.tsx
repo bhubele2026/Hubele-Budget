@@ -21,6 +21,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Debt } from "@workspace/api-client-react";
 import { Slider } from "@/components/ui/slider";
+import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 import { PageSkeleton } from "@/components/page-skeleton";
 import {
   Select,
@@ -202,14 +203,7 @@ export default function AvalanchePage() {
   // the cash-signal "lowest balance" projection. Broadly invalidate the whole
   // forecast namespace so every cached horizon + cash-signal refreshes after a
   // debt mutation, matching the prefix-based invalidation used on Forecast.
-  const invalidateForecast = () => {
-    qc.invalidateQueries({
-      predicate: (q) => {
-        const key = q.queryKey[0];
-        return typeof key === "string" && key.startsWith("/api/forecast");
-      },
-    });
-  };
+  const invalidateForecast = () => invalidateForecastFamily(qc);
 
   const updateSettings = useUpdateAvalancheSettings({
     mutation: {
@@ -220,7 +214,13 @@ export default function AvalanchePage() {
         // payment" row on Bills + Forecast — invalidate those so the
         // UI stays in sync the moment the slider commits.
         qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+        // ⚠️ The FAMILY, not just the bundle. This line used to invalidate
+        // `getGetForecastQueryKey()` alone, which does not match
+        // `/api/forecast/cash-signal` — where the ending balance, the low point
+        // and the runway come from. So moving the slider changed the projection
+        // on the server and nothing on screen for five minutes, and the only
+        // way to see your own change was a hard reload.
+        invalidateForecast();
         // The slider commit also writes the current month's "Avalanche
         // payment" budget line on the server, so invalidate every cached
         // getBudgetMonth so the Budget page card refreshes immediately.

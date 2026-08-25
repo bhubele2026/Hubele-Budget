@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 
 type Candidate = {
   plaidAccountId: string;
@@ -91,7 +92,7 @@ export function PostLinkDebtDialog({
     qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
     qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
-    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    invalidateForecastFamily(qc);
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
     qc.invalidateQueries({ queryKey: ["/api/amex/anchor"] });
   };

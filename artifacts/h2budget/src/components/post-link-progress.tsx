@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
+import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 import {
   PostLinkProgressPanel,
   type PostLinkStatus,
@@ -115,7 +116,7 @@ export function PostLinkProgressBanner({
     qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
     qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    invalidateForecastFamily(qc);
   }, [phase, qc]);
 
   if (!status) return null;

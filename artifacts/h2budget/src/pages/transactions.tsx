@@ -105,6 +105,7 @@ import {
 } from "@/components/account-page";
 import { ChaseLogo } from "@/components/brand-logos";
 import { ChaseInsightStrip } from "@/components/chase-insight-strip";
+import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 import {
   formSchema,
   matchRuleClient,
@@ -1232,7 +1233,7 @@ export default function TransactionsPage() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+          invalidateForecastFamily(queryClient);
           toast({ title: next ? "Sent to Forecast" : "Removed from Forecast" });
         },
       },
@@ -1435,7 +1436,7 @@ export default function TransactionsPage() {
         data: { amount: next },
       });
       queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      invalidateForecastFamily(queryClient);
       queryClient.invalidateQueries({
         queryKey: getGetBudgetMonthQueryKey(
           `${updated.occurredOn.slice(0, 7)}-01`,
@@ -1475,7 +1476,7 @@ export default function TransactionsPage() {
         data: { occurredOn: next },
       });
       queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      invalidateForecastFamily(queryClient);
       const oldMonth = `${tx.occurredOn.slice(0, 7)}-01`;
       const newMonth = `${updated.occurredOn.slice(0, 7)}-01`;
       queryClient.invalidateQueries({
@@ -1518,7 +1519,7 @@ export default function TransactionsPage() {
         data: { amount: next },
       });
       queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      invalidateForecastFamily(queryClient);
       queryClient.invalidateQueries({
         queryKey: getGetBudgetMonthQueryKey(
           `${updated.occurredOn.slice(0, 7)}-01`,
@@ -1541,7 +1542,7 @@ export default function TransactionsPage() {
   const handleRefreshBank = () => {
     refreshBank.mutate({ data: { plaidAccountId: effectiveAccountInternalId ?? null } }, {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+        invalidateForecastFamily(queryClient);
         queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
         toast({ title: "Refreshed from Plaid" });
       },
@@ -1644,7 +1645,7 @@ export default function TransactionsPage() {
           queryClient.invalidateQueries({
             queryKey: getListTransactionsQueryKey(),
           });
-          queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+          invalidateForecastFamily(queryClient);
           toast({
             title:
               res.updated === 0
@@ -1681,7 +1682,7 @@ export default function TransactionsPage() {
           queryClient.invalidateQueries({
             queryKey: getListTransactionsQueryKey(),
           });
-          queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+          invalidateForecastFamily(queryClient);
           toast({
             title:
               res.updated === 0
@@ -1713,7 +1714,7 @@ export default function TransactionsPage() {
       queryClient.invalidateQueries({
         queryKey: getListTransactionsQueryKey(),
       });
-      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      invalidateForecastFamily(queryClient);
       if (res.updated === 0) {
         toast({ title: wasSend ? "Already in review" : "Not in review" });
         return;
@@ -1770,7 +1771,7 @@ export default function TransactionsPage() {
       queryClient.invalidateQueries({
         queryKey: getListTransactionsQueryKey(),
       });
-      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      invalidateForecastFamily(queryClient);
       clearSelection();
       const suffix = cappedOut > 0 ? ` · capped ${cappedOut}` : "";
       toast({
@@ -1838,7 +1839,7 @@ export default function TransactionsPage() {
       queryClient.invalidateQueries({
         queryKey: getListTransactionsQueryKey(),
       });
-      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      invalidateForecastFamily(queryClient);
       clearSelection();
       const parts: string[] = [];
       if (skippedUncat > 0) parts.push(`${skippedUncat} uncategorized`);
@@ -1876,7 +1877,7 @@ export default function TransactionsPage() {
       queryClient.invalidateQueries({
         queryKey: getListTransactionsQueryKey(),
       });
-      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      invalidateForecastFamily(queryClient);
       toast({
         title: "Bulk update failed",
         description: (e as Error).message,

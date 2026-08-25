@@ -78,6 +78,7 @@ import {
 } from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
+import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 
 type Frequency =
   | "weekly"
@@ -326,7 +327,7 @@ export default function BillsPage() {
     // every month a user has paged through, not just the current one.
     qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey().slice(0, 1) });
     qc.invalidateQueries({ queryKey: getListRecurringItemsQueryKey() });
-    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    invalidateForecastFamily(qc);
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
     // Bill edits feed Budget auto-pulled lines (bills/debts → planned
     // amounts on /budget). With the global 30s staleTime we now use,
