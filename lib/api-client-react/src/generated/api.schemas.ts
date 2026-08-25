@@ -2789,6 +2789,18 @@ export const PlaidSyncResultItemsItemKind = {
   unknown: "unknown",
 } as const;
 
+/**
+ * @nullable
+ */
+export type PlaidSyncResultItemsItemBalanceDrift = {
+  /** Plaid's live available balance for the checking account */
+  bank: string;
+  /** The prior anchor rolled forward through every row we hold */
+  ledger: string;
+  /** bank − ledger; positive when the bank holds money our rows cannot account for */
+  unexplained: string;
+} | null | null;
+
 export type PlaidSyncResultItemsItem = {
   itemId: string;
   /** @nullable */
@@ -2824,6 +2836,8 @@ export type PlaidSyncResultItemsItem = {
   /** @nullable */
   lastSyncedAt?: string | null;
   addedDescriptions?: string[];
+  /** @nullable */
+  balanceDrift?: PlaidSyncResultItemsItemBalanceDrift;
 };
 
 export interface PlaidSyncResult {

@@ -4723,6 +4723,20 @@ components:
               addedDescriptions:
                 type: array
                 items: { type: string }
+              # (2026-08-25) Bank reconciliation. Present only when a manual
+              # Sync found that our ledger does NOT explain the balance the
+              # bank reports — rows missing, duplicated or reversed. The app
+              # used to just show the smaller number; a deposit that Plaid's
+              # cursor skipped left every screen $169.90 light for four days
+              # with nothing on screen to explain it. Null/absent means the
+              # two sides tie, which is the normal case.
+              balanceDrift:
+                type: ["object", "null"]
+                required: [bank, ledger, unexplained]
+                properties:
+                  bank: { type: string, description: "Plaid's live available balance for the checking account" }
+                  ledger: { type: string, description: "The prior anchor rolled forward through every row we hold" }
+                  unexplained: { type: string, description: "bank − ledger; positive when the bank holds money our rows cannot account for" }
     PlaidConsentRefreshItem:
       type: object
       required:

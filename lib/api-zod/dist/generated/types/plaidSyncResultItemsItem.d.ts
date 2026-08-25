@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { PlaidSyncResultItemsItemBalanceDrift } from "./plaidSyncResultItemsItemBalanceDrift";
 import type { PlaidSyncResultItemsItemImportedDateRange } from "./plaidSyncResultItemsItemImportedDateRange";
 import type { PlaidSyncResultItemsItemKind } from "./plaidSyncResultItemsItemKind";
 import type { RuleAttribution } from "./ruleAttribution";
@@ -43,5 +44,7 @@ export type PlaidSyncResultItemsItem = {
     /** @nullable */
     lastSyncedAt?: string | null;
     addedDescriptions?: string[];
+    /** @nullable */
+    balanceDrift?: PlaidSyncResultItemsItemBalanceDrift;
 };
 //# sourceMappingURL=plaidSyncResultItemsItem.d.ts.map

@@ -20,6 +20,11 @@ type SyncItem = {
   itemId?: string | null;
   plaidItemRowId?: string | null;
   institutionName?: string | null;
+  balanceDrift?: {
+    bank: string;
+    ledger: string;
+    unexplained: string;
+  } | null;
   plaidErrorCode?: string | null;
   plaidErrorMessage?: string | null;
   plaidDisplayMessage?: string | null;
@@ -207,6 +212,90 @@ describe("usePlaidSync — empty-fleet toast", () => {
     fireEvent.click(getByTestId("button-toast-open-settings"));
     expect(navigateFn).toHaveBeenCalledWith("/settings");
     unmount();
+  });
+});
+
+describe("usePlaidSync — bank reconciliation toast", () => {
+  it("⭐ names both sides and the amount when the ledger doesn't tie", async () => {
+    // The real shape of this failure is "Added 0" plus a balance that has been
+    // quietly wrong for days, so the drift gets its OWN toast rather than a
+    // clause appended to a count the user has learned to ignore.
+    syncResponse = {
+      items: [
+        {
+          added: 0,
+          modified: 0,
+          removed: 0,
+          error: null,
+          institutionName: "Chase",
+          balanceDrift: {
+            bank: "4453.96",
+            ledger: "4284.06",
+            unexplained: "169.90",
+          },
+        },
+      ],
+    };
+    renderHarness();
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => {
+      expect(toastFn).toHaveBeenCalled();
+    });
+    const arg = toastFn.mock.calls[0][0] as {
+      title: string;
+      description: string;
+    };
+    expect(arg.title).toContain("Chase");
+    expect(arg.description).toContain("$4,453.96");
+    expect(arg.description).toContain("$4,284.06");
+    expect(arg.description).toContain("$169.90");
+    // The direction matters: money the bank has that we don't know about is a
+    // MISSING deposit, not a duplicated charge.
+    expect(arg.description).toContain("deposit or credit is probably missing");
+  });
+
+  it("blames a double-count when the ledger claims MORE than the bank holds", async () => {
+    syncResponse = {
+      items: [
+        {
+          added: 0,
+          modified: 0,
+          removed: 0,
+          error: null,
+          institutionName: "Chase",
+          balanceDrift: {
+            bank: "900.00",
+            ledger: "1000.00",
+            unexplained: "-100.00",
+          },
+        },
+      ],
+    };
+    renderHarness();
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => {
+      expect(toastFn).toHaveBeenCalled();
+    });
+    const arg = toastFn.mock.calls[0][0] as { description: string };
+    expect(arg.description).toContain("$100.00");
+    expect(arg.description).toContain("counted twice");
+  });
+
+  it("says nothing when the two sides tie", async () => {
+    syncResponse = {
+      items: [
+        { added: 2, modified: 0, removed: 0, error: null, balanceDrift: null },
+      ],
+    };
+    renderHarness();
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => {
+      expect(toastFn).toHaveBeenCalled();
+    });
+    const titles = toastFn.mock.calls.map(
+      (c) => (c[0] as { title: string }).title,
+    );
+    expect(titles.some((t) => t.includes("doesn't match"))).toBe(false);
   });
 });
 

@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -28,6 +28,11 @@ import {
 } from "./dedupeTransactions";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
+import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
+import {
+  anchorIsReconcilable,
+  reconcileBankBalance,
+} from "./reconcileBankBalance";
 import {
   recordPlaidSyncAttempt,
   type PlaidPendingCleanupDetails,
@@ -217,6 +222,19 @@ export type SyncResult = {
   // than the bare "Added N" count, which trained users to ignore the
   // toast. Empty when the sync added nothing (cursor was caught up).
   addedDescriptions?: string[];
+  // (2026-08-25) Bank reconciliation. Set when a manual Sync found that our
+  // ledger does NOT explain the balance Plaid reports — i.e. rows are missing,
+  // duplicated, or reversed. All three figures are strings so the UI can print
+  // them without re-deriving anything. Null when the two sides tie, which is
+  // the normal case and the only silent one.
+  balanceDrift?: {
+    /** Plaid's live `available` for the checking account. */
+    bank: string;
+    /** The prior anchor rolled forward through every row we hold. */
+    ledger: string;
+    /** bank − ledger. Positive: the bank has money our rows do not explain. */
+    unexplained: string;
+  } | null;
 };
 
 type PlaidErrorBody = {
@@ -782,13 +800,37 @@ export async function syncPlaidItem(
   // items. Only the item that actually owns the checking account should
   // attempt the refresh.
   let bankSnapshotBelongsToThisItem = false;
-  if (forecastSettings?.bankSnapshotAccountId) {
-    const [acct] = await db
-      .select()
-      .from(plaidAccountsTable)
-      .where(eq(plaidAccountsTable.id, forecastSettings.bankSnapshotAccountId));
-    checkingPlaidAccountId = acct?.accountId ?? null;
-    bankSnapshotBelongsToThisItem = acct?.itemId === itemRowId;
+  // The row id the snapshot SHOULD point at. When the stored pointer is null or
+  // dangling this is what heals it, stamped back below once a refresh proves
+  // the account is real. See `resolveSnapshotAccount` for why a broken pointer
+  // is not a small thing: it silently disables both the roll-forward and this
+  // refresh, so the balance freezes and Sync cannot unfreeze it.
+  let healedSnapshotRowId: string | null = null;
+  // The anchor as it stood BEFORE this sync, kept for the reconciliation at the
+  // end: rolling THIS forward through our rows is the prediction we test the
+  // bank's own number against. Captured here because the refresh below
+  // overwrites it.
+  const prevSnapshotBalance =
+    forecastSettings?.bankSnapshotBalance != null
+      ? Number(forecastSettings.bankSnapshotBalance)
+      : null;
+  const prevSnapshotAt = forecastSettings?.bankSnapshotAt ?? null;
+  let liveAvailableBalance: number | null = null;
+  {
+    const resolved = await resolveSnapshotAccount({
+      householdId,
+      bankSnapshotAccountId: forecastSettings?.bankSnapshotAccountId ?? null,
+      bankSnapshotMask: forecastSettings?.bankSnapshotMask ?? null,
+    });
+    checkingPlaidAccountId = resolved.externalId;
+    if (resolved.rowId) {
+      const [acct] = await db
+        .select({ itemId: plaidAccountsTable.itemId })
+        .from(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.id, resolved.rowId));
+      bankSnapshotBelongsToThisItem = acct?.itemId === itemRowId;
+      if (resolved.via !== "pointer") healedSnapshotRowId = resolved.rowId;
+    }
   }
 
   // Build a map from Plaid's external account_id to the user's debt.id, so any
@@ -1941,33 +1983,36 @@ export async function syncPlaidItem(
     // the user-clicked Sync path actually needs the live anchor refresh;
     // the two user-tap balance routes in `routes/forecast.ts` are
     // intentionally untouched.
-    // ⚠️ AND SAY SO WHEN IT SKIPS. Three of these four conditions can be false
-    // for a reason the user will never see, and the most damaging one is a
-    // `bankSnapshotAccountId` that is null or points at a `plaid_accounts` row
-    // that has since been retired: the anchor then never refreshes, no matter
-    // how many times Sync is pressed. `computeCashSignal` now recovers the
-    // account for its roll-forward so the number on screen still moves, but the
-    // pointer itself is still broken and only a log will tell us so.
-    if (
-      syncOrigin === "manual" &&
-      !(checkingPlaidAccountId && forecastSettings?.bankSnapshotAccountId)
-    ) {
+    // ⚠️ AND SAY SO WHEN IT SKIPS. This used to require a stored
+    // `bankSnapshotAccountId`, which meant a null or dangling pointer disabled
+    // the re-anchor permanently and invisibly: the balance froze and pressing
+    // Sync — the one thing anyone would try — could not fix it. The pointer is
+    // now RESOLVED (recovering the account from the snapshot's own mask when
+    // the stored id is gone) and healed below, so this gate turns only on
+    // whether we know the account and this item owns it.
+    // ⚠️ Only for a household that already HAS an anchor. This path repairs a
+    // broken pointer on an existing snapshot; it does not invent a snapshot for
+    // someone who never set one (that user's forecast runs off
+    // `startingBalance` by choice, and spending a billed balance call to
+    // overrule them would be presumptuous).
+    const hasSnapshotAnchor =
+      forecastSettings?.bankSnapshotBalance != null ||
+      forecastSettings?.bankSnapshotAccountId != null;
+    if (syncOrigin === "manual" && hasSnapshotAnchor && !checkingPlaidAccountId) {
       logger.warn(
         {
           householdId,
           itemRowId,
           bankSnapshotAccountId: forecastSettings?.bankSnapshotAccountId ?? null,
-          resolvedExternalId: checkingPlaidAccountId,
+          bankSnapshotMask: forecastSettings?.bankSnapshotMask ?? null,
         },
-        forecastSettings?.bankSnapshotAccountId
-          ? "[plaid-sync] bank snapshot points at a plaid_accounts row that no longer exists — balance anchor NOT refreshed"
-          : "[plaid-sync] no bank snapshot account configured — balance anchor NOT refreshed by this Sync",
+        "[plaid-sync] no resolvable bank snapshot account — balance anchor NOT refreshed by this Sync",
       );
     }
     if (
       syncOrigin === "manual" &&
+      hasSnapshotAnchor &&
       checkingPlaidAccountId &&
-      forecastSettings?.bankSnapshotAccountId &&
       bankSnapshotBelongsToThisItem
     ) {
       try {
@@ -1991,8 +2036,21 @@ export async function syncPlaidItem(
               bankSnapshotBalance: Number(live).toFixed(2),
               bankSnapshotAt: new Date(),
               bankSnapshotSource: "plaid",
+              // Heal the pointer while we are here. Plaid just answered for
+              // this account, so it demonstrably exists — write it back and the
+              // recovery ladder never has to run for this household again.
+              ...(healedSnapshotRowId
+                ? { bankSnapshotAccountId: healedSnapshotRowId }
+                : {}),
             })
             .where(eq(forecastSettingsTable.userId, ownerUserId));
+          if (healedSnapshotRowId) {
+            logger.info(
+              { householdId, itemRowId, bankSnapshotAccountId: healedSnapshotRowId },
+              "[plaid-sync] healed the bank snapshot account pointer",
+            );
+          }
+          liveAvailableBalance = Number(live);
         }
       } catch (e) {
         // Don't break the sync — but capture Plaid's real reason so the
@@ -2250,6 +2308,114 @@ export async function syncPlaidItem(
         // Best-effort; the next sync's anchor refresh will catch up.
       }
     }
+    // ⭐ BANK RECONCILIATION (2026-08-25). Does our ledger actually explain the
+    // bank's balance?
+    //
+    // We hold both halves and never compared them. Roll the PREVIOUS anchor
+    // forward through every row we have; that is what our records predict the
+    // account holds. Plaid just told us what it really holds. A difference is
+    // not a rounding artefact — it is rows missing, duplicated, or reversed.
+    //
+    // This is the check that would have caught Brad's $169.90 on the day it
+    // happened instead of a week later: a Friday deposit that Plaid's cursor
+    // skipped, invisible because the cursor never goes back for what it passed
+    // and the stale-cursor fallback (#720) only fires when the delta is empty
+    // in EVERY direction — and that sync had other rows.
+    //
+    // On a difference we try the same self-heal #720 trusts (`/transactions/get`
+    // over a window, base product, no add-on), then report whatever is still
+    // unexplained rather than quietly showing a number that does not tie.
+    let balanceDrift: SyncResult["balanceDrift"] = null;
+    if (
+      syncOrigin === "manual" &&
+      liveAvailableBalance != null &&
+      prevSnapshotBalance != null &&
+      prevSnapshotAt != null &&
+      checkingPlaidAccountId
+    ) {
+      if (anchorIsReconcilable(prevSnapshotAt)) {
+        const anchorDay = new Date(prevSnapshotAt).toISOString().slice(0, 10);
+        const todayDay = new Date().toISOString().slice(0, 10);
+        const ledgerSince = async (): Promise<number> => {
+          const rows = await db
+            .select({ amount: transactionsTable.amount })
+            .from(transactionsTable)
+            .where(
+              and(
+                eq(transactionsTable.householdId, householdId),
+                eq(transactionsTable.plaidAccountId, checkingPlaidAccountId),
+                gt(transactionsTable.occurredOn, anchorDay),
+                lte(transactionsTable.occurredOn, todayDay),
+              ),
+            );
+          return rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+        };
+
+        let recon = reconcileBankBalance({
+          anchorBalance: prevSnapshotBalance,
+          ledgerNetSinceAnchor: await ledgerSince(),
+          bankAvailable: liveAvailableBalance,
+        });
+
+        if (recon.drifted) {
+          logger.warn(
+            {
+              userId,
+              itemRowId,
+              institutionName: item.institutionName,
+              bankAvailable: liveAvailableBalance,
+              ledgerPredicted: recon.predicted,
+              unexplained: recon.unexplained,
+              anchorDay,
+              anchorBalance: prevSnapshotBalance,
+            },
+            "[plaid-sync] bank reconciliation: our rows do not explain the bank balance",
+          );
+
+          // Try to heal it the same way a stuck cursor is healed. Skipped when
+          // a backfill already ran this sync — one /transactions/get window per
+          // run, never two.
+          if (!backfillRan) {
+            try {
+              const bf = await runGapBackfillForItem(userId, itemRowId);
+              backfillAdded += bf.added;
+              backfillRan = true;
+              if (bf.added > 0) {
+                deliveryMode = "gap-backfill";
+                recon = reconcileBankBalance({
+                  anchorBalance: prevSnapshotBalance,
+                  ledgerNetSinceAnchor: await ledgerSince(),
+                  bankAvailable: liveAvailableBalance,
+                });
+                logger.info(
+                  {
+                    userId,
+                    itemRowId,
+                    recovered: bf.added,
+                    unexplained: recon.unexplained,
+                  },
+                  "[plaid-sync] bank reconciliation: gap-backfill recovered rows",
+                );
+              }
+            } catch (e) {
+              logger.warn(
+                { userId, itemRowId, err: e },
+                "[plaid-sync] bank reconciliation: gap-backfill failed (non-fatal)",
+              );
+            }
+          }
+
+          if (recon.drifted) {
+            balanceDrift = {
+              bank: liveAvailableBalance.toFixed(2),
+              ledger: recon.predicted.toFixed(2),
+              unexplained: recon.unexplained.toFixed(2),
+            };
+          }
+        }
+      }
+    }
+
     // (#671) Single structured delivery-metrics log line per successful
     // sync. Lets support correlate "where did my pending charge go?"
     // tickets against the per-item picture (which path triggered the
@@ -2304,6 +2470,7 @@ export async function syncPlaidItem(
           : null,
       error: balanceRefreshError,
       lastOccurredOn,
+      balanceDrift,
       // (#662) Surface how many `added` rows the first-sync gate
       // dropped on this run so observability catches future
       // regressions where live rows get silently filtered.

@@ -205,6 +205,7 @@ export * from "./plaidSyncAttemptsResult";
 export * from "./plaidSyncInput";
 export * from "./plaidSyncResult";
 export * from "./plaidSyncResultItemsItem";
+export * from "./plaidSyncResultItemsItemBalanceDrift";
 export * from "./plaidSyncResultItemsItemImportedDateRange";
 export * from "./plaidSyncResultItemsItemKind";
 export * from "./plaidUpdateLinkTokenInput";
