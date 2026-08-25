@@ -202,6 +202,16 @@ same function the owning page's endpoint calls** — never reimplemented.
   (`fileParallelism: false`): `singleFork` alone still let Vitest interleave
   files against one Postgres, which flaked `plaidRefreshUserRetry` about one run
   in three. Do not turn it back on to buy the ~60s back.
+- **Two dependencies carry a story** (`pnpm audit --prod` must stay at 0 high):
+  `xlsx` is installed from the **SheetJS CDN tarball**, not npm — npm's last
+  publish (0.18.5) has two unfixable highs. ⚠️ A tarball URL has no registry
+  metadata, so pnpm records **no `integrity`** for it and
+  `install --frozen-lockfile` then refuses the package (CI and Render both die
+  at install). The `integrity: sha512-…` in `pnpm-lock.yaml` is therefore
+  **hand-computed**: if you ever move that URL, recompute it
+  (`sha512-$(openssl dgst -sha512 -binary file.tgz | base64)`) or CI will fail
+  before it runs a single test. `js-cookie` is pinned by override for
+  GHSA-qjx8-664m-686j; Clerk ships the fix on `@clerk/shared` >=4.20.
 - **Deploy:** GitHub `main` is the source of truth; **Render** auto-deploys
   `main` (single Web Service `h2budget` serving SPA + `/api`, health check
   `/api/healthz`, live at https://h2budget.onrender.com). Pinned
