@@ -75,6 +75,7 @@ import type {
   ForecastSettingsInput,
   GetAmexWeeklyPayoffParams,
   GetBillsSummaryParams,
+  GetForecastBankBalanceExplain200,
   GetForecastCashSignalParams,
   GetForecastParams,
   GetReportsBehaviorFactsParams,
@@ -5648,6 +5649,82 @@ export function useGetForecastCashSignal<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetForecastCashSignalQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Diagnostic: why the bank balance reads what it reads. Shows the anchor, which Plaid account it resolves to and how, whether the next Sync will re-read it (and if not, why not), and the ledger rows stacked on top. Read-only and free — no Plaid call, no writes. Exists because diagnosing a wrong balance used to require production credentials, which turned a money bug into a guessing game.
+ */
+export const getGetForecastBankBalanceExplainUrl = () => {
+  return `/api/forecast/bank-balance-explain`;
+};
+
+export const getForecastBankBalanceExplain = async (
+  options?: RequestInit,
+): Promise<GetForecastBankBalanceExplain200> => {
+  return customFetch<GetForecastBankBalanceExplain200>(
+    getGetForecastBankBalanceExplainUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetForecastBankBalanceExplainQueryKey = () => {
+  return [`/api/forecast/bank-balance-explain`] as const;
+};
+
+export const getGetForecastBankBalanceExplainQueryOptions = <
+  TData = Awaited<ReturnType<typeof getForecastBankBalanceExplain>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastBankBalanceExplain>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetForecastBankBalanceExplainQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getForecastBankBalanceExplain>>
+  > = ({ signal }) =>
+    getForecastBankBalanceExplain({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastBankBalanceExplain>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetForecastBankBalanceExplainQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getForecastBankBalanceExplain>>
+>;
+export type GetForecastBankBalanceExplainQueryError = ErrorType<unknown>;
+
+export function useGetForecastBankBalanceExplain<
+  TData = Awaited<ReturnType<typeof getForecastBankBalanceExplain>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastBankBalanceExplain>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetForecastBankBalanceExplainQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

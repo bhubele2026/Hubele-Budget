@@ -20,6 +20,7 @@ import membersRouter from "./members";
 import amexRouter from "./amex";
 import reportsRouter from "./reports";
 import spineRouter from "./spine";
+import bankBalanceExplainRouter from "./bankBalanceExplain";
 
 const router: IRouter = Router();
 
@@ -43,6 +44,7 @@ router.use(invitationsRouter);
 router.use(membersRouter);
 router.use(amexRouter);
 router.use(reportsRouter);
+router.use(bankBalanceExplainRouter);
 router.use(spineRouter);
 
 export default router;

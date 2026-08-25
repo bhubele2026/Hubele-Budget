@@ -3070,6 +3070,8 @@ export type GetForecastCashSignalParams = {
   fromDate?: string;
 };
 
+export type GetForecastBankBalanceExplain200 = { [key: string]: unknown };
+
 export type GetReportsSpendingFactsParams = {
   /**
    * Range start (YYYY-MM-DD). Defaults to 30 days ago.
