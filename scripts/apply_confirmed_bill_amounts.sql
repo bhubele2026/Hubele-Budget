@@ -4,11 +4,33 @@
 -- Reconciled against real Chase charges (2026-07-15 audit, two consecutive
 -- months confirmed for each):
 --
---   Mortgage (Lakeview)   1989.81  ->  2085.79
---   Verizon                342.00  ->   425.45
+--   Mortgage (Lakeview)   1989.81  ->  2085.79   [APPLIED 2026-08-25]
+--   Verizon                342.00  ->   425.45   [NOT APPLIED — see below]
 --
 -- Owner-authorized 2026-08-25: "Apply the confirmed mortgage and Verizon bill
 -- amounts to the H2 Budget production database."
+--
+-- ⚠️ STATUS 2026-08-25, AFTER THE RUN. The mortgage half is DONE and verified
+-- against four consecutive charges of exactly 2085.79 (May 15, Jun 15, Jul 15,
+-- Aug 17). It was applied on its own, because:
+--
+-- ⚠️ THE VERIZON ROW HAD MOVED. The July audit recorded it at 342.00; on the
+-- day of the run it held 442.00 — someone changed it in between. Both UPDATEs
+-- lived in ONE transaction asserting BOTH end states, so the Verizon mismatch
+-- would have rolled the mortgage back with it. That is the guard behaving
+-- correctly, and it is also why the two halves should never have shared a
+-- transaction: an unrelated surprise on one bill must not block a confirmed
+-- fix to the other.
+--
+-- What the actual charges say (all plaid:chase, description "Verizon"):
+--   2026-04-16  425.65      2026-07-16  434.47
+--   2026-05-18  425.35      2026-08-17  429.92
+--   2026-06-16  425.45
+-- Five-month mean ~428.17, latest 429.92, and drifting UP. So 425.45 is now
+-- BELOW every charge except June's, and 442.00 is ~12 above the latest.
+-- Neither is obviously right — Verizon varies month to month — and the
+-- standing rule is to match an actual or ask, never to invent his number.
+-- LEFT FOR THE OWNER TO DECIDE. Do not guess it in a later session.
 --
 -- ⚠️ SCOPE. Only these two rows, and only when they still hold the OLD amount.
 -- The same audit left three questions open that this script deliberately does
