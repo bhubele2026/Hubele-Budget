@@ -1572,6 +1572,9 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
   async function addPlaidAccount(opts: {
     externalId: string;
     name: string;
+    mask?: string | null;
+    subtype?: string | null;
+    type?: string | null;
   }): Promise<{ id: string; externalId: string }> {
     const [item] = await db
       .insert(plaidItemsTable)
@@ -1591,6 +1594,9 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
         itemId: item.id,
         accountId: opts.externalId,
         name: opts.name,
+        mask: opts.mask ?? null,
+        subtype: opts.subtype ?? null,
+        type: opts.type ?? null,
       })
       .returning();
     return { id: acct.id, externalId: acct.accountId };
@@ -1678,6 +1684,130 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
 
     // 1000 - 200 + 50 = 850; the flag-false rows never reach the curve.
     expect(sig.bankToday).toBe("850.00");
+  });
+
+  // ⚠️ THE FROZEN-BALANCE TRAP (2026-08-25 investigation — Brad: "my Chase
+  // checking balance doesn't match", wrong on EVERY screen, after a Sync the
+  // same day).
+  //
+  // `bank_snapshot_account_id` is load-bearing in TWO places that both fail
+  // silently when it is null or points at a `plaid_accounts` row that no
+  // longer exists (a re-link twin retired by the dedupe sweep does exactly
+  // this):
+  //
+  //   1. `isBankRow` resolves it to an external account id. Null there means
+  //      NO Plaid row is ever in scope, so the roll-forward adds nothing.
+  //   2. `plaidSync`'s balance refresh requires it too, so a manual Sync
+  //      quietly declines to re-anchor the snapshot.
+  //
+  // Together they freeze the bank balance at whatever it last was — and
+  // syncing, the one thing a user would try, cannot fix it. These two cases
+  // pin the freeze and the recovery.
+  it("⚠️ a snapshot wired to NO account rolls forward on the sole checking account", async () => {
+    const chase = await addPlaidAccount({
+      externalId: "chase-orphan-anchor",
+      name: "Chase Checking",
+      subtype: "checking",
+      type: "depository",
+    });
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-05-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    // Deliberately NOT wiring bankSnapshotAccountId.
+    await addLedgerTxn({
+      occurredOn: "2026-05-05",
+      amount: "-200",
+      plaidAccountId: chase.externalId,
+      source: "plaid:chase",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      horizonDays: 30,
+    });
+
+    // Before the recovery this froze at "1000.00" — the charge was invisible
+    // because no account was configured to measure it against.
+    expect(sig.bankToday).toBe("800.00");
+  });
+
+  it("⚠️ a DANGLING pointer recovers through the mask the snapshot remembers", async () => {
+    // Two accounts, so "the only checking account" cannot save us — the mask
+    // is what still names the right one after a re-link retires the old row.
+    const live = await addPlaidAccount({
+      externalId: "chase-live-row",
+      name: "Chase Checking",
+      mask: "4821",
+      subtype: "checking",
+      type: "depository",
+    });
+    await addPlaidAccount({
+      externalId: "chase-other-row",
+      name: "Chase Savings",
+      mask: "9902",
+      subtype: "savings",
+      type: "depository",
+    });
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-05-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotAccountId: randomUUID(), bankSnapshotMask: "4821" })
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+    await addLedgerTxn({
+      occurredOn: "2026-05-06",
+      amount: "-150",
+      plaidAccountId: live.externalId,
+      source: "plaid:chase",
+    });
+    // A charge on the OTHER account must stay out of the bank balance.
+    await addLedgerTxn({
+      occurredOn: "2026-05-07",
+      amount: "-999",
+      plaidAccountId: "chase-other-row",
+      source: "plaid:chase",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      horizonDays: 30,
+    });
+    expect(sig.bankToday).toBe("850.00");
+  });
+
+  it("with two checking accounts and nothing to tell them apart, it refuses to guess", async () => {
+    // A wrong guess would put a confidently wrong balance on every screen,
+    // which is worse than an obviously stale one. Frozen is the safe answer;
+    // the warn log is how we find out it happened.
+    await addPlaidAccount({
+      externalId: "chase-a",
+      name: "Chase Checking",
+      subtype: "checking",
+    });
+    await addPlaidAccount({
+      externalId: "chase-b",
+      name: "Chase Checking (old)",
+      subtype: "checking",
+    });
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-05-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await addLedgerTxn({
+      occurredOn: "2026-05-05",
+      amount: "-200",
+      plaidAccountId: "chase-a",
+      source: "plaid:chase",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      horizonDays: 30,
+    });
+    expect(sig.bankToday).toBe("1000.00");
   });
 
   it("without a snapshot, bankToday stays on startingBalance (no roll-forward)", async () => {

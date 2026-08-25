@@ -1941,6 +1941,29 @@ export async function syncPlaidItem(
     // the user-clicked Sync path actually needs the live anchor refresh;
     // the two user-tap balance routes in `routes/forecast.ts` are
     // intentionally untouched.
+    // ⚠️ AND SAY SO WHEN IT SKIPS. Three of these four conditions can be false
+    // for a reason the user will never see, and the most damaging one is a
+    // `bankSnapshotAccountId` that is null or points at a `plaid_accounts` row
+    // that has since been retired: the anchor then never refreshes, no matter
+    // how many times Sync is pressed. `computeCashSignal` now recovers the
+    // account for its roll-forward so the number on screen still moves, but the
+    // pointer itself is still broken and only a log will tell us so.
+    if (
+      syncOrigin === "manual" &&
+      !(checkingPlaidAccountId && forecastSettings?.bankSnapshotAccountId)
+    ) {
+      logger.warn(
+        {
+          householdId,
+          itemRowId,
+          bankSnapshotAccountId: forecastSettings?.bankSnapshotAccountId ?? null,
+          resolvedExternalId: checkingPlaidAccountId,
+        },
+        forecastSettings?.bankSnapshotAccountId
+          ? "[plaid-sync] bank snapshot points at a plaid_accounts row that no longer exists — balance anchor NOT refreshed"
+          : "[plaid-sync] no bank snapshot account configured — balance anchor NOT refreshed by this Sync",
+      );
+    }
     if (
       syncOrigin === "manual" &&
       checkingPlaidAccountId &&

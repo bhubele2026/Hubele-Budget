@@ -9,6 +9,7 @@ import {
   plaidAccountsTable,
   avalancheSettingsTable,
 } from "@workspace/db";
+import { logger } from "./logger";
 
 type Cadence =
   | "weekly"
@@ -450,6 +451,91 @@ export async function computeCashSignal(
       .from(plaidAccountsTable)
       .where(eq(plaidAccountsTable.id, settings.bankSnapshotAccountId));
     configuredCheckingExternalId = acct?.accountId ?? null;
+  }
+
+  // ⚠️ THE FROZEN-BALANCE RECOVERY. `bankSnapshotAccountId` is a pointer into
+  // `plaid_accounts`, and it can go stale two ways: never set (a snapshot
+  // entered by hand), or left dangling when the row it named was retired —
+  // which is exactly what the re-link dedupe does to a duplicate account.
+  //
+  // Either way `configuredCheckingExternalId` lands null, `isBankRow` then
+  // matches NO Plaid row at all, and `bankToday` silently freezes at the raw
+  // snapshot while real charges pile up unseen. Worse, the same null makes
+  // `plaidSync` skip its balance re-anchor, so the one move a user would try —
+  // press Sync — cannot break the freeze. Every surface shows the same stale
+  // number with no indication anything is wrong.
+  //
+  // So when the pointer does not resolve, recover the account from what the
+  // snapshot itself remembers, in descending order of certainty. Each step
+  // must identify the account UNIQUELY; a wrong guess here would put a
+  // confidently wrong balance on every screen, which is worse than a stale one.
+  if (configuredCheckingExternalId === null) {
+    const householdAccounts = await db
+      .select({
+        accountId: plaidAccountsTable.accountId,
+        mask: plaidAccountsTable.mask,
+        subtype: plaidAccountsTable.subtype,
+        type: plaidAccountsTable.type,
+      })
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.householdId, householdId));
+
+    const uniqueExternalId = (rows: { accountId: string | null }[]): string | null => {
+      const ids = Array.from(
+        new Set(rows.map((r) => r.accountId).filter((id): id is string => !!id)),
+      );
+      return ids.length === 1 ? ids[0]! : null;
+    };
+
+    // 1. The mask the snapshot was taken against. The pointer is gone but the
+    //    identity is not: "··1234" still names one physical account.
+    const snapshotMask = settings?.bankSnapshotMask ?? null;
+    if (snapshotMask) {
+      configuredCheckingExternalId = uniqueExternalId(
+        householdAccounts.filter((a) => a.mask === snapshotMask),
+      );
+    }
+
+    // 2. Otherwise, the household's single checking account — unambiguous by
+    //    definition when there is only one of them.
+    if (configuredCheckingExternalId === null) {
+      configuredCheckingExternalId = uniqueExternalId(
+        householdAccounts.filter((a) => a.subtype === "checking"),
+      );
+    }
+
+    // 3. Otherwise, its single depository account (older links can arrive with
+    //    a type but no subtype).
+    if (configuredCheckingExternalId === null) {
+      configuredCheckingExternalId = uniqueExternalId(
+        householdAccounts.filter((a) => a.type === "depository"),
+      );
+    }
+
+    // Nothing unique to point at — two candidates, or none. Stay frozen rather
+    // than pick, and say so: a balance nobody can explain is the bug this
+    // whole block exists to end.
+    if (configuredCheckingExternalId === null) {
+      logger.warn(
+        {
+          householdId,
+          bankSnapshotAccountId: settings?.bankSnapshotAccountId ?? null,
+          snapshotMask,
+          candidateCount: householdAccounts.length,
+        },
+        "[cash-signal] bank snapshot has no resolvable Plaid account — bankToday cannot roll forward and will read as the raw snapshot",
+      );
+    } else {
+      logger.info(
+        {
+          householdId,
+          bankSnapshotAccountId: settings?.bankSnapshotAccountId ?? null,
+          recoveredExternalId: configuredCheckingExternalId,
+          via: snapshotMask ? "snapshot mask" : "sole checking/depository account",
+        },
+        "[cash-signal] bank snapshot account pointer was missing or dangling — recovered it for the roll-forward",
+      );
+    }
   }
   const isBankRow = (
     source: string | null,
