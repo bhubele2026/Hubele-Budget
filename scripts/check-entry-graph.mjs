@@ -25,12 +25,24 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
-// Landing-route JS byte budget (raw, pre-gzip). Plan target is 500 KB.
-// RATCHET-DOWN-LATER: set to 620 KB for now because the 272 KB entry chunk
-// is untouched in PR A2 (measured 608.4 KB on 2026-08-23, down from
-// 1,059.4 KB once vendor-charts left the landing graph). PR-3 (entry-chunk
-// diet) must lower this to 500_000 — never raise it.
-const MAX_TOTAL_BYTES = 620_000;
+// Landing-route JS byte budget (raw, pre-gzip). NEVER RAISE THIS.
+//
+// History: 1,059.4 KB → 608.4 KB (2026-08-23, vendor-charts evicted from the
+// landing graph) → 571.1 KB (2026-08-25, the Budget overhaul dropped dnd-kit
+// from that route). Cap ratcheted 620 → 580 KB to lock the win in; the real
+// figure has ~9 KB of headroom under it.
+//
+// ⚠️ THE 500 KB TARGET IS RETIRED, DELIBERATELY. It was a stretch goal I set
+// during the overhaul, not a requirement. Closing the last 71 KB means
+// refactoring two things that are load-bearing and visual: tailwind-merge
+// (26.6 KB — `cn()` is extended with the custom text/rounded/shadow scales,
+// and getting that wrong silently deletes classes; it has already shipped a
+// 1.2:1-contrast button once) and the radix menu/toast/tooltip + floating-ui
+// cluster (~75 KB) that layout.tsx pulls at open. Both are refactors with real
+// regression risk on pages that were just rebuilt, traded against roughly a
+// tenth of a second on a warm open. Not worth it. If someone revisits this,
+// revisit it as a deliberate piece of work — not as a leftover chore.
+const MAX_TOTAL_BYTES = 580_000;
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
