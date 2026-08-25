@@ -30,6 +30,16 @@ to get the household out of debt; correctness and trust beat everything.
   must be scoped with `from`/`to` and a **small `limit` (default ≤ 100** for
   list views). Summary/aggregate pages request **server-computed aggregates**,
   not raw rows. **The `limit=5000` pattern is banned.**
+- **Filter in SQL, not in the browser.** If a page keeps only some of what it
+  asked for, it asked wrong — `/api/transactions` takes `uncategorized`,
+  `source`, `categoryId`, `excludeTransfers`, `reimbursable`, `search` and an
+  amount range. The Reports → Spending popover pulled a whole window to keep
+  the uncategorized rows out of it; it now asks for those rows.
+- **A capped pull discloses its cap.** The server answers newest-first and cuts
+  at the limit, so a window that overflows silently loses its OLDEST rows — a
+  compare-to-previous quietly drawn against half a period. A page that cannot
+  move to an aggregate (Reports → Cash flow charts rows individually) says on
+  screen that it is showing the most recent N. It never just truncates.
 - **Every `useQuery` has an explicit, sensible `staleTime`/`gcTime`.** Slow-
   changing data (settings, version, mapping-rules, forecast)
   gets a **generous `staleTime`** so navigation doesn't refetch.
@@ -125,9 +135,9 @@ is small. Reuse it; do not invent a second one.
 ### ⭐ The spine — one snapshot, many surfaces
 
 `GET /api/spine` computes the shared household snapshot server-side in one pass
-(bank roll-forward, spend windows, next bill, forecast low point/runway, debt
-payoff %, review count). Every field is produced by **the same function the
-owning page's endpoint calls** — never reimplemented.
+(bank roll-forward, spend windows, next bill, forecast low point/runway/cash
+buffer/verdict, debt payoff %, review count). Every field is produced by **the
+same function the owning page's endpoint calls** — never reimplemented.
 
 - **Any number the spine carries is read from `useSpine()`, never recomputed
   locally.** A page that re-derives its own copy is how two tiles come to
@@ -188,8 +198,10 @@ owning page's endpoint calls** — never reimplemented.
 - **Tests:** `pnpm --filter h2budget exec vitest run` (web, jsdom) and
   `pnpm --filter api-server exec vitest run` (API integration — needs a real
   Postgres and `DATABASE_URL` + `ALLOW_TEST_DB=1`). Parallel agents must use
-  **separate test databases**; several Plaid tests use the real clock and
-  contend.
+  **separate test databases**. The API suite runs **serially**
+  (`fileParallelism: false`): `singleFork` alone still let Vitest interleave
+  files against one Postgres, which flaked `plaidRefreshUserRetry` about one run
+  in three. Do not turn it back on to buy the ~60s back.
 - **Deploy:** GitHub `main` is the source of truth; **Render** auto-deploys
   `main` (single Web Service `h2budget` serving SPA + `/api`, health check
   `/api/healthz`, live at https://h2budget.onrender.com). Pinned

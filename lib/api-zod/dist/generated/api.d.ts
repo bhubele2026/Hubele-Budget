@@ -5698,6 +5698,16 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         transactionCount: number;
         total: number;
     }>;
+    realIncome: zod.ZodObject<{
+        total: zod.ZodNumber;
+        transactionCount: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        transactionCount: number;
+        total: number;
+    }, {
+        transactionCount: number;
+        total: number;
+    }>;
     uncategorized: zod.ZodObject<{
         total: zod.ZodNumber;
         transactionCount: zod.ZodNumber;
@@ -5798,6 +5808,16 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         total: number;
         count: number;
     }>, "many">;
+    dailyNet: zod.ZodArray<zod.ZodObject<{
+        date: zod.ZodString;
+        net: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        net: number;
+    }, {
+        date: string;
+        net: number;
+    }>, "many">;
     dayOfWeek: zod.ZodArray<zod.ZodObject<{
         dow: zod.ZodNumber;
         label: zod.ZodString;
@@ -5895,6 +5915,10 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         transactionCount: number;
         total: number;
     };
+    realIncome: {
+        transactionCount: number;
+        total: number;
+    };
     excluded: {
         transfersTotal: number;
         debtPaymentsTotal: number;
@@ -5919,6 +5943,10 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         date: string;
         total: number;
         count: number;
+    }[];
+    dailyNet: {
+        date: string;
+        net: number;
     }[];
     dayOfWeek: {
         total: number;
@@ -5963,6 +5991,10 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         transactionCount: number;
         total: number;
     };
+    realIncome: {
+        transactionCount: number;
+        total: number;
+    };
     excluded: {
         transfersTotal: number;
         debtPaymentsTotal: number;
@@ -5987,6 +6019,10 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         date: string;
         total: number;
         count: number;
+    }[];
+    dailyNet: {
+        date: string;
+        net: number;
     }[];
     dayOfWeek: {
         total: number;
@@ -9601,11 +9637,17 @@ export declare const GetSpineResponse: zod.ZodObject<{
         lowPoint: zod.ZodString;
         lowPointDate: zod.ZodNullable<zod.ZodString>;
         runwayDays: zod.ZodNullable<zod.ZodNumber>;
+        cashBuffer: zod.ZodString;
+        status: zod.ZodEnum<["ready", "tight", "not_yet", "no_data"]>;
     }, "strip", zod.ZodTypeAny, {
+        status: "ready" | "tight" | "not_yet" | "no_data";
+        cashBuffer: string;
         lowPoint: string;
         lowPointDate: string | null;
         runwayDays: number | null;
     }, {
+        status: "ready" | "tight" | "not_yet" | "no_data";
+        cashBuffer: string;
         lowPoint: string;
         lowPointDate: string | null;
         runwayDays: number | null;
@@ -9636,6 +9678,8 @@ export declare const GetSpineResponse: zod.ZodObject<{
     } | null;
     billsDueCount: number;
     forecast: {
+        status: "ready" | "tight" | "not_yet" | "no_data";
+        cashBuffer: string;
         lowPoint: string;
         lowPointDate: string | null;
         runwayDays: number | null;
@@ -9659,6 +9703,8 @@ export declare const GetSpineResponse: zod.ZodObject<{
     } | null;
     billsDueCount: number;
     forecast: {
+        status: "ready" | "tight" | "not_yet" | "no_data";
+        cashBuffer: string;
         lowPoint: string;
         lowPointDate: string | null;
         runwayDays: number | null;

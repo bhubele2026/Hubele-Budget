@@ -88,10 +88,17 @@ export default function SpendingPage() {
   // (#a8 per-page fetch) The charts read server-computed spending facts; this
   // scoped pull only feeds the Recategorize popover with real txn rows + IDs
   // for exactly the page's window (the old shared hook fetched a 95-day floor).
+  //
+  // (D3) And ONLY the rows that popover can act on. It used to pull the whole
+  // window — up to 2,000 rows — and throw away every categorized one in the
+  // browser; `uncategorized: true` is the same filter, applied in SQL. The
+  // client predicate below still runs: the server knows the rows have no
+  // category, not whether they are outflows or bank noise.
   const { data: txns, isLoading: txnsLoading } = useListTransactions({
     from: fmtISO(fromDate),
     to: fmtISO(today),
-    limit: 2000,
+    uncategorized: true,
+    limit: 500,
   });
   const { data: categories } = useListCategories();
   const rangeTxns = useMemo(() => {

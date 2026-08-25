@@ -380,6 +380,8 @@ type Spine = {
     lowPoint: string;
     lowPointDate: string | null;
     runwayDays: number | null;
+    cashBuffer: string;
+    status: string;
   };
   debt: { payoffPct: number | null };
   reviewCount: number;
@@ -389,6 +391,8 @@ type CashSignal = {
   bankToday: string;
   lowestProjected: string;
   lowestDate: string | null;
+  cashBuffer: string;
+  status: string;
   snapshotAt: string | null;
   daily?: Array<{ date: string; balance: string }>;
 };
@@ -413,6 +417,28 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(spine.forecast.lowPointDate).toBe(signal.lowestDate);
     // Runway is derived from the SAME daily series the Forecast page walks.
     expect(spine.forecast.runwayDays).toBe(runwayDaysFrom(signal.daily));
+  });
+
+  it("cash buffer + verdict match /forecast/cash-signal", async () => {
+    const spine = await get<Spine>("/spine");
+    const signal = await get<CashSignal>("/forecast/cash-signal?horizonDays=90");
+
+    // Reports shows the verdict, the buffer and the low point in ONE tile.
+    // They have to come from one reading of the household or the word can
+    // contradict the number standing beside it.
+    expect(spine.forecast.cashBuffer).toBe(signal.cashBuffer);
+    expect(spine.forecast.status).toBe(signal.status);
+    expect(["ready", "tight", "not_yet", "no_data"]).toContain(
+      spine.forecast.status,
+    );
+    // Not vacuous: the verdict is the one the buffer and low point imply.
+    const lowest = Number(spine.forecast.lowPoint);
+    const buffer = Number(spine.forecast.cashBuffer);
+    if (spine.forecast.status === "ready") {
+      expect(lowest).toBeGreaterThanOrEqual(buffer);
+    } else if (spine.forecast.status === "not_yet") {
+      expect(lowest).toBeLessThan(buffer);
+    }
   });
 
   it("spentMonth + spentWeek match /reports/spending-facts for the same windows", async () => {
@@ -602,7 +628,11 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
       spentMonth: expect.any(Number),
       spentWeek: expect.any(Number),
       billsDueCount: expect.any(Number),
-      forecast: { lowPoint: expect.any(String) },
+      forecast: {
+        lowPoint: expect.any(String),
+        cashBuffer: expect.any(String),
+        status: expect.any(String),
+      },
       reviewCount: expect.any(Number),
     });
   });

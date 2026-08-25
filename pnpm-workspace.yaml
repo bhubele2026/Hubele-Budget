@@ -181,4 +181,15 @@ overrides:
   # recharts' own range, so this pin fixes both without moving recharts (a
   # recharts 3.x major is explicitly NOT wanted — the chart kit targets 2.x).
   # Remove this pin only once every lodash consumer requires >=4.18.0 itself.
-  lodash: "^4.18.0"
+  lodash: "^4.18.0"  # SECURITY pin. js-cookie reaches us only transitively, through Clerk
+  # (`@clerk/shared` declares `js-cookie: 3.0.5` on the versions we hold, both
+  # the 3.47.x copy under `@clerk/react` and the 4.9.x copy under
+  # `@clerk/express`). Everything <=3.0.5 is vulnerable to GHSA-qjx8-664m-686j
+  # (per-instance prototype hijack in `assign()` lets an attacker-controlled
+  # attribute object inject cookie attributes, high). 3.0.7 is the patched
+  # line — it is what Clerk itself moved to on `@clerk/shared` >=4.20 — so this
+  # pin closes the advisory across the whole tree without dragging the auth
+  # SDK forward sixty minor versions on a release we cannot smoke-test against
+  # a real sign-in. Remove it once every Clerk package we hold requires
+  # >=3.0.7 itself.
+  js-cookie: "^3.0.8"

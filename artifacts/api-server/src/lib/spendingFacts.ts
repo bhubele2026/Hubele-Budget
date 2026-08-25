@@ -10,6 +10,8 @@ import { db, transactionsTable, budgetCategoriesTable } from "@workspace/db";
 import { cleanMerchant } from "./merchantNameExtract";
 import {
   isRealSpend,
+  isRealIncome,
+  incomeAmount,
   isUncategorizedSpend,
   isDebtCategory,
   isExcludedCategoryName,
@@ -35,6 +37,7 @@ export interface SpendingFacts {
     floorApplied: boolean;
   };
   realSpend: { total: number; transactionCount: number };
+  realIncome: { total: number; transactionCount: number };
   uncategorized: {
     total: number;
     transactionCount: number;
@@ -61,6 +64,7 @@ export interface SpendingFacts {
     sampleCategoryId: string | null;
   }[];
   dailyBuckets: { date: string; total: number; count: number }[];
+  dailyNet: { date: string; net: number }[];
   dayOfWeek: {
     dow: number;
     label: string;
@@ -164,6 +168,10 @@ export async function buildSpendingFacts(
   let realTotal = 0;
   let realCount = 0;
 
+  let incomeTotal = 0;
+  let incomeCount = 0;
+  const dailyIncome = new Map<string, number>();
+
   let uncatTotal = 0;
   let uncatCount = 0;
   const uncatMerchants = new Map<string, { total: number; count: number }>();
@@ -201,7 +209,18 @@ export async function buildSpendingFacts(
       else if (!t.reimbursable) personalTotal += spend;
     }
 
-    if (spend <= 0) continue; // inflow / refund / non-outflow — skip
+    if (spend <= 0) {
+      // Inflow side. Only earned money counts (see `isRealIncome`); a transfer
+      // in, a refund or a debt draw lands here and is deliberately ignored, so
+      // "of income spent" is measured against what actually came IN.
+      if (isRealIncome(tx, ctx)) {
+        const inc = incomeAmount(tx);
+        incomeTotal += inc;
+        incomeCount += 1;
+        dailyIncome.set(t.occurredOn, (dailyIncome.get(t.occurredOn) ?? 0) + inc);
+      }
+      continue; // nothing below this line applies to a non-outflow
+    }
 
     if (isRealSpend(tx, ctx)) {
       realTotal += spend;
@@ -350,6 +369,23 @@ export async function buildSpendingFacts(
     }))
     .sort((a, b) => (a.month < b.month ? -1 : 1));
 
+  // Daily net across EVERY day the range covers, income minus real spend, in
+  // date order. Empty days are emitted as 0 on purpose: a sparkline drawn only
+  // over days that happened to have activity compresses quiet stretches and
+  // reads as a busier month than it was.
+  const dailyNet: { date: string; net: number }[] = [];
+  {
+    const cursor = new Date(`${start}T00:00:00Z`);
+    const last = Date.parse(`${end}T00:00:00Z`);
+    while (Number.isFinite(last) && cursor.getTime() <= last) {
+      const date = isoDate(cursor);
+      const inc = dailyIncome.get(date) ?? 0;
+      const out = daily.get(date)?.total ?? 0;
+      dailyNet.push({ date, net: round2(inc - out) });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
+
   return {
     range: {
       start,
@@ -359,6 +395,7 @@ export async function buildSpendingFacts(
       floorApplied,
     },
     realSpend: { total: round2(realTotal), transactionCount: realCount },
+    realIncome: { total: round2(incomeTotal), transactionCount: incomeCount },
     uncategorized: {
       total: round2(uncatTotal),
       transactionCount: uncatCount,
@@ -373,6 +410,7 @@ export async function buildSpendingFacts(
     byCategory,
     byMerchant,
     dailyBuckets,
+    dailyNet,
     dayOfWeek,
     monthlyTrends,
     reimbursable: {
