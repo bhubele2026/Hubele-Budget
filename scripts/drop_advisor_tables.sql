@@ -57,7 +57,7 @@
 -- pointed into it, and the no-flag refusal was exercised first to prove the
 -- guard was live.
 --
--- Backup (the only undo): ~/Desktop/h2budget-backup-2026-08-25/
+-- Backup (the only undo): ~/Backups/h2budget-backup-2026-08-25/
 --   advisor-and-forecast-settings.sql · recurring-items.sql
 -- ═══════════════════════════════════════════════════════════════════════════
 
