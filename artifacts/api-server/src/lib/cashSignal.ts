@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -168,23 +168,19 @@ export function expandItem(item: RecurringRow, from: Date, to: Date): CashEvent[
       }
       break;
     }
-    case "quarterly": {
-      let cur = anchor;
-      while (cur > from) cur = addMonths(cur, -3);
-      while (cur < from) cur = addMonths(cur, 3);
-      while (cur <= to) {
-        push(cur);
-        cur = addMonths(cur, 3);
-      }
-      break;
-    }
+    case "quarterly":
     case "annual": {
-      let cur = anchor;
-      while (cur > from) cur = addMonths(cur, -12);
-      while (cur < from) cur = addMonths(cur, 12);
+      const step = item.frequency === "quarterly" ? 3 : 12;
+      const months = (from.getFullYear() - anchor.getFullYear()) * 12
+        + from.getMonth() - anchor.getMonth();
+      let occurrence = Math.floor(months / step);
+      // Always calculate from the original anchor. Chaining clamped dates
+      // permanently changes Jan 31 to the 30th, or Feb 29 to the 28th.
+      let cur = addMonths(anchor, occurrence * step);
+      while (cur < from) cur = addMonths(anchor, ++occurrence * step);
       while (cur <= to) {
         push(cur);
-        cur = addMonths(cur, 12);
+        cur = addMonths(anchor, ++occurrence * step);
       }
       break;
     }
@@ -472,14 +468,17 @@ export async function computeCashSignal(
     return true;
   };
 
-  // Pull future-anchored checking transactions (forecast_flag and reflecting bank movement after snapshot)
+  // Actual checking activity through today belongs in the opening balance
+  // regardless of review flags. Only future transactions require forecastFlag.
   const txnsAll = await db
     .select()
     .from(transactionsTable)
     .where(
       and(
         eq(transactionsTable.householdId, householdId),
-        eq(transactionsTable.forecastFlag, true),
+        snapshotISO
+          ? or(eq(transactionsTable.forecastFlag, true), lte(transactionsTable.occurredOn, todayISO))
+          : eq(transactionsTable.forecastFlag, true),
         gte(transactionsTable.occurredOn, anchorISO),
         lte(transactionsTable.occurredOn, toISO),
       ),
@@ -543,6 +542,27 @@ export async function computeCashSignal(
     .select()
     .from(forecastResolutionsTable)
     .where(eq(forecastResolutionsTable.householdId, householdId));
+  // A moved bill can originate outside the expansion window. Recover that
+  // occurrence before applying resolutions so moving it into view cannot
+  // silently erase the payment from the cash curve.
+  const eventKeys = new Set(events.map(e => `${e.itemId}|${e.date}`));
+  for (const r of resolutionsAll) {
+    if (r.status !== "rescheduled" || !r.recurringItemId || !r.occurrenceDate || !r.rescheduledTo || r.rescheduledTo > toISO) continue;
+    const key = `${r.recurringItemId}|${r.occurrenceDate}`;
+    if (eventKeys.has(key)) continue;
+    const day = parseISO(r.occurrenceDate);
+    const recurringItem = recurring.find(item => item.id === r.recurringItemId);
+    const recovered = recurringItem ? expandItem(recurringItem, day, day) : [
+      ...debtsList.flatMap(d => expandDebtMin(d, linkedRecurringByDebt.get(d.id) ?? null, day, day)),
+      ...expandAvalancheExtra(debtsList, manualExtra, day, day, todayDateOnly),
+    ];
+    for (const event of recovered) {
+      if (event.itemId !== r.recurringItemId || eventKeys.has(`${event.itemId}|${event.date}`)) continue;
+      events.push(event);
+      eventKeys.add(`${event.itemId}|${event.date}`);
+    }
+  }
+
   const matchedIds = Array.from(
     new Set(
       resolutionsAll
@@ -724,8 +744,13 @@ export async function computeCashSignal(
       });
     }
   }
+  const projectedPlaidIds = new Set<string>();
   for (const t of txns) {
     if (t.occurredOn <= anchorISO) continue;
+    if (t.plaidTransactionId) {
+      if (projectedPlaidIds.has(t.plaidTransactionId)) continue;
+      projectedPlaidIds.add(t.plaidTransactionId);
+    }
     items.push({
       date: t.occurredOn,
       amount: Number(t.amount) || 0,

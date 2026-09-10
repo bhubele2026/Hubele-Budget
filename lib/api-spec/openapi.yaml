@@ -3850,6 +3850,23 @@ components:
             daysCovered: { type: integer }
             trackingStart: { type: string }
             floorApplied: { type: boolean }
+        unplanned:
+          type: object
+          description: Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window.
+          required: [total, transactionCount, transactions]
+          properties:
+            total: { type: number }
+            transactionCount: { type: integer }
+            transactions:
+              type: array
+              items:
+                type: object
+                required: [id, date, description, amount]
+                properties:
+                  id: { type: string }
+                  date: { type: string }
+                  description: { type: string }
+                  amount: { type: number }
         realSpend:
           type: object
           required: [total, transactionCount]

@@ -2841,6 +2841,23 @@ export const GetReportsSpendingFactsResponse = zod.object({
     trackingStart: zod.string(),
     floorApplied: zod.boolean(),
   }),
+  unplanned: zod
+    .object({
+      total: zod.number(),
+      transactionCount: zod.number(),
+      transactions: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string(),
+          description: zod.string(),
+          amount: zod.number(),
+        }),
+      ),
+    })
+    .optional()
+    .describe(
+      "Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window.",
+    ),
   realSpend: zod.object({
     total: zod.number(),
     transactionCount: zod.number(),

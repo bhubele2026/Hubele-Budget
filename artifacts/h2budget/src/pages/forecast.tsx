@@ -38,10 +38,12 @@ import {
   cardHead,
   btnLink,
   emptyNote,
+  errorBanner,
   Foot,
   Help,
   Stat,
 } from "@/ui";
+import { ForecastDateBalance } from "@/components/forecast-date-balance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -297,8 +299,8 @@ export default function ForecastPage({
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
-  const { data, isLoading } = useGetForecast({ days: deferredHorizonDays });
-  const { data: cashProjection, isLoading: cashProjectionLoading } =
+  const { data, isLoading, isError: forecastError, refetch: refetchForecast } = useGetForecast({ days: deferredHorizonDays });
+  const { data: cashProjection, isLoading: cashProjectionLoading, isError: projectionError, refetch: refetchProjection } =
     useGetForecastCashSignal({
       horizonDays: deferredHorizonDays,
       fromDate: deferredForecastFromDate,
@@ -1638,7 +1640,7 @@ export default function ForecastPage({
   if (!data || !register) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
+        {forecastError ? <div role="alert" className={errorBanner}>Forecast could not load. <button className={btnLink} onClick={() => void refetchForecast()}>Retry forecast</button></div> : <Skeleton className="h-10 w-48" />}
         <Skeleton className="h-96 w-full" />
       </div>
     );
@@ -1795,6 +1797,12 @@ export default function ForecastPage({
   return (
     <div className="space-y-6">
       <PlaidReauthBanner />
+      {(forecastError || projectionError) && (
+        <div role="alert" className={errorBanner}>
+          <p>{data || cashProjection ? "Forecast refresh failed. Displayed figures may be out of date." : "Forecast could not load. Try again to see your projection."}</p>
+          <button type="button" className={btnLink} onClick={() => { void refetchForecast(); void refetchProjection(); }}>Retry forecast</button>
+        </div>
+      )}
       <div ref={pageStickyHeaderRef} className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
       {/* ⭐ The title used to be a sentence explaining the page's philosophy
           ("Plan register — you decide every match."). The register below says
@@ -1993,9 +2001,9 @@ export default function ForecastPage({
               index={0}
               data-testid="kpi-lowest-point"
               label="Lowest point"
-              value={formatCurrency(Number.isFinite(lowestNum) ? lowestNum : 0)}
+              value={proj && proj.status !== "no_data" && Number.isFinite(lowestNum) ? formatCurrency(lowestNum) : "—"}
               tone={dipsBelowBuffer ? "bad" : "navy"}
-              hint={`${dipsBelowBuffer ? "under buffer" : "above buffer"}${
+              hint={`${!proj || proj.status === "no_data" ? "Set a bank balance to project" : dipsBelowBuffer ? "under buffer" : "above buffer"}${
                 proj?.lowestDate ? ` · ${formatDate(proj.lowestDate)}` : ""
               }`}
             />
@@ -2003,7 +2011,7 @@ export default function ForecastPage({
               index={1}
               data-testid="kpi-ending-balance"
               label="Ending balance"
-              value={formatCurrency(proj?.endingBalance ?? 0)}
+              value={proj && proj.status !== "no_data" ? formatCurrency(proj.endingBalance ?? 0) : "—"}
               hint={
                 proj?.endingDate
                   ? formatDate(proj.endingDate)
@@ -2014,19 +2022,21 @@ export default function ForecastPage({
               index={2}
               data-testid="kpi-projected-income"
               label="Money in"
-              value={formatCurrency(inc)}
+              value={proj ? formatCurrency(inc) : "—"}
               hint={`over ${horizonDays}d`}
             />
             <Stat
               index={3}
               data-testid="kpi-projected-expenses"
               label="Money out"
-              value={formatCurrency(exp)}
+              value={proj ? formatCurrency(exp) : "—"}
               hint={`over ${horizonDays}d`}
             />
           </div>
         );
       })()}
+
+      <ForecastDateBalance signal={cashProjection} />
 
       {/* (#683) Past-due plans dragging tomorrow — discoverable summary */}
       {draggingPlans.length > 0 && draggingTargetDate && (

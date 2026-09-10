@@ -109,6 +109,9 @@ const NotFound = lazy(() => import("./pages/not-found"));
 const mutationCache = new MutationCache({
   onSuccess: () => {
     void queryClient.invalidateQueries({ queryKey: getGetSpineQueryKey() });
+    // Spending aggregates include category and UN edits. They must refresh
+    // alongside the ledger, even when a page only invalidates transactions.
+    void queryClient.invalidateQueries({ predicate: q => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/") });
   },
 });
 

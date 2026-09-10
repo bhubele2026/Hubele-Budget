@@ -1647,8 +1647,7 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       plaidAccountId: chase.externalId,
       source: "plaid:chase",
     });
-    // Posted after anchor, forecast_flag false — the curve ignores it,
-    // bankToday must not.
+    // Posted after anchor: review flags must not change actual opening cash.
     await addLedgerTxn({
       occurredOn: "2026-05-05",
       amount: "-200",
@@ -1682,8 +1681,10 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       horizonDays: 30,
     });
 
-    // 1000 - 200 + 50 = 850; the flag-false rows never reach the curve.
+    // Actual cash is identical in the bank tile and the first curve point.
     expect(sig.bankToday).toBe("850.00");
+    expect(sig.daily?.[0].balance).toBe("850.00");
+    expect(sig.endingBalance).toBe("850.00");
   });
 
   // ⚠️ THE FROZEN-BALANCE TRAP (2026-08-25 investigation — Brad: "my Chase
@@ -1818,5 +1819,17 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       horizonDays: 30,
     });
     expect(sig.bankToday).toBe("750.00");
+  });
+});
+
+describe("rescheduled bills outside the original expansion window", () => {
+  it.each(["2026-01-15", "2026-12-15"])("includes a %s bill moved into the forecast window", async (original) => {
+    await setSettings({ balance: "1000", at: new Date("2026-05-14T12:00:00Z"), cashBuffer: "0" });
+    const item = await addRecurring({ frequency: "onetime", anchorDate: original, amount: "125" });
+    await db.insert(forecastResolutionsTable).values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, recurringItemId: item.id, occurrenceDate: original, status: "rescheduled", rescheduledTo: "2026-05-20" });
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.daily?.[0].balance).toBe("1000.00");
+    expect(sig.daily?.find(d => d.date === "2026-05-20")?.balance).toBe("875.00");
+    expect(sig.projectedExpenses).toBe("125.00");
   });
 });

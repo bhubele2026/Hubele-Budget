@@ -156,23 +156,19 @@ export function expandItem(
       }
       break;
     }
-    case "quarterly": {
-      let cur = anchor;
-      while (cur > from) cur = addMonths(cur, -3);
-      while (cur < from) cur = addMonths(cur, 3);
-      while (cur <= to) {
-        push(cur);
-        cur = addMonths(cur, 3);
-      }
-      break;
-    }
+    case "quarterly":
     case "annual": {
-      let cur = anchor;
-      while (cur > from) cur = addMonths(cur, -12);
-      while (cur < from) cur = addMonths(cur, 12);
+      const step = item.frequency === "quarterly" ? 3 : 12;
+      const months = (from.getFullYear() - anchor.getFullYear()) * 12
+        + from.getMonth() - anchor.getMonth();
+      let occurrence = Math.floor(months / step);
+      // Always calculate from the original anchor. Chaining clamped dates
+      // permanently changes Jan 31 to the 30th, or Feb 29 to the 28th.
+      let cur = addMonths(anchor, occurrence * step);
+      while (cur < from) cur = addMonths(anchor, ++occurrence * step);
       while (cur <= to) {
         push(cur);
-        cur = addMonths(cur, 12);
+        cur = addMonths(anchor, ++occurrence * step);
       }
       break;
     }

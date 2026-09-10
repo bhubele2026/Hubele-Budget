@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useListTransactions,
+  useBulkUpdateTransactions,
   useCreateTransaction,
   useUpdateTransaction,
   useClearTransferOverride,
@@ -89,7 +90,7 @@ import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { PostLinkProgressBanner } from "@/components/post-link-progress";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { SyncButton } from "@/components/sync-button";
-import { card, cardHead, emptyNote, fieldLabel, Help } from "@/ui";
+import { card, cardHead, emptyNote, fieldLabel, Help, errorBanner, btnLink } from "@/ui";
 import {
   AccountPageHeader,
   AccountFilterBar,
@@ -180,7 +181,7 @@ export default function TransactionsPage() {
       to: iso(new Date(now.getFullYear() + 1, now.getMonth() + 1, 0)),
     };
   }, []);
-  const { data: transactions, isLoading } = useListTransactions({
+  const { data: transactions, isLoading, isError: transactionsError, refetch: refetchTransactions } = useListTransactions({
     from: txnWindow.from,
     to: txnWindow.to,
     limit: 1000,
@@ -843,10 +844,17 @@ export default function TransactionsPage() {
       .slice()
       .sort(compareNewestFirst);
   }, [chaseTransactions, search, sourceFilter, memberFilter, categoryFilter, categoryById]);
+  // This is a ledger visibility preference: all totals retain the full ledger.
+  const [hideReviewed, setHideReviewed] = useState(() => {
+    try { return localStorage.getItem("h2-chase-hide-reviewed") === "true"; } catch { return false; }
+  });
+  useEffect(() => { try { localStorage.setItem("h2-chase-hide-reviewed", String(hideReviewed)); } catch { /* private browsing */ } }, [hideReviewed]);
+  const visiblePending = useMemo(() => pendingItems.filter(t => !hideReviewed || !t.reviewed), [pendingItems, hideReviewed]);
+  const visiblePosted = useMemo(() => filtered.filter(t => !t.pending && (!hideReviewed || !t.reviewed)), [filtered, hideReviewed]);
+  const reviewedCount = filtered.filter(t => t.reviewed && !t.pending).length + pendingItems.filter(t => t.reviewed).length;
   const groups = useMemo(() => {
     const map = new Map<string, Transaction[]>();
-    for (const t of filtered) {
-      if (t.pending) continue;
+    for (const t of visiblePosted) {
       const k = t.occurredOn.slice(0, 10);
       const arr = map.get(k);
       if (arr) arr.push(t);
@@ -854,7 +862,7 @@ export default function TransactionsPage() {
     }
     for (const arr of map.values()) arr.sort(compareNewestFirst);
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  }, [filtered]);
+  }, [visiblePosted]);
 
   // ---- Mutations & dialog ----
   const createTx = useCreateTransaction();
@@ -1616,9 +1624,32 @@ export default function TransactionsPage() {
       return next;
     });
   const clearSelection = () => setSelected(new Set());
+  const reviewMutation = useBulkUpdateTransactions();
+  const setReviewed = async (rows: Transaction[], reviewed: boolean) => {
+    const changed = rows.filter(t => !!t.reviewed !== reviewed);
+    if (!changed.length) return;
+    const succeeded = new Set<string>();
+    try {
+      for (let i = 0; i < changed.length; i += 200) {
+        const result = await reviewMutation.mutateAsync({ data: { ids: changed.slice(i, i + 200).map(t => t.id), patch: { reviewed } } });
+        for (const row of result.results) if (row.ok) succeeded.add(row.id);
+      }
+    } catch {
+      // Keep failed rows selected, including rows in chunks not attempted.
+    }
+    setSelected(new Set(changed.filter(t => !succeeded.has(t.id)).map(t => t.id)));
+    await queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+    const failed = changed.length - succeeded.size;
+    toast({
+      title: `${succeeded.size} ${reviewed ? "marked reviewed" : "restored for review"}${failed ? `, ${failed} failed` : ""}`,
+      description: failed ? "Failed rows remain selected. Try again." : "Balances and forecast are unchanged.",
+      variant: failed ? "destructive" : "default",
+      action: succeeded.size ? <ToastAction altText="Undo reviewed status" onClick={() => void setReviewed(changed.filter(t => succeeded.has(t.id)).map(t => ({ ...t, reviewed })), !reviewed)}>Undo</ToastAction> : undefined,
+    });
+  };
   useEffect(() => {
     setSelected((prev) => {
-      const visible = new Set(filtered.map((t) => t.id));
+      const visible = new Set([...visiblePosted, ...visiblePending].map((t) => t.id));
       let changed = false;
       const next = new Set<string>();
       for (const id of prev) {
@@ -1627,7 +1658,7 @@ export default function TransactionsPage() {
       }
       return changed ? next : prev;
     });
-  }, [filtered]);
+  }, [visiblePosted, visiblePending]);
 
   // Reverses a bulk Send-to-Forecast / Remove-from-Forecast by re-issuing
   // the same endpoint with `forecastFlag` inverted, scoped to the exact
@@ -1969,7 +2000,7 @@ export default function TransactionsPage() {
   // transactions list visible during refetches so we never flash a
   // skeleton after the first load.
   if (!transactions) {
-    return <AccountPageSkeleton tiles={5} />;
+    return transactionsError ? <div role="alert" className={errorBanner}>Chase transactions could not load. <button className={btnLink} onClick={() => void refetchTransactions()}>Retry transactions</button></div> : <AccountPageSkeleton tiles={5} />;
   }
 
   // (#741/#742) The shared row-chip cluster moved into
@@ -2081,6 +2112,7 @@ export default function TransactionsPage() {
           (or failed + Retry) instead of staring at silence after the
           link toast. */}
       <PostLinkProgressBanner viewTransactionsPath="/transactions" />
+      {transactionsError && <div role="alert" className={errorBanner}>Chase refresh failed. Showing the last loaded transactions. <button className={btnLink} onClick={() => void refetchTransactions()}>Retry transactions</button></div>}
       <div
         ref={paneRef}
         className="sticky top-0 z-30 -mx-4 -mt-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pt-3 pb-3 md:-mx-8 md:-mt-8 md:px-8 md:pt-4"
@@ -2335,11 +2367,18 @@ export default function TransactionsPage() {
         updateTx={updateTx}
       />
 
+      {(transactions?.length ?? 0) >= 1000 && <div role="status" className={emptyNote}>Showing the 1,000 most recent transactions in the loaded window. Older activity may be missing from this ledger and its running balances. Household spending totals use the full selected period.</div>}
       {previewDialog}
 
+      <div className="flex flex-wrap items-center gap-3" data-testid="chase-review-controls">
+        <Button variant={hideReviewed ? "default" : "outline"} onClick={() => { setHideReviewed(v => !v); clearSelection(); }} data-testid="chase-clear-reviewed">
+          {hideReviewed ? "Show reviewed" : "Clear reviewed from list"}
+        </Button>
+        <span className="text-label text-neutral-500">{reviewedCount} reviewed{hideReviewed ? " hidden" : ""} · clearing keeps your balances and history</span>
+      </div>
       {selected.size > 0 && (
         <div
-          className="surface sticky z-20 flex items-center gap-3 rounded-control px-4 py-2 ring-1 ring-brand-navy/25"
+          className="surface sticky z-20 flex flex-wrap items-center gap-3 rounded-control px-4 py-2 ring-1 ring-brand-navy/25"
           style={{ top: "var(--pinned-pane-h, 0px)" }}
           data-testid="bulk-bar"
         >
@@ -2363,19 +2402,21 @@ export default function TransactionsPage() {
           >
             Remove from Forecast
           </Button>
+          <Button size="sm" variant="outline" disabled={reviewMutation.isPending} onClick={() => void setReviewed([...visiblePosted, ...visiblePending].filter(t => selected.has(t.id)), true)}>Mark reviewed</Button>
+          <Button size="sm" variant="outline" disabled={reviewMutation.isPending} onClick={() => void setReviewed([...visiblePosted, ...visiblePending].filter(t => selected.has(t.id)), false)}>Mark unreviewed</Button>
           {/* Single-flow restore: "Send to Forecast" IS "in Review" now.
               The separate bulk Send-to-Review button (#762 Phase B) is
               gone — a forecast-flagged row shows up in the Review tab
               and on the curve immediately. */}
           <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
-            Clear
+            Clear selection
           </Button>
         </div>
       )}
 
-      {groups.length === 0 && pendingItems.length === 0 && (
+      {groups.length === 0 && visiblePending.length === 0 && (
         <div className={card}>
-          <div className={emptyNote}>No transactions match these filters.</div>
+          <div className={emptyNote}>{hideReviewed && reviewedCount > 0 ? "Review complete. Reviewed transactions are hidden." : "No transactions match these filters."}</div>
         </div>
       )}
 
@@ -2387,8 +2428,8 @@ export default function TransactionsPage() {
           selection / day-net handlers can address it the same way
           as any other day-group. Hidden when no pending rows exist
           so we don't render an empty header. */}
-      {pendingItems.length > 0 && (() => {
-        const items = pendingItems;
+      {visiblePending.length > 0 && (() => {
+        const items = visiblePending;
         const ids = items.map((t) => t.id);
         const allSelected = ids.every((id) => selected.has(id));
         const someSelected =
@@ -2455,7 +2496,7 @@ export default function TransactionsPage() {
                           {formatCurrency(parseSigned(tx.amount))}
                         </span>
                       }
-                      actionsNode={renderSendForecastAction(tx)}
+                      actionsNode={<>{renderSendForecastAction(tx)}<Button variant="ghost" size="sm" disabled={reviewMutation.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button></>}
                     />
                   );
                 })}
@@ -2550,6 +2591,7 @@ export default function TransactionsPage() {
                       actionsNode={
                         <>
                           {renderSendForecastAction(tx)}
+                          <Button variant="ghost" size="sm" disabled={reviewMutation.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button>
                           <Button
                             variant="ghost"
                             size="icon"

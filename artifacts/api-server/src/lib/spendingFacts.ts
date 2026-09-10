@@ -38,6 +38,7 @@ export interface SpendingFacts {
   };
   realSpend: { total: number; transactionCount: number };
   realIncome: { total: number; transactionCount: number };
+  unplanned?: { total: number; transactionCount: number; transactions: { id: string; date: string; description: string; amount: number }[] };
   uncategorized: {
     total: number;
     transactionCount: number;
@@ -146,6 +147,8 @@ export async function buildSpendingFacts(
   // --- Transactions in range ---------------------------------------------
   const txns = await db
     .select({
+      id: transactionsTable.id,
+      unplannedAllowance: transactionsTable.unplannedAllowance,
       occurredOn: transactionsTable.occurredOn,
       description: transactionsTable.description,
       amount: transactionsTable.amount,
@@ -199,6 +202,9 @@ export async function buildSpendingFacts(
   let personalTotal = 0; // Amex spend, personal (non-reimbursable)
   let outstandingReimbursableTotal = 0; // Amex reimbursable, not yet reimbursed
 
+  let unplannedTotal = 0;
+  let unplannedCount = 0;
+  const unplannedRows: { id: string; date: string; description: string; amount: number }[] = [];
   for (const t of txns) {
     const tx = t as unknown as SpendTxn;
     const spend = spendAmount(tx);
@@ -222,6 +228,13 @@ export async function buildSpendingFacts(
       continue; // nothing below this line applies to a non-outflow
     }
 
+    // Unplanned means explicitly assigned to UN, not merely uncategorized.
+    // Include eligible uncategorized UN purchases without counting transfers.
+    if (t.unplannedAllowance && (isRealSpend(tx, ctx) || (!t.categoryId && isUncategorizedSpend(tx)))) {
+      unplannedTotal += spend;
+      unplannedCount++;
+      unplannedRows.push({ id: t.id, date: t.occurredOn, description: cleanMerchant(t.description) || t.description, amount: round2(spend) });
+    }
     if (isRealSpend(tx, ctx)) {
       realTotal += spend;
       realCount += 1;
@@ -394,6 +407,7 @@ export async function buildSpendingFacts(
       trackingStart: TRACKING_START,
       floorApplied,
     },
+    unplanned: { total: round2(unplannedTotal), transactionCount: unplannedCount, transactions: unplannedRows.sort((a, b) => b.amount - a.amount || b.date.localeCompare(a.date)).slice(0, 20) },
     realSpend: { total: round2(realTotal), transactionCount: realCount },
     realIncome: { total: round2(incomeTotal), transactionCount: incomeCount },
     uncategorized: {
