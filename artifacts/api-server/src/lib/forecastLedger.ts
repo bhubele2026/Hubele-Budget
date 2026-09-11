@@ -11,7 +11,13 @@ import {
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdDayOf, householdTodayDate } from "./householdClock";
-import { isInSnapshot } from "@workspace/avalanche-core";
+import {
+  addDaysISO,
+  isInSnapshot,
+  pairPendingWithPosted,
+  pendingChargeWasInBalance,
+  SUPERSEDE_MAX_DAYS,
+} from "@workspace/avalanche-core";
 import {
   addDays,
   expandItem,
@@ -96,6 +102,9 @@ export type ForecastLedger = {
  *     unless the institution's own time shows they happened after the read;
  *     and Plaid charges the ledger already had at the read, dated up to five
  *     days after it.
+ *   - A pending row its posted row replaced (PR4c, `pairPendingWithPosted`)
+ *     never counts; the posted row counts only what the snapshot did not
+ *     already hold of the pair.
  *   - (#666) Planned events dated on/before the snapshot are dropped entirely
  *     — bills AND income, real AND synthetic. The bank snapshot is the
  *     truth: anything dated on or before it is already reflected in the
@@ -335,41 +344,74 @@ export async function buildForecastLedger(
         snapshotISO
           ? inForecastWhere(todayISO)
           : eq(transactionsTable.forecastFlag, true),
+        // (PR4c) With a snapshot, reach SUPERSEDE_MAX_DAYS before the anchor: a
+        // pending row dated before the snapshot can be the half a posted row
+        // replaced. `isInSnapshot` holds every row dated before the snapshot day,
+        // so the extra days add nothing on their own.
         snapshotISO
-          ? gte(transactionsTable.occurredOn, anchorISO)
+          ? gte(transactionsTable.occurredOn, addDaysISO(anchorISO, -SUPERSEDE_MAX_DAYS))
           : gt(transactionsTable.occurredOn, anchorISO),
         lte(transactionsTable.occurredOn, actualUpperISO),
       ),
     );
   let bankToday = startBalanceAtAnchor;
   const actuals: LedgerActual[] = [];
+  type ActualRow = (typeof actualRowsAll)[number];
+  const toSnapshotRow = (t: ActualRow) => ({
+    occurredOn: t.occurredOn,
+    amount: Number(t.amount) || 0,
+    createdAt: t.createdAt,
+    // Stored as a string; an unparsable value is NaN, which the rule treats as no time.
+    occurredAt: t.occurredAt ? new Date(t.occurredAt) : null,
+    plaidAccountId: t.plaidAccountId ?? null,
+  });
+  const heldBySnapshot = (t: ActualRow): boolean =>
+    !!snapshotISO && !!snapshotAt && isInSnapshot(toSnapshotRow(t), snapshotAt, snapshotISO);
+  const pendingWasInBalance = (t: ActualRow): boolean =>
+    !!snapshotISO && !!snapshotAt && pendingChargeWasInBalance(toSnapshotRow(t), snapshotAt, snapshotISO);
+
+  // ⭐ A PENDING ROW ITS POSTED ROW REPLACED COUNTS ONCE (PR4c).
+  // Normally the sync re-keys the pending row onto its posted row, so they are
+  // one row. When that link is missing both rows sit here and the charge would
+  // count twice. `pairPendingWithPosted` pairs them (heuristic; see there). The
+  // pending half never counts. What the posted half adds (PR4c review):
+  //   posted and pending both held by the snapshot       → 0 (the balance has it)
+  //   pending CHARGE with evidence it was in the balance → posted − pending (the tip)
+  //   otherwise                                          → posted, in full
+  // A held posted row whose pending half is NOT held still counts: it reached the
+  // ledger after that pending half and is dated on or after it, so it cannot be
+  // inside a balance the pending half was not. Pending deposits never leave only
+  // a difference — `available` does not hold them.
+  const supersededBy = pairPendingWithPosted(
+    actualRowsAll
+      .filter((t) => isBankRow(t.source, t.plaidAccountId ?? null))
+      .map((t) => ({
+        id: t.id,
+        plaidAccountId: t.plaidAccountId ?? null,
+        pending: !!t.pending,
+        occurredOn: t.occurredOn,
+        amount: Number(t.amount) || 0,
+        description: t.description ?? null,
+        createdAt: t.createdAt,
+      })),
+  );
+  const supersededIds = new Set([...supersededBy.values()].map((p) => p.id));
+  const actualRowById = new Map(actualRowsAll.map((t) => [t.id, t] as const));
+
   // Defensive only: `transactions.plaid_transaction_id` is unique.
   const seenPlaidIds = new Set<string>();
   for (const t of actualRowsAll) {
-    if (
-      snapshotISO &&
-      snapshotAt &&
-      isInSnapshot(
-        {
-          occurredOn: t.occurredOn,
-          amount: Number(t.amount) || 0,
-          createdAt: t.createdAt,
-          // Stored as a string; an unparsable value is NaN, which the rule treats as no time.
-          occurredAt: t.occurredAt ? new Date(t.occurredAt) : null,
-          plaidAccountId: t.plaidAccountId ?? null,
-        },
-        snapshotAt,
-        snapshotISO,
-      )
-    ) {
-      continue;
-    }
+    const replaced = supersededBy.get(t.id);
+    const replacedRow = replaced ? actualRowById.get(replaced.id) : undefined;
+    if (heldBySnapshot(t) && (!replacedRow || heldBySnapshot(replacedRow))) continue;
     if (!isBankRow(t.source, t.plaidAccountId ?? null)) continue;
+    if (supersededIds.has(t.id)) continue;
     if (t.plaidTransactionId) {
       if (seenPlaidIds.has(t.plaidTransactionId)) continue;
       seenPlaidIds.add(t.plaidTransactionId);
     }
-    const amount = Number(t.amount) || 0;
+    let amount = Number(t.amount) || 0;
+    if (replacedRow && pendingWasInBalance(replacedRow)) amount -= Number(replacedRow.amount) || 0;
     if (snapshotISO && t.occurredOn <= todayISO) bankToday += amount;
     if (t.occurredOn <= toISO) {
       actuals.push({ kind: "actual", date: t.occurredOn, amount, matched: false, txnId: t.id });
