@@ -1,16 +1,38 @@
-# PR6 — Overdue bills are assumed unpaid, and never dropped silently
+# PR6 — Overdue bills: paid ones stay off the forecast, unpaid ones are never dropped silently
 
-Codex work-order point **5** (overdue bills and recurrence), plan PR6. Built on PR5a ("probably paid"), then merged with
-`main` once PR5a landed (`9923add`: PR5a, PR13, PR4e follow-ups). Plan: `~/.claude/plans/h2-budget-work-serene-pebble.md`.
+Codex work-order point **5** (overdue bills and recurrence), plan PR6. Built on PR5a ("probably paid"), merged with
+`main` at `9923add` (PR5a, PR13) and again at `1144682` (settings fix, PR7b, PR5b). The independent review of `03815aa`
+asked for changes; they are below under **Review fixes**. Plan: `~/.claude/plans/h2-budget-work-serene-pebble.md`.
+
+## ⭐ The rule Brad should know
+
+**A bill due before today counts as PAID when the bank shows a payment for it, and UNPAID when it doesn't.**
+- **Paid** — any of these, to a checking row dated on or before today:
+  - a row the matcher pairs with the bill and nothing else competes for (any confidence: the payee's name, or the same
+    amount within max($1, 1%) and 3 days);
+  - for a card's minimum: a payment that names the card and pays at least the minimum ($40 due, $812.40 paid).
+- A paid bill is **off the forecast** and listed in `overdueAssumedPaid`. If the row paid less, the **unpaid
+  remainder** (over $1) still weighs on the next business day.
+- **Unpaid** (no such row, or two rows that can't be told apart): it weighs on the next business day for 14 days, then
+  is listed in `overdueOutsideForecast`.
+- **⚠️ Accepted risk.** An unrelated payment of exactly the bill's amount, within 3 days, with no name, hides that bill.
+  Each row can hide only one bill, and every bill it hides is listed in `overdueAssumedPaid`, so it is never silent.
+  The alternative — only confident pairs count — made every paid-but-unnamed bill (rent by Zelle, a mortgage "LOAN PMT",
+  card minimums) come back as a dip; the reviewer measured $3,131.57 of phantom dips in one household.
+- Bills due after today are unchanged: they leave the curve only on PR5a's confident (`offCurve`) pair.
+- Weekly and biweekly expenses keep the old rule until PR8 (below).
 
 | Commit | What it does |
 |---|---|
 | `15f5c9b` | The ledger's overdue rule, the occurrence key, `remapOrphanResolutions`, the one-time archive rule and `isPastOneTime`. |
-| `3cf38a2` | Merge of PR5a's second look (`bcc3ea9`). `forecastLedger.ts` auto-merged. |
+| `3cf38a2` | Merge of PR5a's second look (`bcc3ea9`). |
 | `dbf680a` | `CashSignal` fields and lists (OpenAPI + codegen); the Past-due card and tooltip send the occurrence key; tests. |
-| `fe34b0e` | Merge of `origin/main` (`9923add`). Only generated `.d.ts.map` files conflicted; regenerated. |
+| `fe34b0e` | Merge of `origin/main` (`9923add`). Generated maps regenerated. |
 | `074661f` | Golden re-recorded; the cash-signal tests clean up avalanche settings. |
-| _this note_ | Review note; one test title corrected. |
+| `03815aa` | First review note. |
+| `26e1c62` | Merge of `origin/main` (`1144682`: PR5b, PR7b, settings fix). Conflicts resolved (below). |
+| _review fixes_ | The evidence rule, the card-payment rule, `overdueAssumedPaid`, the moved-to-date fix, the Avalanche start, the lists' bounds, the dashboard; tests; golden. |
+| _this note_ | This note, rewritten with the review fixes. |
 
 ## The problem
 
@@ -18,21 +40,48 @@ Codex work-order point **5** (overdue bills and recurrence), plan PR6. Built on 
 - The pre-snapshot rule (#666) dropped every plan dated before the bank snapshot, on the theory that the balance
   already held it. The one exception (#688) kept an expense dated the day before.
 - A Sync stamps the snapshot "now". So after every Sync, every unresolved bill due before today, except yesterday's,
-  left the curve — paid or not. The curve overstated cash by those bills.
+  left the curve — paid or not. The curve overstated cash by the unpaid ones.
 - **Example:** Rent $1,500 due the 1st, unpaid, snapshot refreshed on the 8th → no dip anywhere.
-- #666 existed to stop phantoms: bills a bank row had paid without a match (Mortgage/HELOC). PR5a's `offCurve` pair is
-  now that evidence, so the date rule can go.
+- #666 existed to stop phantoms: bills a bank row had paid without a match (Mortgage/HELOC). The review showed that a
+  date rule can't be replaced by "confident pairs only"; it needs the evidence rule above.
 
 **Four related bugs, all hidden until now by #666:**
 - **Moved-bill key.** For a moved bill, `events[].originalDate` is the moved-to date. The Past-due card and the chart
-  tooltip sent it as the occurrence, but resolutions are keyed on the date the bill was moved FROM. So Mark missed /
-  Skip / match on a moved-then-overdue bill wrote a key the curve never read, and nothing moved.
-- **One-time bills.** `archiveExpiredOneTime` set a one-time bill inactive the day after its date. An unpaid one-time
-  bill disappeared on the next page load, and a moved one could not be recovered.
-- **Schedule edits.** `PATCH /recurring-items/:id` overwrites the schedule and orphans resolutions. Due day 14 → 20
-  after May was matched leaves the match on the 14th and a phantom unpaid 20th.
+  tooltip sent it as the occurrence, but resolutions are keyed on the date the bill was moved FROM, so Mark missed /
+  Skip / match on a moved-then-overdue bill did nothing.
+- **One-time bills.** `archiveExpiredOneTime` set a one-time bill inactive the day after its date, so an unpaid one
+  disappeared on the next page load, and a moved one could not be recovered.
+- **Schedule edits.** `PATCH /recurring-items/:id` orphans resolutions: due day 14 → 20 after May was matched leaves
+  the match on the 14th and a phantom unpaid 20th.
 - **Pre-anchor phantoms.** Weekly/biweekly expansion walks back past the anchor, semimonthly ignores it, and debt
-  minimums have no start. Each produces "overdue" occurrences from before the item existed.
+  minimums have no start, producing "overdue" occurrences from before the item existed.
+
+## Review fixes (independent review of `03815aa`: REQUEST CHANGES)
+
+| # | Finding | Fix | Tests |
+|---|---|---|---|
+| H1 | Paid-but-unmatched bills came back as dips: only `offCurve` pairs counted as paid. R1–R7 below; R7 had $3,131.57 of phantom dips. | **The evidence rule.** An overdue plan with a non-ambiguous pair of any confidence is paid for the curve; only the unpaid remainder over $1 drags (`overdue_remainder_assumed_unpaid`). A debt minimum is also paid by a payment naming the card for at least the minimum (`plansPaidInFullByName`, next to the matcher; the matcher and `offCurve` are untouched). Every such plan is listed in the new `overdueAssumedPaid[]`. #666 is not re-added. | R1–R7, a named remainder, an ambiguous pair, helper unit tests |
+| H2 | An old-card answer written on a moved-to date was remapped onto next month's bill: April 28 moved to 05-02, a 05-02 "missed" closed May 28. On 05-17 the low read 2,400 instead of 2,100. | `remapOrphanResolutions` never treats a date the item was moved to as an orphan. The ledger and the `/forecast` bundle share the function. | matched, missed and Move on 05-14 and 05-17; register agreement; unit test |
+| M1 | The Avalanche extra had no start: setting a $500 extra on 05-05 dragged a 04-30 payment (2,500 → 2,000). | It starts on the household day of `avalanche_settings.updatedAt`. | set today vs set in January |
+| M2 | The lists were mostly false positives and unbounded: paychecks that arrived without a name; paid bills older than 14 days, or older than the matching window (Comcast 04-05 listed on 05-31); a January snapshot listed back to January. | Both lists (and `overdueAssumedPaid`) are bounded by the first of last month alone. A plan with a non-ambiguous pair is never listed as unpaid (income: never listed at all). Occurrences older than the matching window (before today−45) get a second pairing pass **for the lists only**; those pairs never reach `matches` or the curve. | January snapshot; Comcast 56 days; R7's income and Hannah's Car |
+| LOW | A weekly-cadence item due today is tagged `due_today_not_posted`, not `dragged_past_due` as the note said. | The tag is intended; the note and code comments now say `dragged_past_due` means "due before today". | — |
+| LOW | The note's naming of which `cashSignalOverdue` tests pass on the base. | Named exactly below (Failing before). | — |
+| LOW | `dashboard.ts` `upcomingBills` included kept past one-time bills. | Excluded in the query (as before PR6). | — |
+| LOW | One old-card resolution closes two occurrences of a weekly item moved to the same non-occurrence date. | Disclosed (Residuals). | — |
+| — | The golden's "ties" entry changed order between runs. | Found while re-recording: the lists broke same-day ties by a key that embeds a random id. They now sort by due date, then label, then key. The golden passes three runs in a row. | golden |
+
+### The merge with PR5b (`26e1c62`)
+
+- **`routes/forecast.ts`:** PR5b removed the bundle's `not_match`/`partial` filter; PR6's remap is kept in front of the
+  remaining filters.
+- **`pages/forecast.tsx`:** both intents kept.
+  - The Past-due card's line comes from `draggingPlanLine` (the occurrence key), and PR5b's "Partly paid" chip checks
+    the occurrence key as well as PR5b's two dates.
+  - Skip sends the occurrence key and keeps PR5b's `writeKeyIsPartial` refusal, now asked about that key.
+  - `onMarkMissed` and `matchInboxToPlan` merged cleanly and read `originalDate ?? date`, which the card and tooltip
+    set to the occurrence key.
+- **`ProjectedBalanceChart.tsx`:** PR5b's `lockedPlanKeys` check now also refuses a row whose occurrence key is partly
+  paid.
 
 ## What changed
 
@@ -40,264 +89,275 @@ Codex work-order point **5** (overdue bills and recurrence), plan PR6. Built on 
 
 `bankToday` is computed before the loop and does not move. For each plan occurrence, in order:
 1. **Resolved** (matched / skipped / missed / dismissed) → off the curve. A `partial` keeps its remainder.
-2. **Paid by an `offCurve` pair** (PR5a) → off the curve.
+2. **Due after today** (or a weekly-cadence expense): off the curve on an `offCurve` pair (PR5a), as before.
 3. **Due on or before today** (or the snapshot day, when that is later) and still unresolved:
-   - **expense due in [today−14, today)** → the next business day, tagged **`overdue_assumed_unpaid`**;
+   - **paid on evidence** (the rule at the top) → off the curve, listed in **`overdueAssumedPaid[]`**; a remainder over
+     $1 drags if due in the last 14 days;
+   - **expense due in [today−14, today)** → the next business day, **`overdue_assumed_unpaid`**;
    - **expense due today** → the next business day, **`due_today_not_posted`**, so day 0 still equals the bank;
    - **expense older than 14 days** (#803's floor) → **`overdueOutsideForecast[]`**, off the curve;
-   - **income due before today** → **`incomeNotArrived[]`** (tag `income_not_arrived`), off the curve. Income due
-     today stays off the curve, as before.
+   - **income due before today with no deposit paired** → **`incomeNotArrived[]`**, off the curve. Income due today
+     stays off the curve, as before.
 4. **Otherwise** → on its own (moved-to) date.
 
-- **A suggestion does not count as paid.** A plan whose only pair is not `offCurve` still drags. An unconfirmed guess
-  never overstates cash. The web can join the suggestion to the dragged plan or listed entry by `planKey`
-  (`events[].occurrenceKey`, `overdueOutsideForecast[].planKey`, `incomeNotArrived[].planKey`).
-- **Never overdue from before the item existed.** An occurrence dated before the item's start is skipped in step 3,
-  and is not a matching candidate either:
+- **Never overdue from before the item existed:**
   - a recurring item starts on its anchor date, else its created day;
   - a debt minimum starts on the debt's created day;
-  - the Avalanche extra has no start.
-- **The lists are bounded** by the ledger's expansion start (the first of last month) and by the item's start.
-- **The #666 drop and the #688 exception are gone** — except for weekly-cadence expenses (below).
+  - the Avalanche extra starts on the day its settings were last saved.
+- **The lists** are bounded by the first of last month and by the item's start.
+- **Candidate rows** are read back to the first of last month − 10 days (for the listing pass); the PR5a pass keeps its
+  own windows (plans today−45 .. today+10, rows today−59 .. today).
+- **The #666 drop and the #688 exception are gone**, except for weekly-cadence expenses.
 
 ### ⚠️ Weekly-cadence expenses keep the old rule until PR8
 
 - **`keepsPreSnapshotRule(item, amount)`**: an expense whose item is `weekly` or `biweekly` keeps the pre-PR6 #666/#688
-  rule and the drag exactly as on the base, tagged `dragged_past_due`. It is never dragged as overdue and never listed.
-- **Why:** the Weekly Spend reserve is a plain weekly bill that no bank row ever pays. The overdue rule would drag up to
-  two weeks of it ($450 × 2 in the seed) onto one day.
-- One named predicate, so PR8 can delete it when Weekly/Monthly Spend become Amex payoff events.
-- Income of every cadence gets the new rule.
+  rule and the drag exactly as on the base, and PR5a's `offCurve` rule. Due before today it is tagged
+  `dragged_past_due`; due today it is `due_today_not_posted`, like any other plan. It is never listed.
+- **Why:** the Weekly Spend reserve is a plain weekly bill no bank row ever pays; the overdue rule would drag up to two
+  weeks of it ($450 × 2 in the seed) onto one day.
+- One named predicate, so PR8 can delete it. Income of every cadence gets the new rule.
 
 ### API (`CashSignal`, OpenAPI + codegen)
 
 - **`events[]`** gains:
-  - `assumption` (nullable): `overdue_assumed_unpaid`, `due_today_not_posted`, `dragged_past_due` or
-    `pre_window_on_first_day`;
+  - `assumption` (nullable): `overdue_assumed_unpaid`, `overdue_remainder_assumed_unpaid`, `due_today_not_posted`,
+    `dragged_past_due` or `pre_window_on_first_day`;
   - `occurrenceKey` (`<itemId>|<occurrenceDate>`);
-  - `occurrenceDate` — the resolution key date, the ORIGINAL occurrence date, never the moved-to date.
-  - `computeCashSignal` now passes `assumption` through; before, it dropped it.
-- **New `overdueOutsideForecast[]` and `incomeNotArrived[]`**, sorted by due date. Each entry: `planKey`, `itemId`,
-  `occurrenceDate`, `dueDate` (after any move), `amount` (signed; a partial lists its remainder), `label`,
-  `daysOverdue`.
-- `events[]` stays expense-only.
+  - `occurrenceDate`, the resolution key date, never the moved-to date.
+- **`overdueOutsideForecast[]`, `incomeNotArrived[]`**: `planKey`, `itemId`, `occurrenceDate`, `dueDate`, `amount`,
+  `label`, `daysOverdue`.
+- **`overdueAssumedPaid[]`** (review): `planKey`, `itemId`, `occurrenceDate`, `dueDate`, `label`, `daysOverdue`,
+  `planAmount`, `txnId`, `txnAmount`, `confidence` ("high" / "medium" / "low", or "card_payment"),
+  `unpaidRemainder`.
+- All sorted by due date, then label. PR12 can offer Confirm / Not this from `overdueAssumedPaid`, and the web can join
+  any entry to `matches` by `planKey`.
 
 ### The moved-bill key
 
-- **Ledger:** every plan carries `occurrenceDate`. `originalDate` keeps its meaning (the date it was due after any
-  move), so the "Due …" text and the test ids do not change.
-- **Web:** `lib/forecastPastDue.ts` holds the card's and tooltip's builders, moved out of `pages/forecast.tsx`
-  unchanged apart from the key. The card's Mark missed and "Mark matched to…", its Skip, and the tooltip's Mark missed
-  now send `occurrenceDate`.
-  - Edits to `pages/forecast.tsx` and `ProjectedBalanceChart.tsx` are limited to those call sites.
-- **Resolutions the old web already wrote:** a matched / skipped / missed / dismissed resolution on a moved bill's
-  moved-to date still closes that bill (the register already read it that way), unless that date is an occurrence of
-  the item in its own right.
+- **Ledger:** every plan carries `occurrenceDate`; `originalDate` keeps its meaning (the date it was due after any move).
+- **Web:** `lib/forecastPastDue.ts` builds the card's and tooltip's lines; Mark missed, "Mark matched to…" and Skip send
+  `occurrenceDate`.
+- **Answers the old card already wrote:** a matched / skipped / missed / dismissed on a moved bill's moved-to date still
+  closes that bill (the register read it that way too), unless that date is an occurrence of the item in its own right.
+  The remap never moves such an answer (H2).
 
 ### One-time bills (`archiveExpiredOneTime`)
 
 - **Chosen bound: 60 days.** An unresolved one-time bill stays active while its due date (after any move) is within the
-  last 60 days, or still ahead. So it can drag (≤ 14 days), be listed (older), or be matched, and a moved one is still
-  recovered.
-  - "Resolved" = matched, skipped, missed or dismissed, on its occurrence or on its moved-to date.
-  - `partial` is not resolved: a remainder may be owed.
-- **Nothing else moves.** Every reader that counted only active bills now treats a one-time bill dated before today as
-  archived, exactly as before PR6 (`isPastOneTime`):
-  - the Budget page plan (`routes/budget.ts`, both expansions);
-  - the auto-bills category heal and the income category sync;
-  - the Bills totals and active count (`billsSummary`);
-  - a debt's linked bill (`buildDebtMinSchedule`, the ledger, the `/forecast` bundle);
-  - the Reports → Cash flow run-rate (`CashFlowPage.tsx`).
+  last 60 days, or ahead.
+  - "Resolved" = matched, skipped, missed or dismissed, on its occurrence or its moved-to date.
+  - `partial` is not resolved.
+- **Nothing else moves:** every reader that counted only active bills treats a one-time bill dated before today as
+  archived, as before (`isPastOneTime`):
+  - the Budget page plan;
+  - the auto-bills category heal and income category sync;
+  - the Bills totals;
+  - a debt's linked bill;
+  - the Reports → Cash flow run-rate;
+  - (review) the dashboard's upcoming bills.
 
 ### Schedule edits (read-only, `lib/resolutionRemap.ts`)
 
 - **At read time, a resolution whose date is not an occurrence of its item maps to the item's occurrence in the same
-  period.** The period is:
-  - the same calendar month for monthly, quarterly, annual and debt minimums;
-  - the nearest occurrence within half a period for weekly (3 days), biweekly (7) and semimonthly (7).
+  period.** The period is the same calendar month (monthly, quarterly, annual, debt minimums), or the nearest occurrence
+  within 3 days (weekly) or 7 days (biweekly, semimonthly).
 - **Conditions:**
-  - it maps only when that occurrence has no resolution of its own and no earlier orphan claimed it;
-  - every resolution at the orphaned date moves together, "Not this" (`not_match`) included;
-  - an exact tie maps nowhere; one-time and inactive items never map.
-- **Nothing is written.** Both the ledger and the `/forecast` bundle apply it, through
-  `resolutionScheduleLookup`, so the web register and the curve agree. `forecastMatch.ts` needed no change.
+  - it maps only when that occurrence has no resolution of its own, no earlier orphan claimed it, and (review) the date
+    is not one the item was moved to;
+  - ties and one-time or inactive items never map.
+- **Nothing is written.** The ledger and the `/forecast` bundle share it, so the register and the curve agree.
 
 ### Recurrence
 
-- **Monthly day 31:** Feb 28, Mar 31, Apr 30 is now a test. Expansion was already right.
-- **Expansion is unchanged**, so the web copy of `expandItem` needed no change.
-- Pre-anchor occurrences leave the overdue scope as above; future pre-anchor occurrences still project as before.
+- Monthly day 31 → Feb 28, Mar 31, Apr 30 is now a test; expansion was already right and is unchanged.
 
 ## Figures that should move
 
-- **The forecast curve, low point, ending balance and max safe extra: DOWN** by every unresolved expense due in the
-  last 14 days that no bank row confidently paid, and that the #666 drop hid.
-  - **Golden, full household** (snapshot 05-08, today 05-14): Rent due 05-01 (−1,500.00) and the Avalanche extra due
-    04-30 (−150.00) now land on 05-15.
+**Against `9923add` (the pre-snapshot drop), golden full household** (snapshot 05-08, today 05-14). Rent due 05-01
+(−1,500.00) and the Avalanche extra due 04-30 (−150.00) are unpaid in the fixture, so they now land on 05-15.
 
-    | Entry | Figure | Before | After |
-    |---|---|---|---|
-    | default window | low point (05-15) | 2,690.00 | 1,040.00 |
-    | default window | ending | 6,314.00 | 4,664.00 |
-    | default window | projected expenses | 2,471.00 | 4,121.00 |
-    | default window | max safe extra | 2,190.00 | 540.00 |
-    | window after the anchor | ending | 4,762.00 | 3,112.00 |
-    | window after today | starting balance | 2,690.00 | 1,040.00 |
-    | PR4b snapshot rule | low point | 3,035.00 | 1,385.00 |
-    | PR4b snapshot rule | ending | 6,659.00 | 5,009.00 |
-    | snapshot dated after today | low point | 3,000.00 (no date) | 1,255.00 (05-15) |
+| Entry | Figure | `9923add` | This PR |
+|---|---|---|---|
+| default window | low point (05-15) | 2,690.00 | 1,040.00 |
+| default window | ending | 6,314.00 | 4,664.00 |
+| default window | projected expenses | 2,471.00 | 4,121.00 |
+| default window | max safe extra | 2,190.00 | 540.00 |
+| window after the anchor | ending | 4,762.00 | 3,112.00 |
+| window after today | starting balance | 2,690.00 | 1,040.00 |
+| PR4b snapshot rule | low point | 3,035.00 | 1,385.00 |
+| PR4b snapshot rule | ending | 6,659.00 | 5,009.00 |
+| snapshot dated after today | low point | 3,000.00 (no date) | 1,255.00 (05-15) |
 
-    With the snapshot dated after today, Phone 05-12 drags too, for −1,745.00.
-- **These will drag until someone acts, by design:**
-  - **Debt minimums paid by a larger card payment.** The pair is only a suggestion (not `offCurve`), so the minimum
-    drags until confirmed.
-  - **Last month's Avalanche extra payment.** No bank row names it, so it drags for up to 14 days after month end
-    unless it is matched, skipped or marked missed, and is then listed.
-  - **PR5a's second look.** Its stricter `offCurve` means fewer overdue plans get an `offCurve` pair, so more of them
-    drag with `overdue_assumed_unpaid`. That errs low, as intended.
-- **The curve moves UP** in these cases:
-  - a bill whose due day was edited after it was matched no longer has an unpaid twin in that month;
-  - a Mark missed / Skip / match on a moved bill now takes it off the curve, including one the old card already wrote
-    on the moved-to date.
-- **New and visible:**
-  - `overdueOutsideForecast`: golden full household lists 7 April occurrences, 19–43 days old;
-  - `incomeNotArrived`: the golden 05-08 paycheck;
-  - one-time bills up to 60 days overdue stay in the register.
-- **Unchanged:**
-  - day 0 and cash today (`bankToday` is identical in all 11 golden entries);
-  - income on the curve;
-  - weekly and biweekly expenses;
-  - plans due after today;
-  - the golden entries whose past-due plans already dragged (edge paths, both no-snapshot entries, time-only /
-    balance-only), to the cent;
-  - `matches` in every golden entry.
-- **Not measured:** how much the live household's curve moves. That needs a read-only GET in Brad's signed-in browser,
-  which this build did not do.
+**Golden against the previous head `03815aa`: no curve figure changes in any entry.** Only the lists change:
+- the Golden Card minimum due 04-25 moves from `overdueOutsideForecast` to `overdueAssumedPaid`: a medium pair with a
+  $20 row, `unpaidRemainder` −18.00; in the PR4b entry, a $35 row, −3.00;
+- every other entry gains an empty `overdueAssumedPaid`.
+
+**The reviewer's household cases** (today = snapshot = Tue 05-05, buffer 500, 90 days; figures are max safe extra
+unless noted):
+
+| Case | Pair | `9923add` | `03815aa` | This PR |
+|---|---|---|---|---|
+| R1 rent $1,500 by Zelle, no name | low | 2,500 | 1,000 | **2,500** |
+| R2 rent by check | low | 2,500 | 1,000 | **2,500** |
+| R3 mortgage $2,085.79 "LOAN PMT" + HELOC $1,130 paid $1,185.19 "FIGURE LENDING" | low / medium | 5,500 | 2,284.21 | **5,500** |
+| R4 card minimums $40 + $38 paid $812.40 / $400 | none → card payment | 2,500 | 2,422 | **2,500** |
+| R5 Avalanche extra $500, "ONLINE PAYMENT THANK YOU" | low | 2,500 | 2,000 | **2,500** |
+| R6 rent actually unpaid | none | 2,500 | 1,000 | **1,000** |
+| R7 whole household, all paid: low point | mixed | 6,500 | 3,368.43 | **6,500** |
+| R7 max safe extra | | 6,000 | 2,868.43 | **6,000** |
+| City Water $150 paid $120 (named, low) | low | 2,500 | 2,470 | **2,470** (−30 remainder) |
+| Avalanche extra set today, 04-30 unpaid | — | 2,500 | 2,000 | **2,500** |
+
+These tests use their own fixtures that reproduce the reviewer's figures. A monthly paycheck covers each month's bills,
+so the max safe extra reflects the overdue plans only.
+
+**Old moved-to-date answers** (Storage $300 due the 28th, April moved to 05-02, balance 2,400, buffer 0):
+- **Matched or missed on 05-02:**
+  - on 05-14: 2,400 until 05-27, then 2,100 on 05-28 (`03815aa`: 05-15 onward 2,100 and no May bill);
+  - on 05-17: low 2,100 on 05-28 (`03815aa`: 2,400).
+- **A Move on 05-02 (to 05-10), which the ledger does not follow:**
+  - on 05-14: April drags onto 05-15 (2,100) and May 28 is due (1,800);
+  - on 05-17: April is listed (15 days), and May 28 is due (low 2,100 on 05-28).
+
+**What Brad will see move, live:**
+- **DOWN:** every unpaid bill due in the last 14 days that #666 hid.
+- **Unchanged from `9923add`:** a bill a payment covered, named or not, which now shows up in `overdueAssumedPaid`.
+- **UP** (from `03815aa`'s behaviour): paid rent, mortgage, HELOC, card minimums and the Avalanche extra no longer dip.
+- **UP:** a bill whose due day was edited after a match no longer has an unpaid twin.
+- **UP:** Mark missed / Skip / match on a moved bill now takes it off the curve.
+- **Unchanged:** day 0 and cash today (`bankToday` identical in all golden entries and R1–R7); weekly and biweekly
+  expenses; plans due after today; `matches`.
+- **Not measured:** the live household's figures. That needs a read-only GET in Brad's browser, which this build did not
+  do.
 
 ## Must not change
 
-- `bankToday`, the spine bank balance and spine parity (the parity test passes; the low point follows the cash signal).
-- The review count (no resolution is written) and spending.
-- The Budget page `plannedTotal` / `planBySource` (a new test: a kept one-time bill changes neither).
-- Server auto-match stays off.
+- `bankToday`, the spine bank balance and spine parity (the parity test passes).
+- The review count (nothing is written) and spending.
+- The Budget page `plannedTotal` / `planBySource` (a test: a kept one-time bill changes neither).
+- Server auto-match stays off; PR5a's `offCurve` and the matcher's pairing are unchanged for plans due after today.
 - No DDL, no new dependencies (`pnpm-lock.yaml` unchanged); landing bundle 572.5 KB of 580.
 - Send-to-Forecast single flow.
 
 ## Residuals
 
+- **⚠️ The accepted risk** (top of this note): an unrelated nameless payment of the same amount within 3 days hides an
+  unpaid bill. It is capped at one bill per row and always listed in `overdueAssumedPaid`.
+- **A named underpayment** counts as paid except for its remainder. If the row was actually a different bill from the
+  same payee, the curve is high by the row until the user answers "Not this".
+- **Two cards from one issuer.** Both minimums match a payment carrying the issuer's name ("CAPITAL ONE"); one payment
+  pays only one of them, nearest date first.
 - **Weekly-cadence expenses** keep the pre-snapshot drop and its weekend double lump until PR8 turns Weekly/Monthly
   Spend into Amex payoff events.
-- **Silent beyond the expansion start.** An unresolved occurrence older than the first of last month is not listed
-  (28–61 days back, depending on the day of the month).
-- **Back-dated anchors.** An item created recently with an old anchor date can list occurrences back to that bound.
-  The start is the anchor when one is set, per the brief.
-- **The Avalanche extra has no start date.** Its only bound is the expansion start.
-- **Income due today** is off the curve and not listed (unchanged); only income due before today is listed.
+- **An old-card answer on a moved-to date shared by two moved occurrences** of the same weekly item closes both.
+- **A second Move written on a moved-to date** is not followed: the bill stays at its first moved-to date. The register
+  doesn't follow it either.
+- **Silent before the first of last month:** nothing older is dragged or listed (28–61 days back).
+- **The Avalanche extra's start moves** whenever its settings are saved (raising the extra, or the Budget page's
+  planned amount for it), so an unpaid month end before that save is not overdue.
+- **Listing-only pairs** (occurrences before today−45) appear in `overdueAssumedPaid` but not in `matches`, so the
+  Review "Suggested" list doesn't show them.
+- **Back-dated anchors.** An item created recently with an old anchor can list occurrences back to the first of last
+  month.
+- **Income due today** is off the curve and not listed; an ambiguous deposit leaves a paycheck listed as not arrived.
 - **A snapshot dated after today** (clock skew) drags plans between today and the snapshot day as
-  `due_today_not_posted` (the drag cutoff is still max(snapshot, today)).
-- **One-time bills already archived before this deploys stay archived.** An inactive one-time bill cannot be told apart
-  from one paused on purpose.
-- **A kept one-time bill shows as active** in the Bills page list and in the web's debt payoff-badge name matching.
-  No total counts it.
-- **Schedule-edit mapping:**
-  - one-time bills never map: editing a one-time bill's date orphans its resolution;
-  - ties never map;
-  - the stored rows keep their old dates;
-  - the Bills "actual paid" (#70) still reads stored dates, so a weekly edit across a month boundary can put a paid
-    amount in the other month.
-- **Paychecks.** A paycheck paired by a named deposit, but held back by PR5a's "earlier unpaid occurrence" check, stays
-  listed as not arrived.
-- **The web shows no tags or lists yet.** The tooltip still derives "dragged" from `originalDate !== date`, so it shows
-  neither `assumption` nor the two lists.
+  `due_today_not_posted`.
+- **One-time bills:**
+  - bills already archived before this deploys stay archived;
+  - a kept one shows as active in the Bills list (no total counts it);
+  - editing a one-time bill's date orphans its resolution (one-time bills never map).
+- **The Bills "actual paid" (#70)** reads stored resolution dates.
+- **The web shows no tags or lists yet** (PR12).
 - **Playwright e2e not run:** `forecast-dragging-plans-summary`, `forecast-tooltip-mark-missed`,
-  `forecast-chart-day0-bank-balance`. Test ids are unchanged, but their fixtures may seed pre-snapshot plans that used
-  to drop.
+  `forecast-chart-day0-bank-balance`.
 
 ## Tests
 
+- **`cashSignalOverdueEvidence.integration.test.ts` (18, review):**
+  - R1–R7 with the figures above;
+  - a named remainder (−30.00 on 05-06);
+  - HIGH 2 on 05-14 and 05-17 for matched and missed (4), a Move on both days (2), and the bundle keeping the answer on
+    05-02;
+  - the Avalanche start (set today vs January);
+  - the January-snapshot bound (only 04-15 listed);
+  - Comcast 56 days old paid by name (listed as paid, not in `matches`).
+  - **No-name and partial-name paid cases:** R1, R2, R3's mortgage and R5 (no name); R3's HELOC (part of the name).
+- **`cashSignalOverdue.integration.test.ts` (15):**
+  - (review) "an overdue bill with only a low suggestion still drags" is **replaced**, because the adopted rule
+    reverses it: a low non-ambiguous pair now counts as paid (1,000.00 on 05-15) and is listed. A new test keeps an
+    ambiguous pair dragging in full (940.00).
+  - The other 13, unchanged:
+    - today−15 listed, today−14 dragging;
+    - today's bill;
+    - a skipped occurrence;
+    - income not arrived;
+    - pre-start occurrences;
+    - bills moved beyond and into the window;
+    - Mark missed with the occurrence key;
+    - the old moved-to-date key, and its own-occurrence exception;
+    - due day 14 → 20 after a match;
+    - one-time bills after a page load;
+    - the weekly exception (two tests).
 - **`cashSignal.integration.test.ts` (11 changed):**
-  - **Replaced** the three #666/#688 tests. Each replacement is stricter: it pins where the bill lands and its tag
-    instead of "not on these dates".
-    - "(#666) pre-snapshot pending plans are dropped" → both unpaid bills land on 05-15: 1,220.87, `overdue_assumed_unpaid`.
-    - "(#666/#681) strictly pre-snapshot plans drop" → the expense lands on 05-15 (3,805.27, the #666 figure, now day 1
-      with day 0 at 4,922.56); the income is listed.
-    - "(#688) plans dated 2+ days before snapshot stay dropped" → **the paid/unpaid pair**:
-      - **paid:** a named row ("LAKEVIEW MORTGAGE PMT") → off the curve, 4,871.20 flat, a high `offCurve` match;
-      - **unpaid:** the same bill with no row → 3,371.20 on 05-15, `overdue_assumed_unpaid`.
-  - **Updated, with each flip explained:**
-    - #667 debt minimum → 05-10 drags (4,884.56), and 04-10 is listed (34 days).
-    - #667 Avalanche extra → 04-30 drags (4,722.56), and the 04-25 minimum is listed (19 days).
-    - #688 yesterday's bill → also pins the tag and key.
-    - The snapshot-day test → pins day 1 (1,258.87). Its old title said "dropped"; the plan always dragged.
-    - #681 income → listed.
-    - #667/#681 boundary → `due_today_not_posted`.
-  - **Fixture precision, not weakening:**
-    - the two #687/#681 synthetic-debt tests pin the debt's `createdAt` before its minimum. The database default is the
-      wall clock, which is after the pinned "today".
-    - `cleanup()` now deletes `avalanche_settings`. A $200 extra leaked into later tests, unseen while #666 dropped it.
-  - #803 boundaries and #681/#751 tests pass unchanged.
-- **`cashSignalOverdue.integration.test.ts` (14):**
-  - today−15 listed and today−14 dragging (975.00);
-  - today's bill (day 0 1,000.00, day 1 905.00);
-  - a skipped occurrence;
-  - a low suggestion that still drags (940.00);
-  - income not arrived (listed 36 and 6 days; 06-08 3,000.00);
-  - pre-start occurrences: semimonthly, a debt added 05-11, a weekly income (ending 1,265.00);
-  - a bill moved beyond the window, and one moved into it (955.00; 07-01 655.00);
-  - Mark missed with the occurrence key (920.00 → 1,000.00);
-  - the old moved-to-date key still closing (1,000.00), but not on the bill's own occurrence (950.00);
-  - due day 14 → 20 after a match: no phantom on the curve or in the register, stored rows unchanged;
-  - one-time bills after a page load: Plumber kept (750.00), a moved one recovered (625.00), a 74-day and a resolved
-    one archived, Bills totals 0.00 / 0 active;
-  - the weekly exception: a Sunday snapshot with Weekly Spend $300 gives 1,000.00 / 700.00 (05-18) / 400.00 /
-    100.00 / −200.00 / −500.00, as on the base, tagged `dragged_past_due`, never listed.
-- **`resolutionRemap.test.ts` (11):** monthly 14 → 20; a real occurrence stays; an occupied target; "Not this" moves
-  with its bill; the earlier orphan wins; weekly Sat → Mon; biweekly tie; semimonthly; quarterly in and off its month;
-  one-time / inactive / unknown; no mutation.
+  - the three #666/#688 tests replaced by a stricter paid/unpaid pair plus stricter versions of their scenarios;
+  - the #667 debt-minimum and Avalanche-extra flips;
+  - #688, the snapshot-day test, #681 income and the #667/#681 boundary pin tags and figures;
+  - fixture precision: debt `createdAt`, avalanche cleanup, and (review) the Avalanche extra's `updatedAt` pinned
+    before 04-30.
+- **`planMatch.test.ts` (+5, review):**
+  - `plansPaidInFullByName` pays each minimum by its card's payment;
+  - the matcher itself finds no pair for that payment;
+  - no payment for less, another card's name, no name, or the wrong sign;
+  - window edges (10 before, 14 after);
+  - one row per minimum, and a rejected pair.
+- **`resolutionRemap.test.ts` (12):** the earlier 11, plus (review) a moved-to date is never an orphan.
 - **`cashSignal.test.ts` (+1):** day 31 → Feb 28, Mar 31, Apr 30.
-- **`budgetPlanBySource.integration.test.ts` (+1):** a one-time bill 5 days overdue stays active and leaves
-  `planBySource` and its line unchanged.
-- **Golden (11 re-recorded):** every event gains the three fields and every entry gains the two lists; the figures
-  that moved are listed above.
-- **Web `lib/forecastPastDue.test.ts` (5):** the card's line, match and Skip send 05-05, not the moved-to 05-11; so does
-  the tooltip; an unmoved bill sends its own date; the fallback for a payload without `occurrenceDate`.
+- **`budgetPlanBySource.integration.test.ts` (+1):** a kept one-time bill leaves `planBySource` unchanged.
+- **Golden (11):** re-recorded; see Figures. The golden's Avalanche settings pin `updatedAt` (January).
+- **Web `lib/forecastPastDue.test.ts` (5):** the card and tooltip send the occurrence key.
 
 ## Failing before
 
-Pre-PR6 source means `9923add`, which contains `f40c4b0`, with PR6's source files swapped back:
-- server: `forecastLedger`, `cashSignal`, `billsSummary`, `debtMinSchedule`, `routes/budget`, `routes/forecast`;
-- web: `pages/forecast.tsx`, `ProjectedBalanceChart.tsx`, `CashFlowPage.tsx`;
-- `resolutionRemap.ts` and `forecastPastDue.ts` removed.
+**Review fixes** — against the source before them (`26e1c62`, with the new tests and snapshot copied in): **36 of the 38
+new or changed tests fail.**
+- **`cashSignalOverdueEvidence`, 18 of 18.** The 05-17 Move test was strengthened to pin the low point's date: before
+  that, it also passed on `26e1c62`, where the bug gave the same 2,100 low on 05-18.
+- **`cashSignalOverdue`, 2 of 2:** the paid low pair and the ambiguous pair.
+- **Golden, 11 of 11** (`overdueAssumedPaid`).
+- **`planMatch`, 4 of 5.** Still passing: "the matcher itself finds no pair", which pins unchanged behaviour.
+- **`resolutionRemap`, 1 of 1.**
+- **`cashSignal.integration`, 0 of 1** (fixture pin only).
 
-**49 of the 54 new or changed tests fail:**
-- **`cashSignal.integration`, 9 of 11:**
-  - on a curve figure: the #666 replacement, the income/expense split, the unpaid half of the pair, the #667 debt
-    minimum, the #667 Avalanche extra;
-  - on the new fields only: #688 yesterday, the paid half of the pair, the boundary, #681 income.
-  - Still passing: the snapshot-day test (it always dragged) and the #687 synthetic debt minimum (fixture only).
-- **`cashSignalOverdue`, 12 of 14.** Still passing: the weekly figures (as intended) and the old moved-to-date key
-  (on the base, #666 hid that bill instead).
-- **Golden, 11 of 11.**
-- **`budgetPlanBySource`, 1 of 1:** the base archived the bill.
-- **`resolutionRemap`, 11 of 11:** no module.
-- **Web `forecastPastDue`, 5 of 5:** no module.
-- **Day 31, 0 of 1:** expansion was already right.
+**First round** — against pre-PR6 source (`9923add`, with PR6's files swapped back): 49 of 54 failed.
+- **`cashSignal.integration`, 9 of 11.** Still passing: the snapshot-day test (it always dragged) and the #687 synthetic
+  debt minimum (fixture only).
+- **`cashSignalOverdue`, 12 of 14.** Still passing, exactly:
+  - "a Sunday snapshot with an unresolved weekly $300 expense: the same daily figures as before PR6";
+  - "a Mark missed the pre-PR6 card sent on the moved-to date still closes the moved bill" (on the base, #666 hid that
+    bill).
+
+  "…tagged dragged_past_due, and never dragged or listed as overdue" fails on the base.
+- **Golden 11 of 11; `budgetPlanBySource` 1 of 1; `resolutionRemap` 11 of 11; web `forecastPastDue` 5 of 5; day 31 0 of
+  1.**
 
 ## Verification
 
 - **Workspace typecheck:** clean.
-- **Full API suite (`CI=true`):** **131 files, 1132 pass, 7 todo**. The golden compares clean.
-- **Web suite:** **120 files, 938 pass** (+1 file, +5 tests).
+- **Full API suite (`CI=true`):** **135 files, 1243 pass, 7 todo**. The golden compares clean and passed three separate
+  runs.
+- **Web suite:** **127 files, 1015 pass** (after merging PR5b).
 - **Build and landing guard:** `pnpm run build` exit 0; `check-entry-graph` OK, **572.5 KB of 580**, unchanged.
-- **Codegen:** regenerated after the spec change and again after merging `main`; diff clean.
+- **Codegen:** regenerated after the spec change and after both merges; a fresh run changes nothing further.
 
 ## Left for later
 
 - **PR8:** delete `keepsPreSnapshotRule` when Weekly/Monthly Spend become Amex payoff events.
-- **PR5b:** join suggestions to dragged or listed plans by `planKey`; Confirm / Not this from the Past-due card.
 - **PR12:**
-  - show `assumption` badges and the two lists ("Assumptions to resolve");
-  - the tooltip reads `assumption` instead of `originalDate !== date`;
+  - show `assumption` badges and the three lists;
+  - Confirm / Not this from `overdueAssumedPaid`;
+  - the tooltip reads `assumption`;
   - update the three e2e specs.
 - **Questions for Brad:**
   - Should editing a one-time bill's date carry its resolution?
