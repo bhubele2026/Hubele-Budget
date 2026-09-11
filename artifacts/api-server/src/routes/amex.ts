@@ -489,10 +489,16 @@ router.post("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     // before in Chicago, so that day's rows would count after the anchor on top of
     // a balance that already holds them. Noon UTC keeps it an instant on the same
     // household day all year.
-    const d = /^\d{4}-\d{2}-\d{2}$/.test(body.asOf)
+    const bareDay = /^\d{4}-\d{2}-\d{2}$/.test(body.asOf);
+    const d = bareDay
       ? new Date(`${body.asOf}T12:00:00.000Z`)
       : new Date(body.asOf);
-    if (Number.isNaN(d.getTime())) {
+    // A bare day must also exist: V8 rolls 2026-02-30 over to Mar 2 rather than
+    // failing, so check that the day survives the round trip.
+    if (
+      Number.isNaN(d.getTime()) ||
+      (bareDay && d.toISOString().slice(0, 10) !== body.asOf)
+    ) {
       res.status(400).json({ error: "asOf must be a valid ISO date string" });
       return;
     }

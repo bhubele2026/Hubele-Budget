@@ -287,7 +287,8 @@ describe("computeBankReconcile", () => {
 
   it("keeps a snapshot from the last evening of April in April", () => {
     // 2026-05-01T02:30Z is 9:30pm on Apr 30 in Chicago, so April is not a prior
-    // month. The UTC slice said May 1 and shorted April's forecastEnd.
+    // month. The UTC slice said May 1, which marked April a prior period on the
+    // Forecast page.
     const result = computeBankReconcile(
       baseInput({
         monthFilter: "2026-04",

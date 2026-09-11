@@ -49,10 +49,10 @@ midnight Central, so the page and the server disagreed for five hours every even
   - `chaseEndingBalance.ts`: the snapshot month and day.
   - `accountBalance.ts`: the anchor day.
   - `amexEndingBalance.ts`: the anchor month.
-- **Two server lines in `routes/amex.ts`**, so that a calendar day never travels as UTC midnight:
-  - `GET /amex/anchor` sends the computed balance's date as a bare day (finding 1 of the first review).
-  - `POST /amex/anchor` stores a bare-day `asOf` at noon UTC, the same household day all year (finding 1
-    of the second review).
+- **The Amex anchor route, `routes/amex.ts`,** so that a calendar day never travels as UTC midnight:
+  - `GET /amex/anchor` sends the computed balance's date as a bare day (first review, finding 1).
+  - `POST /amex/anchor` stores a bare-day `asOf` at noon UTC, the same household day all year (second
+    review, finding 1). It rejects a bare day that does not exist (third review, finding 1).
 - **`lib/api-spec/openapi.yaml`** describes when `AmexAnchor.asOf` is a bare day. Codegen changed only
   doc comments and zod `.describe()`.
 
@@ -83,7 +83,7 @@ No stored data is rewritten. Only newly entered dates follow the corrected defau
 - **The landing page:** `layout.tsx` and `useLandingWarmup.ts` were deliberately not touched. They
   already use the browser's local month, which is Central for the household, and they sit on the landing
   path.
-- **Server code**, apart from the two Amex anchor lines above.
+- **Server code**, apart from the Amex anchor route above.
 - **The API's shape.** The spec gains a description only.
 
 ## Tests
@@ -106,7 +106,8 @@ No stored data is rewritten. Only newly entered dates follow the corrected defau
       The old route sent `2026-09-10T00:00:00.000Z`.
     - A POST with `asOf: "2026-04-01"` stores **`2026-04-01T12:00:00.000Z`**. The expectation moved from
       UTC midnight on purpose (see the second review).
-    - An impossible bare day still returns 400.
+    - A bare day that does not exist returns 400, including `2026-02-30` and `2026-04-31`. V8 would roll
+      those into the next month, and the old code saved them.
   - **`amexEndingBalance.test.ts`:**
     - The same balance dated `2026-09-10T00:00:00.000Z` gives **$130**: the Sep 10 rows count after 7pm
       on Sep 9. This pins why a day must not travel in that shape.
@@ -121,7 +122,11 @@ No stored data is rewritten. Only newly entered dates follow the corrected defau
   - **`forecastReconcile.test.ts`:**
     - A 9:30pm Central snapshot on May 15 still counts a May 16 plan of −$40, giving **$960**. The UTC
       slice gave $1,000.
-    - A snapshot at 9:30pm Central on Apr 30 does not make April a prior month. The UTC slice said it did.
+    - A snapshot at 9:30pm Central on Apr 30 does not make April a prior month. The UTC slice said it did,
+      so for that evening the Forecast page marked April "Prior period" and did the following:
+      - hid the Forecast · Bank and Projected end figures
+      - never showed the month as reconciled
+      - closed the month without its gap
   - **`chaseEndingBalance.test.ts`:** a snapshot at 9:30pm Central on Apr 30 ends April at **$1,000** and
     May at **$940** after May 1's −$60. By day, Apr 30 is **$1,000** and May 1 is **$940**. The UTC slice
     gave $1,060 and $1,000 for both.
@@ -133,15 +138,17 @@ No stored data is rewritten. Only newly entered dates follow the corrected defau
 
 ## Verification
 
-- **Workspace typecheck:** passes, including libraries, API and web (inside the build).
+- **Workspace typecheck:** passes, including libraries, API and web.
 - **Codegen:** only the `asOf` description changed. The generated files are committed.
 - **Web tests:**
   - Full suite with the clock in UTC, as on CI: **109 files, 802 pass**.
   - The new and changed tests on Chicago time: 7 files, 74 pass.
 - **API tests:**
-  - Amex anchor route: 12 pass.
+  - Amex anchor route: 12 pass, re-run after the third review's fix.
   - Full suite: **112 files, 794 pass plus 8 pending**, on an isolated database with the Mac held awake.
-    That is two tests more than PR2a: the computed anchor route and the impossible bare day.
+    That is two tests more than PR2a: the computed anchor route and the date that does not exist.
+- **CI:** green on `1f2d862`. The third review's fix is a follow-up commit on the same branch, and it
+  merges only on green.
 - **Build:** passes. The calendar is its own lazy chunk (`householdTime-*.js`, 0.80 kB).
 - **Landing bundle guard:** **571.3 KB of 580**, up 0.1 KB. No recharts on open, and the calendar chunk
   is not preloaded.
@@ -205,12 +212,52 @@ A second reviewer read the fixes before commit and **approved**. It confirmed th
    too. The note no longer calls the first stricter, and says the route test guards the second.
 4. **NIT — done.** The spec now describes when `asOf` is a bare day.
 
+## Third independent review, and what was done
+
+A third reviewer read only the hunks written after the second review, and **approved**. It confirmed
+these were clean:
+- **POST parsing:** full ISO instants and other parseable strings take the same path as before, and
+  unparseable text still returns 400.
+- **Every reader of a noon-UTC anchor:**
+  - The GET anchor branch passes it through.
+  - The Amex page reads it as the same household day.
+  - `refreshAmexAnchor` and the restore script only ever write the current time.
+- **Codegen:** only the description changed, in both the generated source and the committed `dist` files.
+- **This note:** its test counts and dollar figures.
+- **The evening tests fail on the old code**, whatever the machine's timezone:
+
+  | Test | Old code | New code |
+  |---|---|---|
+  | Reconcile, May 16 plan | $1,000 | $960 |
+  | Reconcile, is an Apr 30 evening snapshot a prior month? | yes | no |
+  | Chase month end, Apr / May | $1,060 / $1,000 | $1,000 / $940 |
+  | Chase day end, Apr 30 / May 1 | $1,060 / $1,000 | $1,000 / $940 |
+
+1. **LOW — fixed. A bare day that does not exist was saved.**
+   - V8 rolls `2026-02-30` over to Mar 2 rather than failing, so a direct POST dated Feb 30 saved an
+     anchor on Mar 2.
+   - The old code did the same. But this note and the test name claimed every impossible day returned
+     400.
+   - The route now rejects a bare day that does not survive the round trip, and the test covers Feb 30
+     and Apr 31.
+2. **NIT — fixed.** A reconcile test comment said the old code shorted April's `forecastEnd`, which it did
+   not. The comment now says what the wrong flag did.
+3. **NIT — accepted.** The debt branch keeps the later of the debt row's update time and the saved
+   anchor's `asOf`.
+   - A bare-day POST stored at noon UTC now outranks a debt row updated earlier that UTC day, which is 7pm
+     the evening before to 7am Central.
+   - `asOf` then moves to that day while the balance stays the debt's, so that day's rows are treated as
+     already inside it.
+   - Only a direct API call can do this. It is listed below.
+
 ## Deliberately not in PR2b
 
 - **Pages whose memoised "today" never rolls past midnight:** Allowances, Forecast, Chase, Reports.
 - **Browser-local date arithmetic,** which already means Central for the household on its own devices.
 - **`debts.ts` reads a bare `lastBalanceUpdate` as UTC midnight,** the same trap as the Amex POST. The web
   never sends a bare day there.
+- **A bare-day Amex anchor POST can outrank a debt row updated the evening before** (third review, NIT 3).
+  Only a direct API call reaches it.
 - **The `AmexAnchor.source` spec enum lacks `plaid`,** which the route already returns. That predates
   this PR.
 - **The debt "paid off this month" edge, `debtPending`'s end-of-day cutoff, and the other server
