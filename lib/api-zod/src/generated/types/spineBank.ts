@@ -5,6 +5,8 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { SpineBankSource } from "./spineBankSource";
+import type { SpineBankStaleReason } from "./spineBankStaleReason";
 
 export type SpineBank = {
   /** computeCashSignal().bankToday — snapshot rolled forward through the ledger */
@@ -14,4 +16,26 @@ export type SpineBank = {
    * @nullable
    */
   asOfDate: string | null;
+  /**
+   * computeBankFreshness().source — see BankFreshness
+   * @nullable
+   */
+  source: SpineBankSource;
+  /**
+   * computeBankFreshness().lastContactAt
+   * @nullable
+   */
+  lastContactAt: string | null;
+  /**
+   * computeBankFreshness().lastFailureAt
+   * @nullable
+   */
+  lastFailureAt: string | null;
+  /** computeBankFreshness().stale */
+  stale: boolean;
+  /**
+   * computeBankFreshness().staleReason
+   * @nullable
+   */
+  staleReason: SpineBankStaleReason;
 };

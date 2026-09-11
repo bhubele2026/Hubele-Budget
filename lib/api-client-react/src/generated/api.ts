@@ -25,6 +25,7 @@ import type {
   AvalancheSettings,
   AvalancheSettingsInput,
   BadgeCount,
+  BankBalanceExplain,
   BankSnapshot,
   BehaviorFacts,
   BillsSummary,
@@ -75,7 +76,6 @@ import type {
   ForecastSettingsInput,
   GetAmexWeeklyPayoffParams,
   GetBillsSummaryParams,
-  GetForecastBankBalanceExplain200,
   GetForecastCashSignalParams,
   GetForecastParams,
   GetReportsBehaviorFactsParams,
@@ -5666,8 +5666,8 @@ export const getGetForecastBankBalanceExplainUrl = () => {
 
 export const getForecastBankBalanceExplain = async (
   options?: RequestInit,
-): Promise<GetForecastBankBalanceExplain200> => {
-  return customFetch<GetForecastBankBalanceExplain200>(
+): Promise<BankBalanceExplain> => {
+  return customFetch<BankBalanceExplain>(
     getGetForecastBankBalanceExplainUrl(),
     {
       ...options,

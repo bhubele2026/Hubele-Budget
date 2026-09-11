@@ -19,6 +19,198 @@ export interface SpineNextBill {
   dueDate: string;
 }
 
+/**
+ * Where the snapshot came from; null when there is no snapshot
+ * @nullable
+ */
+export type BankFreshnessSource =
+  | (typeof BankFreshnessSource)[keyof typeof BankFreshnessSource]
+  | null;
+
+export const BankFreshnessSource = {
+  plaid: "plaid",
+  manual: "manual",
+} as const;
+
+/**
+ * refresh_failed when the feed behind the snapshot account failed and has not recovered, or needs a reconnect (immediate, for either source). old when a Plaid balance's feed has been quiet for 48 hours, with no balance re-read and no successful sync. manual_old for a typed-in balance older than 7 days. Null when not stale.
+ * @nullable
+ */
+export type BankFreshnessStaleReason =
+  | (typeof BankFreshnessStaleReason)[keyof typeof BankFreshnessStaleReason]
+  | null;
+
+export const BankFreshnessStaleReason = {
+  refresh_failed: "refresh_failed",
+  old: "old",
+  manual_old: "manual_old",
+} as const;
+
+/**
+ * Whether the bank balance can be trusted right now, decided on the server by computeBankFreshness(). Served as the spine's bank fields and as `freshness` on /forecast/bank-balance-explain.
+ */
+export interface BankFreshness {
+  /**
+   * Where the snapshot came from; null when there is no snapshot
+   * @nullable
+   */
+  source: BankFreshnessSource;
+  /**
+   * Last successful sync of the Plaid item behind the snapshot account
+   * @nullable
+   */
+  lastContactAt: string | null;
+  /**
+   * Newest failed transactions or balance refresh not yet followed by a success of the same kind (PRODUCT_NOT_READY is not a failure)
+   * @nullable
+   */
+  lastFailureAt: string | null;
+  stale: boolean;
+  /**
+   * refresh_failed when the feed behind the snapshot account failed and has not recovered, or needs a reconnect (immediate, for either source). old when a Plaid balance's feed has been quiet for 48 hours, with no balance re-read and no successful sync. manual_old for a typed-in balance older than 7 days. Null when not stale.
+   * @nullable
+   */
+  staleReason: BankFreshnessStaleReason;
+}
+
+export type BankBalanceExplainDisplayed = {
+  /** computeCashSignal().bankToday — what every screen shows */
+  bankToday: string;
+};
+
+export type BankBalanceExplainSnapshot = {
+  /** @nullable */
+  balance: string | null;
+  /** @nullable */
+  at: string | null;
+  /** @nullable */
+  source: string | null;
+  /** @nullable */
+  storedAccountId: string | null;
+  /** @nullable */
+  name: string | null;
+  /** @nullable */
+  mask: string | null;
+};
+
+export type BankBalanceExplainAccountVia =
+  (typeof BankBalanceExplainAccountVia)[keyof typeof BankBalanceExplainAccountVia];
+
+export const BankBalanceExplainAccountVia = {
+  pointer: "pointer",
+  snapshot_mask: "snapshot mask",
+  sole_checking: "sole checking",
+  sole_depository: "sole depository",
+  unresolved: "unresolved",
+} as const;
+
+export type BankBalanceExplainAccount = {
+  /** @nullable */
+  resolvedExternalId: string | null;
+  /** @nullable */
+  resolvedRowId: string | null;
+  via: BankBalanceExplainAccountVia;
+  /** @nullable */
+  name: string | null;
+  /** @nullable */
+  mask: string | null;
+  /** @nullable */
+  belongsToItem: string | null;
+};
+
+export type BankBalanceExplainNextSync = {
+  willRefreshBalance: boolean;
+  /** @nullable */
+  whyNot: string | null;
+};
+
+export type BankBalanceExplainItemsItem = {
+  itemRowId: string;
+  /** @nullable */
+  institutionName: string | null;
+  /** @nullable */
+  lastSyncedAt: string | null;
+  /** @nullable */
+  lastSyncError: string | null;
+  /** @nullable */
+  lastSyncErrorCode: string | null;
+  ownsSnapshotAccount: boolean;
+};
+
+export type BankBalanceExplainAccountsItem = {
+  externalId: string;
+  /** @nullable */
+  name: string | null;
+  /** @nullable */
+  mask: string | null;
+  /** @nullable */
+  type: string | null;
+  /** @nullable */
+  subtype: string | null;
+  isSnapshotAccount: boolean;
+};
+
+export type BankBalanceExplainLedgerSinceAnchor = {
+  rowCount: number;
+  net: string;
+} | null;
+
+export type BankBalanceExplainLedgerRecentRowsItem = {
+  date: string;
+  description: string;
+  amount: string;
+  pending: boolean;
+};
+
+export type BankBalanceExplainLedger = {
+  /** @nullable */
+  anchorDay: string | null;
+  sinceAnchor: BankBalanceExplainLedgerSinceAnchor;
+  recentRows: BankBalanceExplainLedgerRecentRowsItem[];
+};
+
+/**
+ * Why the bank balance reads what it reads: the anchor, the account behind it, whether the next Sync re-reads it, what the ledger adds on top, and whether the balance is stale.
+ */
+export interface BankBalanceExplain {
+  asOf: string;
+  displayed: BankBalanceExplainDisplayed;
+  freshness: BankFreshness;
+  snapshot: BankBalanceExplainSnapshot;
+  account: BankBalanceExplainAccount;
+  nextSync: BankBalanceExplainNextSync;
+  items: BankBalanceExplainItemsItem[];
+  accounts: BankBalanceExplainAccountsItem[];
+  ledger: BankBalanceExplainLedger;
+}
+
+/**
+ * computeBankFreshness().source — see BankFreshness
+ * @nullable
+ */
+export type SpineBankSource =
+  | (typeof SpineBankSource)[keyof typeof SpineBankSource]
+  | null;
+
+export const SpineBankSource = {
+  plaid: "plaid",
+  manual: "manual",
+} as const;
+
+/**
+ * computeBankFreshness().staleReason
+ * @nullable
+ */
+export type SpineBankStaleReason =
+  | (typeof SpineBankStaleReason)[keyof typeof SpineBankStaleReason]
+  | null;
+
+export const SpineBankStaleReason = {
+  refresh_failed: "refresh_failed",
+  old: "old",
+  manual_old: "manual_old",
+} as const;
+
 export type SpineBank = {
   /** computeCashSignal().bankToday — snapshot rolled forward through the ledger */
   balance: string;
@@ -27,6 +219,28 @@ export type SpineBank = {
    * @nullable
    */
   asOfDate: string | null;
+  /**
+   * computeBankFreshness().source — see BankFreshness
+   * @nullable
+   */
+  source: SpineBankSource;
+  /**
+   * computeBankFreshness().lastContactAt
+   * @nullable
+   */
+  lastContactAt: string | null;
+  /**
+   * computeBankFreshness().lastFailureAt
+   * @nullable
+   */
+  lastFailureAt: string | null;
+  /** computeBankFreshness().stale */
+  stale: boolean;
+  /**
+   * computeBankFreshness().staleReason
+   * @nullable
+   */
+  staleReason: SpineBankStaleReason;
 };
 
 /**
@@ -3225,8 +3439,6 @@ export type GetForecastCashSignalParams = {
   horizonDays?: number;
   fromDate?: string;
 };
-
-export type GetForecastBankBalanceExplain200 = { [key: string]: unknown };
 
 export type GetReportsSpendingFactsParams = {
   /**

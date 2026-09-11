@@ -14,6 +14,7 @@ import { buildSpendingFacts } from "../lib/spendingFacts";
 import { buildBillsSummary, pickNextBill, todayDate } from "../lib/billsSummary";
 import { computeReviewCount } from "../lib/reviewCount";
 import { withPendingPayments } from "../lib/debtPending";
+import { computeBankFreshness } from "../lib/bankFreshness";
 
 const router: IRouter = Router();
 
@@ -32,6 +33,9 @@ const router: IRouter = Router();
  * value of the same function the owning page's own endpoint calls:
  *
  *   bank.balance / bank.asOfDate  → computeCashSignal().bankToday / .snapshotAt
+ *   bank.source / .lastContactAt / .lastFailureAt / .stale / .staleReason
+ *                                 → computeBankFreshness()  [lib/bankFreshness]
+ *                                   (also /forecast/bank-balance-explain .freshness)
  *   forecast.lowPoint / .lowPointDate → computeCashSignal().lowestProjected / .lowestDate
  *   forecast.runwayDays           → runwayDaysFrom(signal.daily)      [lib/cashSignal]
  *   forecast.cashBuffer / .status → computeCashSignal().cashBuffer / .status
@@ -54,7 +58,8 @@ const router: IRouter = Router();
  * ⚠️ NO PLAID CALL ON THIS PATH. The debts read below is a plain SELECT, not
  * `GET /debts` — that route opportunistically refreshes stale linked accounts
  * against Plaid's API, which is a fine thing for the Debts page to do on demand
- * and a terrible thing to put in front of first paint.
+ * and a terrible thing to put in front of first paint. The freshness read is
+ * our own tables too: the snapshot, the item behind it, and its sync attempts.
  */
 router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;
@@ -67,7 +72,7 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   // ⚠️ `horizonDays: 90` is not a default — it is the horizon the Forecast tile
   // and the Forecast Overview page both request. Ask for a different window and
   // the low point stops matching the page that shows it.
-  const [signal, monthFacts, weekFacts, billsSummary, debtRows, reviewCount] =
+  const [signal, monthFacts, weekFacts, billsSummary, debtRows, reviewCount, freshness] =
     await Promise.all([
       computeCashSignal(householdId, ownerUserId, { horizonDays: 90 }),
       buildSpendingFacts(householdId, monthStartISO, todayISO),
@@ -75,6 +80,7 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       buildBillsSummary(householdId, ownerUserId),
       db.select().from(debtsTable).where(eq(debtsTable.householdId, householdId)),
       computeReviewCount(householdId, ownerUserId),
+      computeBankFreshness(householdId, ownerUserId),
     ]);
 
   const { nextBill, billsDueCount } = pickNextBill(billsSummary, today);
@@ -93,6 +99,14 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
     bank: {
       balance: signal.bankToday,
       asOfDate: signal.snapshotAt,
+      // Whether that balance can be trusted right now. Decided here, from the
+      // snapshot and the feed that refreshes it, so no screen guesses staleness
+      // from a timestamp of its own.
+      source: freshness.source,
+      lastContactAt: freshness.lastContactAt,
+      lastFailureAt: freshness.lastFailureAt,
+      stale: freshness.stale,
+      staleReason: freshness.staleReason,
     },
     spentMonth: monthFacts.realSpend.total,
     spentWeek: weekFacts.realSpend.total,

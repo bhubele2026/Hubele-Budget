@@ -1180,7 +1180,7 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema: { $ref: "#/components/schemas/BankBalanceExplain" }
 
   /forecast/avalanche-schedule:
     get:
@@ -1962,6 +1962,115 @@ components:
         amount: { type: string }
         dueDate: { type: string }
 
+    BankFreshness:
+      type: object
+      description: >-
+        Whether the bank balance can be trusted right now, decided on the server by
+        computeBankFreshness(). Served as the spine's bank fields and as `freshness` on
+        /forecast/bank-balance-explain.
+      required: [source, lastContactAt, lastFailureAt, stale, staleReason]
+      properties:
+        source: { type: ["string", "null"], enum: [plaid, manual, null], description: Where the snapshot came from; null when there is no snapshot }
+        lastContactAt: { type: ["string", "null"], description: Last successful sync of the Plaid item behind the snapshot account }
+        lastFailureAt: { type: ["string", "null"], description: Newest failed transactions or balance refresh not yet followed by a success of the same kind (PRODUCT_NOT_READY is not a failure) }
+        stale: { type: boolean }
+        staleReason:
+          type: ["string", "null"]
+          enum: [refresh_failed, old, manual_old, null]
+          description: >-
+            refresh_failed when the feed behind the snapshot account failed and has not recovered, or
+            needs a reconnect (immediate, for either source). old when a Plaid balance's feed has been
+            quiet for 48 hours, with no balance re-read and no successful sync. manual_old for a typed-in
+            balance older than 7 days. Null when not stale.
+
+    BankBalanceExplain:
+      type: object
+      description: >-
+        Why the bank balance reads what it reads: the anchor, the account behind it, whether the next
+        Sync re-reads it, what the ledger adds on top, and whether the balance is stale.
+      required: [asOf, displayed, freshness, snapshot, account, nextSync, items, accounts, ledger]
+      properties:
+        asOf: { type: string }
+        displayed:
+          type: object
+          required: [bankToday]
+          properties:
+            bankToday: { type: string, description: computeCashSignal().bankToday — what every screen shows }
+        freshness: { $ref: "#/components/schemas/BankFreshness" }
+        snapshot:
+          type: object
+          required: [balance, at, source, storedAccountId, name, mask]
+          properties:
+            balance: { type: ["string", "null"] }
+            at: { type: ["string", "null"] }
+            source: { type: ["string", "null"] }
+            storedAccountId: { type: ["string", "null"] }
+            name: { type: ["string", "null"] }
+            mask: { type: ["string", "null"] }
+        account:
+          type: object
+          required: [resolvedExternalId, resolvedRowId, via, name, mask, belongsToItem]
+          properties:
+            resolvedExternalId: { type: ["string", "null"] }
+            resolvedRowId: { type: ["string", "null"] }
+            via: { type: string, enum: [pointer, "snapshot mask", "sole checking", "sole depository", unresolved] }
+            name: { type: ["string", "null"] }
+            mask: { type: ["string", "null"] }
+            belongsToItem: { type: ["string", "null"] }
+        nextSync:
+          type: object
+          required: [willRefreshBalance, whyNot]
+          properties:
+            willRefreshBalance: { type: boolean }
+            whyNot: { type: ["string", "null"] }
+        items:
+          type: array
+          items:
+            type: object
+            required: [itemRowId, institutionName, lastSyncedAt, lastSyncError, lastSyncErrorCode, ownsSnapshotAccount]
+            properties:
+              itemRowId: { type: string }
+              institutionName: { type: ["string", "null"] }
+              lastSyncedAt: { type: ["string", "null"] }
+              lastSyncError: { type: ["string", "null"] }
+              lastSyncErrorCode: { type: ["string", "null"] }
+              ownsSnapshotAccount: { type: boolean }
+        accounts:
+          type: array
+          items:
+            type: object
+            required: [externalId, name, mask, type, subtype, isSnapshotAccount]
+            properties:
+              externalId: { type: string }
+              name: { type: ["string", "null"] }
+              mask: { type: ["string", "null"] }
+              type: { type: ["string", "null"] }
+              subtype: { type: ["string", "null"] }
+              isSnapshotAccount: { type: boolean }
+        ledger:
+          type: object
+          required: [anchorDay, sinceAnchor, recentRows]
+          properties:
+            anchorDay: { type: ["string", "null"] }
+            sinceAnchor:
+              oneOf:
+                - type: object
+                  required: [rowCount, net]
+                  properties:
+                    rowCount: { type: integer }
+                    net: { type: string }
+                - type: "null"
+            recentRows:
+              type: array
+              items:
+                type: object
+                required: [date, description, amount, pending]
+                properties:
+                  date: { type: string }
+                  description: { type: string }
+                  amount: { type: string }
+                  pending: { type: boolean }
+
     Spine:
       type: object
       required:
@@ -1970,10 +2079,15 @@ components:
         asOf: { type: string, description: ISO timestamp the snapshot was read }
         bank:
           type: object
-          required: [balance, asOfDate]
+          required: [balance, asOfDate, source, lastContactAt, lastFailureAt, stale, staleReason]
           properties:
             balance: { type: string, description: computeCashSignal().bankToday — snapshot rolled forward through the ledger }
             asOfDate: { type: ["string", "null"], description: computeCashSignal().snapshotAt — when the bank snapshot was taken }
+            source: { type: ["string", "null"], enum: [plaid, manual, null], description: computeBankFreshness().source — see BankFreshness }
+            lastContactAt: { type: ["string", "null"], description: computeBankFreshness().lastContactAt }
+            lastFailureAt: { type: ["string", "null"], description: computeBankFreshness().lastFailureAt }
+            stale: { type: boolean, description: computeBankFreshness().stale }
+            staleReason: { type: ["string", "null"], enum: [refresh_failed, old, manual_old, null], description: computeBankFreshness().staleReason }
         spentMonth: { type: number, description: buildSpendingFacts(monthStart..today).realSpend.total }
         spentWeek: { type: number, description: buildSpendingFacts(weekStart..weekEnd).realSpend.total }
         nextBill:

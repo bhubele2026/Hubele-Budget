@@ -29,3 +29,18 @@ export const PLAID_REAUTH_ERROR_CODES = new Set<string>([
   "PENDING_DISCONNECT",
   "INVALID_ACCESS_TOKEN",
 ]);
+
+// ⭐ The codes that mean the bank feed has STOPPED: no new balance or rows will
+// arrive until someone reconnects. `bankFreshness` marks the bank balance stale
+// the moment one lands, without waiting for the 48-hour age rule.
+//
+// ⚠️ Not the same list as PLAID_REAUTH_ERROR_CODES. PENDING_EXPIRATION and
+// PENDING_DISCONNECT ask for a reconnect BEFORE a date; until then the feed keeps
+// working, so the balance is still fresh. The two USER_* codes arrive only by
+// webhook (`routes/plaid.ts`) and are not reauth prompts, but the feed is gone.
+export const BANK_FEED_DEAD_CODES = new Set<string>([
+  "ITEM_LOGIN_REQUIRED",
+  "INVALID_ACCESS_TOKEN",
+  "USER_PERMISSION_REVOKED",
+  "USER_ACCOUNT_REVOKED",
+]);

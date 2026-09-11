@@ -6,4 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetForecastBankBalanceExplain200 = { [key: string]: unknown };
+export type BankBalanceExplainNextSync = {
+  willRefreshBalance: boolean;
+  /** @nullable */
+  whyNot: string | null;
+};

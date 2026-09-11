@@ -2785,10 +2785,122 @@ export const GetForecastCashSignalResponse = zod.object({
 /**
  * Diagnostic: why the bank balance reads what it reads. Shows the anchor, which Plaid account it resolves to and how, whether the next Sync will re-read it (and if not, why not), and the ledger rows stacked on top. Read-only and free — no Plaid call, no writes. Exists because diagnosing a wrong balance used to require production credentials, which turned a money bug into a guessing game.
  */
-export const GetForecastBankBalanceExplainResponse = zod.record(
-  zod.string(),
-  zod.unknown(),
-);
+export const GetForecastBankBalanceExplainResponse = zod
+  .object({
+    asOf: zod.string(),
+    displayed: zod.object({
+      bankToday: zod
+        .string()
+        .describe("computeCashSignal().bankToday — what every screen shows"),
+    }),
+    freshness: zod
+      .object({
+        source: zod
+          .union([
+            zod.literal("plaid"),
+            zod.literal("manual"),
+            zod.literal(null),
+          ])
+          .nullable()
+          .describe(
+            "Where the snapshot came from; null when there is no snapshot",
+          ),
+        lastContactAt: zod
+          .string()
+          .nullable()
+          .describe(
+            "Last successful sync of the Plaid item behind the snapshot account",
+          ),
+        lastFailureAt: zod
+          .string()
+          .nullable()
+          .describe(
+            "Newest failed transactions or balance refresh not yet followed by a success of the same kind (PRODUCT_NOT_READY is not a failure)",
+          ),
+        stale: zod.boolean(),
+        staleReason: zod
+          .union([
+            zod.literal("refresh_failed"),
+            zod.literal("old"),
+            zod.literal("manual_old"),
+            zod.literal(null),
+          ])
+          .nullable()
+          .describe(
+            "refresh_failed when the feed behind the snapshot account failed and has not recovered, or needs a reconnect (immediate, for either source). old when a Plaid balance's feed has been quiet for 48 hours, with no balance re-read and no successful sync. manual_old for a typed-in balance older than 7 days. Null when not stale.",
+          ),
+      })
+      .describe(
+        "Whether the bank balance can be trusted right now, decided on the server by computeBankFreshness(). Served as the spine's bank fields and as `freshness` on \/forecast\/bank-balance-explain.",
+      ),
+    snapshot: zod.object({
+      balance: zod.string().nullable(),
+      at: zod.string().nullable(),
+      source: zod.string().nullable(),
+      storedAccountId: zod.string().nullable(),
+      name: zod.string().nullable(),
+      mask: zod.string().nullable(),
+    }),
+    account: zod.object({
+      resolvedExternalId: zod.string().nullable(),
+      resolvedRowId: zod.string().nullable(),
+      via: zod.enum([
+        "pointer",
+        "snapshot mask",
+        "sole checking",
+        "sole depository",
+        "unresolved",
+      ]),
+      name: zod.string().nullable(),
+      mask: zod.string().nullable(),
+      belongsToItem: zod.string().nullable(),
+    }),
+    nextSync: zod.object({
+      willRefreshBalance: zod.boolean(),
+      whyNot: zod.string().nullable(),
+    }),
+    items: zod.array(
+      zod.object({
+        itemRowId: zod.string(),
+        institutionName: zod.string().nullable(),
+        lastSyncedAt: zod.string().nullable(),
+        lastSyncError: zod.string().nullable(),
+        lastSyncErrorCode: zod.string().nullable(),
+        ownsSnapshotAccount: zod.boolean(),
+      }),
+    ),
+    accounts: zod.array(
+      zod.object({
+        externalId: zod.string(),
+        name: zod.string().nullable(),
+        mask: zod.string().nullable(),
+        type: zod.string().nullable(),
+        subtype: zod.string().nullable(),
+        isSnapshotAccount: zod.boolean(),
+      }),
+    ),
+    ledger: zod.object({
+      anchorDay: zod.string().nullable(),
+      sinceAnchor: zod.union([
+        zod.object({
+          rowCount: zod.number(),
+          net: zod.string(),
+        }),
+        zod.null(),
+      ]),
+      recentRows: zod.array(
+        zod.object({
+          date: zod.string(),
+          description: zod.string(),
+          amount: zod.string(),
+          pending: zod.boolean(),
+        }),
+      ),
+    }),
+  })
+  .describe(
+    "Why the bank balance reads what it reads: the anchor, the account behind it, whether the next Sync re-reads it, what the ledger adds on top, and whether the balance is stale.",
+  );
 
 /**
  * Returns a deterministic schedule of avalanche extra payments
@@ -4133,6 +4245,28 @@ export const GetSpineResponse = zod.object({
       .describe(
         "computeCashSignal().snapshotAt — when the bank snapshot was taken",
       ),
+    source: zod
+      .union([zod.literal("plaid"), zod.literal("manual"), zod.literal(null)])
+      .nullable()
+      .describe("computeBankFreshness().source — see BankFreshness"),
+    lastContactAt: zod
+      .string()
+      .nullable()
+      .describe("computeBankFreshness().lastContactAt"),
+    lastFailureAt: zod
+      .string()
+      .nullable()
+      .describe("computeBankFreshness().lastFailureAt"),
+    stale: zod.boolean().describe("computeBankFreshness().stale"),
+    staleReason: zod
+      .union([
+        zod.literal("refresh_failed"),
+        zod.literal("old"),
+        zod.literal("manual_old"),
+        zod.literal(null),
+      ])
+      .nullable()
+      .describe("computeBankFreshness().staleReason"),
   }),
   spentMonth: zod
     .number()

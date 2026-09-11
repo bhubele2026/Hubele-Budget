@@ -11,6 +11,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { computeCashSignal } from "../lib/cashSignal";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "../lib/householdClock";
+import { computeBankFreshness } from "../lib/bankFreshness";
 
 const router: IRouter = Router();
 
@@ -148,14 +149,18 @@ router.get(
           .limit(15)
       : [];
 
-    const signal = await computeCashSignal(householdId, ownerUserId, {
-      horizonDays: 90,
-    });
+    const [signal, freshness] = await Promise.all([
+      computeCashSignal(householdId, ownerUserId, { horizonDays: 90 }),
+      computeBankFreshness(householdId, ownerUserId),
+    ]);
 
     res.json({
       asOf: new Date().toISOString(),
       // What every screen is showing right now.
       displayed: { bankToday: signal.bankToday },
+      // Whether that balance can be trusted right now, and why not. The spine's
+      // `bank` object carries the same fields from the same function.
+      freshness,
       // The anchor it is built on.
       snapshot: {
         balance: settings?.bankSnapshotBalance ?? null,
