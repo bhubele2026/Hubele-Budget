@@ -915,18 +915,21 @@ export const BulkSetForecastFlagResponse = zod.object({
 });
 
 /**
- * @summary (PR13) One page of the bank ledger, newest first. The account is the
-one behind the bank balance, chosen on the server: the Plaid account
-the snapshot resolves to, its same-institution mask twins, and manual
-rows (no Plaid account, source neither "amex" nor "plaid:*"), which is
-the rule the bank balance counts by. Ordered by occurredOn desc,
-occurredAt desc (nulls last), id desc, and paged with an opaque keyset
-cursor. `matchingCount` counts every row matching the filters;
-`totals` and `review` cover every row matching the filters other than
-`reviewed`. `runningBalance`, `balanceStart`, `balanceEnd` and
-`anchor` never depend on the non-date filters or the page. The
-boolean filters take the strings "true" or "false"; anything else is
-a 400.
+ * @summary (PR13) One page of the bank ledger, newest first. The server settles
+the scope: the Plaid account the snapshot resolves to, its
+same-institution mask twins, and manual rows (no Plaid account, source
+neither "amex" nor "plaid:*"), which is the rule the bank balance reads
+by. A client must not hide rows the register counts. Ordered by
+occurredOn desc, occurredAt desc (nulls last), id desc, and paged with
+an opaque keyset cursor. Each row carries what it moves the balance by
+(`balanceAmount`, `countsInBalance`, `balanceReason`), from the cash
+rule over the account's whole history. `matchingCount` counts every
+row matching the filters; `totals` and `review` cover every row
+matching the filters other than `reviewed`. `runningBalance`,
+`balanceStart`, `balanceEnd`, `balanceToday` and `anchor` never depend
+on the non-date filters or the page, and no balance is given for a day
+after today. The boolean filters take the strings "true" or "false";
+anything else is a 400.
 
  */
 export const getTransactionsLedgerQueryAccountMax = 64;
@@ -1012,7 +1015,8 @@ export const GetTransactionsLedgerQueryParams = zod.object({
     .number()
     .min(1)
     .max(getTransactionsLedgerQueryLimitMax)
-    .default(getTransactionsLedgerQueryLimitDefault),
+    .default(getTransactionsLedgerQueryLimitDefault)
+    .describe("Plain digits, 1 to 100."),
   cursor: zod.coerce
     .string()
     .max(getTransactionsLedgerQueryCursorMax)
@@ -1106,7 +1110,36 @@ export const GetTransactionsLedgerResponse = zod.object({
             .string()
             .nullable()
             .describe(
-              "(PR13) The account balance straight after this row, on the\nregister of all the account's rows. Null without a bank snapshot.\n",
+              "(PR13) The account balance straight after this row, on the\nregister of all the account's rows. Null without a bank\nsnapshot, and for a row dated after today.\n",
+            ),
+          balanceAmount: zod
+            .string()
+            .describe(
+              "What this row moves the register by: its amount, or 0.00 when it\ndoes not count. `totals` sum these.\n",
+            ),
+          countsInBalance: zod
+            .boolean()
+            .describe("Whether this row moves the balance at all."),
+          balanceReason: zod
+            .string()
+            .describe(
+              "counted (moves the balance by its amount); superseded (a pending\nrow its posted row replaced); duplicate (a second row with the\nsame Plaid transaction id); not_bank (a mask-twin row, which the\nbank balance does not read).\n",
+            ),
+          replacedPendingId: zod
+            .string()
+            .nullable()
+            .describe(
+              "For a posted row that replaced a pending row, that pending row's id.",
+            ),
+          heldAhead: zod
+            .boolean()
+            .describe(
+              "Dated after the snapshot day but already inside the snapshot\nbalance. The days between the snapshot and this row's date read\nhigher than the bank showed, by this row.\n",
+            ),
+          afterToday: zod
+            .boolean()
+            .describe(
+              "Dated after the household's today. Such a row has no running balance.",
             ),
         }),
       ),
@@ -1116,12 +1149,18 @@ export const GetTransactionsLedgerResponse = zod.object({
   matchingCount: zod
     .number()
     .describe("Rows matching every filter, `reviewed` included."),
-  totals: zod.object({
-    count: zod.number(),
-    moneyIn: zod.string(),
-    moneyOut: zod.string(),
-    net: zod.string(),
-  }),
+  totals: zod
+    .object({
+      count: zod
+        .number()
+        .describe("Matching rows, including rows that do not count."),
+      moneyIn: zod.string(),
+      moneyOut: zod.string(),
+      net: zod.string(),
+    })
+    .describe(
+      "Over every row matching the filters other than `reviewed`, rows dated\nafter today included, summing each row's `balanceAmount`: a row that\ndoes not count adds nothing.\n",
+    ),
   review: zod.object({
     reviewed: zod.number(),
     unreviewed: zod.number(),
@@ -1130,13 +1169,19 @@ export const GetTransactionsLedgerResponse = zod.object({
     .string()
     .nullable()
     .describe(
-      "The balance at the end of the day before `from` (before the first row when `from` is absent).",
+      "The balance at the end of the day before `from`, or before the\naccount's first row when `from` is absent. Null without a bank\nsnapshot, or when that day is after today.\n",
     ),
   balanceEnd: zod
     .string()
     .nullable()
     .describe(
-      "The balance at the end of `to` (after the last row when `to` is absent).",
+      "The balance at the end of `to`, which defaults to today. Null without\na bank snapshot, or when `to` is after today.\n",
+    ),
+  balanceToday: zod
+    .string()
+    .nullable()
+    .describe(
+      "The balance at the end of today: the spine's `bank.balance`. Null\nwithout a bank snapshot.\n",
     ),
   anchor: zod.object({
     today: zod
@@ -1170,7 +1215,9 @@ export const GetTransactionsLedgerResponse = zod.object({
  * @summary (PR13) End-of-day balances of the ledger account for up to 120 dates,
 on the same register as GET /transactions/ledger: a date's balance is
 the runningBalance after the last account row dated on or before it.
-Today's equals the bank balance on the spine.
+Today's equals the bank balance on the spine. A date after today, and
+every date without a bank snapshot, has a null balance: the register
+is not a projection.
 
  */
 export const getTransactionsBalancesQueryAccountMax = 64;

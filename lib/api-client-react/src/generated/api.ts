@@ -1649,18 +1649,21 @@ export const useBulkSetForecastFlag = <
 };
 
 /**
- * @summary (PR13) One page of the bank ledger, newest first. The account is the
-one behind the bank balance, chosen on the server: the Plaid account
-the snapshot resolves to, its same-institution mask twins, and manual
-rows (no Plaid account, source neither "amex" nor "plaid:*"), which is
-the rule the bank balance counts by. Ordered by occurredOn desc,
-occurredAt desc (nulls last), id desc, and paged with an opaque keyset
-cursor. `matchingCount` counts every row matching the filters;
-`totals` and `review` cover every row matching the filters other than
-`reviewed`. `runningBalance`, `balanceStart`, `balanceEnd` and
-`anchor` never depend on the non-date filters or the page. The
-boolean filters take the strings "true" or "false"; anything else is
-a 400.
+ * @summary (PR13) One page of the bank ledger, newest first. The server settles
+the scope: the Plaid account the snapshot resolves to, its
+same-institution mask twins, and manual rows (no Plaid account, source
+neither "amex" nor "plaid:*"), which is the rule the bank balance reads
+by. A client must not hide rows the register counts. Ordered by
+occurredOn desc, occurredAt desc (nulls last), id desc, and paged with
+an opaque keyset cursor. Each row carries what it moves the balance by
+(`balanceAmount`, `countsInBalance`, `balanceReason`), from the cash
+rule over the account's whole history. `matchingCount` counts every
+row matching the filters; `totals` and `review` cover every row
+matching the filters other than `reviewed`. `runningBalance`,
+`balanceStart`, `balanceEnd`, `balanceToday` and `anchor` never depend
+on the non-date filters or the page, and no balance is given for a day
+after today. The boolean filters take the strings "true" or "false";
+anything else is a 400.
 
  */
 export const getGetTransactionsLedgerUrl = (
@@ -1734,18 +1737,21 @@ export type GetTransactionsLedgerQueryResult = NonNullable<
 export type GetTransactionsLedgerQueryError = ErrorType<void>;
 
 /**
- * @summary (PR13) One page of the bank ledger, newest first. The account is the
-one behind the bank balance, chosen on the server: the Plaid account
-the snapshot resolves to, its same-institution mask twins, and manual
-rows (no Plaid account, source neither "amex" nor "plaid:*"), which is
-the rule the bank balance counts by. Ordered by occurredOn desc,
-occurredAt desc (nulls last), id desc, and paged with an opaque keyset
-cursor. `matchingCount` counts every row matching the filters;
-`totals` and `review` cover every row matching the filters other than
-`reviewed`. `runningBalance`, `balanceStart`, `balanceEnd` and
-`anchor` never depend on the non-date filters or the page. The
-boolean filters take the strings "true" or "false"; anything else is
-a 400.
+ * @summary (PR13) One page of the bank ledger, newest first. The server settles
+the scope: the Plaid account the snapshot resolves to, its
+same-institution mask twins, and manual rows (no Plaid account, source
+neither "amex" nor "plaid:*"), which is the rule the bank balance reads
+by. A client must not hide rows the register counts. Ordered by
+occurredOn desc, occurredAt desc (nulls last), id desc, and paged with
+an opaque keyset cursor. Each row carries what it moves the balance by
+(`balanceAmount`, `countsInBalance`, `balanceReason`), from the cash
+rule over the account's whole history. `matchingCount` counts every
+row matching the filters; `totals` and `review` cover every row
+matching the filters other than `reviewed`. `runningBalance`,
+`balanceStart`, `balanceEnd`, `balanceToday` and `anchor` never depend
+on the non-date filters or the page, and no balance is given for a day
+after today. The boolean filters take the strings "true" or "false";
+anything else is a 400.
 
  */
 
@@ -1776,7 +1782,9 @@ export function useGetTransactionsLedger<
  * @summary (PR13) End-of-day balances of the ledger account for up to 120 dates,
 on the same register as GET /transactions/ledger: a date's balance is
 the runningBalance after the last account row dated on or before it.
-Today's equals the bank balance on the spine.
+Today's equals the bank balance on the spine. A date after today, and
+every date without a bank snapshot, has a null balance: the register
+is not a projection.
 
  */
 export const getGetTransactionsBalancesUrl = (
@@ -1856,7 +1864,9 @@ export type GetTransactionsBalancesQueryError = ErrorType<void>;
  * @summary (PR13) End-of-day balances of the ledger account for up to 120 dates,
 on the same register as GET /transactions/ledger: a date's balance is
 the runningBalance after the last account row dated on or before it.
-Today's equals the bank balance on the spine.
+Today's equals the bank balance on the spine. A date after today, and
+every date without a bank snapshot, has a null balance: the register
+is not a projection.
 
  */
 

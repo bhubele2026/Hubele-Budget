@@ -57,6 +57,7 @@ the snapshot's account. Any account outside the ledger scope is a 400.
    */
   member?: string;
   /**
+   * Plain digits, 1 to 100.
    * @minimum 1
    * @maximum 100
    */

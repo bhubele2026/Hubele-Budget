@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
 import {
   db,
   budgetCategoriesTable,
@@ -8,8 +8,9 @@ import {
   plaidItemsTable,
   transactionsTable,
 } from "@workspace/db";
+import { classifyCashRows, type CashRow, type CashRowOutcome } from "@workspace/avalanche-core";
 import { computeCashSignal } from "./cashSignal";
-import { householdDayOf, householdTodayISO } from "./householdClock";
+import { addDaysISO, householdDayOf, householdTodayISO } from "./householdClock";
 import {
   resolveSnapshotAccount,
   type SnapshotAccountResolution,
@@ -24,38 +25,47 @@ import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
  * derive its totals and running balances from whatever arrived. This module
  * answers the same questions over EVERY row of the account, one page at a time.
  *
- * Three rules hold it together:
+ *   1. SCOPE IS SETTLED HERE. A row is on the ledger when the bank balance reads
+ *      it (`isBankRow`): its Plaid account is the one the snapshot resolves to,
+ *      or it has no Plaid account and its source is neither "amex" nor "plaid:*".
+ *      Plus that account's mask twins (same institution, mask, type and subtype),
+ *      which the Chase page has always shown as one account (#462). Manual rows
+ *      are in because the bank balance counts them; a client that hides rows the
+ *      register counts breaks the running-balance chain, so it must not.
  *
- *   1. SCOPE = THE BANK BALANCE'S OWN RULE. A row is on the ledger when the bank
- *      balance counts it (`isBankRow` in lib/forecastLedger.ts): its Plaid
- *      account is the one the snapshot resolves to, or it has no Plaid account
- *      and its source is neither "amex" nor "plaid:*". Plus the resolved
- *      account's mask twins (same institution, mask, type and subtype), which
- *      the Chase page has always collapsed into one account (#462). A register
- *      that left out a row the balance counts could never reconcile.
+ *   2. WHAT EACH ROW MOVES — `classifyCashRows` (PR4e), the cash rule the bank
+ *      balance uses, run over the account's WHOLE history with no anchor. A
+ *      counted row moves the register by its amount. A pending row its posted
+ *      row replaced, a repeated Plaid transaction id, and a mask-twin row (not
+ *      the snapshot's account) move it by 0. `totals` sum the same amounts.
  *
- *   2. ONE REGISTER. Every balance here is an anchor plus a running sum over the
- *      account's rows in ledger order (oldest first: occurred_on, occurred_at
- *      nulls first, id). The anchor is chosen so the balance at the end of today
- *      IS `computeCashSignal().bankToday`, the spine's bank balance, from the
- *      same call the spine makes: the snapshot rule (`isInSnapshot`) is reused,
- *      never re-derived. By construction a row's running balance is the previous
- *      row's plus its amount, `balanceStart` plus the range's amounts is
- *      `balanceEnd`, and none of it depends on the non-date filters or the page.
+ *   3. ONE REGISTER, THROUGH TODAY. The balance after a row is the opening
+ *      balance plus the running sum of those amounts in ledger order (oldest
+ *      first: occurred_on, occurred_at nulls first, id). The opening balance is
+ *      chosen so the end of today IS `computeCashSignal().bankToday`, the
+ *      spine's bank balance, from the same call the spine makes. Rows dated
+ *      after today are listed and labelled, but carry no balance, and no day
+ *      after today has one: a register is not a projection.
  *
- *   3. FILTERS IN SQL. Paging, counts and totals never see a partial list.
+ *   4. FILTERS IN SQL. Paging, counts and totals never see a partial list.
  *
- * ⚠️ WHAT THE REGISTER IS NOT: a replay of the bank's `available` balance on past
- * days. Every row sits on its own date at its full amount, so wherever the bank
- * balance counts a row differently, the days before that row move and today does
- * not:
+ * ⚠️ OPEN, AND NOT A RULE HERE: a manual "Payment — <debt>" row that
+ * `routes/debts.ts` writes beside the bank's own debit for the same payment
+ * counts twice in history, as both count in the bank balance today. Whether one
+ * of them should move the balance is Brad's decision (CLAUDE.md §1).
+ * `registerAmount` below is where such a rule would go.
+ *
+ * ⚠️ WHAT THE REGISTER IS NOT: a replay of the bank's `available` balance. The
+ * bank balance decides some rows by the instant the snapshot was read, and the
+ * register puts every row on its own date:
  *   - a charge the snapshot already held but dated after the snapshot day
- *     (`isInSnapshot` rule 3): the days in between read higher than `available`;
- *   - a pending row its posted row replaced, or a posting that adds only its tip
- *     (PR4c, `pairPendingWithPosted`): the balance counts the charge once, the
- *     register lists both rows;
- *   - a mask-twin row, which the bank balance does not count at all.
- * Today's balance is exact in every case; the earlier days are a register.
+ *     (`heldAhead`): the days between the snapshot and its date read higher
+ *     than the bank showed, by that charge;
+ *   - a posting that adds only its tip in the bank balance (PR4c): the register
+ *     takes the posted row in full and the pending row at 0;
+ *   - pairing over the whole history can pair a posted row with a different
+ *     pending row than the bank balance's shorter window does.
+ * Today's balance is exact in every case.
  */
 
 export const LEDGER_BALANCE_DATES_MAX = 120;
@@ -76,15 +86,35 @@ export class LedgerRequestError extends Error {
 
 const bad = (code: string, message: string) => new LedgerRequestError(400, code, message);
 
+// ── Money in cents ──────────────────────────────────────────────────────────
+
+/** `numeric(12,2)` text to integer cents. Exact: at most 12 digits. */
+function toCents(amount: string | number): number {
+  return Math.round(Number(amount) * 100);
+}
+
+function money(cents: number): string {
+  const abs = Math.abs(cents);
+  return `${cents < 0 ? "-" : ""}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
+}
+
 // ── Input checks ────────────────────────────────────────────────────────────
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CURSOR_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 
-/** A real calendar day as YYYY-MM-DD, so 2026-02-30 is refused before Postgres sees it. */
+/** A NUL byte: Postgres refuses it in text, so it must never reach a query. */
+export function hasNul(s: string): boolean {
+  return s.includes("\u0000");
+}
+
+/**
+ * A real calendar day as YYYY-MM-DD from year 1000, so 2026-02-30 and 0000-01-01
+ * (JavaScript has a year 0; Postgres does not) are refused before Postgres sees them.
+ */
 export function isCalendarDay(s: string): boolean {
-  if (!ISO_DAY.test(s)) return false;
+  if (!ISO_DAY.test(s) || Number(s.slice(0, 4)) < 1000) return false;
   const d = new Date(`${s}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
@@ -130,11 +160,15 @@ export const LEDGER_FILTER_KEYS: readonly string[] = [
 
 /** Validates a filter and drops empty values. Throws a 400 `LedgerRequestError`. */
 export function checkLedgerFilter(f: LedgerFilter): LedgerFilter {
+  for (const key of ["from", "to", "search", "categoryId", "source", "member"] as const) {
+    const v = f[key];
+    if (typeof v === "string" && hasNul(v)) throw bad("invalid_filter", `${key} must not contain a NUL byte`);
+  }
   const out: LedgerFilter = {};
   for (const key of ["from", "to"] as const) {
     const v = f[key];
     if (v === undefined || v === "") continue;
-    if (!isCalendarDay(v)) throw bad("invalid_filter", `${key} must be a YYYY-MM-DD date`);
+    if (!isCalendarDay(v)) throw bad("invalid_filter", `${key} must be a YYYY-MM-DD date from year 1000`);
     out[key] = v;
   }
   if (out.from && out.to && out.from > out.to) {
@@ -168,6 +202,7 @@ export function encodeLedgerCursor(c: LedgerCursor): string {
 
 export function decodeLedgerCursor(raw: string): LedgerCursor {
   const invalid = bad("invalid_cursor", "cursor is not a cursor from this endpoint");
+  if (hasNul(raw)) throw invalid;
   let parsed: unknown;
   try {
     parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
@@ -179,8 +214,12 @@ export function decodeLedgerCursor(raw: string): LedgerCursor {
   if (v !== 1) throw invalid;
   if (typeof d !== "string" || !isCalendarDay(d)) throw invalid;
   if (typeof i !== "string" || !isUuid(i)) throw invalid;
-  if (t !== null && (typeof t !== "string" || !CURSOR_TIME.test(t) || Number.isNaN(Date.parse(t)))) {
-    throw invalid;
+  if (t !== null) {
+    if (typeof t !== "string" || !CURSOR_TIME.test(t) || Number(t.slice(0, 4)) < 1000) throw invalid;
+    // Round-trip to the millisecond: 2026-02-30T… would roll into March.
+    const ms = `${t.slice(0, 23)}Z`;
+    const at = new Date(ms);
+    if (Number.isNaN(at.getTime()) || at.toISOString() !== ms) throw invalid;
   }
   return { d, t: t as string | null, i };
 }
@@ -202,7 +241,9 @@ function afterCursor(c: LedgerCursor): SQL {
 
 export type LedgerAccounts = {
   householdId: string;
-  /** The Plaid account ids on the ledger: the resolved account and its mask twins. */
+  /** The Plaid account the bank balance reads, or null when none resolves. */
+  accountExternalId: string | null;
+  /** The Plaid account ids on the ledger: that account and its mask twins. */
   plaidAccountIds: string[];
   via: SnapshotAccountResolution["via"];
 };
@@ -286,6 +327,7 @@ export async function resolveLedgerAccounts(
   }
   return {
     householdId,
+    accountExternalId: resolved.externalId,
     plaidAccountIds: resolved.externalId
       ? Array.from(new Set([resolved.externalId, ...members.map((m) => m.accountId)]))
       : [],
@@ -326,24 +368,178 @@ export async function resolveLedgerScope(
   return { ...accounts, anchor };
 }
 
-// ── SQL ─────────────────────────────────────────────────────────────────────
+// ── The register ────────────────────────────────────────────────────────────
 
 /**
- * `acct`: the account's rows, one copy per Plaid transaction id (the bank
- * balance skips a repeated id too; `transactions_plaid_txn_uq` makes both
- * defensive). `reg`: `acct` plus `cum`, the running sum in ledger order.
- * Postgres inlines CTEs, so a query that never reads `reg` never pays for the
- * window.
+ * Why a row moves the register by what it does:
+ * - `counted`: by its amount;
+ * - `superseded`: 0 — a pending row its posted row replaced (PR4c);
+ * - `duplicate`: 0 — a second row with the same Plaid transaction id;
+ * - `not_bank`: 0 — a mask-twin row; the bank balance reads only the snapshot's account.
  */
-function ledgerCtes(accounts: LedgerAccounts): SQL {
+export type BalanceReason = "counted" | "superseded" | "duplicate" | "not_bank";
+
+export type RegisterRow = {
+  id: string;
+  occurredOn: string;
+  balanceCents: number;
+  countsInBalance: boolean;
+  balanceReason: BalanceReason;
+  /** For a posted row that replaced a pending row: that pending row's id. */
+  replacedPendingId: string | null;
+  /** Dated after the snapshot day, but already inside the snapshot balance. */
+  heldAhead: boolean;
+  /** Running sum of `balanceCents` through this row, in ledger order. */
+  cumCents: number;
+};
+
+export type Register = {
+  byId: Map<string, RegisterRow>;
+  /** Ledger order, oldest first. */
+  ordered: RegisterRow[];
+  /** The balance before the account's first row. Null without a bank snapshot. */
+  openingCents: number | null;
+  today: string;
+};
+
+/**
+ * ⭐ WHAT ONE ROW MOVES THE REGISTER BY. `classifyCashRows` ran with no anchor,
+ * so no row is `held` and none is `adjusted`: every row the cash rule counts
+ * moves the register by its full amount, and every other row by 0.
+ *
+ * ⚠️ OPEN — Brad's decision (CLAUDE.md §1): a manual "Payment — <debt>" row
+ * logged beside the bank's own debit for that payment. Both count today, here
+ * and in the bank balance. A rule for it belongs here, as one more reason that
+ * moves a row by 0, and in the bank balance's rule at the same time.
+ */
+function registerAmount(
+  outcome: CashRowOutcome,
+  amountCents: number,
+): { cents: number; counts: boolean; reason: BalanceReason } {
+  switch (outcome.reason) {
+    case "counted":
+      return { cents: amountCents, counts: true, reason: "counted" };
+    case "superseded":
+    case "duplicate":
+    case "not_bank":
+      return { cents: 0, counts: false, reason: outcome.reason };
+    case "held":
+    case "adjusted":
+      throw new Error(`classifyCashRows returned "${outcome.reason}" without an anchor`);
+  }
+}
+
+/**
+ * Loads every row of the account, in ledger order, and works out what each moves
+ * the register by and the running sum through it. The register reads the whole
+ * history because a double count anywhere in it moves every balance before it.
+ */
+export async function loadRegister(scope: LedgerScope): Promise<Register> {
   const t = transactionsTable;
-  const onAccount =
-    accounts.plaidAccountIds.length > 0 ? inArray(t.plaidAccountId, accounts.plaidAccountIds) : sql`false`;
-  // SQL twin of `isBankRow` (lib/forecastLedger.ts). An empty plaid_account_id
-  // is falsy there, so it means "no Plaid account" here too.
-  const bankRow = sql`(${onAccount} or (nullif(${t.plaidAccountId}, '') is null and lower(${t.source}) <> 'amex' and lower(${t.source}) not like 'plaid:%'))`;
+  const rows = await db
+    .select({
+      id: t.id,
+      occurredOn: t.occurredOn,
+      occurredAt: t.occurredAt,
+      amount: t.amount,
+      createdAt: t.createdAt,
+      pending: t.pending,
+      description: t.description,
+      source: t.source,
+      plaidAccountId: t.plaidAccountId,
+      plaidTransactionId: t.plaidTransactionId,
+    })
+    .from(t)
+    .where(and(eq(t.householdId, scope.householdId), bankRowWhere(scope.plaidAccountIds)))
+    .orderBy(asc(t.occurredOn), sql`${t.occurredAt} asc nulls first`, asc(t.id));
+
+  // The fields `toCashRow` (lib/ledgerCashRows.ts) maps, read from the columns selected above.
+  const cashRows: CashRow[] = rows.map((r) => ({
+    id: r.id,
+    occurredOn: r.occurredOn,
+    amount: Number(r.amount) || 0,
+    createdAt: r.createdAt,
+    occurredAt: r.occurredAt ? new Date(r.occurredAt) : null,
+    pending: !!r.pending,
+    description: r.description ?? null,
+    source: r.source ?? null,
+    plaidAccountId: r.plaidAccountId ?? null,
+    plaidTransactionId: r.plaidTransactionId ?? null,
+  }));
+  const today = scope.anchor.today;
+  const opts = { accountExternalId: scope.accountExternalId, todayISO: today };
+  const unanchored = classifyCashRows(cashRows, { ...opts, anchor: null });
+  const snapshotDay = scope.anchor.snapshotDay;
+  const anchored =
+    scope.anchor.snapshotAt && snapshotDay
+      ? classifyCashRows(cashRows, { ...opts, anchor: { at: new Date(scope.anchor.snapshotAt), day: snapshotDay } })
+      : null;
+
+  const ordered: RegisterRow[] = [];
+  let cum = 0;
+  let throughToday = 0;
+  unanchored.rows.forEach((outcome, i) => {
+    const row = rows[i]!;
+    const { cents, counts, reason } = registerAmount(outcome, toCents(row.amount));
+    cum += cents;
+    if (row.occurredOn <= today) throughToday += cents;
+    ordered.push({
+      id: row.id,
+      occurredOn: row.occurredOn,
+      balanceCents: cents,
+      countsInBalance: counts,
+      balanceReason: reason,
+      replacedPendingId: outcome.replacedId,
+      heldAhead:
+        !!anchored && !!snapshotDay && anchored.rows[i]!.reason === "held" && row.occurredOn > snapshotDay,
+      cumCents: cum,
+    });
+  });
+  const tb = scope.anchor.todayBalance;
+  return {
+    byId: new Map(ordered.map((r) => [r.id, r])),
+    ordered,
+    openingCents: tb === null ? null : toCents(tb) - throughToday,
+    today,
+  };
+}
+
+/** The balance at the end of `day`: null without a snapshot, or for a day after today. */
+export function balanceAtEndOf(reg: Register, day: string): string | null {
+  if (reg.openingCents === null || day > reg.today) return null;
+  let lo = 0;
+  let hi = reg.ordered.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (reg.ordered[mid]!.occurredOn <= day) lo = mid + 1;
+    else hi = mid;
+  }
+  return money(reg.openingCents + (lo === 0 ? 0 : reg.ordered[lo - 1]!.cumCents));
+}
+
+function runningBalanceOf(reg: Register, row: RegisterRow): string | null {
+  if (reg.openingCents === null || row.occurredOn > reg.today) return null;
+  return money(reg.openingCents + row.cumCents);
+}
+
+// ── SQL ─────────────────────────────────────────────────────────────────────
+
+/** SQL twin of `isBankRow`, widened to the mask twins. An empty plaid_account_id is "no Plaid account", as in JavaScript. */
+function bankRowWhere(plaidAccountIds: string[]): SQL {
+  const t = transactionsTable;
+  const onAccount = plaidAccountIds.length > 0 ? inArray(t.plaidAccountId, plaidAccountIds) : sql`false`;
+  return sql`(${onAccount} or (nullif(${t.plaidAccountId}, '') is null and lower(${t.source}) <> 'amex' and lower(${t.source}) not like 'plaid:%'))`;
+}
+
+/**
+ * `acct`: the account's rows. `bal`: the same rows with `balance_amount`, what
+ * each moves the register by — its amount, except the rows `overrides` names
+ * (from `loadRegister`).
+ */
+function ledgerCtes(accounts: LedgerAccounts, overrides: Array<{ id: string; amount: string }>): SQL {
+  const t = transactionsTable;
   return sql`
-    copies as (
+    acct as (
       select
         ${t.id} as id,
         ${t.occurredOn} as occurred_on,
@@ -354,27 +550,19 @@ function ledgerCtes(accounts: LedgerAccounts): SQL {
         ${t.source} as source,
         ${t.member} as member,
         ${t.categoryId} as category_id,
-        ${t.description} as description,
-        row_number() over (
-          partition by coalesce(nullif(${t.plaidTransactionId}, ''), ${t.id}::text)
-          order by ${t.id}
-        ) as copy_rank
+        ${t.description} as description
       from ${t}
       where ${t.householdId} = ${accounts.householdId}::uuid
-        and ${bankRow}
+        and ${bankRowWhere(accounts.plaidAccountIds)}
     ),
-    acct as (
-      select id, occurred_on, occurred_at, amount, reviewed, pending, source, member, category_id, description
-      from copies
-      where copy_rank = 1
+    overrides as (
+      select (e->>'id')::uuid as id, (e->>'amount')::numeric as amount
+      from jsonb_array_elements(${JSON.stringify(overrides)}::jsonb) as e
     ),
-    reg as (
-      select acct.*,
-        sum(amount) over (
-          order by occurred_on, occurred_at nulls first, id
-          rows between unbounded preceding and current row
-        ) as cum
+    bal as (
+      select acct.*, coalesce(o.amount, acct.amount) as balance_amount
       from acct
+      left join overrides o on o.id = acct.id
     )`;
 }
 
@@ -382,7 +570,7 @@ function likePattern(search: string): string {
   return `%${search.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
 }
 
-/** The filter over alias `r` (acct or reg), with categories joined as `c`. */
+/** The filter over alias `r` (acct or bal), with categories joined as `c`. */
 function filterWhere(f: LedgerFilter, withReviewed: boolean): SQL {
   const parts: SQL[] = [sql`true`];
   if (f.from) parts.push(sql`r.occurred_on >= ${f.from}::date`);
@@ -405,8 +593,18 @@ function rowsOf<T>(result: unknown): T[] {
 
 // ── Reads ───────────────────────────────────────────────────────────────────
 
+export type LedgerPageRow = Record<string, unknown> & {
+  runningBalance: string | null;
+  balanceAmount: string;
+  countsInBalance: boolean;
+  balanceReason: BalanceReason;
+  replacedPendingId: string | null;
+  heldAhead: boolean;
+  afterToday: boolean;
+};
+
 export type LedgerPage = {
-  rows: Array<Record<string, unknown> & { runningBalance: string | null }>;
+  rows: LedgerPageRow[];
   nextCursor: string | null;
   limit: number;
   matchingCount: number;
@@ -414,6 +612,7 @@ export type LedgerPage = {
   review: { reviewed: number; unreviewed: number };
   balanceStart: string | null;
   balanceEnd: string | null;
+  balanceToday: string | null;
   anchor: LedgerAnchor;
   account: { via: string; plaidAccountIds: string[] };
 };
@@ -424,67 +623,57 @@ export async function readLedgerPage(
   limit: number,
   cursor: LedgerCursor | null,
 ): Promise<LedgerPage> {
-  const tb = scope.anchor.todayBalance;
-  const today = scope.anchor.today;
   const cats = budgetCategoriesTable;
+  const today = scope.anchor.today;
 
-  // Balance after a row = today's balance − the sum through today + the running sum.
-  const running = tb === null ? sql`null::text` : sql`(${tb}::numeric - s.through_today + r.cum)::text`;
   const pageQuery = db.execute(sql`
-    with ${ledgerCtes(scope)},
-    sums as (
-      select coalesce(sum(amount) filter (where occurred_on <= ${today}::date), 0) as through_today
-      from acct
-    )
+    with ${ledgerCtes(scope, [])}
     select
       r.id::text as id,
       r.occurred_on::text as occurred_on,
+      r.amount::text as amount,
       case when r.occurred_at is null then null
-        else to_char(r.occurred_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') end as occurred_at_key,
-      ${running} as running_balance
-    from reg r
-    cross join sums s
+        else to_char(r.occurred_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') end as occurred_at_key
+    from acct r
     left join ${cats} c on c.id = r.category_id
     where ${filterWhere(filter, true)}
       and ${cursor ? afterCursor(cursor) : sql`true`}
     order by r.occurred_on desc, r.occurred_at desc nulls last, r.id desc
     limit ${limit + 1}
   `);
+  const [register, pageResult] = await Promise.all([loadRegister(scope), pageQuery]);
 
+  const overrides = register.ordered
+    .filter((r) => !r.countsInBalance)
+    .map((r) => ({ id: r.id, amount: money(r.balanceCents) }));
   const withoutReviewed = filterWhere(filter, false);
-  const balanceAfter = (through: SQL) =>
-    tb === null
-      ? sql`null::text`
-      : sql`(${tb}::numeric - coalesce(sum(r.amount) filter (where r.occurred_on <= ${today}::date), 0) + ${through})::text`;
-  const startThrough = filter.from
-    ? sql`coalesce(sum(r.amount) filter (where r.occurred_on < ${filter.from}::date), 0)`
-    : sql`0`;
-  const endThrough = filter.to
-    ? sql`coalesce(sum(r.amount) filter (where r.occurred_on <= ${filter.to}::date), 0)`
-    : sql`coalesce(sum(r.amount), 0)`;
   const aggregateQuery = db.execute(sql`
-    with ${ledgerCtes(scope)}
+    with ${ledgerCtes(scope, overrides)}
     select
       count(*) filter (where ${filterWhere(filter, true)})::int as matching_count,
       count(*) filter (where ${withoutReviewed})::int as total_count,
-      round(coalesce(sum(r.amount) filter (where ${withoutReviewed} and r.amount >= 0), 0), 2)::text as money_in,
-      round(coalesce(-sum(r.amount) filter (where ${withoutReviewed} and r.amount < 0), 0), 2)::text as money_out,
-      round(coalesce(sum(r.amount) filter (where ${withoutReviewed}), 0), 2)::text as net,
+      round(coalesce(sum(r.balance_amount) filter (where ${withoutReviewed} and r.balance_amount > 0), 0), 2)::text as money_in,
+      round(coalesce(-sum(r.balance_amount) filter (where ${withoutReviewed} and r.balance_amount < 0), 0), 2)::text as money_out,
+      round(coalesce(sum(r.balance_amount) filter (where ${withoutReviewed}), 0), 2)::text as net,
       count(*) filter (where ${withoutReviewed} and r.reviewed)::int as reviewed_count,
-      count(*) filter (where ${withoutReviewed} and not r.reviewed)::int as unreviewed_count,
-      ${balanceAfter(startThrough)} as balance_start,
-      ${balanceAfter(endThrough)} as balance_end
-    from acct r
+      count(*) filter (where ${withoutReviewed} and not r.reviewed)::int as unreviewed_count
+    from bal r
     left join ${cats} c on c.id = r.category_id
   `);
 
-  const [pageResult, aggregateResult] = await Promise.all([pageQuery, aggregateQuery]);
-  const pageRows = rowsOf<{
-    id: string;
-    occurred_on: string;
-    occurred_at_key: string | null;
-    running_balance: string | null;
-  }>(pageResult);
+  const pageRows = rowsOf<{ id: string; occurred_on: string; amount: string; occurred_at_key: string | null }>(
+    pageResult,
+  );
+  const hasMore = pageRows.length > limit;
+  const pageSlice = hasMore ? pageRows.slice(0, limit) : pageRows;
+  const last = pageSlice[pageSlice.length - 1];
+  const nextCursor =
+    hasMore && last ? encodeLedgerCursor({ d: last.occurred_on, t: last.occurred_at_key, i: last.id }) : null;
+
+  const [aggregateResult, full] = await Promise.all([
+    aggregateQuery,
+    loadAnnotatedRows(scope.householdId, pageSlice.map((r) => r.id)),
+  ]);
   const [agg] = rowsOf<{
     matching_count: number;
     total_count: number;
@@ -493,22 +682,32 @@ export async function readLedgerPage(
     net: string;
     reviewed_count: number;
     unreviewed_count: number;
-    balance_start: string | null;
-    balance_end: string | null;
   }>(aggregateResult);
 
-  const hasMore = pageRows.length > limit;
-  const pageSlice = hasMore ? pageRows.slice(0, limit) : pageRows;
-  const last = pageSlice[pageSlice.length - 1];
-  const nextCursor =
-    hasMore && last ? encodeLedgerCursor({ d: last.occurred_on, t: last.occurred_at_key, i: last.id }) : null;
-
-  const full = await loadAnnotatedRows(scope.householdId, pageSlice.map((r) => r.id));
-  const rows: LedgerPage["rows"] = [];
+  const rows: LedgerPageRow[] = [];
   for (const r of pageSlice) {
     const row = full.get(r.id);
-    // A row deleted between the two reads is dropped, not invented.
-    if (row) rows.push({ ...row, runningBalance: r.running_balance });
+    // A row deleted between the reads is dropped, not invented.
+    if (!row) continue;
+    const reg = register.byId.get(r.id);
+    rows.push({
+      ...row,
+      // A row written after the register was read has no balance in this response.
+      runningBalance: reg ? runningBalanceOf(register, reg) : null,
+      balanceAmount: reg ? money(reg.balanceCents) : money(toCents(r.amount)),
+      countsInBalance: reg ? reg.countsInBalance : true,
+      balanceReason: reg ? reg.balanceReason : "counted",
+      replacedPendingId: reg?.replacedPendingId ?? null,
+      heldAhead: reg?.heldAhead ?? false,
+      afterToday: r.occurred_on > today,
+    });
+  }
+
+  let balanceStart: string | null = null;
+  if (register.openingCents !== null) {
+    balanceStart = filter.from
+      ? balanceAtEndOf(register, addDaysISO(filter.from, -1))
+      : money(register.openingCents);
   }
 
   return {
@@ -526,8 +725,9 @@ export async function readLedgerPage(
       reviewed: Number(agg?.reviewed_count ?? 0),
       unreviewed: Number(agg?.unreviewed_count ?? 0),
     },
-    balanceStart: agg?.balance_start ?? null,
-    balanceEnd: agg?.balance_end ?? null,
+    balanceStart,
+    balanceEnd: balanceAtEndOf(register, filter.to ?? today),
+    balanceToday: scope.anchor.todayBalance,
     anchor: scope.anchor,
     account: { via: scope.via, plaidAccountIds: scope.plaidAccountIds },
   };
@@ -579,38 +779,19 @@ export function parseBalanceDates(raw: string): string[] {
     throw bad("too_many_dates", `at most ${LEDGER_BALANCE_DATES_MAX} dates per request`);
   }
   for (const d of dates) {
-    if (!isCalendarDay(d)) throw bad("invalid_dates", `${d} is not a YYYY-MM-DD date`);
+    if (!isCalendarDay(d)) throw bad("invalid_dates", "every date must be a YYYY-MM-DD date from year 1000");
   }
   return dates;
 }
 
-/** End-of-day balances on the ledger's register, in the order asked (repeats allowed). */
+/** End-of-day balances on the ledger's register, in the order asked. Null after today and without a snapshot. */
 export async function readLedgerBalances(
   scope: LedgerScope,
   dates: string[],
 ): Promise<Array<{ date: string; balance: string | null }>> {
-  const tb = scope.anchor.todayBalance;
-  if (tb === null) return dates.map((date) => ({ date, balance: null }));
-  const values = sql.join(
-    Array.from(new Set(dates)).map((d) => sql`(${d}::date)`),
-    sql`, `,
-  );
-  const result = await db.execute(sql`
-    with ${ledgerCtes(scope)},
-    sums as (
-      select coalesce(sum(amount) filter (where occurred_on <= ${scope.anchor.today}::date), 0) as through_today
-      from acct
-    ),
-    days(d) as (values ${values})
-    select
-      days.d::text as date,
-      (${tb}::numeric - (select through_today from sums) + coalesce(sum(a.amount), 0))::text as balance
-    from days
-    left join acct a on a.occurred_on <= days.d
-    group by days.d
-  `);
-  const byDate = new Map(rowsOf<{ date: string; balance: string }>(result).map((r) => [r.date, r.balance]));
-  return dates.map((date) => ({ date, balance: byDate.get(date) ?? null }));
+  if (scope.anchor.todayBalance === null) return dates.map((date) => ({ date, balance: null }));
+  const register = await loadRegister(scope);
+  return dates.map((date) => ({ date, balance: balanceAtEndOf(register, date) }));
 }
 
 // ── Write ───────────────────────────────────────────────────────────────────
@@ -618,9 +799,12 @@ export async function readLedgerBalances(
 /**
  * Sets `reviewed` on every ledger row matching `filter`, all or nothing.
  *
- * The matching rows are locked (in id order) before they are counted, so the
- * count the 409 compares and the rows the update touches are the same rows: a
- * row inserted after the lock is neither counted nor changed.
+ * 1. Lock the matching rows in id order. The locking statement picks them from
+ *    its own snapshot, so a row changed by a transaction it waited for is still
+ *    locked even if it no longer matches.
+ * 2. Pick the matching rows again, in a new statement that sees that change. A
+ *    different set is a 409: something moved while we waited.
+ * 3. Only then compare the count with `expectedCount`, and write.
  */
 export async function bulkReviewMatching(
   accounts: LedgerAccounts,
@@ -629,18 +813,18 @@ export async function bulkReviewMatching(
   expectedCount: number,
 ): Promise<{ matched: number; updated: number; updatedIds: string[] }> {
   const t = transactionsTable;
+  const matching = sql`
+    with ${ledgerCtes(accounts, [])}
+    select r.id
+    from acct r
+    left join ${budgetCategoriesTable} c on c.id = r.category_id
+    where ${filterWhere(filter, true)}`;
   return db.transaction(async (tx) => {
     const locked = await tx.execute(sql`
       select ${t.id}::text as id
       from ${t}
       where ${t.householdId} = ${accounts.householdId}::uuid
-        and ${t.id} in (
-          with ${ledgerCtes(accounts)}
-          select r.id
-          from acct r
-          left join ${budgetCategoriesTable} c on c.id = r.category_id
-          where ${filterWhere(filter, true)}
-        )
+        and ${t.id} in (${matching})
       order by ${t.id}
       limit ${BULK_REVIEW_MATCHING_MAX + 1}
       for update
@@ -648,6 +832,21 @@ export async function bulkReviewMatching(
     const ids = rowsOf<{ id: string }>(locked).map((r) => r.id);
     if (ids.length > BULK_REVIEW_MATCHING_MAX) {
       throw bad("too_many_rows", `more than ${BULK_REVIEW_MATCHING_MAX} rows match; narrow the filter`);
+    }
+    const again = rowsOf<{ id: string }>(
+      await tx.execute(sql`
+        select m.id::text as id from (${matching}) m
+        order by m.id
+        limit ${BULK_REVIEW_MATCHING_MAX + 1}
+      `),
+    ).map((r) => r.id);
+    if (again.length !== ids.length || again.some((id, k) => id !== ids[k])) {
+      throw new LedgerRequestError(
+        409,
+        "matching_rows_changed",
+        "the matching rows changed while the request waited; nothing was changed",
+        { matchingCount: again.length },
+      );
     }
     if (ids.length !== expectedCount) {
       throw new LedgerRequestError(

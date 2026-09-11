@@ -12,6 +12,7 @@ import {
   bulkReviewMatching,
   checkLedgerFilter,
   decodeLedgerCursor,
+  hasNul,
   parseBalanceDates,
   parseBoolParam,
   readLedgerBalances,
@@ -36,14 +37,30 @@ function sendLedgerError(res: Response, err: unknown): boolean {
 
 const orUndefined = (v: string | undefined) => (v === undefined || v === "" ? undefined : v);
 
+/** Postgres refuses a NUL byte in text; refuse it here, in every query value, rather than answer 500. */
+function queryHasNul(query: unknown): boolean {
+  return Object.values((query ?? {}) as Record<string, unknown>).some((v) =>
+    (Array.isArray(v) ? v : [v]).some((x) => typeof x === "string" && hasNul(x)),
+  );
+}
+
 router.get("/transactions/ledger", requireAuth, async (req, res): Promise<void> => {
+  if (queryHasNul(req.query)) {
+    res.status(400).json({ error: "query values must not contain a NUL byte", code: "invalid_query" });
+    return;
+  }
+  // `zod.coerce.number()` would also take "1e1" or "0x10": the limit is plain digits.
+  const rawLimit = (req.query as Record<string, unknown>).limit;
+  if (rawLimit !== undefined && !(typeof rawLimit === "string" && /^[0-9]+$/.test(rawLimit))) {
+    res.status(400).json({ error: "limit must be a whole number", code: "invalid_limit" });
+    return;
+  }
   const q = GetTransactionsLedgerQueryParams.safeParse(req.query);
   if (!q.success) {
     res.status(400).json({ error: q.error.message, code: "invalid_query" });
     return;
   }
   try {
-    // The generated schema bounds `limit` but does not require a whole number.
     const { limit } = q.data;
     if (!Number.isInteger(limit) || limit < 1 || limit > getTransactionsLedgerQueryLimitMax) {
       throw new LedgerRequestError(
@@ -76,6 +93,10 @@ router.get("/transactions/ledger", requireAuth, async (req, res): Promise<void> 
 });
 
 router.get("/transactions/balances", requireAuth, async (req, res): Promise<void> => {
+  if (queryHasNul(req.query)) {
+    res.status(400).json({ error: "query values must not contain a NUL byte", code: "invalid_query" });
+    return;
+  }
   const q = GetTransactionsBalancesQueryParams.safeParse(req.query);
   if (!q.success) {
     res.status(400).json({ error: q.error.message, code: "invalid_query" });
@@ -126,6 +147,9 @@ router.post(
         throw new LedgerRequestError(400, "invalid_body", "expectedCount must be a whole number");
       }
       const { account, ...rest } = body;
+      if (account !== undefined && hasNul(account)) {
+        throw new LedgerRequestError(400, "invalid_account", "account must be a uuid");
+      }
       const filter = checkLedgerFilter(rest);
       const accounts = await resolveLedgerAccounts(
         req.householdId!,

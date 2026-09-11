@@ -56,6 +56,7 @@ export type GetTransactionsLedgerParams = {
      */
     member?: string;
     /**
+     * Plain digits, 1 to 100.
      * @minimum 1
      * @maximum 100
      */

@@ -10,9 +10,34 @@ import type { Transaction } from "./transaction";
 export type LedgerRow = Transaction & {
   /**
    * (PR13) The account balance straight after this row, on the
-register of all the account's rows. Null without a bank snapshot.
+register of all the account's rows. Null without a bank
+snapshot, and for a row dated after today.
 
    * @nullable
    */
   runningBalance: string | null;
+  /** What this row moves the register by: its amount, or 0.00 when it
+does not count. `totals` sum these.
+ */
+  balanceAmount: string;
+  /** Whether this row moves the balance at all. */
+  countsInBalance: boolean;
+  /** counted (moves the balance by its amount); superseded (a pending
+row its posted row replaced); duplicate (a second row with the
+same Plaid transaction id); not_bank (a mask-twin row, which the
+bank balance does not read).
+ */
+  balanceReason: string;
+  /**
+   * For a posted row that replaced a pending row, that pending row's id.
+   * @nullable
+   */
+  replacedPendingId: string | null;
+  /** Dated after the snapshot day but already inside the snapshot
+balance. The days between the snapshot and this row's date read
+higher than the bank showed, by this row.
+ */
+  heldAhead: boolean;
+  /** Dated after the household's today. Such a row has no running balance. */
+  afterToday: boolean;
 };

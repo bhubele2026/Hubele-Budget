@@ -396,11 +396,36 @@ export interface Transaction {
 export type LedgerRow = Transaction & {
     /**
      * (PR13) The account balance straight after this row, on the
-  register of all the account's rows. Null without a bank snapshot.
+  register of all the account's rows. Null without a bank
+  snapshot, and for a row dated after today.
   
      * @nullable
      */
     runningBalance: string | null;
+    /** What this row moves the register by: its amount, or 0.00 when it
+  does not count. `totals` sum these.
+   */
+    balanceAmount: string;
+    /** Whether this row moves the balance at all. */
+    countsInBalance: boolean;
+    /** counted (moves the balance by its amount); superseded (a pending
+  row its posted row replaced); duplicate (a second row with the
+  same Plaid transaction id); not_bank (a mask-twin row, which the
+  bank balance does not read).
+   */
+    balanceReason: string;
+    /**
+     * For a posted row that replaced a pending row, that pending row's id.
+     * @nullable
+     */
+    replacedPendingId: string | null;
+    /** Dated after the snapshot day but already inside the snapshot
+  balance. The days between the snapshot and this row's date read
+  higher than the bank showed, by this row.
+   */
+    heldAhead: boolean;
+    /** Dated after the household's today. Such a row has no running balance. */
+    afterToday: boolean;
 };
 export interface LedgerAnchor {
     /** The household's today (America/Chicago), YYYY-MM-DD. */
@@ -429,7 +454,14 @@ export interface LedgerAccountScope {
    */
     plaidAccountIds: string[];
 }
+/**
+ * Over every row matching the filters other than `reviewed`, rows dated
+after today included, summing each row's `balanceAmount`: a row that
+does not count adds nothing.
+
+ */
 export interface LedgerTotals {
+    /** Matching rows, including rows that do not count. */
     count: number;
     moneyIn: string;
     moneyOut: string;
@@ -449,15 +481,27 @@ export interface LedgerPage {
     totals: LedgerTotals;
     review: LedgerReviewCounts;
     /**
-     * The balance at the end of the day before `from` (before the first row when `from` is absent).
+     * The balance at the end of the day before `from`, or before the
+  account's first row when `from` is absent. Null without a bank
+  snapshot, or when that day is after today.
+  
      * @nullable
      */
     balanceStart: string | null;
     /**
-     * The balance at the end of `to` (after the last row when `to` is absent).
+     * The balance at the end of `to`, which defaults to today. Null without
+  a bank snapshot, or when `to` is after today.
+  
      * @nullable
      */
     balanceEnd: string | null;
+    /**
+     * The balance at the end of today: the spine's `bank.balance`. Null
+  without a bank snapshot.
+  
+     * @nullable
+     */
+    balanceToday: string | null;
     anchor: LedgerAnchor;
     account: LedgerAccountScope;
 }
@@ -3185,6 +3229,7 @@ export type GetTransactionsLedgerParams = {
      */
     member?: string;
     /**
+     * Plain digits, 1 to 100.
      * @minimum 1
      * @maximum 100
      */

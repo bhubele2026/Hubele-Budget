@@ -6,7 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Over every row matching the filters other than `reviewed`, rows dated
+after today included, summing each row's `balanceAmount`: a row that
+does not count adds nothing.
+
+ */
 export interface LedgerTotals {
+  /** Matching rows, including rows that do not count. */
   count: number;
   moneyIn: string;
   moneyOut: string;

@@ -20,15 +20,27 @@ export interface LedgerPage {
     totals: LedgerTotals;
     review: LedgerReviewCounts;
     /**
-     * The balance at the end of the day before `from` (before the first row when `from` is absent).
+     * The balance at the end of the day before `from`, or before the
+  account's first row when `from` is absent. Null without a bank
+  snapshot, or when that day is after today.
+  
      * @nullable
      */
     balanceStart: string | null;
     /**
-     * The balance at the end of `to` (after the last row when `to` is absent).
+     * The balance at the end of `to`, which defaults to today. Null without
+  a bank snapshot, or when `to` is after today.
+  
      * @nullable
      */
     balanceEnd: string | null;
+    /**
+     * The balance at the end of today: the spine's `bank.balance`. Null
+  without a bank snapshot.
+  
+     * @nullable
+     */
+    balanceToday: string | null;
     anchor: LedgerAnchor;
     account: LedgerAccountScope;
 }

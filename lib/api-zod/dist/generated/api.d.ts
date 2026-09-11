@@ -1400,18 +1400,21 @@ export declare const BulkSetForecastFlagResponse: zod.ZodObject<{
     affectedIds: string[];
 }>;
 /**
- * @summary (PR13) One page of the bank ledger, newest first. The account is the
-one behind the bank balance, chosen on the server: the Plaid account
-the snapshot resolves to, its same-institution mask twins, and manual
-rows (no Plaid account, source neither "amex" nor "plaid:*"), which is
-the rule the bank balance counts by. Ordered by occurredOn desc,
-occurredAt desc (nulls last), id desc, and paged with an opaque keyset
-cursor. `matchingCount` counts every row matching the filters;
-`totals` and `review` cover every row matching the filters other than
-`reviewed`. `runningBalance`, `balanceStart`, `balanceEnd` and
-`anchor` never depend on the non-date filters or the page. The
-boolean filters take the strings "true" or "false"; anything else is
-a 400.
+ * @summary (PR13) One page of the bank ledger, newest first. The server settles
+the scope: the Plaid account the snapshot resolves to, its
+same-institution mask twins, and manual rows (no Plaid account, source
+neither "amex" nor "plaid:*"), which is the rule the bank balance reads
+by. A client must not hide rows the register counts. Ordered by
+occurredOn desc, occurredAt desc (nulls last), id desc, and paged with
+an opaque keyset cursor. Each row carries what it moves the balance by
+(`balanceAmount`, `countsInBalance`, `balanceReason`), from the cash
+rule over the account's whole history. `matchingCount` counts every
+row matching the filters; `totals` and `review` cover every row
+matching the filters other than `reviewed`. `runningBalance`,
+`balanceStart`, `balanceEnd`, `balanceToday` and `anchor` never depend
+on the non-date filters or the page, and no balance is given for a day
+after today. The boolean filters take the strings "true" or "false";
+anything else is a 400.
 
  */
 export declare const getTransactionsLedgerQueryAccountMax = 64;
@@ -1563,10 +1566,28 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
     }>, zod.ZodObject<{
         runningBalance: zod.ZodNullable<zod.ZodString>;
+        balanceAmount: zod.ZodString;
+        countsInBalance: zod.ZodBoolean;
+        balanceReason: zod.ZodString;
+        replacedPendingId: zod.ZodNullable<zod.ZodString>;
+        heldAhead: zod.ZodBoolean;
+        afterToday: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
         runningBalance: string | null;
+        balanceAmount: string;
+        countsInBalance: boolean;
+        balanceReason: string;
+        replacedPendingId: string | null;
+        heldAhead: boolean;
+        afterToday: boolean;
     }, {
         runningBalance: string | null;
+        balanceAmount: string;
+        countsInBalance: boolean;
+        balanceReason: string;
+        replacedPendingId: string | null;
+        heldAhead: boolean;
+        afterToday: boolean;
     }>>, "many">;
     nextCursor: zod.ZodNullable<zod.ZodString>;
     limit: zod.ZodNumber;
@@ -1599,6 +1620,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     }>;
     balanceStart: zod.ZodNullable<zod.ZodString>;
     balanceEnd: zod.ZodNullable<zod.ZodString>;
+    balanceToday: zod.ZodNullable<zod.ZodString>;
     anchor: zod.ZodObject<{
         today: zod.ZodString;
         todayBalance: zod.ZodNullable<zod.ZodString>;
@@ -1667,6 +1689,12 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
     } & {
         runningBalance: string | null;
+        balanceAmount: string;
+        countsInBalance: boolean;
+        balanceReason: string;
+        replacedPendingId: string | null;
+        heldAhead: boolean;
+        afterToday: boolean;
     })[];
     nextCursor: string | null;
     matchingCount: number;
@@ -1682,6 +1710,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     };
     balanceStart: string | null;
     balanceEnd: string | null;
+    balanceToday: string | null;
     anchor: {
         today: string;
         todayBalance: string | null;
@@ -1728,6 +1757,12 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
     } & {
         runningBalance: string | null;
+        balanceAmount: string;
+        countsInBalance: boolean;
+        balanceReason: string;
+        replacedPendingId: string | null;
+        heldAhead: boolean;
+        afterToday: boolean;
     })[];
     nextCursor: string | null;
     matchingCount: number;
@@ -1743,6 +1778,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     };
     balanceStart: string | null;
     balanceEnd: string | null;
+    balanceToday: string | null;
     anchor: {
         today: string;
         todayBalance: string | null;
@@ -1755,7 +1791,9 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
  * @summary (PR13) End-of-day balances of the ledger account for up to 120 dates,
 on the same register as GET /transactions/ledger: a date's balance is
 the runningBalance after the last account row dated on or before it.
-Today's equals the bank balance on the spine.
+Today's equals the bank balance on the spine. A date after today, and
+every date without a bank snapshot, has a null balance: the register
+is not a projection.
 
  */
 export declare const getTransactionsBalancesQueryAccountMax = 64;

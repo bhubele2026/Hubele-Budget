@@ -1,11 +1,14 @@
 // ⭐ PR13 — the paginated bank ledger (GET /transactions/ledger,
-// GET /transactions/balances, POST /transactions/bulk-review-matching).
+// GET /transactions/balances, POST /transactions/bulk-review-matching), mounted
+// through routes/index.ts as production mounts it.
 //
 // One household carries the plan's fixture: 250 checking rows of −$1.00 and 10
 // of +$100.00 (five rows on 05-10 have no institution time), 30 Amex rows the
 // ledger must never show, and a bank snapshot of $5,000.00 read at 10:00 on
-// 2026-05-15 in Chicago. Smaller households cover the scope edges: mask twins,
-// manual rows, a PR4c pending/posted pair, no snapshot, and 1,001 rows.
+// 2026-05-15 in Chicago. Smaller households cover the rest: the review's history
+// fixture (a replaced pending row, a logged payment beside its ACH, a held-ahead
+// charge, a future row), mask twins and manual rows, a PR4c pair, no snapshot,
+// 1,001 rows, and a row that moves while bulk review waits for its lock.
 //
 // Two main-fixture rows sit where the snapshot rule and the old day rule
 // disagree, so today's balance proves which rule the ledger anchors on:
@@ -21,14 +24,16 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 const RUN = `${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 const MAIN_USER = `ledger-main-${RUN}`;
 const EDGE_USER = `ledger-edge-${RUN}`;
 const NOSNAP_USER = `ledger-nosnap-${RUN}`;
 const BIG_USER = `ledger-big-${RUN}`;
-const USERS = [MAIN_USER, EDGE_USER, NOSNAP_USER, BIG_USER];
+const REVIEW_USER = `ledger-review-${RUN}`;
+const CONC_USER = `ledger-conc-${RUN}`;
+const USERS = [MAIN_USER, EDGE_USER, NOSNAP_USER, BIG_USER, REVIEW_USER, CONC_USER];
 const householdOf = new Map<string, string>();
 let actingUser = MAIN_USER;
 
@@ -64,21 +69,19 @@ import {
   GetTransactionsBalancesResponse,
   GetTransactionsLedgerResponse,
 } from "@workspace/api-zod";
-import transactionsLedgerRouter from "../routes/transactionsLedger";
-import transactionsRouter from "../routes/transactions";
-import spineRouter from "../routes/spine";
+import apiRouter from "../routes/index";
 import { createTestApp } from "./_helpers/createTestApp";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 
+// Production: app.use("/api", router) after the JSON parser. The paths below
+// drop the "/api" prefix; the router and its order are production's.
 const routes = Router();
 routes.use((req, _res, next) => {
   (req as { log?: unknown }).log = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} };
   next();
 });
-routes.use(transactionsLedgerRouter);
-routes.use(transactionsRouter);
-routes.use(spineRouter);
+routes.use(apiRouter);
 const { request } = createTestApp(routes);
 
 const PINNED_NOW = new Date("2026-05-20T17:00:00Z"); // noon in Chicago
@@ -87,7 +90,22 @@ const SNAPSHOT_AT = new Date("2026-05-15T15:00:00Z"); // 10:00 in Chicago
 const RANGE = "from=2026-04-01&to=2026-05-20";
 
 type LedgerBody = ReturnType<typeof GetTransactionsLedgerResponse.parse>;
-type Row = { id: string; occurredOn: string; occurredAt: string | null; amount: string; runningBalance: string | null; plaidAccountId?: string | null; source: string; reviewed: boolean };
+type Row = {
+  id: string;
+  occurredOn: string;
+  occurredAt: string | null;
+  amount: string;
+  runningBalance: string | null;
+  balanceAmount: string;
+  countsInBalance: boolean;
+  balanceReason: string;
+  replacedPendingId: string | null;
+  heldAhead: boolean;
+  afterToday: boolean;
+  plaidAccountId?: string | null;
+  source: string;
+  reviewed: boolean;
+};
 type Seed = {
   key: string;
   occurredOn: string;
@@ -104,7 +122,6 @@ const cents = (s: string | null | undefined): number => {
   if (s === null || s === undefined) throw new Error("expected money, got null");
   return Math.round(Number(s) * 100);
 };
-const money = (c: number) => (c / 100).toFixed(2);
 
 function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -148,6 +165,22 @@ async function walk(query: string, limit: number): Promise<LedgerBody[]> {
 
 const rowsOf = (pages: LedgerBody[]) => pages.flatMap((p) => p.rows as unknown as Row[]);
 
+/** Each dated-through-today row's balance is the next older row's plus what it moves the register by. */
+function expectChain(rows: Row[]): void {
+  const dated = rows.filter((r) => !r.afterToday);
+  for (let k = 0; k < dated.length - 1; k++) {
+    expect(cents(dated[k]!.runningBalance) - cents(dated[k]!.balanceAmount), `row ${k}`).toBe(
+      cents(dated[k + 1]!.runningBalance),
+    );
+  }
+}
+
+async function spineBalance(): Promise<string> {
+  const spine = await get("/spine");
+  expect(spine.status, JSON.stringify(spine.json)).toBe(200);
+  return (spine.json as { bank: { balance: string } }).bank.balance;
+}
+
 let CHK = "";
 let AMX = "";
 let CHK_ROW_ID = "";
@@ -156,12 +189,14 @@ let CATEGORY_ID = "";
 let checking: Seeded[] = [];
 const byKey = new Map<string, Seeded>();
 
-// Edge household
 let EDGE_EXT1 = "";
 let EDGE_EXT2 = "";
 let EDGE_TWIN_ROW_ID = "";
 let EDGE_CREDIT_ROW_ID = "";
 const edgeIds = new Map<string, string>();
+
+const reviewIds = new Map<string, string>();
+let concIds: string[] = [];
 
 async function cleanup(): Promise<void> {
   for (const u of USERS) {
@@ -206,6 +241,20 @@ async function addAccount(
   return { rowId: acct!.id, externalId };
 }
 
+async function setSnapshot(userId: string, rowId: string, mask: string, balance: string): Promise<void> {
+  await db.insert(forecastSettingsTable).values({
+    userId,
+    householdId: householdOf.get(userId)!,
+    daysAhead: 90,
+    cashBuffer: "0",
+    bankSnapshotBalance: balance,
+    bankSnapshotAt: SNAPSHOT_AT,
+    bankSnapshotSource: "plaid",
+    bankSnapshotAccountId: rowId,
+    bankSnapshotMask: mask,
+  });
+}
+
 function timeOn(day: string, n: number): string {
   // 16:MM:SSZ is late morning in Chicago, on the row's own household day, and
   // never a whole hour (whole hours are placeholder times to the snapshot rule).
@@ -222,17 +271,7 @@ async function seedMain(): Promise<void> {
   CHK_ROW_ID = chk.rowId;
   AMX = amx.externalId;
   AMX_ROW_ID = amx.rowId;
-  await db.insert(forecastSettingsTable).values({
-    userId: MAIN_USER,
-    householdId,
-    daysAhead: 90,
-    cashBuffer: "500.00",
-    bankSnapshotBalance: "5000.00",
-    bankSnapshotAt: SNAPSHOT_AT,
-    bankSnapshotSource: "plaid",
-    bankSnapshotAccountId: CHK_ROW_ID,
-    bankSnapshotMask: "5526",
-  });
+  await setSnapshot(MAIN_USER, CHK_ROW_ID, "5526", "5000.00");
   const [cat] = await db
     .insert(budgetCategoriesTable)
     .values({ userId: MAIN_USER, householdId, name: "Weekend Getaway", kind: "expense", groupName: "Living" })
@@ -367,17 +406,7 @@ async function seedEdge(): Promise<void> {
   EDGE_EXT2 = twin.externalId;
   EDGE_TWIN_ROW_ID = twin.rowId;
   EDGE_CREDIT_ROW_ID = credit.rowId;
-  await db.insert(forecastSettingsTable).values({
-    userId: EDGE_USER,
-    householdId,
-    daysAhead: 90,
-    cashBuffer: "0",
-    bankSnapshotBalance: "1000.00",
-    bankSnapshotAt: SNAPSHOT_AT,
-    bankSnapshotSource: "plaid",
-    bankSnapshotAccountId: main.rowId,
-    bankSnapshotMask: "7777",
-  });
+  await setSnapshot(EDGE_USER, main.rowId, "7777", "1000.00");
   const rows: Array<{
     key: string;
     day: string;
@@ -435,6 +464,75 @@ async function seedEdge(): Promise<void> {
   for (const r of inserted) edgeIds.set(keyByDescription.get(r.description)!, r.id);
 }
 
+/**
+ * The review's history fixture: a $1,000.00 snapshot read 05-15 10:00 in
+ * Chicago, today 05-20, bank balance 990.00.
+ */
+async function seedReview(): Promise<void> {
+  const householdId = householdOf.get(REVIEW_USER)!;
+  const acct = await addAccount(REVIEW_USER, { institutionName: "Chase", mask: "2468", type: "depository", subtype: "checking" });
+  await setSnapshot(REVIEW_USER, acct.rowId, "2468", "1000.00");
+  const [groceries] = await db
+    .insert(budgetCategoriesTable)
+    .values({ userId: REVIEW_USER, householdId, name: "Groceries", kind: "expense", groupName: "Living" })
+    .returning();
+  const rows: Array<{
+    key: string;
+    day: string;
+    amount: string;
+    plaid: boolean;
+    description: string;
+    pending?: boolean;
+    categoryId?: string;
+    createdAt?: Date;
+  }> = [
+    { key: "rent", day: "2026-04-10", amount: "-100.00", plaid: true, description: "RENT PAYMENT" },
+    // A categorised leftover pending row beside the posted row that replaced it.
+    { key: "leftoverPending", day: "2026-04-20", amount: "-40.00", plaid: true, pending: true, categoryId: groceries!.id, description: "WHOLE FOODS MARKET" },
+    { key: "postedGroceries", day: "2026-04-21", amount: "-40.00", plaid: true, description: "WHOLE FOODS MARKET 0421" },
+    // The bank's ACH for a card payment, and the manual row routes/debts.ts writes when it is logged.
+    { key: "ach", day: "2026-04-25", amount: "-500.00", plaid: true, description: "AMEX EPAYMENT ACH PMT" },
+    { key: "loggedPayment", day: "2026-04-25", amount: "-500.00", plaid: false, description: "Payment — Amex" },
+    // In the ledger before the read, dated the next day: the snapshot holds it.
+    { key: "heldAhead", day: "2026-05-16", amount: "-30.00", plaid: true, description: "SHELL OIL 0516", createdAt: new Date("2026-05-15T14:00:00Z") },
+    { key: "recent", day: "2026-05-19", amount: "-10.00", plaid: true, description: "CORNER COFFEE" },
+    // Typed today, dated five days ahead.
+    { key: "future", day: "2026-05-25", amount: "-200.00", plaid: false, description: "Payment — Visa", createdAt: createdAtStartOfHouseholdDay(TODAY) },
+  ];
+  const inserted = await db
+    .insert(transactionsTable)
+    .values(
+      rows.map((r) => ({
+        userId: REVIEW_USER,
+        householdId,
+        occurredOn: r.day,
+        createdAt: r.createdAt ?? createdAtStartOfHouseholdDay(r.day),
+        description: r.description,
+        amount: r.amount,
+        pending: r.pending ?? false,
+        categoryId: r.categoryId ?? null,
+        plaidAccountId: r.plaid ? acct.externalId : null,
+        plaidTransactionId: r.plaid ? `ptx-${RUN}-review-${r.key}` : null,
+        source: r.plaid ? "plaid" : "manual",
+      })),
+    )
+    .returning({ id: transactionsTable.id, description: transactionsTable.description });
+  const keyByDescription = new Map(rows.map((r) => [r.description, r.key]));
+  for (const r of inserted) reviewIds.set(keyByDescription.get(r.description)!, r.id);
+}
+
+async function waitForLockWait(): Promise<void> {
+  for (let k = 0; k < 200; k++) {
+    const res = await db.execute(
+      sql`select count(*)::int as n from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`,
+    );
+    const n = Number((res as unknown as { rows: Array<{ n: number }> }).rows[0]?.n ?? 0);
+    if (n > 0) return;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("bulk review never waited for the row lock");
+}
+
 beforeAll(async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(PINNED_NOW);
@@ -442,6 +540,7 @@ beforeAll(async () => {
   await cleanup();
   await seedMain();
   await seedEdge();
+  await seedReview();
   await db.insert(transactionsTable).values({
     userId: NOSNAP_USER,
     householdId: householdOf.get(NOSNAP_USER)!,
@@ -462,6 +561,22 @@ beforeAll(async () => {
       source: "manual",
     })),
   );
+  concIds = (
+    await db
+      .insert(transactionsTable)
+      .values(
+        Array.from({ length: 5 }, (_, k) => ({
+          userId: CONC_USER,
+          householdId: householdOf.get(CONC_USER)!,
+          occurredOn: "2026-05-12",
+          createdAt: createdAtStartOfHouseholdDay("2026-05-12"),
+          description: `CONCURRENT ROW ${k}`,
+          amount: "-3.00",
+          source: "manual",
+        })),
+      )
+      .returning({ id: transactionsTable.id })
+  ).map((r) => r.id);
 });
 
 afterAll(async () => {
@@ -486,12 +601,23 @@ describe("GET /transactions/ledger — paging", () => {
     expect(rows[99]!.occurredAt).toBeNull();
     expect(rows[100]!.occurredAt).toBeNull();
 
+    // No pair, no repeated id, no twin: every row moves the register by its amount.
+    for (const r of rows) {
+      expect(r.countsInBalance).toBe(true);
+      expect(r.balanceReason).toBe("counted");
+      expect(r.balanceAmount).toBe(r.amount);
+      expect(r.afterToday).toBe(false);
+    }
+    // Only the charge the snapshot held ahead of its date is labelled.
+    expect(rows.filter((r) => r.heldAhead).map((r) => r.id)).toEqual([byKey.get("held")!.id]);
+
     for (const p of pages) {
       expect(p.matchingCount).toBe(260);
       expect(p.totals).toEqual({ count: 260, moneyIn: "1000.00", moneyOut: "250.00", net: "750.00" });
       expect(p.review).toEqual({ reviewed: 0, unreviewed: 260 });
       expect(p.balanceStart).toBe("4331.00");
       expect(p.balanceEnd).toBe("5081.00");
+      expect(p.balanceToday).toBe("5081.00");
       expect(p.anchor).toEqual({
         today: TODAY,
         todayBalance: "5081.00",
@@ -514,13 +640,13 @@ describe("GET /transactions/ledger — paging", () => {
     expect(pages.every((p) => p.matchingCount === 8)).toBe(true);
   });
 
-  it("defaults to 50 rows and refuses a limit outside 1–100 or a bad cursor", async () => {
+  it("defaults to 50 rows and refuses a limit that is not plain digits from 1 to 100, or a bad cursor", async () => {
     const first = await get(`/transactions/ledger?${RANGE}`);
     expect(first.status).toBe(200);
     expect((first.json as LedgerBody).rows).toHaveLength(50);
     expect((first.json as LedgerBody).limit).toBe(50);
 
-    for (const limit of ["101", "0", "1.5", "abc", ""]) {
+    for (const limit of ["101", "0", "1.5", "abc", "", "1e1", "0x10", "%2B5"]) {
       const r = await get(`/transactions/ledger?${RANGE}&limit=${limit}`);
       expect(r.status, `limit=${limit}`).toBe(400);
     }
@@ -536,9 +662,7 @@ describe("GET /transactions/ledger — balances", () => {
   it("each running balance is the one before it plus its amount; the newest is today's bank balance and the oldest is the start plus its amount", async () => {
     const rows = rowsOf(await walk(RANGE, 100));
     expect(rows[0]!.runningBalance).toBe("5081.00");
-    for (let k = 0; k < rows.length - 1; k++) {
-      expect(cents(rows[k]!.runningBalance) - cents(rows[k]!.amount)).toBe(cents(rows[k + 1]!.runningBalance));
-    }
+    expectChain(rows);
     const oldest = rows[rows.length - 1]!;
     expect(oldest.occurredOn).toBe("2026-04-01");
     expect(cents(oldest.runningBalance)).toBe(cents("4331.00") + cents(oldest.amount));
@@ -565,6 +689,9 @@ describe("GET /transactions/ledger — balances", () => {
       const r = await get(`/transactions/ledger?${RANGE}&search=${wildcard}`);
       expect((r.json as LedgerBody).matchingCount, `search=${wildcard}`).toBe(0);
     }
+    // A space is an ordinary character.
+    const spaced = await get(`/transactions/ledger?${RANGE}&search=${encodeURIComponent("parking garage")}`);
+    expect((spaced.json as LedgerBody).matchingCount).toBe(1);
 
     const pending = await get(`/transactions/ledger?pending=true`);
     const p = pending.json as LedgerBody;
@@ -605,13 +732,13 @@ describe("GET /transactions/ledger — balances", () => {
 });
 
 describe("GET /transactions/balances", () => {
-  it("today's balance is the spine's bank balance, and the snapshot rule, not the day rule, set it", async () => {
-    const spine = await get("/spine");
-    expect(spine.status, JSON.stringify(spine.json)).toBe(200);
-    const bank = (spine.json as { bank: { balance: string } }).bank.balance;
+  it("today's balance is the spine's bank balance, set by the snapshot rule, and no day after today has one", async () => {
+    const bank = await spineBalance();
     expect(bank).toBe("5081.00");
 
-    const r = await get(`/transactions/balances?dates=${TODAY},2026-03-31,2026-05-03,2026-05-15,${TODAY}`);
+    const r = await get(
+      `/transactions/balances?dates=${TODAY},2026-03-31,2026-05-03,2026-05-15,2026-05-21,2026-06-30,${TODAY}`,
+    );
     expect(r.status, JSON.stringify(r.json)).toBe(200);
     const body = GetTransactionsBalancesResponse.parse(r.json);
     expect(body.anchor.todayBalance).toBe(bank);
@@ -625,6 +752,8 @@ describe("GET /transactions/balances", () => {
       // The register, not `available` replayed: the held −1.00 dated 05-17 sits
       // on 05-17, so the end of the snapshot day reads 5000 + 100 + 1.
       { date: "2026-05-15", balance: "5101.00" },
+      { date: "2026-05-21", balance: null },
+      { date: "2026-06-30", balance: null },
       { date: TODAY, balance: bank },
     ]);
     expect(endOf("2026-05-15")).toBe("5101.00");
@@ -642,6 +771,157 @@ describe("GET /transactions/balances", () => {
     }
     const missing = await get("/transactions/balances");
     expect(missing.status).toBe(400);
+  });
+});
+
+describe("inputs that passed validation but reached Postgres", () => {
+  it("year 0000, an impossible cursor time and a NUL byte are 400s on every endpoint, and nothing is written", async () => {
+    const uuid = randomUUID();
+    const cursorOf = (o: unknown) => encodeURIComponent(Buffer.from(JSON.stringify(o)).toString("base64url"));
+    for (const q of [
+      "from=0000-01-01",
+      "to=0000-12-31",
+      "search=%00",
+      "search=parking%00garage",
+      "source=%00",
+      "member=a%00b",
+      "account=%00",
+      `cursor=${cursorOf({ v: 1, d: "0000-01-01", t: null, i: uuid })}`,
+      `cursor=${cursorOf({ v: 1, d: "2026-05-10", t: "2026-02-30T10:00:00.000000Z", i: uuid })}`,
+      `cursor=${cursorOf({ v: 1, d: "2026-05-10", t: "0000-05-10T10:00:00.000000Z", i: uuid })}`,
+    ]) {
+      const r = await get(`/transactions/ledger?${q}`);
+      expect(r.status, `${q} -> ${JSON.stringify(r.json)}`).toBe(400);
+    }
+    for (const dates of ["0000-01-01", "2026-05-01%00", `${TODAY},0999-12-31`]) {
+      const r = await get(`/transactions/balances?dates=${dates}`);
+      expect(r.status, `dates=${dates}`).toBe(400);
+    }
+    for (const filter of [
+      { from: "0000-01-01" },
+      { to: "0000-01-01" },
+      { search: "a\u0000" },
+      { source: "\u0000" },
+      { member: "\u0000" },
+      { account: "\u0000" },
+    ]) {
+      const r = await request("POST", "/transactions/bulk-review-matching", { filter, reviewed: true, expectedCount: 0 });
+      expect(r.status, JSON.stringify(filter)).toBe(400);
+    }
+    const reviewed = await db
+      .select({ id: transactionsTable.id })
+      .from(transactionsTable)
+      .where(and(eq(transactionsTable.userId, MAIN_USER), eq(transactionsTable.reviewed, true)));
+    expect(reviewed).toHaveLength(0);
+  });
+});
+
+describe("history and future rows (the review's fixture)", () => {
+  it("a replaced pending row moves nothing, so every earlier balance and money out are right; the logged payment beside its ACH still counts", async () => {
+    actingUser = REVIEW_USER;
+    try {
+      expect(await spineBalance()).toBe("990.00");
+      const pages = await walk("", 100);
+      const rows = rowsOf(pages);
+      const page = pages[0]!;
+      const row = (key: string) => rows.find((r) => r.id === reviewIds.get(key))!;
+      expect(rows).toHaveLength(8);
+
+      expect(page.balanceToday).toBe("990.00");
+      expect(page.balanceEnd).toBe("990.00");
+      // Every row dated through today, added back to today's balance, except
+      // the replaced pending −40: 990 + 100 + 40 + 500 + 500 + 30 + 10.
+      // 46ae246 read 2,210.00 (the pending −40 counted too). 1,670.00 would need
+      // the logged payment not to count: that is Brad's decision, still open.
+      expect(page.balanceStart).toBe("2170.00");
+      // Money out on the same basis, the future row included: 100 + 40 + 500 +
+      // 500 + 30 + 10 + 200. 46ae246 read 1,420.00; 880.00 with the open rule.
+      expect(page.totals).toEqual({ count: 8, moneyIn: "0.00", moneyOut: "1380.00", net: "-1380.00" });
+
+      expect(row("leftoverPending")).toMatchObject({
+        countsInBalance: false,
+        balanceReason: "superseded",
+        balanceAmount: "0.00",
+        runningBalance: "2070.00",
+      });
+      expect(row("postedGroceries")).toMatchObject({
+        countsInBalance: true,
+        balanceReason: "counted",
+        replacedPendingId: reviewIds.get("leftoverPending"),
+        runningBalance: "2030.00",
+      });
+      expect(row("rent").runningBalance).toBe("2070.00");
+      expect(row("ach").balanceReason).toBe("counted");
+      expect(row("loggedPayment")).toMatchObject({ countsInBalance: true, balanceReason: "counted", balanceAmount: "-500.00" });
+      expect([row("ach").runningBalance, row("loggedPayment").runningBalance].sort()).toEqual(["1030.00", "1530.00"]);
+      expect(row("heldAhead")).toMatchObject({ heldAhead: true, countsInBalance: true, runningBalance: "1000.00" });
+      expect(row("recent")).toMatchObject({ heldAhead: false, runningBalance: "990.00" });
+      expectChain(rows);
+
+      const b = await get(
+        "/transactions/balances?dates=2026-04-09,2026-04-20,2026-04-22,2026-04-25,2026-05-15,2026-05-16,2026-05-19",
+      );
+      expect((b.json as { balances: unknown }).balances).toEqual([
+        { date: "2026-04-09", balance: "2170.00" },
+        { date: "2026-04-20", balance: "2070.00" },
+        // 04-21..24 still read 500.00 above the review's figure: the open logged payment.
+        { date: "2026-04-22", balance: "2030.00" },
+        { date: "2026-04-25", balance: "1030.00" },
+        // The held-ahead −30 sits on 05-16, so the snapshot day reads 30.00 above
+        // the 1,000.00 the bank showed (the row is labelled `heldAhead`).
+        { date: "2026-05-15", balance: "1030.00" },
+        { date: "2026-05-16", balance: "1000.00" },
+        { date: "2026-05-19", balance: "990.00" },
+      ]);
+    } finally {
+      actingUser = MAIN_USER;
+    }
+  });
+
+  it("a row dated after today is listed and labelled but carries no balance; no end balance or date after today has one", async () => {
+    actingUser = REVIEW_USER;
+    try {
+      const page = (await get("/transactions/ledger?limit=2")).json as LedgerBody;
+      const [future, recent] = page.rows as unknown as Row[];
+      expect(future).toMatchObject({ id: reviewIds.get("future"), afterToday: true, runningBalance: null, balanceAmount: "-200.00" });
+      // The newest dated row, the end balance and today's balance are the spine's figure.
+      expect(recent!.runningBalance).toBe("990.00");
+      expect(page.balanceEnd).toBe("990.00");
+      expect(page.balanceToday).toBe(await spineBalance());
+
+      const toLater = (await get("/transactions/ledger?to=2026-06-30&limit=1")).json as LedgerBody;
+      expect(toLater.balanceEnd).toBeNull();
+      expect(toLater.balanceToday).toBe("990.00");
+      expect(((await get("/transactions/ledger?from=2026-05-21&limit=1")).json as LedgerBody).balanceStart).toBe("990.00");
+      expect(((await get("/transactions/ledger?from=2026-05-22&limit=1")).json as LedgerBody).balanceStart).toBeNull();
+
+      const b = await get(`/transactions/balances?dates=${TODAY},2026-05-21,2026-05-25,2026-06-30`);
+      expect((b.json as { balances: unknown }).balances).toEqual([
+        { date: TODAY, balance: "990.00" },
+        { date: "2026-05-21", balance: null },
+        { date: "2026-05-25", balance: null },
+        { date: "2026-06-30", balance: null },
+      ]);
+    } finally {
+      actingUser = MAIN_USER;
+    }
+  });
+
+  it("with source=plaid the manual rows are hidden from the page but not from the register: balances and start/end are the unfiltered ones", async () => {
+    actingUser = REVIEW_USER;
+    try {
+      const all = new Map(rowsOf(await walk("", 100)).map((r) => [r.id, r]));
+      const filtered = (await get("/transactions/ledger?source=plaid&limit=100")).json as LedgerBody;
+      expect(filtered.matchingCount).toBe(6);
+      expect(filtered.totals).toEqual({ count: 6, moneyIn: "0.00", moneyOut: "680.00", net: "-680.00" });
+      for (const r of filtered.rows as unknown as Row[]) {
+        expect(r.runningBalance).toBe(all.get(r.id)!.runningBalance);
+      }
+      expect(filtered.balanceStart).toBe("2170.00");
+      expect(filtered.balanceEnd).toBe("990.00");
+    } finally {
+      actingUser = MAIN_USER;
+    }
   });
 });
 
@@ -748,38 +1028,95 @@ describe("reviewing", () => {
       actingUser = MAIN_USER;
     }
   });
+
+  it("refuses when a matching row stops matching while the request waits for its lock, and reviews nothing", async () => {
+    actingUser = CONC_USER;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    let blocker: Promise<void> | null = null;
+    try {
+      let moved: () => void = () => {};
+      const movedDone = new Promise<void>((r) => (moved = r));
+      // Another request moves the first row out of the filter's range and holds
+      // its row lock until released.
+      blocker = db.transaction(async (tx) => {
+        await tx
+          .update(transactionsTable)
+          .set({ occurredOn: "2026-01-01" })
+          .where(eq(transactionsTable.id, concIds[0]!));
+        moved();
+        await gate;
+      });
+      await movedDone;
+      // Counted before that change committed, five rows match.
+      const bulk = request("POST", "/transactions/bulk-review-matching", {
+        filter: { from: "2026-05-01" },
+        reviewed: true,
+        expectedCount: 5,
+      });
+      await waitForLockWait();
+      release();
+      await blocker;
+      const r = await bulk;
+      expect(r.status, JSON.stringify(r.json)).toBe(409);
+      expect(r.json).toMatchObject({ code: "matching_rows_changed", matchingCount: 4 });
+      const reviewed = await db
+        .select({ id: transactionsTable.id })
+        .from(transactionsTable)
+        .where(and(eq(transactionsTable.userId, CONC_USER), eq(transactionsTable.reviewed, true)));
+      expect(reviewed).toHaveLength(0);
+    } finally {
+      release();
+      if (blocker) await blocker.catch(() => {});
+      actingUser = MAIN_USER;
+    }
+  });
 });
 
 describe("scope edges", () => {
-  it("mask twins and manual rows are on the ledger; Amex-sourced manual rows and a same-mask card are not", async () => {
+  it("mask twins and manual rows are listed; a twin row and a replaced pending row move nothing; Amex-sourced rows, a same-mask card and another household's account are out", async () => {
     actingUser = EDGE_USER;
     try {
       const r = await get("/transactions/ledger?limit=100");
       expect(r.status, JSON.stringify(r.json)).toBe(200);
       const page = r.json as LedgerBody;
-      expect(new Set(page.rows.map((row) => row.id))).toEqual(
+      const rows = page.rows as unknown as Row[];
+      const row = (key: string) => rows.find((x) => x.id === edgeIds.get(key))!;
+      expect(new Set(rows.map((x) => x.id))).toEqual(
         new Set(
           ["main", "twin", "manual", "emptyPlaidId", "pendingCoffee", "postedCoffee"].map((k) => edgeIds.get(k)!),
         ),
       );
       expect([...page.account.plaidAccountIds].sort()).toEqual([EDGE_EXT1, EDGE_EXT2].sort());
 
-      // The bank balance counts the main account and the manual rows but not the
-      // twin, and counts the replaced pending coffee once (PR4c):
-      // 1000 − 10 − 30 − 5 − 25 = 930.00. The register lists every row at its
-      // full amount and ties to that balance today, so the twin's −20 and the
-      // pending −25 move the days before them (disclosed in lib/bankLedger.ts).
-      const spine = await get("/spine");
-      expect((spine.json as { bank: { balance: string } }).bank.balance).toBe("930.00");
-      expect(page.anchor.todayBalance).toBe("930.00");
-      expect(page.rows[0]!.runningBalance).toBe("930.00");
-      expect(page.totals.net).toBe("-115.00");
-      expect(page.balanceStart).toBe(money(cents("930.00") + 11500));
+      // The bank balance: the main account and the manual rows, not the twin,
+      // and the replaced pending coffee once: 1000 − 10 − 30 − 5 − 25 = 930.00.
+      expect(await spineBalance()).toBe("930.00");
+      expect(page.balanceToday).toBe("930.00");
+      expect(rows[0]!.runningBalance).toBe("930.00");
+      // Every row is dated after the snapshot and none was in it, so the balance
+      // before them all is the snapshot's own 1,000.00.
+      expect(page.balanceStart).toBe("1000.00");
+      expect(page.totals).toEqual({ count: 6, moneyIn: "0.00", moneyOut: "70.00", net: "-70.00" });
+      expect(row("twin")).toMatchObject({ countsInBalance: false, balanceReason: "not_bank", balanceAmount: "0.00" });
+      expect(row("pendingCoffee")).toMatchObject({ countsInBalance: false, balanceReason: "superseded", balanceAmount: "0.00" });
+      expect(row("postedCoffee")).toMatchObject({ countsInBalance: true, replacedPendingId: edgeIds.get("pendingCoffee") });
+      expect(row("emptyPlaidId")).toMatchObject({ countsInBalance: true, balanceAmount: "-5.00" });
+      expectChain(rows);
 
       const viaTwin = await get(`/transactions/ledger?account=${EDGE_TWIN_ROW_ID}&limit=1`);
       expect(viaTwin.status).toBe(200);
       const viaCard = await get(`/transactions/ledger?account=${EDGE_CREDIT_ROW_ID}&limit=1`);
       expect(viaCard.status).toBe(400);
+      const otherHousehold = await get(`/transactions/ledger?account=${CHK_ROW_ID}&limit=1`);
+      expect(otherHousehold.status).toBe(400);
+      expect(otherHousehold.json).toMatchObject({ code: "account_not_ledger" });
+      const otherHouseholdBulk = await request("POST", "/transactions/bulk-review-matching", {
+        filter: { account: CHK_ROW_ID },
+        reviewed: true,
+        expectedCount: 0,
+      });
+      expect(otherHouseholdBulk.status).toBe(400);
     } finally {
       actingUser = MAIN_USER;
     }
@@ -795,6 +1132,7 @@ describe("scope edges", () => {
       expect(page.rows[0]!.runningBalance).toBeNull();
       expect(page.balanceStart).toBeNull();
       expect(page.balanceEnd).toBeNull();
+      expect(page.balanceToday).toBeNull();
       expect(page.anchor.todayBalance).toBeNull();
       expect(page.account).toEqual({ via: "unresolved", plaidAccountIds: [] });
       expect(page.totals).toEqual({ count: 1, moneyIn: "0.00", moneyOut: "12.00", net: "-12.00" });
