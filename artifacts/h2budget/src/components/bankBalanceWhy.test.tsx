@@ -1,14 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import React from "react";
+import { formatRelativeTime } from "@/lib/utils";
 
 /**
  * "Why this number?" on Banking's bank balance.
  *
- * Pinned: nothing is fetched until the popover opens; every line is the
- * server's; the snapshot and the rows since it are never presented as adding up
- * to the displayed balance unless they do, to the cent; and loading and failure
- * say so.
+ * Pinned:
+ * - nothing is fetched until the popover opens, and it is always asked afresh;
+ * - it never shows an older explanation as current (refreshing reads "Loading…",
+ *   a failed refresh keeps the last answer under a banner);
+ * - every line is the server's, including the snapshot's household day;
+ * - the lines are never presented as adding up unless they do, to the cent,
+ *   including when the rows figure is absent;
+ * - loading and failure say so.
  */
 
 class ResizeObserverStub {
@@ -20,7 +25,7 @@ class ResizeObserverStub {
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver ?? ResizeObserverStub;
 
 const state = vi.hoisted(() => ({
-  calls: [] as Array<{ query?: { enabled?: boolean } }>,
+  calls: [] as Array<{ query?: { enabled?: boolean; staleTime?: number } }>,
   result: { data: undefined } as Record<string, unknown>,
   refetch: vi.fn(),
 }));
@@ -35,13 +40,15 @@ vi.mock("@workspace/api-client-react", () => ({
 
 import { BankBalanceWhy } from "./bank-balance-why";
 
+const NOW = new Date("2026-09-11T17:00:00.000Z");
+
 function explain(over: Record<string, unknown> = {}) {
   return {
-    asOf: "2026-09-11T17:00:00.000Z",
+    asOf: NOW.toISOString(),
     displayed: { bankToday: "1960.00" },
     freshness: {
       source: "plaid",
-      lastContactAt: "2026-09-11T15:00:00.000Z",
+      lastContactAt: null,
       lastFailureAt: null,
       stale: false,
       staleReason: null,
@@ -75,41 +82,68 @@ function explain(over: Record<string, unknown> = {}) {
 }
 
 const open = () => fireEvent.click(screen.getByRole("button", { name: "Why this number?" }));
-const lastEnabled = () => state.calls[state.calls.length - 1]?.query?.enabled;
+const lastQuery = () => state.calls[state.calls.length - 1]?.query;
+const popoverText = () => screen.getByTestId("bank-why").textContent ?? "";
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
   state.calls = [];
   state.result = { data: undefined };
   state.refetch.mockReset();
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
-describe("Why this number? — fetched only when asked", () => {
+describe("Why this number? — fetched only when asked, never older than the tile", () => {
   it("asks for nothing while closed", () => {
     render(<BankBalanceWhy />);
-    expect(lastEnabled()).toBe(false);
+    expect(lastQuery()?.enabled).toBe(false);
     expect(screen.queryByTestId("bank-why")).toBeNull();
   });
 
-  it("asks once it opens, and says it is loading", () => {
+  it("asks afresh once it opens, and says it is loading", () => {
     render(<BankBalanceWhy />);
     open();
-    expect(lastEnabled()).toBe(true);
-    expect(screen.getByTestId("bank-why").textContent).toContain("Loading…");
+    expect(lastQuery()?.enabled).toBe(true);
+    expect(lastQuery()?.staleTime).toBe(0);
+    expect(popoverText()).toContain("Loading…");
+  });
+
+  it("while a newer answer is on its way, says Loading… rather than showing the older one", () => {
+    state.result = { data: explain(), isFetching: true };
+    render(<BankBalanceWhy />);
+    open();
+    expect(popoverText()).toContain("Loading…");
+    expect(screen.queryByTestId("bank-why-displayed")).toBeNull();
+  });
+
+  it("after a failed refresh, keeps the last answer under a banner that says so", () => {
+    state.result = {
+      data: explain(),
+      isRefetchError: true,
+      dataUpdatedAt: NOW.getTime() - 5 * 60 * 1000,
+    };
+    render(<BankBalanceWhy />);
+    open();
+    expect(screen.getByTestId("bank-why-refresh-banner").textContent).toContain("Couldn't refresh");
+    expect(screen.getByTestId("bank-why-displayed").textContent).toBe("$1,960.00");
   });
 
   it("after a failed load, says so and offers a Retry that retries", () => {
     state.result = { data: undefined, isLoadingError: true };
     render(<BankBalanceWhy />);
     open();
-    expect(screen.getByTestId("bank-why").textContent).toContain("Couldn't load");
+    expect(popoverText()).toContain("Couldn't load");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(state.refetch).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("Why this number? — the server's lines", () => {
-  it("shows the displayed balance, the snapshot and the rows since, and says the next Sync re-reads it", () => {
+  it("shows the balance, the snapshot and the rows since, with the next Sync's attempt", () => {
     state.result = { data: explain() };
     render(<BankBalanceWhy />);
     open();
@@ -120,30 +154,80 @@ describe("Why this number? — the server's lines", () => {
     const since = screen.getByTestId("bank-why-since").textContent ?? "";
     expect(since).toContain("2 rows since then");
     expect(since).toContain("-$40.00");
-    expect(screen.getByTestId("bank-why-next-sync").textContent).toContain(
-      "The next Sync re-reads this balance",
+    expect(screen.getByTestId("bank-why-next-sync").textContent).toBe(
+      "The next Sync asks the bank for this balance.",
     );
-    expect(screen.getByTestId("text-bank-snapshot-freshness")).toBeTruthy();
   });
 
-  it("adds no note when the snapshot and the rows since add up to the balance, to the cent", () => {
+  it("dates the snapshot with the server's household day, not a UTC slice", () => {
+    // 02:30Z on the 11th is 21:30 on the 10th in Chicago.
+    state.result = {
+      data: explain({
+        snapshot: { ...explain().snapshot, at: "2026-09-11T02:30:00.000Z" },
+        ledger: { ...explain().ledger, anchorDay: "2026-09-10" },
+      }),
+    };
+    render(<BankBalanceWhy />);
+    open();
+    const snap = screen.getByTestId("bank-why-snapshot").textContent ?? "";
+    expect(snap).toContain("Sep 10, 2026");
+    expect(snap).not.toContain("Sep 11");
+  });
+
+  it("dates the freshness line from the snapshot, not from when the answer was made", () => {
     state.result = { data: explain() };
+    render(<BankBalanceWhy />);
+    open();
+    const fromSnapshot = formatRelativeTime("2026-09-10T14:00:00.000Z", NOW);
+    expect(fromSnapshot).not.toBe(formatRelativeTime(NOW.toISOString(), NOW));
+    expect(screen.getByTestId("text-bank-snapshot-freshness").textContent).toContain(fromSnapshot);
+  });
+
+  it("adds no note, and no equation, when the lines add up to the cent (even 0.10 + 0.20 = 0.30)", () => {
+    state.result = {
+      data: explain({
+        displayed: { bankToday: "0.30" },
+        snapshot: { ...explain().snapshot, balance: "0.10" },
+        ledger: { ...explain().ledger, sinceAnchor: { rowCount: 1, net: "0.20" } },
+      }),
+    };
+    render(<BankBalanceWhy />);
+    open();
+    expect(screen.queryByTestId("bank-why-mismatch")).toBeNull();
+    expect(popoverText()).not.toContain("=");
+  });
+
+  it("says the lines are counted differently when they don't add up, still with no equation", () => {
+    state.result = { data: explain({ displayed: { bankToday: "1925.10" } }) };
+    render(<BankBalanceWhy />);
+    open();
+    expect(screen.getByTestId("bank-why-mismatch").textContent).toContain("different rules");
+    expect(popoverText()).not.toContain("=");
+  });
+
+  it("with no rows figure (unresolved account), still says so when the snapshot and balance differ", () => {
+    state.result = {
+      data: explain({ ledger: { anchorDay: "2026-09-10", sinceAnchor: null, recentRows: [] } }),
+    };
+    render(<BankBalanceWhy />);
+    open();
+    expect(screen.queryByTestId("bank-why-since")).toBeNull();
+    expect(screen.getByTestId("bank-why-mismatch")).toBeTruthy();
+  });
+
+  it("with no rows figure and a snapshot equal to the balance, adds no note", () => {
+    state.result = {
+      data: explain({
+        displayed: { bankToday: "2000.00" },
+        ledger: { anchorDay: "2026-09-10", sinceAnchor: null, recentRows: [] },
+      }),
+    };
     render(<BankBalanceWhy />);
     open();
     expect(screen.queryByTestId("bank-why-mismatch")).toBeNull();
   });
 
-  it("says the lines are counted differently when they don't add up, never an equation", () => {
-    state.result = {
-      data: explain({ displayed: { bankToday: "1925.10" } }),
-    };
-    render(<BankBalanceWhy />);
-    open();
-    expect(screen.getByTestId("bank-why-mismatch").textContent).toContain("different rules");
-    expect(screen.getByTestId("bank-why").textContent).not.toContain("=");
-  });
-
-  it("gives the server's reason when the next Sync won't re-read the balance", () => {
+  it("gives the server's reason when the next Sync won't ask the bank", () => {
     state.result = {
       data: explain({
         nextSync: {
@@ -155,11 +239,11 @@ describe("Why this number? — the server's lines", () => {
     render(<BankBalanceWhy />);
     open();
     expect(screen.getByTestId("bank-why-next-sync").textContent).toBe(
-      "The next Sync won't re-read it: the resolved account is no longer on file for this household.",
+      "The next Sync won't ask the bank for it: the resolved account is no longer on file for this household.",
     );
   });
 
-  it("with no snapshot, says the forecast runs off the starting balance", () => {
+  it("with no snapshot, says the forecast runs off the starting balance, and nothing about the next Sync", () => {
     state.result = {
       data: explain({
         snapshot: {
@@ -169,6 +253,10 @@ describe("Why this number? — the server's lines", () => {
           storedAccountId: null,
           name: null,
           mask: null,
+        },
+        nextSync: {
+          willRefreshBalance: false,
+          whyNot: "no bank snapshot is set, so there is no anchor to refresh",
         },
         ledger: { anchorDay: null, sinceAnchor: null, recentRows: [] },
       }),
@@ -180,6 +268,7 @@ describe("Why this number? — the server's lines", () => {
     );
     expect(screen.queryByTestId("bank-why-snapshot")).toBeNull();
     expect(screen.queryByTestId("bank-why-mismatch")).toBeNull();
+    expect(screen.queryByTestId("bank-why-next-sync")).toBeNull();
   });
 
   it("shows a stale verdict in words when the server judges the balance stale", () => {

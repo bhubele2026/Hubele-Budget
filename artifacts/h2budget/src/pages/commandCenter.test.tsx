@@ -521,7 +521,25 @@ function todayISOForWeek(): string {
 describe("Banking — why this number?", () => {
   it("puts a 'Why this number?' button on the bank balance tile", () => {
     render(<CommandCenterPage />);
-    const tile = screen.getByTestId("cc-stat-bank").parentElement as HTMLElement;
-    expect(within(tile).getByRole("button", { name: "Why this number?" })).toBeTruthy();
+    const stat = screen.getByTestId("cc-stat-bank");
+    const button = within(stat.parentElement as HTMLElement).getByRole("button", {
+      name: "Why this number?",
+    });
+    // Beside the Stat, never inside it: a clickable Stat would nest a button in a button.
+    expect(stat.contains(button)).toBe(false);
+  });
+});
+
+describe("Banking — the bank balance's 'as of' day is the household's", () => {
+  it("dates an evening Chicago snapshot on its Chicago day, not the next UTC day", () => {
+    // 02:30Z on the 15th is 21:30 on the 14th in Chicago.
+    state.spine = { ...SPINE, bank: { ...SPINE.bank, asOfDate: `${ym}-15T02:30:00.000Z` } };
+    render(<CommandCenterPage />);
+    const day14 = new Date(`${ym}-14T00:00:00`).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    const hint = screen.getByTestId("cc-stat-bank").textContent ?? "";
+    expect(hint).toContain(`as of ${day14}`);
   });
 });

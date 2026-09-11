@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BankBalanceWhy } from "@/components/bank-balance-why";
+import { householdDayOfAt } from "@/lib/householdDay";
 import {
   useGetSettings,
   useListTransactions,
@@ -51,12 +52,15 @@ function money(v: string | number | null | undefined): string {
   return Number.isFinite(n) ? formatCurrency(n) : "—";
 }
 
-/** "Aug 21" from a date-only or timestamp ISO string.
+/** "Aug 21" from a date-only or timestamp ISO string, on the household calendar.
  *  ⚠️ The `T00:00:00` suffix is load-bearing: a bare `new Date("2026-08-21")`
- *  parses as UTC midnight and renders as the 20th west of Greenwich. */
+ *  parses as UTC midnight and renders as the 20th west of Greenwich.
+ *  ⚠️ So is `householdDayOfAt`: a snapshot at 9:30pm Chicago is already the next
+ *  day in UTC, and slicing the timestamp dated it a day late ("Why this
+ *  number?" dates the same snapshot by the server's household day). */
 function shortDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
-  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  const d = new Date(`${householdDayOfAt(iso)}T00:00:00`);
   return Number.isNaN(d.getTime())
     ? null
     : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -390,7 +394,8 @@ export default function CommandCenterPage() {
       >
         {/* "Why this number?" sits on the tile, one tap away. Nothing is fetched
             until it opens, and every line in it is the server's diagnostic. */}
-        <div className="relative">
+        {/* `grid` so the Stat still stretches to its row, as its neighbours do. */}
+        <div className="relative grid">
           <Stat
             index={0}
             data-testid="cc-stat-bank"

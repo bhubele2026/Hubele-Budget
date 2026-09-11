@@ -70,6 +70,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getListTransactionsQueryKey: () => ["/api/transactions"],
   getGetForecastQueryKey: () => ["/api/forecast"],
   getGetForecastCashSignalQueryKey: () => ["/api/forecast/cash-signal"],
+  getGetForecastBankBalanceExplainQueryKey: () => ["/api/forecast/bank-balance-explain"],
 }));
 
 // (#357) The Reconnect ToastAction now dispatches a window event instead of

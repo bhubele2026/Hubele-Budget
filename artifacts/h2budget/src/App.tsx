@@ -14,7 +14,11 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { ClerkProvider, Show, useAuth, useClerk } from "@clerk/react";
-import { getSpine, getGetSpineQueryKey } from "@workspace/api-client-react";
+import {
+  getSpine,
+  getGetSpineQueryKey,
+  getGetForecastBankBalanceExplainQueryKey,
+} from "@workspace/api-client-react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 
@@ -110,6 +114,9 @@ const NotFound = lazy(() => import("./pages/not-found"));
 const mutationCache = new MutationCache({
   onSuccess: () => {
     void queryClient.invalidateQueries({ queryKey: getGetSpineQueryKey() });
+    // "Why this number?" explains the spine's bank balance, so it can never be
+    // older than it: a write that moves the balance moves the explanation too.
+    void queryClient.invalidateQueries({ queryKey: getGetForecastBankBalanceExplainQueryKey() });
     // Spending aggregates include category and UN edits. They must refresh
     // alongside the ledger, even when a page only invalidates transactions.
     void queryClient.invalidateQueries({ predicate: q => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/") });
