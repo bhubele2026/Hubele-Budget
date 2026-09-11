@@ -243,12 +243,22 @@ Today is exact in every case. Earlier days differ in three ways:
   bank balance's shorter window does (the lower edge `classifyCashRows` documents). The spine's figure does not move.
 
 After today (second review, R2):
-- **A pending row dated through today whose posted row is dated after today and not flagged** counts today, as in the
-  bank balance. The posted row is listed at its amount with no balance. So a `totals` range that reaches past today
-  counts that charge twice, until the posted row's day arrives and it pairs. In the fixture, money out with no end
-  date is 243.00, the coffee's 12.00 twice; through today it is 222.00, the start less today.
-- **`heldAhead` on such a posted row** uses only its own `isInSnapshot`, since it is no longer paired. That needs a
-  posted row dated after today that the snapshot holds, which is rare. No fixture row differs from the old label.
+- **Any `totals` range that reaches past today can count a charge twice among rows dated after today**, until the
+  later row's day arrives and it pairs. Balances are unaffected. Two shapes:
+  - a pending row dated through today whose posted row is dated after today and not flagged counts today, as in the
+    bank balance, while the posted row is listed at its amount with no balance. In the fixture, money out with no end
+    date is 243.00, the coffee's 12.00 twice; through today it is 222.00, the start less today;
+  - an unflagged and a flagged posting dated after today competing for one pending row both count while the pending
+    row is 0: money out 20.00 for one 10.00 charge (third review).
+
+  PR14 should pass `to` no later than today for the register view.
+- **`heldAhead` can differ from the old anchored label only on rows dated after today**, which carry no balance. Rows
+  through today see the same pending candidates under both runs. Two shapes (third review):
+  - an unflagged posted row the snapshot holds, whose pending half it does not: now true, was false;
+  - a flagged posting that now pairs with the pending row the unflagged posting used to take: now false, was true.
+- **A flagged posting dated after today hides a real pending charge from today's balance** until its own date. The
+  spine does the same, so the register mirrors it. It needs a Plaid posting flagged for the forecast, which is unusual;
+  it belongs to the PR4c cash-row rule, not this PR.
 
 ### Cursor edge cases
 
