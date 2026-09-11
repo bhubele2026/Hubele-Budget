@@ -5174,6 +5174,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             dayDelta: zod.ZodNumber;
             confidence: zod.ZodString;
             ambiguous: zod.ZodBoolean;
+            offCurve: zod.ZodBoolean;
         }, "strip", zod.ZodTypeAny, {
             txnAmount: string;
             planKey: string;
@@ -5185,6 +5186,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             dayDelta: number;
             confidence: string;
             ambiguous: boolean;
+            offCurve: boolean;
         }, {
             txnAmount: string;
             planKey: string;
@@ -5196,6 +5198,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             dayDelta: number;
             confidence: string;
             ambiguous: boolean;
+            offCurve: boolean;
         }>, "many">>;
     }, "strip", zod.ZodTypeAny, {
         status: "ready" | "tight" | "not_yet" | "no_data";
@@ -5215,6 +5218,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             dayDelta: number;
             confidence: string;
             ambiguous: boolean;
+            offCurve: boolean;
         }[] | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
@@ -5256,6 +5260,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             dayDelta: number;
             confidence: string;
             ambiguous: boolean;
+            offCurve: boolean;
         }[] | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
@@ -5446,6 +5451,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             dayDelta: number;
             confidence: string;
             ambiguous: boolean;
+            offCurve: boolean;
         }[] | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
@@ -5584,6 +5590,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             dayDelta: number;
             confidence: string;
             ambiguous: boolean;
+            offCurve: boolean;
         }[] | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
@@ -5889,6 +5896,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         dayDelta: zod.ZodNumber;
         confidence: zod.ZodString;
         ambiguous: zod.ZodBoolean;
+        offCurve: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
         txnAmount: string;
         planKey: string;
@@ -5900,6 +5908,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         dayDelta: number;
         confidence: string;
         ambiguous: boolean;
+        offCurve: boolean;
     }, {
         txnAmount: string;
         planKey: string;
@@ -5911,6 +5920,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         dayDelta: number;
         confidence: string;
         ambiguous: boolean;
+        offCurve: boolean;
     }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     status: "ready" | "tight" | "not_yet" | "no_data";
@@ -5930,6 +5940,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         dayDelta: number;
         confidence: string;
         ambiguous: boolean;
+        offCurve: boolean;
     }[] | undefined;
     fromDate?: string | undefined;
     toDate?: string | undefined;
@@ -5971,6 +5982,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         dayDelta: number;
         confidence: string;
         ambiguous: boolean;
+        offCurve: boolean;
     }[] | undefined;
     fromDate?: string | undefined;
     toDate?: string | undefined;

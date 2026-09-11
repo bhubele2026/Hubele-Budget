@@ -34,6 +34,7 @@ import { db, forecastResolutionsTable, transactionsTable } from "@workspace/db";
 import forecastRouter from "../routes/forecast";
 import { computeReviewCount } from "../lib/reviewCount";
 import { householdTodayISO } from "../lib/householdClock";
+import { addDaysISO } from "@workspace/avalanche-core";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
@@ -157,5 +158,31 @@ describe("(PR5) review count and not_match", () => {
     expect(await computeReviewCount(TEST_HOUSEHOLD_ID, TEST_USER)).toBe(1);
     await post({ ...RENT, status: "matched", matchedTxnId: txn });
     expect(await computeReviewCount(TEST_HOUSEHOLD_ID, TEST_USER)).toBe(0);
+  });
+});
+
+describe("(PR5 review) resolutions keep what the user already decided", () => {
+  it("a partial confirmation keeps the plan's reschedule", async () => {
+    const movedTo = addDaysISO(householdTodayISO(), 5);
+    expect((await post({ ...WATER, status: "rescheduled", rescheduledTo: movedTo } as Body)).status).toBe(200);
+    expect((await post({ ...WATER, status: "partial", matchedTxnId: A })).status).toBe(200);
+    const rows = await db.select().from(forecastResolutionsTable).where(eq(forecastResolutionsTable.householdId, TEST_HOUSEHOLD_ID));
+    expect(rows.map((r) => `${r.status}:${r.rescheduledTo ?? "-"}#${r.matchedTxnId ?? "-"}`).sort()).toEqual(
+      [`partial:-#${A}`, `rescheduled:${movedTo}#-`].sort(),
+    );
+  });
+
+  it("moving a plan after a partial confirmation keeps the partial", async () => {
+    const movedTo = addDaysISO(householdTodayISO(), 3);
+    await post({ ...WATER, status: "partial", matchedTxnId: A });
+    expect((await post({ ...WATER, status: "rescheduled", rescheduledTo: movedTo } as Body)).status).toBe(200);
+    const rows = await db.select().from(forecastResolutionsTable).where(eq(forecastResolutionsTable.householdId, TEST_HOUSEHOLD_ID));
+    expect(rows.map((r) => r.status).sort()).toEqual(["partial", "rescheduled"]);
+  });
+
+  it("rejecting a pair takes back an earlier match of that same pair", async () => {
+    await post({ ...WATER, status: "matched", matchedTxnId: A });
+    await post({ ...WATER, status: "not_match", matchedTxnId: A });
+    expect(await stored()).toEqual([key(WATER, A, "not_match")]);
   });
 });

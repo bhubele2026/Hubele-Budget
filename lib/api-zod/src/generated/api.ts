@@ -2633,11 +2633,12 @@ export const GetForecastResponse = zod.object({
               dayDelta: zod.number(),
               confidence: zod.string(),
               ambiguous: zod.boolean(),
+              offCurve: zod.boolean(),
             }),
           )
           .optional()
           .describe(
-            '(PR5) Plans a bank row probably paid. Each one is off the curve\nuntil the user confirms (\"matched\"\/\"partial\") or rejects\n(\"not_match\") it; the bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+            '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, within max($25, 10%)); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
           ),
       }),
       zod.null(),
@@ -2842,11 +2843,12 @@ export const GetForecastCashSignalResponse = zod.object({
         dayDelta: zod.number(),
         confidence: zod.string(),
         ambiguous: zod.boolean(),
+        offCurve: zod.boolean(),
       }),
     )
     .optional()
     .describe(
-      '(PR5) Plans a bank row probably paid. Each one is off the curve\nuntil the user confirms (\"matched\"\/\"partial\") or rejects\n(\"not_match\") it; the bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+      '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, within max($25, 10%)); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
     ),
 });
 

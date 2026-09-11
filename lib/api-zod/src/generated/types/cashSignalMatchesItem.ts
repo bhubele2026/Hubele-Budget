@@ -17,4 +17,5 @@ export type CashSignalMatchesItem = {
   dayDelta: number;
   confidence: string;
   ambiguous: boolean;
+  offCurve: boolean;
 };
