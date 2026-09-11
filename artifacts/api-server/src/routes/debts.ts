@@ -18,6 +18,7 @@ import {
   CreateDebtPaymentParams,
 } from "@workspace/api-zod";
 import { fetchLiabilitiesForItem } from "../lib/plaidLiabilities";
+import { householdTodayISO } from "../lib/householdClock";
 import {
   loadPendingPayments,
   type PendingEntry,
@@ -27,9 +28,9 @@ const router: IRouter = Router();
 
 const REFRESH_STALE_MS = 60 * 60 * 1000; // 1 hour
 
+/** The household's today (America/Chicago) — the day a balance change is recorded on. */
 function todayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return householdTodayISO();
 }
 
 async function recordBalanceSnapshot(

@@ -29,6 +29,7 @@ import {
 import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
+import { householdDayOf, householdTodayISO } from "./householdClock";
 import {
   anchorIsReconcilable,
   reconcileBankBalance,
@@ -2334,8 +2335,9 @@ export async function syncPlaidItem(
       checkingPlaidAccountId
     ) {
       if (anchorIsReconcilable(prevSnapshotAt)) {
-        const anchorDay = new Date(prevSnapshotAt).toISOString().slice(0, 10);
-        const todayDay = new Date().toISOString().slice(0, 10);
+        // Household calendar days (America/Chicago), matching the roll-forward.
+        const anchorDay = householdDayOf(new Date(prevSnapshotAt));
+        const todayDay = householdTodayISO();
         const ledgerSince = async (): Promise<number> => {
           const rows = await db
             .select({ amount: transactionsTable.amount })

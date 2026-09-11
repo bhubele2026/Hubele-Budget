@@ -5,9 +5,25 @@
 // This is the single isomorphic math engine shared by the client
 // (artifacts/h2budget/src/lib/avalanche.ts re-exports it) and the server
 // (artifacts/api-server/src/lib/avalancheSim.ts reuses simulate/targetIndex).
-// Keep it framework-free: no Intl, no DOM, money stays as numbers here.
+// Keep it framework-free: no DOM, no dependencies, money stays as numbers here.
+// Intl appears in exactly one place — householdTime.ts, which turns an instant
+// into the household's calendar date — and is built lazily there so importing
+// this package costs nothing at load time.
+//
+// It also holds the two rules both apps must share rather than copy:
+// `inForecast` (which checking rows are cash) and the household calendar
+// (America/Chicago today, Sunday–Saturday weeks, calendar months).
 
 export { inForecast } from "./forecastInclusion";
+export {
+  HOUSEHOLD_TZ,
+  householdDateOf,
+  householdToday,
+  addDaysISO,
+  dayOfWeekISO,
+  weekBounds,
+  monthBounds,
+} from "./householdTime";
 
 export type Strategy = "avalanche" | "snowball";
 

@@ -5,7 +5,8 @@ import {
   forecastResolutionsTable,
   transactionsTable,
 } from "@workspace/db";
-import { forecastTodayISO, inForecastWhere } from "./forecastInclusion";
+import { inForecastWhere } from "./forecastInclusion";
+import { householdTodayISO, monthBounds } from "./householdClock";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 
 /**
@@ -27,7 +28,9 @@ import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
  *
  * The bank account comes from `resolveSnapshotAccount` — the same resolution
  * the balance roll-forward uses — so a dangling snapshot pointer cannot zero
- * the badge while the curve keeps moving.
+ * the badge while the curve keeps moving. "Today" and "this month" are the
+ * household's (America/Chicago), so the badge doesn't jump to next month on
+ * the last evening of a month on a UTC server.
  */
 export async function computeReviewCount(
   householdId: string,
@@ -46,12 +49,8 @@ export async function computeReviewCount(
     bankSnapshotMask: settings?.bankSnapshotMask ?? null,
   });
 
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const monthStart = `${y}-${pad(m + 1)}-01`;
-  const monthEnd = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
+  const today = householdTodayISO();
+  const { start: monthStart, end: monthEnd } = monthBounds(today);
 
   const txns = await db
     .select({
@@ -63,7 +62,7 @@ export async function computeReviewCount(
     .where(
       and(
         eq(transactionsTable.householdId, householdId),
-        inForecastWhere(forecastTodayISO(now)),
+        inForecastWhere(today),
         gte(transactionsTable.occurredOn, monthStart),
         lte(transactionsTable.occurredOn, monthEnd),
       ),

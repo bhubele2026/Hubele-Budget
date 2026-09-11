@@ -14,6 +14,7 @@
 // outflows are NEGATIVE (spend); income categories use the inflow side.
 
 import { and, eq, gte, lt } from "drizzle-orm";
+import { householdTodayISO } from "./householdClock";
 import { sql } from "drizzle-orm";
 import {
   db,
@@ -319,7 +320,7 @@ export async function buildBudgetFacts(
   monthStart: string,
   monthsBack = 6,
 ): Promise<BudgetFacts> {
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = householdTodayISO();
 
   // --- Category context (loaded once) ------------------------------------
   const cats = await db

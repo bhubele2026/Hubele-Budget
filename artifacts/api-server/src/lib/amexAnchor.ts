@@ -15,6 +15,7 @@ import {
 } from "./spendingFilter";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
+import { householdTodayDate } from "./householdClock";
 
 /**
  * Source values that count as Amex when computing the anchor. The legacy
@@ -236,7 +237,7 @@ export interface AmexWeeklyPayoff {
 }
 
 /** Default `weekStart` = the Sunday of the last fully-completed Sun–Sat week. */
-export function lastCompletedWeekStart(today: Date = new Date()): string {
+export function lastCompletedWeekStart(today: Date = householdTodayDate()): string {
   const thisWeekSunday = weekStartFor(today);
   return fmtISO(addDays(parseISO(thisWeekSunday), -7));
 }

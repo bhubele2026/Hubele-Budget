@@ -67,6 +67,7 @@ import debtsRouter from "../routes/debts";
 // parity set — its debt figure must agree with `/debts` on the same basis.
 import dashboardRouter from "../routes/dashboard";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { householdTodayDate } from "../lib/householdClock";
 
 const app = express();
 app.use(express.json());
@@ -118,7 +119,11 @@ const iso = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 const NOW = new Date();
-const TODAY = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate());
+// The household's today (America/Chicago) — the date the server's spine reads —
+// as a local-midnight Date for the arithmetic below. Built from the machine
+// clock it would disagree with the server every evening after 7pm Central
+// whenever CI runs in UTC.
+const TODAY = householdTodayDate(NOW);
 const TODAY_ISO = iso(TODAY);
 const MONTH_START_ISO = iso(new Date(TODAY.getFullYear(), TODAY.getMonth(), 1));
 
@@ -163,7 +168,10 @@ beforeAll(async () => {
     // Anchor the snapshot at the start of the month so the ledger rows below
     // roll forward on top of it — this is the Chase-tab derivation, and it is
     // the one the spine must reproduce exactly.
-    bankSnapshotAt: new Date(TODAY.getFullYear(), TODAY.getMonth(), 1),
+    // A real instant — noon Central on the 1st — so the snapshot's household
+    // day is the 1st on a UTC runner and on a Central laptop alike. (A
+    // local-midnight Date is 7pm the previous evening in Chicago on UTC.)
+    bankSnapshotAt: new Date(`${MONTH_START_ISO}T12:00:00-05:00`),
     bankSnapshotSource: "manual",
     bankSnapshotAccountId: acct!.id,
   });

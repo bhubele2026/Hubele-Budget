@@ -16,6 +16,7 @@ import {
   type SimDebt,
   type Strategy,
 } from "@workspace/avalanche-core";
+import { householdMonthStartDate } from "./householdClock";
 
 type DebtRow = typeof debtsTable.$inferSelect;
 
@@ -57,6 +58,9 @@ export function monthsUntilAvalanchePayoff(
     debts: work,
     extraPerMonth,
     strategy: AVALANCHE,
+    // Month 1 is the household's current month (America/Chicago), not the
+    // server clock's — on the last evening of a month those differ.
+    startDate: householdMonthStartDate(),
   });
   if (sim.ranOutOfTime) return null;
   return sim.monthsToFreedom;
@@ -172,8 +176,11 @@ export function computeAvalanchePayoffFacts(
     };
   }
 
-  const sim = simulate({ debts: work, extraPerMonth, strategy });
-  const minOnly = simulateMinimumsOnly({ debts: work, strategy });
+  // Month 1 is the household's current month (America/Chicago), not the server
+  // clock's — on the last evening of a month those differ.
+  const startDate = householdMonthStartDate();
+  const sim = simulate({ debts: work, extraPerMonth, strategy, startDate });
+  const minOnly = simulateMinimumsOnly({ debts: work, strategy, startDate });
 
   const monthsToFreedom = sim.ranOutOfTime ? null : sim.monthsToFreedom;
   const minOnlyMonthsToFreedom = minOnly.ranOutOfTime
