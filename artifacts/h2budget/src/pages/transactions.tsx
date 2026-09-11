@@ -81,6 +81,8 @@ import { invalidateBankLedger } from "@/lib/mutationInvalidation";
 import {
   useGetTransactionsBalances,
   getGetTransactionsBalancesQueryKey,
+  useGetTransactionsLedger,
+  getGetTransactionsLedgerQueryKey,
 } from "@workspace/api-client-react/ledger";
 import { useSpine } from "@/hooks/useSpine";
 import { FreshnessLine } from "@/components/data-state";
@@ -125,6 +127,7 @@ import {
   splitAtToday,
   sumCounted,
   toBulkFilter,
+  toLedgerParams,
   type ChaseListFilter,
 } from "./transactions/chaseLedger";
 import { useChaseLedger } from "./transactions/useChaseLedger";
@@ -1577,13 +1580,33 @@ export default function TransactionsPage() {
   }, [registerFilterKey]);
   const pageIds = registerRows.map((t) => t.id);
   const pageAllSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  // (PR14 second review N1) "Select all" never covers pending rows. The sync keeps a
+  // reviewed row when the bank drops it (plaidSync skips reviewed rows), so a
+  // reviewed pending hold would stay counted in money out and the start balance.
+  // A pending row can still be reviewed on its own row. The count is the server's,
+  // for the register's filter with pending=false, asked only while the banner is up.
+  const postedFilter: ChaseListFilter | null = registerFilter
+    ? { ...registerFilter, pending: false }
+    : null;
+  const postedParams = postedFilter ? { ...toLedgerParams(postedFilter), limit: 1 } : undefined;
+  const postedCountQuery = useGetTransactionsLedger(postedParams, {
+    query: {
+      queryKey: getGetTransactionsLedgerQueryKey(postedParams),
+      enabled: !!postedFilter && (pageAllSelected || !!allMatching),
+      staleTime: LEDGER_CACHE.staleTime,
+      gcTime: LEDGER_CACHE.gcTime,
+    },
+  });
+  const postedCount = postedCountQuery.isPlaceholderData
+    ? null
+    : (postedCountQuery.data?.matchingCount ?? null);
   const selectPage = () => {
     setAllMatching(null);
     setSelected(new Set(pageIds));
   };
   const selectAllMatching = () => {
-    if (!registerFilter || matchingCount == null || register.isPlaceholderData) return;
-    setAllMatching({ filter: registerFilter, count: matchingCount });
+    if (!postedFilter || postedCount == null || register.isPlaceholderData) return;
+    setAllMatching({ filter: postedFilter, count: postedCount });
   };
 
   // Reviewing writes only `reviewed`: no balance, total or forecast moves.
@@ -1592,6 +1615,10 @@ export default function TransactionsPage() {
     if (!ids.length) return;
     // The write refetches the Chase lists itself, once (PR14 review M3).
     const { succeeded, failed } = await reviewWrites.reviewIds(ids, reviewed);
+    // (PR14 second review LOW) A failed id that is not on a loaded page cannot stay
+    // selected (the selection follows the rows on screen), so the toast says so.
+    const onScreen = new Set(filtered.map((t) => t.id));
+    const failedOffScreen = failed.some((id) => !onScreen.has(id));
     // (PR14 review LOW-4) Merge, never replace: saved rows leave the selection and
     // failed rows stay in it, and anything selected meanwhile (before a later
     // Undo, say) is kept.
@@ -1613,7 +1640,11 @@ export default function TransactionsPage() {
           ) : null}
         </>
       ),
-      description: failed.length ? "Failed rows remain selected. Try again." : "Balances and forecast are unchanged.",
+      description: !failed.length
+        ? "Balances and forecast are unchanged."
+        : failedOffScreen
+          ? "Failed rows on the loaded pages remain selected. Try again."
+          : "Failed rows remain selected. Try again.",
       variant: failed.length ? "destructive" : "default",
       action: succeeded.size ? <ToastAction altText="Undo reviewed status" onClick={() => void reviewByIds(Array.from(succeeded), !reviewed)}>Undo</ToastAction> : undefined,
     });
@@ -2557,9 +2588,9 @@ export default function TransactionsPage() {
         (allMatching || (pageAllSelected && matchingCount > registerRows.length)) && (
           <ChaseSelectAllBanner
             pageSelected={pageIds.length}
-            matchingCount={matchingCount}
+            postedCount={postedCount}
             allMatchingCount={allMatching?.count ?? null}
-            canSelectAll={!register.isPlaceholderData}
+            canSelectAll={!register.isPlaceholderData && postedCount != null}
             onSelectAll={selectAllMatching}
             onClear={clearSelection}
           />
@@ -2741,8 +2772,18 @@ export default function TransactionsPage() {
         // (PR14 review M1) What the ledger counts: a mask-twin, duplicate or replaced
         // row adds 0, so the day reconciles with the card.
         const dayNet = sumCounted(items);
-        const dayNetNode =
-          dayKey === partialDayKey ? (
+        // (PR14 second review NIT) A day after today is listed, never totalled, as in
+        // the Pending group and the card.
+        const afterTodayDay = items.every((t) => t.afterToday);
+        const dayNetNode = afterTodayDay ? (
+          <span
+            className="tabular-nums text-neutral-400"
+            title="Days after today are not totalled"
+            data-testid={`day-net-${dayKey}`}
+          >
+            —
+          </span>
+        ) : dayKey === partialDayKey ? (
             <span
               className="tabular-nums text-neutral-400"
               title="More rows for this day on the next page"

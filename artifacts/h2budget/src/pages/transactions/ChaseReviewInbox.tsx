@@ -82,27 +82,33 @@ export function ChaseReviewControls({
  */
 export function ChaseSelectAllBanner({
   pageSelected,
-  matchingCount,
+  postedCount,
   allMatchingCount,
   canSelectAll,
   onSelectAll,
   onClear,
 }: {
   pageSelected: number;
-  matchingCount: number;
+  /**
+   * (PR14 second review N1) Posted rows matching the register's filter: "Select all"
+   * leaves pending rows out. Null while the server's count loads.
+   */
+  postedCount: number | null;
   /** The count captured when "Select all" was clicked; null while only the page is selected. */
   allMatchingCount: number | null;
-  /** False while the list shows another filter's rows (the count is not this filter's yet). */
+  /** False while the list shows another filter's rows or the posted count is loading. */
   canSelectAll: boolean;
   onSelectAll: () => void;
   onClear: () => void;
 }) {
+  const why = "Pending rows are left out: a reviewed pending row is kept when the bank drops it. Review a pending row on its own row.";
   if (allMatchingCount != null) {
     return (
       <div className="flex flex-wrap items-center gap-2 text-label text-neutral-600" data-testid="chase-select-all-banner">
         <span>
-          All <Num n={allMatchingCount} testId="chase-all-matching-count" /> matching selected.
+          All <Num n={allMatchingCount} testId="chase-all-matching-count" /> posted rows selected.
         </span>
+        <Help>{why}</Help>
         <Button variant="ghost" size="sm" onClick={onClear} data-testid="chase-select-all-clear">
           Clear selection
         </Button>
@@ -114,7 +120,7 @@ export function ChaseSelectAllBanner({
       <span>
         <Num n={pageSelected} /> on this page selected.
       </span>
-      {matchingCount > BULK_REVIEW_MAX ? (
+      {postedCount != null && postedCount > BULK_REVIEW_MAX ? (
         <span data-testid="chase-select-all-too-many">
           Over <Num n={BULK_REVIEW_MAX} /> match. Narrow the range to select all.
         </span>
@@ -126,9 +132,16 @@ export function ChaseSelectAllBanner({
           disabled={!canSelectAll}
           data-testid="chase-select-all-matching"
         >
-          Select all <Num n={matchingCount} testId="chase-select-all-count" /> matching
+          {postedCount == null ? (
+            "Select all posted"
+          ) : (
+            <>
+              Select all <Num n={postedCount} testId="chase-select-all-count" /> posted
+            </>
+          )}
         </Button>
       )}
+      <Help>{why}</Help>
     </div>
   );
 }

@@ -271,6 +271,10 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
     }
 
     if (url.pathname === "/api/transactions/bulk-review-matching" && method === "POST") {
+      // (PR14 second review N1) As the server: reviewing by filter must exclude pending rows.
+      if (body.reviewed === true && body.filter?.pending !== false) {
+        return json(400, { error: "exclude pending rows", code: "pending_not_excluded" });
+      }
       const scope = body.filter?.account ? (otherRows.get(body.filter.account) ?? rows) : rows;
       const matched = scope.filter((t) => matches(t, body.filter ?? {}));
       if (matched.length > 1000) {

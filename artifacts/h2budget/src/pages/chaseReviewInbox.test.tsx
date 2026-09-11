@@ -275,6 +275,8 @@ describe("paging", () => {
     await waitFor(() => expect(screen.getByTestId("row-tx-later")).toBeTruthy());
     expect(server.ledgerGets("2026-09-17")[0]!.query.get("to")).toBe("2026-09-19");
     expect(screen.getByTestId("label-after-today-later").textContent).toBe("After today");
+    // (PR14 second review NIT) A day after today is listed, never totalled.
+    expect(screen.getByTestId("day-net-2026-09-18").textContent).toBe("—");
     const inOut = screen.getByTestId("chase-stats-in-out").textContent ?? "";
     expect(inOut).toContain("$40.00");
     expect(inOut).not.toContain("$500.00");
@@ -309,10 +311,12 @@ describe("selection and bulk review", () => {
 
     fireEvent.click(screen.getByTestId("chase-select-page"));
     expect(screen.getByTestId("bulk-bar").textContent).toContain("50 selected");
-    expect(screen.getByTestId("chase-select-all-matching").textContent).toBe("Select all 120 matching");
+    await waitFor(() =>
+      expect(screen.getByTestId("chase-select-all-matching").textContent).toBe("Select all 120 posted"),
+    );
 
     fireEvent.click(screen.getByTestId("chase-select-all-matching"));
-    expect(screen.getByTestId("chase-select-all-banner").textContent).toContain("All 120 matching selected.");
+    expect(screen.getByTestId("chase-select-all-banner").textContent).toContain("All 120 posted rows selected.");
     expect(screen.getByTestId("bulk-bar").textContent).toContain("120 selected");
     // Forecast actions need ids; they are not offered for "all matching".
     expect(screen.queryByTestId("bulk-send-forecast")).toBeNull();
@@ -323,7 +327,7 @@ describe("selection and bulk review", () => {
     );
     const post = server.calls.find((c) => c.path === "/api/transactions/bulk-review-matching")!;
     expect(post.body).toEqual({
-      filter: { from: REGISTER_FROM, to: TODAY },
+      filter: { from: REGISTER_FROM, to: TODAY, pending: false },
       reviewed: true,
       expectedCount: 120,
     });
@@ -339,6 +343,9 @@ describe("selection and bulk review", () => {
     show();
     await ready("Showing 50 of 120 · 120 to review");
     fireEvent.click(screen.getByTestId("chase-select-page"));
+    await waitFor(() =>
+      expect(screen.getByTestId("chase-select-all-matching").textContent).toBe("Select all 120 posted"),
+    );
     fireEvent.click(screen.getByTestId("chase-select-all-matching"));
 
     // A Sync lands a row before the click.
@@ -358,7 +365,7 @@ describe("selection and bulk review", () => {
     expect(server.rows.some((r) => r.reviewed)).toBe(false);
     await waitFor(() => expect(registerGets().length).toBeGreaterThan(getsBefore));
     await ready("Showing 50 of 121 · 121 to review");
-    expect(screen.queryByText(/All 120 matching selected/)).toBeNull();
+    expect(screen.queryByText(/All 120 posted rows selected/)).toBeNull();
     expect(screen.getByTestId("bulk-bar").textContent).not.toContain("120 selected");
   });
 
@@ -782,7 +789,7 @@ describe("(PR14 review) fixes", () => {
     show();
     await ready("Showing 50 of 60 · 60 to review");
     fireEvent.click(screen.getByTestId("chase-select-page"));
-    expect(screen.getByTestId("chase-select-all-count").className).toContain("font-mono");
+    await waitFor(() => expect(screen.getByTestId("chase-select-all-count").className).toContain("font-mono"));
     fireEvent.click(screen.getByTestId("chase-select-all-matching"));
     fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
     await waitFor(() =>
@@ -790,5 +797,83 @@ describe("(PR14 review) fixes", () => {
     );
     const call = state.toast.mock.calls.map((c) => c[0] as any).find((a) => nodeText(a.title) === "60 marked reviewed");
     expect(renderToStaticMarkup(<>{call.title}</>)).toContain('class="font-mono tabular-nums"');
+  });
+});
+
+describe("(PR14 second review)", () => {
+  it("N1: Select all leaves pending rows out — the count and the filter are the server's posted rows; a pending row is still reviewable on its own", async () => {
+    const pending = ["p0", "p1", "p2"].map((id, k) => ({
+      id,
+      occurredOn: TODAY,
+      occurredAt: `${TODAY}T23:5${k}:00.000Z`,
+      pending: true,
+      amount: "-77.00",
+    }));
+    serve({ rows: [...weekRows(120), ...pending] });
+    show();
+    await ready("Showing 50 of 123 · 123 to review");
+    fireEvent.click(screen.getByTestId("chase-select-page"));
+    await waitFor(() =>
+      expect(screen.getByTestId("chase-select-all-matching").textContent).toBe("Select all 120 posted"),
+    );
+    const countQuery = server.calls.find(
+      (c) => c.path === "/api/transactions/ledger" && c.query.get("pending") === "false",
+    )!.query;
+    expect(countQuery.get("from")).toBe(REGISTER_FROM);
+    expect(countQuery.get("to")).toBe(TODAY);
+    expect(countQuery.get("limit")).toBe("1");
+
+    fireEvent.click(screen.getByTestId("chase-select-all-matching"));
+    expect(screen.getByTestId("bulk-bar").textContent).toContain("120 selected");
+    fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
+    await waitFor(() =>
+      expect(toastTexts(state.toast)).toContainEqual(expect.objectContaining({ title: "120 marked reviewed" })),
+    );
+    const post = server.calls.find((c) => c.path === "/api/transactions/bulk-review-matching")!;
+    expect(post.body).toEqual({
+      filter: { from: REGISTER_FROM, to: TODAY, pending: false },
+      reviewed: true,
+      expectedCount: 120,
+    });
+    expect(server.rows.filter((r) => r.pending).map((r) => r.reviewed)).toEqual([false, false, false]);
+    expect(server.rows.filter((r) => !r.pending).every((r) => r.reviewed)).toBe(true);
+    await ready("Showing 50 of 123 · 3 to review");
+
+    // One pending row, on its own row: allowed, as before.
+    fireEvent.click(within(screen.getByTestId("row-tx-p0")).getByText("Mark reviewed"));
+    await waitFor(() => expect(server.rows.find((r) => r.id === "p0")!.reviewed).toBe(true));
+    expect(server.calls.filter((c) => c.path === "/api/transactions/bulk-update").at(-1)!.body).toEqual({
+      ids: ["p0"],
+      patch: { reviewed: true },
+    });
+  });
+
+  it("LOW: an Undo whose failed ids are not on a loaded page says only the loaded ones stay selected", async () => {
+    // r000 is the oldest row: never on the first page of 50.
+    serve({ rows: weekRows(120), failReviewIds: ["r000"] });
+    show();
+    await ready("Showing 50 of 120 · 120 to review");
+    fireEvent.click(screen.getByTestId("chase-select-page"));
+    await waitFor(() =>
+      expect(screen.getByTestId("chase-select-all-matching").textContent).toBe("Select all 120 posted"),
+    );
+    fireEvent.click(screen.getByTestId("chase-select-all-matching"));
+    fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
+    await waitFor(() =>
+      expect(toastTexts(state.toast)).toContainEqual(expect.objectContaining({ title: "120 marked reviewed" })),
+    );
+    const undo = toastTexts(state.toast).find((t) => t.title === "120 marked reviewed")!.action as any;
+    await act(async () => {
+      undo.props.onClick();
+    });
+    await waitFor(() =>
+      expect(toastTexts(state.toast)).toContainEqual(
+        expect.objectContaining({
+          title: "119 restored for review, 1 failed",
+          description: "Failed rows on the loaded pages remain selected. Try again.",
+          variant: "destructive",
+        }),
+      ),
+    );
   });
 });
