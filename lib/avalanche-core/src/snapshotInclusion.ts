@@ -86,3 +86,23 @@ export function isInSnapshot(row: SnapshotLedgerRow, snapAt: Date, snapDay: stri
   }
   return false;
 }
+
+/**
+ * (PR4c review) Was this PENDING row a charge the balance read at `snapAt`
+ * already held? Used only when a posted row replaced it: then the posting adds
+ * just the difference (the tip). Needs positive evidence, not just `isInSnapshot`:
+ *   - never a deposit — `available` does not hold pending deposits;
+ *   - the snapshot rule must hold it;
+ *   - and it is dated before the snapshot day, or reached the ledger at or
+ *     before the read, or carries a real institution time at or before the read.
+ * A snapshot-day pending row with no such evidence may have happened after the
+ * read (the rule holds it only for want of evidence), so its posting counts in full.
+ */
+export function pendingChargeWasInBalance(row: SnapshotLedgerRow, snapAt: Date, snapDay: string): boolean {
+  if (row.amount >= 0) return false;
+  if (!isInSnapshot(row, snapAt, snapDay)) return false;
+  if (row.occurredOn < snapDay) return true;
+  const read = snapAt.getTime();
+  const happenedAt = realTimeMs(row.occurredAt);
+  return row.createdAt.getTime() <= read || (happenedAt !== null && happenedAt <= read);
+}

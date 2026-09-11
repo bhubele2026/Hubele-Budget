@@ -15,6 +15,7 @@ import {
   addDaysISO,
   isInSnapshot,
   pairPendingWithPosted,
+  pendingChargeWasInBalance,
   SUPERSEDE_MAX_DAYS,
 } from "@workspace/avalanche-core";
 import {
@@ -355,31 +356,32 @@ export async function buildForecastLedger(
     );
   let bankToday = startBalanceAtAnchor;
   const actuals: LedgerActual[] = [];
-  const heldBySnapshot = (t: (typeof actualRowsAll)[number]): boolean =>
-    !!snapshotISO &&
-    !!snapshotAt &&
-    isInSnapshot(
-      {
-        occurredOn: t.occurredOn,
-        amount: Number(t.amount) || 0,
-        createdAt: t.createdAt,
-        // Stored as a string; an unparsable value is NaN, which the rule treats as no time.
-        occurredAt: t.occurredAt ? new Date(t.occurredAt) : null,
-        plaidAccountId: t.plaidAccountId ?? null,
-      },
-      snapshotAt,
-      snapshotISO,
-    );
+  type ActualRow = (typeof actualRowsAll)[number];
+  const toSnapshotRow = (t: ActualRow) => ({
+    occurredOn: t.occurredOn,
+    amount: Number(t.amount) || 0,
+    createdAt: t.createdAt,
+    // Stored as a string; an unparsable value is NaN, which the rule treats as no time.
+    occurredAt: t.occurredAt ? new Date(t.occurredAt) : null,
+    plaidAccountId: t.plaidAccountId ?? null,
+  });
+  const heldBySnapshot = (t: ActualRow): boolean =>
+    !!snapshotISO && !!snapshotAt && isInSnapshot(toSnapshotRow(t), snapshotAt, snapshotISO);
+  const pendingWasInBalance = (t: ActualRow): boolean =>
+    !!snapshotISO && !!snapshotAt && pendingChargeWasInBalance(toSnapshotRow(t), snapshotAt, snapshotISO);
 
   // ⭐ A PENDING ROW ITS POSTED ROW REPLACED COUNTS ONCE (PR4c).
   // Normally the sync re-keys the pending row onto its posted row, so they are
   // one row. When that link is missing both rows sit here and the charge would
   // count twice. `pairPendingWithPosted` pairs them (heuristic; see there). The
-  // pending half never counts. What the posted half adds depends on what the
-  // snapshot already held — `available` included the charge while it was pending:
-  //   posted held by the snapshot             → 0 (the balance has the posting)
-  //   posted counts, pending held             → posted − pending (the tip)
-  //   posted counts, pending not held          → posted (the pending row is skipped)
+  // pending half never counts. What the posted half adds (PR4c review):
+  //   posted and pending both held by the snapshot       → 0 (the balance has it)
+  //   pending CHARGE with evidence it was in the balance → posted − pending (the tip)
+  //   otherwise                                          → posted, in full
+  // A held posted row whose pending half is NOT held still counts: it reached the
+  // ledger after that pending half and is dated on or after it, so it cannot be
+  // inside a balance the pending half was not. Pending deposits never leave only
+  // a difference — `available` does not hold them.
   const supersededBy = pairPendingWithPosted(
     actualRowsAll
       .filter((t) => isBankRow(t.source, t.plaidAccountId ?? null))
@@ -399,7 +401,9 @@ export async function buildForecastLedger(
   // Defensive only: `transactions.plaid_transaction_id` is unique.
   const seenPlaidIds = new Set<string>();
   for (const t of actualRowsAll) {
-    if (heldBySnapshot(t)) continue;
+    const replaced = supersededBy.get(t.id);
+    const replacedRow = replaced ? actualRowById.get(replaced.id) : undefined;
+    if (heldBySnapshot(t) && (!replacedRow || heldBySnapshot(replacedRow))) continue;
     if (!isBankRow(t.source, t.plaidAccountId ?? null)) continue;
     if (supersededIds.has(t.id)) continue;
     if (t.plaidTransactionId) {
@@ -407,9 +411,7 @@ export async function buildForecastLedger(
       seenPlaidIds.add(t.plaidTransactionId);
     }
     let amount = Number(t.amount) || 0;
-    const replaced = supersededBy.get(t.id);
-    const replacedRow = replaced ? actualRowById.get(replaced.id) : undefined;
-    if (replaced && replacedRow && heldBySnapshot(replacedRow)) amount -= replaced.amount;
+    if (replacedRow && pendingWasInBalance(replacedRow)) amount -= Number(replacedRow.amount) || 0;
     if (snapshotISO && t.occurredOn <= todayISO) bankToday += amount;
     if (t.occurredOn <= toISO) {
       actuals.push({ kind: "actual", date: t.occurredOn, amount, matched: false, txnId: t.id });

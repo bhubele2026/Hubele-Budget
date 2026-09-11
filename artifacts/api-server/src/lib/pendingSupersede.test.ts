@@ -66,16 +66,31 @@ describe("canSupersede", () => {
     expect(canSupersede(p, posted("q", "2026-05-02", -20, { description: "COFFEE SHOP" }))).toBe(false);
     expect(descriptionsFuzzyEqual("AFFIRM.COM PAYME Merchant: Affirm", "Affirm")).toBe(true);
   });
+
+  it("(PR4c review) never pairs rows with no real description", () => {
+    const p = pending("p", "2026-05-01", -20, { description: "(no description)" });
+    expect(canSupersede(p, posted("q", "2026-05-02", -20, { description: "(no description)" }))).toBe(false);
+    expect(canSupersede(pending("p", "2026-05-01", -20, { description: "" }), posted("q", "2026-05-02", -20, { description: "" }))).toBe(false);
+  });
 });
 
 describe("pairPendingWithPosted", () => {
-  it("pairs one to one: two pendings and one posted row pair once, with the nearest date", () => {
+  it("pairs one to one: two equal pendings and one posted row pair once, with the OLDEST pending row (holds post oldest first)", () => {
     const pairs = pairPendingWithPosted([
-      pending("p-far", "2026-05-01", -20),
-      pending("p-near", "2026-05-03", -20),
+      pending("p-old", "2026-05-01", -20),
+      pending("p-new", "2026-05-03", -20),
       posted("q", "2026-05-04", -20),
     ]);
-    expect([...pairs.entries()].map(([q, p]) => [q, p.id])).toEqual([["q", "p-near"]]);
+    expect([...pairs.entries()].map(([q, p]) => [q, p.id])).toEqual([["q", "p-old"]]);
+  });
+
+  it("(PR4c review) the closest amount beats the nearest date: an older −40 hold posting as −40 is not taken by a newer −30", () => {
+    const pairs = pairPendingWithPosted([
+      pending("p-40", "2026-05-01", -40),
+      pending("p-30", "2026-05-02", -30),
+      posted("q", "2026-05-03", -40),
+    ]);
+    expect(pairs.get("q")?.id).toBe("p-40");
   });
 
   it("one pending and two posted rows: the earlier posted row takes it", () => {

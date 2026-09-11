@@ -1,4 +1,4 @@
-import { descriptionsFuzzyEqual } from "./descriptionMatch";
+import { descriptionsFuzzyEqual, tokenizeDescription } from "./descriptionMatch";
 import { addDaysISO } from "./householdTime";
 
 /** A posted row can replace a pending row dated up to this many days before it. */
@@ -17,7 +17,12 @@ export type SupersedeRow = {
 };
 
 const cents = (n: number): number => Math.round(Math.abs(n) * 100);
-const dayNumber = (iso: string): number => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
+
+/** (PR4c review) "(no description)" and empty labels match each other trivially: never pair them. */
+function hasRealDescription(d: string | null): boolean {
+  if (tokenizeDescription(d).size === 0) return false;
+  return (d ?? "").trim().toLowerCase() !== "(no description)";
+}
 
 /**
  * ⭐ DID THIS POSTED ROW REPLACE THIS PENDING ROW? (PR4c)
@@ -34,7 +39,7 @@ const dayNumber = (iso: string): number => Date.parse(`${iso}T00:00:00Z`) / 86_4
  *   - it is dated on the pending row's day or up to SUPERSEDE_MAX_DAYS after;
  *   - same sign, and |pending| ≤ |posted| ≤ 1.30 × |pending| + $1.00 (a tip or a
  *     final amount above the authorisation hold, never below it);
- *   - the descriptions are fuzzy-equal (`descriptionsFuzzyEqual`).
+ *   - both have a real description, and they are fuzzy-equal (`descriptionsFuzzyEqual`).
  */
 export function canSupersede(pending: SupersedeRow, posted: SupersedeRow): boolean {
   if (!pending.pending || posted.pending) return false;
@@ -46,14 +51,27 @@ export function canSupersede(pending: SupersedeRow, posted: SupersedeRow): boole
   const p = cents(pending.amount);
   const q = cents(posted.amount);
   if (q < p || q > Math.round(p * 1.3) + 100) return false;
+  if (!hasRealDescription(pending.description) || !hasRealDescription(posted.description)) return false;
   return descriptionsFuzzyEqual(pending.description, posted.description);
+}
+
+/** Negative when `a` is the better pending row for `posted` than `b`. */
+function rankPending(a: SupersedeRow, b: SupersedeRow, posted: SupersedeRow): number {
+  const gapA = cents(posted.amount) - cents(a.amount);
+  const gapB = cents(posted.amount) - cents(b.amount);
+  return (
+    gapA - gapB ||
+    a.occurredOn.localeCompare(b.occurredOn) ||
+    a.createdAt.getTime() - b.createdAt.getTime() ||
+    a.id.localeCompare(b.id)
+  );
 }
 
 /**
  * Pair posted rows with the pending rows they replaced, one to one. Posted rows
- * pick in date order (then `created_at`, then id); each takes the nearest-dated
- * qualifying pending row, then the closest amount, then the oldest, then id.
- * Returns posted row id → the pending row it replaced.
+ * pick in date order (then `created_at`, then id); each takes the qualifying
+ * pending row with the closest amount, then the oldest (holds post oldest first —
+ * PR4c review), then id. Returns posted row id → the pending row it replaced.
  */
 export function pairPendingWithPosted(rows: readonly SupersedeRow[]): Map<string, SupersedeRow> {
   const pendings = rows.filter((r) => r.pending && r.plaidAccountId);
@@ -69,25 +87,9 @@ export function pairPendingWithPosted(rows: readonly SupersedeRow[]): Map<string
   const pairs = new Map<string, SupersedeRow>();
   for (const posted of posteds) {
     let best: SupersedeRow | null = null;
-    let bestKey: [number, number, number, string] | null = null;
     for (const pending of pendings) {
       if (taken.has(pending.id) || !canSupersede(pending, posted)) continue;
-      const key: [number, number, number, string] = [
-        dayNumber(posted.occurredOn) - dayNumber(pending.occurredOn),
-        cents(posted.amount) - cents(pending.amount),
-        pending.createdAt.getTime(),
-        pending.id,
-      ];
-      if (
-        !bestKey ||
-        key[0] < bestKey[0] ||
-        (key[0] === bestKey[0] &&
-          (key[1] < bestKey[1] ||
-            (key[1] === bestKey[1] && (key[2] < bestKey[2] || (key[2] === bestKey[2] && key[3] < bestKey[3])))))
-      ) {
-        best = pending;
-        bestKey = key;
-      }
+      if (!best || rankPending(pending, best, posted) < 0) best = pending;
     }
     if (best) {
       taken.add(best.id);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isInSnapshot, PLAID_HELD_AHEAD_DAYS } from "@workspace/avalanche-core";
+import { isInSnapshot, pendingChargeWasInBalance, PLAID_HELD_AHEAD_DAYS } from "@workspace/avalanche-core";
 
 /**
  * The one rule for "the bank snapshot already holds this row" (PR4b).
@@ -99,5 +99,35 @@ describe("isInSnapshot — household days", () => {
     const created = new Date("2026-05-29T14:00:00Z");
     expect(held(row("2026-06-03", { createdAt: created }), snapAt, "2026-05-29")).toBe(true); // +5
     expect(held(row("2026-06-04", { createdAt: created }), snapAt, "2026-05-29")).toBe(false); // +6
+  });
+});
+
+describe("pendingChargeWasInBalance (PR4c review)", () => {
+  const was = (r: ReturnType<typeof row>) => pendingChargeWasInBalance(r, SNAP_AT, SNAP_DAY);
+
+  it("never for a deposit: available does not hold pending deposits", () => {
+    expect(was(row("2026-04-30", { amount: 2000 }))).toBe(false);
+    expect(was(row(SNAP_DAY, { amount: 2000, createdAt: BEFORE }))).toBe(false);
+  });
+
+  it("a charge dated before the snapshot day was in the balance", () => {
+    expect(was(row("2026-04-30", { createdAt: AFTER }))).toBe(true);
+  });
+
+  it("a snapshot-day charge needs evidence: arrival or a real time at or before the read", () => {
+    expect(was(row(SNAP_DAY, { createdAt: BEFORE }))).toBe(true);
+    expect(was(row(SNAP_DAY, { createdAt: AFTER, occurredAt: TIME_BEFORE }))).toBe(true);
+    // Held by the rule for want of evidence — may have happened after the read.
+    expect(isInSnapshot(row(SNAP_DAY, { createdAt: AFTER }), SNAP_AT, SNAP_DAY)).toBe(true);
+    expect(was(row(SNAP_DAY, { createdAt: AFTER }))).toBe(false);
+  });
+
+  it("never when the snapshot rule counts the row", () => {
+    expect(was(row(SNAP_DAY, { createdAt: AFTER, occurredAt: TIME_AFTER }))).toBe(false);
+    expect(was(row("2026-05-03", { createdAt: AFTER }))).toBe(false);
+  });
+
+  it("an ahead-dated charge the ledger had at the read was in the balance", () => {
+    expect(was(row("2026-05-03", { createdAt: BEFORE }))).toBe(true);
   });
 });

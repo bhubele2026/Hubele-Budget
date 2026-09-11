@@ -17,6 +17,7 @@
 export { inForecast } from "./forecastInclusion";
 export {
   isInSnapshot,
+  pendingChargeWasInBalance,
   PLAID_HELD_AHEAD_DAYS,
   type SnapshotLedgerRow,
 } from "./snapshotInclusion";

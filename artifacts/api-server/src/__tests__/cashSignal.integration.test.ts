@@ -1810,9 +1810,11 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
     pendingAmount: string;
     pendingCreatedAt?: Date;
     pendingDescription?: string;
+    pendingOccurredAt?: string;
     postedOn: string;
     postedAmount: string;
     postedDescription?: string;
+    postedCreatedAt?: Date;
   }): Promise<void> {
     const chase = await snapshotReadAt10am();
     await addLedgerTxn({
@@ -1823,6 +1825,7 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       pending: true,
       description: opts.pendingDescription ?? "TST* CORNER BISTRO",
       createdAt: opts.pendingCreatedAt,
+      occurredAt: opts.pendingOccurredAt,
     });
     await addLedgerTxn({
       occurredOn: opts.postedOn,
@@ -1830,6 +1833,7 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       plaidAccountId: chase.externalId,
       source: "plaid:chase",
       description: opts.postedDescription ?? "CORNER BISTRO",
+      createdAt: opts.postedCreatedAt,
     });
   }
   async function expectCash(value: string): Promise<void> {
@@ -1878,6 +1882,77 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
   it("(PR4c) not a pair: posted eight days after the pending row", async () => {
     await pendingThenPosted({ pendingOn: "2026-05-03", pendingAmount: "-48.20", postedOn: "2026-05-11", postedAmount: "-55.00" });
     await expectCash("896.80");
+  });
+
+  it("(PR4c review R1) a pending deposit held by the snapshot, posted the next day: the deposit counts in full — 3000.00", async () => {
+    await pendingThenPosted({
+      pendingOn: "2026-05-01",
+      pendingAmount: "2000.00",
+      pendingCreatedAt: new Date("2026-05-01T14:00:00Z"),
+      pendingDescription: "PAYROLL ACME CORP",
+      postedOn: "2026-05-02",
+      postedAmount: "2000.00",
+      postedDescription: "ACME CORP PAYROLL",
+    });
+    await expectCash("3000.00");
+  });
+
+  it("(PR4c review R1b) the same pending deposit dated before the snapshot day — 3000.00", async () => {
+    await pendingThenPosted({
+      pendingOn: "2026-04-30",
+      pendingAmount: "2000.00",
+      pendingDescription: "PAYROLL ACME CORP",
+      postedOn: "2026-05-02",
+      postedAmount: "2000.00",
+      postedDescription: "ACME CORP PAYROLL",
+    });
+    await expectCash("3000.00");
+  });
+
+  it("(PR4c review R2) a snapshot-day pending charge that reached the ledger after the read, no time: its posting counts in full — 945.00", async () => {
+    await pendingThenPosted({
+      pendingOn: "2026-05-01",
+      pendingAmount: "-48.20",
+      pendingCreatedAt: new Date("2026-05-01T23:00:00Z"), // 18:00 CT, after the read
+      postedOn: "2026-05-02",
+      postedAmount: "-55.00",
+    });
+    await expectCash("945.00");
+  });
+
+  it("(PR4c review R3) a pending charge timed after the read, posted the same day with no time: the charge is not wiped out — 945.00", async () => {
+    await pendingThenPosted({
+      pendingOn: "2026-05-01",
+      pendingAmount: "-48.20",
+      pendingCreatedAt: new Date("2026-05-01T19:30:00Z"),
+      pendingOccurredAt: "2026-05-01T19:12:34.000Z", // 14:12 CT, after the read
+      postedOn: "2026-05-01",
+      postedAmount: "-55.00",
+      postedCreatedAt: new Date("2026-05-01T20:00:00Z"),
+    });
+    await expectCash("945.00");
+  });
+
+  it("(PR4c review) both halves held by the snapshot: nothing is added — 1000.00", async () => {
+    await pendingThenPosted({
+      pendingOn: "2026-05-01",
+      pendingAmount: "-48.20",
+      pendingCreatedAt: new Date("2026-05-01T13:00:00Z"),
+      postedOn: "2026-05-01",
+      postedAmount: "-55.00",
+      postedCreatedAt: new Date("2026-05-01T14:00:00Z"),
+    });
+    await expectCash("1000.00");
+  });
+
+  it("(PR4c review) two pendings, the older posts: it takes the older hold (closest amount), not the newer — 930.00", async () => {
+    const chase = await snapshotReadAt10am();
+    const rowAt = (occurredOn: string, amount: string, pending: boolean, description: string) =>
+      addLedgerTxn({ occurredOn, amount, plaidAccountId: chase.externalId, source: "plaid:chase", pending, description });
+    await rowAt("2026-05-03", "-40.00", true, "TST* CORNER BISTRO");
+    await rowAt("2026-05-04", "-30.00", true, "TST* CORNER BISTRO");
+    await rowAt("2026-05-05", "-40.00", false, "CORNER BISTRO");
+    await expectCash("930.00");
   });
 
   // ⚠️ THE FROZEN-BALANCE TRAP (2026-08-25 investigation — Brad: "my Chase

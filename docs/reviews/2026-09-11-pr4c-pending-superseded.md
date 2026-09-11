@@ -1,117 +1,195 @@
 # PR4c — A pending charge its posted row replaced counts once
 
-Codex work-order point **1** (cash today), plan PR4: "pending superseded, read-only". PR4b, PR4d and PR4d-2 are live
+Codex work-order point **1** (cash today), plan PR4 ("pending superseded, read-only"). PR4b, PR4d and PR4d-2 are live
 (`b93c01e`). Plan: `~/.claude/plans/h2-budget-work-serene-pebble.md`.
+
+| Commit | What it does |
+|---|---|
+| `4f2969c` | The pairing rule, the comparator move, the ledger wiring and tests. |
+| review-fix commit | Fixes from the first review: which pending rows leave only a difference, when a held posted row still counts, ranking, and rows with no description. The rules below are as shipped. |
 
 ## The problem
 
-**A charge can sit in the ledger twice: once pending, once posted.**
-- Normally the Plaid sync re-keys the pending row onto its posted row through `pending_transaction_id`, so they become
-  one row.
-- **When that link is missing, both rows stay.** This happens when:
+**A charge can sit in the ledger twice, once pending and once posted.**
+- Normally the Plaid sync re-keys the pending row onto its posted row through `pending_transaction_id`, so there is one
+  row.
+- **When that link is missing, both rows stay:**
   - the merchant re-bills under a fresh id and Plaid never sends the link;
-  - the pending row survives because the user already worked it. The cursor `removed` delete and the vanished-pending
+  - or the pending row survives because the user already worked it. The cursor `removed` delete and the vanished-pending
     sweep never delete a categorised, bucketed, reviewed or overridden row.
-- **Cash today and the forecast curve then subtract the charge twice.**
-- **Example:** a restaurant charge pending at −48.20 posts at −55.00 with the tip. Cash was down by 103.20; the truth is
-  55.00.
+- **Cash today and the forecast curve then count the charge twice.**
+- **Example:** a restaurant charge pending at −48.20 posts at −55.00 with the tip. Cash went down by 103.20; the truth
+  is 55.00.
 
 ## What changed
 
 **One pairing rule, `pairPendingWithPosted`** (`lib/avalanche-core/src/pendingSupersede.ts`, pure). A posted row
 replaces a pending row when **all** of these hold:
-- same Plaid account; one row pending, the other not;
+- same Plaid account; one row pending, the other posted;
 - the posted row reached the ledger after the pending row;
-- the posted row is dated on the pending row's day or up to 7 days later (`SUPERSEDE_MAX_DAYS`);
-- same sign, and |pending| ≤ |posted| ≤ 1.30 × |pending| + $1.00, so a tip or a final amount above the hold, never below it;
-- the descriptions are fuzzy-equal. That is the dedupe pass's own token-subset comparator, moved verbatim to
-  `lib/avalanche-core/src/descriptionMatch.ts`; `dedupeTransactions.ts` imports it back.
+- it is dated on the pending row's day or up to 7 days later (`SUPERSEDE_MAX_DAYS`);
+- same sign, and |pending| ≤ |posted| ≤ 1.30 × |pending| + $1.00 (a tip, or a final amount above the hold, never
+  below it);
+- both have a real description (never empty or "(no description)"), and the descriptions are fuzzy-equal. The
+  comparator is the dedupe pass's token-subset test, moved verbatim to `lib/avalanche-core/src/descriptionMatch.ts`
+  and imported back by `dedupeTransactions.ts`.
 
-Pairing is one to one. Posted rows pick in date order, each taking the nearest-dated pending row, then the closest
-amount, then the oldest.
+Pairing is one to one. Posted rows pick in date order. Each takes the qualifying pending row with the **closest
+amount**, then the **oldest**, because holds post oldest first.
 
-**In the ledger** (`lib/forecastLedger.ts`, the one loop `bankToday` and the curve share), the pending half never
-counts. What the posted half adds depends on what the bank snapshot already held, because `available` included the
-charge while it was pending:
+**In the ledger** (`lib/forecastLedger.ts`, the one loop behind `bankToday` and the curve), the pending half never
+counts. The posted half adds:
 
-| Posted row | Pending row | Posted row adds | Why |
-|---|---|---|---|
-| held by the snapshot | either | 0 | the balance already has the posting |
-| counts | held by the snapshot | posted − pending (−55.00 − −48.20 = **−6.80**) | the balance held the pending amount; only the tip is new |
-| counts | counts | posted (−55.00) | neither was in the balance |
+| Case | Posted row adds | Why |
+|---|---|---|
+| Posted and pending both held by the snapshot | 0 | The balance already has the charge. |
+| Pending **charge** with evidence it was inside the balance (`pendingChargeWasInBalance`) | posted − pending (−55.00 − −48.20 = **−6.80**) | `available` held the pending amount, so only the tip is new. |
+| Anything else | posted, in full | Neither was in the balance, or there is no evidence either was. |
 
-**The plan's wording, "the pending row leaves cash", is not enough.** Dropping a pending row the snapshot already held
-changes nothing, and the posted row would still subtract the whole charge again. The table above is the deviation.
+**`pendingChargeWasInBalance`** (`lib/avalanche-core/src/snapshotInclusion.ts`) needs positive evidence, not only
+`isInSnapshot`. All of these must hold:
+- the row is not a deposit (`available` does not hold pending deposits);
+- the snapshot rule holds the row;
+- and the row is dated before the snapshot day, reached the ledger at or before the read, or has a real institution
+  time at or before the read.
 
-**With a snapshot, the actual-rows query reaches 7 days before the anchor.** A pending row dated before the snapshot
-day can be the half a posted row replaced. `isInSnapshot` holds every row dated before the snapshot day, so the extra
-days change nothing on their own.
+**A snapshot-day pending row with no such evidence** is held by PR4b's rule only because nothing shows when it
+happened. It may have happened after the read, so its posting counts in full. This matches `main` and the linked
+re-key path.
+
+**A held posted row whose pending half is not held still counts.** The posted row reached the ledger after its pending
+half and is dated on or after it, so it cannot be inside a balance that did not hold the pending half.
+
+**Deviation from the plan.** The plan said "the pending row leaves cash". That is not enough: dropping a pending row the
+snapshot already held changes nothing, and the posted row would still subtract the whole charge again. The table
+above replaces it.
+
+**With a snapshot, the actual-rows query reaches 7 days before the anchor**, so a pending row dated before the snapshot
+day can be found. `isInSnapshot` holds every row dated before the snapshot day, so the extra days change nothing on
+their own.
 
 ## Figures that should move
 
-**Live**, wherever cash today is shown or used (`bankToday`, the curve and low point, the spine's bank balance): up
-by the double-counted half of any pending/posted pair the sync left unlinked.
-- **Pending row held, posted row after the read:** up by the pending amount. Cash moves only by the tip.
-- **Neither held:** up by the pending amount. The charge counts once, at the posted amount.
-- **Unchanged:** every other row, and every household with no such pair. **No existing test fixture holds a pair.**
-  Golden, cash signal, household scenario, spine parity, bank-balance explain and forecast past rows all pass
-  unchanged, and the golden snapshot file is untouched.
+**Live**, wherever cash today is shown or used (`bankToday`, the curve and low point, the spine's bank balance). Only
+pending/posted pairs the sync left unlinked are affected:
+- **A double-counted charge:** cash goes **up** by the pending amount. If the balance held the pending charge, only the
+  tip moves cash.
+- **A double-counted pending deposit that was not held** (dated after the snapshot day): cash goes **down** by the
+  deposit that was counted twice.
+- **Unchanged:** every other row, and every household with no such pair. **No existing fixture holds a pair.** Golden,
+  cash signal, household scenario, spine parity, bank-balance explain and forecast past rows all pass unchanged, and
+  the golden snapshot file is untouched.
 
-**Not measured:** how many pairs the household's ledger holds. That needs a read-only production query Brad approves.
-The production database stays locked.
+**Not measured:** how many unlinked pairs the household's ledger holds. The reviewer asks for a read-only production
+count before merge. The production database is locked, so that needs Brad's approval.
 
 ## Residuals
 
-- **False pair (overstates cash).**
-  - A real charge still pending, plus a *different* later charge at the same merchant that posted first. It must be
-    within 7 days and 1.30× + $1, with fuzzy-equal descriptions (coffee, gas).
-  - The pending charge is dropped until it posts, when it is re-keyed and the pair disappears.
-  - It needs out-of-order posting: the later charge posts before the earlier one. There is no
-    `pending_transaction_id` column to tell them apart.
-- **Missed pair (understates cash, as before).** A posted amount below the hold, over 1.30× + $1, more than 7 days
-  later, or with a description the token-subset test does not match.
-- **Spending totals still count both halves.** This rule applies only to cash and the forecast. Spending reports use
-  `isRealSpend` (plan PR7).
-- **The same surfaces as PR4b stay on their own rules:** the web Chase page (`lib/accountBalance.ts`), "Why this
-  number?" (`sinceAnchor`) and the sync's reconciliation. They can differ by the pairs above as well (PR4e).
-- **Only Plaid rows pair.** Manual and Amex rows never do.
+**False pair — overstates cash by the dropped pending charge until it posts.**
+- A real charge that is still pending gets paired with a *different* same-merchant charge that posted first, within
+  7 days and 1.30× + $1.
+- A re-keyed posted row keeps its own pending row's `created_at`. That blocks pairing with an *older* pending row, so
+  charges posting in order are safe. It does not block a *newer* one.
+- Descriptions are the sync's `merchant_name || name`. Short labels ("Amazon", "Uber", "PayPal", "Starbucks") are
+  token subsets across different purchases.
+- The +$1 slack lets a $3.00 charge pair with a $4.00 one.
+- The reviewer reproduced 994.25 against a true 989.00.
+
+**Snapshot-day pending charge, no evidence.** Its posting counts in full. If it was in fact authorised before the read
+and only reached the ledger late, cash is understated by the pending amount. That is `main`'s behaviour and the
+linked path's.
+
+**`current` anchor.** When Plaid returned no `available` and the snapshot used `current`, pending charges were not in
+the balance, so "posted − pending" is too small a charge. The same happens with a typed-in balance that left pending
+charges out. The source only records "plaid" or "manual", so this can't be detected.
+
+**Missed pairs — understates cash, as before:**
+- the posted amount is below the hold, over 1.30× + $1, or more than 7 days later;
+- the descriptions don't match;
+- the posted row reached the ledger before its pending row.
+
+**Other surfaces:**
+- `acceptedImpact` (`forecast.tsx`, "accepted") now takes only the tip for a matched posted row, and a matched pending
+  row that was replaced drops out of it.
+- Spending totals still count both halves (plan PR7).
+- The web Chase page (`lib/accountBalance.ts`), "Why this number?" and the sync reconciliation still use their own
+  rules (PR4e, in progress).
+- Only Plaid rows pair.
 
 ## Must not change
 
-- Every existing figure and test. No fixture holds a pair; see above.
+- Every existing figure and test (no fixture holds a pair).
 - `dedupeTransactions.ts` behaviour: the comparator moved verbatim, and its suite passes.
-- The web app's code. The shared library gains two modules, and the web suite and bundle guard were re-run.
+- The web app's code. The shared library gains modules, and the web suite and bundle guard were re-run.
 
 ## Tests
 
-- **New `lib/pendingSupersede.test.ts`** (9):
+- **`lib/pendingSupersede.test.ts`** (11):
   - a tip pairs;
-  - same day (posted later) and +7 days pair; +8 does not;
+  - same day and +7 days pair, +8 doesn't;
   - never a posted row dated earlier, or one that reached the ledger first;
-  - the amount bounds at exactly 1.30 × + $1, a cent over, a cent under, the other sign, and deposits;
+  - amount bounds: exactly 1.30× + $1, a cent over, a cent under, the other sign, deposits;
   - account, pending flag and description, plus the moved comparator;
-  - one-to-one pairing: two pendings with one posted row, one pending with two posted rows, and the closer amount on a
-    tie.
-- **`__tests__/cashSignal.integration.test.ts`** (+6), on a balance of 1,000.00 read at 10:00 CT on 05-01:
-  - pending −48.20 held, posted −55.00 the next day → **993.20** in `bankToday` and `daily[0]`;
+  - rows with no description never pair;
+  - one to one:
+    - two equal pendings take the oldest;
+    - the closest amount beats the nearest date;
+    - the earlier posted row takes a lone pending row;
+    - nothing qualifies.
+- **`lib/snapshotInclusion.test.ts`** (+5, `pendingChargeWasInBalance`):
+  - never a deposit;
+  - a charge before the snapshot day;
+  - snapshot-day evidence (arrival, real time) versus none;
+  - never when the rule counts the row;
+  - an ahead-dated charge the ledger had.
+- **`__tests__/cashSignal.integration.test.ts`** (+12). Balance 1,000.00 read at 10:00 CT on 05-01; values are
+  `bankToday` and `daily[0]`:
+  - pending −48.20 with evidence, posted −55.00 the next day → **993.20**;
   - neither held → **945.00**;
-  - a pending row dated before the snapshot day (found through the widened query) → **993.20**;
-  - not a pair: a different merchant (895.00), the amount over 1.30× + $1 (905.00), eight days apart (896.80).
-- **Failing before:** run against `main`'s `forecastLedger.ts` (`b93c01e`), **the three pairing tests fail** (993.20, 945.00,
-  993.20). The three "not a pair" tests pass there, as they must.
+  - pending dated before the snapshot day → **993.20**;
+  - not a pair:
+    - different merchant → **895.00**;
+    - over 1.30× + $1 → **905.00**;
+    - eight days apart → **896.80**;
+  - review regressions:
+    - a pending deposit held, posted the next day → **3000.00** (R1);
+    - the same deposit dated before the snapshot day → **3000.00** (R1b);
+    - a snapshot-day pending charge that reached the ledger after the read → **945.00** (R2);
+    - a pending charge timed after the read, posted the same day with no time → **945.00** (R3);
+    - both halves held → **1000.00**;
+    - two pendings, the older posts → **930.00**.
+- **Failing before:**
+  - on `b93c01e` (`main`), the first three pairing tests fail;
+  - on `4f2969c` (this PR before review), **5 of the 6 review regression tests fail**: R1, R1b, R2, R3 and the
+    two-pendings case. The both-held test passes on both, as it should.
 
 ## Verification
 
-- **Ledger-dependent API files:** 9 files, 137 pass, 8 todo. The golden snapshot file is unchanged.
-- **Full API suite:** **121 files, 916 pass, 8 todo** (901 on `main`, plus 9 unit and 6 cash-signal tests).
-- **Web suite:** 118 files, 917 pass (the shared library gained two modules).
-- **Workspace typecheck and build:** pass; workspace build exit 0.
+- **Ledger-dependent API files:** 9 files, **150 pass**, 8 todo. The golden snapshot file is unchanged.
+- **Full API suite:** **121 files, 929 pass, 8 todo** (916 at `4f2969c`, plus 13 tests).
+- **Web suite:** **118 files, 917 pass**.
+- **Workspace typecheck and build:** clean; workspace build exit 0.
 - **Landing bundle guard:** 572.5 KB of 580, unchanged.
+
+## Review
+
+**First review of `4f2969c`: REQUEST CHANGES.** Every money finding was reproduced on a 1,000.00 balance.
+
+| Finding | Done |
+|---|---|
+| HIGH H1: a pending deposit was subtracted from its posted row (R1, R1b: 1000.00 against a true 3000.00) | Only a pending **charge** can leave a difference. Two tests. |
+| HIGH H2: a pending charge that happened after the read counted only as a tip, overstating cash (R2: 993.20 against 945.00) | A difference is taken only with evidence the pending charge was in the balance (`pendingChargeWasInBalance`). Test. |
+| MEDIUM M1: a held posted row wiped out a charge whose pending half was not held (R3: 1000.00 against 945.00) | A held posted row is skipped only when its pending half is held too. Test, plus a both-held test. |
+| MEDIUM M2: false pairs are wider than the note said (a newer pending row, short labels, +$1 slack, "(no description)") | "(no description)" and empty rows never pair. The residual is rewritten accurately. The production count needs Brad's approval. |
+| LOW L1: the date tie-break took the newest pending row (R6) | Rank by closest amount, then oldest. Unit test and ledger test (930.00). |
+| LOW L2: `current` anchor; LOW L3: arrival-order misses | Disclosed. |
+| NITs: `acceptedImpact`; the figure direction for deposits; missing tests | Disclosed; the figures section is corrected; tests added. There is no no-snapshot ledger test: `heldBySnapshot` is always false there, so the posted row counts in full and the pending row is skipped. |
 
 ## Left for later
 
-- **PR4d, still open:** backfill order around the balance read; an optional untouched-delete for an OLD/NEW re-mint
-  pair; a time-evidence re-mint tie-break.
-- **PR4e:** move the web `accountBalance.ts`, the explain route and the sync reconciliation onto `isInSnapshot` and this
-  pairing rule.
+- **PR4d, still open:** backfill order around the balance read; an optional untouched-delete for an OLD/NEW re-mint pair;
+  a time-evidence re-mint tie-break.
+- **PR4e (in progress):** the explain route and the sync reconciliation onto the same per-row rule. The web Chase page
+  moves in PR14.
 - **PR7:** spending totals should not count both halves of a pair.
+- **A read-only production count of unlinked pending/posted pairs**, if Brad approves.
