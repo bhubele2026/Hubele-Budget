@@ -25,4 +25,25 @@ export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({
     predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/"),
   });
+  invalidateBankLedger(queryClient);
+}
+
+/**
+ * (PR14) Every ledger or ledger-balance query: the Chase list's pages (an
+ * infinite key, `["infinite", "/api/transactions/ledger", …]`) and the balances
+ * behind its charts. Their review counts, totals and running balances move with
+ * any transaction write, and neither key starts with `/api/transactions`'s own
+ * list key, so the list pages' `getListTransactionsQueryKey()` never reached
+ * them.
+ */
+export function isBankLedgerQueryKey(key: readonly unknown[]): boolean {
+  return key.some(
+    (k) =>
+      typeof k === "string" &&
+      (k.startsWith("/api/transactions/ledger") || k.startsWith("/api/transactions/balances")),
+  );
+}
+
+export function invalidateBankLedger(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ predicate: (q) => isBankLedgerQueryKey(q.queryKey) });
 }
