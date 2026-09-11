@@ -328,13 +328,12 @@ describe("(#720) Stale-cursor gap-backfill fallback", () => {
 });
 
 /**
- * ⭐ PR4b — THE SNAPSHOT IS RE-STAMPED AFTER THE SYNC'S OWN BACKFILL.
+ * ⭐ PR4b — A ROW THIS SYNC BACKFILLS AFTER READING THE BALANCE IS NOT COUNTED TWICE.
  *
- * A manual Sync reads the bank balance first and writes `bankSnapshotAt`, then
- * a backfill can import rows the cursor missed. Those rows get `created_at`
- * AFTER the read. Under the PR4b rule a row dated on the snapshot day that
- * reached the ledger after the read counts — but the balance read seconds
- * earlier already held it, so without the re-stamp it would be counted twice.
+ * A manual Sync reads the bank balance first and writes `bankSnapshotAt`, then a
+ * backfill can import rows the cursor missed. Those rows reach the ledger AFTER
+ * the read, but the bank had them. Under the PR4b rule a snapshot-day row with no
+ * transaction time is held whenever it arrived, so it is not added on top.
  */
 describe("(PR4b) bank snapshot vs rows the same Sync backfilled", () => {
   it("does not add a backfilled snapshot-day row on top of the balance the Sync just read", async () => {
@@ -385,7 +384,8 @@ describe("(PR4b) bank snapshot vs rows the same Sync backfilled", () => {
       .where(eq(transactionsTable.plaidTransactionId, "restamp-today-charge"));
     expect(settings!.bankSnapshotBalance).toBe("2500.00");
     expect(imported).toBeDefined();
-    expect(imported!.createdAt.getTime()).toBeLessThanOrEqual(settings!.bankSnapshotAt!.getTime());
+    // It reached the ledger after the read — and is still not added on top.
+    expect(imported!.createdAt.getTime()).toBeGreaterThanOrEqual(settings!.bankSnapshotAt!.getTime());
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
     expect(sig.bankToday).toBe("2500.00");

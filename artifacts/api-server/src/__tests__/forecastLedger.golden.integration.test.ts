@@ -154,6 +154,8 @@ async function txn(opts: {
   plaidTransactionId?: string | null;
   /** When the row reached the ledger. Defaults to 00:00 Chicago on its own date. */
   createdAt?: Date;
+  /** The institution's own transaction time (`occurred_at`). */
+  occurredAt?: string;
 }) {
   const [t] = await db
     .insert(transactionsTable)
@@ -169,6 +171,7 @@ async function txn(opts: {
       forecastFlag: opts.forecastFlag ?? false,
       plaidTransactionId: opts.plaidTransactionId ?? null,
       createdAt: opts.createdAt ?? createdAtStartOfHouseholdDay(opts.occurredOn),
+      occurredAt: opts.occurredAt ?? null,
     })
     .returning();
   return t;
@@ -339,26 +342,32 @@ describe("PR4a golden — computeCashSignal output, byte for byte", () => {
 
 /**
  * ⭐ PR4b — THE SNAPSHOT RULE, ON THE FULL HOUSEHOLD (balance read 05-08 15:00Z).
- * Recorded with the rule in place; the entries above are unchanged by it because
- * every fixture row is created at 00:00 on its own day.
- *   same-day −35 created after the read      → counts
- *   Plaid −22 dated 05-10, created before     → held (already in the balance)
- *   Plaid −18 dated 05-10, created after      → counts
- *   Plaid −90 dated 05-14 (+6), created before → counts (outside the five days)
- *   manual −12 dated 05-09, created before    → counts (manual rows: same day only)
- * Hand check: bankToday = 2785 − 35 − 18 − 90 − 12 = 2630.00.
+ * The entries above are unchanged by the rule: every fixture row is created at
+ * 00:00 on its own day and carries no transaction time.
+ *   −35 dated 05-08, real time 18:23Z (after the read)    → counts
+ *   −15 dated 05-08, arrived 05-09, no time              → held (feed latency)
+ *   −22 Plaid charge dated 05-10, in the ledger at the read → held
+ *   +500 Plaid deposit dated 05-10, in the ledger at the read → counts (not in `available`)
+ *   −18 Plaid charge dated 05-10, arrived after the read  → counts
+ *   −90 Plaid charge dated 05-14 (+6)                     → counts
+ *   −12 manual, dated 05-09                               → counts
+ * bankToday = 2785 − 35 + 500 − 18 − 90 − 12 = 3130.00
+ * (PR4a's day rule: 2785 − 22 + 500 − 18 − 90 − 12 = 3143.00).
  */
 describe("PR4b golden — the snapshot rule", () => {
-  it("counts rows that reached the ledger after the read, and holds Plaid rows the bank already had", async () => {
+  it("counts rows shown to happen after the read, holds rows the balance already had", async () => {
     await fullHousehold();
     const ext = "golden-chase-1";
-    await txn({ occurredOn: "2026-05-08", amount: "-35", plaidAccountId: ext, source: "plaid:chase", plaidTransactionId: "r-sameday-after", createdAt: new Date("2026-05-08T18:00:00Z") });
-    await txn({ occurredOn: "2026-05-10", amount: "-22", plaidAccountId: ext, source: "plaid:chase", plaidTransactionId: "r-held", createdAt: new Date("2026-05-08T14:00:00Z") });
+    const atRead = new Date("2026-05-08T14:00:00Z");
+    await txn({ occurredOn: "2026-05-08", amount: "-35", plaidAccountId: ext, source: "plaid:chase", plaidTransactionId: "r-sameday-happened-after", createdAt: new Date("2026-05-08T18:30:00Z"), occurredAt: "2026-05-08T18:23:41.000Z" });
+    await txn({ occurredOn: "2026-05-08", amount: "-15", plaidAccountId: ext, source: "plaid:chase", plaidTransactionId: "r-sameday-late", createdAt: new Date("2026-05-09T12:00:00Z") });
+    await txn({ occurredOn: "2026-05-10", amount: "-22", plaidAccountId: ext, source: "plaid:chase", plaidTransactionId: "r-held-charge", createdAt: atRead });
+    await txn({ occurredOn: "2026-05-10", amount: "500", plaidAccountId: ext, source: "plaid:chase", plaidTransactionId: "r-pending-deposit", createdAt: atRead });
     await txn({ occurredOn: "2026-05-10", amount: "-18", plaidAccountId: ext, source: "plaid:chase", plaidTransactionId: "r-after", createdAt: new Date("2026-05-09T12:00:00Z") });
-    await txn({ occurredOn: "2026-05-14", amount: "-90", plaidAccountId: ext, source: "plaid:chase", plaidTransactionId: "r-plus6", createdAt: new Date("2026-05-08T14:00:00Z") });
-    await txn({ occurredOn: "2026-05-09", amount: "-12", source: "manual", createdAt: new Date("2026-05-08T14:00:00Z") });
+    await txn({ occurredOn: "2026-05-14", amount: "-90", plaidAccountId: ext, source: "plaid:chase", plaidTransactionId: "r-plus6", createdAt: atRead });
+    await txn({ occurredOn: "2026-05-09", amount: "-12", source: "manual", createdAt: atRead });
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 45 });
-    expect(sig.bankToday).toBe("2630.00");
+    expect(sig.bankToday).toBe("3130.00");
     expect(normalised(sig)).toMatchSnapshot();
   });
 });

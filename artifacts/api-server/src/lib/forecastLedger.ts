@@ -92,9 +92,10 @@ export type ForecastLedger = {
  *
  * Anchored on the bank snapshot when present:
  *   - A checking row counts unless the snapshot already holds it (PR4b,
- *     `isInSnapshot`): rows dated before the snapshot day; snapshot-day rows
- *     that reached the ledger before the balance was read; and Plaid rows that
- *     existed at the read and are dated up to five days after it.
+ *     `isInSnapshot`): rows dated before the snapshot day; snapshot-day rows,
+ *     unless the institution's own time shows they happened after the read;
+ *     and Plaid charges the ledger already had at the read, dated up to five
+ *     days after it.
  *   - (#666) Planned events dated on/before the snapshot are dropped entirely
  *     — bills AND income, real AND synthetic. The bank snapshot is the
  *     truth: anything dated on or before it is already reflected in the
@@ -316,13 +317,14 @@ export async function buildForecastLedger(
   // and the curve takes only forecast-flagged rows after today.
   //
   // ⭐ WHICH ROWS THE SNAPSHOT ALREADY HOLDS — ONE RULE, APPLIED HERE ONLY (PR4b).
-  // A calendar day is not enough: the balance is read at an INSTANT, so a row
-  // dated on the snapshot day can land after the read, and a Plaid row dated a
-  // few days ahead can already be inside it (a pending authorisation). With a
-  // snapshot the query therefore reads the snapshot day too, and
-  // `isInSnapshot` compares each row's `created_at` with the read. Because
-  // `bankToday` and the curve take their rows from this one loop, they cannot
-  // disagree about it.
+  // A calendar day is not enough: the balance is read at an INSTANT. A
+  // snapshot-day row can have happened after the read, and a Plaid charge dated
+  // a few days ahead can already be inside it (a posted row re-keyed from its
+  // pending row keeps the pending row's `created_at`). With a snapshot the
+  // query therefore reads the snapshot day too, and `isInSnapshot` decides each
+  // row — see there for why `created_at` never decides the snapshot day.
+  // Because `bankToday` and the curve take their rows from this one loop, they
+  // cannot disagree about it.
   const actualUpperISO = toISO > todayISO ? toISO : todayISO;
   const actualRowsAll = await db
     .select()
@@ -350,8 +352,9 @@ export async function buildForecastLedger(
       isInSnapshot(
         {
           occurredOn: t.occurredOn,
+          amount: Number(t.amount) || 0,
           createdAt: t.createdAt,
-          // Stored as a string; an unparsable value is NaN and simply falls back to created_at.
+          // Stored as a string; an unparsable value is NaN, which the rule treats as no time.
           occurredAt: t.occurredAt ? new Date(t.occurredAt) : null,
           plaidAccountId: t.plaidAccountId ?? null,
         },

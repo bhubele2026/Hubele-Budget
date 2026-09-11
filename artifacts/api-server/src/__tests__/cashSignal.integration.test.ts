@@ -1722,18 +1722,37 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
     expect(sig.daily?.[0].balance).toBe("1000.00");
   });
 
-  it("(PR4b) a snapshot-day row that reached the ledger after the read counts, in the tile and on the curve", async () => {
+  it("(PR4b) a snapshot-day charge that happened after the read counts, in the tile and on the curve", async () => {
+    // The plan's "$960" case. It counts on the institution's own time (14:07 CT),
+    // not on when the row reached the ledger — see isInSnapshot for why.
     const chase = await snapshotReadAt10am();
     await addLedgerTxn({
       occurredOn: "2026-05-01",
       amount: "-40",
       plaidAccountId: chase.externalId,
       source: "plaid:chase",
-      createdAt: new Date("2026-05-01T19:00:00Z"), // 14:00 CT
+      createdAt: new Date("2026-05-01T19:10:00Z"), // arrived 14:10 CT
+      occurredAt: "2026-05-01T19:07:12.000Z", // happened 14:07 CT, after the read
     });
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
     expect(sig.bankToday).toBe("960.00");
     expect(sig.daily?.[0].balance).toBe("960.00");
+  });
+
+  it("(PR4b) a snapshot-day row that only arrived after the read, with no transaction time, is not added again", async () => {
+    // Feed latency: Chase rows reach Plaid hours to days late, so arriving after
+    // the read is no evidence the purchase happened after it.
+    const chase = await snapshotReadAt10am();
+    await addLedgerTxn({
+      occurredOn: "2026-05-01",
+      amount: "-40",
+      plaidAccountId: chase.externalId,
+      source: "plaid:chase",
+      createdAt: new Date("2026-05-01T19:00:00Z"), // arrived 14:00 CT, no transaction time
+    });
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.bankToday).toBe("1000.00");
+    expect(sig.daily?.[0].balance).toBe("1000.00");
   });
 
   it("(PR4b) a Plaid row dated two days ahead that already existed at the read is not added again", async () => {
@@ -1760,11 +1779,27 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       plaidAccountId: chase.externalId,
       source: "plaid:chase",
       createdAt: new Date("2026-05-01T19:00:00Z"), // arrived 14:00 CT, after the read
-      occurredAt: "2026-05-01T13:00:00.000Z", // happened 08:00 CT, before the read
+      occurredAt: "2026-05-01T13:12:34.000Z", // happened 08:12 CT, before the read
     });
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
     expect(sig.bankToday).toBe("1000.00");
     expect(sig.daily?.[0].balance).toBe("1000.00");
+  });
+
+  it("(PR4b) a pending deposit dated the next day that existed at the read still counts", async () => {
+    // The balance anchor is `available`, which leaves pending deposits out.
+    const chase = await snapshotReadAt10am();
+    await addLedgerTxn({
+      occurredOn: "2026-05-02",
+      amount: "2000",
+      plaidAccountId: chase.externalId,
+      source: "plaid:chase",
+      pending: true,
+      createdAt: new Date("2026-05-01T14:00:00Z"), // pending at 09:00 CT, before the read
+    });
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.bankToday).toBe("3000.00");
+    expect(sig.daily?.[0].balance).toBe("3000.00");
   });
 
   // ⚠️ THE FROZEN-BALANCE TRAP (2026-08-25 investigation — Brad: "my Chase
