@@ -50,6 +50,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetBillsSummaryQueryKey: () => ["/api/bills/summary"],
   getGetForecastQueryKey: () => ["/api/forecast"],
   getGetForecastCashSignalQueryKey: () => ["/api/forecast/cash-signal"],
+  getGetForecastBankBalanceExplainQueryKey: () => ["/api/forecast/bank-balance-explain"],
   getGetDashboardQueryKey: () => ["/api/dashboard"],
   // Stub the update-link-token mutation used by PlaidReconnectButton so we
   // don't need to mount real react-plaid-link in these unit tests.

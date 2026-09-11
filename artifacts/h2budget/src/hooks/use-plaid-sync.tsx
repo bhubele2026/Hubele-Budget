@@ -7,6 +7,7 @@ import {
   getListTransactionsQueryKey,
   getGetForecastQueryKey,
   getGetForecastCashSignalQueryKey,
+  getGetForecastBankBalanceExplainQueryKey,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -363,6 +364,11 @@ export function usePlaidSync() {
               // without forcing a manual reload. Cheap (single GET) and
               // a no-op for users without an Amex item linked.
               qc.invalidateQueries({ queryKey: ["/api/amex/anchor"] });
+              // "Why this number?" must never explain an older bank balance than the
+              // tile: a Sync can re-read the balance even when no rows changed.
+              qc.invalidateQueries({
+                queryKey: getGetForecastBankBalanceExplainQueryKey(),
+              });
               if (!silent) {
                 if (items.length === 0) {
                   // (#671 follow-up) Truth-in-toast: when the user's
