@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -9,15 +9,9 @@ import {
   avalancheSettingsTable,
 } from "@workspace/db";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
-import { inForecastWhere } from "./forecastInclusion";
+import { ledgerActualRowsWhere, toCashRow } from "./ledgerCashRows";
 import { householdDayOf, householdTodayDate } from "./householdClock";
-import {
-  addDaysISO,
-  isInSnapshot,
-  pairPendingWithPosted,
-  pendingChargeWasInBalance,
-  SUPERSEDE_MAX_DAYS,
-} from "@workspace/avalanche-core";
+import { classifyCashRows, isBankRow } from "@workspace/avalanche-core";
 import {
   addDays,
   expandItem,
@@ -96,7 +90,9 @@ export type ForecastLedger = {
  * items into the daily series. `forecastLedger.golden.integration.test.ts` pins
  * the full `computeCashSignal` output recorded before the extraction.
  *
- * Anchored on the bank snapshot when present:
+ * Anchored on the bank snapshot when present (what each row adds is
+ * `classifyCashRows`, PR4e — the same rule "Why this number?" and the Sync's
+ * reconciliation use):
  *   - A checking row counts unless the snapshot already holds it (PR4b,
  *     `isInSnapshot`): rows dated before the snapshot day; snapshot-day rows,
  *     unless the institution's own time shows they happened after the read;
@@ -286,23 +282,6 @@ export async function buildForecastLedger(
   });
   const configuredCheckingExternalId = snapshotAccount.externalId;
 
-  const isBankRow = (
-    source: string | null,
-    plaidAccountId: string | null,
-  ): boolean => {
-    if (plaidAccountId) {
-      return (
-        configuredCheckingExternalId !== null &&
-        plaidAccountId === configuredCheckingExternalId
-      );
-    }
-    // Manual rows (no plaidAccountId): exclude anything tagged as an
-    // explicit credit-card source.
-    const s = (source ?? "").toLowerCase();
-    if (s === "amex" || s.startsWith("plaid:")) return false;
-    return true;
-  };
-
   // ⭐ ONE SET OF ACTUAL ROWS FOR BOTH `bankToday` AND THE CURVE (PR4a).
   //
   // These used to be two queries over two row sets that happened to agree:
@@ -335,86 +314,50 @@ export async function buildForecastLedger(
   // Because `bankToday` and the curve take their rows from this one loop, they
   // cannot disagree about it.
   const actualUpperISO = toISO > todayISO ? toISO : todayISO;
+  // (PR4c) With a snapshot the query reaches SUPERSEDE_MAX_DAYS before the
+  // anchor, where the pending half of a pair can sit. See `ledgerActualRowsWhere`.
   const actualRowsAll = await db
     .select()
     .from(transactionsTable)
     .where(
-      and(
-        eq(transactionsTable.householdId, householdId),
-        snapshotISO
-          ? inForecastWhere(todayISO)
-          : eq(transactionsTable.forecastFlag, true),
-        // (PR4c) With a snapshot, reach SUPERSEDE_MAX_DAYS before the anchor: a
-        // pending row dated before the snapshot can be the half a posted row
-        // replaced. `isInSnapshot` holds every row dated before the snapshot day,
-        // so the extra days add nothing on their own.
-        snapshotISO
-          ? gte(transactionsTable.occurredOn, addDaysISO(anchorISO, -SUPERSEDE_MAX_DAYS))
-          : gt(transactionsTable.occurredOn, anchorISO),
-        lte(transactionsTable.occurredOn, actualUpperISO),
-      ),
+      ledgerActualRowsWhere({
+        householdId,
+        snapshotDay: snapshotISO,
+        todayISO,
+        upperISO: actualUpperISO,
+      }),
     );
   let bankToday = startBalanceAtAnchor;
   const actuals: LedgerActual[] = [];
-  type ActualRow = (typeof actualRowsAll)[number];
-  const toSnapshotRow = (t: ActualRow) => ({
-    occurredOn: t.occurredOn,
-    amount: Number(t.amount) || 0,
-    createdAt: t.createdAt,
-    // Stored as a string; an unparsable value is NaN, which the rule treats as no time.
-    occurredAt: t.occurredAt ? new Date(t.occurredAt) : null,
-    plaidAccountId: t.plaidAccountId ?? null,
+  // ⭐ WHAT EACH ROW ADDS — `classifyCashRows` (PR4e), the one rule shared with
+  // "Why this number?" and the Sync's reconciliation. Moved verbatim from here:
+  //   - held by the snapshot (PR4b, `isInSnapshot`) → 0;
+  //   - not on the snapshot's account (`isBankRow`) → 0;
+  //   - ⭐ A PENDING ROW ITS POSTED ROW REPLACED COUNTS ONCE (PR4c). Normally the
+  //     sync re-keys the pending row onto its posted row, so they are one row.
+  //     When that link is missing both rows sit here and the charge would count
+  //     twice. `pairPendingWithPosted` pairs them (heuristic; see there). The
+  //     pending half never counts. What the posted half adds (PR4c review):
+  //       posted and pending both held by the snapshot       → 0 (the balance has it)
+  //       pending CHARGE with evidence it was in the balance → posted − pending (the tip)
+  //       otherwise                                          → posted, in full
+  //     A held posted row whose pending half is NOT held still counts: it reached
+  //     the ledger after that pending half and is dated on or after it, so it
+  //     cannot be inside a balance the pending half was not. Pending deposits
+  //     never leave only a difference — `available` does not hold them.
+  //   - a repeated plaid transaction id → 0 (defensive only: the id is unique).
+  // Rows that count are summed into `bankToday` and become actuals in the order
+  // the query returned them, as before the move.
+  const cash = classifyCashRows(actualRowsAll.map(toCashRow), {
+    anchor: snapshotISO && snapshotAt ? { at: snapshotAt, day: snapshotISO } : null,
+    accountExternalId: configuredCheckingExternalId,
+    todayISO,
   });
-  const heldBySnapshot = (t: ActualRow): boolean =>
-    !!snapshotISO && !!snapshotAt && isInSnapshot(toSnapshotRow(t), snapshotAt, snapshotISO);
-  const pendingWasInBalance = (t: ActualRow): boolean =>
-    !!snapshotISO && !!snapshotAt && pendingChargeWasInBalance(toSnapshotRow(t), snapshotAt, snapshotISO);
-
-  // ⭐ A PENDING ROW ITS POSTED ROW REPLACED COUNTS ONCE (PR4c).
-  // Normally the sync re-keys the pending row onto its posted row, so they are
-  // one row. When that link is missing both rows sit here and the charge would
-  // count twice. `pairPendingWithPosted` pairs them (heuristic; see there). The
-  // pending half never counts. What the posted half adds (PR4c review):
-  //   posted and pending both held by the snapshot       → 0 (the balance has it)
-  //   pending CHARGE with evidence it was in the balance → posted − pending (the tip)
-  //   otherwise                                          → posted, in full
-  // A held posted row whose pending half is NOT held still counts: it reached the
-  // ledger after that pending half and is dated on or after it, so it cannot be
-  // inside a balance the pending half was not. Pending deposits never leave only
-  // a difference — `available` does not hold them.
-  const supersededBy = pairPendingWithPosted(
-    actualRowsAll
-      .filter((t) => isBankRow(t.source, t.plaidAccountId ?? null))
-      .map((t) => ({
-        id: t.id,
-        plaidAccountId: t.plaidAccountId ?? null,
-        pending: !!t.pending,
-        occurredOn: t.occurredOn,
-        amount: Number(t.amount) || 0,
-        description: t.description ?? null,
-        createdAt: t.createdAt,
-      })),
-  );
-  const supersededIds = new Set([...supersededBy.values()].map((p) => p.id));
-  const actualRowById = new Map(actualRowsAll.map((t) => [t.id, t] as const));
-
-  // Defensive only: `transactions.plaid_transaction_id` is unique.
-  const seenPlaidIds = new Set<string>();
-  for (const t of actualRowsAll) {
-    const replaced = supersededBy.get(t.id);
-    const replacedRow = replaced ? actualRowById.get(replaced.id) : undefined;
-    if (heldBySnapshot(t) && (!replacedRow || heldBySnapshot(replacedRow))) continue;
-    if (!isBankRow(t.source, t.plaidAccountId ?? null)) continue;
-    if (supersededIds.has(t.id)) continue;
-    if (t.plaidTransactionId) {
-      if (seenPlaidIds.has(t.plaidTransactionId)) continue;
-      seenPlaidIds.add(t.plaidTransactionId);
-    }
-    let amount = Number(t.amount) || 0;
-    if (replacedRow && pendingWasInBalance(replacedRow)) amount -= Number(replacedRow.amount) || 0;
-    if (snapshotISO && t.occurredOn <= todayISO) bankToday += amount;
-    if (t.occurredOn <= toISO) {
-      actuals.push({ kind: "actual", date: t.occurredOn, amount, matched: false, txnId: t.id });
+  for (const r of cash.rows) {
+    if (!r.counts) continue;
+    if (snapshotISO && r.occurredOn <= todayISO) bankToday += r.contribution;
+    if (r.occurredOn <= toISO) {
+      actuals.push({ kind: "actual", date: r.occurredOn, amount: r.contribution, matched: false, txnId: r.id });
     }
   }
 
@@ -482,7 +425,7 @@ export async function buildForecastLedger(
         ),
       );
     for (const t of matchedTxns) {
-      if (isBankRow(t.source, t.plaidAccountId ?? null)) {
+      if (isBankRow(t.source, t.plaidAccountId ?? null, configuredCheckingExternalId)) {
         matchedTxnBankSet.add(t.id);
       }
     }

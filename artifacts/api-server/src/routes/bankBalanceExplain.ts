@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, gt, lte } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   db,
   forecastSettingsTable,
@@ -12,6 +12,7 @@ import { computeCashSignal } from "../lib/cashSignal";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "../lib/householdClock";
 import { computeBankFreshness } from "../lib/bankFreshness";
+import { classifyLedgerRowsThroughToday } from "../lib/ledgerCashRows";
 
 const router: IRouter = Router();
 
@@ -108,23 +109,31 @@ router.get(
 
     // What the roll-forward is adding on top of the anchor — the other half of
     // every figure on screen.
+    //
+    // ⭐ ONE RULE WITH THE BALANCE (PR4e). This used to sum the account's rows
+    // dated after the snapshot day, which is not what `bankToday` adds: it
+    // skipped manual rows and snapshot-day rows after the read, and added rows
+    // the snapshot already held and both halves of a pending/posted pair. The
+    // popover's "counted differently" note was routine. It now asks the ledger's
+    // own rule (`classifyCashRows`) over the ledger's own rows, so the snapshot
+    // plus `net` is `bankToday` to the cent.
+    //   - Present whenever the snapshot has a read time — the ledger's condition
+    //     for rolling forward. An unresolved account still rolls manual rows.
+    //   - `rowCount`: the rows the balance adds on top of the snapshot, dated
+    //     through today — one per row on the ledger, including a posted row that
+    //     adds 0.00 because its pending half was already in the balance. Held,
+    //     other-account and replaced pending rows are not counted.
     let sinceAnchor: { rowCount: number; net: string } | null = null;
-    if (anchorDay && resolved.externalId) {
-      const rows = await db
-        .select({ amount: transactionsTable.amount })
-        .from(transactionsTable)
-        .where(
-          and(
-            eq(transactionsTable.householdId, householdId),
-            eq(transactionsTable.plaidAccountId, resolved.externalId),
-            gt(transactionsTable.occurredOn, anchorDay),
-            lte(transactionsTable.occurredOn, todayDay),
-          ),
-        );
-      const net = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    if (anchorDay && settings?.bankSnapshotAt) {
+      const cash = await classifyLedgerRowsThroughToday({
+        householdId,
+        anchor: { at: new Date(settings.bankSnapshotAt), day: anchorDay },
+        accountExternalId: resolved.externalId,
+        todayISO: todayDay,
+      });
       sinceAnchor = {
-        rowCount: rows.length,
-        net: (Math.round(net * 100) / 100).toFixed(2),
+        rowCount: cash.throughToday.rowCount,
+        net: (Math.round(cash.throughToday.net * 100) / 100).toFixed(2),
       };
     }
 

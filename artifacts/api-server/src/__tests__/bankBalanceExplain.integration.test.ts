@@ -164,6 +164,76 @@ describe("GET /forecast/bank-balance-explain", () => {
     expect(e.nextSync.willRefreshBalance).toBe(true);
   });
 
+  it("⭐ (PR4e) the rows line is what the balance adds: snapshot + net = the balance, to the cent", async () => {
+    // One snapshot read at 07:00 CT on 08-20, and a row of each kind the old
+    // day sum got wrong. The old line read "4 rows, −561.60" beside a balance of
+    // 4429.06, so the popover's "counted differently" note showed every time.
+    await reset();
+    const { rowId } = await seedAccount({ externalId: "chase-5526", mask: "5526" });
+    await db.insert(forecastSettingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      bankSnapshotAccountId: rowId,
+      bankSnapshotBalance: "4726.97",
+      bankSnapshotAt: new Date("2026-08-20T12:00:00Z"),
+      bankSnapshotSource: "plaid",
+      bankSnapshotMask: "5526",
+      cashBuffer: "0",
+    });
+    const base = {
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      plaidAccountId: "chase-5526",
+      source: "plaid:chase",
+    };
+    await db.insert(transactionsTable).values([
+      // Counts: a charge after the read.
+      { ...base, occurredOn: "2026-08-21", description: "HY-VEE", amount: "-442.91", createdAt: createdAtStartOfHouseholdDay("2026-08-21") },
+      // Held: a snapshot-day charge the ledger had before the read.
+      { ...base, occurredOn: "2026-08-20", description: "CASEY'S", amount: "-30.00", createdAt: new Date("2026-08-20T10:00:00Z") },
+      // Held: a charge dated two days ahead that was already in the ledger at the read.
+      { ...base, occurredOn: "2026-08-22", description: "NETFLIX", amount: "-15.49", createdAt: new Date("2026-08-20T11:00:00Z") },
+      // An unlinked pending/posted pair: the charge counts once, at −55.00.
+      { ...base, occurredOn: "2026-08-23", description: "TST* CORNER BISTRO", amount: "-48.20", pending: true, createdAt: createdAtStartOfHouseholdDay("2026-08-23") },
+      { ...base, occurredOn: "2026-08-24", description: "CORNER BISTRO", amount: "-55.00", createdAt: createdAtStartOfHouseholdDay("2026-08-24") },
+      // Counts: a manual row on the account.
+      { ...base, plaidAccountId: null, source: "manual", occurredOn: "2026-08-25", description: "Cash deposit", amount: "200.00", createdAt: createdAtStartOfHouseholdDay("2026-08-25") },
+    ]);
+
+    const e = await explain();
+    // HY-VEE −442.91, the posted −55.00, the manual +200.00.
+    expect(e.ledger.sinceAnchor).toEqual({ rowCount: 3, net: "-297.91" });
+    expect(e.displayed.bankToday).toBe("4429.06");
+    const cents = (v: string) => Math.round(Number(v) * 100);
+    expect(cents(e.snapshot.balance!) + cents(e.ledger.sinceAnchor!.net)).toBe(cents(e.displayed.bankToday));
+  });
+
+  it("(PR4e) an unresolved account still rolls its manual rows, and the rows line says so", async () => {
+    // The balance on screen adds manual rows even when no Plaid account resolves;
+    // the rows line used to be absent here, so the two could not be compared.
+    await reset();
+    await seedAccount({ externalId: "chase-a", mask: null });
+    await seedAccount({ externalId: "chase-b", mask: null });
+    await db.insert(forecastSettingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      bankSnapshotBalance: "4284.06",
+      bankSnapshotAt: new Date("2026-08-20T12:00:00Z"),
+      bankSnapshotSource: "plaid",
+      cashBuffer: "0",
+    });
+    await db.insert(transactionsTable).values([
+      { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, occurredOn: "2026-08-21", description: "Rent check", amount: "-84.06", source: "manual", createdAt: createdAtStartOfHouseholdDay("2026-08-21") },
+      // Not on any resolved account: no Plaid row counts.
+      { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, occurredOn: "2026-08-21", description: "KWIK TRIP", amount: "-10.00", plaidAccountId: "chase-a", source: "plaid:chase", createdAt: createdAtStartOfHouseholdDay("2026-08-21") },
+    ]);
+
+    const e = await explain();
+    expect(e.account.via).toBe("unresolved");
+    expect(e.ledger.sinceAnchor).toEqual({ rowCount: 1, net: "-84.06" });
+    expect(e.displayed.bankToday).toBe("4200.00");
+  });
+
   it("⭐ names why a Sync will not re-read the balance when nothing identifies the account", async () => {
     // Two checking accounts, no stored pointer, no mask on the snapshot: the
     // recovery ladder cannot pick one, so the balance is frozen. THIS is the

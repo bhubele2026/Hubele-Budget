@@ -26,10 +26,10 @@ import { btnLink } from "@/ui";
  * how old it is.
  *
  * ⚠️ NO EQUATION. `displayed.bankToday` is the cash signal's roll-forward;
- * `ledger.sinceAnchor.net` is a plain sum of the account's rows after the
- * snapshot day, and is absent when the snapshot's account cannot be resolved.
- * They follow different rules (PR4 makes cash today one rule), so they are
- * separate lines, and a note says so whenever they don't add up to the cent.
+ * `ledger.sinceAnchor.net` is what that roll-forward adds, by the same rule over
+ * the same rows (PR4e), and is absent when the snapshot has no read time. The
+ * server reads them a moment apart, so they stay separate lines, and a note says
+ * so whenever they don't add up to the cent.
  */
 export function BankBalanceWhy() {
   const [open, setOpen] = useState(false);
@@ -156,8 +156,7 @@ function Explanation({ explain }: { explain: BankBalanceExplain }) {
 
           {addsUp === false && (
             <p className="text-micro text-neutral-500" data-testid="bank-why-mismatch">
-              The balance above and these lines are counted by different rules, so they do not add
-              up to the cent.
+              The balance above and these lines do not add up to the cent.
             </p>
           )}
 

@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * What the bank balance adds on top of the snapshot, by the ledger's own rule (PR4e): rows the snapshot already held, rows off the account and the pending half of a replaced pair add nothing; manual rows on the account count. snapshot.balance + net equals displayed.bankToday to the cent. rowCount is the rows that count, dated through today, including a posted row that adds 0.00. Null when the snapshot has no read time.
+ */
 export type BankBalanceExplainLedgerSinceAnchor = {
   rowCount: number;
   net: string;

@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, lte, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -30,6 +30,7 @@ import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "./householdClock";
+import { classifyLedgerRowsThroughToday } from "./ledgerCashRows";
 import { laterRowIsNearer, pickRemintCandidate, type RemintBatchEntry } from "./remintMatch";
 import {
   anchorIsReconcilable,
@@ -2450,20 +2451,23 @@ export async function syncPlaidItem(
         // Household calendar days (America/Chicago), matching the roll-forward.
         const anchorDay = householdDayOf(new Date(prevSnapshotAt));
         const todayDay = householdTodayISO();
-        const ledgerSince = async (): Promise<number> => {
-          const rows = await db
-            .select({ amount: transactionsTable.amount })
-            .from(transactionsTable)
-            .where(
-              and(
-                eq(transactionsTable.householdId, householdId),
-                eq(transactionsTable.plaidAccountId, checkingPlaidAccountId),
-                gt(transactionsTable.occurredOn, anchorDay),
-                lte(transactionsTable.occurredOn, todayDay),
-              ),
-            );
-          return rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-        };
+        // ⭐ THE LEDGER'S OWN RULE (PR4e). The prediction is what cash today
+        // would read on the PRE-sync anchor: `classifyCashRows` over the rows
+        // the ledger reads. A day sum here used to add charges the anchor
+        // already held and both halves of an unlinked pending/posted pair, so
+        // an honest ledger raised drift — a false "doesn't match our records"
+        // toast and an extra /transactions/get backfill. Manual rows on the
+        // account count, as they do in the balance on screen. Re-read after a
+        // backfill: it can add rows.
+        const ledgerSince = async (): Promise<number> =>
+          (
+            await classifyLedgerRowsThroughToday({
+              householdId,
+              anchor: { at: new Date(prevSnapshotAt), day: anchorDay },
+              accountExternalId: checkingPlaidAccountId,
+              todayISO: todayDay,
+            })
+          ).throughToday.net;
 
         let recon = reconcileBankBalance({
           anchorBalance: prevSnapshotBalance,
