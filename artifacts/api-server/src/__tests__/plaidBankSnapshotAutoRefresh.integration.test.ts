@@ -464,11 +464,18 @@ describe("(PR4e) bank reconciliation uses the ledger's cash rule", () => {
     const { add, sync } = await setUp(500);
     await add({ day: 1, amount: "-500.00", manual: true, description: "Payment — Chase Freedom" });
     await add({ day: 1, amount: "-500.00", description: "CHASE CREDIT CRD AUTOPAY" });
+    // Cash today on screen (the spine's call) counts both rows until a manual Sync
+    // taken after both are stored re-reads the balance: 1,000.00 − 500.00 − 500.00.
+    const cashToday = async () =>
+      (await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 90 })).bankToday;
+    expect(await cashToday()).toBe("0.00");
 
     const { result, driftLogged } = await sync();
     expect(result.balanceDrift ?? null).toBeNull();
     expect(driftLogged).toBe(false);
     expect(transactionsGetCalls).toBe(0);
+    // The Sync's snapshot (500.00) holds both rows, dated before its day.
+    expect(await cashToday()).toBe("500.00");
   });
 
   it("⭐ a row that is really missing still raises drift, at exactly its own amount, beside a held charge", async () => {
@@ -489,29 +496,53 @@ describe("(PR4e) bank reconciliation uses the ledger's cash rule", () => {
     expect(transactionsGetCalls).toBeGreaterThan(0);
   });
 
-  it("⚠️ (residual, pinned — not the goal) a hand-typed check the bank cleared but the feed has not delivered reports drift", async () => {
+  it("⚠️ (residual, pinned — not the goal) a hand-typed check the bank cleared but the feed has not delivered: one drift report, then none", async () => {
     // Review C1. A check typed in by hand as a manual −60.00 row; the bank has
     // cleared it (available 940.00) but Plaid has not delivered the row yet. The
-    // reconciliation sums Plaid rows only, so it predicts 1,000.00 and reports
-    // −60.00 as drift, a toast the owner cannot act on. This pins today's
-    // disclosed behaviour (PR4e note, residuals). It is not a desired end state:
-    // when manual rows can be matched to the feed's debits, change this test.
+    // reconciliation sums Plaid rows only, so the first manual Sync predicts
+    // 1,000.00 and reports −60.00 as drift, a toast the owner cannot act on. That
+    // Sync re-anchors, so later Syncs report none, whether or not the feed ever
+    // delivers the row. This pins today's disclosed behaviour (PR4e note,
+    // residuals). It is not a desired end state: when manual rows can be matched
+    // to the feed's debits, change this test.
     const { add, sync } = await setUp(940);
     await add({ day: 1, amount: "-60.00", manual: true, description: "Check #1042" });
+    // Cash today on screen: the spine's call.
+    const cashToday = async () =>
+      (await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 90 })).bankToday;
 
-    const { result, driftLogged } = await sync();
-    expect(result.balanceDrift).toEqual({
+    const beforeFirst = new Date();
+    const first = await sync();
+    expect(first.result.balanceDrift).toEqual({
       bank: "940.00",
       ledger: "1000.00",
       unexplained: "-60.00",
     });
-    expect(driftLogged).toBe(true);
+    expect(first.driftLogged).toBe(true);
 
-    // Cash today on screen (the spine's call) is right regardless: the Sync
-    // re-anchored at 940.00, and that snapshot holds the manual row dated before
-    // its day.
-    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 90 });
-    expect(sig.bankToday).toBe("940.00");
+    // (review LOW 1) The Sync re-anchored. Cash today alone cannot show it: the
+    // old 1,000.00 anchor less the manual −60.00 also reads 940.00.
+    const [settings] = await db
+      .select()
+      .from(forecastSettingsTable)
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+    expect(settings!.bankSnapshotBalance).toBe("940.00");
+    expect(settings!.bankSnapshotAt!.getTime()).toBeGreaterThanOrEqual(beforeFirst.getTime());
+    // The new snapshot holds the manual row, dated before its day.
+    expect(await cashToday()).toBe("940.00");
+
+    // (review LOW 3) A second manual Sync with the feed still silent: no drift.
+    const second = await sync();
+    expect(second.result.balanceDrift ?? null).toBeNull();
+    expect(second.driftLogged).toBe(false);
+    expect(await cashToday()).toBe("940.00");
+
+    // The feed delivers the check later, dated the day it cleared: still no drift.
+    await add({ day: 1, amount: "-60.00", createdAt: new Date(), description: "CHECK 1042" });
+    const third = await sync();
+    expect(third.result.balanceDrift ?? null).toBeNull();
+    expect(third.driftLogged).toBe(false);
+    expect(await cashToday()).toBe("940.00");
   });
 });
 

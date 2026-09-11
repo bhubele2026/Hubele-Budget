@@ -244,10 +244,10 @@ describe("GET /forecast/bank-balance-explain", () => {
   it("(review) a pair split across the today + 7 edge still ties: a posted row at exactly today + 7 replaces today's pending row", async () => {
     // The explain query reads through today + 7; the balance's 90-day ledger reads
     // further. Today's pending −30.00 is replaced by the posted −32.00 dated on the
-    // bound itself, today + 7, so it adds nothing today. The competing posted
-    // −31.00 at today + 8 is past explain's bound and, dated more than 7 days after
-    // the pending row, could not take it anyway. Both reads therefore add only
-    // HY-VEE. (PR4e follow-up) The posted row sits ON the bound so a window ending
+    // bound itself, today + 7, so it adds nothing today. The posted −31.00 at
+    // today + 8 is a decoy: a posted row replaces only a pending row dated at most
+    // 7 days before it, so it can never take today's pending row (and it is past
+    // explain's bound). Both reads therefore add only HY-VEE. (PR4e follow-up) The posted row sits ON the bound so a window ending
     // at today + 6 fails here: it misses the −32.00 and counts the −30.00.
     await reset();
     const { rowId } = await seedAccount({ externalId: "chase-5526", mask: "5526" });

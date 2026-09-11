@@ -10,15 +10,20 @@ Codex work-order point **1** (cash today, one rule), plan PR4e. Server only. Bas
 | `dcc7202` | Review fixes (table below): the reconciliation sums Plaid rows only; window and spec wording; two stale comments; five tests. |
 | review-note commit | This note, updated. |
 
-**Update (follow-up to the approval, `fix/pr4e-review-nits`).** Three non-blocking review notes; tests and this note
-only, no source change.
-- **Wording:** a logged payment beside its bank debit keeps cash today low only until the next manual Sync, not "until
-  the row is removed". The re-read snapshot holds both rows, as the reviewer's case B showed (no drift on the second
-  Sync). Fixed under residuals and left for later.
+**Update (follow-up to the approval, `fix/pr4e-review-nits`).** Non-blocking review notes; tests and this note only,
+no source change.
+- **Wording:** a logged payment beside its bank debit does not keep cash today low "until the row is removed". It does
+  until a manual Sync or a typed balance taken after both rows are stored, and the feed can bring it back (see
+  residuals). The case B test now shows the first part: cash today reads 0.00 before its Sync and 500.00 after.
 - **Edge test:** the explain today + 7 case put its posted row at today + 6, so a window ending at today + 6 also
-  passed. It now sits at exactly today + 7 and fails with that bound.
-- **C1 test:** a hand-typed check the bank cleared before the feed delivered it is now pinned through
-  `syncPlaidItem`. It shows drift −60.00 while cash today reads 940.00, a disclosed residual rather than a goal.
+  passed. It now sits at exactly today + 7 and fails with that bound. The row at today + 8 is a decoy.
+- **C1 test:** a hand-typed check the bank cleared before the feed delivered it is now pinned through `syncPlaidItem`.
+  The first manual Sync reports drift −60.00 and re-anchors at 940.00 (read back from the settings row). A second
+  Sync, and a third after the feed delivers the check, report none. Cash today reads 940.00 throughout. A disclosed
+  residual rather than a goal.
+- **Second review round** (approved at `bc574f0`): the re-anchor is asserted, because the old anchor less the check
+  also reads 940.00. "Until the next manual Sync" was too strong. The reason given, that both rows are dated before
+  the Sync's day, was wrong for rows dated on that day.
 
 ## Review findings and what was done
 
@@ -97,8 +102,8 @@ per-row loop moved verbatim, carrying PR4c's review semantics from `62c7db0`.
   posted rows pair in date order, so rows after today + 7 cannot change an outcome dated on or before today. The spine
   and explain ledgers use a 90-day window, which reads past that bound, so `throughToday.net` is exactly what their
   `bankToday` adds. Tests pin this at the unit level (a posted row after today supersedes today's pending row) and
-  through explain (a posted row at exactly today + 7 replaces today's pending row, beside a competing posted row at
-  today + 8).
+  through explain (a posted row at exactly today + 7 replaces today's pending row, beside a decoy posted row at
+  today + 8 that can never take it).
 - **Lower edge, anchor − 7:** the ledger's bound, not a complete one. A pending row dated before it can change a pair
   after the anchor through pairing order. Every caller reads the same bound, so all agree with the ledger (see
   residuals).
@@ -215,11 +220,20 @@ The production database stays locked.
     its no-snapshot line.
 - **The reconciliation and manual rows.**
   - A checking transaction recorded only by hand (a typed check the feed has not delivered) is left out of the
-    prediction, so it can show as drift until the feed delivers it. That is the base's behaviour.
-  - The balance on screen still counts a logged payment's manual row beside the bank's own debit: cash today is low by
-    that payment until the next manual Sync re-reads the balance. The new snapshot then holds both rows, because both
-    are dated before its day. This was true before PR4e and is not changed here. The reconciliation does not report
-    it, because it compares the bank with the feed's rows.
+    prediction. It shows as one drift report, on the first manual Sync after the check clears, whether or not the feed
+    ever delivers it: that Sync re-anchors. That is the base's behaviour.
+  - The balance on screen still counts a logged payment's manual row beside the bank's own debit. Cash today is low by
+    that payment until a manual Sync (or a balance typed on the forecast page, `routes/forecast.ts:792`) taken after
+    both rows are stored.
+    - **Why that snapshot holds both:** a row dated before its day is always held. A row dated on its day is held
+      unless both its transaction time and its stored time fall after the read, so a row with no transaction time is
+      held.
+    - **It can come back.** Suppose the Sync reads 500.00 after the bank took the debit but before the feed delivered
+      it. The manual row is held. The feed then delivers the −500.00 debit dated the day after the read, with no
+      transaction time. That row counts, so cash today reads 0.00 against a bank of 500.00 until another manual Sync.
+      Dated on the read day instead, it is held and cash today reads 500.00.
+    - This was true before PR4e and is not changed here. The reconciliation does not report it, because it compares
+      the bank with the feed's rows.
 - **The reconciliation inherits the ledger's other residuals** (PR4b and PR4c notes). When the Plaid-row figure is wrong
   because of one, the drift toast says so.
 - **Row volume.** Explain now reads the household's forecast rows from anchor − 7 through today + 7, not one account's
@@ -301,9 +315,10 @@ All from the worktree root, on `dcc7202`.
 
 - **PR14:** the web Chase page's balances move to server balances. `classifyCashRows` is already shared for the web
   ledger.
-- **A logged payment beside its bank debit:** both count in cash today until the next manual Sync re-reads the balance
-  (a double count that predates PR4e). Closing that gap needs a merge or match between "Log payment" rows and the
-  feed's debits, which is sync write-path work.
+- **A logged payment beside its bank debit:** both count in cash today until a manual Sync or a typed balance taken
+  after both rows are stored, and the feed can bring the double count back after one (see residuals). It predates
+  PR4e. Closing it needs a merge or match between "Log payment" rows and the feed's debits, which is sync write-path
+  work.
 - **Window edges:** reading from before anchor − 7, or posted rows through today + 7 regardless of the window, would
   close the two window residuals above, but it moves the ledger's output. It needs its own PR and golden entries.
 - **Measuring** how often held-ahead charges and unlinked pairs raised false drift in production. This needs an
