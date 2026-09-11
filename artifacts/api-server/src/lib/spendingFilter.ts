@@ -5,6 +5,8 @@
 // import path for it; add nothing here that decides spending.
 export {
   CARD_PAYMENT_PATTERNS,
+  CARD_PAYMENT_WORD_PREFIXES,
+  GENERIC_CARD_PAYMENT_PHRASES,
   PFC_CARD_PAYMENT,
   classifyOutflow,
   incomeAmount,

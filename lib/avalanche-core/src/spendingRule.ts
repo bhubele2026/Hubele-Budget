@@ -118,13 +118,92 @@ export const CARD_PAYMENT_PATTERNS: readonly string[] = [
   "synchrony ashley",
   "paypal paymthly",
   "barclaycard us creditcard",
-  "credit card pymt",
   "target card srvc",
   "menards big card",
   "amex epayment",
   "amex ach pmt",
   "american express ach",
+  // (PR7b)
+  "payment to chase card ending in",
+  "us bank credit card payment",
+  "wf credit card auto pay",
+  "target card services",
 ];
+
+/**
+ * (PR7b) Issuer codes a bank glues to a reference number
+ * ("CRCARDPMT5KX9ABC"), which whole-word matching misses. A description
+ * matches when one of its words STARTS with a code. Only codes that are
+ * neither English words nor merchant names belong here; a code never matches
+ * in the middle of a word ("XCRCARDPMTX" is not a payment).
+ */
+export const CARD_PAYMENT_WORD_PREFIXES: readonly string[] = ["crcardpmt"];
+
+/**
+ * (PR7b) Payment phrases with no issuer in them. On its own such a phrase can
+ * be part of a business name ("CREDIT CARD PYMT SUPPLIES INC"), so it matches
+ * only where the words around it show a payment:
+ *   - it is an ACH entry description ("… CO ENTRY DESCR:CREDIT CARD PAYMENT
+ *     SEC:PPD …"), or
+ *   - every word after it is a reference: it contains a digit, is ACH
+ *     boilerplate (`REFERENCE_WORDS`), or is the value after an ID label
+ *     ("PPD ID: WFCCAUTOPY").
+ *
+ * ⚠️ IT ERRS TOWARD MISSING, ON PURPOSE. A payment it misses still counts as
+ * spending, but the user can flag it (`isExternalCardPayment`, rule 3). A
+ * purchase it wrongly caught could not be put back: there is no "this was a
+ * purchase" override yet.
+ */
+export const GENERIC_CARD_PAYMENT_PHRASES: readonly string[] = [
+  "credit card pymt",
+  "credit card payment",
+  "credit card auto pay",
+];
+
+const REFERENCE_WORDS: ReadonlySet<string> = new Set([
+  "ach",
+  "ppd",
+  "ccd",
+  "web",
+  "tel",
+  "sec",
+  "id",
+  "ref",
+  "conf",
+  "trn",
+  "pmt",
+  "pymt",
+  "payment",
+  "auto",
+  "pay",
+  "autopay",
+  "online",
+  "mobile",
+  "thank",
+  "you",
+]);
+
+/** A word after one of these is an identifier, whatever its letters. */
+const ID_LABELS: ReadonlySet<string> = new Set(["id", "ref", "conf", "trn"]);
+
+function onlyReferencesFollow(rest: readonly string[]): boolean {
+  for (let k = 0; k < rest.length; k += 1) {
+    const w = rest[k]!;
+    if (/\d/.test(w) || REFERENCE_WORDS.has(w)) continue;
+    if (k > 0 && ID_LABELS.has(rest[k - 1]!)) continue;
+    return false;
+  }
+  return true;
+}
+
+function genericPhraseIsPayment(words: readonly string[], phrase: readonly string[]): boolean {
+  for (let i = 0; i + phrase.length <= words.length; i += 1) {
+    if (!phrase.every((w, j) => words[i + j] === w)) continue;
+    if (i > 0 && words[i - 1] === "descr") return true;
+    if (onlyReferencesFollow(words.slice(i + phrase.length))) return true;
+  }
+  return false;
+}
 
 /** Plaid's detailed category for a payment to a credit card (rule 8). */
 export const PFC_CARD_PAYMENT = "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT";
@@ -146,10 +225,21 @@ export function matchesTransferPattern(description: string): boolean {
   return TRANSFER_PAYMENT_PATTERNS.some((p) => d.includes(p));
 }
 
-/** Rule 9: the description names a payment to a credit card. */
+/**
+ * Rule 9: the description names a payment to a credit card — an issuer phrase
+ * as whole words (`CARD_PAYMENT_PATTERNS`), a word starting with an issuer code
+ * (`CARD_PAYMENT_WORD_PREFIXES`), or a generic phrase in a payment's position
+ * (`GENERIC_CARD_PAYMENT_PHRASES`).
+ */
 export function matchesCardPaymentPattern(description: string): boolean {
-  const d = ` ${normalizeDescription(description)} `;
-  return CARD_PAYMENT_PATTERNS.some((p) => d.includes(` ${p} `));
+  const norm = normalizeDescription(description);
+  const d = ` ${norm} `;
+  if (CARD_PAYMENT_PATTERNS.some((p) => d.includes(` ${p} `))) return true;
+  const words = norm === "" ? [] : norm.split(" ");
+  if (words.some((w) => CARD_PAYMENT_WORD_PREFIXES.some((p) => w.startsWith(p)))) {
+    return true;
+  }
+  return GENERIC_CARD_PAYMENT_PHRASES.some((p) => genericPhraseIsPayment(words, p.split(" ")));
 }
 
 export function isExcludedCategoryName(name: string | null | undefined): boolean {

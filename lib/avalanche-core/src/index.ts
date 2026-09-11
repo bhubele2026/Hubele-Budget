@@ -40,6 +40,8 @@ export {
 } from "./cashRows";
 export {
   CARD_PAYMENT_PATTERNS,
+  CARD_PAYMENT_WORD_PREFIXES,
+  GENERIC_CARD_PAYMENT_PHRASES,
   PFC_CARD_PAYMENT,
   classifyOutflow,
   incomeAmount,
