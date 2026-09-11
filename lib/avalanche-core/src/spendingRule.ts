@@ -132,27 +132,18 @@ export const CARD_PAYMENT_PATTERNS: readonly string[] = [
 
 /**
  * (PR7b) Issuer codes a bank glues to a reference number
- * ("CRCARDPMT5KX9ABC"), which whole-word matching misses. A description
- * matches when one of its words STARTS with a code. Only codes that are
- * neither English words nor merchant names belong here; a code never matches
- * in the middle of a word ("XCRCARDPMTX" is not a payment).
+ * ("CRCARDPMT5KX9ABC"), which whole-word matching misses. A word matches when
+ * it STARTS with a code and the rest of the word is empty or carries a digit
+ * (a reference, not a name: "CRCARDPMTSHOP" is not a payment). A code never
+ * matches in the middle of a word ("XCRCARDPMTX").
  */
 export const CARD_PAYMENT_WORD_PREFIXES: readonly string[] = ["crcardpmt"];
 
 /**
- * (PR7b) Payment phrases with no issuer in them. On its own such a phrase can
- * be part of a business name ("CREDIT CARD PYMT SUPPLIES INC"), so it matches
- * only where the words around it show a payment:
- *   - it is an ACH entry description ("… CO ENTRY DESCR:CREDIT CARD PAYMENT
- *     SEC:PPD …"), or
- *   - every word after it is a reference: it contains a digit, is ACH
- *     boilerplate (`REFERENCE_WORDS`), or is the value after an ID label
- *     ("PPD ID: WFCCAUTOPY").
- *
- * ⚠️ IT ERRS TOWARD MISSING, ON PURPOSE. A payment it misses still counts as
- * spending, but the user can flag it (`isExternalCardPayment`, rule 3). A
- * purchase it wrongly caught could not be put back: there is no "this was a
- * purchase" override yet.
+ * (PR7b) Payment phrases with no issuer in them ("CREDIT CARD PYMT"). They
+ * follow the same position rule as every other phrase (see
+ * `matchesCardPaymentPattern`); they are listed apart because on their own
+ * they say nothing about WHICH card.
  */
 export const GENERIC_CARD_PAYMENT_PHRASES: readonly string[] = [
   "credit card pymt",
@@ -160,6 +151,7 @@ export const GENERIC_CARD_PAYMENT_PHRASES: readonly string[] = [
   "credit card auto pay",
 ];
 
+/** ACH boilerplate that may follow a payment phrase. */
 const REFERENCE_WORDS: ReadonlySet<string> = new Set([
   "ach",
   "ppd",
@@ -177,30 +169,131 @@ const REFERENCE_WORDS: ReadonlySet<string> = new Set([
   "auto",
   "pay",
   "autopay",
-  "online",
-  "mobile",
   "thank",
   "you",
 ]);
 
-/** A word after one of these is an identifier, whatever its letters. */
+/** A word after one of these is an identifier, whatever its letters ("ID:WFCCAUTOPY"). */
 const ID_LABELS: ReadonlySet<string> = new Set(["id", "ref", "conf", "trn"]);
 
-function onlyReferencesFollow(rest: readonly string[]): boolean {
-  for (let k = 0; k < rest.length; k += 1) {
+/** Words that are labels only in front of "id" ("CO ID:", "ORIG ID:", "IND ID:"). */
+const ID_QUALIFIERS: ReadonlySet<string> = new Set(["co", "orig", "ind"]);
+
+/**
+ * BofA's individual-name label ("INDN:JANE DOE"). Up to four words after it are
+ * the account holder's name, not a merchant.
+ */
+const NAME_LABELS: ReadonlySet<string> = new Set(["indn"]);
+const MAX_NAME_WORDS = 4;
+
+/**
+ * ACH entry-description labels: Chase's "CO ENTRY DESCR:", BofA's "DES:". A
+ * phrase right after one is what the payer called the payment.
+ */
+const ENTRY_DESCRIPTION_LABELS: ReadonlySet<string> = new Set(["descr", "des"]);
+
+/** After "to": the network or issuer being paid ("CREDIT CARD PYMT TO VISA"). */
+const PAYEE_WORDS: ReadonlySet<string> = new Set([
+  "visa",
+  "mastercard",
+  "mc",
+  "amex",
+  "american",
+  "express",
+  "discover",
+  "citi",
+  "citibank",
+  "chase",
+  "barclays",
+  "barclaycard",
+  "synchrony",
+  "capital",
+  "one",
+  "us",
+  "usbank",
+  "bank",
+  "wells",
+  "fargo",
+  "wf",
+  "bofa",
+  "boa",
+  "of",
+  "america",
+  "elan",
+  "fnbo",
+  "apple",
+  "goldman",
+  "sachs",
+  "card",
+]);
+
+/**
+ * Card processors that put a merchant's name after them: "SQ *", "PAYPAL *",
+ * "TST*", "SP ". A phrase after one is that merchant's name, so a description
+ * that STARTS with one is a purchase unless the phrase itself starts there
+ * ("PAYPAL *PAYMTHLY" is PayPal Credit's own payment).
+ */
+const PROCESSOR_PREFIXES: ReadonlySet<string> = new Set([
+  "sq",
+  "square",
+  "paypal",
+  "pp",
+  "tst",
+  "toast",
+  "sp",
+  "stripe",
+  "clover",
+  "clv",
+  "pos",
+]);
+
+/** The words after a phrase: nothing but references, IDs, a labelled name or "to <issuer>". */
+function followsLikeAPayment(rest: readonly string[]): boolean {
+  let k = 0;
+  if (rest[0] === "to") {
+    k = 1;
+    if (!PAYEE_WORDS.has(rest[k] ?? "")) return false;
+    while (k < rest.length && PAYEE_WORDS.has(rest[k]!)) k += 1;
+  }
+  while (k < rest.length) {
     const w = rest[k]!;
-    if (/\d/.test(w) || REFERENCE_WORDS.has(w)) continue;
-    if (k > 0 && ID_LABELS.has(rest[k - 1]!)) continue;
-    return false;
+    if (/\d/.test(w) || REFERENCE_WORDS.has(w)) {
+      k += 1;
+    } else if (k > 0 && ID_LABELS.has(rest[k - 1]!)) {
+      k += 1;
+    } else if (ID_QUALIFIERS.has(w) && rest[k + 1] === "id") {
+      k += 1;
+    } else if (NAME_LABELS.has(w)) {
+      k += 1;
+      for (
+        let n = 0;
+        n < MAX_NAME_WORDS &&
+        k < rest.length &&
+        !/\d/.test(rest[k]!) &&
+        !REFERENCE_WORDS.has(rest[k]!) &&
+        !ID_QUALIFIERS.has(rest[k]!);
+        n += 1
+      ) {
+        k += 1;
+      }
+    } else {
+      return false;
+    }
   }
   return true;
 }
 
-function genericPhraseIsPayment(words: readonly string[], phrase: readonly string[]): boolean {
+/** Does a phrase found at words[start, end) read as a payment where it sits? */
+function hitIsPayment(words: readonly string[], start: number, end: number): boolean {
+  if (start > 0 && PROCESSOR_PREFIXES.has(words[0]!)) return false;
+  if (start > 0 && ENTRY_DESCRIPTION_LABELS.has(words[start - 1]!)) return true;
+  return followsLikeAPayment(words.slice(end));
+}
+
+function phraseIsPayment(words: readonly string[], phrase: readonly string[]): boolean {
   for (let i = 0; i + phrase.length <= words.length; i += 1) {
     if (!phrase.every((w, j) => words[i + j] === w)) continue;
-    if (i > 0 && words[i - 1] === "descr") return true;
-    if (onlyReferencesFollow(words.slice(i + phrase.length))) return true;
+    if (hitIsPayment(words, i, i + phrase.length)) return true;
   }
   return false;
 }
@@ -226,20 +319,45 @@ export function matchesTransferPattern(description: string): boolean {
 }
 
 /**
- * Rule 9: the description names a payment to a credit card — an issuer phrase
- * as whole words (`CARD_PAYMENT_PATTERNS`), a word starting with an issuer code
- * (`CARD_PAYMENT_WORD_PREFIXES`), or a generic phrase in a payment's position
- * (`GENERIC_CARD_PAYMENT_PHRASES`).
+ * Rule 9: the description names a payment to a credit card.
+ *
+ * WHAT: an issuer phrase (`CARD_PAYMENT_PATTERNS`), a generic phrase
+ * (`GENERIC_CARD_PAYMENT_PHRASES`) — both as whole words — or a word starting
+ * with an issuer code (`CARD_PAYMENT_WORD_PREFIXES`).
+ *
+ * WHERE (PR7b review N1, L1): the same words are a merchant's name in
+ * "TARGET CARD SERVICES GIFT CARD" or "SQ *CREDIT CARD PAYMENT", so a match
+ * counts only in a payment's position:
+ *   - never after a leading card processor ("SQ *", "PAYPAL *", "TST*", …);
+ *   - right after an ACH entry-description label ("… DESCR:CRCARDPMT",
+ *     "… DES:CREDIT CARD PYMT …"), whatever follows; or
+ *   - followed by nothing but references: words with a digit, ACH boilerplate,
+ *     the value after an ID label ("PPD ID: WFCCAUTOPY", "CO ID:9999"), a name
+ *     after BofA's "INDN:", or "to <issuer>" ("TO VISA").
+ *
+ * ⚠️ IT ERRS TOWARD MISSING, ON PURPOSE. A payment it misses still counts as
+ * spending, but the user can flag it (`isExternalCardPayment`, rule 3). A
+ * purchase it wrongly caught could not be put back: there is no "this was a
+ * purchase" override yet. So an unlabelled name after a phrase
+ * ("US BANK CREDIT CARD PAYMENT JANE DOE") reads as a purchase.
  */
 export function matchesCardPaymentPattern(description: string): boolean {
   const norm = normalizeDescription(description);
-  const d = ` ${norm} `;
-  if (CARD_PAYMENT_PATTERNS.some((p) => d.includes(` ${p} `))) return true;
-  const words = norm === "" ? [] : norm.split(" ");
-  if (words.some((w) => CARD_PAYMENT_WORD_PREFIXES.some((p) => w.startsWith(p)))) {
-    return true;
+  if (norm === "") return false;
+  const words = norm.split(" ");
+  for (const p of [...CARD_PAYMENT_PATTERNS, ...GENERIC_CARD_PAYMENT_PHRASES]) {
+    if (phraseIsPayment(words, p.split(" "))) return true;
   }
-  return GENERIC_CARD_PAYMENT_PHRASES.some((p) => genericPhraseIsPayment(words, p.split(" ")));
+  for (let i = 0; i < words.length; i += 1) {
+    const w = words[i]!;
+    for (const code of CARD_PAYMENT_WORD_PREFIXES) {
+      if (!w.startsWith(code)) continue;
+      const tail = w.slice(code.length);
+      if (tail !== "" && !/\d/.test(tail)) continue;
+      if (hitIsPayment(words, i, i + 1)) return true;
+    }
+  }
+  return false;
 }
 
 export function isExcludedCategoryName(name: string | null | undefined): boolean {

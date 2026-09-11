@@ -269,8 +269,13 @@ describe("CARD_PAYMENT_PATTERNS", () => {
     "CAPITAL ONE CRCARDPMT5KX9ABC",
     // The same issuers in the forms a bank adds around them.
     "U.S. BANK CREDIT CARD PAYMENT PPD ID: 9000000001",
-    "US BANK CREDIT CARD PAYMENT JANE DOE",
     "WF Credit Card AUTO PAY 260901 PPD ID: WFCCAUTOPY",
+    // (review L1) BofA's layout, and a payee after "to".
+    "FIRST NATIONAL DES:CREDIT CARD PYMT ID:1234 INDN:JANE DOE CO ID:9999 PPD",
+    "CAPITAL ONE DES:CRCARDPMT ID:5KX9ABC INDN:JANE DOE CO ID:9279744380 PPD",
+    "US BANK CREDIT CARD PAYMENT ID:1234 INDN:JANE DOE CO ID:9999 PPD",
+    "CREDIT CARD PYMT TO VISA",
+    "CREDIT CARD PAYMENT TO CAPITAL ONE 1234",
     // A generic phrase where only a payment puts it.
     "CREDIT CARD PAYMENT",
     "CREDIT CARD PYMT 0412",
@@ -298,9 +303,36 @@ describe("CARD_PAYMENT_PATTERNS", () => {
     "WF CAFE 12",
     "TARGET 00012345 CARD",
     "SERVICES CARD TARGET",
+    // (review N1) Purchases the first PR7b revision caught as card payments.
+    "TARGET CARD SERVICES GIFT CARD",
+    "WF CREDIT CARD AUTO PAY CAFE",
+    "US BANK CREDIT CARD PAYMENT PROCESSING CENTER",
+    "CRCARDPMTSHOP LLC",
+    "SQ *CREDIT CARD PAYMENT",
+    "PAYPAL *CREDIT CARD PAYMENT",
+    "CREDIT CARD PAYMENT ONLINE",
+    // And their neighbours.
+    "CRCARDPMTSHOP",
+    "TST* CREDIT CARD PYMT 0412",
+    "CREDIT CARD PYMT TO VISA SUPPLIES",
+    "CREDIT CARD PAYMENT TO",
+    "CREDIT CARD PAYMENT INDN JANE DOE BAKERY SUPPLY CO",
   ])("(PR7b) does not catch %s", (d) => {
     expect(matchesCardPaymentPattern(d)).toBe(false);
     expect(classifyOutflow({ ...base, categoryId: null, description: d }, ctx).kind).toBe("spend");
+  });
+
+  it("(review N1) a leading processor makes it a purchase, unless the phrase itself starts there", () => {
+    expect(matchesCardPaymentPattern("SQ *CREDIT CARD PAYMENT")).toBe(false);
+    expect(matchesCardPaymentPattern("PAYPAL *PAYMTHLY")).toBe(true);
+  });
+
+  it("⚠️ (review N1, disclosed) an unlabelled name after a phrase reads as a purchase", () => {
+    // Indistinguishable from "… PROCESSING CENTER" without a name list. A missed
+    // payment can be flagged (rule 3); a caught purchase cannot be put back.
+    expect(matchesCardPaymentPattern("US BANK CREDIT CARD PAYMENT JANE DOE")).toBe(false);
+    // With BofA's INDN label the same name is fine.
+    expect(matchesCardPaymentPattern("US BANK CREDIT CARD PAYMENT INDN:JANE DOE")).toBe(true);
   });
 
   it("(PR7b) an issuer code matches at the start of a word only", () => {
