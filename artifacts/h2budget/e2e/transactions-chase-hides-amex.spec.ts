@@ -309,6 +309,20 @@ test.describe("Chase Transactions page — Amex/debt rows stay off the page (#45
           source: "plaid:capitalone",
           plaidTransactionId: `e2e-${suffix}-capone-out`,
         },
+        // (PR14 second review N3) The original fixture's `plaid:chase` row with no
+        // account. With a linked account the old page listed no account-less rows
+        // either; PR13's server rule leaves it out, as the bank balance does.
+        {
+          userId,
+          householdId,
+          occurredOn: day,
+          occurredAt: at(21),
+          description: `E2E-${suffix} PLAID CHASE NO ACCOUNT`,
+          amount: "-33.00",
+          account: "chase",
+          source: "plaid:chase",
+          plaidTransactionId: `e2e-${suffix}-chase-orphan`,
+        },
       ])
       .returning({ id: transactionsTable.id, description: transactionsTable.description });
 

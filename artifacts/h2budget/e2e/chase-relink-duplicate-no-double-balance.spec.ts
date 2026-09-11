@@ -395,12 +395,14 @@ test.describe("Chase page — re-link duplicate window doesn't double the balanc
       [aRow, bRow],
     );
 
-    // The twin is not an option; A is.
+    // Back to A. (PR14 second review N2) No "the twin is not an option" check:
+    // `listCheckingAccounts` merges twins by institution and mask and keeps the
+    // snapshot account, so the twin is never offered in any phase, and such a
+    // check could not fail.
     await page.getByTestId("select-chase-account").click();
     await expect(page.getByTestId(`option-chase-account-${acctA.id}`)).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByTestId(`option-chase-account-${acctADup.id}`)).toHaveCount(0);
     const pageA2Promise = page.waitForResponse(isRegisterLedger(monthStart, acctA.id), {
       timeout: 30_000,
     });

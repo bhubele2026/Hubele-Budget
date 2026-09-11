@@ -345,25 +345,10 @@ test.describe("Chase per-account picker — stale selection self-heal (#316, PR1
       .where(eq(transactionsTable.plaidAccountId, acctB!.accountId));
     await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.id, acctB!.id));
 
-    // Reload: the server refuses `account=B`, and the page falls back to A.
-    const refusedB = page.waitForResponse(isRegisterLedger(monthStart, acctB!.id), {
-      timeout: 60_000,
-    });
-    const fallbackA = page.waitForResponse(isRegisterLedger(monthStart, null), {
-      timeout: 60_000,
-    });
-    await page.reload();
-    await expectRefused(await refusedB);
-    const pageA = await readLedger(await fallbackA);
-    await expect(page.getByRole("heading", { name: /^chase$/i })).toBeVisible({
-      timeout: 15_000,
-    });
-    await expectAccountARows(page, pageA, aIds, bIds);
-    await expectAccountAFigures(page, pageA);
-    await expectPersistenceCleared(page);
-
-    // --- 2. Picks that were never a Chase ledger account. Hold `/api/forecast`
-    // so only the server's 400 can reset the pick.
+    // Hold `/api/forecast` for the reloads below, so only the server's 400 can
+    // reset a pick. (PR14 second review N2) Step 1 held nothing before: a forecast
+    // bundle that answered first let the older self-heal clear the pick, React
+    // Query aborted the refused request, and `refusedB` never resolved.
     let hold: Promise<void> | null = null;
     await page.route(
       (url) => url.pathname.endsWith("/api/forecast"),
@@ -376,6 +361,37 @@ test.describe("Chase per-account picker — stale selection self-heal (#316, PR1
         }
       },
     );
+
+    // Reload: the server refuses `account=B`, and the page falls back to A.
+    let releaseReload: () => void = () => {};
+    hold = new Promise<void>((resolve) => {
+      releaseReload = resolve;
+    });
+    try {
+      const refusedB = page.waitForResponse(isRegisterLedger(monthStart, acctB!.id), {
+        timeout: 60_000,
+      });
+      const fallbackA = page.waitForResponse(isRegisterLedger(monthStart, null), {
+        timeout: 60_000,
+      });
+      await page.reload();
+      await expectRefused(await refusedB);
+      // Reset by the 400 alone: the forecast bundle is still held.
+      await expectPersistenceCleared(page);
+      const pageA = await readLedger(await fallbackA);
+      await expect(page.getByRole("heading", { name: /^chase$/i })).toBeVisible({
+        timeout: 15_000,
+      });
+      await expectAccountARows(page, pageA, aIds, bIds);
+      releaseReload();
+      await expectAccountAFigures(page, pageA);
+      await expectPersistenceCleared(page);
+    } finally {
+      releaseReload();
+      hold = null;
+    }
+
+    // --- 2. Picks that were never a Chase ledger account, under the same hold.
 
     for (const [label, badId] of [
       ["an Ally savings account", allySavings!.id],

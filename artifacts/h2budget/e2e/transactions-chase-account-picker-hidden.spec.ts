@@ -49,15 +49,25 @@ test.afterAll(async () => {
   await cleanupTestUsers(provisionedUserIds);
 });
 
+/**
+ * (PR14 second review N2) The household's day, America/Chicago. The row used to be
+ * dated in UTC while `?month=` used the host's month, so on a Chicago evening of
+ * a month's last day the row landed in the next month.
+ */
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-function thisMonthStart(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}-01`;
+/** The month the seeded row's own date falls in. */
+function monthStartOf(day: string): string {
+  return `${day.slice(0, 7)}-01`;
 }
 
 test.describe("Chase per-account picker — hidden for single-account users (#410)", () => {
@@ -122,7 +132,7 @@ test.describe("Chase per-account picker — hidden for single-account users (#41
       plaidAccountId: acct.accountId,
     });
 
-    const monthStart = thisMonthStart();
+    const monthStart = monthStartOf(today);
     const context = await browser.newContext();
     const page = await context.newPage();
     await signInAndOpen(

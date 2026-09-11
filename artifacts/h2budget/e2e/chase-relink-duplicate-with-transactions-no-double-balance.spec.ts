@@ -334,6 +334,13 @@ test.describe("Chase page — re-link duplicate window with transactions never d
     // The re-imports on the twin: same postings, fresh Plaid ids.
     const d1 = await seedRow(acctADup, "a1-relink", grocerDay, 15, GROCER, "-25.00");
     const d2 = await seedRow(acctADup, "a2-relink", pharmacyDay, 15, PHARMACY, "-10.00");
+    // (PR14 second review N3) A posting that reached only the twin during the re-link.
+    // The old page counted it; PR13's server counts every twin row 0 (not_bank), as
+    // the bank balance and spine have since PR4e, until account dedupe re-points it
+    // onto A. Listed, labelled Not counted, and left out of every total: it sits on
+    // the grocer day, whose total stays -$25.00, and Money out stays A's own.
+    const TWIN_ONLY = `E2E-${suffix} CHASE RELINK TWIN ONLY`;
+    const d3 = await seedRow(acctADup, "twin-only", grocerDay, 18, TWIN_ONLY, "-7.77");
     const bRow = await seedRow(acctB, "b1", grocerDay, 16, `E2E-${suffix} JOINT`, "-50.00");
     const cRow = await seedRow(acctC, "c1", grocerDay, 17, `E2E-${suffix} SAVINGS`, "-75.00");
 
@@ -377,28 +384,28 @@ test.describe("Chase page — re-link duplicate window with transactions never d
     const pageA = await readLedger(await firstA);
 
     // The server lists the copies (not dropped from A's view) and counts them 0.
-    expect(pageA.rows.map((r) => r.id).sort()).toEqual([a1, a2, d1, d2].sort());
+    expect(pageA.rows.map((r) => r.id).sort()).toEqual([a1, a2, d1, d2, d3].sort());
     const byId = new Map(pageA.rows.map((r) => [r.id, r]));
     for (const id of [a1, a2]) {
       expect(byId.get(id)).toMatchObject({ countsInBalance: true, balanceReason: "counted" });
     }
-    for (const id of [d1, d2]) {
+    for (const id of [d1, d2, d3]) {
       expect(byId.get(id)).toMatchObject({ countsInBalance: false, balanceReason: "not_bank" });
       expect(parseCents(byId.get(id)!.balanceAmount)).toBe(0);
     }
 
     await expect(page.getByTestId("chase-showing")).toHaveText(
-      `Showing 4 of 4 · 4 to review`,
+      `Showing 5 of 5 · 5 to review`,
       { timeout: 20_000 },
     );
     const rowLocator = page.locator('[data-testid^="row-tx-"]');
-    await expect(rowLocator).toHaveCount(4, { timeout: 15_000 });
+    await expect(rowLocator).toHaveCount(5, { timeout: 15_000 });
     const renderedIds = await rowLocator.evaluateAll((els) =>
       els.map((el) => (el.getAttribute("data-testid") ?? "").slice("row-tx-".length)),
     );
     expect(new Set(renderedIds).size, "a row rendered twice").toBe(renderedIds.length);
-    expect([...renderedIds].sort()).toEqual([a1, a2, d1, d2].sort());
-    for (const id of [d1, d2]) {
+    expect([...renderedIds].sort()).toEqual([a1, a2, d1, d2, d3].sort());
+    for (const id of [d1, d2, d3]) {
       await expect(page.getByTestId(`label-not-counted-${id}`)).toHaveText("Not counted");
     }
     for (const id of [a1, a2]) {
@@ -454,7 +461,8 @@ test.describe("Chase page — re-link duplicate window with transactions never d
     await expect(page.getByTestId(`option-chase-account-${acctA.id}`)).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByTestId(`option-chase-account-${acctADup.id}`)).toHaveCount(0);
+    // (PR14 second review N2) No "the twin is not an option" check: twins are
+    // merged in the picker's list in every phase, so it could not fail.
     const pageA2Promise = page.waitForResponse(isRegisterLedger(monthStart, acctA.id), {
       timeout: 30_000,
     });
