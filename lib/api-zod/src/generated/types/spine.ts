@@ -14,9 +14,9 @@ export interface Spine {
   /** ISO timestamp the snapshot was read */
   asOf: string;
   bank: SpineBank;
-  /** buildSpendingFacts(monthStart..today).realSpend.total */
+  /** buildSpendingFacts(monthStart..today).householdSpend.total */
   spentMonth: number;
-  /** buildSpendingFacts(weekStart..weekEnd).realSpend.total */
+  /** buildSpendingFacts(weekStart..weekEnd).householdSpend.total */
   spentWeek: number;
   /** Earliest upcoming bill or debt minimum on/after today; null when nothing is scheduled */
   nextBill: SpineNextBill | null;

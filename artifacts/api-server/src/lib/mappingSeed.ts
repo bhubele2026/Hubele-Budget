@@ -80,3 +80,12 @@ export const SEED_MAPPING_RULES: SeedMappingRule[] = [
 ];
 
 export const SEED_MAPPING_PRIORITY = 50;
+
+/**
+ * (PR7) The phrases that identify a payment TO a credit card. They live with
+ * the one spending rule in `@workspace/avalanche-core` (spendingRule.ts), which
+ * the web app shares; they are re-exported here beside the seed rules they
+ * were drawn from. Recognition is in spending totals only — nothing re-tags a
+ * row, and `isTransfer` stays a manual decision (#666).
+ */
+export { CARD_PAYMENT_PATTERNS } from "@workspace/avalanche-core";

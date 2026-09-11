@@ -375,6 +375,23 @@ beforeAll(async () => {
     source: "manual",
   });
 
+  // ── (PR7 M1) An uncategorized purchase today, inside the spine's week AND
+  // month windows. Household spending counts it and realSpend does not, so the
+  // spend parity test can tell which one the spine reads. A card charge on an
+  // account that is not the checking account, so the bank roll-forward and the
+  // review count assertions below are untouched.
+  await db.insert(transactionsTable).values({
+    userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
+    occurredOn: TODAY_ISO,
+    createdAt: createdAtStartOfHouseholdDay(TODAY_ISO),
+    description: "Farmers market",
+    amount: "-12.34",
+    categoryId: null,
+    plaidAccountId: `acct-card-${randomUUID()}`,
+    source: "plaid:amex",
+  });
+
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
   const addr = server.address();
@@ -499,18 +516,36 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
   it("spentMonth + spentWeek match /reports/spending-facts for the same windows", async () => {
     const spine = await get<Spine>("/spine");
 
-    const month = await get<{ realSpend: { total: number } }>(
+    // (PR7) Household spending: the one spending rule, categorized or not.
+    type Facts = {
+      householdSpend: { total: number };
+      realSpend: { total: number };
+      uncategorized: { total: number };
+    };
+    const month = await get<Facts>(
       `/reports/spending-facts?from=${MONTH_START_ISO}&to=${TODAY_ISO}`,
     );
-    expect(spine.spentMonth).toBe(month.realSpend.total);
+    expect(spine.spentMonth).toBe(month.householdSpend.total);
+    // The household figure is the categorized and uncategorized buckets, no more.
+    expect(month.householdSpend.total).toBeCloseTo(
+      month.realSpend.total + month.uncategorized.total,
+      2,
+    );
 
     // Week window = the server's own Sun–Sat helpers, which is what the spine
     // asks for; re-deriving them here would only test my arithmetic.
     const { weekStartFor, weekEndFor } = await import("../lib/cashSignal");
-    const week = await get<{ realSpend: { total: number } }>(
+    const week = await get<Facts>(
       `/reports/spending-facts?from=${weekStartFor(TODAY)}&to=${weekEndFor(TODAY)}`,
     );
-    expect(spine.spentWeek).toBe(week.realSpend.total);
+    expect(spine.spentWeek).toBe(week.householdSpend.total);
+
+    // Not vacuous for WHICH figure: the fixture's uncategorized purchase sits
+    // in both windows, so a spine that read realSpend fails here.
+    expect(month.uncategorized.total).toBeGreaterThanOrEqual(12.34);
+    expect(week.uncategorized.total).toBeGreaterThanOrEqual(12.34);
+    expect(spine.spentMonth).not.toBe(month.realSpend.total);
+    expect(spine.spentWeek).not.toBe(week.realSpend.total);
 
     // Not vacuous, and internally coherent: a week cannot outspend its month.
     expect(spine.spentMonth).toBeGreaterThan(0);

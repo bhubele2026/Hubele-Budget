@@ -10,9 +10,10 @@
 // into the household's calendar date — and is built lazily there so importing
 // this package costs nothing at load time.
 //
-// It also holds the two rules both apps must share rather than copy:
-// `inForecast` (which checking rows are cash) and the household calendar
-// (America/Chicago today, Sunday–Saturday weeks, calendar months).
+// It also holds the rules both apps must share rather than copy:
+// `inForecast` (which checking rows are cash), the household calendar
+// (America/Chicago today, Sunday–Saturday weeks, calendar months) and the one
+// spending rule (`classifyOutflow`: what is a purchase, what is a card payment).
 
 export { inForecast } from "./forecastInclusion";
 export {
@@ -49,6 +50,27 @@ export {
   type CashRowReason,
   type CashRowsResult,
 } from "./cashRows";
+export {
+  CARD_PAYMENT_PATTERNS,
+  PFC_CARD_PAYMENT,
+  classifyOutflow,
+  incomeAmount,
+  isDebtCategory,
+  isExcludedCategoryName,
+  isRealIncome,
+  isRealSpend,
+  isUncategorizedSpend,
+  matchesCardPaymentPattern,
+  matchesTransferPattern,
+  normalizeDescription,
+  spendAmount,
+  type ClassifyOptions,
+  type OutflowClassification,
+  type OutflowKind,
+  type OutflowRule,
+  type SpendContext,
+  type SpendTxn,
+} from "./spendingRule";
 export {
   HOUSEHOLD_TZ,
   householdDateOf,

@@ -8,7 +8,7 @@
 import type { SpendingFactsUnplannedTransactionsItem } from "./spendingFactsUnplannedTransactionsItem";
 
 /**
- * Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window.
+ * Purchases explicitly marked UN, categorized or not, through the same rule as householdSpend (so never a transfer, debt payment, card payment or reimbursable charge). Details are the largest 20 purchases; total covers the whole window.
  */
 export type SpendingFactsUnplanned = {
   total: number;

@@ -1,21 +1,18 @@
-// (#850 — Spending overhaul, Phase 1) Structured Spending-tab facts.
+// (#850 — Spending overhaul, Phase 1; PR7 — one spending rule) Structured
+// Spending-tab facts.
 //
-// Builds the clean, merchant-centric fact set the Phase 2 Spending UI will
-// render, on top of the isRealSpend() definition of spending. Transfers,
-// debt payments, reimbursements, and ignore-category rows are excluded from
-// "real spend" and surfaced separately under `excluded` for transparency.
+// Every outflow in the range goes through `classifyOutflow()` exactly once.
+// What it calls spend is household spending (`householdSpend`), split into
+// categorized (`realSpend`, which feeds every breakdown) and uncategorized.
+// Everything else is surfaced under `excluded` for transparency.
 
 import { and, eq, gte, lte } from "drizzle-orm";
 import { db, transactionsTable, budgetCategoriesTable } from "@workspace/db";
 import { cleanMerchant } from "./merchantNameExtract";
 import {
-  isRealSpend,
+  classifyOutflow,
   isRealIncome,
   incomeAmount,
-  isUncategorizedSpend,
-  isDebtCategory,
-  isExcludedCategoryName,
-  matchesTransferPattern,
   spendAmount,
   type SpendContext,
   type SpendTxn,
@@ -36,9 +33,15 @@ export interface SpendingFacts {
     trackingStart: string;
     floorApplied: boolean;
   };
+  /**
+   * Every purchase on any account, categorized or not:
+   * `realSpend` + `uncategorized`. The spine's spent week/month.
+   */
+  householdSpend: { total: number; transactionCount: number };
+  /** Categorized purchases only; the basis of every breakdown below. */
   realSpend: { total: number; transactionCount: number };
   realIncome: { total: number; transactionCount: number };
-  unplanned?: { total: number; transactionCount: number; transactions: { id: string; date: string; description: string; amount: number }[] };
+  unplanned: { total: number; transactionCount: number; transactions: { id: string; date: string; description: string; amount: number }[] };
   uncategorized: {
     total: number;
     transactionCount: number;
@@ -49,6 +52,10 @@ export interface SpendingFacts {
     debtPaymentsTotal: number;
     reimbursementTotal: number;
     ignoreTotal: number;
+    /** Payments to a credit card from another account (rules 3, 8, 9). */
+    cardPayments: number;
+    /** Charges flagged reimbursable (rule 7). */
+    reimbursable: number;
   };
   byCategory: {
     categoryId: string;
@@ -157,6 +164,10 @@ export async function buildSpendingFacts(
       source: transactionsTable.source,
       reimbursable: transactionsTable.reimbursable,
       reimbursed: transactionsTable.reimbursed,
+      // (PR7) The columns the one spending rule reads.
+      debtId: transactionsTable.debtId,
+      isExternalCardPayment: transactionsTable.isExternalCardPayment,
+      pfcDetailed: transactionsTable.pfcDetailed,
     })
     .from(transactionsTable)
     .where(
@@ -168,6 +179,9 @@ export async function buildSpendingFacts(
     );
 
   // --- Accumulators -------------------------------------------------------
+  let householdTotal = 0;
+  let householdCount = 0;
+
   let realTotal = 0;
   let realCount = 0;
 
@@ -183,6 +197,8 @@ export async function buildSpendingFacts(
   let debtPaymentsTotal = 0;
   let reimbursementTotal = 0;
   let ignoreTotal = 0;
+  let cardPaymentsTotal = 0;
+  let reimbursableExcludedTotal = 0;
 
   const byCat = new Map<string, { total: number; txnCount: number }>();
   const byMerch = new Map<
@@ -206,7 +222,7 @@ export async function buildSpendingFacts(
   let unplannedCount = 0;
   const unplannedRows: { id: string; date: string; description: string; amount: number }[] = [];
   for (const t of txns) {
-    const tx = t as unknown as SpendTxn;
+    const tx: SpendTxn = t;
     const spend = spendAmount(tx);
 
     // Amex reimbursable accounting is independent of the real-spend buckets.
@@ -215,7 +231,9 @@ export async function buildSpendingFacts(
       else if (!t.reimbursable) personalTotal += spend;
     }
 
-    if (spend <= 0) {
+    const c = classifyOutflow(tx, ctx);
+
+    if (c.kind === "not_outflow") {
       // Inflow side. Only earned money counts (see `isRealIncome`); a transfer
       // in, a refund or a debt draw lands here and is deliberately ignored, so
       // "of income spent" is measured against what actually came IN.
@@ -228,22 +246,61 @@ export async function buildSpendingFacts(
       continue; // nothing below this line applies to a non-outflow
     }
 
+    if (c.kind !== "spend") {
+      // Excluded outflow — bucketed for the transparency panel by the rule
+      // that excluded it.
+      switch (c.kind) {
+        case "transfer":
+        case "bank_noise":
+          transfersTotal += spend;
+          break;
+        case "debt_payment":
+          debtPaymentsTotal += spend;
+          break;
+        case "card_payment":
+          cardPaymentsTotal += spend;
+          break;
+        case "reimbursable":
+          reimbursableExcludedTotal += spend;
+          break;
+        case "excluded_category": {
+          const name = (categoriesById.get(t.categoryId ?? "")?.name ?? "")
+            .trim()
+            .toLowerCase();
+          if (name === "reimbursement") reimbursementTotal += spend;
+          else if (name === "ignore") ignoreTotal += spend;
+          else transfersTotal += spend; // Transfer, Transfers in/out
+          break;
+        }
+        case "income":
+          // An outflow in an income category (a clawback, a reversed
+          // deposit) is neither spending nor one of the panel's buckets.
+          break;
+      }
+      continue;
+    }
+
+    // ── Household spending ────────────────────────────────────────────────
+    householdTotal += spend;
+    householdCount += 1;
+
     // Unplanned means explicitly assigned to UN, not merely uncategorized.
-    // Include eligible uncategorized UN purchases without counting transfers.
-    if (t.unplannedAllowance && (isRealSpend(tx, ctx) || (!t.categoryId && isUncategorizedSpend(tx)))) {
+    // Any purchase can be UN, categorized or not; nothing excluded above can.
+    if (t.unplannedAllowance) {
       unplannedTotal += spend;
       unplannedCount++;
       unplannedRows.push({ id: t.id, date: t.occurredOn, description: cleanMerchant(t.description) || t.description, amount: round2(spend) });
     }
-    if (isRealSpend(tx, ctx)) {
+
+    if (c.categorized) {
       realTotal += spend;
       realCount += 1;
 
       const cid = t.categoryId as string;
-      const c = byCat.get(cid) ?? { total: 0, txnCount: 0 };
-      c.total += spend;
-      c.txnCount += 1;
-      byCat.set(cid, c);
+      const cat = byCat.get(cid) ?? { total: 0, txnCount: 0 };
+      cat.total += spend;
+      cat.txnCount += 1;
+      byCat.set(cid, cat);
 
       const name = cleanMerchant(t.description) || "Unknown";
       const m = byMerch.get(name) ?? { total: 0, count: 0, catCounts: new Map() };
@@ -266,7 +323,7 @@ export async function buildSpendingFacts(
       mo.total += spend;
       mo.byCat.set(cid, (mo.byCat.get(cid) ?? 0) + spend);
       monthly.set(month, mo);
-    } else if (!t.categoryId && isUncategorizedSpend(tx)) {
+    } else {
       uncatTotal += spend;
       uncatCount += 1;
       const name = cleanMerchant(t.description) || "Unknown";
@@ -274,30 +331,6 @@ export async function buildSpendingFacts(
       um.total += spend;
       um.count += 1;
       uncatMerchants.set(name, um);
-    } else {
-      // Excluded outflow — classify for the transparency panel. Debt
-      // linkage is checked FIRST: many debt payments also match the
-      // transfer/payment description patterns (ACH PMT, autopay), and a
-      // category linked to a tracked debt is unambiguously a debt payment.
-      const catName = t.categoryId
-        ? categoriesById.get(t.categoryId)?.name ?? ""
-        : "";
-      if (isDebtCategory(tx, ctx)) {
-        debtPaymentsTotal += spend;
-      } else if (
-        t.isTransfer ||
-        matchesTransferPattern(t.description) ||
-        /transfer/i.test(catName)
-      ) {
-        transfersTotal += spend;
-      } else if (catName.trim().toLowerCase() === "reimbursement") {
-        reimbursementTotal += spend;
-      } else if (catName.trim().toLowerCase() === "ignore") {
-        ignoreTotal += spend;
-      } else if (isExcludedCategoryName(catName)) {
-        // Remaining named exclusions (e.g. "Transfers in/out") -> transfers.
-        transfersTotal += spend;
-      }
     }
   }
 
@@ -407,6 +440,7 @@ export async function buildSpendingFacts(
       trackingStart: TRACKING_START,
       floorApplied,
     },
+    householdSpend: { total: round2(householdTotal), transactionCount: householdCount },
     unplanned: { total: round2(unplannedTotal), transactionCount: unplannedCount, transactions: unplannedRows.sort((a, b) => b.amount - a.amount || b.date.localeCompare(a.date)).slice(0, 20) },
     realSpend: { total: round2(realTotal), transactionCount: realCount },
     realIncome: { total: round2(incomeTotal), transactionCount: incomeCount },
@@ -420,6 +454,8 @@ export async function buildSpendingFacts(
       debtPaymentsTotal: round2(debtPaymentsTotal),
       reimbursementTotal: round2(reimbursementTotal),
       ignoreTotal: round2(ignoreTotal),
+      cardPayments: round2(cardPaymentsTotal),
+      reimbursable: round2(reimbursableExcludedTotal),
     },
     byCategory,
     byMerchant,

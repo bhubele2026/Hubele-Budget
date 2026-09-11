@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { isUncategorizedSpendRow, spendAmountOf } from "@/lib/uncategorizedSpend";
 import {
   useListTransactions,
   useListCategories,
@@ -133,42 +134,6 @@ interface HeatCell {
   amount: number;
   week: number;
   dow: number;
-}
-
-// Mirrors the server's transfer/payment description patterns so the
-// Recategorize popover lists exactly the txns that the facts pipeline counts
-// as uncategorized (spendingFilter.ts isUncategorizedSpend).
-const SPENDING_TRANSFER_PATTERNS = [
-  "online transfer",
-  "ach pmt",
-  "ach payment",
-  "web id:",
-  "credit card pmt",
-  "autopay",
-  "payment thank you",
-  "card pmt",
-  "epay",
-  "chase credit",
-  "bk of amer",
-  "wells fargo card",
-];
-
-function spendMagnitude(t: Transaction): number {
-  const a = parseFloat(t.amount);
-  if (!Number.isFinite(a)) return 0;
-  if (t.source === "amex") return a > 0 ? a : 0;
-  return a < 0 ? -a : 0;
-}
-
-// Client-side mirror of isUncategorizedSpend — used only to populate the
-// Recategorize popover with the actual transaction rows + IDs.
-function isUncategorizedSpendTxn(t: Transaction): boolean {
-  if (spendMagnitude(t) <= 0) return false;
-  if (t.isTransfer === true) return false;
-  if (t.categoryId) return false;
-  const d = (t.description ?? "").toLowerCase();
-  if (SPENDING_TRANSFER_PATTERNS.some((p) => d.includes(p))) return false;
-  return true;
 }
 
 function sentenceCase(s: string): string {
@@ -356,6 +321,8 @@ function SpendingSection({
   // (#dow-drill) Clicked weekday bar → reveal that day's top merchants.
   const [selectedDow, setSelectedDow] = useState<number | null>(null);
 
+  // (PR7) The server's own rule decides which rows are uncategorized spend.
+  const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
   // Real uncategorized rows (with IDs) for the Recategorize popover, scoped to
   // the facts' (possibly floor-clamped) range so the count matches the banner.
   const uncategorizedTxns = useMemo(() => {
@@ -364,9 +331,9 @@ function SpendingSection({
     const hi = facts.range.end;
     return txns
       .filter((t) => t.occurredOn >= lo && t.occurredOn <= hi)
-      .filter(isUncategorizedSpendTxn)
-      .sort((a, b) => spendMagnitude(b) - spendMagnitude(a));
-  }, [facts, txns]);
+      .filter((t) => isUncategorizedSpendRow(t, categoryIds))
+      .sort((a, b) => spendAmountOf(b) - spendAmountOf(a));
+  }, [facts, txns, categoryIds]);
 
   // Top categories excluding the DB "Uncategorized" bucket (it has its own
   // banner; it must never show as a category or in the pie).
@@ -550,7 +517,11 @@ function SpendingSection({
           index={0}
           label="Total real spend"
           value={formatCurrency(facts.realSpend.total)}
-          hint={`${facts.realSpend.transactionCount} transactions · ${rangeLabel(facts.range.start, facts.range.end)}`}
+          hint={`${facts.realSpend.transactionCount} transactions · ${rangeLabel(facts.range.start, facts.range.end)}${
+            facts.uncategorized.total > 0
+              ? ` · + ${formatCurrency(facts.uncategorized.total)} uncategorized`
+              : ""
+          }`}
           data-testid="spending-total"
         />
         <Stat
