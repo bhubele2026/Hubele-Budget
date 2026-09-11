@@ -84,10 +84,14 @@ export function PlanDropRow({
   // server's curve already leaves it out).
   const pp = row.probablyPaid;
   const suggested = !!pp && !!onAnswer;
+  // A partly-paid plan can move: the server keeps its `partial` beside the
+  // `rescheduled` row, so the remainder lands on the new date.
   const canMove =
     !suggested &&
     !!onMove &&
-    (row.status === "pending_plan" || row.status === "future");
+    (row.status === "pending_plan" ||
+      row.status === "future" ||
+      row.status === "partial");
   // (#480) Mark-missed is only meaningful while the row is still pending —
   // once it's matched/missed/rescheduled there's nothing to "miss".
   const canMarkMissed =

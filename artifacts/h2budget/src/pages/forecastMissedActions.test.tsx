@@ -300,7 +300,7 @@ describe("Forecast — Missed bucket actions (#480)", () => {
     expect(upsertMutate).not.toHaveBeenCalled();
   });
 
-  it("(PR5) a partly-paid row shows what was paid, has no Mark missed or Move, and a row click marks nothing", () => {
+  it("(PR5) a partly-paid row shows what was paid, has no Mark missed, and a row click marks nothing", () => {
     forecastData = {
       ...FORECAST_BASE,
       resolutions: [
@@ -324,9 +324,40 @@ describe("Forecast — Missed bucket actions (#480)", () => {
     expect(paid.textContent).toContain("$1,000.00");
     expect(paid.textContent).toContain("$1,500.00");
     expect(screen.queryByTestId("mark-missed-rent-2026-05-30")).toBeNull();
-    expect(screen.queryByTestId("move-plan-rent-2026-05-30")).toBeNull();
     fireEvent.click(row);
     expect(upsertMutate).not.toHaveBeenCalled();
+  });
+
+  it("(PR5) Move on a partly-paid row reschedules the occurrence; the partial stays (the server keeps both)", () => {
+    forecastData = {
+      ...FORECAST_BASE,
+      resolutions: [
+        ...FORECAST_BASE.resolutions,
+        {
+          id: "res-rent-partial",
+          recurringItemId: "rent",
+          occurrenceDate: "2026-05-30",
+          status: "partial",
+          matchedTxnId: "t-rent",
+          txnAmount: "-1000.00",
+        },
+      ],
+    };
+    renderPage();
+    fireEvent.click(screen.getByTestId("move-plan-rent-2026-05-30"));
+    fireEvent.change(screen.getByTestId("input-move-date") as HTMLInputElement, {
+      target: { value: "2026-06-10" },
+    });
+    fireEvent.click(screen.getByTestId("button-save-move"));
+    expect(upsertMutate).toHaveBeenCalledTimes(1);
+    expect(upsertMutate.mock.calls[0][0]).toEqual({
+      data: {
+        status: "rescheduled",
+        recurringItemId: "rent",
+        occurrenceDate: "2026-05-30",
+        rescheduledTo: "2026-06-10",
+      },
+    });
   });
 
   it("clicking Mark missed upserts a missed resolution (no browser confirm) and surfaces an Undo toast", () => {

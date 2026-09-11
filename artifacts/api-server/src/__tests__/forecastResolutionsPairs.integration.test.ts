@@ -180,6 +180,36 @@ describe("(PR5 review) resolutions keep what the user already decided", () => {
     expect(rows.map((r) => r.status).sort()).toEqual(["partial", "rescheduled"]);
   });
 
+  it("(PR5b) the bundle returns 'Not this' and partial answers, beside the decisions they sit next to", async () => {
+    // The web register reads them now; the bundle used to filter them out.
+    const today = householdTodayISO();
+    const plan = { recurringItemId: "gas-item", occurrenceDate: addDaysISO(today, -2) };
+    const other = { recurringItemId: "phone-item", occurrenceDate: addDaysISO(today, -3) };
+    const movedTo = addDaysISO(today, 4);
+    await post({ ...plan, status: "not_match", matchedTxnId: A });
+    await post({ ...plan, status: "matched", matchedTxnId: B });
+    const C = randomUUID();
+    await post({ ...other, status: "partial", matchedTxnId: C });
+    await post({ ...other, status: "rescheduled", rescheduledTo: movedTo } as Body);
+
+    const r = await fetch(`${baseUrl}/forecast?days=30`);
+    expect(r.status).toBe(200);
+    const bundle = (await r.json()) as {
+      resolutions: Array<{ recurringItemId: string | null; occurrenceDate: string | null; status: string; matchedTxnId: string | null; rescheduledTo: string | null }>;
+    };
+    const got = bundle.resolutions
+      .map((x) => `${x.status}:${x.recurringItemId}|${x.occurrenceDate}#${x.matchedTxnId ?? "-"}>${x.rescheduledTo ?? "-"}`)
+      .sort();
+    expect(got).toEqual(
+      [
+        `not_match:${plan.recurringItemId}|${plan.occurrenceDate}#${A}>-`,
+        `matched:${plan.recurringItemId}|${plan.occurrenceDate}#${B}>-`,
+        `partial:${other.recurringItemId}|${other.occurrenceDate}#${C}>-`,
+        `rescheduled:${other.recurringItemId}|${other.occurrenceDate}#->${movedTo}`,
+      ].sort(),
+    );
+  });
+
   it("rejecting a pair takes back an earlier match of that same pair", async () => {
     await post({ ...WATER, status: "matched", matchedTxnId: A });
     await post({ ...WATER, status: "not_match", matchedTxnId: A });
