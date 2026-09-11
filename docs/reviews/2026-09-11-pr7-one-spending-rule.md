@@ -2,8 +2,10 @@
 
 Codex work-order points **7** (spending and checking cash are distinct) and **9** (what the spending numbers mean), plan
 PR7. Base: `main` = `b93c01e`. Plan: `~/.claude/plans/h2-budget-work-serene-pebble.md`. Brad's decision 5: card payments
-are recognized automatically, **in spending totals only**; nothing is re-tagged; one click marks a row "this was a
-purchase".
+are recognized **automatically, in spending totals only**; nothing is re-tagged.
+
+- **First look:** `aecbf38`, REQUEST CHANGES (one HIGH, two MEDIUM, three LOW, one NIT).
+- **This revision:** `0198bb8` plus this note. The findings and what was done are in **Review** below.
 
 ## The problem
 
@@ -18,17 +20,19 @@ purchase".
 
 **Four smaller holes in the same predicate.**
 - A reimbursable charge counted as spending.
-- An outflow tagged to a debt (`transactions.debt_id`) counted, if its category was a plain expense.
+- An outflow tagged to a debt (`transactions.debt_id`) counted, if its category was a plain expense. Sync only tags the
+  payment side (positive amounts on the linked card), so a tagged outflow is a hand-tagged payment.
 - The user's own `isExternalCardPayment` flag and Plaid's `LOAN_PAYMENTS_CREDIT_CARD_PAYMENT` category were ignored.
 - A row whose category had been deleted counted **nowhere**: not spend, not uncategorized, not excluded.
 
-**Two rules, not one.** Categorized purchases (`isRealSpend`) and the uncategorized bucket (`isUncategorizedSpend`)
-repeated the checks separately, and the Spending facts loop repeated them a third time for the excluded panel.
+**Three copies of the rule.** `isRealSpend`, `isUncategorizedSpend` and the Spending facts loop each repeated the checks.
+The Spending page's Recategorize popover kept a **browser copy** of the bank-noise list.
 
 ## What changed
 
-**One classifier, `classifyOutflow()`** (`lib/spendingFilter.ts`, pure). Every outflow gets exactly one kind. First match
-wins:
+**One classifier, `classifyOutflow()`,** pure, in **`lib/avalanche-core/src/spendingRule.ts`**. The server
+(`api-server/src/lib/spendingFilter.ts`, a re-export) and the web app import the same code. Every outflow gets exactly one
+kind; first match wins:
 
 | # | Rule | Kind |
 |---|---|---|
@@ -40,27 +44,41 @@ wins:
 | 6 | income category | income |
 | 7 | `reimbursable` | reimbursable |
 | 8 | `pfc_detailed = LOAN_PAYMENTS_CREDIT_CARD_PAYMENT` | card payment |
-| 9 | `CARD_PAYMENT_PATTERNS` (exported from `lib/mappingSeed.ts`) | card payment |
+| 9 | `CARD_PAYMENT_PATTERNS` (also re-exported from `lib/mappingSeed.ts`) | card payment |
 | 9b | the pre-PR7 bank-noise patterns, unchanged | bank noise |
 | 10 | otherwise | spend: categorized, or uncategorized when there is no category or it was deleted |
 
+- **Recognition is automatic.** Rules 8–9 apply whatever category a row carries and whoever set it. The rule does not
+  read `isTransferUserOverridden` (see Review H1).
+- **There is no user override in this PR.** A false-positive card-payment match cannot be undone by the user until the
+  follow-up adds a "this was a purchase" marker with its own column and per-row toggle. That is additive DDL and needs
+  Brad's go.
+  - The reviewer found no false positives in a 32-row realistic table: Apple Store, Capital One Café, Discover Books,
+    American Express Travel, PayPal \*Netflix, Zelle, Venmo and others.
+  - `spendingFilter.test.ts` pins a 32-row table of its own.
 - **The system "Uncategorized" category is not excluded.** A row there is spend, as before.
-- **Wrappers.** `isRealSpend` is `spend && categorized`; `isUncategorizedSpend` is `spend && !categorized` (it now takes
-  the category context, so it can see a deleted category).
+- **Wrappers.** `isRealSpend` is `spend && categorized`; `isUncategorizedSpend` is `spend && !categorized`.
 - **Every field the rules read is required on `SpendTxn`.** A caller that forgets to select `debtId`, `reimbursable`,
-  `isExternalCardPayment`, `pfcDetailed` or `isTransferUserOverridden` fails to compile rather than classify with a
-  default. All four callers were updated: `spendingFacts`, `behaviorFacts`, `amexAnchor`, `billsOneOff`.
-- **`CARD_PAYMENT_PATTERNS`:** `crcardpmt`, `capital one mobile pymt`, `applecard gsbank`, `goldman sachs apple`,
-  `discover e-payment`, `citi card online`, `credit one bank`, `synchrony paypal`, `synchrony ashley`, `paypal paymthly`,
-  `menards big card`, `amex epayment`, `amex ach pmt`, `american express ach`.
-  - Matched case-insensitively with runs of whitespace collapsed, since Chase pads raw strings.
-  - They are the seed mapping rules' card-payment patterns, minus merchant names (see Deviations).
+  `isExternalCardPayment` or `pfcDetailed` fails to compile rather than classify with a default.
+- **Callers:** three production callers, `spendingFacts`, `behaviorFacts` and `amexAnchor`. `billsOneOff.computeOneOff`
+  was updated to compile but has **no production caller**.
 
-**"This was a purchase."** A row with `isTransferUserOverridden=true` and `isTransfer=false` skips rules 8–9 only.
-- Rules 1–7 are recorded facts (flags, tags, categories) and still apply.
-- Bank noise (9b) still applies, as it did before PR7. So the override can never count a row main's rule did not already
-  count.
-- The server honours it now. **No new per-row UI toggle in this PR** (see Deviations, point 1).
+**`CARD_PAYMENT_PATTERNS`** are issuer payment phrases, never a merchant or brand name on its own:
+- `crcardpmt`
+- `capital one mobile pymt`, `capital one online pymt`
+- `applecard gsbank`, `goldman sachs apple`
+- `discover e payment`, `discover dc pymnts`
+- `citi card online`, `credit one bank`
+- `synchrony paypal`, `synchrony bank paypal`, `synchrony bank payment`, `synchrony ashley`
+- `paypal paymthly`, `barclaycard us creditcard`, `credit card pymt`, `target card srvc`, `menards big card`
+- `amex epayment`, `amex ach pmt`, `american express ach`
+
+**How a phrase matches:**
+- **Normalized.** The description is lowercased, every run of punctuation and whitespace becomes one space, and the
+  phrase must appear as **whole words**. So "SYNCHRONY BANK/PAYPAL", "PAYPAL \*PAYMTHLY" and "CAPITAL ONE   CRCARDPMT"
+  match, and "XCRCARDPMTX" does not.
+- **Merchant names stay out.** The seed rules also send "MATTRESS FIRM" and "AFFIRM" to Misc / Buffer; those are merchant
+  names and are left out. "NELNET" and "DEPT OF ED" are student loans, not cards.
 
 **`/reports/spending-facts`** (`lib/spendingFacts.ts`) runs each row through `classifyOutflow` once.
 - **New `householdSpend {total, transactionCount}`** = categorized + uncategorized spend.
@@ -69,71 +87,63 @@ wins:
 - **New `excluded.cardPayments` and `excluded.reimbursable`**, beside the four existing buckets. Bank noise goes to
   `transfersTotal`, as before.
 - **`unplanned`** is required in OpenAPI and counts any UN-flagged purchase through the same rule.
-- It selects the five columns the rule reads. Codegen was run and the generated `api-zod` / `api-client-react` files are
-  committed.
+- **`Transaction` gains `pfcDetailed`** in the spec. The list route already returned it; the popover needs it for rule 8.
+- Codegen was run and the generated `api-zod` / `api-client-react` files are committed.
 
-**The spine.**
-- `spentWeek` / `spentMonth` = `buildSpendingFacts().householdSpend.total`, the same call the report makes.
-- The Banking strip ("Household spending this week/month", `chase-insight-strip.tsx`) reads the same field, so it still
-  agrees with the Command Center tiles. Its help text now says what is in and out.
+**The spine.** `spentWeek` / `spentMonth` = `buildSpendingFacts().householdSpend.total`, the same call the report makes.
+
+**The web app.**
+- **Banking strip** (`chase-insight-strip.tsx`): the headline is `householdSpend`, so it agrees with the Command Center
+  tiles.
+  - When anything is uncategorized, a note under the headline says "Includes $X not yet categorized". The category mix
+    beside it is categorized only.
+  - The "Needs a category" stat now says it is included in the total above.
+- **Spending page** "Total real spend" and the **Reports hub** "Spending" tile stay on `realSpend`. When anything is
+  uncategorized they add "+ $X uncategorized", so each reconciles on sight with the household figure.
+- **The Recategorize popover** (`SpendingPage.tsx`) lists rows through `lib/uncategorizedSpend.ts`, which calls the shared
+  `classifyOutflow`. The browser copy of the bank-noise list is gone. It no longer offers card payments, reimbursable
+  charges or bank noise as "needs a category".
 
 **The Amex weekly payoff** (`lib/amexAnchor.ts`) uses the same rule with one option, `reimbursableIsSpend`. A reimbursable
 charge is still owed to Amex, so it stays in "what to pay this card".
 
 ## Deviations from the plan, and why
 
-1. **The override flag does not mean "this was a purchase". Needs the lead's decision.**
-   - `PATCH /transactions/:id` sets `isTransferUserOverridden=true` (and `isTransfer=false`) whenever the body carries a
-     non-null `categoryId`, not only when the user toggles the Transfer flag (`routes/transactions.ts`, #479). POST does
-     the same when the Transfer category is picked.
-   - The flag therefore means "the user decided this row's transfer status **or picked its category by hand**".
-   - **Consequence:** a card payment the user hand-categorized into a non-debt category (e.g. Misc / Buffer) carries the
-     override. It **still counts as spending**, as it did on main.
-   - Rows categorized by a mapping rule (sync, import, bulk re-categorize) do not set the flag and are recognized.
-   - I kept the plan's reuse because it matches the route's own stated meaning ("the user disagreeing with any
-     auto-Transfer heuristic"), and it can never raise a total above main's.
-   - **A true one-click override needs its own marker.** Options: a new boolean column (DDL, needs approval), or a jsonb
-     id list in `settings.preferences`. Every jsonb read would have to load it, and any stale `preferences` write would
-     wipe it.
-   - **Not measured:** how many such rows production holds. That needs a read-only query Brad approves, e.g. outflows
-     with `is_transfer_user_overridden AND NOT is_transfer` whose description matches the patterns or whose
-     `pfc_detailed` is the card-payment category.
-   - **The UI toggle was skipped** for the same reason. The existing "Reset to auto" (`clear-transfer-override`) already
-     undoes it.
-2. **The bank-noise patterns stay, as rule 9b, and the override does not skip them.** The plan's list omits them.
-   Dropping them, or letting the override skip them, would count rows main excluded ("ACH PMT … WEB ID:" bills,
-   "AUTOPAY"). The plan's figures-that-move list does not include that.
-3. **Pattern list trimmed.** The seed rules also send "MATTRESS FIRM" and "AFFIRM" to Misc / Buffer. Those are merchant
-   names, so a store charge would be dropped from spending; they are left out. "NELNET" and "DEPT OF ED" are student
-   loans, not cards. A unit test pins that every other seeded card-payment pattern is recognized.
-4. **The Amex payoff keeps reimbursable charges** (`reimbursableIsSpend`). Reason above.
-5. **Field names follow the plan literally:** `excluded.cardPayments` and `excluded.reimbursable`, not `…Total` like their
+1. **No "this was a purchase" override.** The plan reused `is_transfer_user_overridden`. The review showed it cannot mean
+   that: every hand-picked category sets it (`routes/transactions.ts` #479). A dedicated marker is deferred to a follow-up
+   (Review H1).
+2. **The bank-noise patterns stay, as rule 9b.** The plan's list omits them. Dropping them would count rows main excluded
+   ("ACH PMT … WEB ID:" bills, "AUTOPAY"). The plan's figures-that-move list does not include that.
+   - Their loose substring "epay" also drops "REPAY \*PEST CONTROL" and "EPAYMENTS PLUMBING LLC". That is pre-PR7
+     behaviour, disclosed and pinned by a test (Review NIT).
+3. **The pure rule lives in `lib/avalanche-core`, not only in `api-server`.** It is the package both apps already share
+   rules through (`inForecast`, the household calendar), so the popover runs the server's code.
+4. **Pattern list trimmed** to issuer phrases (see above).
+5. **The Amex payoff keeps reimbursable charges** (`reimbursableIsSpend`).
+6. **Field names follow the plan literally:** `excluded.cardPayments` and `excluded.reimbursable`, not `…Total` like their
    siblings.
-6. **Which surfaces moved to `householdSpend`:** the spine and the Banking strip, which show "household spending" and must
-   agree. The Reports hub tile and the Spending page's "Total real spend" stay on `realSpend`, with the uncategorized
-   banner beside it. The hub's own comment pins it to the Spending page, and both are labelled real spend.
-7. **Not done: pending/posted pairs** (PR4c's note hands "spending totals should not count both halves" to PR7). PR4c is
-   not on `main` (`fix/pending-superseded-by-posted` is unmerged), so its pairing rule is not available here. Listed
-   under Left for later.
+7. **Not done: pending/posted pairs.** PR4c's note hands "spending totals should not count both halves" to PR7, but PR4c
+   (`fix/pending-superseded-by-posted`) is not on `main`.
 
 ## Figures that should move
 
 **Live, wherever household spending shows** (Command Center "Spent this week/month" via the spine, the Banking strip):
-- **Down** by card payments: flagged, Plaid-classified, or matched by description.
+- **Down** by card payments: flagged, Plaid-classified, or matched by description, however the row is categorized.
 - **Down** by outflows tagged to a debt and by reimbursable charges.
 - **Up** by uncategorized purchases, including rows whose category was deleted.
 
 **`realSpend`** (Spending page total, byCategory/merchant/day-of-week/monthly charts, dailyNet, Reports hub tile): down by
-card payments, debt-tagged outflows and reimbursable charges. **Never up**: uncategorized stays its own bucket.
+card payments, debt-tagged outflows and reimbursable charges. **Never up**; the uncategorized total is now shown beside it.
 
 **Other surfaces:**
 - **Unplanned:** down by any card payment, debt-tagged or reimbursable row flagged UN. Up by a UN row whose category was
   deleted.
 - **Habits (behavior facts):** splurge, most-visited, streaks and days-since exclude card payments and debt-tagged
   outflows. Reimbursable rows were already dropped there.
-- **Amex weekly payoff (`weekCharges`):** down only by a charge on the card that is flagged `isExternalCardPayment`,
-  tagged to a debt, Plaid-classified as a card payment or matching a card-payment string. Reimbursable and uncategorized
-  charges are unchanged.
+- **Amex weekly payoff (`weekCharges`):** down only by a charge on the card that is flagged, tagged to a debt,
+  Plaid-classified as a card payment or matching a card-payment phrase. Reimbursable and uncategorized charges are
+  unchanged.
+- **Spending popover:** stops listing uncategorized card payments, reimbursable charges and flagged or debt-tagged rows.
 - **`excluded` panel (API only; no screen reads it):**
   - two new buckets;
   - a transfer tagged to a debt now lands in transfers (rule 1 before rule 2);
@@ -143,91 +153,133 @@ card payments, debt-tagged outflows and reimbursable charges. **Never up**: unca
 
 | Test | Before (main) | After |
 |---|---|---|
-| Household scenario S10, spent this week | 424.00 (pinned as known-wrong) | **274.00** |
-| Codex check: $100 Amex groceries + $100 "CAPITAL ONE CRCARDPMT" | 200.00 spending (card payment counted) | **100.00**; `excluded.cardPayments` 100.00 |
-| Spine parity, spent week/month | spine = `realSpend.total` | spine = `householdSpend.total` (same fixture values; no uncategorized row) |
+| Household scenario S10, spent this week (card payment filed by hand, override flag set) | 424.00 | **274.00** |
+| Codex check: $100 Amex groceries + $100 "CAPITAL ONE CRCARDPMT" | 200.00 | **100.00**; `excluded.cardPayments` 100.00 |
+| The same payment after `PATCH {categoryId: Misc / Buffer}` | 200.00 (and 200.00 on `aecbf38`) | **100.00** |
+| Spine parity, spent month | `realSpend` 557.90 | `householdSpend` **570.24** (fixture gains a 12.34 uncategorized charge) |
 | Household clock, unplanned spending, spending-facts income | unchanged | unchanged |
 
-**Not measured:** the production figures. That needs a read-only query Brad approves.
+**Not measured:** the production figures, or payment-like descriptions that match no pattern. Both need a read-only
+production query Brad approves.
 
 ## Must not change
 
 - **Budget page `plannedTotal` / `planBySource`:** `routes/budget.ts` and `lib/budgetFacts.ts` import nothing from the
   spending rule. `budgetPlanBySource` passes.
 - **Cash today and the forecast:** `cashSignal`, `forecastLedger` and `routes/forecast.ts` do not import it. Golden,
-  cash-signal, household-scenario cash and review columns, and spine bank parity all pass unchanged.
-- **Landing:** `landing.tsx` untouched and still shows no dollar figures.
-- **No stored data re-tagged:** the integration test reads the card-payment row back after classification. `isTransfer`,
-  `isExternalCardPayment` and `categoryId` are unchanged, and no route writes anything new.
+  cash-signal, household-scenario cash and review columns, and spine bank and review-count parity all pass unchanged.
+  - The spine parity fixture's new charge sits on a card account, so it does not move either.
+- **Landing:** `landing.tsx` untouched and still shows no dollar figures. Landing JS **572.5 KB of 580** (entry chunk
+  239.8 → 239.9 KB).
+- **No stored data re-tagged:** the integration test PATCHes a category through the real route and reads the row back.
+  `isTransfer` and `isExternalCardPayment` are untouched, and no route writes anything new.
 - **No new dependency; no schema or DDL change** (`lib/db` untouched).
 
 ## Residuals
 
-- **Hand-categorized card payments still count** (Deviation 1).
-- **A pattern list, not a certainty.**
-  - A card issuer not on the list still counts until Plaid's category or the user's flag catches it.
+- **No user override** until the follow-up. A false-positive match stays excluded.
+- **A phrase list, not a certainty.**
+  - An issuer phrase not on the list still counts until Plaid's category or the user's `isExternalCardPayment` flag
+    catches it.
   - Plaid's detailed category is only on rows synced since #636.
-  - A description containing one of the strings would be dropped even if it were a purchase. None of the patterns is a
-    merchant name; there is a test for that.
-- **Browser-side mirrors not moved:**
-  - The Spending page's Recategorize popover (`SpendingPage.tsx` `isUncategorizedSpendTxn`) still screens only the
-    bank-noise list, so it can list an uncategorized card payment the banner no longer counts. The list is rows to
-    fix, not a total.
-  - The Allowances/bucket helpers (`bucketSpend.ts`, `discretionarySpend.ts`) keep their own flag-based rules. They count
-    only rows the user explicitly tagged.
-- **Legacy noise that is really a card payment** ("chase credit", "bk of amer", "wells fargo card", "credit card pmt")
-  sits in `excluded.transfersTotal`, not `cardPayments`. Totals are unaffected.
+- **The popover lists only rows with no category id** (the `uncategorized=true` SQL filter). A purchase whose category
+  was deleted is in the banner's total but not in the list.
+- **Legacy bank noise** (unchanged):
+  - The loose "epay" substring above.
+  - "chase credit", "bk of amer", "wells fargo card" and "credit card pmt" sit in `excluded.transfersTotal`, not
+    `cardPayments`. Totals are unaffected.
 - **`dailyNet` and the charts use categorized spend only**, so they do not sum to `householdSpend` while anything is
-  uncategorized.
+  uncategorized. The tiles now say by how much.
+- **Browser bucket helpers** (`bucketSpend.ts`, `discretionarySpend.ts`) keep their own flag-based rules. They count only
+  rows the user explicitly tagged weekly, monthly or UN.
 - **Pending/posted pairs** the sync left unlinked still count twice in spending (PR4c covers cash only).
 
 ## Tests
 
-- **New `lib/spendingFilter.test.ts`** (25):
+- **`lib/spendingFilter.test.ts`** (76):
   - **the 12-row table**, one row per rule in order, each asserting the kind, the rule and that both wrappers agree;
-  - first match wins, inflows, manual-Amex positive charges, a deleted category, the system Uncategorized category;
-  - the override: it skips rules 8 and 9, never beats rules 1–7 or 9b, and a user-set transfer stays a transfer;
-  - the Amex payoff option;
-  - `CARD_PAYMENT_PATTERNS`: every seeded card-payment pattern is recognized, store purchases are not, and the list is
-    normalized.
-- **New `__tests__/spendingCardPayments.integration.test.ts`** (3), through `/reports/spending-facts` and `/spine`:
+  - first match wins, inflows, manual-Amex positive charges, a deleted category, the system Uncategorized category, the
+    Amex payoff option;
+  - **automatic recognition:** a card payment uncategorized, filed under Misc / Buffer or Groceries, in Uncategorized, or
+    in a deleted category is still a card payment; the override flag is ignored, by description and by Plaid category;
+  - **16 payment strings recognized**, including all eight from review M2;
+  - **32 purchases not caught**, including the reviewer's examples;
+  - whole-word matching after normalization; every seeded card-payment pattern recognized; patterns written normalized;
+  - the loose legacy "epay", pinned and disclosed.
+- **`__tests__/spendingCardPayments.integration.test.ts`** (4), through `/reports/spending-facts`, `/spine` and
+  `PATCH /transactions/:id`:
   - **Codex check:** $100 Amex groceries + $100 card payment → `householdSpend` and `realSpend` **100**,
     `excluded.cardPayments` 100, spine week and month **100**.
-  - **Override:** "this was a purchase" → 200 on the report and the spine together; reset → 100; the row is never
-    re-tagged.
+  - **H1:** `PATCH {categoryId: Misc / Buffer}` sets `isTransferUserOverridden`; household spend and the spine stay
+    **100**. The same after `PATCH {isTransfer: false}`. The row is never re-tagged.
+  - **M1:** an uncategorized purchase inside the spine's week and month; the spine equals `householdSpend` **112.34** and
+    differs from `realSpend`.
   - **One mixed ledger, every bucket:** categorized, uncategorized, deleted category, reimbursable, a Plaid-classified
     payment with a bland description, a UN-flagged card payment, bank noise. The buckets sum to every dollar that left
     (710.00).
-- **Switched on:** household scenario S10, 274.00. Its `it.todo` is removed, and the fixture and the contract document
-  are updated. No step carries a known-wrong value now.
-- **Changed:**
-  - `spineParity` now compares the spine to `householdSpend`, and adds `householdSpend = realSpend + uncategorized`. It
-    is stricter, not looser.
-  - `spendingFilterIncome.test.ts`'s row helper fills the new required fields.
-  - The web mocks in `chaseInsightStrip.test.tsx` and `commandCenter.test.tsx` carry `householdSpend`, the real payload
-    shape.
-- **Failing before:** the new and changed tests were run against `main`'s seven source files (`git checkout origin/main --`
-  on the spending lib, the three callers and `routes/spine.ts`), then restored. **All four files fail there:**
-  - household scenario S10 on the number: **424 vs 274**, a difference of exactly the $150 card payment;
-  - the three integration tests and the spine parity test at the missing `householdSpend`;
-  - all 25 unit tests, because `classifyOutflow` / `CARD_PAYMENT_PATTERNS` do not exist on main.
+- **`__tests__/amexWeeklyPayoffReimbursable.integration.test.ts`** (1, L2): through `/amex/weekly-payoff`, $50 +
+  $40 reimbursable + a $30 card-payment string on a Platinum card → `weekCharges` **90**. The Spending report for the same
+  week shows `householdSpend` 50, `excluded.reimbursable` 40, `cardPayments` 30.
+- **Household scenario:** S10 switched on at **274.00**, its fixture row carrying `isTransferUserOverridden: true` as a UI
+  filing would. The contract document is updated.
+- **Spine parity:** gains an uncategorized card charge today. It asserts the spine equals `householdSpend`, that
+  `householdSpend = realSpend + uncategorized`, and that spent week and month differ from `realSpend`.
+- **Web:**
+  - `lib/uncategorizedSpend.test.ts` (13): popover rows through the shared rule;
+  - the strip's uncategorized note and its absence (2);
+  - the Reports hub "+ $X uncategorized" (1);
+  - mocks in `chaseInsightStrip.test.tsx` and `commandCenter.test.tsx` carry `householdSpend`.
+- **`spendingFilterIncome.test.ts`:** row helper fills the new required fields.
+
+**Failing before**, each run and restored:
+- **Against `main`'s source (`b93c01e`, first look):** all four new or changed API files fail. S10 fails on the number
+  (424 vs 274); the rest fail at the missing `householdSpend` or `classifyOutflow`.
+- **Against `aecbf38`'s API source (this revision): 14 fail.**
+  - S10: 424 vs 274.
+  - **H1 through the PATCH route:** 200 vs 100.
+  - M1 test: 212.34 vs 112.34, but only because the hand-filed payment is counted there.
+  - The override-ignored unit test.
+  - The eight M2 strings.
+  - Whole-word normalization, and patterns written normalized.
+  - The false-positive table, the L2 payoff test and spine parity pass there, as they must.
+- **`spine.ts` reverted to read `realSpend` (M1):** both M1 assertions fail (card-payment test 100 vs 112.34; spine parity
+  557.90 vs 570.24).
+- **`reimbursableIsSpend` removed from `amexAnchor.ts` (L2):** the payoff test fails.
+- **`aecbf38`'s strip and Reports hub (L1):** both new web tests fail.
+- **`lib/uncategorizedSpend.test.ts`** is a new module. On `aecbf38` the popover's own predicate kept "CAPITAL ONE
+  CRCARDPMT" as uncategorized.
 
 ## Verification
 
-- **Full API suite:** **122 files, 929 pass, 7 todo** (main `b93c01e`: 120 files, 901 pass, 8 todo). That is +25 unit
-  and +3 integration tests, and one todo switched on.
-- **Full web suite:** **118 files, 917 pass** (same as main).
+- **Full API suite:** **123 files, 982 pass, 7 todo** (`aecbf38`: 122 files, 929 pass; main `b93c01e`: 120 files, 901 pass,
+  8 todo).
+- **Full web suite:** **119 files, 933 pass** (`aecbf38` and main: 118 files, 917 pass).
 - **Workspace typecheck:** exit 0.
 - **Workspace build:** exit 0.
-- **Landing bundle guard:** **572.5 KB of 580**, unchanged.
+- **Landing bundle guard:** **572.5 KB of 580**; entry chunk 239.9 KB.
 - **Codegen:** re-run after commit, no diff.
+
+## Review
+
+First look at `aecbf38`: **REQUEST CHANGES**.
+
+| Finding | What was done |
+|---|---|
+| **HIGH H1** — a hand-picked category put a card payment back into spending (`isTransferUserOverridden` skipped rules 8–9, and every category PATCH sets it) | `classifyOutflow` no longer reads the flag; recognition is automatic whatever the category. The "this was a purchase" marker (own column + toggle) is deferred to a follow-up (additive DDL, needs Brad's go); until then a false positive cannot be undone by the user. The popover now runs the shared rule from `@workspace/avalanche-core` instead of a browser copy. New integration test PATCHes a category through the real route and asserts household spend and `spentWeek` stay 100. S10's row carries the flag and stays 274.00. |
+| **MEDIUM M1** — nothing tested that the spine reads `householdSpend` | An uncategorized purchase inside the spine's week and month, in both the card-payment test and spine parity, with `spentWeek`/`spentMonth` ≠ `realSpend`. Both fail with `spine.ts` reverted. |
+| **MEDIUM M2** — common payment strings missed | Punctuation normalized to spaces, whole-word matching; added Capital One online, Discover DC, Synchrony Bank (PayPal and payment), Barclaycard US, "credit card pymt", Target card service ("PAYPAL \*PAYMTHLY" matches the existing phrase once normalized). All eight strings are in the table; the 32-purchase false-positive table stays green. A read-only production check for unmatched payment-like descriptions needs Brad's approval. |
+| **LOW L1** — household spend and real spend differ by the uncategorized total | Shown, not just disclosed: the strip says "Includes $X not yet categorized" under its headline; the Spending page total and the Reports hub tile add "+ $X uncategorized". |
+| **LOW L2** — no route test for `reimbursableIsSpend` | `/amex/weekly-payoff` integration test; fails with the option removed. |
+| **LOW L3** — "four callers" was wrong | Corrected: three production callers; `computeOneOff` has none. |
+| **NIT** — legacy "epay" drops "REPAY \*PEST CONTROL", "EPAYMENTS PLUMBING LLC" | Disclosed and pinned by a test. Left unchanged: tightening it would count rows the app has always excluded, which this PR cannot measure. |
 
 ## Left for later
 
-- **A dedicated "this was a purchase" marker, plus its per-row toggle** (Deviation 1). A column needs DDL approval; the
-  jsonb alternative is described above.
+- **"This was a purchase":** a dedicated column and per-row toggle, skipping rules 8–9 for that row only. Additive DDL;
+  needs Brad's go.
+- **A read-only production query** (Brad's approval): payment-like outflows that match no phrase, and the before/after
+  household figures.
 - **Spending totals should not count both halves of a pending/posted pair** once PR4c's `pairPendingWithPosted` is on
   `main`.
 - **PR10:** needs classification and the Codex point-9 states. `householdSpend` and `unplanned` are the inputs.
-- **Move the Spending page popover's client-side filter onto a server field** (or the `uncategorized` SQL filter plus the
-  card-payment rule).
+- **The popover could list deleted-category purchases** if `/transactions` gained a filter for a dangling category id.
