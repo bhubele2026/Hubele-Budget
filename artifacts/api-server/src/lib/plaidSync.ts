@@ -1,3 +1,4 @@
+import { pickRemintCandidate } from "./remintMatch";
 import { and, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import {
   db,
@@ -900,6 +901,9 @@ export async function syncPlaidItem(
     debtIdsByAcctRowId.set(d.plaidAccountRowId, arr);
   }
 
+  // (PR4d) From a null cursor Plaid replays the item's whole history in `added`,
+  // so an id absent from this sync's rows no longer exists (re-mint evidence).
+  const startedFromNullCursor = item.cursor == null;
   let cursor = item.cursor ?? undefined;
   let added: PlaidTxn[] = [];
   let modified: PlaidTxn[] = [];
@@ -1278,6 +1282,9 @@ export async function syncPlaidItem(
       if (addedDescriptions.length >= ADDED_DESCRIPTIONS_LIMIT) return;
       addedDescriptions.push(description);
     };
+    // (PR4d) Re-mint evidence: the ids Plaid removed in this sync, and every id it sent.
+    const removedIds = new Set(removed.map((r) => r.transaction_id));
+    const liveIds = new Set([...added, ...modified].map((r) => r.transaction_id));
     for (const t of [...added, ...modified]) {
       const description = t.merchant_name || t.name || "(no description)";
       // `personal_finance_category` is the modern Plaid taxonomy used to
@@ -1541,7 +1548,10 @@ export async function syncPlaidItem(
                 plaidTransactionId: t.transaction_id,
                 // Honor a manual date edit, same CASE shape the upsert uses.
                 occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${t.date} END`,
-                occurredAt,
+                // (PR4d) Keep the time first seen: a pending row's authorisation
+                // time must not be replaced by the posting time (the bank snapshot
+                // rule reads it as when the charge happened).
+                occurredAt: sql`COALESCE(${transactionsTable.occurredAt}, ${occurredAt}::timestamptz)`,
                 description,
                 amount: signedAmount,
                 pending: !!t.pending,
@@ -1571,10 +1581,11 @@ export async function syncPlaidItem(
       {
         const remintLow = fmtISO(addDays(parseISO(t.date), -2));
         const remintHigh = fmtISO(addDays(parseISO(t.date), 2));
-        const [remintMatch] = await db
+        const remintCandidates = await db
           .select({
             id: transactionsTable.id,
             oldPtid: transactionsTable.plaidTransactionId,
+            occurredOn: transactionsTable.occurredOn,
           })
           .from(transactionsTable)
           .where(
@@ -1587,8 +1598,12 @@ export async function syncPlaidItem(
               sql`${transactionsTable.plaidTransactionId} is not null`,
               sql`${transactionsTable.plaidTransactionId} <> ${t.transaction_id}`,
             ),
-          )
-          .limit(1);
+          );
+        // (PR4d) Same amount within two days is not proof of a re-mint — two real
+        // charges look identical. Adopt only a row whose old id is gone: Plaid removed it in this
+        // sync, or this sync replayed the whole history and did not send it.
+        const remintMatch = pickRemintCandidate(remintCandidates, t.date, (oldPtid) =>
+          removedIds.has(oldPtid) || (startedFromNullCursor && !liveIds.has(oldPtid)));
         if (remintMatch) {
           logger.warn(
             {
@@ -1606,7 +1621,8 @@ export async function syncPlaidItem(
             .update(transactionsTable)
             .set({
               plaidTransactionId: t.transaction_id,
-              occurredOn: t.date,
+              // (PR4d) Honor a manual date edit, same CASE shape the upsert uses.
+              occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${t.date} END`,
               description,
               amount: signedAmount,
               // (#728) Authoritative pending boolean replaces the old
@@ -1676,7 +1692,8 @@ export async function syncPlaidItem(
             // and we keep their date; otherwise refresh from Plaid. Same
             // CASE-guard shape as `isTransfer` below.
             occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${values.occurredOn} END`,
-            occurredAt: values.occurredAt,
+            // (PR4d) Keep the time first seen (see the pending→posted re-key above).
+            occurredAt: sql`COALESCE(${transactionsTable.occurredAt}, excluded.occurred_at)`,
             description: values.description,
             amount: values.amount,
             // (#728) Refresh the pending boolean on every upsert so the
@@ -3449,6 +3466,10 @@ export async function runGapBackfillForItem(
         offset += batch.length;
       }
 
+      // (PR4d) /transactions/get returned every transaction in [startStr, todayStr],
+      // so inside that window an id absent from `all` no longer exists.
+      const fetchedIds = new Set(all.map((x) => x.transaction_id));
+      const windowStart: string = startStr;
       for (const t of all) {
         const description = t.merchant_name || t.name || "(no description)";
         const pfc = (t as unknown as {
@@ -3580,7 +3601,8 @@ export async function runGapBackfillForItem(
                 .set({
                   plaidTransactionId: t.transaction_id,
                   occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${values.occurredOn} END`,
-                  occurredAt: values.occurredAt,
+                  // (PR4d) occurredAt deliberately not written: the backfill has no
+                  // time (values.occurredAt is null) and must not wipe the one on file.
                   description: values.description,
                   amount: values.amount,
                   pending: values.pending,
@@ -3609,10 +3631,11 @@ export async function runGapBackfillForItem(
         // both ids for support diffing.
         const remintLow = fmtISO(addDays(parseISO(t.date), -2));
         const remintHigh = fmtISO(addDays(parseISO(t.date), 2));
-        const [remintMatch] = await db
+        const remintCandidates = await db
           .select({
             id: transactionsTable.id,
             oldPtid: transactionsTable.plaidTransactionId,
+            occurredOn: transactionsTable.occurredOn,
           })
           .from(transactionsTable)
           .where(
@@ -3625,8 +3648,12 @@ export async function runGapBackfillForItem(
               sql`${transactionsTable.plaidTransactionId} is not null`,
               sql`${transactionsTable.plaidTransactionId} <> ${t.transaction_id}`,
             ),
-          )
-          .limit(1);
+          );
+        // (PR4d) Same amount within two days is not proof of a re-mint — two real
+        // charges look identical. Adopt only a row whose old id is gone: its date is inside the
+        // window /transactions/get just returned in full, and its id is not in it.
+        const remintMatch = pickRemintCandidate(remintCandidates, t.date, (oldPtid, occurredOn) =>
+          !fetchedIds.has(oldPtid) && occurredOn >= windowStart && occurredOn <= todayStr);
         if (remintMatch) {
           logger.warn(
             {
@@ -3644,7 +3671,8 @@ export async function runGapBackfillForItem(
             .update(transactionsTable)
             .set({
               plaidTransactionId: t.transaction_id,
-              occurredOn: t.date,
+              // (PR4d) Honor a manual date edit, same CASE shape the upsert uses.
+              occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${t.date} END`,
               description,
               amount: signedAmount,
               pfcPrimary: values.pfcPrimary,
