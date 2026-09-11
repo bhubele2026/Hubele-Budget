@@ -7,6 +7,8 @@
 // (artifacts/api-server/src/lib/avalancheSim.ts reuses simulate/targetIndex).
 // Keep it framework-free: no Intl, no DOM, money stays as numbers here.
 
+export { inForecast } from "./forecastInclusion";
+
 export type Strategy = "avalanche" | "snowball";
 
 export type SimDebt = {

@@ -1,3 +1,4 @@
+import { inForecast } from "@workspace/avalanche-core";
 import type { CashEvent } from "./forecast";
 
 export type Transaction = {
@@ -9,6 +10,10 @@ export type Transaction = {
   categoryId?: string | null;
   source?: string;
   plaidAccountId?: string | null;
+  /** A transfer between household accounts or a card payment. Still cash,
+   *  still matchable to a planned payment — never swept into "not planned"
+   *  by a bulk action. */
+  isTransfer?: boolean;
 };
 
 /** True if a transaction belongs to a bank/checking-style account.
@@ -31,16 +36,21 @@ export function isBankTxn(
 }
 
 /** The exact filter Forecast uses to decide which transactions can reach
- *  the inbox / register / running balance. A txn is included iff it is
- *  flagged for forecast AND belongs to the configured Chase checking
- *  account (per `isBankTxn` semantics). Kept here so the page wiring and
- *  tests share a single source of truth — a regression in either side
- *  surfaces immediately. */
+ *  the inbox / register / running balance. A txn is included iff it belongs
+ *  to the configured Chase checking account (per `isBankTxn` semantics) AND
+ *  is in the forecast per `inForecast` — it already happened (dated on or
+ *  before `todayISO`), or it is a future row flagged for the forecast. The
+ *  server's curve and review badge apply the same rule. Kept here so the page
+ *  wiring and tests share a single source of truth — a regression in either
+ *  side surfaces immediately. */
 export function filterForecastTxns<
-  T extends Pick<Transaction, "forecastFlag" | "source" | "plaidAccountId">,
->(txns: T[], checkingPlaidAccountIds: Set<string>): T[] {
+  T extends Pick<
+    Transaction,
+    "forecastFlag" | "source" | "plaidAccountId" | "occurredOn"
+  >,
+>(txns: T[], checkingPlaidAccountIds: Set<string>, todayISO: string): T[] {
   return txns.filter(
-    (t) => t.forecastFlag && isBankTxn(t, checkingPlaidAccountIds),
+    (t) => inForecast(t, todayISO) && isBankTxn(t, checkingPlaidAccountIds),
   );
 }
 

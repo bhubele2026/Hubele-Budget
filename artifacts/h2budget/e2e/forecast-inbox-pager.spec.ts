@@ -256,12 +256,15 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
     await expect(prev).toBeDisabled();
     await expect(next).toBeDisabled();
 
-    // --- Auto-advance after Remove (un-send back to Bank list). The "X"
-    // remove icon button sits next to the InboxCardView with the title
-    // "Un-send back to Bank list".
+    // --- Auto-advance after Remove. The "X" icon button sits next to the
+    // InboxCardView. For a future row its title is "Un-send back to Bank
+    // list"; for a row that has already happened it records "Not a planned
+    // payment" instead (a posted row is cash either way). Both leave the inbox.
     const removeBtn = page
       .getByTestId("pinned-inbox-area")
-      .getByRole("button", { name: /un-send back to bank list/i });
+      .getByRole("button", {
+        name: /un-send back to bank list|not a planned payment/i,
+      });
     await expect(removeBtn).toBeVisible();
     await removeBtn.click();
 

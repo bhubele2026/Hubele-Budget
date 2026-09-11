@@ -110,6 +110,15 @@ test.describe("Chase Transactions Review Bucket badge (#426)", () => {
   test("Send-to-Forecast flips the row badge to in-review-bucket and the chip to 1; matching it on /review flips the badge to matched and clears the chip", async ({
     page,
   }) => {
+    // The seeded row must still be ahead of today. A row that has already
+    // happened is always in the forecast (`inForecast`, 2026-09-10), so it has
+    // no Send button to click. `pickAnchorDay` caps at the 28th, so from the
+    // 26th on there is no future current-month day left — skip rather than
+    // test a row that cannot be sent.
+    test.skip(
+      new Date().getDate() + 3 > 28,
+      "no future day left in the current month for a sendable row",
+    );
     const { email, password } = await createTestUser(
       "txn-bucket-badge-426",
       provisionedUserIds,

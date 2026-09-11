@@ -18,6 +18,7 @@ import {
   loadUserRules,
 } from "../lib/autoCategorize";
 import { selectPatternCandidates } from "../lib/patternCandidates";
+import { forecastTodayISO } from "../lib/forecastInclusion";
 import { cleanMerchant, merchantSignature } from "../lib/merchantNameExtract";
 import {
   EXCLUDED_CATEGORY_RULE_ERROR,
@@ -774,9 +775,15 @@ router.patch(
         };
       }
     }
-    // If forecast_flag was turned off, drop any forecast resolution that
-    // points to this txn so the Forecast inbox/bucket stays consistent.
-    if (parsed.data.forecastFlag === false) {
+    // If forecast_flag was turned off on a FUTURE row, drop any forecast
+    // resolution that points to it so the Forecast inbox/bucket stays
+    // consistent. A row that has already happened is cash whatever its flag
+    // says (`inForecast`) — it stays on the curve and in Review — so deleting
+    // its match would only restart the bill it paid and count the money twice.
+    if (
+      parsed.data.forecastFlag === false &&
+      row.occurredOn > forecastTodayISO()
+    ) {
       await db
         .delete(forecastResolutionsTable)
         .where(
@@ -1094,19 +1101,23 @@ router.post(
               occurredOn: transactionsTable.occurredOn,
             });
     const okIds = new Set(updated.map((r) => r.id));
-    // Mirror per-row PATCH cleanup: if forecast_flag was flipped off,
-    // drop any forecast_resolutions pointing at the affected rows so
-    // the Forecast inbox/bucket stays consistent.
-    if (patch.forecastFlag === false && updated.length > 0) {
+    // Mirror per-row PATCH cleanup: if forecast_flag was flipped off on a
+    // FUTURE row, drop any forecast_resolutions pointing at it so the
+    // Forecast inbox/bucket stays consistent. Rows that have already
+    // happened keep theirs — they stay on the curve and in Review
+    // (`inForecast`), so deleting a match would restart the bill it paid.
+    const forecastToday = forecastTodayISO();
+    const futureFlaggedOffIds =
+      patch.forecastFlag === false
+        ? updated.filter((r) => r.occurredOn > forecastToday).map((r) => r.id)
+        : [];
+    if (futureFlaggedOffIds.length > 0) {
       await db
         .delete(forecastResolutionsTable)
         .where(
           and(
             eq(forecastResolutionsTable.householdId, req.householdId!),
-            inArray(
-              forecastResolutionsTable.matchedTxnId,
-              updated.map((r) => r.id),
-            ),
+            inArray(forecastResolutionsTable.matchedTxnId, futureFlaggedOffIds),
           ),
         );
     }
@@ -1208,8 +1219,10 @@ router.post(
  *     the affectedIds and naturally drop any rows the user has since
  *     toggled back by hand);
  *   - when the target is `false`, any forecast_resolutions pointing at
- *     the affected rows are also dropped so the Forecast inbox/bucket
- *     stays consistent.
+ *     affected FUTURE rows are also dropped so the Forecast inbox/bucket
+ *     stays consistent. Rows that have already happened keep theirs: they
+ *     stay on the curve and in Review (`inForecast`), so deleting a match
+ *     would restart the bill it paid and count the money twice.
  * Returns the ids that were actually flipped so the client can scope an
  * Undo whitelist to exactly those rows.
  */
@@ -1237,15 +1250,22 @@ router.post(
           eq(transactionsTable.forecastFlag, !forecastFlag),
         ),
       )
-      .returning({ id: transactionsTable.id });
+      .returning({
+        id: transactionsTable.id,
+        occurredOn: transactionsTable.occurredOn,
+      });
     const affectedIds = updated.map((r) => r.id);
-    if (!forecastFlag && affectedIds.length > 0) {
+    const forecastToday = forecastTodayISO();
+    const futureFlaggedOffIds = !forecastFlag
+      ? updated.filter((r) => r.occurredOn > forecastToday).map((r) => r.id)
+      : [];
+    if (futureFlaggedOffIds.length > 0) {
       await db
         .delete(forecastResolutionsTable)
         .where(
           and(
             eq(forecastResolutionsTable.householdId, req.householdId!),
-            inArray(forecastResolutionsTable.matchedTxnId, affectedIds),
+            inArray(forecastResolutionsTable.matchedTxnId, futureFlaggedOffIds),
           ),
         );
     }

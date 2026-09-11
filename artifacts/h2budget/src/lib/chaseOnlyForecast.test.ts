@@ -8,14 +8,17 @@ import type { CashEvent } from "./forecast";
 
 // Exercises the shared `filterForecastTxns` helper used by the Forecast
 // page (artifacts/h2budget/src/pages/forecast.tsx) before it hands txns to
-// `buildLineRegister`. These tests pin the rule that ONLY the configured
-// Chase checking account's transactions can ever reach inbox / register /
-// running balance, regardless of forecastFlag. A future refactor of
-// buildLineRegister or the page memo must not silently let Amex / other
-// depository accounts back in.
+// `buildLineRegister`. These tests pin two rules:
+//   1. ONLY the configured Chase checking account's transactions can ever
+//      reach inbox / register / running balance, regardless of forecastFlag.
+//      A future refactor of buildLineRegister or the page memo must not
+//      silently let Amex / other depository accounts back in.
+//   2. A Chase row that has already happened is in the forecast whatever its
+//      flag says (`inForecast`); the flag only gates future rows.
 
 const CHASE_ACCT = "chase-checking-acct-id";
 const AMEX_ACCT = "amex-card-acct-id";
+const TODAY = "2026-05-15";
 
 const baseOpts = {
   events: [] as CashEvent[],
@@ -58,7 +61,7 @@ describe("Forecast Chase-only filter", () => {
         source: "plaid:amex",
       }),
     ];
-    const filtered = filterForecastTxns(all, checking);
+    const filtered = filterForecastTxns(all, checking, TODAY);
     expect(filtered).toHaveLength(0);
 
     const { rows, allBank } = buildLineRegister({
@@ -78,7 +81,7 @@ describe("Forecast Chase-only filter", () => {
         source: "plaid:chase",
       }),
     ];
-    const filtered = filterForecastTxns(all, checking);
+    const filtered = filterForecastTxns(all, checking, TODAY);
     expect(filtered.map((t) => t.id)).toEqual(["chase-1"]);
 
     const { rows, allBank } = buildLineRegister({
@@ -114,7 +117,7 @@ describe("Forecast Chase-only filter", () => {
         source: "plaid:chase",
       }),
     ];
-    const filtered = filterForecastTxns(all, checking);
+    const filtered = filterForecastTxns(all, checking, TODAY);
     expect(filtered.map((t) => t.id).sort()).toEqual(["chase-1", "chase-2"]);
 
     const { rows, allBank } = buildLineRegister({
@@ -143,7 +146,7 @@ describe("Forecast Chase-only filter", () => {
         source: "plaid:chase",
       }),
     ];
-    const filtered = filterForecastTxns(all, checking);
+    const filtered = filterForecastTxns(all, checking, TODAY);
     expect(filtered).toHaveLength(0);
 
     const { allBank } = buildLineRegister({
@@ -167,7 +170,7 @@ describe("Forecast Chase-only filter", () => {
         source: "plaid:chase",
       }),
     ];
-    const filtered = filterForecastTxns(all, checking);
+    const filtered = filterForecastTxns(all, checking, TODAY);
     const { allBank } = buildLineRegister({
       ...baseOpts,
       txns: filtered,
@@ -177,5 +180,73 @@ describe("Forecast Chase-only filter", () => {
       .filter((b) => b.status === "pending_bank")
       .map((b) => b.txn.id);
     expect(inbox).toEqual(["chase-pending"]);
+  });
+});
+
+describe("Forecast inclusion: posted rows are cash, the flag gates only the future", () => {
+  const checking = new Set<string>([CHASE_ACCT]);
+
+  it("includes an already-posted Chase row whose forecastFlag is off — it moved real money", () => {
+    const all = [
+      txn("posted-unflagged", "2026-05-10", "-60.00", {
+        forecastFlag: false,
+        plaidAccountId: CHASE_ACCT,
+        source: "plaid:chase",
+      }),
+    ];
+    const filtered = filterForecastTxns(all, checking, TODAY);
+    expect(filtered.map((t) => t.id)).toEqual(["posted-unflagged"]);
+
+    const { allBank } = buildLineRegister({
+      ...baseOpts,
+      txns: filtered,
+      resolutions: [],
+    });
+    // It lands in the inbox, where it can be matched to its bill.
+    expect(allBank.map((b) => [b.txn.id, b.status])).toEqual([
+      ["posted-unflagged", "pending_bank"],
+    ]);
+  });
+
+  it("includes a Chase row dated today whose forecastFlag is off", () => {
+    const all = [
+      txn("today-unflagged", TODAY, "-12.00", {
+        forecastFlag: false,
+        plaidAccountId: CHASE_ACCT,
+        source: "plaid:chase",
+      }),
+    ];
+    expect(filterForecastTxns(all, checking, TODAY).map((t) => t.id)).toEqual([
+      "today-unflagged",
+    ]);
+  });
+
+  it("includes a future Chase row only when it is flagged for the forecast", () => {
+    const all = [
+      txn("future-unflagged", "2026-05-20", "-40.00", {
+        forecastFlag: false,
+        plaidAccountId: CHASE_ACCT,
+        source: "plaid:chase",
+      }),
+      txn("future-flagged", "2026-05-21", "-30.00", {
+        forecastFlag: true,
+        plaidAccountId: CHASE_ACCT,
+        source: "plaid:chase",
+      }),
+    ];
+    expect(filterForecastTxns(all, checking, TODAY).map((t) => t.id)).toEqual([
+      "future-flagged",
+    ]);
+  });
+
+  it("still excludes an already-posted Amex row whose forecastFlag is off", () => {
+    const all = [
+      txn("amex-posted-unflagged", "2026-05-10", "-90.00", {
+        forecastFlag: false,
+        plaidAccountId: AMEX_ACCT,
+        source: "plaid:amex",
+      }),
+    ];
+    expect(filterForecastTxns(all, checking, TODAY)).toHaveLength(0);
   });
 });

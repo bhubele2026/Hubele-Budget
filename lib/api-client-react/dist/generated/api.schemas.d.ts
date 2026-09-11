@@ -2381,6 +2381,13 @@ export interface ForecastBundle {
     bankSnapshot?: BankSnapshot | null;
     cashSignal?: CashSignal | null;
     plaidCheckingAccounts: PlaidCheckingAccount[];
+    /**
+     * Plaid account_id the forecast treats as the bank account, resolved the same way the balance roll-forward resolves it. Null when no account can be identified uniquely.
+     * @nullable
+     */
+    checkingAccountExternalId?: string | null;
+    /** The calendar date (YYYY-MM-DD) the server judged "already happened" against when it built this bundle, the curve and the review badge. The page uses it so its inbox agrees with the badge. */
+    today?: string;
     monthSnapshots?: ForecastBundleMonthSnapshots;
     accountSnapshots?: ForecastBundleAccountSnapshots;
 }

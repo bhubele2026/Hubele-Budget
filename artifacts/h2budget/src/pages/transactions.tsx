@@ -12,6 +12,8 @@ import {
   useGetForecast,
   useRefreshForecastBank,
   useBulkSetForecastFlag,
+  useUpsertForecastResolution,
+  useDeleteForecastResolution,
   useSendTransactionsToReview,
   useUnsendTransactionsFromReview,
   getListTransactionsQueryKey,
@@ -64,6 +66,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { isBankTxn } from "@/lib/forecastMatch";
+import { inForecast } from "@workspace/avalanche-core";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { type BucketKey } from "@/components/bucket-bubbles";
@@ -870,6 +873,9 @@ export default function TransactionsPage() {
   const clearTransferOverride = useClearTransferOverride();
   const deleteTx = useDeleteTransaction();
   const bulkSetForecastFlag = useBulkSetForecastFlag();
+  // Posted rows leave Review by resolution, not by flag (`inForecast`).
+  const upsertResolution = useUpsertForecastResolution();
+  const deleteResolution = useDeleteForecastResolution();
   // (#762 — Phase B) Manual Send-to-Review gate mutations. The
   // unsend variant backs both the symmetric "Unsend" affordance on
   // an already-promoted row and the 5-second Undo on the bulk /
@@ -1218,6 +1224,43 @@ export default function TransactionsPage() {
       checkingPlaidAccountIdSet,
     );
 
+  // The server's "today" (sent with the forecast bundle) so a row's in-Review
+  // state here agrees with the review badge; the browser date is a fallback.
+  const forecastToday = forecastData?.today ?? todayISO;
+
+  // `inForecast` on the Chase page: a checking row that has already happened
+  // is in the forecast — on the curve and in Review — whatever its flag says,
+  // because it moved real money. The flag decides only rows that haven't
+  // happened. Non-checking rows keep the flag alone.
+  const isInForecastRow = (tx: Transaction): boolean =>
+    canSendToForecast(tx) ? inForecast(tx, forecastToday) : tx.forecastFlag;
+  const isPostedCheckingRow = (tx: Transaction): boolean =>
+    canSendToForecast(tx) && tx.occurredOn <= forecastToday;
+
+  // A posted row can't leave the cash it already moved. Taking it out of
+  // Review records the decision instead — "not a planned payment", the same
+  // resolution the Review page's "Unplanned" writes — rather than flipping a
+  // flag that would no longer remove it from anything.
+  const handleNotPlanned = (tx: Transaction) => {
+    upsertResolution.mutate(
+      { data: { status: "ignored_unforecasted", matchedTxnId: tx.id } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+          invalidateForecastFamily(queryClient);
+          toast({ title: "Marked not a planned payment" });
+        },
+        onError: (e) => {
+          toast({
+            title: "Couldn't save",
+            description: (e as Error).message,
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
   const handleToggleForecast = (tx: Transaction) => {
     const next = !tx.forecastFlag;
     if (next && !canSendToForecast(tx)) {
@@ -1256,7 +1299,7 @@ export default function TransactionsPage() {
   // and posted row blocks so they can't drift. Returns null when the row isn't
   // in the forecast.
   const renderForecastChip = (tx: Transaction) => {
-    if (!tx.forecastFlag) return null;
+    if (!isInForecastRow(tx)) return null;
     const r = resolutionByTxnId.get(tx.id);
     // Tone follows the palette rule: navy for the resting states, grey for
     // "not planned". None of them is an alarm, so none of them is orange —
@@ -1268,6 +1311,24 @@ export default function TransactionsPage() {
           ? { attr: "unplanned", label: "Not planned", icon: Inbox, tone: "gray" }
           : { attr: "in-review-bucket", label: "In Review", icon: Inbox, tone: "info" };
     const StateIcon = state.icon;
+    // What the "×" does. A future row leaves the forecast. A posted row still
+    // awaiting review is marked "not a planned payment". A posted row that is
+    // already matched or marked not planned has nothing to take away here —
+    // its match is managed in Review, and flipping its flag would change
+    // nothing (it stays cash).
+    const removal = !isPostedCheckingRow(tx)
+      ? {
+          label: "Remove from forecast",
+          onClick: () => handleToggleForecast(tx),
+          pending: updateTx.isPending,
+        }
+      : state.attr === "in-review-bucket"
+        ? {
+            label: "Not a planned payment",
+            onClick: () => handleNotPlanned(tx),
+            pending: upsertResolution.isPending,
+          }
+        : null;
     return (
       <span
         className="inline-flex items-center gap-1"
@@ -1282,17 +1343,19 @@ export default function TransactionsPage() {
         >
           <StateIcon className="h-3 w-3" /> {state.label}
         </Link>
-        <button
-          type="button"
-          onClick={() => handleToggleForecast(tx)}
-          disabled={updateTx.isPending}
-          title="Remove from forecast"
-          aria-label="Remove from forecast"
-          className="press inline-flex items-center rounded-control p-0.5 text-neutral-400 hover:text-brand-navy disabled:opacity-50"
-          data-testid={`button-remove-forecast-${tx.id}`}
-        >
-          <X className="h-3 w-3" />
-        </button>
+        {removal && (
+          <button
+            type="button"
+            onClick={removal.onClick}
+            disabled={removal.pending}
+            title={removal.label}
+            aria-label={removal.label}
+            className="press inline-flex items-center rounded-control p-0.5 text-neutral-400 hover:text-brand-navy disabled:opacity-50"
+            data-testid={`button-remove-forecast-${tx.id}`}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
       </span>
     );
   };
@@ -1300,9 +1363,10 @@ export default function TransactionsPage() {
   // The forecast action for a row that is NOT yet in the forecast: an upright
   // paper-plane = "Send to Forecast". (The plane now means "send" in exactly one
   // place; removal lives on the status chip's "×" above.) Null once the row is
-  // in the forecast, or for non-bank rows that can't be forecast at all.
+  // in the forecast — a posted checking row always is — or for non-bank rows
+  // that can't be forecast at all.
   const renderSendForecastAction = (tx: Transaction) => {
-    if (tx.forecastFlag) return null;
+    if (isInForecastRow(tx)) return null;
     if (!canSendToForecast(tx)) return null;
     if (!tx.categoryId) {
       return (
@@ -1833,13 +1897,51 @@ export default function TransactionsPage() {
     }
   };
 
+  // Reverses the "not a planned payment" half of a bulk Remove by deleting
+  // exactly the resolutions that action created.
+  const undoNotPlanned = async (resolutionIds: string[]) => {
+    if (resolutionIds.length === 0) return;
+    let restored = 0;
+    for (const id of resolutionIds) {
+      try {
+        await deleteResolution.mutateAsync({ id });
+        restored += 1;
+      } catch {
+        // Counted below; the rest still restore.
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+    invalidateForecastFamily(queryClient);
+    toast({
+      title:
+        restored === resolutionIds.length
+          ? `Back in Review: ${restored}`
+          : `Back in Review: ${restored} · ${resolutionIds.length - restored} failed`,
+      ...(restored === resolutionIds.length
+        ? {}
+        : { variant: "destructive" as const }),
+    });
+  };
+
   const bulkSetForecast = async (next: boolean) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
     const byId = new Map(filtered.map((t) => [t.id, t] as const));
-    const candidates = ids
+    const selectedTxns = ids
       .map((id) => byId.get(id))
-      .filter((t): t is Transaction => !!t && t.forecastFlag !== next);
+      .filter((t): t is Transaction => !!t);
+    // A posted checking row is already in the forecast and can't leave the
+    // cash it moved (`inForecast`). Sending skips it. Removing records "not a
+    // planned payment" for the posted rows still awaiting review; posted rows
+    // already matched or marked not planned are left exactly as they are.
+    const notPlannedTargets = next
+      ? []
+      : selectedTxns.filter(
+          (t) => isPostedCheckingRow(t) && !resolutionByTxnId.has(t.id),
+        );
+    const candidates = selectedTxns.filter(
+      (t) => !isPostedCheckingRow(t) && t.forecastFlag !== next,
+    );
     // Forecast is Chase-checking-only — bulk-send must skip any
     // non-checking (Amex / credit) rows that happen to be selected.
     const bankEligible = next
@@ -1850,7 +1952,7 @@ export default function TransactionsPage() {
       ? bankEligible.filter((t) => !!t.categoryId)
       : bankEligible;
     const skippedUncat = next ? bankEligible.length - targets.length : 0;
-    if (!targets.length) {
+    if (!targets.length && !notPlannedTargets.length) {
       const reason =
         next && skippedNonBank > 0 && skippedUncat === 0
           ? "Only Chase checking transactions can be sent to Forecast."
@@ -1864,9 +1966,33 @@ export default function TransactionsPage() {
     }
     const targetIds = targets.map((t) => t.id);
     try {
-      const res = await bulkSetForecastFlag.mutateAsync({
-        data: { ids: targetIds, forecastFlag: next },
-      });
+      const res =
+        targetIds.length > 0
+          ? await bulkSetForecastFlag.mutateAsync({
+              data: { ids: targetIds, forecastFlag: next },
+            })
+          : { updated: 0, affectedIds: [] as string[] };
+      // "Not a planned payment" for the posted rows, six at a time — the same
+      // resolution the Review page writes.
+      const createdResolutionIds: string[] = [];
+      let notPlannedFailed = 0;
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < notPlannedTargets.length) {
+          const t = notPlannedTargets[cursor++]!;
+          try {
+            const row = await upsertResolution.mutateAsync({
+              data: { status: "ignored_unforecasted", matchedTxnId: t.id },
+            });
+            createdResolutionIds.push(row.id);
+          } catch {
+            notPlannedFailed += 1;
+          }
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(6, notPlannedTargets.length) }, worker),
+      );
       queryClient.invalidateQueries({
         queryKey: getListTransactionsQueryKey(),
       });
@@ -1878,11 +2004,21 @@ export default function TransactionsPage() {
       const suffix = parts.length ? ` · skipped ${parts.join(", ")}` : "";
       const okCount = res.updated;
       const undoIds = res.affectedIds;
+      const titleParts: string[] = [];
+      if (next) {
+        titleParts.push(`Sent ${okCount} to Forecast${suffix}`);
+      } else {
+        if (targetIds.length > 0) titleParts.push(`Removed ${okCount} from Forecast`);
+        if (notPlannedTargets.length > 0) {
+          titleParts.push(`${createdResolutionIds.length} not a planned payment`);
+        }
+        if (notPlannedFailed > 0) titleParts.push(`${notPlannedFailed} failed`);
+      }
+      const canUndo = undoIds.length > 0 || createdResolutionIds.length > 0;
       toast({
-        title: next
-          ? `Sent ${okCount} to Forecast${suffix}`
-          : `Removed ${okCount} from Forecast`,
-        ...(undoIds.length > 0
+        title: titleParts.join(" · "),
+        ...(notPlannedFailed > 0 ? { variant: "destructive" as const } : {}),
+        ...(canUndo
           ? {
               action: (
                 <ToastAction
@@ -1896,7 +2032,10 @@ export default function TransactionsPage() {
                       ? "action-undo-bulk-send-forecast"
                       : "action-undo-bulk-remove-forecast"
                   }
-                  onClick={() => undoBulkForecast(undoIds, next)}
+                  onClick={() => {
+                    undoBulkForecast(undoIds, next);
+                    void undoNotPlanned(createdResolutionIds);
+                  }}
                 >
                   Undo
                 </ToastAction>
@@ -2479,7 +2618,7 @@ export default function TransactionsPage() {
                       }
                       onQuickDate={(raw) => handleQuickDate(tx, raw)}
                       disabled={updateTx.isPending}
-                      dimmed={tx.forecastFlag || isIgnored}
+                      dimmed={isInForecastRow(tx) || isIgnored}
                       hideDate
                       cardLabel={formatTransactionSource(tx.source)}
                       testId={`row-tx-${tx.id}`}
@@ -2562,11 +2701,11 @@ export default function TransactionsPage() {
                       }
                       onQuickDate={(raw) => handleQuickDate(tx, raw)}
                       disabled={updateTx.isPending}
-                      dimmed={tx.forecastFlag || isIgnored}
+                      dimmed={isInForecastRow(tx) || isIgnored}
                       cardLabel={formatTransactionSource(tx.source)}
                       testId={`row-tx-${tx.id}`}
                       rowData={{
-                        "data-sent": tx.forecastFlag ? "true" : "false",
+                        "data-sent": isInForecastRow(tx) ? "true" : "false",
                         "data-ignored": isIgnored ? "true" : "false",
                       }}
                       metaNode={renderForecastChip(tx)}

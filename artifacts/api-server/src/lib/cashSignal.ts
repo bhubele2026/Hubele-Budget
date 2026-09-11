@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, lte } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -9,6 +9,7 @@ import {
   avalancheSettingsTable,
 } from "@workspace/db";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
+import { inForecastWhere } from "./forecastInclusion";
 
 type Cadence =
   | "weekly"
@@ -470,6 +471,7 @@ export async function computeCashSignal(
 
   // Actual checking activity through today belongs in the opening balance
   // regardless of review flags. Only future transactions require forecastFlag.
+  // One rule for the curve, the Review bundle and the badge: `inForecast`.
   const txnsAll = await db
     .select()
     .from(transactionsTable)
@@ -477,7 +479,7 @@ export async function computeCashSignal(
       and(
         eq(transactionsTable.householdId, householdId),
         snapshotISO
-          ? or(eq(transactionsTable.forecastFlag, true), lte(transactionsTable.occurredOn, todayISO))
+          ? inForecastWhere(todayISO)
           : eq(transactionsTable.forecastFlag, true),
         gte(transactionsTable.occurredOn, anchorISO),
         lte(transactionsTable.occurredOn, toISO),

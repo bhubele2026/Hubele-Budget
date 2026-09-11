@@ -255,7 +255,7 @@ export default function CommandCenterPage() {
   );
 
   const now = new Date();
-  const monthRange = useMemo(() => currentMonthRange(now), [now.getMonth()]);
+  const monthRange = useMemo(() => currentMonthRange(now), [now.getMonth()]); // eslint-disable-line react-hooks/exhaustive-deps
   const weekRange = useMemo(() => currentWeekRange(now), [todayISO(now)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Period pickers for the two allowance buckets that have one. 0 = current

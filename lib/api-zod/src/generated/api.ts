@@ -2604,6 +2604,18 @@ export const GetForecastResponse = zod.object({
       institutionName: zod.string().nullish(),
     }),
   ),
+  checkingAccountExternalId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Plaid account_id the forecast treats as the bank account, resolved the same way the balance roll-forward resolves it. Null when no account can be identified uniquely.",
+    ),
+  today: zod
+    .string()
+    .optional()
+    .describe(
+      'The calendar date (YYYY-MM-DD) the server judged \"already happened\" against when it built this bundle, the curve and the review badge. The page uses it so its inbox agrees with the badge.',
+    ),
   monthSnapshots: zod
     .record(
       zod.string(),

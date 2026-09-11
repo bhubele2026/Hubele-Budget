@@ -5224,6 +5224,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
         subtype?: string | null | undefined;
         institutionName?: string | null | undefined;
     }>, "many">;
+    checkingAccountExternalId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    today: zod.ZodOptional<zod.ZodString>;
     monthSnapshots: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodObject<{
         balance: zod.ZodString;
         at: zod.ZodString;
@@ -5377,6 +5379,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
             balance: string;
         }[] | undefined;
     } | null | undefined;
+    checkingAccountExternalId?: string | null | undefined;
+    today?: string | undefined;
     monthSnapshots?: Record<string, {
         at: string;
         balance: string;
@@ -5500,6 +5504,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
             balance: string;
         }[] | undefined;
     } | null | undefined;
+    checkingAccountExternalId?: string | null | undefined;
+    today?: string | undefined;
     monthSnapshots?: Record<string, {
         at: string;
         balance: string;

@@ -28,6 +28,12 @@ import {
 } from "../lib/debtMinSchedule";
 import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
 import { computeReviewCount } from "../lib/reviewCount";
+import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
+import {
+  forecastTodayISO,
+  inForecast,
+  inForecastWhere,
+} from "../lib/forecastInclusion";
 import {
   plaid,
   isValidPlaidAccessToken,
@@ -344,14 +350,15 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // account's external Plaid account_id (if any) so we can filter out
   // any non-checking transactions/resolutions at read time — even if a
   // legacy row still has `forecastFlag = true`.
-  let configuredCheckingExternalId: string | null = null;
-  if (settings.bankSnapshotAccountId) {
-    const [acct] = await db
-      .select({ accountId: plaidAccountsTable.accountId })
-      .from(plaidAccountsTable)
-      .where(eq(plaidAccountsTable.id, settings.bankSnapshotAccountId));
-    configuredCheckingExternalId = acct?.accountId ?? null;
-  }
+  //
+  // Resolved exactly as the balance roll-forward resolves it, so a dangling
+  // pointer can't leave Review empty while the curve keeps moving.
+  const snapshotAccount = await resolveSnapshotAccount({
+    householdId,
+    bankSnapshotAccountId: settings.bankSnapshotAccountId ?? null,
+    bankSnapshotMask: settings.bankSnapshotMask ?? null,
+  });
+  const configuredCheckingExternalId = snapshotAccount.externalId;
   const isBankRow = (
     source: string | null | undefined,
     plaidAccountId: string | null | undefined,
@@ -374,7 +381,10 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     .where(
       and(
         eq(transactionsTable.householdId, householdId),
-        eq(transactionsTable.forecastFlag, true),
+        // `inForecast`: a row that has already happened is cash and belongs
+        // in Review whatever its flag says; the flag gates only future rows.
+        // Same rule the curve and the review badge apply.
+        inForecastWhere(forecastTodayISO(today)),
         gte(transactionsTable.occurredOn, fromISO),
         lte(transactionsTable.occurredOn, toISO),
         // Original single-flow design (Task #6 Review inbox / Task #33
@@ -412,11 +422,23 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     )
     .where(eq(forecastResolutionsTable.householdId, householdId));
 
-  // Drop resolutions whose matched transaction isn't bank-checking, so
-  // legacy Amex matches no longer mark planned items as `matched` on
-  // the Forecast page.
+  // Drop resolutions whose matched transaction is out of the forecast (a
+  // future row taken out of it) or isn't bank-checking, so legacy Amex
+  // matches no longer mark planned items as `matched` on the Forecast page.
+  // A match on a row that has already happened stays whatever that row's flag
+  // says: the row is still on the curve, and dropping the match here would
+  // show the bill unpaid while the curve treats it as paid.
+  const forecastToday = forecastTodayISO(today);
   const resolutions = resolutionRows
-    .filter((r) => !r.matchedTxnId || r.txnForecastFlag !== false)
+    .filter(
+      (r) =>
+        !r.matchedTxnId ||
+        r.txnDate == null ||
+        inForecast(
+          { occurredOn: r.txnDate, forecastFlag: r.txnForecastFlag },
+          forecastToday,
+        ),
+    )
     .filter(
       (r) =>
         !r.matchedTxnId || isBankRow(r.txnSource, r.txnPlaidAccountId),
@@ -446,6 +468,8 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     bankSnapshot: presentSnapshot(settings),
     cashSignal,
     plaidCheckingAccounts,
+    checkingAccountExternalId: configuredCheckingExternalId,
+    today: forecastToday,
     monthSnapshots: settings.monthSnapshots ?? {},
     accountSnapshots: settings.accountSnapshots ?? {},
   });
