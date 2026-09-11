@@ -1,4 +1,5 @@
 import { isBankTxn, monthKey, type BankLine, type PlanLine } from "./forecastMatch";
+import { householdDayOfAt } from "./householdDay";
 
 export type ReconcileContributor = {
   kind: "matched" | "starting";
@@ -87,7 +88,8 @@ export function computeBankReconcile(input: ReconcileInput): ReconcileResult {
     else if (b.status === "ignored_unforecasted") unplanned += 1;
   }
 
-  const snapshotAtISO = bankSnapshot?.at ? bankSnapshot.at.slice(0, 10) : null;
+  // Household calendar day (America/Chicago) of the snapshot, as the server uses.
+  const snapshotAtISO = bankSnapshot?.at ? householdDayOfAt(bankSnapshot.at) : null;
   const startBal = bankSnapshot
     ? Number(bankSnapshot.balance) || 0
     : Number(settingsStartingBalance) || 0;

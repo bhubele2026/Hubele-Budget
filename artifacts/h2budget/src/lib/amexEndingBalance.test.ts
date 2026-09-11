@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeAmexEndOfMonthBalance,
   makeAmexBalanceAtEndOf,
+  resolveAmexAnchor,
   resolveAmexDebt,
   type AmexAnchor,
   type AmexDebtLike,
@@ -366,5 +367,44 @@ describe("amexEndingBalance shared helper", () => {
       ],
     });
     expect(after).toBeCloseTo((before as number) + 250, 2);
+  });
+});
+
+// (PR2b) `/api/amex/anchor` source "computed" is the running sum of every Amex
+// row, dated by the latest row's day. That day's rows are already inside the
+// balance, so its month must end at the sum. The server sends the day as a bare
+// YYYY-MM-DD, which the household calendar reads unchanged.
+describe("(PR2b) a computed Amex anchor counts its latest day once", () => {
+  const txns: AmexTxnInput[] = [
+    { occurredOn: "2026-09-02", amount: "30.00" },
+    { occurredOn: "2026-09-10", amount: "50.00" },
+  ];
+
+  it("resolves the server's bare-day asOf to an ending balance equal to the sum", () => {
+    const anchor = resolveAmexAnchor({
+      amexDebt: null,
+      amexAnchorResp: {
+        amexEndingBalance: 80,
+        asOf: "2026-09-10",
+        source: "computed",
+      },
+    });
+    expect(anchor).toEqual({ balance: 80, asOf: "2026-09-10" });
+    const balanceAtEndOf = makeAmexBalanceAtEndOf({
+      anchor,
+      amexTransactions: txns,
+    });
+    expect(balanceAtEndOf(monthKeyFromISO("2026-09-01"))).toBeCloseTo(80, 2);
+  });
+
+  it("reads a UTC-midnight instant as the evening before, so that day's rows count after it", () => {
+    // 2026-09-10T00:00Z is 7pm on Sep 9 in Chicago. Right for a real 7pm
+    // snapshot; $50 too high for a sum that already runs through Sep 10, which
+    // is why the computed source must not send its day in this shape.
+    const balanceAtEndOf = makeAmexBalanceAtEndOf({
+      anchor: { balance: 80, asOf: "2026-09-10T00:00:00.000Z" },
+      amexTransactions: txns,
+    });
+    expect(balanceAtEndOf(monthKeyFromISO("2026-09-01"))).toBeCloseTo(130, 2);
   });
 });

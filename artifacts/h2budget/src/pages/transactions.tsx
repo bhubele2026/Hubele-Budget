@@ -41,6 +41,7 @@ import { rangeForMode, type RangeMode } from "@/lib/timeRange";
 import { Sparkline, StackBar, DeltaPill, MoneyText } from "@/components/viz";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, cn, moneyColorClass } from "@/lib/utils";
+import { householdToday } from "@/lib/householdDay";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
@@ -140,8 +141,9 @@ function formatTransactionSource(source: string | null | undefined): string {
   return titleCase(s);
 }
 
+/** The household calendar day (America/Chicago) of an instant — never the UTC date. */
 function ymd(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return householdToday(d);
 }
 
 // #103 — persisted chase-page account picker. Stored under a stable key
@@ -890,7 +892,7 @@ export default function TransactionsPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      occurredOn: new Date().toISOString().split("T")[0],
+      occurredOn: householdToday(),
       description: "",
       amount: "",
       kind: "expense",
@@ -915,7 +917,7 @@ export default function TransactionsPage() {
     setEditingTx(null);
     categoryManuallyPickedRef.current = false;
     form.reset({
-      occurredOn: new Date().toISOString().split("T")[0],
+      occurredOn: householdToday(),
       description: "",
       amount: "",
       kind: "expense",

@@ -29,6 +29,7 @@ import {
   isChaseFallbackSource,
 } from "./chaseScope";
 import type { EffectiveSnapshotEntry } from "./effectiveSnapshot";
+import { householdDayOfAt } from "./householdDay";
 
 export type ChaseTxnInput = {
   id: string;
@@ -99,7 +100,8 @@ export function makeChaseBalanceAtEndOf(args: {
   if (!effectiveSnapshot) return () => null;
 
   const anchorBalance = Number(effectiveSnapshot.balance) || 0;
-  const anchorMonth = monthKeyFromISO(effectiveSnapshot.at);
+  // Household month (America/Chicago) of the snapshot, as the server uses.
+  const anchorMonth = monthKeyFromISO(householdDayOfAt(effectiveSnapshot.at));
 
   const netChangeByMonth = new Map<string, number>();
   for (const t of chaseTransactions) {
@@ -145,7 +147,8 @@ export function makeChaseBalanceAtEndOfDate(args: {
   if (!effectiveSnapshot) return () => null;
 
   const anchorBalance = Number(effectiveSnapshot.balance) || 0;
-  const anchorDay = effectiveSnapshot.at.slice(0, 10);
+  // Household calendar day (America/Chicago) of the snapshot, as the server uses.
+  const anchorDay = householdDayOfAt(effectiveSnapshot.at);
 
   return (targetDay: string) =>
     computeBalanceAtEndOfDate({

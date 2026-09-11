@@ -132,6 +132,25 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
     expect(detail.textContent).not.toContain("Still importing recent activity");
   });
 
+  it("does NOT show the 'still importing' hint on the month's last evening in Central time", () => {
+    // 2026-06-01T03:00Z is 10pm on May 31 in Chicago. A window reaching May 30 is
+    // current for the household; the UTC month (June) called it stale.
+    vi.setSystemTime(new Date("2026-06-01T03:00:00Z"));
+    render(
+      <PostLinkProgressPanel
+        status={makeStatus({
+          phase: "ready",
+          added: 100,
+          importedDateRange: { min: "2026-04-01", max: "2026-05-30" },
+        })}
+        viewTransactionsPath="/transactions" onDismiss={() => {}}
+      />,
+    );
+    const detail = screen.getByTestId("text-post-link-detail");
+    expect(detail.textContent).toContain("Imported Apr 1 – May 30 from Chase.");
+    expect(detail.textContent).not.toContain("Still importing recent activity");
+  });
+
   it("(#408) suppresses the green Ready pill when the linked item still has lastSyncErrorCode set", () => {
     render(
       <PostLinkProgressPanel

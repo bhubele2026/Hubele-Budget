@@ -5,6 +5,7 @@ import {
   shiftMonth,
   type MonthKey,
 } from "@/components/account-page/month-navigator";
+import { householdDayOfAt } from "./householdDay";
 
 export type AnchorMonthTxn = {
   occurredOn: string;
@@ -50,7 +51,8 @@ export function computeBalanceAtEndOf(args: {
   // both the anchor date and the anchor-month transactions.
   let endOfAnchor = anchorBalance;
   if (anchorAt && anchorMonthTxns && anchorMonthTxns.length > 0) {
-    const anchorDay = anchorAt.slice(0, 10);
+    // Household calendar day (America/Chicago) of the anchor, as the server uses.
+    const anchorDay = householdDayOfAt(anchorAt);
     let postAnchor = 0;
     for (const t of anchorMonthTxns) {
       const day = t.occurredOn.slice(0, 10);

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeChaseEndOfMonthBalance,
   makeChaseBalanceAtEndOf,
+  makeChaseBalanceAtEndOfDate,
   scopeChaseTransactions,
   type ChaseTxnInput,
 } from "./chaseEndingBalance";
@@ -154,6 +155,42 @@ describe("chaseEndingBalance shared helper", () => {
       ],
     });
     expect(after).toBeCloseTo((before as number) - 250, 2);
+  });
+});
+
+// (PR2b) A snapshot taken at 9:30pm Central on Apr 30 is April's, not May's. The
+// UTC text says May 1, which moved the anchor month and treated May 1's rows as
+// already inside the balance.
+describe("(PR2b) an evening Chase snapshot keeps its household day", () => {
+  const eveningSnapshot: EffectiveSnapshotEntry = {
+    balance: "1000.00",
+    at: "2026-05-01T02:30:00.000Z", // 9:30pm on Apr 30 in Chicago
+    source: "plaid",
+    name: "Chase Total Checking",
+    mask: "1234",
+  };
+  const txns: ChaseTxnInput[] = [
+    // Apr 30: already in the snapshot.
+    { id: "e1", occurredOn: "2026-04-30", amount: "-25.00", plaidAccountId: "chase-acct" },
+    // May 1: after it.
+    { id: "e2", occurredOn: "2026-05-01", amount: "-60.00", plaidAccountId: "chase-acct" },
+  ];
+
+  it("ends April at the snapshot and May after May 1's row", () => {
+    const args = { effectiveSnapshot: eveningSnapshot, chaseTransactions: txns };
+    // The UTC slice gave 1060 and 1000.
+    expect(computeChaseEndOfMonthBalance({ monthStart: "2026-04-01", ...args })).toBeCloseTo(1000, 2);
+    expect(computeChaseEndOfMonthBalance({ monthStart: "2026-05-01", ...args })).toBeCloseTo(940, 2);
+  });
+
+  it("rolls the day balance from Apr 30, not May 1", () => {
+    const balanceAtEndOfDate = makeChaseBalanceAtEndOfDate({
+      effectiveSnapshot: eveningSnapshot,
+      chaseTransactions: txns,
+    });
+    // The UTC slice gave 1060 and 1000.
+    expect(balanceAtEndOfDate("2026-04-30")).toBeCloseTo(1000, 2);
+    expect(balanceAtEndOfDate("2026-05-01")).toBeCloseTo(940, 2);
   });
 });
 

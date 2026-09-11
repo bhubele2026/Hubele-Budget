@@ -76,6 +76,7 @@ import {
 import { LineTrend, CHART, type SeriesDef } from "@/lib/charts";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
 import { cn } from "@/lib/utils";
+import { householdToday } from "@/lib/householdDay";
 import {
   simulate,
   simulateWithSolvableFallback,
@@ -1968,7 +1969,9 @@ function PayDialog({
   const recommendedTopUp = isTarget ? suggestedExtra : 0;
   const [payExtra, setPayExtra] = useState(false);
   const [amount, setAmount] = useState((min + (isTarget ? suggestedExtra : 0)).toFixed(2));
-  const [occurredOn, setOccurredOn] = useState(() => new Date().toISOString().slice(0, 10));
+  // Defaults to the household's today (America/Chicago). The UTC date is
+  // already tomorrow after 7pm Central, which would record the payment a day late.
+  const [occurredOn, setOccurredOn] = useState(() => householdToday());
   const [account, setAccount] = useState(defaultAccount);
   const [notes, setNotes] = useState("");
 
@@ -1978,7 +1981,7 @@ function PayDialog({
       const prefillExtra = isTarget && suggestedExtra > 0;
       setPayExtra(prefillExtra);
       setAmount((m + (prefillExtra ? suggestedExtra : 0)).toFixed(2));
-      setOccurredOn(new Date().toISOString().slice(0, 10));
+      setOccurredOn(householdToday());
       setAccount(defaultAccount);
       setNotes("");
     }
