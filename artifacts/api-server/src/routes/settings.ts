@@ -66,18 +66,93 @@ router.post(
   },
 );
 
+/**
+ * Preference keys the SERVER writes into `settings.preferences`, never the
+ * settings UI. None is in the OpenAPI `SettingsPreferences` schema, so the
+ * generated `UpdateSettingsBody` strips them from every PUT body; because PUT
+ * replaces the whole `preferences` object, a web preferences save (which sends
+ * `{...prev, ...patch}`) used to delete all of them.
+ *
+ * PUT /settings therefore always keeps the value the row already holds for each
+ * key, and never takes one from the request: a browser's copy can be stale (a
+ * Plaid sync may have moved the anchor since the page loaded).
+ *
+ * - `amexAnchor`: `lib/amexAnchor.ts` refreshAmexAnchor, and POST/DELETE
+ *   /amex/anchor. Its `lastAutoBalance` is how the refresh tells a hand-edited
+ *   Amex debt balance from its own last write.
+ * - `amexCleanupDoneAt`: `routes/amex.ts`, the one-shot duplicate-account heal
+ *   stamp.
+ * - `budgetCategoriesV2`: `routes/budget.ts`, the one-time category
+ *   consolidation gate.
+ * - `budgetMay2026AmountsV1`: `routes/budget.ts`, the one-time May 2026
+ *   planned-amount gate.
+ *
+ * A new server-written preference key belongs in this list.
+ */
+export const SERVER_OWNED_PREFERENCE_KEYS = [
+  "amexAnchor",
+  "amexCleanupDoneAt",
+  "budgetCategoriesV2",
+  "budgetMay2026AmountsV1",
+] as const;
+
+/**
+ * The preferences to store for a PUT: the request's object as sent (nested maps
+ * replaced, not merged, so removing a week from `weeklyAllowanceOverrides`
+ * removes it), with each server-owned key taken from the stored row instead.
+ * `null` still clears the user's keys; it stays `null` only when the row holds
+ * no server-owned key.
+ */
+export function keepServerOwnedPreferences(
+  stored: unknown,
+  incoming: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  const kept: Record<string, unknown> = {};
+  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+    const storedObj = stored as Record<string, unknown>;
+    for (const key of SERVER_OWNED_PREFERENCE_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(storedObj, key)) {
+        kept[key] = storedObj[key];
+      }
+    }
+  }
+  if (incoming === null && Object.keys(kept).length === 0) return null;
+  const next: Record<string, unknown> = { ...(incoming ?? {}) };
+  for (const key of SERVER_OWNED_PREFERENCE_KEYS) delete next[key];
+  return { ...next, ...kept };
+}
+
 router.put("/settings", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpdateSettingsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  await loadOrCreate(req.householdOwnerId!, req.householdId!);
-  const [row] = await db
-    .update(settingsTable)
-    .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(settingsTable.userId, req.householdOwnerId!))
-    .returning();
+  const ownerUserId = req.householdOwnerId!;
+  await loadOrCreate(ownerUserId, req.householdId!);
+  const { preferences, ...rest } = parsed.data;
+  const row = await db.transaction(async (tx) => {
+    // A body without `preferences` leaves the column alone, as before.
+    let preferencesSet: { preferences?: Record<string, unknown> | null } = {};
+    if (preferences !== undefined) {
+      // Lock the row so a server write that lands between this read and the
+      // update below is not overwritten with the value read here.
+      const [current] = await tx
+        .select({ preferences: settingsTable.preferences })
+        .from(settingsTable)
+        .where(eq(settingsTable.userId, ownerUserId))
+        .for("update");
+      preferencesSet = {
+        preferences: keepServerOwnedPreferences(current?.preferences, preferences),
+      };
+    }
+    const [updated] = await tx
+      .update(settingsTable)
+      .set({ ...rest, ...preferencesSet, updatedAt: new Date() })
+      .where(eq(settingsTable.userId, ownerUserId))
+      .returning();
+    return updated;
+  });
   res.json(row);
 });
 
