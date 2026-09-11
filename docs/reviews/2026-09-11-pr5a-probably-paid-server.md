@@ -61,7 +61,9 @@ The rule is asymmetric and name-strict on purpose:
 - **An overpaid bill** ($150 "City Water" plan, $173 "CITY WATER UTIL" row) leaves the curve: the row already takes
   the full $173, so the bill counts once.
 - **A different bill from the same payee** stays a suggestion: "VERIZON FIOS" −130 shares only "verizon" with the
-  "Verizon Wireless" plan, and "AMAZON MKTPL US" −29.99 only "amazon" with "Amazon Prime".
+  "Verizon Wireless" plan, and "AMAZON MKTPL US" −29.99 only "amazon" with "Amazon Prime". That holds only when the
+  amounts differ by more than max($1, 1%) or the dates by more than 5 days: an exact, prompt payment is "high" on any
+  part of the name (see Residuals).
 - **An underpaid bill** ($38 plan, $20 row) stays on the curve until the user confirms "partial". Taking it off would
   hide the $18 still due and overstate projected cash. Keeping it understates cash by $20 at most, until the user
   answers.
@@ -146,7 +148,8 @@ After the resolutions are read, and before the plans loop:
   - every later occurrence while an earlier occurrence of the item has no named pair (up to 45 days);
   - new weekly or biweekly items whose expansion invents occurrences before the anchor (PR6 scopes overdue plans to the
     anchor);
-  - variable bills whose previous payment fell outside the band;
+  - variable bills whose previous payment fell outside max($25, 10%): April's $360 on a $300 plan keeps May's exact
+    early payment counted, 05-20 400.00 instead of 700.00;
   - a named overpayment that carries only part of the plan's name ("Oak Street Rent" paid to "OAK STREET PROPERTIES" at
     +$20).
 - **Golden:** every cash-signal snapshot gains `"matches"`, and no curve figure changes.
@@ -164,9 +167,17 @@ After the resolutions are read, and before the plans loop:
 
 - **An unanswered underpayment understates cash.** A named row that paid less than the plan leaves both on the curve
   until the user confirms "partial" (at most the row's amount too low).
-- **An overpaid pair can still be wrong.** A row carrying the plan's full name, unambiguous and within max($25, 10%)
-  above the plan, takes the plan off before the user answers. If the payee bills twice under the same name (two plans
-  labelled only "Verizon"), the curve is too high by the plan until "Not this".
+- **A pair can still be wrong, capped at one plan's amount until "Not this"** (third look). An unambiguous pair leaves
+  the curve before the user answers when either:
+  - it is "high" (within max($1, 1%) and 5 days) on any part of the name: "Verizon Wireless" $120 and "VERIZON FIOS"
+    −120 three days early; "Chase Freedom minimum" $40 and Sapphire's "CHASE CREDIT CRD AUTOPAY" −40 two days early;
+  - or the label's only distinctive word is a common word or an issuer name, so any row carrying it is the "full name"
+    within max($25, 10%): "Verizon" $120 vs "VERIZON FIOS" −130 (overstated $120); "City Water" $30 vs "PRIMO WATER"
+    −35 ($30); "Rent" $1,500 vs "ENTERPRISE RENT A CAR" −1,550 ($1,500); "Chase minimum" vs any Chase payment up to
+    $25 over.
+
+  If the other bill is also a planned candidate, the pair is ambiguous and stays. A label with a second distinctive
+  word ("Oak Street Rent", "Chase Sapphire minimum") avoids the second shape.
 - **Income below plan.** A deposit more than max($1, 1%) below its plan keeps the plan on the curve, so both count, as on
   `main`.
 - **The plan window** is the later of today−45 and the first of last month (the curve's expansion start).

@@ -938,6 +938,447 @@ export const BulkSetForecastFlagResponse = zod.object({
     ),
 });
 
+/**
+ * @summary (PR13) One page of the bank ledger, newest first. The server settles
+the scope: the Plaid account the snapshot resolves to, its
+same-institution mask twins, and manual rows (no Plaid account, source
+neither "amex" nor "plaid:*"), which is the rule the bank balance reads
+by. A client must not hide rows the register counts. Ordered by
+occurredOn desc, occurredAt desc (nulls last), id desc, and paged with
+an opaque keyset cursor. Each row carries what it moves the balance by
+(`balanceAmount`, `countsInBalance`, `balanceReason`), from the cash
+rule over the account's whole history. `matchingCount` counts every
+row matching the filters; `totals` and `review` cover every row
+matching the filters other than `reviewed`. `runningBalance`,
+`balanceStart`, `balanceEnd`, `balanceToday` and `anchor` never depend
+on the non-date filters or the page, and no balance is given for a day
+after today. The boolean filters take the strings "true" or "false";
+anything else is a 400.
+
+ */
+export const getTransactionsLedgerQueryAccountMax = 64;
+
+export const getTransactionsLedgerQueryFromMax = 10;
+
+export const getTransactionsLedgerQueryToMax = 10;
+
+export const getTransactionsLedgerQuerySearchMax = 200;
+
+export const getTransactionsLedgerQueryReviewedMax = 5;
+
+export const getTransactionsLedgerQueryPendingMax = 5;
+
+export const getTransactionsLedgerQueryUncategorizedMax = 5;
+
+export const getTransactionsLedgerQueryCategoryIdMax = 64;
+
+export const getTransactionsLedgerQuerySourceMax = 100;
+
+export const getTransactionsLedgerQueryMemberMax = 100;
+
+export const getTransactionsLedgerQueryLimitDefault = 50;
+export const getTransactionsLedgerQueryLimitMax = 100;
+
+export const getTransactionsLedgerQueryCursorMax = 512;
+
+export const GetTransactionsLedgerQueryParams = zod.object({
+  account: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQueryAccountMax)
+    .optional()
+    .describe(
+      "`plaid_accounts.id` of the ledger account. Optional; defaults to\nthe snapshot's account. Any account outside the ledger scope is a 400.\n",
+    ),
+  from: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQueryFromMax)
+    .optional()
+    .describe("First day, YYYY-MM-DD, inclusive."),
+  to: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQueryToMax)
+    .optional()
+    .describe("Last day, YYYY-MM-DD, inclusive."),
+  search: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQuerySearchMax)
+    .optional()
+    .describe(
+      "Case-insensitive match on the description or the category name.",
+    ),
+  reviewed: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQueryReviewedMax)
+    .optional()
+    .describe('\"true\" or \"false\".'),
+  pending: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQueryPendingMax)
+    .optional()
+    .describe('\"true\" or \"false\".'),
+  uncategorized: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQueryUncategorizedMax)
+    .optional()
+    .describe(
+      '\"true\" keeps only rows with no category; \"false\" is no filter.',
+    ),
+  categoryId: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQueryCategoryIdMax)
+    .optional(),
+  source: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQuerySourceMax)
+    .optional(),
+  member: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQueryMemberMax)
+    .optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getTransactionsLedgerQueryLimitMax)
+    .default(getTransactionsLedgerQueryLimitDefault)
+    .describe("Plain digits, 1 to 100."),
+  cursor: zod.coerce
+    .string()
+    .max(getTransactionsLedgerQueryCursorMax)
+    .optional()
+    .describe("The `nextCursor` of the previous page."),
+});
+
+export const GetTransactionsLedgerResponse = zod.object({
+  rows: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        occurredOn: zod.string(),
+        occurredAt: zod.string().nullish(),
+        description: zod.string(),
+        amount: zod.string(),
+        account: zod.string().nullish(),
+        categoryId: zod.string().nullish(),
+        forecastFlag: zod.boolean(),
+        weeklyAllowance: zod.boolean(),
+        weeklyBucket: zod
+          .union([
+            zod.literal("groceries"),
+            zod.literal("dining"),
+            zod.literal("alcohol"),
+            zod.literal("entertainment"),
+            zod.literal("misc"),
+            zod.literal(null),
+          ])
+          .nullish(),
+        monthlyAllowance: zod.boolean(),
+        unplannedAllowance: zod.boolean(),
+        reimbursable: zod.boolean(),
+        reimbursed: zod.boolean(),
+        reviewed: zod
+          .boolean()
+          .describe(
+            "Whether the user has marked this transaction as done on the\nAmex page. Reviewed rows render greyed out so the eye skips\nover them and focuses on what's left to handle. Defaults to\nfalse; toggled explicitly by the user (never auto-set on\ncategorize).\n",
+          ),
+        isTransfer: zod.boolean(),
+        isTransferUserOverridden: zod
+          .boolean()
+          .describe(
+            "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+          ),
+        isExternalCardPayment: zod
+          .boolean()
+          .describe(
+            '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
+          ),
+        sentToReviewAt: zod
+          .string()
+          .nullish()
+          .describe(
+            '(#762 — Phase B) ISO8601 timestamp the user clicked \"Send\nto Review\" on this row, or null when the row has never been\npromoted into the Review workflow. The Chase \/ Amex\nsource-of-truth views ignore this column entirely; only the\nReview pipeline on \/forecast filters on it. Drives the \"✓\nin review\" badge and per-row affordance on the Chase page.\n',
+          ),
+        notes: zod.string().nullish(),
+        source: zod.string(),
+        member: zod.string().nullish(),
+        owedBy: zod.string().nullish(),
+        plaidTransactionId: zod.string().nullish(),
+        plaidAccountId: zod.string().nullish(),
+        debtId: zod.string().nullish(),
+        pfcDetailed: zod
+          .string()
+          .nullish()
+          .describe(
+            "Plaid personal_finance_category.detailed, persisted on sync (#636); null for manual and imported rows. Read by the one spending rule (classifyOutflow, rule 8), which the web shares.",
+          ),
+        pending: zod
+          .boolean()
+          .describe(
+            '(#728) True when Plaid reported this transaction as pending\non the most recent \/transactions\/sync. Replaces the legacy\n`notes=\'[pending]\'` string marker the sync used to write.\nDrives the Transactions page \"Pending\" section (pending\nrows pinned above the dated day-groups) and the \"Pending\"\nbadge on each row. Flips back to false on the\npending→posted lifecycle when Plaid surfaces the posted\ntwin as a `modified` row.\n',
+          ),
+        matchedRuleId: zod
+          .string()
+          .nullish()
+          .describe(
+            'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+          ),
+        displayName: zod
+          .string()
+          .optional()
+          .describe(
+            "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read. (#888) Precedence: a household\nmerchant alias keyed on `merchantSignature` wins; otherwise the\ndeterministic `cleanMerchant()` label (ACH noise, ORIG CO \/ WEB\nID fields, and processor prefixes stripped). Used as the row\nheadline so the raw description can be demoted to a muted\nsub-line. Computed server-side per list response — never\npersisted; the stored `description` is untouched.\n",
+          ),
+        merchantSignature: zod
+          .string()
+          .optional()
+          .describe(
+            "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
+          ),
+      })
+      .and(
+        zod.object({
+          runningBalance: zod
+            .string()
+            .nullable()
+            .describe(
+              "(PR13) The account balance straight after this row, on the\nregister of all the account's rows. Null without a bank\nsnapshot, and for a row dated after today.\n",
+            ),
+          balanceAmount: zod
+            .string()
+            .describe(
+              "What this row moves the register by: its amount, or 0.00 when it\ndoes not count. `totals` sum these.\n",
+            ),
+          countsInBalance: zod
+            .boolean()
+            .describe("Whether this row moves the balance at all."),
+          balanceReason: zod
+            .string()
+            .describe(
+              "counted (moves the balance by its amount); superseded (a pending\nrow its posted row replaced); duplicate (a second row with the\nsame Plaid transaction id); not_bank (a mask-twin row, which the\nbank balance does not read).\n",
+            ),
+          replacedPendingId: zod
+            .string()
+            .nullable()
+            .describe(
+              "For a posted row that replaced a pending row, that pending row's id.",
+            ),
+          heldAhead: zod
+            .boolean()
+            .describe(
+              "Dated after the snapshot day but already inside the snapshot\nbalance. The days between the snapshot and this row's date read\nhigher than the bank showed, by this row.\n",
+            ),
+          afterToday: zod
+            .boolean()
+            .describe(
+              "Dated after the household's today. Such a row has no running balance.",
+            ),
+          stalePending: zod
+            .boolean()
+            .describe(
+              "Still pending and dated more than 14 days before the household's\ntoday. A label only: the row moves the balance as balanceReason\nsays. A leftover pending row its posted row could not replace\ncounts beside that posted row.\n",
+            ),
+        }),
+      ),
+  ),
+  nextCursor: zod.string().nullable(),
+  limit: zod.number(),
+  matchingCount: zod
+    .number()
+    .describe("Rows matching every filter, `reviewed` included."),
+  totals: zod
+    .object({
+      count: zod
+        .number()
+        .describe("Matching rows, including rows that do not count."),
+      moneyIn: zod.string(),
+      moneyOut: zod.string(),
+      net: zod.string(),
+    })
+    .describe(
+      "Over every row matching the filters other than `reviewed`, rows dated\nafter today included, summing each row's `balanceAmount`: a row that\ndoes not count adds nothing.\n",
+    ),
+  review: zod.object({
+    reviewed: zod.number(),
+    unreviewed: zod.number(),
+  }),
+  balanceStart: zod
+    .string()
+    .nullable()
+    .describe(
+      "The balance at the end of the day before `from`, or before the\naccount's first row when `from` is absent. Null without a bank\nsnapshot, or when that day is after today.\n",
+    ),
+  balanceEnd: zod
+    .string()
+    .nullable()
+    .describe(
+      "The balance at the end of `to`, which defaults to today. Null without\na bank snapshot, or when `to` is after today.\n",
+    ),
+  balanceToday: zod
+    .string()
+    .nullable()
+    .describe(
+      "The balance at the end of today: the spine's `bank.balance`. Null\nwithout a bank snapshot.\n",
+    ),
+  anchor: zod.object({
+    today: zod
+      .string()
+      .describe("The household's today (America\/Chicago), YYYY-MM-DD."),
+    todayBalance: zod
+      .string()
+      .nullable()
+      .describe(
+        "The balance at the end of `today`: the spine's `bank.balance`, from\nthe same computation. Null without a bank snapshot.\n",
+      ),
+    snapshotBalance: zod.string().nullable(),
+    snapshotAt: zod.string().nullable(),
+    snapshotDay: zod.string().nullable(),
+  }),
+  account: zod.object({
+    via: zod
+      .string()
+      .describe(
+        "How the snapshot's account was found: pointer, snapshot mask, sole\nchecking, sole depository, or unresolved.\n",
+      ),
+    plaidAccountIds: zod
+      .array(zod.string())
+      .describe(
+        "The Plaid account ids on the ledger (the resolved account and its\nmask twins). Manual rows are on the ledger as well.\n",
+      ),
+  }),
+});
+
+/**
+ * @summary (PR13) End-of-day balances of the ledger account for up to 120 dates,
+on the same register as GET /transactions/ledger: a date's balance is
+the runningBalance after the last account row dated on or before it.
+Today's equals the bank balance on the spine. A date after today, and
+every date without a bank snapshot, has a null balance: the register
+is not a projection.
+
+ */
+export const getTransactionsBalancesQueryAccountMax = 64;
+
+export const getTransactionsBalancesQueryDatesMax = 1400;
+
+export const GetTransactionsBalancesQueryParams = zod.object({
+  account: zod.coerce
+    .string()
+    .max(getTransactionsBalancesQueryAccountMax)
+    .optional()
+    .describe("As on GET \/transactions\/ledger."),
+  dates: zod.coerce
+    .string()
+    .max(getTransactionsBalancesQueryDatesMax)
+    .describe("Comma-separated YYYY-MM-DD dates, 1 to 120 of them."),
+});
+
+export const GetTransactionsBalancesResponse = zod.object({
+  balances: zod.array(
+    zod.object({
+      date: zod.string(),
+      balance: zod.string().nullable(),
+    }),
+  ),
+  anchor: zod.object({
+    today: zod
+      .string()
+      .describe("The household's today (America\/Chicago), YYYY-MM-DD."),
+    todayBalance: zod
+      .string()
+      .nullable()
+      .describe(
+        "The balance at the end of `today`: the spine's `bank.balance`, from\nthe same computation. Null without a bank snapshot.\n",
+      ),
+    snapshotBalance: zod.string().nullable(),
+    snapshotAt: zod.string().nullable(),
+    snapshotDay: zod.string().nullable(),
+  }),
+  account: zod.object({
+    via: zod
+      .string()
+      .describe(
+        "How the snapshot's account was found: pointer, snapshot mask, sole\nchecking, sole depository, or unresolved.\n",
+      ),
+    plaidAccountIds: zod
+      .array(zod.string())
+      .describe(
+        "The Plaid account ids on the ledger (the resolved account and its\nmask twins). Manual rows are on the ledger as well.\n",
+      ),
+  }),
+});
+
+/**
+ * @summary (PR13) Mark every ledger row matching a filter reviewed (or not) in
+one request, without the client holding the ids. The filter is the
+ledger's, `reviewed` included. `expectedCount` is the `matchingCount`
+the client showed: when a different number of rows matches now, the
+request is refused with 409 and nothing changes. More than 1,000
+matching rows is a 400. Rows already in the target state count in
+`matched` but not in `updated`.
+
+ */
+export const bulkReviewMatchingTransactionsBodyFilterAccountMax = 64;
+
+export const bulkReviewMatchingTransactionsBodyFilterFromMax = 10;
+
+export const bulkReviewMatchingTransactionsBodyFilterToMax = 10;
+
+export const bulkReviewMatchingTransactionsBodyFilterSearchMax = 200;
+
+export const bulkReviewMatchingTransactionsBodyFilterCategoryIdMax = 64;
+
+export const bulkReviewMatchingTransactionsBodyFilterSourceMax = 100;
+
+export const bulkReviewMatchingTransactionsBodyFilterMemberMax = 100;
+
+export const bulkReviewMatchingTransactionsBodyExpectedCountMin = 0;
+
+export const BulkReviewMatchingTransactionsBody = zod.object({
+  filter: zod.object({
+    account: zod
+      .string()
+      .max(bulkReviewMatchingTransactionsBodyFilterAccountMax)
+      .optional(),
+    from: zod
+      .string()
+      .max(bulkReviewMatchingTransactionsBodyFilterFromMax)
+      .optional(),
+    to: zod
+      .string()
+      .max(bulkReviewMatchingTransactionsBodyFilterToMax)
+      .optional(),
+    search: zod
+      .string()
+      .max(bulkReviewMatchingTransactionsBodyFilterSearchMax)
+      .optional(),
+    reviewed: zod.boolean().optional(),
+    pending: zod.boolean().optional(),
+    uncategorized: zod.boolean().optional(),
+    categoryId: zod
+      .string()
+      .max(bulkReviewMatchingTransactionsBodyFilterCategoryIdMax)
+      .optional(),
+    source: zod
+      .string()
+      .max(bulkReviewMatchingTransactionsBodyFilterSourceMax)
+      .optional(),
+    member: zod
+      .string()
+      .max(bulkReviewMatchingTransactionsBodyFilterMemberMax)
+      .optional(),
+  }),
+  reviewed: zod.boolean(),
+  expectedCount: zod
+    .number()
+    .min(bulkReviewMatchingTransactionsBodyExpectedCountMin)
+    .describe("The `matchingCount` the client showed for this filter."),
+});
+
+export const BulkReviewMatchingTransactionsResponse = zod.object({
+  matched: zod.number(),
+  updated: zod.number(),
+  updatedIds: zod.array(zod.string()),
+});
+
 export const ListDebtsResponseItem = zod.object({
   id: zod.string(),
   name: zod.string(),
@@ -2728,7 +3169,7 @@ export const GetForecastResponse = zod.object({
           )
           .optional()
           .describe(
-            '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, within max($25, 10%)); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+            '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, and either an exact prompt payment or the\nplan\'s full name paying at most max($25, 10%) more); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
           ),
       }),
       zod.null(),
@@ -3028,7 +3469,7 @@ export const GetForecastCashSignalResponse = zod.object({
     )
     .optional()
     .describe(
-      '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, within max($25, 10%)); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+      '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, and either an exact prompt payment or the\nplan\'s full name paying at most max($25, 10%) more); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
     ),
 });
 
