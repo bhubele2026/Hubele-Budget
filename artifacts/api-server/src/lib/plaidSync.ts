@@ -1,5 +1,4 @@
-import { pickRemintCandidate } from "./remintMatch";
-import { and, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lte, sql, type SQL } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -31,6 +30,7 @@ import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "./householdClock";
+import { pickRemintCandidate } from "./remintMatch";
 import {
   anchorIsReconcilable,
   reconcileBankBalance,
@@ -407,6 +407,16 @@ function plaidAmountToSigned(t: PlaidTxn): string {
  * by actor — a household member must be able to sync items linked by
  * any other member of the same household.
  */
+/**
+ * (PR4d) `occurred_at` keeps the time first seen, so a pending row's
+ * authorisation time is not replaced by a later posting time. A whole-hour
+ * value on file is treated as a placeholder and may be replaced: institutions
+ * send default times, and `pickRealTime` only drops 00:00 UTC.
+ */
+function keepFirstRealTime(incoming: SQL): SQL {
+  return sql`COALESCE(CASE WHEN date_trunc('hour', ${transactionsTable.occurredAt} AT TIME ZONE 'UTC') = ${transactionsTable.occurredAt} AT TIME ZONE 'UTC' THEN NULL ELSE ${transactionsTable.occurredAt} END, ${incoming})`;
+}
+
 /**
  * (#732) Reconcile locally-stored pending Plaid rows for a single
  * account against the set of pending `plaid_transaction_id`s Plaid
@@ -1285,6 +1295,13 @@ export async function syncPlaidItem(
     // (PR4d) Re-mint evidence: the ids Plaid removed in this sync, and every id it sent.
     const removedIds = new Set(removed.map((r) => r.transaction_id));
     const liveIds = new Set([...added, ...modified].map((r) => r.transaction_id));
+    // (PR4d review) A pending id a posted row in this batch names as its
+    // `pending_transaction_id` has a successor: that row re-keys it. It is not gone.
+    const successorIds = new Set(
+      [...added, ...modified]
+        .map((r) => r.pending_transaction_id)
+        .filter((id): id is string => !!id),
+    );
     for (const t of [...added, ...modified]) {
       const description = t.merchant_name || t.name || "(no description)";
       // `personal_finance_category` is the modern Plaid taxonomy used to
@@ -1548,10 +1565,9 @@ export async function syncPlaidItem(
                 plaidTransactionId: t.transaction_id,
                 // Honor a manual date edit, same CASE shape the upsert uses.
                 occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${t.date} END`,
-                // (PR4d) Keep the time first seen: a pending row's authorisation
-                // time must not be replaced by the posting time (the bank snapshot
-                // rule reads it as when the charge happened).
-                occurredAt: sql`COALESCE(${transactionsTable.occurredAt}, ${occurredAt}::timestamptz)`,
+                // (PR4d) Keep the time first seen (see keepFirstRealTime): the bank
+                // snapshot rule reads it as when the charge happened.
+                occurredAt: keepFirstRealTime(sql`${occurredAt}::timestamptz`),
                 description,
                 amount: signedAmount,
                 pending: !!t.pending,
@@ -1581,29 +1597,46 @@ export async function syncPlaidItem(
       {
         const remintLow = fmtISO(addDays(parseISO(t.date), -2));
         const remintHigh = fmtISO(addDays(parseISO(t.date), 2));
-        const remintCandidates = await db
-          .select({
-            id: transactionsTable.id,
-            oldPtid: transactionsTable.plaidTransactionId,
-            occurredOn: transactionsTable.occurredOn,
-          })
+        // (PR4d review) A row already holding this id makes this an update of that
+        // row, never a re-mint: adopting would collide on the unique index (23505),
+        // abort the sync or the account's backfill, and leave the cursor pinned.
+        const [sameIdRow] = await db
+          .select({ id: transactionsTable.id })
           .from(transactionsTable)
-          .where(
-            and(
-              eq(transactionsTable.householdId, householdId),
-              eq(transactionsTable.plaidAccountId, t.account_id),
-              eq(transactionsTable.amount, signedAmount),
-              sql`${transactionsTable.occurredOn} >= ${remintLow}`,
-              sql`${transactionsTable.occurredOn} <= ${remintHigh}`,
-              sql`${transactionsTable.plaidTransactionId} is not null`,
-              sql`${transactionsTable.plaidTransactionId} <> ${t.transaction_id}`,
-            ),
-          );
+          .where(eq(transactionsTable.plaidTransactionId, t.transaction_id))
+          .limit(1);
+        const remintCandidates = sameIdRow
+          ? []
+          : await db
+              .select({
+                id: transactionsTable.id,
+                oldPtid: transactionsTable.plaidTransactionId,
+                occurredOn: transactionsTable.occurredOn,
+                occurredOnUserOverridden: transactionsTable.occurredOnUserOverridden,
+              })
+              .from(transactionsTable)
+              .where(
+                and(
+                  eq(transactionsTable.householdId, householdId),
+                  eq(transactionsTable.plaidAccountId, t.account_id),
+                  eq(transactionsTable.amount, signedAmount),
+                  sql`${transactionsTable.occurredOn} >= ${remintLow}`,
+                  sql`${transactionsTable.occurredOn} <= ${remintHigh}`,
+                  sql`${transactionsTable.plaidTransactionId} is not null`,
+                  sql`${transactionsTable.plaidTransactionId} <> ${t.transaction_id}`,
+                ),
+              );
         // (PR4d) Same amount within two days is not proof of a re-mint — two real
         // charges look identical. Adopt only a row whose old id is gone: Plaid removed it in this
-        // sync, or this sync replayed the whole history and did not send it.
-        const remintMatch = pickRemintCandidate(remintCandidates, t.date, (oldPtid) =>
-          removedIds.has(oldPtid) || (startedFromNullCursor && !liveIds.has(oldPtid)));
+        // sync, or this sync replayed the whole history and did not send it — and no
+        // posted row in this batch names it as its pending row.
+        const remintMatch = pickRemintCandidate(
+          remintCandidates,
+          t.date,
+          (c) =>
+            !successorIds.has(c.oldPtid) &&
+            (removedIds.has(c.oldPtid) || (startedFromNullCursor && !liveIds.has(c.oldPtid))),
+        );
         if (remintMatch) {
           logger.warn(
             {
@@ -1693,7 +1726,7 @@ export async function syncPlaidItem(
             // CASE-guard shape as `isTransfer` below.
             occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${values.occurredOn} END`,
             // (PR4d) Keep the time first seen (see the pending→posted re-key above).
-            occurredAt: sql`COALESCE(${transactionsTable.occurredAt}, excluded.occurred_at)`,
+            occurredAt: keepFirstRealTime(sql`excluded.occurred_at`),
             description: values.description,
             amount: values.amount,
             // (#728) Refresh the pending boolean on every upsert so the
@@ -3442,6 +3475,9 @@ export async function runGapBackfillForItem(
       const pageSize = 500;
       // Hard cap on pages to bound a runaway loop in case of a
       // malformed Plaid response.
+      // (PR4d review) False when the walk stops at the page cap: a cut-short list
+      // proves nothing about the ids missing from it.
+      let fetchedComplete = false;
       for (let page = 0; page < 20; page++) {
         const resp = await plaid().transactionsGet({
           access_token: item.accessToken,
@@ -3461,6 +3497,7 @@ export async function runGapBackfillForItem(
           batch.length < pageSize ||
           (typeof total === "number" && all.length >= total)
         ) {
+          fetchedComplete = true;
           break;
         }
         offset += batch.length;
@@ -3469,6 +3506,15 @@ export async function runGapBackfillForItem(
       // (PR4d) /transactions/get returned every transaction in [startStr, todayStr],
       // so inside that window an id absent from `all` no longer exists.
       const fetchedIds = new Set(all.map((x) => x.transaction_id));
+      const successorIds = new Set(
+        all.map((x) => x.pending_transaction_id).filter((id): id is string => !!id),
+      );
+      if (!fetchedComplete) {
+        logger.warn(
+          { userId, itemRowId, externalAcctId, start: startStr, end: todayStr, fetched: all.length },
+          "[plaid-backfill] /transactions/get stopped at the page cap — no re-mint adoption and no vanished-pending sweep for this account",
+        );
+      }
       const windowStart: string = startStr;
       for (const t of all) {
         const description = t.merchant_name || t.name || "(no description)";
@@ -3631,29 +3677,51 @@ export async function runGapBackfillForItem(
         // both ids for support diffing.
         const remintLow = fmtISO(addDays(parseISO(t.date), -2));
         const remintHigh = fmtISO(addDays(parseISO(t.date), 2));
-        const remintCandidates = await db
-          .select({
-            id: transactionsTable.id,
-            oldPtid: transactionsTable.plaidTransactionId,
-            occurredOn: transactionsTable.occurredOn,
-          })
+        // (PR4d review) A row already holding this id makes this an update of that
+        // row, never a re-mint: adopting would collide on the unique index (23505),
+        // abort the sync or the account's backfill, and leave the cursor pinned.
+        const [sameIdRow] = await db
+          .select({ id: transactionsTable.id })
           .from(transactionsTable)
-          .where(
-            and(
-              eq(transactionsTable.householdId, householdId),
-              eq(transactionsTable.plaidAccountId, t.account_id),
-              eq(transactionsTable.amount, signedAmount),
-              sql`${transactionsTable.occurredOn} >= ${remintLow}`,
-              sql`${transactionsTable.occurredOn} <= ${remintHigh}`,
-              sql`${transactionsTable.plaidTransactionId} is not null`,
-              sql`${transactionsTable.plaidTransactionId} <> ${t.transaction_id}`,
-            ),
-          );
+          .where(eq(transactionsTable.plaidTransactionId, t.transaction_id))
+          .limit(1);
+        const remintCandidates = sameIdRow
+          ? []
+          : await db
+              .select({
+                id: transactionsTable.id,
+                oldPtid: transactionsTable.plaidTransactionId,
+                occurredOn: transactionsTable.occurredOn,
+                occurredOnUserOverridden: transactionsTable.occurredOnUserOverridden,
+              })
+              .from(transactionsTable)
+              .where(
+                and(
+                  eq(transactionsTable.householdId, householdId),
+                  eq(transactionsTable.plaidAccountId, t.account_id),
+                  eq(transactionsTable.amount, signedAmount),
+                  sql`${transactionsTable.occurredOn} >= ${remintLow}`,
+                  sql`${transactionsTable.occurredOn} <= ${remintHigh}`,
+                  sql`${transactionsTable.plaidTransactionId} is not null`,
+                  sql`${transactionsTable.plaidTransactionId} <> ${t.transaction_id}`,
+                ),
+              );
         // (PR4d) Same amount within two days is not proof of a re-mint — two real
-        // charges look identical. Adopt only a row whose old id is gone: its date is inside the
-        // window /transactions/get just returned in full, and its id is not in it.
-        const remintMatch = pickRemintCandidate(remintCandidates, t.date, (oldPtid, occurredOn) =>
-          !fetchedIds.has(oldPtid) && occurredOn >= windowStart && occurredOn <= todayStr);
+        // charges look identical. Adopt only a row whose old id is gone: the list below is complete,
+        // the row is dated inside its window and absent from it, no posted row in the
+        // list names it as its pending row, and the user has not moved its date (a
+        // moved date says nothing about where Plaid lists it).
+        const remintMatch = pickRemintCandidate(
+          remintCandidates,
+          t.date,
+          (c) =>
+            fetchedComplete &&
+            !successorIds.has(c.oldPtid) &&
+            !c.occurredOnUserOverridden &&
+            !fetchedIds.has(c.oldPtid) &&
+            c.occurredOn >= windowStart &&
+            c.occurredOn <= todayStr,
+        );
         if (remintMatch) {
           logger.warn(
             {
@@ -3757,7 +3825,8 @@ export async function runGapBackfillForItem(
         if (t.pending) currentPendingIds.add(t.transaction_id);
       }
       try {
-        await reconcileVanishedPendings({
+        // (PR4d review) Never sweep on a list cut short at the page cap.
+        if (fetchedComplete) await reconcileVanishedPendings({
           householdId,
           userId,
           itemRowId,

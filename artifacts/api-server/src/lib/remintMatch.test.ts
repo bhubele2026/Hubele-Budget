@@ -6,11 +6,11 @@ const row = (id: string, oldPtid: string | null, occurredOn: string) => ({ id, o
 describe("pickRemintCandidate", () => {
   it("adopts nothing when every candidate's old id still exists — a second real charge", () => {
     const live = new Set(["A"]);
-    expect(pickRemintCandidate([row("r1", "A", "2026-09-10")], "2026-09-11", (id) => !live.has(id))).toBeNull();
+    expect(pickRemintCandidate([row("r1", "A", "2026-09-10")], "2026-09-11", (c) => !live.has(c.oldPtid))).toBeNull();
   });
 
   it("adopts a candidate whose old id is gone", () => {
-    const picked = pickRemintCandidate([row("r1", "A", "2026-09-10")], "2026-09-10", (id) => id === "A");
+    const picked = pickRemintCandidate([row("r1", "A", "2026-09-10")], "2026-09-10", (c) => c.oldPtid === "A");
     expect(picked?.id).toBe("r1");
   });
 
@@ -18,7 +18,7 @@ describe("pickRemintCandidate", () => {
     const picked = pickRemintCandidate(
       [row("r1", "LIVE", "2026-09-10"), row("r2", "GONE", "2026-09-12")],
       "2026-09-10",
-      (id) => id === "GONE",
+      (c) => c.oldPtid === "GONE",
     );
     expect(picked?.id).toBe("r2");
   });
@@ -33,17 +33,20 @@ describe("pickRemintCandidate", () => {
     ).toBe("r3");
   });
 
-  it("passes the candidate's date to the evidence check and ignores rows with no Plaid id", () => {
+  it("hands the whole candidate to the evidence check, and never offers a row with no Plaid id", () => {
     const seen: string[] = [];
     const picked = pickRemintCandidate(
-      [row("r1", null, "2026-09-10"), row("r2", "A", "2026-09-09")],
+      [
+        { ...row("r1", null, "2026-09-10"), occurredOnUserOverridden: false },
+        { ...row("r2", "A", "2026-09-09"), occurredOnUserOverridden: true },
+      ],
       "2026-09-10",
-      (_id, day) => {
-        seen.push(day);
-        return day >= "2026-09-10";
+      (c) => {
+        seen.push(`${c.id}:${c.occurredOn}`);
+        return !c.occurredOnUserOverridden;
       },
     );
-    expect(seen).toEqual(["2026-09-09"]);
+    expect(seen).toEqual(["r2:2026-09-09"]);
     expect(picked).toBeNull();
   });
 });

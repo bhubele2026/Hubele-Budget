@@ -30,8 +30,11 @@ row is a separate transaction and is inserted.
 
 | Path | A candidate's old id is gone when |
 |---|---|
-| Cursor sync (`syncPlaidItem`) | Plaid **removed** it in this sync; **or** the sync started from a null cursor (Plaid replays the whole history in `added`) and did not send it |
-| Gap backfill (`runGapBackfillForItem`) | the row's date is inside `[startStr, today]`, the window `/transactions/get` just returned in full, **and** its id is not in that list |
+| Cursor sync (`syncPlaidItem`) | Plaid **removed** it in this sync, **or** the sync started from a null cursor (Plaid replays the whole history in `added`) and did not send it — **and** no posted row in the batch names it as its `pending_transaction_id` |
+| Gap backfill (`runGapBackfillForItem`) | the list is complete (the walk did not stop at the 20-page cap), the row's date is inside `[startStr, today]`, its id is not in the list, no posted row in the list names it as its pending row, **and** the user has not moved its date |
+
+**In both paths, no re-mint at all when a row already holds the incoming id.** That is an update of that row. Adopting
+another row onto the id would collide on the unique index (`23505`).
 
 - **Why the backfill needs the window test.** Heal, reconcile and `routes/plaid.ts:820` backfills start the day after
   the newest stored row (`overlapDays` 0), so older rows are outside the list and their absence proves nothing. The
@@ -53,7 +56,13 @@ row is a separate transaction and is inserted.
 
 - **Ledger, spending and cash:** a second real charge with the same amount within two days of another now stays as its
   own row. Cash goes down by it and spending goes up by it, where before one of the two vanished.
-- **Cash today:** the PR4b overstatement is gone. In the reviewer's case, 1000.00 becomes **975.00**.
+- **Cash today:** the PR4b overstatement is gone in the cases reviewed: a separate charge dated ahead (1000.00 →
+  **975.00**), and a pending charge that posts in the same batch as a separate same-amount charge, in either order
+  (1000.00 → **975.00**).
+- **Sync reliability:** an update to an id already on file next to a same-amount row no longer throws `23505`.
+  - Cursor: the sync failed ("Couldn't reach Plaid") and the cursor never advanced, so the item was stuck.
+  - Backfill: the rest of the account and its vanished-pending sweep were skipped. That was partly older behaviour,
+    and partly a new risk from this PR's first commit.
 - **`occurred_at`** on a posted row now keeps the authorisation time when the pending row had one. The Chase ledger
   orders rows within a day by it, so a few rows can reorder within their day. No amount changes.
 - **Not recovered automatically:** charges merged before this PR stay merged. A cursor sync never re-sends them. A
@@ -80,8 +89,34 @@ row is a separate transaction and is inserted.
 - **The dedupe pass itself merges two real same-day charges at the same merchant for the same amount**
   (`lib/dedupeTransactions.ts`, key: account, date, amount, fuzzy description). This is older behaviour and is not
   changed here. Two identical coffees on one day still show as one.
-- **`COALESCE` keeps a wrong first time.** If the first time Plaid sent was itself wrong, a later correction to the
-  same row is ignored. Whole-hour placeholders are already stored as null by the sync and filled later.
+- **The first time is kept.** If the first real time Plaid sent was itself wrong, a later correction is ignored.
+  - A whole-hour value on file counts as a placeholder and may be replaced (`keepFirstRealTime`). `pickRealTime`
+    itself only drops 00:00:00 UTC, so whole-hour values are stored.
+  - The snapshot rule already ignores them; the hourly behaviour clock and `debtPending` read them.
+- **Null-cursor evidence during a historical pull.** Only brand-new items and "reset cursor"
+  (`routes/plaid.ts:2254`) start from a null cursor. If Plaid is still building the history, a row within two days of
+  the oldest date Plaid sent can read as gone and be adopted.
+- **Page cap.** When `/transactions/get` stops at 20 pages (10,000 rows), that account gets no re-mint adoption and no
+  vanished-pending sweep for that run, and a warning is logged. This path has no test, because it needs 10,000 rows.
+- **Dedupe churn (read in code, not reproduced).** When the dedupe pass collapses a same-date re-mint pair, the
+  survivor keeps the dead old id: `mergeStatePatch` only copies the loser's id when the survivor has none. A later
+  `modified` for the new id re-inserts it, and the next pass deletes it again.
+- **Same-day, same-amount separate charges.** "Both stay" is proven only for different days. On the same day, the
+  dedupe pass collapses them right after the cursor upsert (above).
+
+## Review
+
+**First review, `6e33497`: REQUEST CHANGES.** Every finding was reproduced by the reviewer.
+
+| Finding | Done |
+|---|---|
+| HIGH: a pending id that just posted reads as gone, so a separate same-amount charge in the same batch takes its row before the posted row re-keys it (cash 1000.00 vs 975.00; certain on the backfill's newest-first list) | `successorIds` from the batch's `pending_transaction_id` are never gone, on both paths. Three tests. |
+| MEDIUM: a re-mint onto an id already on file throws `23505`. Backfill: the rest of the account and its sweep are skipped. Cursor: the sync fails and the cursor is stuck | No re-mint when a row already holds the incoming id. Cursor and backfill tests. |
+| LOW: backfill "gone" by a stored date the user moved | Rows with `occurredOnUserOverridden` are never gone on the backfill path. Test. |
+| LOW: the 20-page cap is silent | Gone-evidence and the sweep are off when the walk stops at the cap; a warning is logged. Untested (needs 10,000 rows). |
+| LOW: null-cursor edge during a historical pull | Disclosed in Residuals. |
+| LOW: the note was wrong about placeholders; `COALESCE` kept a whole-hour placeholder | `keepFirstRealTime` treats a whole-hour value on file as a placeholder. Note corrected. Test. |
+| NIT: missing tests; dedupe churn; import order | Tests added; churn and same-day collapse disclosed; import moved below the local imports. |
 
 ## Must not change
 
@@ -94,9 +129,9 @@ row is a separate transaction and is inserted.
 ## Tests
 
 - **`lib/remintMatch.test.ts`** (5): no adoption while the old id exists; adoption when it is gone; a live candidate
-  skipped for a gone one; nearest date, then id; the evidence check sees the candidate's date, and rows with no Plaid
-  id are ignored.
-- **`__tests__/plaidSyncRemintDistinctCharges.integration.test.ts`** (10):
+  skipped for a gone one; nearest date, then id; the evidence check receives the whole candidate, and rows with no
+  Plaid id are never offered.
+- **`__tests__/plaidSyncRemintDistinctCharges.integration.test.ts`** (17):
   - cursor, incremental: two real −$25 charges a day apart both stay;
   - cursor, genuine re-mint (old id in `removed`): adopted in place;
   - cursor, null cursor: a replayed id is kept; an id not replayed is adopted;
@@ -106,16 +141,27 @@ row is a separate transaction and is inserted.
   - backfill, overlap 1: both ids listed → both stay;
   - backfill, overlap 1: the old id missing inside the window → adopted;
   - backfill, overlap 0: a row before the window is never adopted;
-  - the PR4b reviewer's case through the ledger: `bankToday` **975.00**.
-- **Failing before.** Run against `main`'s `plaidSync.ts` (`cdc5ecc`), **8 of the 10 integration tests fail**. The two
-  that pass are the guards that must keep adopting: a genuine re-mint with the old id in `removed`, and a backfill
-  whose full window no longer lists the old id.
+  - the PR4b reviewer's case through the ledger: `bankToday` **975.00**;
+  - a whole-hour time on file is replaced by a later real time;
+  - a pending id with a posted successor in the same batch, three ways (cursor with the separate charge first, cursor
+    with the posted row first, and the backfill's newest-first list): the pending row is re-keyed by its posted row,
+    the separate charge is new, and `bankToday` is **975.00**;
+  - cursor: an id already on file next to a removed same-amount pending — no failure, the cursor advances;
+  - backfill: an id already on file — the account's later rows still land;
+  - backfill: a row whose date the user moved is never treated as gone.
+- **Failing before.**
+  - Against `main` (`cdc5ecc`), **8 of the first 10 integration tests fail**. The two that pass are the guards that must
+    keep adopting: a genuine re-mint with the old id in `removed`, and a backfill whose full window no longer lists
+    the old id.
+  - Against this PR's first commit (`6e33497`): **6 of the 7 tests added for the review fail.** The one that passes is the cursor case with the posted row
+    first: the posted row re-keys the pending row before the separate charge is handled, so that commit was already
+    right in that order. It is kept to pin both orders.
 
 ## Verification
 
-- **Plaid sync tests plus the helper's unit file** (16 files): **86 pass**.
-- **Full API suite:** **120 files, 882 pass, 8 todo** (867 before, plus 5 unit and 10 integration tests).
-- **Typecheck and build:** API typecheck and the workspace build pass (exit 0).
+- **Plaid sync tests plus the helper's unit file** (16 files): **93 pass**.
+- **Full API suite:** **120 files, 889 pass, 8 todo** (882 at `6e33497`, plus the 7 review tests).
+- **Typecheck and build:** API typecheck clean; workspace build exit 0.
 - **Landing bundle guard:** 572.5 KB of 580, unchanged.
 - **Web suite:** not run; no web or shared-library change.
 

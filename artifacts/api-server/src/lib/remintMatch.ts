@@ -24,10 +24,12 @@ const dayNumber = (iso: string): number => Date.parse(`${iso}T00:00:00Z`) / 86_4
 export function pickRemintCandidate<T extends RemintCandidate>(
   candidates: readonly T[],
   incomingDate: string,
-  isGone: (oldPtid: string, occurredOn: string) => boolean,
+  isGone: (candidate: T & { oldPtid: string }) => boolean,
 ): T | null {
   const target = dayNumber(incomingDate);
-  const gone = candidates.filter((c) => c.oldPtid != null && isGone(c.oldPtid, c.occurredOn));
+  const gone = candidates.filter(
+    (c): c is T & { oldPtid: string } => c.oldPtid != null && isGone(c as T & { oldPtid: string }),
+  );
   gone.sort(
     (a, b) =>
       Math.abs(dayNumber(a.occurredOn) - target) - Math.abs(dayNumber(b.occurredOn) - target) ||
