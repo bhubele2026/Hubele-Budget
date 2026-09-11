@@ -536,3 +536,103 @@ describe("(PR4d second look) the pending→posted re-key never moves a row onto 
     expect((await rowsFor()).map((r) => r.plaidTransactionId)).toEqual(["S"]);
   });
 });
+
+describe("(PR4d-2) re-mint ties and the first-sync merge guard", () => {
+  it("backfill, an exact tie: the earlier-dated re-mint takes the old row, not the later separate charge — cash 975.00", async () => {
+    // OLD (−25) is dated the snapshot day and was on file before the read. Plaid
+    // re-mints it as NEW dated a day earlier; a separate −25 X is dated a day later.
+    // Both are one day from OLD and X is listed first (newest first).
+    const { itemRowId, ext, acctRowId } = await seedChase("cursor-prev");
+    const { today, yesterday, readAt } = await snapshotReadYesterday(acctRowId);
+    const twoDaysAgo = addDaysISO(today, -2);
+    const oldRowId = await ledgerRow({
+      ext,
+      ptid: "OLD",
+      date: yesterday,
+      createdAt: new Date(readAt.getTime() - 3_600_000),
+    });
+    nextGet = [plaidTxn(ext, "X", today), plaidTxn(ext, "NEW", twoDaysAgo)];
+
+    await runGapBackfillForItem(TEST_USER, itemRowId, { overlapDays: 1 });
+
+    const rows = await rowsFor();
+    expect(rows.map((r) => r.plaidTransactionId).sort()).toEqual(["NEW", "X"]);
+    expect(rows.find((r) => r.id === oldRowId)?.plaidTransactionId).toBe("NEW");
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.bankToday).toBe("975.00");
+  });
+
+  async function seedFirstSyncChase(): Promise<{ itemRowId: string; ext: string; manualRowId: string }> {
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: `item-${randomUUID()}`,
+        accessToken: `access-sandbox-${randomUUID()}`,
+        institutionName: "Chase",
+        institutionSlug: "chase",
+        cursor: "cursor-prev",
+      })
+      .returning();
+    const ext = `acct-${randomUUID()}`;
+    const [acct] = await db
+      .insert(plaidAccountsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: ext,
+        name: "Chase Checking",
+        type: "depository",
+        subtype: "checking",
+        firstSyncCompletedAt: null,
+        importCutoffDate: "2026-09-10",
+      })
+      .returning();
+    // The checking account the forecast uses, so the first-sync merge looks at manual bank rows.
+    await db.insert(forecastSettingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      daysAhead: 90,
+      startingBalance: "0",
+      cashBuffer: "0",
+      bankSnapshotAccountId: acct!.id,
+    });
+    const [manual] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-09-08",
+        description: "PARKING GARAGE",
+        amount: "-25.00",
+        source: "manual",
+      })
+      .returning({ id: transactionsTable.id });
+    return { itemRowId: item!.id, ext, manualRowId: manual!.id };
+  }
+
+  it("first sync: a manual row still merges with a Plaid id that is not on file (control)", async () => {
+    const { itemRowId, ext, manualRowId } = await seedFirstSyncChase();
+    nextSync = { added: [plaidTxn(ext, "S", "2026-09-08")], modified: [], removed: [] };
+
+    await syncPlaidItem(TEST_USER, itemRowId);
+
+    const [manual] = await db.select().from(transactionsTable).where(eq(transactionsTable.id, manualRowId));
+    expect(manual!.plaidTransactionId).toBe("S");
+  });
+
+  it("first sync: a Plaid id already on file is never merged onto a manual row — no failure, the cursor advances", async () => {
+    const { itemRowId, ext, manualRowId } = await seedFirstSyncChase();
+    await ledgerRow({ ext, ptid: "S", date: "2026-09-08" });
+    nextSync = { added: [plaidTxn(ext, "S", "2026-09-08")], modified: [], removed: [] };
+
+    await syncPlaidItem(TEST_USER, itemRowId);
+
+    const [item] = await db.select().from(plaidItemsTable).where(eq(plaidItemsTable.id, itemRowId));
+    expect(item!.cursor).toBe("cursor-next");
+    const [manual] = await db.select().from(transactionsTable).where(eq(transactionsTable.id, manualRowId));
+    expect(manual!.plaidTransactionId).toBeNull();
+  });
+});

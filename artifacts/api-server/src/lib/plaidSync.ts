@@ -400,14 +400,20 @@ function plaidAmountToSigned(t: PlaidTxn): string {
 
 /** (PR4d review) One incoming batch, in order, as the re-mint tie-break sees it. */
 function remintBatchEntries(rows: readonly PlaidTxn[], onFile: ReadonlySet<string>): RemintBatchEntry[] {
-  return rows.map((r) => ({
-    id: r.transaction_id,
-    accountId: r.account_id,
-    date: r.date,
-    signedAmount: plaidAmountToSigned(r),
-    namesPendingRow: !!r.pending_transaction_id,
-    onFileAtStart: onFile.has(r.transaction_id),
-  }));
+  const seen = new Set<string>();
+  return rows.map((r) => {
+    const firstCopy = !seen.has(r.transaction_id);
+    seen.add(r.transaction_id);
+    return {
+      id: r.transaction_id,
+      accountId: r.account_id,
+      date: r.date,
+      signedAmount: plaidAmountToSigned(r),
+      namesPendingRow: !!r.pending_transaction_id,
+      onFileAtStart: onFile.has(r.transaction_id),
+      firstCopy,
+    };
+  });
 }
 
 /** (PR4d review) Which of these Plaid ids a ledger row already holds. */
@@ -1670,8 +1676,9 @@ export async function syncPlaidItem(
           t.date,
           (c) =>
             !successorIds.has(c.oldPtid) &&
-            !laterRowIsNearer(batchEntries, batchIndex, c.occurredOn) &&
-            (removedIds.has(c.oldPtid) || (startedFromNullCursor && !liveIds.has(c.oldPtid))),
+            (removedIds.has(c.oldPtid) || (startedFromNullCursor && !liveIds.has(c.oldPtid))) &&
+            // Last: the batch scan is the only check that grows with the batch.
+            !laterRowIsNearer(batchEntries, batchIndex, c.occurredOn),
         );
         if (remintMatch) {
           logger.warn(
@@ -3759,11 +3766,12 @@ export async function runGapBackfillForItem(
           (c) =>
             fetchedComplete &&
             !successorIds.has(c.oldPtid) &&
-            !laterRowIsNearer(batchEntries, batchIndex, c.occurredOn) &&
             !c.occurredOnUserOverridden &&
             !fetchedIds.has(c.oldPtid) &&
             c.occurredOn >= windowStart &&
-            c.occurredOn <= todayStr,
+            c.occurredOn <= todayStr &&
+            // Last: the batch scan is the only check that grows with the batch.
+            !laterRowIsNearer(batchEntries, batchIndex, c.occurredOn),
         );
         if (remintMatch) {
           logger.warn(

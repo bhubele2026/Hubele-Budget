@@ -110,11 +110,15 @@ same amount, not on file when the batch started, and not naming a pending row. E
   `modified` for the new id re-inserts it, and the next pass deletes it again.
 - **Same-day, same-amount separate charges.** "Both stay" is proven only for different days. On the same day, the
   dedupe pass collapses them right after the cursor upsert (above).
-- **Batch tie-break limits.**
-  - When a genuine re-mint and a separate same-amount charge are the same number of days from the old row, the first
-    in list order takes it, as before.
-  - A row can defer to a later, nearer row that then adopts a different gone row, leaving a duplicate. Cash is then
-    understated.
+- **Batch tie-break limits** (updated by PR4d-2, `docs/reviews/2026-09-11-pr4d2-remint-tie-break.md`).
+  - An exact tie goes to the earlier-dated row. When the tie is truly ambiguous, this errs toward understating cash.
+    Two rows on the same date are left to list order; either pick moves cash the same way.
+  - A row can defer to a later, nearer row that never adopts. Each of these leaves a duplicate, and cash is
+    understated:
+    - the later row adopts a different gone row;
+    - the backfill's manual merge consumes it first;
+    - the first-sync merge or cutoff skip consumes it first;
+    - it is a later copy of an id handled earlier. PR4d-2 counts only the first copy as a claimant.
 
 ## Review
 
