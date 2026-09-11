@@ -107,7 +107,8 @@ Plan: `~/.claude/plans/h2-budget-work-serene-pebble.md`.
     - a refresh failed with figures on screen: "refresh", never "load";
     - the page's forecast never loaded: "load".
 
-    All three fail on `6601674`.
+    The two "load" cases fail on `6601674`. The "refresh" case passes there too, since that code always said
+    "refresh"; it guards the other half of the choice.
 - **`pages/billsOverviewSpine.test.tsx`** (+4), all of which fail on the base code:
   - while loading: dashes, no chip, meter, footnote or "No recurring bills", and no banner;
   - after a failed first load: the banner with Retry, dashes, "Couldn't load bills";
