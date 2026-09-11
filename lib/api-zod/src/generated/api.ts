@@ -2604,6 +2604,18 @@ export const GetForecastResponse = zod.object({
       institutionName: zod.string().nullish(),
     }),
   ),
+  checkingAccountExternalId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Plaid account_id the forecast treats as the bank account, resolved the same way the balance roll-forward resolves it. Null when no account can be identified uniquely.",
+    ),
+  today: zod
+    .string()
+    .optional()
+    .describe(
+      'The calendar date (YYYY-MM-DD) the server judged \"already happened\" against when it built this bundle, the curve and the review badge. The page uses it so its inbox agrees with the badge.',
+    ),
   monthSnapshots: zod
     .record(
       zod.string(),
@@ -2841,6 +2853,23 @@ export const GetReportsSpendingFactsResponse = zod.object({
     trackingStart: zod.string(),
     floorApplied: zod.boolean(),
   }),
+  unplanned: zod
+    .object({
+      total: zod.number(),
+      transactionCount: zod.number(),
+      transactions: zod.array(
+        zod.object({
+          id: zod.string(),
+          date: zod.string(),
+          description: zod.string(),
+          amount: zod.number(),
+        }),
+      ),
+    })
+    .optional()
+    .describe(
+      "Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window.",
+    ),
   realSpend: zod.object({
     total: zod.number(),
     transactionCount: zod.number(),

@@ -175,10 +175,13 @@ describe("POST /transactions/bulk-update", () => {
     expect(otherRow?.reviewed).toBe(false);
   });
 
-  it("drops forecast_resolutions for affected rows when forecastFlag is set to false", async () => {
-    const flagged1 = await insertTxn(TEST_USER, { forecastFlag: true });
-    const flagged2 = await insertTxn(TEST_USER, { forecastFlag: true });
-    const untouched = await insertTxn(TEST_USER, { forecastFlag: true });
+  it("drops forecast_resolutions for affected FUTURE rows when forecastFlag is set to false", async () => {
+    // Future-dated: the flag still decides whether an expected row is
+    // projected, so taking it out of the forecast also drops its resolution.
+    const FUTURE = "2099-06-15";
+    const flagged1 = await insertTxn(TEST_USER, { forecastFlag: true, occurredOn: FUTURE });
+    const flagged2 = await insertTxn(TEST_USER, { forecastFlag: true, occurredOn: FUTURE });
+    const untouched = await insertTxn(TEST_USER, { forecastFlag: true, occurredOn: FUTURE });
 
     await db.insert(forecastResolutionsTable).values([
       { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, status: "matched", matchedTxnId: flagged1 },

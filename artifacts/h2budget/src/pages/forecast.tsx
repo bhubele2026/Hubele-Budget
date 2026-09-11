@@ -38,10 +38,12 @@ import {
   cardHead,
   btnLink,
   emptyNote,
+  errorBanner,
   Foot,
   Help,
   Stat,
 } from "@/ui";
+import { ForecastDateBalance } from "@/components/forecast-date-balance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -297,8 +299,8 @@ export default function ForecastPage({
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
-  const { data, isLoading } = useGetForecast({ days: deferredHorizonDays });
-  const { data: cashProjection, isLoading: cashProjectionLoading } =
+  const { data, isLoading, isError: forecastError, refetch: refetchForecast } = useGetForecast({ days: deferredHorizonDays });
+  const { data: cashProjection, isLoading: cashProjectionLoading, isError: projectionError, refetch: refetchProjection } =
     useGetForecastCashSignal({
       horizonDays: deferredHorizonDays,
       fromDate: deferredForecastFromDate,
@@ -635,6 +637,13 @@ export default function ForecastPage({
   // same way; this is a belt-and-braces guard.
   const checkingPlaidAccountIds = useMemo(() => {
     const s = new Set<string>();
+    // The server resolves the account exactly as the balance roll-forward
+    // does, so a dangling snapshot pointer can't empty Review while the curve
+    // keeps moving. The local lookup below is only for an older bundle.
+    if (data?.checkingAccountExternalId) {
+      s.add(data.checkingAccountExternalId);
+      return s;
+    }
     const snapshotRowId = data?.bankSnapshot?.accountId ?? null;
     if (snapshotRowId) {
       const acct = (data?.plaidCheckingAccounts ?? []).find(
@@ -643,7 +652,17 @@ export default function ForecastPage({
       if (acct?.accountId) s.add(acct.accountId);
     }
     return s;
-  }, [data?.bankSnapshot?.accountId, data?.plaidCheckingAccounts]);
+  }, [
+    data?.checkingAccountExternalId,
+    data?.bankSnapshot?.accountId,
+    data?.plaidCheckingAccounts,
+  ]);
+
+  // The calendar date the inbox treats as "already happened" (`inForecast`).
+  // The server's date, sent with the bundle, so this inbox always agrees with
+  // the review badge — the browser's clock can sit on the other side of
+  // midnight. A fresh bundle after midnight moves the cutoff with it.
+  const todayIso = data?.today ?? todayISO();
 
   const register = useMemo(() => {
     if (!data) return null;
@@ -652,6 +671,7 @@ export default function ForecastPage({
     const txns = filterForecastTxns(
       (data.transactions ?? []) as unknown as MatchTxn[],
       checkingPlaidAccountIds,
+      todayIso,
     );
     const resolutions = (data.resolutions ?? []) as Resolution[];
     const snapshot = data.bankSnapshot ?? null;
@@ -681,7 +701,17 @@ export default function ForecastPage({
       // /forecast (overall) view leaves this off.
       lingerPastDuePlans: mode === "review",
     });
-  }, [data, closedMonths, today, debtLinks, payoffsByDebt, deferredForecastFromDate, mode]);
+  }, [
+    data,
+    closedMonths,
+    today,
+    todayIso,
+    checkingPlaidAccountIds,
+    debtLinks,
+    payoffsByDebt,
+    deferredForecastFromDate,
+    mode,
+  ]);
 
   const bucket = useMemo(() => {
     if (!register || !data) return [];
@@ -1082,9 +1112,11 @@ export default function ForecastPage({
     );
   };
 
-  const bulkMarkBankUnplanned = async () => {
-    const ids = bankInbox.map((c) => c.bank.txn.id);
-    if (!ids.length) return;
+  // Writes "not a planned payment" (`ignored_unforecasted`) for each txn, six
+  // at a time. Shared by every bulk "unplanned" action on the inbox.
+  const markTxnsUnplanned = async (
+    ids: string[],
+  ): Promise<{ ok: number; failures: string[] }> => {
     const CONCURRENCY = 6;
     let cursor = 0;
     let ok = 0;
@@ -1106,7 +1138,16 @@ export default function ForecastPage({
     await Promise.all(
       Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
     );
-    invalidate();
+    return { ok, failures };
+  };
+
+  const toastUnplannedResult = ({
+    ok,
+    failures,
+  }: {
+    ok: number;
+    failures: string[];
+  }) => {
     if (!failures.length) {
       toast({ title: `Marked ${ok} as unplanned` });
     } else {
@@ -1118,44 +1159,41 @@ export default function ForecastPage({
     }
   };
 
+  const bulkMarkBankUnplanned = async () => {
+    const ids = bankInbox.map((c) => c.bank.txn.id);
+    if (!ids.length) return;
+    const result = await markTxnsUnplanned(ids);
+    invalidate();
+    toastUnplannedResult(result);
+  };
+
   // (#27) Bulk-mark just the selected inbox cards as unplanned.
   const bulkMarkBankUnplannedSelected = async () => {
     const ids = Array.from(selectedBankIds).filter((id) =>
       bankInbox.some((c) => c.bank.txn.id === id),
     );
     if (!ids.length) return;
-    const CONCURRENCY = 6;
-    let cursor = 0;
-    let ok = 0;
-    const failures: string[] = [];
-    const worker = async () => {
-      while (cursor < ids.length) {
-        const i = cursor++;
-        const txnId = ids[i];
-        try {
-          await upsertResolution.mutateAsync({
-            data: { status: "ignored_unforecasted", matchedTxnId: txnId },
-          });
-          ok += 1;
-        } catch (e) {
-          failures.push((e as Error).message);
-        }
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
-    );
+    const result = await markTxnsUnplanned(ids);
     invalidate();
     clearBankSelection();
-    if (!failures.length) {
-      toast({ title: `Marked ${ok} as unplanned` });
-    } else {
-      toast({
-        title: `${ok} updated, ${failures.length} failed`,
-        description: failures[0],
-        variant: "destructive",
-      });
-    }
+    toastUnplannedResult(result);
+  };
+
+  // Posted rows whose forecast flag is off — taken out of the forecast
+  // earlier, or backfilled after a bank reconnect — are back in Review
+  // because they moved real money (`inForecast`, 2026-09-10). One action
+  // clears the ones the household had already decided weren't planned.
+  // Transfers and card payments are left out on purpose: they are the rows
+  // most likely to pay a planned bill or debt minimum, so they stay in the
+  // inbox to be matched rather than swept into "not planned".
+  const returnedUnflaggedIds = bankInbox
+    .filter((c) => c.bank.txn.forecastFlag === false && !c.bank.txn.isTransfer)
+    .map((c) => c.bank.txn.id);
+  const bulkMarkReturnedUnplanned = async () => {
+    if (!returnedUnflaggedIds.length) return;
+    const result = await markTxnsUnplanned(returnedUnflaggedIds);
+    invalidate();
+    toastUnplannedResult(result);
   };
 
   // (#27) Bulk-match the confident-pickable subset of selected inbox cards.
@@ -1462,6 +1500,16 @@ export default function ForecastPage({
   };
 
   const onRemoveFromForecast = (txnId: string) => {
+    // A row that has already happened moved real money, so it stays on the
+    // cash curve whatever its flag says (`inForecast`). Taking it out of
+    // Review means deciding it was not a planned payment — the resolution
+    // "Mark unplanned" writes — not flipping a flag that no longer removes it
+    // from anything.
+    const txn = (data?.transactions ?? []).find((t) => t.id === txnId);
+    if (!txn || txn.occurredOn <= todayIso) {
+      onMarkUnplannedTxn(txnId);
+      return;
+    }
     updateTxn.mutate(
       { id: txnId, data: { forecastFlag: false } },
       {
@@ -1638,7 +1686,7 @@ export default function ForecastPage({
   if (!data || !register) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
+        {forecastError ? <div role="alert" className={errorBanner}>Forecast could not load. <button className={btnLink} onClick={() => void refetchForecast()}>Retry forecast</button></div> : <Skeleton className="h-10 w-48" />}
         <Skeleton className="h-96 w-full" />
       </div>
     );
@@ -1795,6 +1843,12 @@ export default function ForecastPage({
   return (
     <div className="space-y-6">
       <PlaidReauthBanner />
+      {(forecastError || projectionError) && (
+        <div role="alert" className={errorBanner}>
+          <p>{data || cashProjection ? "Forecast refresh failed. Displayed figures may be out of date." : "Forecast could not load. Try again to see your projection."}</p>
+          <button type="button" className={btnLink} onClick={() => { void refetchForecast(); void refetchProjection(); }}>Retry forecast</button>
+        </div>
+      )}
       <div ref={pageStickyHeaderRef} className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
       {/* ⭐ The title used to be a sentence explaining the page's philosophy
           ("Plan register — you decide every match."). The register below says
@@ -1993,9 +2047,9 @@ export default function ForecastPage({
               index={0}
               data-testid="kpi-lowest-point"
               label="Lowest point"
-              value={formatCurrency(Number.isFinite(lowestNum) ? lowestNum : 0)}
+              value={proj && proj.status !== "no_data" && Number.isFinite(lowestNum) ? formatCurrency(lowestNum) : "—"}
               tone={dipsBelowBuffer ? "bad" : "navy"}
-              hint={`${dipsBelowBuffer ? "under buffer" : "above buffer"}${
+              hint={`${!proj || proj.status === "no_data" ? "Set a bank balance to project" : dipsBelowBuffer ? "under buffer" : "above buffer"}${
                 proj?.lowestDate ? ` · ${formatDate(proj.lowestDate)}` : ""
               }`}
             />
@@ -2003,7 +2057,7 @@ export default function ForecastPage({
               index={1}
               data-testid="kpi-ending-balance"
               label="Ending balance"
-              value={formatCurrency(proj?.endingBalance ?? 0)}
+              value={proj && proj.status !== "no_data" ? formatCurrency(proj.endingBalance ?? 0) : "—"}
               hint={
                 proj?.endingDate
                   ? formatDate(proj.endingDate)
@@ -2014,19 +2068,21 @@ export default function ForecastPage({
               index={2}
               data-testid="kpi-projected-income"
               label="Money in"
-              value={formatCurrency(inc)}
+              value={proj ? formatCurrency(inc) : "—"}
               hint={`over ${horizonDays}d`}
             />
             <Stat
               index={3}
               data-testid="kpi-projected-expenses"
               label="Money out"
-              value={formatCurrency(exp)}
+              value={proj ? formatCurrency(exp) : "—"}
               hint={`over ${horizonDays}d`}
             />
           </div>
         );
       })()}
+
+      <ForecastDateBalance signal={cashProjection} />
 
       {/* (#683) Past-due plans dragging tomorrow — discoverable summary */}
       {draggingPlans.length > 0 && draggingTargetDate && (
@@ -2442,6 +2498,38 @@ export default function ForecastPage({
                     </button>
                   </div>
                 )}
+                {/* Posted rows with the forecast flag off moved real money, so
+                    they are back in Review (`inForecast`). Most were already
+                    decided on; one click records that. */}
+                {returnedUnflaggedIds.length > 0 && (
+                  <div
+                    className="flex items-center gap-2 rounded-control bg-neutral-50 px-3 py-1.5 ring-1 ring-brand-line"
+                    data-testid="returned-unflagged-note"
+                    role="note"
+                  >
+                    <span className="flex flex-1 items-center gap-1.5 text-micro text-neutral-500">
+                      Back in review
+                      <span className="font-mono tabular-nums text-brand-navy">
+                        {returnedUnflaggedIds.length}
+                      </span>
+                      <Help>
+                        Posted rows count toward cash even with the forecast
+                        flag off, so they return to review. Mark the ones that
+                        were not planned payments. Transfers and card payments
+                        stay listed to be matched.
+                      </Help>
+                    </span>
+                    <button
+                      type="button"
+                      className={btnLink}
+                      onClick={bulkMarkReturnedUnplanned}
+                      disabled={upsertResolution.isPending}
+                      data-testid="returned-unflagged-mark-unplanned"
+                    >
+                      Mark {returnedUnflaggedIds.length} unplanned
+                    </button>
+                  </div>
+                )}
                 {/* (#27) Selection-scoped bulk bar */}
                 {selectedBankIds.size > 0 && (
                   <div
@@ -2749,15 +2837,25 @@ export default function ForecastPage({
                         </div>
                         {/* The single flow, in reverse. Send-to-Forecast puts a
                             Chase row straight into Review; this puts it back.
-                            There is no gate in either direction. */}
+                            There is no gate in either direction. A row that has
+                            already happened is cash either way, so for it this
+                            records "not a planned payment" instead. */}
                         <button
                           type="button"
                           className="press grid h-7 w-7 shrink-0 place-items-center self-start rounded-control text-neutral-400 hover:bg-neutral-50 hover:text-brand-navy"
                           onClick={() =>
                             onRemoveFromForecast(card.bank.txn.id)
                           }
-                          title="Un-send back to Bank list"
-                          aria-label="Un-send back to Bank list"
+                          title={
+                            card.bank.txn.occurredOn <= todayIso
+                              ? "Not a planned payment"
+                              : "Un-send back to Bank list"
+                          }
+                          aria-label={
+                            card.bank.txn.occurredOn <= todayIso
+                              ? "Not a planned payment"
+                              : "Un-send back to Bank list"
+                          }
                         >
                           <X className="h-4 w-4" aria-hidden="true" />
                         </button>

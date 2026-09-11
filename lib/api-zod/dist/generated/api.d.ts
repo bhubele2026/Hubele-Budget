@@ -5224,6 +5224,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
         subtype?: string | null | undefined;
         institutionName?: string | null | undefined;
     }>, "many">;
+    checkingAccountExternalId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    today: zod.ZodOptional<zod.ZodString>;
     monthSnapshots: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodObject<{
         balance: zod.ZodString;
         at: zod.ZodString;
@@ -5377,6 +5379,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
             balance: string;
         }[] | undefined;
     } | null | undefined;
+    checkingAccountExternalId?: string | null | undefined;
+    today?: string | undefined;
     monthSnapshots?: Record<string, {
         at: string;
         balance: string;
@@ -5500,6 +5504,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
             balance: string;
         }[] | undefined;
     } | null | undefined;
+    checkingAccountExternalId?: string | null | undefined;
+    today?: string | undefined;
     monthSnapshots?: Record<string, {
         at: string;
         balance: string;
@@ -5965,6 +5971,44 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         trackingStart: string;
         floorApplied: boolean;
     }>;
+    unplanned: zod.ZodOptional<zod.ZodObject<{
+        total: zod.ZodNumber;
+        transactionCount: zod.ZodNumber;
+        transactions: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            date: zod.ZodString;
+            description: zod.ZodString;
+            amount: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            id: string;
+            description: string;
+            amount: number;
+        }, {
+            date: string;
+            id: string;
+            description: string;
+            amount: number;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        transactionCount: number;
+        total: number;
+        transactions: {
+            date: string;
+            id: string;
+            description: string;
+            amount: number;
+        }[];
+    }, {
+        transactionCount: number;
+        total: number;
+        transactions: {
+            date: string;
+            id: string;
+            description: string;
+            amount: number;
+        }[];
+    }>>;
     realSpend: zod.ZodObject<{
         total: zod.ZodNumber;
         transactionCount: zod.ZodNumber;
@@ -6243,6 +6287,16 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
             name: string;
         }[];
     }[];
+    unplanned?: {
+        transactionCount: number;
+        total: number;
+        transactions: {
+            date: string;
+            id: string;
+            description: string;
+            amount: number;
+        }[];
+    } | undefined;
 }, {
     reimbursable: {
         personalTotal: number;
@@ -6319,6 +6373,16 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
             name: string;
         }[];
     }[];
+    unplanned?: {
+        transactionCount: number;
+        total: number;
+        transactions: {
+            date: string;
+            id: string;
+            description: string;
+            amount: number;
+        }[];
+    } | undefined;
 }>;
 /**
  * Returns deterministic Behavior facts (days-since-last buckets, no-dining

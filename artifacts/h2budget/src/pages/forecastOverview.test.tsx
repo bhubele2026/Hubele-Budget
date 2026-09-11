@@ -184,3 +184,18 @@ describe("Forecast Overview — headline figures come from the spine", () => {
     expect(within(bills).queryByText("Paycheck")).toBeNull();
   });
 });
+
+it("never reports safe runway or an above-buffer forecast before data exists", () => {
+  state.spine = undefined;
+  state.cashSignal = undefined;
+  render(<ForecastOverviewPage />);
+  expect(statOf("fo-stat-runway")).not.toContain("Clear");
+  expect(statOf("fo-stat-runway")).not.toContain("stays positive");
+  expect(statOf("fo-stat-low-point")).not.toContain("above buffer");
+});
+it("does not show a fallback starting balance as a validated projection", () => {
+  state.cashSignal = { ...CASH_SIGNAL, status: "no_data" };
+  render(<ForecastOverviewPage />);
+  expect(statOf("fo-stat-ending")).toContain("—");
+  expect(statOf("fo-stat-runway")).not.toContain("Clear");
+});

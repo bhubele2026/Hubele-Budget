@@ -2199,6 +2199,22 @@ export type SpendingFactsRange = {
   floorApplied: boolean;
 };
 
+export type SpendingFactsUnplannedTransactionsItem = {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+};
+
+/**
+ * Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window.
+ */
+export type SpendingFactsUnplanned = {
+  total: number;
+  transactionCount: number;
+  transactions: SpendingFactsUnplannedTransactionsItem[];
+};
+
 export type SpendingFactsRealSpend = {
   total: number;
   transactionCount: number;
@@ -2291,6 +2307,8 @@ export type SpendingFactsReimbursable = {
 
 export interface SpendingFacts {
   range: SpendingFactsRange;
+  /** Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window. */
+  unplanned?: SpendingFactsUnplanned;
   realSpend: SpendingFactsRealSpend;
   /** The mirror of realSpend — money arriving from outside the household, through the same filter that decides real spending. Transfers between the household's own accounts, reimbursements, debt-payment counterparts and card refunds are all excluded, so this is what was EARNED in the range rather than everything that landed in an account. */
   realIncome: SpendingFactsRealIncome;
@@ -2667,6 +2685,13 @@ export interface ForecastBundle {
   bankSnapshot?: BankSnapshot | null;
   cashSignal?: CashSignal | null;
   plaidCheckingAccounts: PlaidCheckingAccount[];
+  /**
+   * Plaid account_id the forecast treats as the bank account, resolved the same way the balance roll-forward resolves it. Null when no account can be identified uniquely.
+   * @nullable
+   */
+  checkingAccountExternalId?: string | null;
+  /** The calendar date (YYYY-MM-DD) the server judged "already happened" against when it built this bundle, the curve and the review badge. The page uses it so its inbox agrees with the badge. */
+  today?: string;
   monthSnapshots?: ForecastBundleMonthSnapshots;
   accountSnapshots?: ForecastBundleAccountSnapshots;
 }

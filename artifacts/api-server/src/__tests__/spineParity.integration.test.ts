@@ -595,7 +595,16 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     const badge = await get<{ count: number }>("/forecast/review-count");
 
     expect(spine.reviewCount).toBe(badge.count);
-    expect(spine.reviewCount).toBe(2); // the two forecast-flagged bank rows
+    // Not vacuous, and counted by `inForecast` (2026-09-10): an unresolved
+    // checking-scoped row this month is in Review when it has already happened
+    // (whatever its flag) or is flagged for the forecast. The two flagged bills
+    // always count; "Groceries today" always counts; the unflagged purchases on
+    // the 2nd and 3rd and the manual Visa payment on the 6th count once their
+    // date has arrived — derived here so the assertion holds on any day.
+    const alreadyHappened = [2, 3, 6].filter(
+      (d) => dayThisMonth(d) <= TODAY_ISO,
+    ).length;
+    expect(spine.reviewCount).toBe(2 + 1 + alreadyHappened);
   });
 
   it("⚠️ never carries a debt balance or amount owed — landing law", async () => {

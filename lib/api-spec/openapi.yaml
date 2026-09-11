@@ -3850,6 +3850,23 @@ components:
             daysCovered: { type: integer }
             trackingStart: { type: string }
             floorApplied: { type: boolean }
+        unplanned:
+          type: object
+          description: Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window.
+          required: [total, transactionCount, transactions]
+          properties:
+            total: { type: number }
+            transactionCount: { type: integer }
+            transactions:
+              type: array
+              items:
+                type: object
+                required: [id, date, description, amount]
+                properties:
+                  id: { type: string }
+                  date: { type: string }
+                  description: { type: string }
+                  amount: { type: number }
         realSpend:
           type: object
           required: [total, transactionCount]
@@ -4372,6 +4389,18 @@ components:
         plaidCheckingAccounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidCheckingAccount" }
+        checkingAccountExternalId:
+          description: >-
+            Plaid account_id the forecast treats as the bank account, resolved
+            the same way the balance roll-forward resolves it. Null when no
+            account can be identified uniquely.
+          type: ["string", "null"]
+        today:
+          description: >-
+            The calendar date (YYYY-MM-DD) the server judged "already happened"
+            against when it built this bundle, the curve and the review badge.
+            The page uses it so its inbox agrees with the badge.
+          type: string
         monthSnapshots:
           type: object
           additionalProperties:

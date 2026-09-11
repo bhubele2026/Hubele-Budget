@@ -262,6 +262,8 @@ export * from "./spendingFactsRealSpend";
 export * from "./spendingFactsReimbursable";
 export * from "./spendingFactsUncategorized";
 export * from "./spendingFactsUncategorizedSampleMerchantsItem";
+export * from "./spendingFactsUnplanned";
+export * from "./spendingFactsUnplannedTransactionsItem";
 export * from "./spine";
 export * from "./spineBank";
 export * from "./spineDebt";

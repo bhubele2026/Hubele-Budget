@@ -7,7 +7,7 @@ import { useSpine } from "@/hooks/useSpine";
 import { Sparkline, StackBar } from "@/components/viz";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
 import { CHART } from "@/lib/chartTokens";
-import { card, cardHead, emptyNote, Foot, Help, Stat } from "@/ui";
+import { card, cardHead, emptyNote, Foot, Help, Stat, errorBanner, btnLink } from "@/ui";
 import { formatCurrency } from "@/lib/utils";
 
 /**
@@ -62,7 +62,7 @@ function shortDate(iso: string | null | undefined): string | undefined {
 
 export default function ForecastOverviewPage() {
   const { data: spine } = useSpine();
-  const { data: signal } = useGetForecastCashSignal(
+  const { data: signal, isError, refetch } = useGetForecastCashSignal(
     { horizonDays: 90 },
     {
       query: {
@@ -79,6 +79,7 @@ export default function ForecastOverviewPage() {
   const runwayDays = spine?.forecast?.runwayDays ?? null;
 
   // ── Detail figures: the spine does not carry these. ────────────────────────
+  const forecastReady = !!spine?.forecast && !!signal && signal.status !== "no_data";
   const buffer = num(signal?.cashBuffer);
   const ending = num(signal?.endingBalance);
   const income = num(signal?.projectedIncome);
@@ -116,6 +117,8 @@ export default function ForecastOverviewPage() {
 
   return (
     <div className="space-y-4" data-testid="forecast-overview">
+      {isError && <div className={errorBanner} role="alert">Forecast refresh failed. <button className={btnLink} onClick={() => void refetch()}>Retry forecast</button></div>}
+      {signal?.status === "no_data" && <div className={emptyNote}>Set a bank balance in Forecast to calculate future cash.</div>}
       {/* ── The spine row. Three of these four are the shared snapshot. ────── */}
       <div
         data-testid="fo-spine-stats"
@@ -135,9 +138,9 @@ export default function ForecastOverviewPage() {
           index={1}
           data-testid="fo-stat-low-point"
           label="Cash low point"
-          value={money(lowPoint)}
+          value={forecastReady ? money(lowPoint) : "—"}
           tone={dipsBelowBuffer ? "bad" : "navy"}
-          hint={`${dipsBelowBuffer ? "under buffer" : "above buffer"}${
+          hint={`${!forecastReady ? "Awaiting forecast" : dipsBelowBuffer ? "under buffer" : "above buffer"}${
             lowPointDate ? ` · ${lowPointDate}` : ""
           }`}
         />
@@ -145,14 +148,14 @@ export default function ForecastOverviewPage() {
           index={2}
           data-testid="fo-stat-runway"
           label="Runway"
-          value={runwayDays == null ? "Clear" : `${runwayDays} days`}
-          hint={runwayDays == null ? "stays positive" : "until negative"}
+          value={!forecastReady ? "—" : runwayDays == null ? "Clear" : `${runwayDays} days`}
+          hint={!forecastReady ? "Awaiting forecast" : runwayDays == null ? "stays positive" : "until negative"}
         />
         <Stat
           index={3}
           data-testid="fo-stat-ending"
           label="Ending balance"
-          value={money(signal?.endingBalance)}
+          value={forecastReady ? money(signal?.endingBalance) : "—"}
           hint="at 90 days"
         />
       </div>
@@ -172,7 +175,7 @@ export default function ForecastOverviewPage() {
             {money(bankToday)} → {money(signal?.endingBalance)}
           </span>
         </div>
-        {dailyValues.length > 1 ? (
+        {forecastReady && dailyValues.length > 1 ? (
           <>
             <div className="px-4 py-4">
               <Sparkline

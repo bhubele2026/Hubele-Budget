@@ -15,7 +15,7 @@ import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { ChaseInsightStrip } from "@/components/chase-insight-strip";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
 import { card, cardHead, emptyNote, Foot, Help, Stat } from "@/ui";
-import { currentMonthRange } from "@/lib/timeRange";
+import { currentMonthRange, currentWeekRange } from "@/lib/timeRange";
 import { isoDaysAgo, todayISO, currentWeekBounds } from "@/lib/weeklyStreak";
 import {
   isSplurge,
@@ -256,6 +256,7 @@ export default function CommandCenterPage() {
 
   const now = new Date();
   const monthRange = useMemo(() => currentMonthRange(now), [now.getMonth()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const weekRange = useMemo(() => currentWeekRange(now), [todayISO(now)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Period pickers for the two allowance buckets that have one. 0 = current
   // period; negative = back in time. Forward is capped at 0.
@@ -437,7 +438,7 @@ export default function CommandCenterPage() {
              sync controls dock in this card's head, beside the freshness of
              the balance they refresh. ─────────────────────────────────────── */}
       <ChaseInsightStrip
-        range={monthRange}
+        range={weekRange}
         actions={
           <>
             {snapshotAt && (

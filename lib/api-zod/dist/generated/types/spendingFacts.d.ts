@@ -17,8 +17,11 @@ import type { SpendingFactsRealIncome } from "./spendingFactsRealIncome";
 import type { SpendingFactsRealSpend } from "./spendingFactsRealSpend";
 import type { SpendingFactsReimbursable } from "./spendingFactsReimbursable";
 import type { SpendingFactsUncategorized } from "./spendingFactsUncategorized";
+import type { SpendingFactsUnplanned } from "./spendingFactsUnplanned";
 export interface SpendingFacts {
     range: SpendingFactsRange;
+    /** Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window. */
+    unplanned?: SpendingFactsUnplanned;
     realSpend: SpendingFactsRealSpend;
     /** The mirror of realSpend — money arriving from outside the household, through the same filter that decides real spending. Transfers between the household's own accounts, reimbursements, debt-payment counterparts and card refunds are all excluded, so this is what was EARNED in the range rather than everything that landed in an account. */
     realIncome: SpendingFactsRealIncome;

@@ -278,3 +278,22 @@ describe("expandItem - sign convention", () => {
     expect(out[0].amount).toBe(1500);
   });
 });
+
+describe("forecast schedule stability", () => {
+
+  it("keeps quarterly month-end dates anchored after a short month", () => {
+    const out = expandItem(rec({ id: "q", name: "Quarterly", frequency: "quarterly", anchorDate: "2026-01-31" }), new Date(2026, 0, 1), new Date(2026, 11, 31));
+    expect(out.map(e => e.date)).toEqual(["2026-01-31", "2026-04-30", "2026-07-31", "2026-10-31"]);
+  });
+  it("restores leap-day anniversaries after non-leap years", () => {
+    const out = expandItem(rec({ id: "a", name: "Annual", frequency: "annual", anchorDate: "2024-02-29" }), new Date(2025, 0, 1), new Date(2028, 11, 31));
+    expect(out.map(e => e.date)).toEqual(["2025-02-28", "2026-02-28", "2027-02-28", "2028-02-29"]);
+  });
+  it("returns identical occurrences when the visible window changes", () => {
+    const row = rec({ id: "q", name: "Quarterly", frequency: "quarterly", anchorDate: "2026-01-31" });
+    const wide = expandItem(row, new Date(2025, 0, 1), new Date(2027, 11, 31));
+    const narrow = expandItem(row, new Date(2026, 5, 1), new Date(2026, 11, 31));
+    expect(narrow).toEqual(wide.filter(e => e.date >= "2026-06-01" && e.date <= "2026-12-31"));
+  });
+
+});

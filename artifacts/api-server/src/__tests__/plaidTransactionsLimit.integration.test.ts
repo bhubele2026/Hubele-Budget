@@ -33,6 +33,14 @@ import { eq } from "drizzle-orm";
 const TEST_USER = `txnlimit-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 let TEST_HOUSEHOLD_ID: string;
 
+// The self-heal case refreshes successfully and then walks the cursor through
+// syncPlaidItem's poll-after-refresh budget. With production delays that is
+// ~22s of real waits, past this suite's 30s timeout once DB work is added.
+// The sibling refresh tests shorten the schedule the same way; this file used
+// to inherit their value only when Vitest happened to run one of them first in
+// the shared fork, so it passed or timed out depending on file order.
+process.env.PLAID_REFRESH_POLL_DELAYS_MS = "5,5";
+
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (
     req: { userId?: string; actualUserId?: string; householdId?: string; householdOwnerId?: string },

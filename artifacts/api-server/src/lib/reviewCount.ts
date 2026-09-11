@@ -3,16 +3,19 @@ import {
   db,
   forecastSettingsTable,
   forecastResolutionsTable,
-  plaidAccountsTable,
   transactionsTable,
 } from "@workspace/db";
+import { forecastTodayISO, inForecastWhere } from "./forecastInclusion";
+import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 
 /**
- * The Review-inbox count: unmatched forecast-flagged BANK txns in the current
- * calendar month. Mirrors the client's `filterForecastTxns`/`isBankTxn`
- * semantics (h2budget/src/lib/forecastMatch.ts + useReviewInboxCount) with
- * three small queries — the layout used to pull the entire ~30-query
- * `/forecast` bundle on every route just to derive this integer.
+ * The Review-inbox count: unresolved BANK txns in the current calendar month
+ * that are in the forecast (`inForecast`: already happened, or a future row
+ * flagged for the forecast). Mirrors the client's `filterForecastTxns`/
+ * `isBankTxn` semantics (h2budget/src/lib/forecastMatch.ts +
+ * useReviewInboxCount) with three small queries — the layout used to pull the
+ * entire ~30-query `/forecast` bundle on every route just to derive this
+ * integer.
  *
  * ⚠️ THIS BODY WAS LIFTED VERBATIM OUT OF `routes/forecast.ts` — it is the same
  * code, not a second copy of it. It moved into a lib the moment a SECOND caller
@@ -21,6 +24,10 @@ import {
  * hand-kept implementations of "how many things need looking at" is exactly the
  * class of drift the spine exists to end. `GET /forecast/review-count` now calls
  * this; so does the spine; there is one definition.
+ *
+ * The bank account comes from `resolveSnapshotAccount` — the same resolution
+ * the balance roll-forward uses — so a dangling snapshot pointer cannot zero
+ * the badge while the curve keeps moving.
  */
 export async function computeReviewCount(
   householdId: string,
@@ -29,17 +36,15 @@ export async function computeReviewCount(
   const [settings] = await db
     .select({
       bankSnapshotAccountId: forecastSettingsTable.bankSnapshotAccountId,
+      bankSnapshotMask: forecastSettingsTable.bankSnapshotMask,
     })
     .from(forecastSettingsTable)
     .where(eq(forecastSettingsTable.userId, ownerUserId));
-  let checkingExternalId: string | null = null;
-  if (settings?.bankSnapshotAccountId) {
-    const [acct] = await db
-      .select({ accountId: plaidAccountsTable.accountId })
-      .from(plaidAccountsTable)
-      .where(eq(plaidAccountsTable.id, settings.bankSnapshotAccountId));
-    checkingExternalId = acct?.accountId ?? null;
-  }
+  const { externalId: checkingExternalId } = await resolveSnapshotAccount({
+    householdId,
+    bankSnapshotAccountId: settings?.bankSnapshotAccountId ?? null,
+    bankSnapshotMask: settings?.bankSnapshotMask ?? null,
+  });
 
   const now = new Date();
   const y = now.getFullYear();
@@ -58,7 +63,7 @@ export async function computeReviewCount(
     .where(
       and(
         eq(transactionsTable.householdId, householdId),
-        eq(transactionsTable.forecastFlag, true),
+        inForecastWhere(forecastTodayISO(now)),
         gte(transactionsTable.occurredOn, monthStart),
         lte(transactionsTable.occurredOn, monthEnd),
       ),

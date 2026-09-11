@@ -4,7 +4,16 @@ import {
   getGetReportsSpendingFactsQueryKey,
 } from "@workspace/api-client-react";
 import { StackBar } from "@/components/viz";
-import { card, cardHead, fieldLabel, Help } from "@/ui";
+import {
+  card,
+  cardHead,
+  fieldLabel,
+  Help,
+  Stat,
+  emptyNote,
+  errorBanner,
+  btnLink,
+} from "@/ui";
 import { rangeDays, type DateRange } from "@/lib/timeRange";
 import { formatCurrency } from "@/lib/utils";
 
@@ -33,7 +42,11 @@ function isoOf(d: Date): string {
 function priorWindow(range: DateRange): { from: string; to: string } {
   const days = rangeDays(range);
   const start = new Date(`${range.from}T00:00:00`);
-  const priorTo = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
+  const priorTo = new Date(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate() - 1,
+  );
   const priorFrom = new Date(
     priorTo.getFullYear(),
     priorTo.getMonth(),
@@ -69,11 +82,18 @@ export function ChaseInsightStrip({
 }) {
   const prior = useMemo(() => priorWindow(range), [range]);
 
-  const { data: cur } = useGetReportsSpendingFacts(
+  const {
+    data: cur,
+    isError,
+    refetch,
+  } = useGetReportsSpendingFacts(
     { from: range.from, to: range.to },
     {
       query: {
-        queryKey: getGetReportsSpendingFactsQueryKey({ from: range.from, to: range.to }),
+        queryKey: getGetReportsSpendingFactsQueryKey({
+          from: range.from,
+          to: range.to,
+        }),
         staleTime: 10 * 60_000,
         gcTime: 30 * 60_000,
       },
@@ -83,7 +103,10 @@ export function ChaseInsightStrip({
     { from: prior.from, to: prior.to },
     {
       query: {
-        queryKey: getGetReportsSpendingFactsQueryKey({ from: prior.from, to: prior.to }),
+        queryKey: getGetReportsSpendingFactsQueryKey({
+          from: prior.from,
+          to: prior.to,
+        }),
         staleTime: 10 * 60_000,
         gcTime: 30 * 60_000,
       },
@@ -113,7 +136,7 @@ export function ChaseInsightStrip({
 
   // Hide the strip only once we have data and there's genuinely nothing to
   // show — unless the head is carrying page controls, which must not vanish.
-  if (cur && curTotal === 0 && !mix.length && !actions) return null;
+  // Keep zero and unclassified weeks visible; silence is not a spending total.
 
   // ⚠️ Rounded to whole percent for the chip, so the WORD and the number agree:
   // a +0.4% move reads "0%", and calling that "up" would be a lie.
@@ -123,33 +146,45 @@ export function ChaseInsightStrip({
     <section className={card} data-testid="chase-insight-strip">
       <div className={cardHead}>
         <h2 className="text-title font-semibold text-brand-navy">
-          Spend this {period}
+          Household spending this {period}
         </h2>
         <Help>
           Real spend only, classified by the server: transfers, debt and loan
           payments, and uncategorized rows are excluded. Compared against the
           equal-length window immediately before this one.
         </Help>
-        {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+        {actions && (
+          <div className="ml-auto flex items-center gap-2">{actions}</div>
+        )}
       </div>
 
+      {isError && (
+        <div role="alert" className={errorBanner}>
+          Spending refresh failed.{" "}
+          <button className={btnLink} onClick={() => void refetch()}>
+            Retry spending
+          </button>
+        </div>
+      )}
       <div className="grid gap-5 p-4 sm:grid-cols-[minmax(0,15rem)_1fr] sm:gap-8">
         <div>
           <div
             className="font-mono text-display font-semibold tabular-nums text-brand-navy"
             data-testid="strip-spend-total"
           >
-            {formatCurrency(curTotal)}
+            {cur ? formatCurrency(curTotal) : "—"}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            {pctRounded != null && (
+            {cur && prev && pctRounded != null && (
               <span className={`chip ${pctRounded > 0 ? "bad" : "gray"}`}>
                 {pctRounded > 0 ? "up" : pctRounded < 0 ? "down" : "flat"}{" "}
                 {Math.abs(pctRounded)}%
               </span>
             )}
             <span className="text-micro text-neutral-400">
-              vs {formatCurrency(prevTotal)} last {period}
+              {prev
+                ? `vs ${formatCurrency(prevTotal)} last ${period}`
+                : "Loading comparison…"}
             </span>
           </div>
         </div>
@@ -167,6 +202,65 @@ export function ChaseInsightStrip({
           </div>
         </div>
       </div>
+      <div className="grid gap-3 px-4 pb-4 sm:grid-cols-2">
+        <Stat
+          label="Unplanned spending"
+          value={cur?.unplanned ? formatCurrency(cur.unplanned.total) : "—"}
+          hint="Purchases marked UN in this period"
+          tone={cur?.unplanned?.total ? "bad" : "navy"}
+        />
+        <Stat
+          label="Needs a category"
+          value={
+            cur?.uncategorized ? formatCurrency(cur.uncategorized.total) : "—"
+          }
+          hint="Excluded from categorized spending above; may overlap UN"
+        />
+      </div>
+      <details
+        className="border-t border-brand-line p-4"
+        data-testid="unplanned-spending-details"
+      >
+        <summary className="cursor-pointer text-label font-semibold text-brand-navy">
+          What was unplanned?
+          {cur?.unplanned ? ` (${cur.unplanned.transactionCount})` : ""}
+        </summary>
+        <p className="mt-2 text-micro text-neutral-500">
+          Household purchases across accounts. Transfers and debt payments
+          excluded. UN means explicitly marked unplanned; uncategorized does not
+          automatically mean unplanned.
+        </p>
+        {cur?.unplanned?.transactions.length ? (
+          <ul className="mt-3 divide-y divide-brand-line">
+            {cur.unplanned.transactions.map((t) => (
+              <li
+                key={t.id}
+                className="flex items-center justify-between gap-3 py-2 text-label"
+              >
+                <span>
+                  {t.description}
+                  <span className="ml-2 text-neutral-500">{t.date}</span>
+                </span>
+                <span className="font-mono tabular-nums">
+                  {formatCurrency(t.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className={emptyNote}>
+            {cur?.unplanned
+              ? "No purchases marked unplanned in this period."
+              : "Unplanned spending is unavailable."}
+          </div>
+        )}
+        {(cur?.unplanned?.transactionCount ?? 0) > 20 && (
+          <p className="text-micro text-neutral-500">
+            Showing the 20 largest purchases. The total includes every unplanned
+            purchase in the period.
+          </p>
+        )}
+      </details>
     </section>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useListTransactions,
+  useBulkUpdateTransactions,
   useCreateTransaction,
   useUpdateTransaction,
   useClearTransferOverride,
@@ -11,6 +12,8 @@ import {
   useGetForecast,
   useRefreshForecastBank,
   useBulkSetForecastFlag,
+  useUpsertForecastResolution,
+  useDeleteForecastResolution,
   useSendTransactionsToReview,
   useUnsendTransactionsFromReview,
   getListTransactionsQueryKey,
@@ -63,6 +66,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { isBankTxn } from "@/lib/forecastMatch";
+import { inForecast } from "@workspace/avalanche-core";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { type BucketKey } from "@/components/bucket-bubbles";
@@ -89,7 +93,7 @@ import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { PostLinkProgressBanner } from "@/components/post-link-progress";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { SyncButton } from "@/components/sync-button";
-import { card, cardHead, emptyNote, fieldLabel, Help } from "@/ui";
+import { card, cardHead, emptyNote, fieldLabel, Help, errorBanner, btnLink } from "@/ui";
 import {
   AccountPageHeader,
   AccountFilterBar,
@@ -180,7 +184,7 @@ export default function TransactionsPage() {
       to: iso(new Date(now.getFullYear() + 1, now.getMonth() + 1, 0)),
     };
   }, []);
-  const { data: transactions, isLoading } = useListTransactions({
+  const { data: transactions, isLoading, isError: transactionsError, refetch: refetchTransactions } = useListTransactions({
     from: txnWindow.from,
     to: txnWindow.to,
     limit: 1000,
@@ -843,10 +847,17 @@ export default function TransactionsPage() {
       .slice()
       .sort(compareNewestFirst);
   }, [chaseTransactions, search, sourceFilter, memberFilter, categoryFilter, categoryById]);
+  // This is a ledger visibility preference: all totals retain the full ledger.
+  const [hideReviewed, setHideReviewed] = useState(() => {
+    try { return localStorage.getItem("h2-chase-hide-reviewed") === "true"; } catch { return false; }
+  });
+  useEffect(() => { try { localStorage.setItem("h2-chase-hide-reviewed", String(hideReviewed)); } catch { /* private browsing */ } }, [hideReviewed]);
+  const visiblePending = useMemo(() => pendingItems.filter(t => !hideReviewed || !t.reviewed), [pendingItems, hideReviewed]);
+  const visiblePosted = useMemo(() => filtered.filter(t => !t.pending && (!hideReviewed || !t.reviewed)), [filtered, hideReviewed]);
+  const reviewedCount = filtered.filter(t => t.reviewed && !t.pending).length + pendingItems.filter(t => t.reviewed).length;
   const groups = useMemo(() => {
     const map = new Map<string, Transaction[]>();
-    for (const t of filtered) {
-      if (t.pending) continue;
+    for (const t of visiblePosted) {
       const k = t.occurredOn.slice(0, 10);
       const arr = map.get(k);
       if (arr) arr.push(t);
@@ -854,7 +865,7 @@ export default function TransactionsPage() {
     }
     for (const arr of map.values()) arr.sort(compareNewestFirst);
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  }, [filtered]);
+  }, [visiblePosted]);
 
   // ---- Mutations & dialog ----
   const createTx = useCreateTransaction();
@@ -862,6 +873,9 @@ export default function TransactionsPage() {
   const clearTransferOverride = useClearTransferOverride();
   const deleteTx = useDeleteTransaction();
   const bulkSetForecastFlag = useBulkSetForecastFlag();
+  // Posted rows leave Review by resolution, not by flag (`inForecast`).
+  const upsertResolution = useUpsertForecastResolution();
+  const deleteResolution = useDeleteForecastResolution();
   // (#762 — Phase B) Manual Send-to-Review gate mutations. The
   // unsend variant backs both the symmetric "Unsend" affordance on
   // an already-promoted row and the 5-second Undo on the bulk /
@@ -1210,6 +1224,43 @@ export default function TransactionsPage() {
       checkingPlaidAccountIdSet,
     );
 
+  // The server's "today" (sent with the forecast bundle) so a row's in-Review
+  // state here agrees with the review badge; the browser date is a fallback.
+  const forecastToday = forecastData?.today ?? todayISO;
+
+  // `inForecast` on the Chase page: a checking row that has already happened
+  // is in the forecast — on the curve and in Review — whatever its flag says,
+  // because it moved real money. The flag decides only rows that haven't
+  // happened. Non-checking rows keep the flag alone.
+  const isInForecastRow = (tx: Transaction): boolean =>
+    canSendToForecast(tx) ? inForecast(tx, forecastToday) : tx.forecastFlag;
+  const isPostedCheckingRow = (tx: Transaction): boolean =>
+    canSendToForecast(tx) && tx.occurredOn <= forecastToday;
+
+  // A posted row can't leave the cash it already moved. Taking it out of
+  // Review records the decision instead — "not a planned payment", the same
+  // resolution the Review page's "Unplanned" writes — rather than flipping a
+  // flag that would no longer remove it from anything.
+  const handleNotPlanned = (tx: Transaction) => {
+    upsertResolution.mutate(
+      { data: { status: "ignored_unforecasted", matchedTxnId: tx.id } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+          invalidateForecastFamily(queryClient);
+          toast({ title: "Marked not a planned payment" });
+        },
+        onError: (e) => {
+          toast({
+            title: "Couldn't save",
+            description: (e as Error).message,
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
   const handleToggleForecast = (tx: Transaction) => {
     const next = !tx.forecastFlag;
     if (next && !canSendToForecast(tx)) {
@@ -1248,7 +1299,7 @@ export default function TransactionsPage() {
   // and posted row blocks so they can't drift. Returns null when the row isn't
   // in the forecast.
   const renderForecastChip = (tx: Transaction) => {
-    if (!tx.forecastFlag) return null;
+    if (!isInForecastRow(tx)) return null;
     const r = resolutionByTxnId.get(tx.id);
     // Tone follows the palette rule: navy for the resting states, grey for
     // "not planned". None of them is an alarm, so none of them is orange —
@@ -1260,6 +1311,24 @@ export default function TransactionsPage() {
           ? { attr: "unplanned", label: "Not planned", icon: Inbox, tone: "gray" }
           : { attr: "in-review-bucket", label: "In Review", icon: Inbox, tone: "info" };
     const StateIcon = state.icon;
+    // What the "×" does. A future row leaves the forecast. A posted row still
+    // awaiting review is marked "not a planned payment". A posted row that is
+    // already matched or marked not planned has nothing to take away here —
+    // its match is managed in Review, and flipping its flag would change
+    // nothing (it stays cash).
+    const removal = !isPostedCheckingRow(tx)
+      ? {
+          label: "Remove from forecast",
+          onClick: () => handleToggleForecast(tx),
+          pending: updateTx.isPending,
+        }
+      : state.attr === "in-review-bucket"
+        ? {
+            label: "Not a planned payment",
+            onClick: () => handleNotPlanned(tx),
+            pending: upsertResolution.isPending,
+          }
+        : null;
     return (
       <span
         className="inline-flex items-center gap-1"
@@ -1274,17 +1343,19 @@ export default function TransactionsPage() {
         >
           <StateIcon className="h-3 w-3" /> {state.label}
         </Link>
-        <button
-          type="button"
-          onClick={() => handleToggleForecast(tx)}
-          disabled={updateTx.isPending}
-          title="Remove from forecast"
-          aria-label="Remove from forecast"
-          className="press inline-flex items-center rounded-control p-0.5 text-neutral-400 hover:text-brand-navy disabled:opacity-50"
-          data-testid={`button-remove-forecast-${tx.id}`}
-        >
-          <X className="h-3 w-3" />
-        </button>
+        {removal && (
+          <button
+            type="button"
+            onClick={removal.onClick}
+            disabled={removal.pending}
+            title={removal.label}
+            aria-label={removal.label}
+            className="press inline-flex items-center rounded-control p-0.5 text-neutral-400 hover:text-brand-navy disabled:opacity-50"
+            data-testid={`button-remove-forecast-${tx.id}`}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
       </span>
     );
   };
@@ -1292,9 +1363,10 @@ export default function TransactionsPage() {
   // The forecast action for a row that is NOT yet in the forecast: an upright
   // paper-plane = "Send to Forecast". (The plane now means "send" in exactly one
   // place; removal lives on the status chip's "×" above.) Null once the row is
-  // in the forecast, or for non-bank rows that can't be forecast at all.
+  // in the forecast — a posted checking row always is — or for non-bank rows
+  // that can't be forecast at all.
   const renderSendForecastAction = (tx: Transaction) => {
-    if (tx.forecastFlag) return null;
+    if (isInForecastRow(tx)) return null;
     if (!canSendToForecast(tx)) return null;
     if (!tx.categoryId) {
       return (
@@ -1616,9 +1688,32 @@ export default function TransactionsPage() {
       return next;
     });
   const clearSelection = () => setSelected(new Set());
+  const reviewMutation = useBulkUpdateTransactions();
+  const setReviewed = async (rows: Transaction[], reviewed: boolean) => {
+    const changed = rows.filter(t => !!t.reviewed !== reviewed);
+    if (!changed.length) return;
+    const succeeded = new Set<string>();
+    try {
+      for (let i = 0; i < changed.length; i += 200) {
+        const result = await reviewMutation.mutateAsync({ data: { ids: changed.slice(i, i + 200).map(t => t.id), patch: { reviewed } } });
+        for (const row of result.results) if (row.ok) succeeded.add(row.id);
+      }
+    } catch {
+      // Keep failed rows selected, including rows in chunks not attempted.
+    }
+    setSelected(new Set(changed.filter(t => !succeeded.has(t.id)).map(t => t.id)));
+    await queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+    const failed = changed.length - succeeded.size;
+    toast({
+      title: `${succeeded.size} ${reviewed ? "marked reviewed" : "restored for review"}${failed ? `, ${failed} failed` : ""}`,
+      description: failed ? "Failed rows remain selected. Try again." : "Balances and forecast are unchanged.",
+      variant: failed ? "destructive" : "default",
+      action: succeeded.size ? <ToastAction altText="Undo reviewed status" onClick={() => void setReviewed(changed.filter(t => succeeded.has(t.id)).map(t => ({ ...t, reviewed })), !reviewed)}>Undo</ToastAction> : undefined,
+    });
+  };
   useEffect(() => {
     setSelected((prev) => {
-      const visible = new Set(filtered.map((t) => t.id));
+      const visible = new Set([...visiblePosted, ...visiblePending].map((t) => t.id));
       let changed = false;
       const next = new Set<string>();
       for (const id of prev) {
@@ -1627,7 +1722,7 @@ export default function TransactionsPage() {
       }
       return changed ? next : prev;
     });
-  }, [filtered]);
+  }, [visiblePosted, visiblePending]);
 
   // Reverses a bulk Send-to-Forecast / Remove-from-Forecast by re-issuing
   // the same endpoint with `forecastFlag` inverted, scoped to the exact
@@ -1802,13 +1897,51 @@ export default function TransactionsPage() {
     }
   };
 
+  // Reverses the "not a planned payment" half of a bulk Remove by deleting
+  // exactly the resolutions that action created.
+  const undoNotPlanned = async (resolutionIds: string[]) => {
+    if (resolutionIds.length === 0) return;
+    let restored = 0;
+    for (const id of resolutionIds) {
+      try {
+        await deleteResolution.mutateAsync({ id });
+        restored += 1;
+      } catch {
+        // Counted below; the rest still restore.
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+    invalidateForecastFamily(queryClient);
+    toast({
+      title:
+        restored === resolutionIds.length
+          ? `Back in Review: ${restored}`
+          : `Back in Review: ${restored} · ${resolutionIds.length - restored} failed`,
+      ...(restored === resolutionIds.length
+        ? {}
+        : { variant: "destructive" as const }),
+    });
+  };
+
   const bulkSetForecast = async (next: boolean) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
     const byId = new Map(filtered.map((t) => [t.id, t] as const));
-    const candidates = ids
+    const selectedTxns = ids
       .map((id) => byId.get(id))
-      .filter((t): t is Transaction => !!t && t.forecastFlag !== next);
+      .filter((t): t is Transaction => !!t);
+    // A posted checking row is already in the forecast and can't leave the
+    // cash it moved (`inForecast`). Sending skips it. Removing records "not a
+    // planned payment" for the posted rows still awaiting review; posted rows
+    // already matched or marked not planned are left exactly as they are.
+    const notPlannedTargets = next
+      ? []
+      : selectedTxns.filter(
+          (t) => isPostedCheckingRow(t) && !resolutionByTxnId.has(t.id),
+        );
+    const candidates = selectedTxns.filter(
+      (t) => !isPostedCheckingRow(t) && t.forecastFlag !== next,
+    );
     // Forecast is Chase-checking-only — bulk-send must skip any
     // non-checking (Amex / credit) rows that happen to be selected.
     const bankEligible = next
@@ -1819,7 +1952,7 @@ export default function TransactionsPage() {
       ? bankEligible.filter((t) => !!t.categoryId)
       : bankEligible;
     const skippedUncat = next ? bankEligible.length - targets.length : 0;
-    if (!targets.length) {
+    if (!targets.length && !notPlannedTargets.length) {
       const reason =
         next && skippedNonBank > 0 && skippedUncat === 0
           ? "Only Chase checking transactions can be sent to Forecast."
@@ -1833,9 +1966,33 @@ export default function TransactionsPage() {
     }
     const targetIds = targets.map((t) => t.id);
     try {
-      const res = await bulkSetForecastFlag.mutateAsync({
-        data: { ids: targetIds, forecastFlag: next },
-      });
+      const res =
+        targetIds.length > 0
+          ? await bulkSetForecastFlag.mutateAsync({
+              data: { ids: targetIds, forecastFlag: next },
+            })
+          : { updated: 0, affectedIds: [] as string[] };
+      // "Not a planned payment" for the posted rows, six at a time — the same
+      // resolution the Review page writes.
+      const createdResolutionIds: string[] = [];
+      let notPlannedFailed = 0;
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < notPlannedTargets.length) {
+          const t = notPlannedTargets[cursor++]!;
+          try {
+            const row = await upsertResolution.mutateAsync({
+              data: { status: "ignored_unforecasted", matchedTxnId: t.id },
+            });
+            createdResolutionIds.push(row.id);
+          } catch {
+            notPlannedFailed += 1;
+          }
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(6, notPlannedTargets.length) }, worker),
+      );
       queryClient.invalidateQueries({
         queryKey: getListTransactionsQueryKey(),
       });
@@ -1847,11 +2004,21 @@ export default function TransactionsPage() {
       const suffix = parts.length ? ` · skipped ${parts.join(", ")}` : "";
       const okCount = res.updated;
       const undoIds = res.affectedIds;
+      const titleParts: string[] = [];
+      if (next) {
+        titleParts.push(`Sent ${okCount} to Forecast${suffix}`);
+      } else {
+        if (targetIds.length > 0) titleParts.push(`Removed ${okCount} from Forecast`);
+        if (notPlannedTargets.length > 0) {
+          titleParts.push(`${createdResolutionIds.length} not a planned payment`);
+        }
+        if (notPlannedFailed > 0) titleParts.push(`${notPlannedFailed} failed`);
+      }
+      const canUndo = undoIds.length > 0 || createdResolutionIds.length > 0;
       toast({
-        title: next
-          ? `Sent ${okCount} to Forecast${suffix}`
-          : `Removed ${okCount} from Forecast`,
-        ...(undoIds.length > 0
+        title: titleParts.join(" · "),
+        ...(notPlannedFailed > 0 ? { variant: "destructive" as const } : {}),
+        ...(canUndo
           ? {
               action: (
                 <ToastAction
@@ -1865,7 +2032,10 @@ export default function TransactionsPage() {
                       ? "action-undo-bulk-send-forecast"
                       : "action-undo-bulk-remove-forecast"
                   }
-                  onClick={() => undoBulkForecast(undoIds, next)}
+                  onClick={() => {
+                    undoBulkForecast(undoIds, next);
+                    void undoNotPlanned(createdResolutionIds);
+                  }}
                 >
                   Undo
                 </ToastAction>
@@ -1969,7 +2139,7 @@ export default function TransactionsPage() {
   // transactions list visible during refetches so we never flash a
   // skeleton after the first load.
   if (!transactions) {
-    return <AccountPageSkeleton tiles={5} />;
+    return transactionsError ? <div role="alert" className={errorBanner}>Chase transactions could not load. <button className={btnLink} onClick={() => void refetchTransactions()}>Retry transactions</button></div> : <AccountPageSkeleton tiles={5} />;
   }
 
   // (#741/#742) The shared row-chip cluster moved into
@@ -2081,6 +2251,7 @@ export default function TransactionsPage() {
           (or failed + Retry) instead of staring at silence after the
           link toast. */}
       <PostLinkProgressBanner viewTransactionsPath="/transactions" />
+      {transactionsError && <div role="alert" className={errorBanner}>Chase refresh failed. Showing the last loaded transactions. <button className={btnLink} onClick={() => void refetchTransactions()}>Retry transactions</button></div>}
       <div
         ref={paneRef}
         className="sticky top-0 z-30 -mx-4 -mt-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pt-3 pb-3 md:-mx-8 md:-mt-8 md:px-8 md:pt-4"
@@ -2335,11 +2506,18 @@ export default function TransactionsPage() {
         updateTx={updateTx}
       />
 
+      {(transactions?.length ?? 0) >= 1000 && <div role="status" className={emptyNote}>Showing the 1,000 most recent transactions in the loaded window. Older activity may be missing from this ledger and its running balances. Household spending totals use the full selected period.</div>}
       {previewDialog}
 
+      <div className="flex flex-wrap items-center gap-3" data-testid="chase-review-controls">
+        <Button variant={hideReviewed ? "default" : "outline"} onClick={() => { setHideReviewed(v => !v); clearSelection(); }} data-testid="chase-clear-reviewed">
+          {hideReviewed ? "Show reviewed" : "Clear reviewed from list"}
+        </Button>
+        <span className="text-label text-neutral-500">{reviewedCount} reviewed{hideReviewed ? " hidden" : ""} · clearing keeps your balances and history</span>
+      </div>
       {selected.size > 0 && (
         <div
-          className="surface sticky z-20 flex items-center gap-3 rounded-control px-4 py-2 ring-1 ring-brand-navy/25"
+          className="surface sticky z-20 flex flex-wrap items-center gap-3 rounded-control px-4 py-2 ring-1 ring-brand-navy/25"
           style={{ top: "var(--pinned-pane-h, 0px)" }}
           data-testid="bulk-bar"
         >
@@ -2363,19 +2541,21 @@ export default function TransactionsPage() {
           >
             Remove from Forecast
           </Button>
+          <Button size="sm" variant="outline" disabled={reviewMutation.isPending} onClick={() => void setReviewed([...visiblePosted, ...visiblePending].filter(t => selected.has(t.id)), true)}>Mark reviewed</Button>
+          <Button size="sm" variant="outline" disabled={reviewMutation.isPending} onClick={() => void setReviewed([...visiblePosted, ...visiblePending].filter(t => selected.has(t.id)), false)}>Mark unreviewed</Button>
           {/* Single-flow restore: "Send to Forecast" IS "in Review" now.
               The separate bulk Send-to-Review button (#762 Phase B) is
               gone — a forecast-flagged row shows up in the Review tab
               and on the curve immediately. */}
           <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
-            Clear
+            Clear selection
           </Button>
         </div>
       )}
 
-      {groups.length === 0 && pendingItems.length === 0 && (
+      {groups.length === 0 && visiblePending.length === 0 && (
         <div className={card}>
-          <div className={emptyNote}>No transactions match these filters.</div>
+          <div className={emptyNote}>{hideReviewed && reviewedCount > 0 ? "Review complete. Reviewed transactions are hidden." : "No transactions match these filters."}</div>
         </div>
       )}
 
@@ -2387,8 +2567,8 @@ export default function TransactionsPage() {
           selection / day-net handlers can address it the same way
           as any other day-group. Hidden when no pending rows exist
           so we don't render an empty header. */}
-      {pendingItems.length > 0 && (() => {
-        const items = pendingItems;
+      {visiblePending.length > 0 && (() => {
+        const items = visiblePending;
         const ids = items.map((t) => t.id);
         const allSelected = ids.every((id) => selected.has(id));
         const someSelected =
@@ -2438,7 +2618,7 @@ export default function TransactionsPage() {
                       }
                       onQuickDate={(raw) => handleQuickDate(tx, raw)}
                       disabled={updateTx.isPending}
-                      dimmed={tx.forecastFlag || isIgnored}
+                      dimmed={isInForecastRow(tx) || isIgnored}
                       hideDate
                       cardLabel={formatTransactionSource(tx.source)}
                       testId={`row-tx-${tx.id}`}
@@ -2455,7 +2635,7 @@ export default function TransactionsPage() {
                           {formatCurrency(parseSigned(tx.amount))}
                         </span>
                       }
-                      actionsNode={renderSendForecastAction(tx)}
+                      actionsNode={<>{renderSendForecastAction(tx)}<Button variant="ghost" size="sm" disabled={reviewMutation.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button></>}
                     />
                   );
                 })}
@@ -2521,11 +2701,11 @@ export default function TransactionsPage() {
                       }
                       onQuickDate={(raw) => handleQuickDate(tx, raw)}
                       disabled={updateTx.isPending}
-                      dimmed={tx.forecastFlag || isIgnored}
+                      dimmed={isInForecastRow(tx) || isIgnored}
                       cardLabel={formatTransactionSource(tx.source)}
                       testId={`row-tx-${tx.id}`}
                       rowData={{
-                        "data-sent": tx.forecastFlag ? "true" : "false",
+                        "data-sent": isInForecastRow(tx) ? "true" : "false",
                         "data-ignored": isIgnored ? "true" : "false",
                       }}
                       metaNode={renderForecastChip(tx)}
@@ -2550,6 +2730,7 @@ export default function TransactionsPage() {
                       actionsNode={
                         <>
                           {renderSendForecastAction(tx)}
+                          <Button variant="ghost" size="sm" disabled={reviewMutation.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button>
                           <Button
                             variant="ghost"
                             size="icon"

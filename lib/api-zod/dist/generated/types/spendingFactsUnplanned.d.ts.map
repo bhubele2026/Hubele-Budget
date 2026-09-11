@@ -1,0 +1,1 @@
+{"version":3,"file":"spendingFactsUnplanned.d.ts","sourceRoot":"","sources":["../../../src/generated/types/spendingFactsUnplanned.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,sCAAsC,EAAE,MAAM,0CAA0C,CAAC;AAEvG;;GAEG;AACH,MAAM,MAAM,sBAAsB,GAAG;IACnC,KAAK,EAAE,MAAM,CAAC;IACd,gBAAgB,EAAE,MAAM,CAAC;IACzB,YAAY,EAAE,sCAAsC,EAAE,CAAC;CACxD,CAAC"}
