@@ -61,6 +61,22 @@ export function weekEndFor(date: Date | string): string {
   return fmtISO(addDays(sun, 6));
 }
 
+/**
+ * (PR6) A one-time item dated before today.
+ *
+ * Before PR6 `archiveExpiredOneTime` set such an item inactive the day after its
+ * date. It now keeps an unresolved one-time bill active for up to 60 days so the
+ * forecast can drag, list or match it. Every other reader that counted only
+ * active items (the Budget page plan, the Bills totals, the auto-bills category
+ * heal, a debt's linked bill) treats it as archived, exactly as before.
+ */
+export function isPastOneTime(
+  item: { frequency: string; anchorDate: string | null },
+  todayISO: string,
+): boolean {
+  return item.frequency === "onetime" && item.anchorDate != null && item.anchorDate < todayISO;
+}
+
 function addMonths(d: Date, n: number): Date {
   const target = new Date(d.getFullYear(), d.getMonth() + n, 1);
   const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
@@ -215,7 +231,21 @@ export type CashSignal = {
     amount: string;
     itemId: string;
     originalDate: string;
+    /**
+     * (PR6) Why the plan is not on its due date: `overdue_assumed_unpaid`,
+     * `due_today_not_posted`, `dragged_past_due` (weekly-cadence expenses, until
+     * PR8) or `pre_window_on_first_day`; null on its own date.
+     */
+    assumption: string | null;
+    /** (PR6) `<itemId>|<occurrenceDate>` — the resolution key. */
+    occurrenceKey: string;
+    /** (PR6) The date resolutions are keyed on (before any reschedule). */
+    occurrenceDate: string;
   }>;
+  /** (PR6) Expenses overdue by more than 14 days: off the curve, never dropped silently. */
+  overdueOutsideForecast?: CashSignalListedPlan[];
+  /** (PR6) Income due before today that has not arrived (`income_not_arrived`): off the curve. */
+  incomeNotArrived?: CashSignalListedPlan[];
   /**
    * (PR5) Plans a bank row probably paid: each one is off the curve until the
    * user confirms ("matched"/"partial") or rejects ("not_match") it. Amounts are
@@ -235,6 +265,16 @@ export type CashSignal = {
     /** Only these plans are off the curve; every other match is a suggestion. */
     offCurve: boolean;
   }>;
+};
+
+export type CashSignalListedPlan = {
+  planKey: string;
+  itemId: string;
+  occurrenceDate: string;
+  dueDate: string;
+  amount: string;
+  label: string;
+  daysOverdue: number;
 };
 
 function r2(n: number): string {
@@ -387,6 +427,9 @@ export async function computeCashSignal(
         amount: r2(e.amount),
         itemId: e.itemId,
         originalDate: e.originalDate,
+        assumption: e.assumption ?? null,
+        occurrenceKey: `${e.itemId}|${e.occurrenceDate}`,
+        occurrenceDate: e.occurrenceDate,
       })),
     matches: ledger.matches.map((m) => ({
       planKey: m.planKey,
@@ -401,5 +444,19 @@ export async function computeCashSignal(
       ambiguous: m.ambiguous,
       offCurve: m.offCurve,
     })),
+    overdueOutsideForecast: ledger.overdueOutsideForecast.map(listedPlan),
+    incomeNotArrived: ledger.incomeNotArrived.map(listedPlan),
+  };
+}
+
+function listedPlan(p: import("./forecastLedger").LedgerListedPlan): CashSignalListedPlan {
+  return {
+    planKey: p.planKey,
+    itemId: p.itemId,
+    occurrenceDate: p.occurrenceDate,
+    dueDate: p.dueDate,
+    amount: r2(p.amount),
+    label: p.label,
+    daysOverdue: p.daysOverdue,
   };
 }

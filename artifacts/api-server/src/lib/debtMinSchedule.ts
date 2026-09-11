@@ -1,6 +1,7 @@
 import { debtsTable, recurringItemsTable } from "@workspace/db";
 import type { CashEvent } from "./cashSignal";
-import { fmtISO, expandItem } from "./cashSignal";
+import { fmtISO, expandItem, isPastOneTime } from "./cashSignal";
+import type { ResolutionSchedule } from "./resolutionRemap";
 import {
   activeSimDebts,
   monthsUntilAvalanchePayoff,
@@ -95,6 +96,8 @@ export function buildDebtMinSchedule(
   const recurringByDebt = new Map<string, RecurringRow>();
   for (const r of recurring) {
     if (!activeRecurring(r)) continue;
+    // (PR6) A one-time bill dated before today counts as archived, as before PR6.
+    if (isPastOneTime(r, fmtISO(today))) continue;
     if (r.kind === "income") continue;
     if (!r.debtId) continue;
     if (!recurringByDebt.has(r.debtId)) recurringByDebt.set(r.debtId, r);
@@ -297,6 +300,33 @@ export function expandAvalancheExtra(
  * matches the bills/summary semantics so "no double counting" holds across
  * Bills, Forecast, and Dashboard.
  */
+/**
+ * (PR6) Each forecast item's schedule, for `remapOrphanResolutions`: recurring
+ * items by their own cadence, and `debt:<id>` minimums (monthly) for debts with
+ * no linked bill. The ledger and the `/forecast` bundle both build it from the
+ * same rows, so the curve and the register map a resolution to the same
+ * occurrence. The avalanche extra (always month-end) has no schedule to edit.
+ */
+export function resolutionScheduleLookup(
+  recurring: RecurringRow[],
+  debts: DebtRow[],
+  linkedRecurringByDebt: Map<string, RecurringRow>,
+): (itemId: string) => ResolutionSchedule | null {
+  const recurringById = new Map(recurring.map((r) => [r.id, r] as const));
+  const debtById = new Map(debts.map((d) => [d.id, d] as const));
+  return (itemId) => {
+    const r = recurringById.get(itemId);
+    if (r) {
+      return { cadence: r.frequency, occurrences: (from, to) => expandItem(r, from, to).map((e) => e.date) };
+    }
+    if (!itemId.startsWith("debt:")) return null;
+    const d = debtById.get(itemId.slice("debt:".length));
+    if (!d) return null;
+    const linked = linkedRecurringByDebt.get(d.id) ?? null;
+    return { cadence: "monthly", occurrences: (from, to) => expandDebtMin(d, linked, from, to).map((e) => e.date) };
+  };
+}
+
 export function pickRecurringSuppressionForForecast(
   _debts: DebtRow[],
   _recurring: RecurringRow[],

@@ -19,13 +19,16 @@ import {
   fmtISO,
   addDays,
   parseISO,
+  isPastOneTime,
   type CashEvent,
 } from "../lib/cashSignal";
 import {
   buildDebtMinSchedule,
   expandDebtMin,
   expandAvalancheExtra,
+  resolutionScheduleLookup,
 } from "../lib/debtMinSchedule";
+import { remapOrphanResolutions } from "../lib/resolutionRemap";
 import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
 import { computeReviewCount } from "../lib/reviewCount";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
@@ -332,7 +335,9 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // forecast doesn't miss known obligations and never double-counts them.
   const linkedRecurringByDebt = new Map<string, typeof recurring[number]>();
   for (const r of recurring) {
-    if (r.debtId && r.active === "true" && !linkedRecurringByDebt.has(r.debtId)) {
+    // (PR6) A one-time bill dated before today no longer links its debt, as before
+    // PR6 (it was archived by then) — the ledger applies the same rule.
+    if (r.debtId && r.active === "true" && !isPastOneTime(r, fmtISO(today)) && !linkedRecurringByDebt.has(r.debtId)) {
       linkedRecurringByDebt.set(r.debtId, r);
     }
   }
@@ -438,7 +443,13 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // says: the row is still on the curve, and dropping the match here would
   // show the bill unpaid while the curve treats it as paid.
   const forecastToday = forecastTodayISO(now);
-  const resolutions = resolutionRows
+  // (PR6) A resolution a schedule edit orphaned follows its bill to the item's
+  // occurrence in the same period — the mapping the cash signal applies — so the
+  // register and the curve agree. Read-only: the stored rows keep their dates.
+  const resolutions = remapOrphanResolutions(
+    resolutionRows,
+    resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt),
+  )
     // (PR5) Pair-level answers ("Not this", partial) stay out of the bundle until
     // the web register understands them (PR5b); the cash signal already applies
     // them. PR5b removes this filter.

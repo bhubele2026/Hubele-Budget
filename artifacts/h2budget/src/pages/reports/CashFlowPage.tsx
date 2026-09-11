@@ -11,6 +11,7 @@ import {
 import { PageSkeleton } from "@/components/page-skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { type RangeMode } from "@/lib/timeRange";
+import { householdToday } from "@/lib/householdDay";
 import {
   ANIM_AREA,
   ANIM_BAR,
@@ -282,8 +283,12 @@ function CashFlowSection({
     };
     let income = 0;
     let expense = 0;
+    const today = householdToday();
     for (const r of recurringItems) {
       if (r.active && r.active !== "true" && r.active !== "1") continue;
+      // (PR6) A one-time bill dated before today counts as archived, as before
+      // PR6: the server now keeps an unresolved one active for the forecast.
+      if (r.frequency === "onetime" && r.anchorDate && r.anchorDate < today) continue;
       const amt = Math.abs(Number(r.amount) || 0);
       const mul = freqMul[String(r.frequency ?? "monthly").toLowerCase()] ?? 1;
       const monthly = amt * mul;
