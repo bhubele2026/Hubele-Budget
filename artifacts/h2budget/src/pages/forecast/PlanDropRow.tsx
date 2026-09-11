@@ -12,12 +12,21 @@ import type { PlanLine } from "@/lib/forecastMatch";
 import type { PayoffInfo } from "@/lib/forecastDebts";
 import { Flame } from "lucide-react";
 import { isPlanRowMatchEligible, statusBadge } from "./statusBadge";
+import { canRecordPartial } from "@/lib/forecastMatch";
+import {
+  AmountDifference,
+  DayDelta,
+  curveLabel,
+  type SuggestionAnswer,
+} from "./probablyPaidText";
 
 export function PlanDropRow({
   row,
   onSelect,
   onMove,
   onMarkMissed,
+  onAnswer,
+  answerDisabled = false,
   activeDragId,
   payoff,
   isBestSuggestion = false,
@@ -30,6 +39,9 @@ export function PlanDropRow({
    *  alongside "Move to…" so users don't have to discover the row click
    *  (which now also routes through this same handler). */
   onMarkMissed?: (row: PlanLine) => void;
+  /** (PR5) Answers to a "Suggested" row: Confirm / Not this / Partial. */
+  onAnswer?: (row: PlanLine, answer: SuggestionAnswer) => void;
+  answerDisabled?: boolean;
   activeDragId: string | null;
   payoff?: PayoffInfo;
   /**
@@ -67,13 +79,32 @@ export function PlanDropRow({
   const isOverEligible = droppable.isOver && isDragActive && isEligible;
   const isOverBlocked = droppable.isOver && isDragActive && !isEligible;
   const showSuggestion = !isOverEligible && isBestSuggestion;
+  // (PR5) A "Suggested" row shows its three answers. An `offCurve` pair —
+  // the server's curve already leaves the plan out — shows them INSTEAD of
+  // Move / Mark missed; a pair still counted on the curve keeps both (it may
+  // be the wrong row, and the plan can still move or be missed).
+  const pp = row.probablyPaid;
+  const suggested = !!pp && !!onAnswer;
+  const offCurveSuggestion = suggested && !!pp?.offCurve;
+  // A partly-paid plan can move: the server keeps its `partial` beside the
+  // `rescheduled` row, so the remainder lands on the new date.
   const canMove =
-    !!onMove && (row.status === "pending_plan" || row.status === "future");
+    !offCurveSuggestion &&
+    !!onMove &&
+    (row.status === "pending_plan" ||
+      row.status === "future" ||
+      row.status === "partial");
   // (#480) Mark-missed is only meaningful while the row is still pending —
   // once it's matched/missed/rescheduled there's nothing to "miss".
   const canMarkMissed =
+    !offCurveSuggestion &&
     !!onMarkMissed &&
     (row.status === "pending_plan" || row.status === "future");
+  const answer = (e: { stopPropagation: () => void }, a: SuggestionAnswer) => {
+    e.stopPropagation();
+    onAnswer?.(row, a);
+  };
+  const testKey = `${row.itemId}-${row.date}`;
   // (#456) During an active drag, mark every eligible plan row as a valid
   // drop target so the user sees there are many places they can land. The
   // row directly under the cursor (`isOverEligible`) gets a stronger
@@ -88,6 +119,9 @@ export function PlanDropRow({
       tabIndex={0}
       onClick={() => onSelect(row)}
       onKeyDown={(e) => {
+        // Only the row itself: Enter/Space on a button inside the row belongs
+        // to that button (preventDefault here would swallow its click).
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onSelect(row);
@@ -146,10 +180,49 @@ export function PlanDropRow({
           <div className="whitespace-nowrap font-mono text-micro tabular-nums text-neutral-400">
             {formatDate(row.date)}
           </div>
+          {pp && (
+            <div
+              className="flex flex-wrap items-center gap-x-2 text-micro text-neutral-500"
+              data-testid={`plan-probably-paid-${testKey}`}
+            >
+              <span className="max-w-[180px] truncate">
+                {pp.txnDescription ?? "Bank row"}
+              </span>
+              <span className="font-mono tabular-nums">
+                {formatDate(pp.txnDate)}
+              </span>
+              <span className="font-mono tabular-nums">
+                {formatCurrency(pp.txnAmount)}
+              </span>
+              <span>·</span>
+              <AmountDifference difference={pp.difference} />
+              <span>·</span>
+              <DayDelta days={pp.dayDelta} />
+              <span>·</span>
+              <span data-testid={`plan-probably-paid-curve-${testKey}`}>
+                {curveLabel(pp.offCurve)}
+              </span>
+            </div>
+          )}
+          {row.status === "partial" && row.plannedAmount != null && (
+            <div
+              className="text-micro text-neutral-500"
+              data-testid={`plan-partial-paid-${testKey}`}
+            >
+              Paid{" "}
+              <span className="font-mono tabular-nums">
+                {row.paidAmount != null ? formatCurrency(row.paidAmount) : "—"}
+              </span>{" "}
+              of{" "}
+              <span className="font-mono tabular-nums">
+                {formatCurrency(row.plannedAmount)}
+              </span>
+            </div>
+          )}
         </div>
       </div>
       <div className="flex w-full items-center justify-end gap-3 sm:w-auto sm:gap-4">
-        {statusBadge(row.status)}
+        {statusBadge(pp ? "suggested" : row.status)}
         <span
           className={`font-mono text-label tabular-nums ${
             row.amount < 0 ? "text-bad" : "text-brand-navy"
@@ -157,6 +230,39 @@ export function PlanDropRow({
         >
           {formatCurrency(row.amount)}
         </span>
+        {suggested && pp && (
+          <>
+            <button
+              type="button"
+              className={`${btnLink} whitespace-nowrap`}
+              disabled={answerDisabled}
+              onClick={(e) => answer(e, "matched")}
+              data-testid={`plan-confirm-${testKey}`}
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              className={`${btnLink} whitespace-nowrap`}
+              disabled={answerDisabled}
+              onClick={(e) => answer(e, "not_match")}
+              data-testid={`plan-not-this-${testKey}`}
+            >
+              Not this
+            </button>
+            {canRecordPartial(row, pp) && (
+              <button
+                type="button"
+                className={`${btnLink} whitespace-nowrap`}
+                disabled={answerDisabled}
+                onClick={(e) => answer(e, "partial")}
+                data-testid={`plan-partial-${testKey}`}
+              >
+                Partial
+              </button>
+            )}
+          </>
+        )}
         {canMove && (
           <button
             type="button"

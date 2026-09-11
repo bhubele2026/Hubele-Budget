@@ -31,7 +31,7 @@ function ReportTile({
 }: {
   label: string;
   value: ReactNode;
-  sub: string;
+  sub: ReactNode;
   href: string;
   visual: ReactNode;
   index: number;
@@ -218,9 +218,20 @@ export default function ReportsPage() {
           href="/reports/spending"
           value={facts ? <MoneyText countUp amount={spent} /> : "—"}
           sub={
-            uncategorizedSpent > 0
-              ? `Last 30 days, by category · + ${formatCurrency(uncategorizedSpent)} uncategorized`
-              : "Last 30 days, by category"
+            uncategorizedSpent > 0 ? (
+              <>
+                {"Last 30 days, by category · + "}
+                <span
+                  className="font-mono tabular-nums"
+                  data-testid="report-tile-spending-uncategorized"
+                >
+                  {formatCurrency(uncategorizedSpent)}
+                </span>
+                {" uncategorized"}
+              </>
+            ) : (
+              "Last 30 days, by category"
+            )
           }
           visual={
             spendMix.length ? (

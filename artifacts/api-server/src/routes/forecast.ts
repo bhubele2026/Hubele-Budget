@@ -443,6 +443,9 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // says: the row is still on the curve, and dropping the match here would
   // show the bill unpaid while the curve treats it as paid.
   const forecastToday = forecastTodayISO(now);
+  // (PR5b) Pair-level answers ("Not this", partial) are in the bundle: the web
+  // register reads a `not_match` as deciding neither side, and a `partial` as a
+  // matched row plus the plan's unpaid remainder.
   // (PR6) A resolution a schedule edit orphaned follows its bill to the item's
   // occurrence in the same period — the mapping the cash signal applies — so the
   // register and the curve agree. Read-only: the stored rows keep their dates.
@@ -450,10 +453,6 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     resolutionRows,
     resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt),
   )
-    // (PR5) Pair-level answers ("Not this", partial) stay out of the bundle until
-    // the web register understands them (PR5b); the cash signal already applies
-    // them. PR5b removes this filter.
-    .filter((r) => r.status !== "not_match" && r.status !== "partial")
     .filter(
       (r) =>
         !r.matchedTxnId ||

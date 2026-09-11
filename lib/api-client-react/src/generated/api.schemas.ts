@@ -2727,6 +2727,8 @@ export type SpendingFactsExcluded = {
   cardPayments: number;
   /** Charges flagged reimbursable. */
   reimbursable: number;
+  /** Pending outflows a posted row replaced when the sync never linked them (pairPendingWithPosted, PR4c). The charge counts once, on its posted row; this is the pending half left out. No row is deleted or re-tagged. */
+  replacedPending: number;
 };
 
 export type SpendingFactsByCategoryItem = {

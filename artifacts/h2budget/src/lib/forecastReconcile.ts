@@ -103,6 +103,11 @@ export function computeBankReconcile(input: ReconcileInput): ReconcileResult {
       if (snapshotAtISO && p.date <= snapshotAtISO) continue;
       if (p.date > endOfMonthISO) continue;
       if (p.status === "matched" || p.status === "missed") continue;
+      // (PR5) A plan the server took OFF the curve (an `offCurve` pair) is
+      // left out until the user answers; the row is already in the bank
+      // balance. A pair kept on the curve is a suggestion only and counts.
+      if (p.probablyPaid?.offCurve) continue;
+      // A `partial` line's amount is its unpaid remainder — the curve's figure.
       forecastEnd += p.amount;
     }
     forecastEnd = round2(forecastEnd);

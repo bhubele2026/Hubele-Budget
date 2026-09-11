@@ -59,8 +59,54 @@ export type ResolutionStatus =
   | "missed"
   | "dismissed"
   | "skipped"
+  | "rescheduled"
   | "ignored_unforecasted"
-  | "unplanned";
+  | "unplanned"
+  /** (PR5) "Not this": one plan/row PAIR the user rejected. It decides
+   *  neither the plan nor the row — both stay open. */
+  | "not_match"
+  /** (PR5) The row paid part of the plan; the remainder stays planned. */
+  | "partial";
+
+/** One pair from `CashSignal.matches` (PR5a), as the API sends it. */
+export type CashSignalMatch = {
+  /** `<itemId>|<occurrenceDate>` — the resolution key. */
+  planKey: string;
+  planItemId: string;
+  /** The occurrence date resolutions are keyed on (before any reschedule). */
+  planDate: string;
+  txnId: string;
+  planAmount: string | number;
+  txnAmount: string | number;
+  /** |txn| − |plan|: positive means more was paid than planned. */
+  difference: string | number;
+  /** txn date − plan date, in days: negative means paid early. */
+  dayDelta: number;
+  confidence: string;
+  ambiguous: boolean;
+  /** True only for pairs the server took OFF the curve (payee name in the
+   *  row, not ambiguous, amounts close). Every other pair is a suggestion
+   *  only: the plan still counts. Anything but `true` is treated as on the
+   *  curve, so a missing flag can never hide a bill. */
+  offCurve?: boolean;
+};
+
+/** A bank row the server paired with an open plan. Shown as "Suggested"
+ *  until the user answers; only an `offCurve` pair is out of the forecast. */
+export type ProbablyPaid = {
+  txnId: string;
+  /** Resolution key date — what Confirm / Not this / Partial post. */
+  planDate: string;
+  txnAmount: number;
+  difference: number;
+  dayDelta: number;
+  confidence: string;
+  ambiguous: boolean;
+  /** The server's curve already leaves the plan out. */
+  offCurve: boolean;
+  txnDate: string;
+  txnDescription: string | null;
+};
 
 export type Resolution = {
   id: string;
@@ -75,7 +121,13 @@ export type Resolution = {
   txnForecastFlag?: boolean | null;
 };
 
-export type PlanLineStatus = "pending_plan" | "matched" | "missed" | "future";
+export type PlanLineStatus =
+  | "pending_plan"
+  | "matched"
+  | "missed"
+  | "future"
+  /** (PR5) Partly paid: `amount` is the unpaid remainder. */
+  | "partial";
 export type BankLineStatus = "pending_bank" | "matched" | "ignored_unforecasted";
 
 export type PlanLine = {
@@ -83,12 +135,22 @@ export type PlanLine = {
   date: string;
   itemId: string;
   label: string;
+  /** Signed. For a `partial` line this is the REMAINDER still planned (0 once
+   *  the shortfall is $1 or less), so every sum over plan lines agrees with the
+   *  server's curve; the full planned amount is `plannedAmount`. */
   amount: number;
   status: PlanLineStatus;
   resolutionId?: string;
   matchedTxnId?: string | null;
   /** Original occurrence date when the row has been rescheduled. */
   originalDate?: string;
+  /** (PR5) Set on an open (pending/upcoming) plan the server paired with a
+   *  bank row. Off the server's curve only when `probablyPaid.offCurve`. */
+  probablyPaid?: ProbablyPaid;
+  /** (PR5) `partial` lines: the full planned amount. */
+  plannedAmount?: number;
+  /** (PR5) `partial` lines: the paying row's amount, when known. */
+  paidAmount?: number | null;
 };
 
 export type BankLine = {
@@ -98,7 +160,50 @@ export type BankLine = {
   amount: number;
   status: BankLineStatus;
   resolutionId?: string;
+  /** The status of the resolution that decided this row (`matched`,
+   *  `partial`, `ignored_unforecasted`, `unplanned`). */
+  resolutionStatus?: string;
+  /** (PR5) The open plan the server says this pending row probably paid. */
+  suggestedPlan?: PlanLine;
 };
+
+/**
+ * (PR5) What a `partial` resolution leaves on the curve: plan − paid row.
+ * Mirrors the server ledger (`buildForecastLedger`, "PROBABLY PAID"): a
+ * remainder of $1 or less, or one that flips sign, leaves nothing; an unknown
+ * paid amount leaves the whole plan.
+ */
+export function partialRemainder(
+  planAmount: number,
+  paidAmount: number | null | undefined,
+): number {
+  if (paidAmount == null || !Number.isFinite(paidAmount)) return planAmount;
+  const remainder = Math.round((planAmount - paidAmount) * 100) / 100;
+  if (Math.abs(remainder) <= 1 || Math.sign(remainder) !== Math.sign(planAmount)) {
+    return 0;
+  }
+  return remainder;
+}
+
+/** (PR5) "Partial" is offered only when the row paid LESS than the plan and
+ *  more than $1 would stay planned. */
+export function canRecordPartial(plan: Pick<PlanLine, "amount">, pp: Pick<ProbablyPaid, "txnAmount">): boolean {
+  if (Math.sign(pp.txnAmount) !== Math.sign(plan.amount)) return false;
+  if (Math.abs(pp.txnAmount) >= Math.abs(plan.amount)) return false;
+  return partialRemainder(plan.amount, pp.txnAmount) !== 0;
+}
+
+function toNum(v: string | number | null | undefined): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
 
 export type LineRow = (PlanLine | BankLine) & { runningBalance?: number };
 
@@ -161,8 +266,20 @@ export function buildLineRegister(opts: {
    *  their date. The forward-looking /forecast (overall) view leaves this
    *  off so it stays a clean "what's coming" register. Default false. */
   lingerPastDuePlans?: boolean;
-}): { rows: LineRow[]; allPlan: PlanLine[]; allBank: BankLine[] } {
-  const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO, visibleFromISO, lingerPastDuePlans } = opts;
+  /** (PR5) `CashSignal.matches`: plans a bank row probably paid. An open plan
+   *  listed here carries `probablyPaid` and its row `suggestedPlan`. A pair the
+   *  client already knows is decided (plan or row resolved, pair rejected) is
+   *  ignored, so a cash signal older than the bundle can't resurrect it. */
+  matches?: ReadonlyArray<CashSignalMatch> | null;
+}): {
+  rows: LineRow[];
+  allPlan: PlanLine[];
+  allBank: BankLine[];
+  /** (PR5b) Pairs the user answered "Not this", as `<itemId>|<occurrenceDate>#<txnId>`.
+   *  No suggestion — the server's or the client's — may offer one again. */
+  rejectedPairs: ReadonlySet<string>;
+} {
+  const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO, visibleFromISO, lingerPastDuePlans, matches } = opts;
   const today = opts.today ?? new Date();
   const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const fromMs = parseISO(fromISO);
@@ -172,54 +289,39 @@ export function buildLineRegister(opts: {
     ? Math.max(parseISO(visibleFromISO), fromMs)
     : fromMs;
 
+  // ⚠️ (PR5) "Not this" (`not_match`) answers are about one plan/row PAIR and
+  // decide neither side, so they never enter the per-plan / per-row maps. The
+  // server keeps them alongside the real decision (a rejection survives a later
+  // match of either side), so letting them in would make "last write wins"
+  // hide a row's real match or ignore behind a rejection.
+  //
+  // A move and a decision can also coexist for one occurrence (a `partial`
+  // keeps the `rescheduled` row), so moves are read into their own map: the
+  // move sets the date, the decision the status.
   const byEventKey = new Map<string, Resolution>();
+  const rescheduleByKey = new Map<string, Resolution>();
   const byTxn = new Map<string, Resolution>();
+  const rejectedPairs = new Set<string>();
   for (const r of resolutions) {
+    if (r.status === "not_match") {
+      if (r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
+        rejectedPairs.add(`${r.recurringItemId}|${r.occurrenceDate}#${r.matchedTxnId}`);
+      }
+      continue;
+    }
     if (r.recurringItemId && r.occurrenceDate) {
-      byEventKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, r);
+      const key = `${r.recurringItemId}|${r.occurrenceDate}`;
+      if (r.status === "rescheduled") rescheduleByKey.set(key, r);
+      else byEventKey.set(key, r);
     }
     if (r.matchedTxnId) byTxn.set(r.matchedTxnId, r);
   }
 
-  const allPlan: PlanLine[] = events.flatMap((ev) => {
-    const origKey = `${ev.itemId}|${ev.date}`;
-    const origRes = byEventKey.get(origKey);
-    let date = ev.date;
-    let stored: Resolution | undefined = origRes;
-    if (origRes?.status === "rescheduled" && origRes.rescheduledTo) {
-      date = origRes.rescheduledTo;
-      const atNew = byEventKey.get(`${ev.itemId}|${date}`);
-      if (atNew && atNew.id !== origRes.id) stored = atNew;
-    }
-    // (#480) "Skip" from the Missed bucket: drop the occurrence entirely.
-    // The row should not appear in the register, the bucket, or the
-    // running-balance projection for the selected month. Backend cash
-    // signal applies the same filter so chart math stays consistent.
-    if (stored?.status === "skipped") return [];
-    const evMs = parseISO(date);
-    let status: PlanLineStatus;
-    if (stored?.status === "matched") status = "matched";
-    else if (stored?.status === "missed" || stored?.status === "dismissed")
-      status = "missed";
-    else if (evMs > todayMs) status = "future";
-    else status = "pending_plan";
-    return [{
-      kind: "plan" as const,
-      date,
-      itemId: ev.itemId,
-      label: ev.label,
-      amount: ev.amount,
-      status,
-      resolutionId: stored?.id,
-      matchedTxnId: stored?.matchedTxnId ?? null,
-      originalDate: date !== ev.date ? ev.date : undefined,
-    }];
-  });
-
   const allBank: BankLine[] = txns.map((t) => {
     const stored = byTxn.get(t.id);
     let status: BankLineStatus;
-    if (stored?.status === "matched") status = "matched";
+    // A `partial` row paid (part of) a plan: it is decided, like a match.
+    if (stored?.status === "matched" || stored?.status === "partial") status = "matched";
     else if (stored?.status === "ignored_unforecasted" || stored?.status === "unplanned")
       status = "ignored_unforecasted";
     else status = "pending_bank";
@@ -230,15 +332,105 @@ export function buildLineRegister(opts: {
       amount: txnSigned(t),
       status,
       resolutionId: stored?.id,
+      resolutionStatus: stored?.status,
     };
   });
+  const bankById = new Map(allBank.map((b) => [b.txn.id, b]));
+  const txnById = new Map(txns.map((t) => [t.id, t]));
+
+  // (PR5) Server pairs, one to one. A pair is dropped when the client already
+  // knows better: the row is claimed by a resolution, or the pair was rejected.
+  // (The plan side is checked below: only an open plan takes a suggestion.)
+  const matchByPlanKey = new Map<string, CashSignalMatch>();
+  const pairedTxnIds = new Set<string>();
+  for (const m of matches ?? []) {
+    if (matchByPlanKey.has(m.planKey) || pairedTxnIds.has(m.txnId)) continue;
+    if (rejectedPairs.has(`${m.planKey}#${m.txnId}`)) continue;
+    if (byTxn.has(m.txnId)) continue;
+    matchByPlanKey.set(m.planKey, m);
+    pairedTxnIds.add(m.txnId);
+  }
+
+  const allPlan: PlanLine[] = events.flatMap((ev) => {
+    const origKey = `${ev.itemId}|${ev.date}`;
+    const moved = rescheduleByKey.get(origKey);
+    const date = moved?.rescheduledTo ?? ev.date;
+    // The decision on the occurrence's own key wins; a moved occurrence also
+    // honours a decision keyed on its new date (the pre-PR5 lookup); with no
+    // decision, the move itself is the stored resolution.
+    const stored: Resolution | undefined =
+      byEventKey.get(origKey) ??
+      (moved?.rescheduledTo ? byEventKey.get(`${ev.itemId}|${date}`) : undefined) ??
+      moved;
+    // (#480) "Skip" from the Missed bucket: drop the occurrence entirely.
+    // The row should not appear in the register, the bucket, or the
+    // running-balance projection for the selected month. Backend cash
+    // signal applies the same filter so chart math stays consistent.
+    if (stored?.status === "skipped") return [];
+    const evMs = parseISO(date);
+    let status: PlanLineStatus;
+    let amount = ev.amount;
+    let plannedAmount: number | undefined;
+    let paidAmount: number | null | undefined;
+    if (stored?.status === "matched") status = "matched";
+    else if (stored?.status === "missed" || stored?.status === "dismissed")
+      status = "missed";
+    else if (stored?.status === "partial") {
+      // (PR5) Only the unpaid remainder stays planned — the server's rule.
+      status = "partial";
+      const paidTxn = stored.matchedTxnId ? txnById.get(stored.matchedTxnId) : undefined;
+      paidAmount = paidTxn ? txnSigned(paidTxn) : toNum(stored.txnAmount);
+      plannedAmount = ev.amount;
+      amount = partialRemainder(ev.amount, paidAmount);
+    } else if (evMs > todayMs) status = "future";
+    else status = "pending_plan";
+
+    let probablyPaid: ProbablyPaid | undefined;
+    const m = matchByPlanKey.get(origKey);
+    if (m && (status === "pending_plan" || status === "future")) {
+      const bank = bankById.get(m.txnId);
+      probablyPaid = {
+        txnId: m.txnId,
+        planDate: m.planDate,
+        txnAmount: toNum(m.txnAmount) ?? 0,
+        difference: toNum(m.difference) ?? 0,
+        dayDelta: m.dayDelta,
+        confidence: m.confidence,
+        ambiguous: m.ambiguous,
+        offCurve: m.offCurve === true,
+        txnDate: bank?.date ?? addDaysISO(date, m.dayDelta),
+        txnDescription: bank?.txn.description ?? null,
+      };
+    }
+    return [{
+      kind: "plan" as const,
+      date,
+      itemId: ev.itemId,
+      label: ev.label,
+      amount,
+      status,
+      resolutionId: stored?.id,
+      matchedTxnId: stored?.matchedTxnId ?? null,
+      originalDate: date !== ev.date ? ev.date : undefined,
+      ...(probablyPaid ? { probablyPaid } : {}),
+      ...(status === "partial" ? { plannedAmount, paidAmount: paidAmount ?? null } : {}),
+    }];
+  });
+  for (const p of allPlan) {
+    if (!p.probablyPaid) continue;
+    const bank = bankById.get(p.probablyPaid.txnId);
+    if (bank) bank.suggestedPlan = p;
+  }
 
   const isHiddenByClosedMonth = (iso: string, isResolved: boolean) =>
     isResolved && closedMonths.has(monthKey(iso));
 
+  // A partly-paid plan stays in the register while a remainder is planned.
   const activePlan = allPlan.filter(
     (p) =>
-      (p.status === "pending_plan" || p.status === "future") &&
+      (p.status === "pending_plan" ||
+        p.status === "future" ||
+        (p.status === "partial" && p.amount !== 0)) &&
       !isHiddenByClosedMonth(p.date, false),
   );
   const activeBank = allBank.filter(
@@ -290,9 +482,12 @@ export function buildLineRegister(opts: {
   // never lingered — only the upper-bound window applies to them.
   const visiblePlan = activePlan.filter((p) => {
     if (inVisibleWindow(p.date)) return true;
+    // (PR5b) A past-due partly-paid plan lingers too while a remainder is
+    // planned: the curve still carries that remainder forward.
     if (
       lingerPastDuePlans &&
-      p.status === "pending_plan" &&
+      (p.status === "pending_plan" ||
+        (p.status === "partial" && p.amount !== 0 && parseISO(p.date) <= todayMs)) &&
       parseISO(p.date) >= fromMs
     ) {
       return true;
@@ -316,7 +511,12 @@ export function buildLineRegister(opts: {
   if (bankInWindowAll.length === 0) {
     let proj = startBalance;
     for (const r of rows) {
-      if (anchorMs !== null && parseISO(r.date) <= anchorMs) {
+      // (PR5) An off-curve pair's plan is out of the server's curve; its row
+      // counts. A pair kept on the curve is a suggestion only and still counts.
+      if (
+        (anchorMs !== null && parseISO(r.date) <= anchorMs) ||
+        (r.kind === "plan" && r.probablyPaid?.offCurve)
+      ) {
         r.runningBalance = proj;
         continue;
       }
@@ -325,7 +525,7 @@ export function buildLineRegister(opts: {
     }
   }
 
-  return { rows, allPlan, allBank };
+  return { rows, allPlan, allBank, rejectedPairs };
 }
 
 export function findCandidates(row: LineRow, rows: LineRow[], days = 7): LineRow[] {
@@ -374,8 +574,10 @@ export type PlanSuggestion = {
  *   - low: otherwise.
  *
  *  Returns up to `limit` suggestions sorted by score (best first). Filters
- *  out any plan whose status isn't `pending_plan` or `future`. Works for
- *  refunds/credits because we match on Math.sign of `amount`.
+ *  out any plan whose status isn't `pending_plan` or `future`, and (PR5) any
+ *  plan the server already paired with a row (`probablyPaid`) — that plan's
+ *  one suggestion is the server's. Works for refunds/credits because we
+ *  match on Math.sign of `amount`.
  */
 export function suggestPlanMatchesForBank(
   bank: BankLine,
@@ -393,6 +595,7 @@ export function suggestPlanMatchesForBank(
   const out: PlanSuggestion[] = [];
   for (const p of planRows) {
     if (p.status !== "pending_plan" && p.status !== "future") continue;
+    if (p.probablyPaid) continue;
     if (Math.sign(p.amount) !== wantSign) continue;
     const daysAway = Math.round(Math.abs(parseISO(p.date) - targetMs) / DAY);
     if (daysAway > maxDays) continue;
@@ -419,6 +622,42 @@ export function suggestPlanMatchesForBank(
   }
   out.sort((a, b) => a.score - b.score);
   return out.slice(0, limit);
+}
+
+/**
+ * (PR5) The client's own suggestions for each pending bank row — only where
+ * the server has not already paired. A row the server paired (`suggestedPlan`)
+ * gets none, and no plan the server paired is offered to any other row, so a
+ * plan never carries two different suggestions. Manual matching (the dropdown,
+ * drag) still reaches every open plan.
+ */
+export function buildClientSuggestions(
+  bankRows: BankLine[],
+  allPlan: PlanLine[],
+  /** (PR5b) `buildLineRegister().rejectedPairs`. A pair the user answered
+   *  "Not this" is never suggested again — not as a chip, a one-click Match,
+   *  the Enter shortcut or "Match all confident". Confirming it would write
+   *  `matched`, and the server would delete the rejection. */
+  rejectedPairs: ReadonlySet<string> = new Set(),
+): Map<string, PlanSuggestion[]> {
+  const candidates = allPlan.filter(
+    (p) => (p.status === "pending_plan" || p.status === "future") && !p.probablyPaid,
+  );
+  const out = new Map<string, PlanSuggestion[]>();
+  for (const b of bankRows) {
+    if (b.suggestedPlan) {
+      out.set(b.txn.id, []);
+      continue;
+    }
+    const open =
+      rejectedPairs.size === 0
+        ? candidates
+        : candidates.filter(
+            (p) => !rejectedPairs.has(`${p.itemId}|${p.originalDate ?? p.date}#${b.txn.id}`),
+          );
+    out.set(b.txn.id, suggestPlanMatchesForBank(b, open));
+  }
+  return out;
 }
 
 /** Rank ALL pending/future plan rows by how well they match a single
@@ -595,6 +834,7 @@ export type BucketEntry = {
   id: string;
   status:
     | "matched"
+    | "partial"
     | "missed"
     | "ignored_unforecasted"
     | "unplanned"
@@ -662,11 +902,21 @@ export function buildBucket(opts: {
     let amount = 0;
 
     if (r.recurringItemId && r.occurrenceDate) {
-      const p = planByKey.get(`${r.recurringItemId}|${r.occurrenceDate}`);
+      const key = `${r.recurringItemId}|${r.occurrenceDate}`;
+      // A decision on a moved occurrence (a `partial` kept beside its
+      // `rescheduled` row) is keyed on the ORIGINAL date.
+      const p = planByKey.get(key) ?? planByOriginalKey.get(key);
       if (p) {
         date = p.date;
         label = p.label;
-        amount = p.amount;
+        // A partial's plan line carries the remainder; the bucket shows the
+        // part that was settled — what the row actually paid when known (a
+        // shortfall of $1 or less leaves no remainder, but was not paid in
+        // full), else planned − remainder.
+        amount =
+          r.status === "partial" && p.plannedAmount != null
+            ? p.paidAmount ?? Math.round((p.plannedAmount - p.amount) * 100) / 100
+            : p.amount;
       } else {
         date = r.occurrenceDate;
       }
@@ -688,6 +938,7 @@ export function buildBucket(opts: {
 
     let status: BucketEntry["status"];
     if (r.status === "matched") status = "matched";
+    else if (r.status === "partial") status = "partial";
     else if (r.status === "missed" || r.status === "dismissed") status = "missed";
     else if (r.status === "ignored_unforecasted") status = "ignored_unforecasted";
     else if (r.status === "unplanned") status = "unplanned";

@@ -109,6 +109,34 @@ describe("Forecast — skipped status (#480)", () => {
     expect(lastBalance(skipped)).toBeCloseTo(1000, 2);
   });
 
+  it("(PR5) a later \"Not this\" answer on the same occurrence does not bring a skipped row back", () => {
+    // The server keeps `not_match` rows alongside every other decision, so a
+    // rejection can sit after the skip in the list. It must not win.
+    const resolutions: Resolution[] = [
+      {
+        id: "r-skip",
+        recurringItemId: "rent",
+        occurrenceDate: "2026-05-10",
+        status: "skipped",
+        matchedTxnId: null,
+      },
+      {
+        id: "r-not",
+        recurringItemId: "rent",
+        occurrenceDate: "2026-05-10",
+        status: "not_match",
+        matchedTxnId: "t1",
+      },
+    ];
+    const { allPlan, rows } = buildLineRegister({
+      ...baseRegisterOpts,
+      events: [event],
+      resolutions,
+    });
+    expect(allPlan).toHaveLength(0);
+    expect(rows.filter((r) => r.kind === "plan")).toHaveLength(0);
+  });
+
   it("keeps `missed` and `dismissed` rows visible — only `skipped` is suppressed", () => {
     // Defence: this test guards against a regression where a future
     // refactor accidentally widens the skip filter to also drop

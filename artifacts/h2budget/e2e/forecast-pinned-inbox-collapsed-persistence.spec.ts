@@ -100,14 +100,18 @@ test.describe("Forecast pinned inbox collapsed-state persistence (#530)", () => 
     });
 
     // Seed a single planned bill that matches the bank txn we're about
-    // to create — same amount and same day-of-month — so the pinned
-    // inbox card has a confident one-click suggestion (which both
-    // enables the compact strip's "Match" button and renders the
-    // SuggestionStrip we'll assert on after expanding).
+    // to create — same amount, 4 days apart — so the pinned inbox card has
+    // a confident one-click suggestion (which both enables the compact
+    // strip's "Match" button and renders the SuggestionStrip we'll assert on
+    // after expanding). (PR5b review) The row's description shares no word
+    // with the bill's name, so the server's "probably paid" matcher can never
+    // pair them (it needs the name, or ≤ 3 days): the client path on every
+    // calendar day.
     const suffix = Math.random().toString(36).slice(2, 8);
     const billName = `PinnedCollapseBill-${suffix}`;
-    const billDay = 11;
-    const billIso = currentMonthDay(billDay);
+    const rowTag = `r${Math.random().toString(36).slice(2, 8)}`;
+    const billDay = 20;
+    const rowIso = currentMonthDay(16);
 
     await apiCall<{ id: string }>(page, "POST", "/api/recurring-items", {
       name: billName,
@@ -118,13 +122,13 @@ test.describe("Forecast pinned inbox collapsed-state persistence (#530)", () => 
       active: "true",
     });
 
-    const txnDescription = `PINNED-COLLAPSE-${suffix}`;
+    const txnDescription = `PINNED-COLLAPSE-${rowTag}`;
     const txn = await apiCall<{ id: string }>(
       page,
       "POST",
       "/api/transactions",
       {
-        occurredOn: billIso,
+        occurredOn: rowIso,
         description: txnDescription,
         amount: "-42.00",
         forecastFlag: true,
@@ -149,6 +153,8 @@ test.describe("Forecast pinned inbox collapsed-state persistence (#530)", () => 
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(fullCheckbox).toBeVisible();
     await expect(suggestionStrip).toBeVisible();
+    // The server never paired this row: no "Suggested" strip.
+    await expect(page.getByTestId(`probably-paid-${txn.id}`)).toHaveCount(0);
     await expect(collapsedRow).toHaveCount(0);
 
     // --- (a) Collapse: the compact strip replaces the full card and
