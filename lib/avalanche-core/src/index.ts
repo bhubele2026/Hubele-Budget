@@ -16,6 +16,11 @@
 
 export { inForecast } from "./forecastInclusion";
 export {
+  isInSnapshot,
+  PLAID_HELD_AHEAD_DAYS,
+  type SnapshotLedgerRow,
+} from "./snapshotInclusion";
+export {
   HOUSEHOLD_TZ,
   householdDateOf,
   householdToday,

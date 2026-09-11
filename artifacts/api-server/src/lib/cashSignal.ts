@@ -333,7 +333,9 @@ export async function computeCashSignal(
 
   // The chart's markers: planned expenses that actually drag the balance down
   // (negative, not matched out), in date order. `originalDate !== date` marks a
-  // past-due plan dragged forward (#650).
+  // plan the curve moved off its due date: a past-due plan dragged forward
+  // (#650), or, without a snapshot, a plan due before the window placed on its
+  // first day. The ledger item's `assumption` says which.
   const expenseEvents = items.filter(
     (it): it is Extract<typeof it, { kind: "plan" }> => it.kind === "plan" && it.amount < 0,
   );

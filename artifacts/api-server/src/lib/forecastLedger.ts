@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, lte } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, lte } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -11,6 +11,7 @@ import {
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdDayOf, householdTodayDate } from "./householdClock";
+import { isInSnapshot } from "@workspace/avalanche-core";
 import {
   addDays,
   expandItem,
@@ -43,8 +44,12 @@ export type LedgerPlan = {
   amount: number;
   itemId: string;
   label: string;
-  /** Present when the curve assumes something the ledger does not show. */
-  assumption?: "dragged_past_due";
+  /**
+   * Present when the curve moved the plan off its due date:
+   * - `dragged_past_due`: past-due and unresolved, so it lands on the next business day (#681/#751);
+   * - `pre_window_on_first_day`: no snapshot, and due before the window, so it lands on the window's first day.
+   */
+  assumption?: "dragged_past_due" | "pre_window_on_first_day";
 };
 
 export type LedgerItem = LedgerActual | LedgerPlan;
@@ -64,9 +69,16 @@ export type ForecastLedger = {
   snapshotBalance: number | null;
   /** The snapshot balance, or the starting balance when there is no snapshot. */
   startBalanceAtAnchor: number;
-  /** The snapshot rolled forward through today's checking rows (the anchor alone without a snapshot). */
+  /**
+   * The snapshot rolled forward through today's checking rows (the anchor alone without a snapshot).
+   * ⚠️ Unrounded: callers format it to cents.
+   */
   bankToday: number;
-  /** Every plan and actual row, sorted by date (stable: plans before actuals on a day, each in build order). */
+  /**
+   * Every plan and actual row, sorted by date (stable: plans before actuals on a day, each in build order).
+   * ⚠️ Plans can fall OUTSIDE `[fromISO, toISO]` (a drag target past `toISO`, a plan dated before `fromISO`);
+   * actuals are capped at `toISO`. Consumers window the items themselves.
+   */
   items: LedgerItem[];
 };
 
@@ -79,7 +91,11 @@ export type ForecastLedger = {
  * the full `computeCashSignal` output recorded before the extraction.
  *
  * Anchored on the bank snapshot when present:
- *   - Skip checking transactions on/before the snapshot date (already counted).
+ *   - A checking row counts unless the snapshot already holds it (PR4b,
+ *     `isInSnapshot`): rows dated before the snapshot day; snapshot-day rows,
+ *     unless the institution's own time shows they happened after the read;
+ *     and Plaid charges the ledger already had at the read, dated up to five
+ *     days after it.
  *   - (#666) Planned events dated on/before the snapshot are dropped entirely
  *     — bills AND income, real AND synthetic. The bank snapshot is the
  *     truth: anything dated on or before it is already reflected in the
@@ -299,6 +315,16 @@ export async function buildForecastLedger(
   //
   // Without a snapshot there is no roll: `bankToday` is the starting balance,
   // and the curve takes only forecast-flagged rows after today.
+  //
+  // ⭐ WHICH ROWS THE SNAPSHOT ALREADY HOLDS — ONE RULE, APPLIED HERE ONLY (PR4b).
+  // A calendar day is not enough: the balance is read at an INSTANT. A
+  // snapshot-day row can have happened after the read, and a Plaid charge dated
+  // a few days ahead can already be inside it (a posted row re-keyed from its
+  // pending row keeps the pending row's `created_at`). With a snapshot the
+  // query therefore reads the snapshot day too, and `isInSnapshot` decides each
+  // row — see there for why `created_at` never decides the snapshot day.
+  // Because `bankToday` and the curve take their rows from this one loop, they
+  // cannot disagree about it.
   const actualUpperISO = toISO > todayISO ? toISO : todayISO;
   const actualRowsAll = await db
     .select()
@@ -309,7 +335,9 @@ export async function buildForecastLedger(
         snapshotISO
           ? inForecastWhere(todayISO)
           : eq(transactionsTable.forecastFlag, true),
-        gt(transactionsTable.occurredOn, anchorISO),
+        snapshotISO
+          ? gte(transactionsTable.occurredOn, anchorISO)
+          : gt(transactionsTable.occurredOn, anchorISO),
         lte(transactionsTable.occurredOn, actualUpperISO),
       ),
     );
@@ -318,6 +346,24 @@ export async function buildForecastLedger(
   // Defensive only: `transactions.plaid_transaction_id` is unique.
   const seenPlaidIds = new Set<string>();
   for (const t of actualRowsAll) {
+    if (
+      snapshotISO &&
+      snapshotAt &&
+      isInSnapshot(
+        {
+          occurredOn: t.occurredOn,
+          amount: Number(t.amount) || 0,
+          createdAt: t.createdAt,
+          // Stored as a string; an unparsable value is NaN, which the rule treats as no time.
+          occurredAt: t.occurredAt ? new Date(t.occurredAt) : null,
+          plaidAccountId: t.plaidAccountId ?? null,
+        },
+        snapshotAt,
+        snapshotISO,
+      )
+    ) {
+      continue;
+    }
     if (!isBankRow(t.source, t.plaidAccountId ?? null)) continue;
     if (t.plaidTransactionId) {
       if (seenPlaidIds.has(t.plaidTransactionId)) continue;
@@ -533,6 +579,9 @@ export async function buildForecastLedger(
       amount: ev.amount,
       itemId: ev.itemId,
       label: ev.label,
+      ...(effectiveDate !== rawEffectiveDate
+        ? { assumption: "pre_window_on_first_day" as const }
+        : {}),
     });
   }
 

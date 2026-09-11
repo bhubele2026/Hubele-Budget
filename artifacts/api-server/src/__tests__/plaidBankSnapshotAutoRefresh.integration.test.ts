@@ -101,6 +101,7 @@ import {
 import { syncAllForAllUsers, syncPlaidItem } from "../lib/plaidSync";
 import { logger } from "../lib/logger";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 
 async function cleanup(): Promise<void> {
   await db
@@ -216,6 +217,7 @@ async function addBankRow(opts: {
     amount: opts.amount,
     plaidAccountId: opts.externalAccountId,
     source: "plaid:chase",
+    createdAt: createdAtStartOfHouseholdDay(opts.occurredOn),
   });
 }
 

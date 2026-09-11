@@ -42,6 +42,7 @@ import {
 import { GetForecastBankBalanceExplainResponse } from "@workspace/api-zod";
 import bankBalanceExplainRouter from "../routes/bankBalanceExplain";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 
 const app = express();
 app.use(express.json());
@@ -149,6 +150,7 @@ describe("GET /forecast/bank-balance-explain", () => {
       amount: "-442.91",
       plaidAccountId: "chase-5526",
       source: "plaid:chase",
+      createdAt: createdAtStartOfHouseholdDay("2026-08-21"),
     });
 
     const e = await explain();
@@ -232,6 +234,7 @@ describe("GET /forecast/bank-balance-explain", () => {
       amount: "-442.91",
       plaidAccountId: "chase-5526",
       source: "plaid:chase",
+      createdAt: createdAtStartOfHouseholdDay("2026-08-21"),
     });
 
     const res = await fetch(`${baseUrl}/api/forecast/bank-balance-explain`);

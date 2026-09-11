@@ -57,6 +57,7 @@ import {
 import spineRouter from "../routes/spine";
 import forecastRouter from "../routes/forecast";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 
 const app = express();
 app.use(express.json());
@@ -178,6 +179,7 @@ beforeAll(async () => {
       plaidAccountId: CHASE.accountId,
       source: "plaid:chase",
       forecastFlag: true,
+      createdAt: createdAtStartOfHouseholdDay(occurredOn),
     });
   }
 
