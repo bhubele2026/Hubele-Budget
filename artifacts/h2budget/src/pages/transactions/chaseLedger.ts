@@ -1,9 +1,5 @@
-import type {
-  GetTransactionsLedgerParams,
-  LedgerFilter,
-  LedgerPage,
-  LedgerRow,
-} from "@workspace/api-client-react";
+import type { LedgerFilter, LedgerPage, LedgerRow } from "@workspace/api-client-react";
+import type { GetTransactionsLedgerParams } from "@workspace/api-client-react/ledger";
 
 /**
  * ⭐ PR14 — THE CHASE LIST READS THE SERVER'S LEDGER. Pure helpers only.
@@ -116,6 +112,28 @@ export function moneyOrNull(value: string | null | undefined): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * (PR14 review M1) What a row adds to a day or group total: what the ledger
+ * moves the register by (a mask-twin, duplicate or replaced row adds 0), so a
+ * day's total reconciles with the card. On an account with no register
+ * (`balanceAmount` null) the row's amount when `countsInBalance`, else 0.
+ */
+export function countedAmount(
+  row: Pick<LedgerRow, "amount" | "countsInBalance"> & { balanceAmount: string | null },
+): number {
+  if (row.balanceAmount != null) return Number(row.balanceAmount) || 0;
+  return row.countsInBalance ? Number(row.amount) || 0 : 0;
+}
+
+/** The counted total of rows, summed in whole cents. */
+export function sumCounted(
+  rows: ReadonlyArray<Pick<LedgerRow, "amount" | "countsInBalance"> & { balanceAmount: string | null }>,
+): number {
+  let cents = 0;
+  for (const r of rows) cents += Math.round(countedAmount(r) * 100);
+  return cents / 100;
 }
 
 /** Up to `max` evenly spaced days from `from` to `to`, both ends included. */

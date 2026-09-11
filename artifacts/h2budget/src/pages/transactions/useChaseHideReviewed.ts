@@ -4,7 +4,8 @@ import {
   getGetUiPreferencesQueryKey,
   useGetUiPreferences,
   useUpdateUiPreferences,
-} from "@workspace/api-client-react";
+} from "@workspace/api-client-react/ledger";
+import { OWN_INVALIDATION } from "@/lib/mutationInvalidation";
 
 /** The first-paint seed. The saved preference lives on the server (per user). */
 export const CHASE_HIDE_REVIEWED_STORAGE_KEY = "h2-chase-hide-reviewed";
@@ -46,7 +47,8 @@ export function useChaseHideReviewed(): [boolean, (next: boolean) => void] {
       gcTime: 30 * 60_000,
     },
   });
-  const save = useUpdateUiPreferences();
+  // A view setting moves no data: no refetch of balances, spine or reports.
+  const save = useUpdateUiPreferences({ mutation: { meta: OWN_INVALIDATION } });
   const saved = prefs.data?.chaseHideReviewed;
 
   useEffect(() => {

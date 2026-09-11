@@ -14,6 +14,7 @@ import {
   type FakeLedgerServer,
   type FakeRowInput,
 } from "./__test-helpers__/fakeLedgerServer";
+import { toastTexts } from "./__test-helpers__/toastText";
 
 /**
  * The Chase list's reviewed state. (PR14) On the server's ledger: "Clear
@@ -230,7 +231,7 @@ it("retains failed rows and reports partial review saves", async () => {
   fireEvent.click(screen.getByText("Select todo"));
   fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
   await waitFor(() =>
-    expect(state.toast).toHaveBeenCalledWith(
+    expect(toastTexts(state.toast)).toContainEqual(
       expect.objectContaining({ title: "1 marked reviewed, 1 failed" }),
     ),
   );

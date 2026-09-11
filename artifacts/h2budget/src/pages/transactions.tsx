@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  useGetTransactionsBalances,
-  getGetTransactionsBalancesQueryKey,
   useCreateTransaction,
   useUpdateTransaction,
   useClearTransferOverride,
@@ -80,6 +78,10 @@ import {
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import { compareNewestFirst } from "@/lib/runningBalance";
 import { invalidateBankLedger } from "@/lib/mutationInvalidation";
+import {
+  useGetTransactionsBalances,
+  getGetTransactionsBalancesQueryKey,
+} from "@workspace/api-client-react/ledger";
 import { useSpine } from "@/hooks/useSpine";
 import { FreshnessLine } from "@/components/data-state";
 import { useToast } from "@/hooks/use-toast";
@@ -121,6 +123,7 @@ import {
   moneyOrNull,
   sampleDays,
   splitAtToday,
+  sumCounted,
   toBulkFilter,
   type ChaseListFilter,
 } from "./transactions/chaseLedger";
@@ -132,6 +135,7 @@ import {
   ChaseReviewControls,
   ChaseSelectAllBanner,
   LedgerRowLabels,
+  MonoCount,
 } from "./transactions/ChaseReviewInbox";
 
 // Task #451 — Render a transaction's `source` (e.g. `plaid:chase`,
@@ -507,7 +511,10 @@ export default function TransactionsPage() {
   // (#728) Pending is live money still settling, so the pinned group lists ALL of
   // it for this account whatever the range: Plaid restamps a pending row's date,
   // and a range-scoped list hid settling charges ("I know I'm missing expenses").
-  const pendingLedger = useChaseLedger({ ...baseFilter, pending: true, to: ledgerToday });
+  // (PR14 review LOW-1) No `to`: a pending row dated after today is settling money
+  // too. It is listed in the group, labelled "After today", and left out of the
+  // group's total.
+  const pendingLedger = useChaseLedger({ ...baseFilter, pending: true });
   // Days after today: listed and labelled, never totalled (see `splitAtToday`).
   const afterLedger = useChaseLedger(afterWindow ? { ...baseFilter, ...afterWindow } : null);
   const isLoading = register.isLoading;
@@ -515,8 +522,24 @@ export default function TransactionsPage() {
   const registerPage = register.first;
   const registerRows = register.rows;
   const matchingCount = registerPage?.matchingCount ?? null;
-  const toReviewCount = registerPage?.review.unreviewed ?? null;
+  // (PR14 review LOW-2) While a new range or filter loads, the cache still holds the
+  // last one's figures. They are never shown under the new label: "—" until it answers.
+  const statsStale = register.isPlaceholderData;
+  const toReviewCount = statsStale ? null : (registerPage?.review.unreviewed ?? null);
   const reviewedCount = registerPage?.review.reviewed ?? 0;
+  // (PR14 review H1) An account other than the bank balance's: rows, totals and
+  // review counts, and no balance (the server computes none for it).
+  const balanceUnavailable = registerPage?.balanceUnavailableReason === "not_snapshot_account";
+  // (PR14 review H1) A saved account the ledger refuses (not a Chase account of this
+  // household, or gone) falls back to the default account, clearing `?account=` and
+  // the saved choice, instead of failing on every visit.
+  useEffect(() => {
+    if (!selectedAccountKey || selectedAccountKey === "manual") return;
+    if (register.errorCode !== "account_not_ledger" && register.errorCode !== "invalid_account") return;
+    setSelectedAccountKey(null);
+    toast({ title: "That account has no ledger. Showing the bank balance account." });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [register.errorCode, selectedAccountKey]);
 
   // Every row on screen, once. The bulk actions and the selection read this.
   const filtered = useMemo<Transaction[]>(() => {
@@ -535,9 +558,11 @@ export default function TransactionsPage() {
   const pendingItems = useMemo(() => {
     const byId = new Map<string, LedgerRow>();
     for (const t of pendingLedger.rows) byId.set(t.id, t);
-    for (const t of registerRows) if (t.pending && !byId.has(t.id)) byId.set(t.id, t);
+    for (const t of [...registerRows, ...afterLedger.rows]) {
+      if (t.pending && !byId.has(t.id)) byId.set(t.id, t);
+    }
     return Array.from(byId.values()).sort(compareNewestFirst);
-  }, [pendingLedger.rows, registerRows]);
+  }, [pendingLedger.rows, registerRows, afterLedger.rows]);
   const visiblePending = pendingItems;
   const visiblePosted = useMemo(
     () => [...afterLedger.rows, ...registerRows].filter((t) => !t.pending),
@@ -562,7 +587,7 @@ export default function TransactionsPage() {
       : null;
 
   // ---- Range stats: the ledger's totals and balances, never re-derived ----
-  const rangeTotals = registerPage
+  const rangeTotals = registerPage && !statsStale
     ? {
         moneyIn: Number(registerPage.totals.moneyIn),
         moneyOut: Number(registerPage.totals.moneyOut),
@@ -611,7 +636,7 @@ export default function TransactionsPage() {
   const { data: ledgerBalances } = useGetTransactionsBalances(balancesParams, {
     query: {
       queryKey: getGetTransactionsBalancesQueryKey(balancesParams),
-      enabled: !!effectiveSnapshot && balanceDatesParam !== "",
+      enabled: !!effectiveSnapshot && !balanceUnavailable && balanceDatesParam !== "",
       staleTime: LEDGER_CACHE.staleTime,
       gcTime: LEDGER_CACHE.gcTime,
     },
@@ -625,28 +650,30 @@ export default function TransactionsPage() {
     return m;
   }, [ledgerBalances]);
   const rangeBalances = {
-    series: sparkDays.flatMap((d) => {
-      const b = balanceByDate.get(d);
-      return b == null ? [] : [b];
-    }),
-    startBal: moneyOrNull(registerPage?.balanceStart),
-    endBal: moneyOrNull(registerPage?.balanceEnd),
+    series: statsStale
+      ? []
+      : sparkDays.flatMap((d) => {
+          const b = balanceByDate.get(d);
+          return b == null ? [] : [b];
+        }),
+    startBal: statsStale ? null : moneyOrNull(registerPage?.balanceStart),
+    endBal: statsStale ? null : moneyOrNull(registerPage?.balanceEnd),
   };
 
   // The forward-looking actual-vs-forecast trend chart. Weekly (Sun–Sat, on the
   // week-ending Saturday) actual balances from the ledger, and the cash signal's
   // projection, both meeting at today's balance.
   const balanceTrend = useMemo(() => {
-    if (!effectiveSnapshot) return null;
+    if (!effectiveSnapshot || balanceUnavailable) return null;
     const { windowStart, windowEnd, saturdays } = trendWindow;
 
-    // Today's balance: the spine's, as the ledger carries it; the cash signal's
-    // own bank-today when the ledger has not answered. Neither: no seed at all,
-    // never a $0 one.
+    // Today's balance: the spine's, as the ledger carries it. Without it there is no
+    // seed at all, never a $0 one (PR14 review LOW-5): the cash signal's bankToday
+    // is not used, because without a snapshot it is a starting balance that
+    // belongs to no day.
     const todayBalance =
       moneyOrNull(registerPage?.balanceToday ?? pendingLedger.first?.balanceToday) ??
-      moneyOrNull(ledgerBalances?.anchor.todayBalance) ??
-      moneyOrNull(cashProjection?.bankToday);
+      moneyOrNull(ledgerBalances?.anchor.todayBalance);
 
     // A date whose balance the register cannot give is skipped, never drawn at 0.
     const historicalActual: BalanceSeriesPoint[] = [];
@@ -692,6 +719,7 @@ export default function TransactionsPage() {
     };
   }, [
     effectiveSnapshot,
+    balanceUnavailable,
     trendWindow,
     registerPage?.balanceToday,
     pendingLedger.first?.balanceToday,
@@ -1562,14 +1590,29 @@ export default function TransactionsPage() {
   const reviewWrites = useChaseReviewWrites();
   const reviewByIds = async (ids: string[], reviewed: boolean) => {
     if (!ids.length) return;
+    // The write refetches the Chase lists itself, once (PR14 review M3).
     const { succeeded, failed } = await reviewWrites.reviewIds(ids, reviewed);
-    // Failed saves stay selected; saved rows leave the selection.
+    // (PR14 review LOW-4) Merge, never replace: saved rows leave the selection and
+    // failed rows stay in it, and anything selected meanwhile (before a later
+    // Undo, say) is kept.
     setAllMatching(null);
-    setSelected(new Set(failed));
-    await invalidateBankLedger(queryClient);
-    void queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of succeeded) next.delete(id);
+      for (const id of failed) next.add(id);
+      return next;
+    });
     toast({
-      title: `${succeeded.size} ${reviewed ? "marked reviewed" : "restored for review"}${failed.length ? `, ${failed.length} failed` : ""}`,
+      title: (
+        <>
+          <MonoCount n={succeeded.size} /> {reviewed ? "marked reviewed" : "restored for review"}
+          {failed.length ? (
+            <>
+              , <MonoCount n={failed.length} /> failed
+            </>
+          ) : null}
+        </>
+      ),
       description: failed.length ? "Failed rows remain selected. Try again." : "Balances and forecast are unchanged.",
       variant: failed.length ? "destructive" : "default",
       action: succeeded.size ? <ToastAction altText="Undo reviewed status" onClick={() => void reviewByIds(Array.from(succeeded), !reviewed)}>Undo</ToastAction> : undefined,
@@ -1587,10 +1630,12 @@ export default function TransactionsPage() {
     );
     if (outcome.kind === "ok") {
       clearSelection();
-      await invalidateBankLedger(queryClient);
-      void queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
       toast({
-        title: `${outcome.updated} ${reviewed ? "marked reviewed" : "restored for review"}`,
+        title: (
+          <>
+            <MonoCount n={outcome.updated} /> {reviewed ? "marked reviewed" : "restored for review"}
+          </>
+        ),
         description: "Balances and forecast are unchanged.",
         action: outcome.updatedIds.length ? <ToastAction altText="Undo reviewed status" onClick={() => void reviewByIds(outcome.updatedIds, !reviewed)}>Undo</ToastAction> : undefined,
       });
@@ -1599,13 +1644,16 @@ export default function TransactionsPage() {
     if (outcome.kind === "count_changed") {
       // Nothing was written. Show the new count and make the user choose again.
       setAllMatching(null);
-      await invalidateBankLedger(queryClient);
       toast({
         title: "The count changed. Nothing was marked.",
         description:
-          outcome.matchingCount != null
-            ? `${outcome.matchingCount.toLocaleString("en-US")} match now. Select again to review them.`
-            : "Select again to review them.",
+          outcome.matchingCount != null ? (
+            <>
+              <MonoCount n={outcome.matchingCount} /> match now. Select again to review them.
+            </>
+          ) : (
+            "Select again to review them."
+          ),
         variant: "destructive",
       });
       return;
@@ -1613,7 +1661,11 @@ export default function TransactionsPage() {
     if (outcome.kind === "too_many") {
       setAllMatching(null);
       toast({
-        title: "Over 1,000 match. Nothing was marked.",
+        title: (
+          <>
+            Over <MonoCount n={1000} /> match. Nothing was marked.
+          </>
+        ),
         description: "Narrow the range and try again.",
         variant: "destructive",
       });
@@ -2049,10 +2101,11 @@ export default function TransactionsPage() {
   // Gate on data only — global keepPreviousData keeps the previous
   // transactions list visible during refetches so we never flash a
   // skeleton after the first load.
-  // (PR14) The register's first page. An account the ledger does not cover
-  // renders the page (the picker stays reachable) with a note in the list.
-  if (register.enabled && !registerPage && register.errorCode !== "invalid_account") {
-    return register.isLoadingError ? <div role="alert" className={errorBanner}>Chase transactions could not load. <button className={btnLink} onClick={() => void register.refetch()}>Retry transactions</button></div> : <AccountPageSkeleton tiles={5} />;
+  // (PR14 review H1) Only a cold first load shows the skeleton. A failed load renders
+  // the whole page, header and account picker included, with the error and Retry
+  // in the list: one account's error can never dead-end the page.
+  if (register.enabled && !registerPage && !register.isLoadingError) {
+    return <AccountPageSkeleton tiles={5} />;
   }
 
   // (#741/#742) The shared row-chip cluster moved into
@@ -2144,7 +2197,7 @@ export default function TransactionsPage() {
   // or per-account). Refresh-from-Plaid is offered for any selected
   // Plaid checking account so the user can populate / advance that
   // account's snapshot directly from this page.
-  const hasLinkedChecking = !!effectiveSnapshot;
+  const hasLinkedChecking = !!effectiveSnapshot || balanceUnavailable;
   // The end of the range, through today, on the server's register. Null without
   // a snapshot time: a null shows "—", never a `?? 0` dressed as $0.00.
   const checkingEnd = rangeBalances.endBal;
@@ -2243,7 +2296,13 @@ export default function TransactionsPage() {
                   />
                 ) : (
                   <div className="grid h-10 place-items-center text-micro text-neutral-400">
-                    No rows through today
+                    {/* (PR14 review LOW-3) Say which: no day through today, a failed
+                        load, or a new range still loading. */}
+                    {register.isLoadingError
+                      ? "Couldn't load"
+                      : !register.enabled
+                        ? "No rows through today"
+                        : "—"}
                   </div>
                 )}
                 <div className="mt-3 flex items-baseline gap-2">
@@ -2270,7 +2329,15 @@ export default function TransactionsPage() {
                 <span className="text-title font-semibold text-brand-navy">
                   Checking balance
                 </span>
-                {checkingEnd != null ? (
+                {balanceUnavailable ? (
+                  <span
+                    className="ml-auto text-label font-semibold text-neutral-500"
+                    title="Only the account the bank balance reads has a balance here."
+                    data-testid="chase-balance-unavailable"
+                  >
+                    Balance unavailable
+                  </span>
+                ) : checkingEnd != null ? (
                   <MoneyText
                     amount={checkingEnd}
                     className="ml-auto font-mono text-title font-semibold tabular-nums text-brand-navy"
@@ -2476,13 +2543,16 @@ export default function TransactionsPage() {
         canSelectPage={pageIds.length > 0}
         freshness={<FreshnessLine bank={spine.data?.bank} />}
       />
-      {register.errorCode === "invalid_account" && (
-        <div className={card}>
-          <div className={emptyNote} data-testid="chase-no-ledger">
-            No ledger for this account yet.
+      {register.isLoadingError &&
+        register.errorCode !== "account_not_ledger" &&
+        register.errorCode !== "invalid_account" && (
+          <div role="alert" className={errorBanner} data-testid="chase-ledger-error">
+            Chase transactions could not load.{" "}
+            <button className={btnLink} onClick={() => void register.refetch()}>
+              Retry transactions
+            </button>
           </div>
-        </div>
-      )}
+        )}
       {matchingCount != null &&
         (allMatching || (pageAllSelected && matchingCount > registerRows.length)) && (
           <ChaseSelectAllBanner
@@ -2538,7 +2608,7 @@ export default function TransactionsPage() {
       )}
 
       {(registerPage || !register.enabled) &&
-        register.errorCode !== "invalid_account" &&
+        !register.isLoadingError &&
         groups.length === 0 &&
         visiblePending.length === 0 && (
           <div className={card}>
@@ -2564,7 +2634,8 @@ export default function TransactionsPage() {
         const allSelected = ids.every((id) => selected.has(id));
         const someSelected =
           !allSelected && ids.some((id) => selected.has(id));
-        const dayNet = items.reduce((s, t) => s + parseSigned(t.amount), 0);
+        // (PR14 review M1) Counted rows only, and never a row dated after today.
+        const dayNet = sumCounted(items.filter((t) => !t.afterToday));
         const dayNetNode = (
           <span
             className={cn("tabular-nums", moneyColorClass(dayNet))}
@@ -2667,7 +2738,9 @@ export default function TransactionsPage() {
         const allSelected = ids.every((id) => selected.has(id));
         const someSelected = !allSelected && ids.some((id) => selected.has(id));
         const isToday = dayKey === todayKey;
-        const dayNet = items.reduce((s, t) => s + parseSigned(t.amount), 0);
+        // (PR14 review M1) What the ledger counts: a mask-twin, duplicate or replaced
+        // row adds 0, so the day reconciles with the card.
+        const dayNet = sumCounted(items);
         const dayNetNode =
           dayKey === partialDayKey ? (
             <span
@@ -2786,7 +2859,7 @@ export default function TransactionsPage() {
           </div>
         );
       })}
-      {registerPage && (
+      {registerPage && !statsStale && (
         <ChaseLedgerPager
           showing={registerRows.length}
           matching={registerPage.matchingCount}

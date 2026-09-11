@@ -4,6 +4,8 @@ import {
   BALANCE_DATES_MAX,
   LEDGER_PAGE_SIZE,
   balanceDates,
+  countedAmount,
+  sumCounted,
   flattenLedgerPages,
   ledgerRowLabels,
   moneyOrNull,
@@ -163,5 +165,21 @@ describe("ledgerRowLabels: the words carry the state", () => {
     const twin = ledgerRowLabels({ ...base, countsInBalance: false, balanceReason: "superseded" });
     expect(twin.map((l) => l.label)).toEqual(["Not counted"]);
     expect(twin[0]!.title).toBe("Replaced by its posted row.");
+  });
+});
+
+describe("(PR14 review M1) counted amounts", () => {
+  it("a counted row adds its balance amount; a twin, duplicate or replaced row adds 0", () => {
+    expect(countedAmount({ amount: "-82.92", countsInBalance: true, balanceAmount: "-82.92" })).toBe(-82.92);
+    expect(countedAmount({ amount: "-63.21", countsInBalance: false, balanceAmount: "0.00" })).toBe(0);
+  });
+  it("on an account with no register (balanceAmount null), countsInBalance decides", () => {
+    expect(countedAmount({ amount: "-30.00", countsInBalance: true, balanceAmount: null })).toBe(-30);
+    expect(countedAmount({ amount: "-30.00", countsInBalance: false, balanceAmount: null })).toBe(0);
+  });
+  it("sums in whole cents", () => {
+    const row = (a: string) => ({ amount: a, countsInBalance: true, balanceAmount: a });
+    expect(sumCounted([row("0.10"), row("0.20")])).toBe(0.3);
+    expect(sumCounted([row("-82.92"), { amount: "-63.21", countsInBalance: false, balanceAmount: "0.00" }])).toBe(-82.92);
   });
 });

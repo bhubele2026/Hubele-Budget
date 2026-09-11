@@ -47,3 +47,39 @@ export function isBankLedgerQueryKey(key: readonly unknown[]): boolean {
 export function invalidateBankLedger(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ predicate: (q) => isBankLedgerQueryKey(q.queryKey) });
 }
+
+/** (PR14 review M3) The Chase list's pages only: not the balances behind its charts. */
+export function isBankLedgerListKey(key: readonly unknown[]): boolean {
+  return key.some((k) => typeof k === "string" && k.startsWith("/api/transactions/ledger"));
+}
+
+/**
+ * (PR14 review M3) Marks the Chase list's pages stale once. A review write
+ * moves the `reviewed` flag and nothing else (`chaseReviewMovesNoMoney`
+ * integration test): no balance, spending figure or spine number, so it
+ * refetches the lists and nothing more.
+ */
+export function invalidateBankLedgerLists(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ predicate: (q) => isBankLedgerListKey(q.queryKey) });
+}
+
+/**
+ * (PR14 review M3) Mutation `meta` for a write that invalidates exactly what it
+ * moves itself, once, instead of the rule above firing per request: the Chase
+ * review writes (a 200-id chunk loop would fire it per chunk, each refetch
+ * cancelling the last while the server still did the work) and the UI-preference
+ * save (it moves no data at all).
+ */
+export const OWN_INVALIDATION = { invalidateAfterWrite: false } as const;
+
+export function shouldInvalidateAfterWrite(meta: Record<string, unknown> | undefined): boolean {
+  return meta?.invalidateAfterWrite !== false;
+}
+
+/** What `App.tsx`'s `mutationCache` runs after every successful write. */
+export function onWriteSuccess(
+  queryClient: QueryClient,
+  mutation: { meta?: Record<string, unknown> },
+): void {
+  if (shouldInvalidateAfterWrite(mutation.meta)) invalidateAfterWrite(queryClient);
+}

@@ -1,9 +1,6 @@
 import { useMemo } from "react";
-import {
-  useGetTransactionsLedgerInfinite,
-  type LedgerPage,
-  type LedgerRow,
-} from "@workspace/api-client-react";
+import type { LedgerPage, LedgerRow } from "@workspace/api-client-react";
+import { useGetTransactionsLedgerInfinite } from "@workspace/api-client-react/ledger";
 import {
   LEDGER_CACHE,
   flattenLedgerPages,

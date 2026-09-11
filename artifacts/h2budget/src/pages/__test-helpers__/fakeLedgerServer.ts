@@ -55,7 +55,7 @@ export function ledgerRow(r: FakeRowInput): LedgerRow {
     pending: false,
     reviewed: false,
     runningBalance: null,
-    balanceAmount: amount,
+    balanceAmount: r.countsInBalance === false ? "0.00" : amount,
     countsInBalance: true,
     balanceReason: "counted",
     replacedPendingId: null,
@@ -81,6 +81,17 @@ export type FakeLedgerOptions = {
   /** Answer every ledger GET with this status (and `ledgerErrorCode`). */
   ledgerStatus?: number;
   ledgerErrorCode?: string;
+  /** (PR14 review H1) Answer the first N ledger GETs with 500, then normally. */
+  ledgerFailures?: number;
+  /**
+   * (PR14 review H1) Accounts other than the snapshot's: `account=<id>` lists these
+   * rows with every balance null and `balanceUnavailableReason: "not_snapshot_account"`.
+   */
+  otherAccounts?: Record<string, FakeRowInput[]>;
+  /** (PR14 review H1) `account=<id>` answers 400 `account_not_ledger`. */
+  refusedAccounts?: string[];
+  /** Holds a ledger GET until the returned promise settles (to observe a loading state). */
+  holdLedger?: (query: URLSearchParams) => Promise<void> | undefined;
 };
 
 export type FakeCall = {
@@ -119,6 +130,14 @@ const money = (c: number) => (c / 100).toFixed(2);
 
 export function createFakeLedgerServer(opts: FakeLedgerOptions) {
   const rows: LedgerRow[] = opts.rows.map(ledgerRow);
+  const otherRows = new Map<string, LedgerRow[]>(
+    Object.entries(opts.otherAccounts ?? {}).map(([id, list]) => [
+      id,
+      list.map((r) => ({ ...ledgerRow(r), balanceAmount: null, runningBalance: null }) as unknown as LedgerRow),
+    ]),
+  );
+  const allRows = () => [...rows, ...Array.from(otherRows.values()).flat()];
+  let ledgerGetCount = 0;
   const prefs: Record<string, unknown> = { ...(opts.prefs ?? {}) };
   const calls: FakeCall[] = [];
   const today = opts.today ?? "2026-09-16";
@@ -160,9 +179,21 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
     const q = url.searchParams;
 
     if (url.pathname === "/api/transactions/ledger" && method === "GET") {
+      ledgerGetCount += 1;
+      const hold = opts.holdLedger?.(q);
+      if (hold) await hold;
       if (opts.ledgerStatus) {
         return json(opts.ledgerStatus, { error: "refused", code: opts.ledgerErrorCode ?? "error" });
       }
+      if (opts.ledgerFailures && ledgerGetCount <= opts.ledgerFailures) {
+        return json(500, { error: "boom" });
+      }
+      const accountParam = q.get("account");
+      if (accountParam && opts.refusedAccounts?.includes(accountParam)) {
+        return json(400, { error: "not a ledger account", code: "account_not_ledger" });
+      }
+      const other = accountParam ? otherRows.get(accountParam) : undefined;
+      const scopeRows = other ?? rows;
       const f: Filter = {
         from: q.get("from") ?? undefined,
         to: q.get("to") ?? undefined,
@@ -173,12 +204,13 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
       };
       const limit = Number(q.get("limit") ?? "50");
       const offset = Number(q.get("cursor") ?? "0");
-      const matching = rows.filter((t) => matches(t, f)).sort(newestFirst);
-      const base = rows.filter((t) => matches(t, f, true));
+      const matching = scopeRows.filter((t) => matches(t, f)).sort(newestFirst);
+      const base = scopeRows.filter((t) => matches(t, f, true));
       let moneyIn = 0;
       let moneyOut = 0;
       for (const t of base) {
-        const c = cents(t.balanceAmount);
+        const c =
+          t.balanceAmount != null ? cents(t.balanceAmount) : t.countsInBalance ? cents(t.amount) : 0;
         if (c > 0) moneyIn += c;
         else moneyOut -= c;
       }
@@ -190,10 +222,15 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
         matchingCount: matching.length,
         totals: { count: base.length, moneyIn: money(moneyIn), moneyOut: money(moneyOut), net: money(moneyIn - moneyOut) },
         review: { reviewed, unreviewed: base.length - reviewed },
-        balanceStart: opts.balanceStart ?? null,
-        balanceEnd: opts.balanceEnd ?? null,
-        balanceToday: opts.balanceToday ?? null,
-        anchor: anchor(),
+        balanceStart: other ? null : (opts.balanceStart ?? null),
+        balanceEnd: other ? null : (opts.balanceEnd ?? null),
+        balanceToday: other ? null : (opts.balanceToday ?? null),
+        balanceUnavailableReason: other
+          ? "not_snapshot_account"
+          : opts.balanceToday == null
+            ? "no_snapshot"
+            : null,
+        anchor: other ? { ...anchor(), todayBalance: null } : anchor(),
         account,
       });
     }
@@ -201,7 +238,16 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
     if (url.pathname === "/api/transactions/balances" && method === "GET") {
       const dates = (q.get("dates") ?? "").split(",").filter(Boolean);
       return json(200, {
-        balances: dates.map((date) => ({ date, balance: opts.balanceByDate?.[date] ?? null })),
+        balances: dates.map((date) => ({
+          date,
+          balance: q.get("account") && otherRows.has(q.get("account")!) ? null : (opts.balanceByDate?.[date] ?? null),
+        })),
+        balanceUnavailableReason:
+          q.get("account") && otherRows.has(q.get("account")!)
+            ? "not_snapshot_account"
+            : opts.balanceToday == null
+              ? "no_snapshot"
+              : null,
         anchor: anchor(),
         account,
       });
@@ -213,7 +259,7 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
       const ids: string[] = body.ids;
       const results = ids.map((id) => {
         if (opts.failReviewIds?.includes(id)) return { id, ok: false, error: "retry" };
-        const row = rows.find((t) => t.id === id);
+        const row = allRows().find((t) => t.id === id);
         if (row && body.patch?.reviewed !== undefined) row.reviewed = body.patch.reviewed;
         return { id, ok: true };
       });
@@ -225,7 +271,8 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
     }
 
     if (url.pathname === "/api/transactions/bulk-review-matching" && method === "POST") {
-      const matched = rows.filter((t) => matches(t, body.filter ?? {}));
+      const scope = body.filter?.account ? (otherRows.get(body.filter.account) ?? rows) : rows;
+      const matched = scope.filter((t) => matches(t, body.filter ?? {}));
       if (matched.length > 1000) {
         return json(400, { error: "too many", code: "too_many_rows" });
       }
@@ -267,6 +314,8 @@ export function createFakeLedgerServer(opts: FakeLedgerOptions) {
       rows.push(ledgerRow(r));
     },
     /** Ledger GETs, oldest first, optionally only those whose `from` is given. */
+    /** GET /transactions/balances requests so far. */
+    balanceGets: () => calls.filter((c) => c.path === "/api/transactions/balances"),
     ledgerGets: (from?: string) =>
       calls.filter(
         (c) =>

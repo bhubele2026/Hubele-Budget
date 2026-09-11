@@ -1,6 +1,10 @@
 import React from "react";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, fireEvent, cleanup, waitFor, within, act } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MutationCache, QueryClient, QueryClientProvider, keepPreviousData } from "@tanstack/react-query";
+import { onWriteSuccess } from "@/lib/mutationInvalidation";
+import { formatCurrency } from "@/lib/utils";
+import { nodeText, toastTexts } from "./__test-helpers__/toastText";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFakeLedgerServer,
@@ -28,6 +32,8 @@ const state = vi.hoisted(() => ({
   listTransactions: vi.fn(),
   forecast: undefined as unknown,
   spine: undefined as unknown,
+  cashSignal: undefined as unknown,
+  trendProps: [] as any[],
 }));
 
 vi.mock("@workspace/api-client-react", async (original) => {
@@ -67,6 +73,7 @@ vi.mock("@workspace/api-client-react", async (original) => {
     useListPlaidItems: () => ({ data: state.empty }),
     useGetForecast: () => ({ data: state.forecast }),
     useGetSpine: () => ({ data: state.spine, isLoading: false, isFetching: false, refetch: vi.fn() }),
+    useGetForecastCashSignal: () => ({ data: state.cashSignal }),
   };
 });
 vi.mock("wouter", () => ({
@@ -102,7 +109,10 @@ vi.mock("@/components/chase-insight-strip", () => ({
   ChaseInsightStrip: () => null,
 }));
 vi.mock("@/components/account-page/balance-trend-chart", () => ({
-  BalanceTrendChart: () => null,
+  BalanceTrendChart: (props: any) => {
+    state.trendProps.push(props);
+    return null;
+  },
 }));
 vi.mock("./transactions/InlineAmountEditor", () => ({
   InlineAmountEditor: ({ tx }: any) => <span data-testid={`amount-${tx.id}`}>{tx.amount}</span>,
@@ -200,11 +210,21 @@ async function ready(text: string) {
 beforeEach(() => {
   localStorage.clear();
   window.history.replaceState(null, "", "/transactions");
-  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // The app's own after-write rule (App.tsx), so request counts are the app's.
+  qc = new QueryClient({
+    mutationCache: new MutationCache({
+      onSuccess: (_d, _v, _c, mutation) => onWriteSuccess(qc, mutation),
+    }),
+    // App.tsx's global stale-while-revalidate: a new filter shows the last one's
+    // data while it loads, which is exactly the state LOW-2 must not mislabel.
+    defaultOptions: { queries: { retry: false, placeholderData: keepPreviousData } },
+  });
   state.toast.mockReset();
   state.listTransactions.mockReset();
   state.forecast = { ...LINKED_FORECAST, bankSnapshot: null };
   state.spine = undefined;
+  state.cashSignal = undefined;
+  state.trendProps = [];
 });
 afterEach(() => {
   cleanup();
@@ -299,7 +319,7 @@ describe("selection and bulk review", () => {
 
     fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
     await waitFor(() =>
-      expect(state.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "120 marked reviewed" })),
+      expect(toastTexts(state.toast)).toContainEqual(expect.objectContaining({ title: "120 marked reviewed" })),
     );
     const post = server.calls.find((c) => c.path === "/api/transactions/bulk-review-matching")!;
     expect(post.body).toEqual({
@@ -327,7 +347,7 @@ describe("selection and bulk review", () => {
     fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
 
     await waitFor(() =>
-      expect(state.toast).toHaveBeenCalledWith(
+      expect(toastTexts(state.toast)).toContainEqual(
         expect.objectContaining({
           title: "The count changed. Nothing was marked.",
           description: "121 match now. Select again to review them.",
@@ -350,7 +370,7 @@ describe("selection and bulk review", () => {
     fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
 
     await waitFor(() =>
-      expect(state.toast).toHaveBeenCalledWith(
+      expect(toastTexts(state.toast)).toContainEqual(
         expect.objectContaining({ title: "2 marked reviewed, 1 failed", variant: "destructive" }),
       ),
     );
@@ -374,7 +394,7 @@ describe("selection and bulk review", () => {
     fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
 
     await waitFor(() =>
-      expect(state.toast).toHaveBeenCalledWith(
+      expect(toastTexts(state.toast)).toContainEqual(
         expect.objectContaining({ title: "200 marked reviewed, 50 failed" }),
       ),
     );
@@ -396,7 +416,7 @@ describe("clearing reviewed rows", () => {
     for (const id of picked) fireEvent.click(screen.getByText(`Select ${id}`));
     fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
     await waitFor(() =>
-      expect(state.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "20 marked reviewed" })),
+      expect(toastTexts(state.toast)).toContainEqual(expect.objectContaining({ title: "20 marked reviewed" })),
     );
     const update = server.calls.find((c) => c.path === "/api/transactions/bulk-update")!;
     expect(update.body).toEqual({ ids: picked, patch: { reviewed: true } });
@@ -494,7 +514,8 @@ describe("rows the balance treats specially", () => {
     expect(screen.queryByTestId("text-running-balance-twin")).toBeNull();
     const pendingQuery = server.calls.find((c) => c.query.get("pending") === "true")!.query;
     expect(pendingQuery.get("from")).toBeNull();
-    expect(pendingQuery.get("to")).toBe(TODAY);
+    // (PR14 review LOW-1) No `to`: a pending row dated after today is listed too.
+    expect(pendingQuery.get("to")).toBeNull();
   });
 });
 
@@ -526,5 +547,248 @@ describe("no $0 for missing data", () => {
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Chase transactions could not load."));
     expect(screen.getByText("Retry transactions")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/\$\d/);
+  });
+});
+
+describe("(PR14 review) fixes", () => {
+  const TWO_ACCOUNTS = {
+    ...LINKED_FORECAST,
+    bankSnapshot: { ...LINKED_FORECAST.bankSnapshot, accountId: "acct-a", source: "plaid" },
+    plaidCheckingAccounts: [
+      { id: "acct-a", accountId: "ext-a", name: "Total Checking", mask: "1111", institutionName: "Chase" },
+      { id: "acct-a2", accountId: "ext-a2", name: "Total Checking", mask: "1111", institutionName: "Chase" },
+      { id: "acct-b", accountId: "ext-b", name: "Business Checking", mask: "2222", institutionName: "Chase" },
+    ],
+  };
+
+  it("H1: a second, non-twin Chase account lists its rows and totals with 'Balance unavailable', and no balances", async () => {
+    localStorage.setItem("h2budget:chase-account", "acct-b");
+    state.forecast = TWO_ACCOUNTS;
+    serve({
+      rows: [{ id: "a1", occurredOn: TODAY, amount: "-5.00", runningBalance: "995.00" }],
+      balanceStart: "1000.00",
+      balanceEnd: "995.00",
+      balanceToday: "995.00",
+      otherAccounts: {
+        "acct-b": [
+          { id: "b1", occurredOn: TODAY, occurredAt: `${TODAY}T10:00:00.000Z`, amount: "-30.00" },
+          { id: "b2", occurredOn: "2026-09-14", occurredAt: "2026-09-14T10:00:00.000Z", amount: "100.00" },
+          { id: "b2twin", occurredOn: "2026-09-14", occurredAt: "2026-09-14T09:00:00.000Z", amount: "100.00", countsInBalance: false, balanceReason: "not_bank" },
+        ],
+      },
+    });
+    show();
+    await ready("Showing 3 of 3 · 3 to review");
+    expect(registerGets()[0]!.query.get("account")).toBe("acct-b");
+    expect(screen.getByTestId("chase-account-picker")).toBeTruthy();
+    expect(screen.getByTestId("chase-balance-unavailable").textContent).toBe("Balance unavailable");
+    expect(screen.queryByTestId("row-tx-a1")).toBeNull();
+    expect(screen.getByTestId("row-tx-b1")).toBeTruthy();
+    expect(screen.getByTestId("label-not-counted-b2twin").textContent).toBe("Not counted");
+    expect(screen.queryAllByTestId(/^text-running-balance-/)).toHaveLength(0);
+    const inOut = screen.getByTestId("chase-stats-in-out").textContent ?? "";
+    expect(inOut).toContain("$100.00");
+    expect(inOut).toContain("$30.00");
+    expect(inOut).not.toContain("$200.00");
+    // The twin adds nothing to its day.
+    expect(screen.getByTestId("day-net-2026-09-14").textContent).toBe(`+${formatCurrency(100)}`);
+    // No balance is asked for, drawn, or invented.
+    expect(server.balanceGets()).toHaveLength(0);
+    expect(state.trendProps).toHaveLength(0);
+    expect(document.body.textContent).not.toContain("$0.00");
+  });
+
+  it("H1: a saved account the server refuses resets to the default account, clearing ?account= and the saved choice", async () => {
+    localStorage.setItem("h2budget:chase-account", "acct-gone");
+    // The forecast bundle has not answered, so only the server can say the account is wrong.
+    state.forecast = undefined;
+    serve({ rows: weekRows(2), refusedAccounts: ["acct-gone"] });
+    show();
+    await ready("Showing 2 of 2 · 2 to review");
+    const gets = registerGets();
+    expect(gets[0]!.query.get("account")).toBe("acct-gone");
+    expect(gets.at(-1)!.query.get("account")).toBeNull();
+    await waitFor(() => expect(localStorage.getItem("h2budget:chase-account")).toBeNull());
+    expect(window.location.search).not.toContain("account=");
+    expect(toastTexts(state.toast)).toContainEqual(
+      expect.objectContaining({ title: "That account has no ledger. Showing the bank balance account." }),
+    );
+  });
+
+  it("H1: a failed load keeps the header, picker and controls on screen, says why not 'No rows', and Retry recovers", async () => {
+    state.forecast = TWO_ACCOUNTS;
+    // Register, pending and after-today lists all fail on the first try.
+    serve({ rows: weekRows(2), ledgerFailures: 3 });
+    show();
+    const error = await screen.findByTestId("chase-ledger-error");
+    expect(error.textContent).toContain("Chase transactions could not load.");
+    expect(screen.getByTestId("chase-account-picker")).toBeTruthy();
+    expect(screen.getByTestId("chase-review-controls")).toBeTruthy();
+    const inOut = screen.getByTestId("chase-stats-in-out").textContent ?? "";
+    expect(inOut).toContain("Couldn't load");
+    expect(inOut).not.toContain("No rows through today");
+    expect(screen.queryByTestId("chase-empty")).toBeNull();
+    fireEvent.click(within(error).getByText("Retry transactions"));
+    await ready("Showing 2 of 2 · 2 to review");
+    expect(screen.queryByTestId("chase-ledger-error")).toBeNull();
+  });
+
+  it("M1: a day's total counts what the ledger counts: a twin and a duplicate add nothing, and it reconciles with the card", async () => {
+    state.forecast = LINKED_FORECAST;
+    serve({
+      rows: [
+        { id: "coffee", occurredOn: "2026-09-15", occurredAt: "2026-09-15T10:00:00.000Z", amount: "-82.92" },
+        { id: "twin", occurredOn: "2026-09-15", occurredAt: "2026-09-15T11:00:00.000Z", amount: "-63.21", countsInBalance: false, balanceReason: "not_bank" },
+        { id: "dup", occurredOn: "2026-09-15", occurredAt: "2026-09-15T12:00:00.000Z", amount: "-82.92", countsInBalance: false, balanceReason: "duplicate" },
+        { id: "pay", occurredOn: "2026-09-14", amount: "500.00" },
+      ],
+    });
+    show();
+    await ready("Showing 4 of 4 · 4 to review");
+    expect(screen.getByTestId("day-net-2026-09-15").textContent).toBe(formatCurrency(-82.92));
+    expect(screen.getByTestId("day-net-2026-09-14").textContent).toBe(`+${formatCurrency(500)}`);
+    const inOut = screen.getByTestId("chase-stats-in-out").textContent ?? "";
+    expect(inOut).toContain("$82.92");
+    expect(inOut).not.toContain("$146.13");
+    expect(inOut).not.toContain("$228.05");
+  });
+
+  it("LOW-1 and M1: a pending row dated after today is listed, labelled, and left out of the Pending total, as is a pending twin", async () => {
+    serve({
+      rows: [
+        { id: "p1", occurredOn: TODAY, occurredAt: `${TODAY}T10:00:00.000Z`, pending: true, amount: "-12.00" },
+        { id: "ptwin", occurredOn: TODAY, occurredAt: `${TODAY}T09:00:00.000Z`, pending: true, amount: "-12.00", countsInBalance: false, balanceReason: "not_bank" },
+        { id: "ptomorrow", occurredOn: "2026-09-17", pending: true, amount: "-9.99", afterToday: true, description: "PENDING TOMORROW" },
+      ],
+    });
+    show();
+    await waitFor(() => expect(screen.getByTestId("row-tx-ptomorrow")).toBeTruthy());
+    expect(screen.getByTestId("label-after-today-ptomorrow").textContent).toBe("After today");
+    expect(screen.getAllByTestId("row-tx-ptomorrow")).toHaveLength(1);
+    expect(screen.getByTestId("day-net-pending").textContent).toBe(formatCurrency(-12));
+  });
+
+  it("M3: one review refetches each loaded list once, and nothing else; saving the hide setting refetches no balances", async () => {
+    state.forecast = LINKED_FORECAST;
+    serve({ rows: weekRows(150), balanceStart: "1000.00", balanceEnd: "900.00", balanceToday: "900.00" });
+    show();
+    await ready("Showing 50 of 150 · 150 to review");
+    fireEvent.click(screen.getByTestId("chase-load-more"));
+    await ready("Showing 100 of 150 · 150 to review");
+    fireEvent.click(screen.getByTestId("chase-load-more"));
+    await ready("Showing 150 of 150 · 150 to review");
+    await waitFor(() => expect(server.balanceGets().length).toBeGreaterThan(0));
+    await new Promise((r) => setTimeout(r, 30));
+
+    const before = server.calls.length;
+    fireEvent.click(within(screen.getByTestId("row-tx-r149")).getByText("Mark reviewed"));
+    await waitFor(() =>
+      expect(toastTexts(state.toast)).toContainEqual(expect.objectContaining({ title: "1 marked reviewed" })),
+    );
+    await ready("Showing 150 of 150 · 149 to review");
+    await new Promise((r) => setTimeout(r, 30));
+    const after = server.calls.slice(before);
+    const ledger = after.filter((c) => c.path === "/api/transactions/ledger");
+    // One pass over the register's three loaded pages, in order; one each for the others.
+    expect(ledger.filter((c) => c.query.get("from") === REGISTER_FROM).map((c) => c.query.get("cursor"))).toEqual([null, "50", "100"]);
+    expect(ledger.filter((c) => c.query.get("pending") === "true")).toHaveLength(1);
+    expect(ledger.filter((c) => c.query.get("from") === "2026-09-17")).toHaveLength(1);
+    expect(ledger).toHaveLength(5);
+    expect(after.filter((c) => c.path === "/api/transactions/balances")).toHaveLength(0);
+    expect(after.filter((c) => c.method !== "GET")).toHaveLength(1);
+
+    const balancesBefore = server.balanceGets().length;
+    fireEvent.click(screen.getByText("Clear reviewed from list"));
+    await ready("Showing 50 of 149 · 149 to review");
+    await waitFor(() => expect(server.prefs.chaseHideReviewed).toBe(true));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(server.balanceGets().length).toBe(balancesBefore);
+  });
+
+  it("LOW-2: while a new filter loads, the old figures are not shown under it", async () => {
+    state.forecast = LINKED_FORECAST;
+    let release: () => void = () => {};
+    serve({
+      rows: weekRows(4),
+      balanceStart: "1000.00",
+      balanceEnd: "960.00",
+      balanceToday: "960.00",
+      holdLedger: (q) =>
+        q.get("reviewed") === "false" && q.get("from") === REGISTER_FROM
+          ? new Promise<void>((r) => {
+              release = r;
+            })
+          : undefined,
+    });
+    show();
+    await ready("Showing 4 of 4 · 4 to review");
+    expect(screen.getByTestId("chase-stats-in-out").textContent).toContain("$40.00");
+    fireEvent.click(screen.getByText("Clear reviewed from list"));
+    await waitFor(() => expect(screen.getByTestId("chase-stats-in-out").textContent).not.toContain("$40.00"));
+    expect(screen.getByTestId("chase-stats-in-out").textContent).toContain("—");
+    expect(screen.getByTestId("chase-stats-balance").textContent).not.toContain("$1,000.00");
+    expect(screen.queryByTestId("chase-showing")).toBeNull();
+    expect(screen.getByTestId("chase-to-review").textContent).toContain("—");
+    act(() => release());
+    await ready("Showing 4 of 4 · 4 to review");
+    expect(screen.getByTestId("chase-stats-in-out").textContent).toContain("$40.00");
+  });
+
+  it("LOW-4: reviewing one row, and its Undo, keep the other rows the user selected", async () => {
+    serve({ rows: weekRows(3) });
+    show();
+    await ready("Showing 3 of 3 · 3 to review");
+    fireEvent.click(screen.getByText("Select r000"));
+    fireEvent.click(screen.getByText("Select r001"));
+    fireEvent.click(within(screen.getByTestId("row-tx-r002")).getByText("Mark reviewed"));
+    await waitFor(() =>
+      expect(toastTexts(state.toast)).toContainEqual(expect.objectContaining({ title: "1 marked reviewed" })),
+    );
+    expect(screen.getByTestId("bulk-bar").textContent).toContain("2 selected");
+    const undo = toastTexts(state.toast).find((t) => t.title === "1 marked reviewed")!.action as any;
+    await act(async () => {
+      undo.props.onClick();
+    });
+    await waitFor(() =>
+      expect(toastTexts(state.toast)).toContainEqual(expect.objectContaining({ title: "1 restored for review" })),
+    );
+    expect(screen.getByTestId("bulk-bar").textContent).toContain("2 selected");
+    expect(server.rows.find((r) => r.id === "r002")!.reviewed).toBe(false);
+  });
+
+  it("LOW-5: with no balance for today, the chart gets no seed, never the cash signal's starting balance", async () => {
+    state.forecast = LINKED_FORECAST;
+    state.cashSignal = { bankToday: "777.00", daily: [] };
+    serve({ rows: weekRows(1), balanceToday: null });
+    show();
+    await ready("Showing 1 of 1 · 1 to review");
+    const props = state.trendProps.at(-1);
+    expect(props.forecastFromToday).toEqual([]);
+    expect(props.actualFromToday).toEqual([]);
+    expect(JSON.stringify(props)).not.toContain("777");
+  });
+
+  it("LOW-5 control: with today's balance, the chart is seeded at it", async () => {
+    state.forecast = LINKED_FORECAST;
+    state.cashSignal = { bankToday: "777.00", daily: [] };
+    serve({ rows: weekRows(1), balanceToday: "960.00" });
+    show();
+    await ready("Showing 1 of 1 · 1 to review");
+    await waitFor(() => expect(state.trendProps.at(-1).actualFromToday[0]?.balance).toBe(960));
+  });
+
+  it("NIT: the select-all count and the toast counts are mono", async () => {
+    serve({ rows: weekRows(60) });
+    show();
+    await ready("Showing 50 of 60 · 60 to review");
+    fireEvent.click(screen.getByTestId("chase-select-page"));
+    expect(screen.getByTestId("chase-select-all-count").className).toContain("font-mono");
+    fireEvent.click(screen.getByTestId("chase-select-all-matching"));
+    fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
+    await waitFor(() =>
+      expect(toastTexts(state.toast)).toContainEqual(expect.objectContaining({ title: "60 marked reviewed" })),
+    );
+    const call = state.toast.mock.calls.map((c) => c[0] as any).find((a) => nodeText(a.title) === "60 marked reviewed");
+    expect(renderToStaticMarkup(<>{call.title}</>)).toContain('class="font-mono tabular-nums"');
   });
 });

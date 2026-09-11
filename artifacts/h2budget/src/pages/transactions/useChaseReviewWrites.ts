@@ -1,8 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  useBulkReviewMatchingTransactions,
+  getListTransactionsQueryKey,
   useBulkUpdateTransactions,
   type LedgerFilter,
 } from "@workspace/api-client-react";
+import { useBulkReviewMatchingTransactions } from "@workspace/api-client-react/ledger";
+import { OWN_INVALIDATION, invalidateBankLedgerLists } from "@/lib/mutationInvalidation";
 
 /** The bulk-update endpoint's id cap per request. */
 const IDS_PER_REQUEST = 200;
@@ -31,15 +34,33 @@ export type ReviewMatchingOutcome =
  * - By filter ("Select all 260 matching"): POST
  *   /transactions/bulk-review-matching with the count the user saw. One
  *   transaction on the server; a different count is a 409 and writes nothing.
+ *
+ * ⭐ (PR14 review M3) ONE REFETCH PER WRITE. Both mutations opt out of the app's
+ * after-write rule (`OWN_INVALIDATION`): it would fire once per 200-id request,
+ * each firing cancelling the last refetch while the server still did its work,
+ * and it would refetch balances, the spine and reports, none of which a review
+ * moves. Instead, once the whole write is over, the Chase lists refetch once and
+ * the old transaction list is only marked stale.
  */
 export function useChaseReviewWrites() {
-  const bulkUpdate = useBulkUpdateTransactions();
-  const bulkMatching = useBulkReviewMatchingTransactions();
+  const queryClient = useQueryClient();
+  const bulkUpdate = useBulkUpdateTransactions({ mutation: { meta: OWN_INVALIDATION } });
+  const bulkMatching = useBulkReviewMatchingTransactions({ mutation: { meta: OWN_INVALIDATION } });
+
+  const afterWrite = async () => {
+    void queryClient.invalidateQueries({
+      queryKey: getListTransactionsQueryKey(),
+      refetchType: "none",
+    });
+    await invalidateBankLedgerLists(queryClient);
+  };
 
   const reviewIds = async (ids: string[], reviewed: boolean): Promise<ReviewIdsOutcome> => {
     const succeeded = new Set<string>();
+    let attempted = false;
     try {
       for (let i = 0; i < ids.length; i += IDS_PER_REQUEST) {
+        attempted = true;
         const result = await bulkUpdate.mutateAsync({
           data: { ids: ids.slice(i, i + IDS_PER_REQUEST), patch: { reviewed } },
         });
@@ -48,6 +69,8 @@ export function useChaseReviewWrites() {
     } catch {
       // The failed request's ids, and every id after it, count as failed below.
     }
+    // A failed request may still have written part of its rows: refetch whenever one ran.
+    if (attempted) await afterWrite();
     return { succeeded, failed: ids.filter((id) => !succeeded.has(id)) };
   };
 
@@ -58,17 +81,21 @@ export function useChaseReviewWrites() {
   ): Promise<ReviewMatchingOutcome> => {
     try {
       const r = await bulkMatching.mutateAsync({ data: { filter, reviewed, expectedCount } });
+      await afterWrite();
       return { kind: "ok", matched: r.matched, updated: r.updated, updatedIds: r.updatedIds };
     } catch (e) {
       const status = (e as { status?: unknown }).status;
       const data = (e as { data?: { code?: unknown; matchingCount?: unknown } | null }).data;
       if (status === 409) {
+        // Nothing was written, but the list is out of date: show the new count.
+        await afterWrite();
         return {
           kind: "count_changed",
           matchingCount: typeof data?.matchingCount === "number" ? data.matchingCount : null,
         };
       }
       if (status === 400 && data?.code === "too_many_rows") return { kind: "too_many" };
+      await afterWrite();
       return { kind: "failed", message: (e as Error)?.message ?? "Request failed" };
     }
   };

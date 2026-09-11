@@ -18,6 +18,8 @@ const Num = ({ n, testId }: { n: number; testId?: string }) => (
     {count(n)}
   </span>
 );
+/** A count in running text (toasts, banners): mono numerals, like every count on screen. */
+export const MonoCount = ({ n }: { n: number }) => <Num n={n} />;
 
 export function ChaseReviewControls({
   toReview,
@@ -124,7 +126,7 @@ export function ChaseSelectAllBanner({
           disabled={!canSelectAll}
           data-testid="chase-select-all-matching"
         >
-          Select all {count(matchingCount)} matching
+          Select all <Num n={matchingCount} testId="chase-select-all-count" /> matching
         </Button>
       )}
     </div>
@@ -158,6 +160,9 @@ export function ChaseLedgerPager({
           </>
         )}
       </span>
+      <Help>
+        Rows in this range through today. Pending rows and rows after today are listed apart and are not in this count.
+      </Help>
       {hasMore && (
         <Button variant="outline" size="sm" onClick={onLoadMore} disabled={loading} data-testid="chase-load-more">
           {loading ? "Loading…" : "Load more"}
