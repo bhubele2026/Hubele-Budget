@@ -18,6 +18,8 @@ import React from "react";
  */
 
 let reviewCount = 0;
+/** No spine yet (still loading, or the first load failed): the count is unknown. */
+let spineMissing = false;
 
 vi.mock("@clerk/react", () => ({
   UserButton: () => <div data-testid="user-button" />,
@@ -26,7 +28,10 @@ vi.mock("@clerk/react", () => ({
 vi.mock("@workspace/api-client-react", () => ({
   // The Review badge reads the shared spine now, not its own endpoint, so the
   // nav count and the landing bell can never disagree (see hooks/useSpine.ts).
-  useGetSpine: () => ({ data: { reviewCount }, isLoading: false }),
+  useGetSpine: () => ({
+    data: spineMissing ? undefined : { reviewCount },
+    isLoading: spineMissing,
+  }),
   getGetSpineQueryKey: () => ["/api/spine"],
   getSpine: vi.fn(),
   getDashboard: vi.fn(),
@@ -176,6 +181,19 @@ describe("the review count is a finding or it is nothing", () => {
     reviewCount = 4;
     mount("/banking");
     expect(screen.getByTestId("topnav-review-badge").textContent).toContain("4");
+  });
+
+  it("shows no badge anywhere while the count is unknown, not a zero pill", () => {
+    spineMissing = true;
+    try {
+      mount("/banking");
+      expect(screen.queryByTestId("topnav-review-badge")).toBeNull();
+      cleanup();
+      mount("/review");
+      expect(screen.getByTestId("topnav-review").textContent).toBe("Review");
+    } finally {
+      spineMissing = false;
+    }
   });
 });
 

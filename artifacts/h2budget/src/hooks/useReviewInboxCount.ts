@@ -15,8 +15,12 @@ import { useSpine } from "@/hooks/useSpine";
  * `/forecast/review-count` and `/spine`, with a parity test asserting they
  * match); this hook just stopped asking for it twice. Dropping the separate
  * request is also what lets `/home` open on exactly ONE API call.
+ *
+ * ⚠️ `null` MEANS UNKNOWN, NOT ZERO. While the spine is loading, or after it
+ * failed, there is no count. Callers hide the badge and never claim "All
+ * reconciled" on a null.
  */
-export function useReviewInboxCount(): number {
+export function useReviewInboxCount(): number | null {
   const { data } = useSpine();
-  return data?.reviewCount ?? 0;
+  return data ? data.reviewCount : null;
 }

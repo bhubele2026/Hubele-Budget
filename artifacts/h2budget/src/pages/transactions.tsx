@@ -89,7 +89,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { ToastAction } from "@/components/ui/toast";
-import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { PostLinkProgressBanner } from "@/components/post-link-progress";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
@@ -2409,7 +2408,9 @@ export default function TransactionsPage() {
           the Forecast Review Bucket awaiting a match. Clickable so the
           user can jump straight to the bucket and resolve them. */}
       <div className="flex items-center gap-2 flex-wrap" data-testid="chase-bucket-summary">
-        {awaitingMatchCount > 0 ? (
+        {/* An unknown count (the spine is loading or failed) shows nothing:
+            "All reconciled" is a claim, and a null count cannot make it. */}
+        {awaitingMatchCount != null && awaitingMatchCount > 0 ? (
           <Link
             href="/forecast#bucket"
             data-testid="link-bucket-pending-count"
@@ -2426,11 +2427,11 @@ export default function TransactionsPage() {
             </span>
             <ArrowRight className="h-3 w-3" />
           </Link>
-        ) : (
+        ) : awaitingMatchCount === 0 ? (
           <span className="chip gray" data-testid="text-bucket-empty">
             All reconciled
           </span>
-        )}
+        ) : null}
       </div>
       {(() => {
         // (#797) Show the picker only when there are 2+ *Chase* checking

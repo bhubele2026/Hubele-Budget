@@ -5,13 +5,11 @@ import {
   useGetSettings,
   useListTransactions,
   useListRecurringItems,
-  useGetForecastCashSignal,
-  getGetForecastCashSignalQueryKey,
   type Transaction,
 } from "@workspace/api-client-react";
 import { useSpine } from "@/hooks/useSpine";
 import { SyncButton } from "@/components/sync-button";
-import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
+import { FreshnessLine, RefreshBanner } from "@/components/data-state";
 import { ChaseInsightStrip } from "@/components/chase-insight-strip";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
 import { card, cardHead, emptyNote, Foot, Help, Stat } from "@/ui";
@@ -216,8 +214,16 @@ function AllowanceRow({
 // ── page ────────────────────────────────────────────────────────────────────
 
 export default function CommandCenterPage() {
-  // ⭐ Every headline number on this page. One request, one instant.
-  const { data: spine } = useSpine();
+  // ⭐ Every headline number on this page. One request, one instant. The same
+  // read says whether those numbers could be refreshed, and the spine's bank
+  // object carries the snapshot's source and the server's freshness verdict, so
+  // this page no longer needs the cash-signal query at all.
+  const {
+    data: spine,
+    state: spineState,
+    updatedAt: spineUpdatedAt,
+    refetch: refetchSpine,
+  } = useSpine();
   const narrow = useNarrow();
 
   const { data: settings } = useGetSettings();
@@ -236,22 +242,6 @@ export default function CommandCenterPage() {
   const recurringNames = useMemo(
     () => (recurringItemsData ?? []).map((r) => r.name),
     [recurringItemsData],
-  );
-
-  /**
-   * ⚠️ NOT A NUMBER SOURCE. The balance on screen comes from the spine; this
-   * existing (cached, 5-minute) query is read ONLY for the snapshot's source
-   * and timestamp, which the freshness label needs and the spine does not
-   * carry. Nothing here is rendered as money.
-   */
-  const { data: cashSignal } = useGetForecastCashSignal(
-    { horizonDays: 90 },
-    {
-      query: {
-        queryKey: getGetForecastCashSignalQueryKey({ horizonDays: 90 }),
-        staleTime: 5 * 60_000,
-      },
-    },
   );
 
   const now = new Date();
@@ -375,8 +365,6 @@ export default function CommandCenterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeklyTxns, recurringNames]);
 
-  const snapshotAt = cashSignal?.snapshotAt ?? null;
-  const snapshotSource = cashSignal?.snapshotSource === "plaid" ? "plaid" : "manual";
   const bankAsOf = shortDate(spine?.bank?.asOfDate);
   const nextBill = spine?.nextBill ?? null;
   const lowPoint = spine?.forecast?.lowPoint ?? null;
@@ -384,6 +372,14 @@ export default function CommandCenterPage() {
 
   return (
     <div className="space-y-4">
+      {/* A failed refresh keeps the last good figures below and says how old
+          they are; a failed first load leaves the tiles on their em dashes. */}
+      <RefreshBanner
+        state={spineState}
+        updatedAt={spineUpdatedAt}
+        onRetry={refetchSpine}
+        data-testid="cc-refresh-banner"
+      />
       {/* ── The spine row. Five figures, one request, one instant. ────────── */}
       <div
         data-testid="cc-spine-stats"
@@ -441,11 +437,10 @@ export default function CommandCenterPage() {
         range={weekRange}
         actions={
           <>
-            {snapshotAt && (
-              <span className="hidden text-micro text-neutral-400 sm:block">
-                <BankSnapshotFreshness source={snapshotSource} at={snapshotAt} />
-              </span>
-            )}
+            {/* The server's verdict on the bank balance (PR3a), at every width. */}
+            <span className="text-micro text-neutral-400">
+              <FreshnessLine bank={spine?.bank} />
+            </span>
             {/* `compact` because the head already carries a timestamp — the
                 button's own "Last synced" line would stack a second one under
                 it and read as a duplicate. It stays in the tooltip. */}

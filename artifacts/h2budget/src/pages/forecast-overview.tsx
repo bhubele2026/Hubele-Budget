@@ -4,6 +4,7 @@ import {
   getGetForecastCashSignalQueryKey,
 } from "@workspace/api-client-react";
 import { useSpine } from "@/hooks/useSpine";
+import { RefreshBanner } from "@/components/data-state";
 import { Sparkline, StackBar } from "@/components/viz";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
 import { CHART } from "@/lib/chartTokens";
@@ -61,7 +62,12 @@ function shortDate(iso: string | null | undefined): string | undefined {
 }
 
 export default function ForecastOverviewPage() {
-  const { data: spine } = useSpine();
+  const {
+    data: spine,
+    state: spineState,
+    updatedAt: spineUpdatedAt,
+    refetch: refetchSpine,
+  } = useSpine();
   const { data: signal, isError, refetch } = useGetForecastCashSignal(
     { horizonDays: 90 },
     {
@@ -117,6 +123,14 @@ export default function ForecastOverviewPage() {
 
   return (
     <div className="space-y-4" data-testid="forecast-overview">
+      {/* The spine's own state: its figures below are kept after a failed
+          refresh, and fall back to em dashes after a failed first load. */}
+      <RefreshBanner
+        state={spineState}
+        updatedAt={spineUpdatedAt}
+        onRetry={refetchSpine}
+        data-testid="fo-refresh-banner"
+      />
       {isError && <div className={errorBanner} role="alert">Forecast refresh failed. <button className={btnLink} onClick={() => void refetch()}>Retry forecast</button></div>}
       {signal?.status === "no_data" && <div className={emptyNote}>Set a bank balance in Forecast to calculate future cash.</div>}
       {/* ── The spine row. Three of these four are the shared snapshot. ────── */}

@@ -338,8 +338,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(t);
   }, []);
 
+  // A null count is unknown (the spine is loading or failed): no badge, never 0.
   const railBadge = (href: string): number | null => {
-    if (href === "/review" && reviewCount > 0) return reviewCount;
+    if (href === "/review" && reviewCount != null && reviewCount > 0) return reviewCount;
     return null;
   };
 
@@ -367,7 +368,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // ⚠️ THE COUNT SHOWS ONCE. When the live ribbon already carries the Review
   // tab (the Forecast area), a second copy on the right would be the same
   // finding claimed twice — and two badges reading "3" look like six things.
-  const showReviewPill = reviewCount > 0 && !ribbonHrefs.has("/review");
+  const showReviewPill =
+    reviewCount != null && reviewCount > 0 && !ribbonHrefs.has("/review");
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">

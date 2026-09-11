@@ -7,20 +7,21 @@ import {
 import { seedManualBankSnapshot } from "./helpers/api";
 
 /**
- * End-to-end coverage for the shared bank-snapshot freshness label
- * (`text-bank-snapshot-freshness`) on the two surfaces task #333 added it
- * to:
- *   - Dashboard's Chase ending-balance tile (`tile-chase-ending-balance`)
- *   - Transactions page's snapshot meta line (`text-snapshot-meta`)
+ * End-to-end coverage for the bank-balance freshness label on the pages that
+ * show it:
+ *   - Banking (`/banking`), in the spending card's head beside Sync. It reads
+ *     the spine's freshness verdict (PR3a/PR3b1): `text-bank-snapshot-freshness`
+ *     when fresh, `text-bank-freshness-stale` when the server says stale.
+ *   - Forecast (`/forecast`), in the bank card's snapshot meta line.
  *
- * The Forecast page already has its own coverage for the same component
- * (#285), so this spec only locks the prop wiring on the two newer
- * locations — a regression that drops the `<BankSnapshotFreshness …/>`
- * call from either page would no longer slip through.
+ * (PR3b1) This spec used to target a Dashboard "Chase ending balance" tile and a
+ * Transactions snapshot meta line. Neither shows the label any more, so it could
+ * not pass. CI runs Playwright only when `E2E_ENABLED` is set, which is why that
+ * went unnoticed.
  *
- * We seed a manual bank snapshot via the same `/api/forecast/bank-snapshot`
- * endpoint the in-app "Set manually" dialog hits, so both pages render
- * with `source: "manual"` and the label reads "Set manually …".
+ * A manual snapshot seeded through `/api/forecast/bank-snapshot` (the same
+ * endpoint the in-app "Set manually" dialog uses) is fresh, so both pages read
+ * "Set manually …".
  */
 
 const provisionedUserIds: string[] = [];
@@ -29,48 +30,44 @@ test.afterAll(async () => {
   await cleanupTestUsers(provisionedUserIds);
 });
 
-test.describe("BankSnapshotFreshness label — Dashboard + Transactions wiring (#333)", () => {
-  test("renders 'Set manually …' on the Dashboard's Chase ending-balance tile when a manual snapshot exists", async ({
+test.describe("Bank balance freshness label — Banking + Forecast", () => {
+  test("renders 'Set manually …' on Banking beside Sync, at desktop and phone width", async ({
     page,
   }) => {
     const { email, password } = await createTestUser(
-      "dash-bank-freshness",
+      "banking-bank-freshness",
       provisionedUserIds,
     );
 
-    await signInAndOpen(page, email, password, "/");
+    await signInAndOpen(page, email, password, "/banking");
     await seedManualBankSnapshot(page);
-    // Reload so the dashboard's `useGetForecast` query picks up the newly
-    // seeded snapshot before we assert the populated branch.
+    // Reload so the spine picks up the newly seeded snapshot.
     await page.reload();
 
-    const tile = page.getByTestId("tile-chase-ending-balance");
-    await expect(tile).toBeVisible({ timeout: 15_000 });
-    // Wait for the populated branch to render (vs. the missing-state
-    // dash) so we know `chaseEndingBalance` resolved against the snapshot.
-    await expect(
-      tile.getByTestId("text-chase-ending-balance"),
-    ).toBeVisible({ timeout: 15_000 });
-
-    const freshness = tile.getByTestId("text-bank-snapshot-freshness");
-    await expect(freshness).toBeVisible();
+    const freshness = page.getByTestId("text-bank-snapshot-freshness");
+    await expect(freshness).toBeVisible({ timeout: 15_000 });
     await expect(freshness).toContainText("Set manually");
     await expect(freshness).not.toContainText("Last auto-updated");
+    await expect(page.getByTestId("text-bank-freshness-stale")).toHaveCount(0);
+
+    // The label used to be hidden below the `sm` breakpoint.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(freshness).toBeVisible();
   });
 
-  test("renders 'Set manually …' on the Transactions snapshot meta line when viewing the snapshot account", async ({
+  test("renders 'Set manually …' in the Forecast bank card's meta line", async ({
     page,
   }) => {
     const { email, password } = await createTestUser(
-      "txn-bank-freshness",
+      "forecast-bank-freshness",
       provisionedUserIds,
     );
 
-    await signInAndOpen(page, email, password, "/transactions");
+    await signInAndOpen(page, email, password, "/forecast");
     await seedManualBankSnapshot(page);
     await page.reload();
 
-    const meta = page.getByTestId("text-snapshot-meta");
+    const meta = page.getByTestId("text-bank-snapshot-meta");
     await expect(meta).toBeVisible({ timeout: 15_000 });
     await expect(meta).toContainText("Manual");
 
