@@ -43,8 +43,12 @@ export type LedgerPlan = {
   amount: number;
   itemId: string;
   label: string;
-  /** Present when the curve assumes something the ledger does not show. */
-  assumption?: "dragged_past_due";
+  /**
+   * Present when the curve moved the plan off its due date:
+   * - `dragged_past_due`: past-due and unresolved, so it lands on the next business day (#681/#751);
+   * - `pre_window_on_first_day`: no snapshot, and due before the window, so it lands on the window's first day.
+   */
+  assumption?: "dragged_past_due" | "pre_window_on_first_day";
 };
 
 export type LedgerItem = LedgerActual | LedgerPlan;
@@ -64,9 +68,16 @@ export type ForecastLedger = {
   snapshotBalance: number | null;
   /** The snapshot balance, or the starting balance when there is no snapshot. */
   startBalanceAtAnchor: number;
-  /** The snapshot rolled forward through today's checking rows (the anchor alone without a snapshot). */
+  /**
+   * The snapshot rolled forward through today's checking rows (the anchor alone without a snapshot).
+   * ⚠️ Unrounded: callers format it to cents.
+   */
   bankToday: number;
-  /** Every plan and actual row, sorted by date (stable: plans before actuals on a day, each in build order). */
+  /**
+   * Every plan and actual row, sorted by date (stable: plans before actuals on a day, each in build order).
+   * ⚠️ Plans can fall OUTSIDE `[fromISO, toISO]` (a drag target past `toISO`, a plan dated before `fromISO`);
+   * actuals are capped at `toISO`. Consumers window the items themselves.
+   */
   items: LedgerItem[];
 };
 
@@ -533,6 +544,9 @@ export async function buildForecastLedger(
       amount: ev.amount,
       itemId: ev.itemId,
       label: ev.label,
+      ...(effectiveDate !== rawEffectiveDate
+        ? { assumption: "pre_window_on_first_day" as const }
+        : {}),
     });
   }
 
