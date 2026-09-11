@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, lte, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -30,6 +30,7 @@ import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "./householdClock";
+import { classifyLedgerRowsThroughToday } from "./ledgerCashRows";
 import { laterRowIsNearer, pickRemintCandidate, type RemintBatchEntry } from "./remintMatch";
 import {
   anchorIsReconcilable,
@@ -2450,20 +2451,31 @@ export async function syncPlaidItem(
         // Household calendar days (America/Chicago), matching the roll-forward.
         const anchorDay = householdDayOf(new Date(prevSnapshotAt));
         const todayDay = householdTodayISO();
-        const ledgerSince = async (): Promise<number> => {
-          const rows = await db
-            .select({ amount: transactionsTable.amount })
-            .from(transactionsTable)
-            .where(
-              and(
-                eq(transactionsTable.householdId, householdId),
-                eq(transactionsTable.plaidAccountId, checkingPlaidAccountId),
-                gt(transactionsTable.occurredOn, anchorDay),
-                lte(transactionsTable.occurredOn, todayDay),
-              ),
-            );
-          return rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-        };
+        // ⭐ THE LEDGER'S OWN RULE, OVER THE BANK FEED'S OWN ROWS (PR4e). The
+        // prediction is `classifyCashRows` on the PRE-sync anchor, over the rows
+        // the ledger reads, summing only rows with a Plaid account. A day sum
+        // here used to add charges the anchor already held and both halves of an
+        // unlinked pending/posted pair, so an honest ledger raised drift — a
+        // false "doesn't match our records" toast and an extra
+        // /transactions/get backfill.
+        //
+        // ⚠️ MANUAL ROWS STAY OUT, although cash today counts them. "Log
+        // payment" (routes/debts.ts) writes a `source: "manual"` checking row
+        // for every debt payment. The sync merges manual rows only on an
+        // account's first sync (#361) and dedupe is per Plaid account, so the
+        // row stays for good, beside the bank's own debit once it posts.
+        // Counting it here raised drift after every logged payment: before the
+        // debit, the bank has not moved; after it, the payment counts twice.
+        // Re-read after a backfill: it can add rows.
+        const ledgerSince = async (): Promise<number> =>
+          (
+            await classifyLedgerRowsThroughToday({
+              householdId,
+              anchor: { at: new Date(prevSnapshotAt), day: anchorDay },
+              accountExternalId: checkingPlaidAccountId,
+              todayISO: todayDay,
+            })
+          ).plaidRowsThroughToday.net;
 
         let recon = reconcileBankBalance({
           anchorBalance: prevSnapshotBalance,

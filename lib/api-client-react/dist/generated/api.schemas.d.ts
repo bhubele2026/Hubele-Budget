@@ -129,6 +129,9 @@ export type BankBalanceExplainAccountsItem = {
     subtype: string | null;
     isSnapshotAccount: boolean;
 };
+/**
+ * What the bank balance adds on top of the snapshot, by the ledger's own rule (PR4e): rows the snapshot already held, rows off the account and the pending half of a replaced pair add nothing; manual rows on the account count. When the snapshot has a balance and both are read at the same moment, snapshot.balance + net equals displayed.bankToday to the cent; a row landing between the two reads, or a household midnight between them, can break that. rowCount is the rows that count, dated through today, including a posted row that adds 0.00. Null when the snapshot has no read time.
+ */
 export type BankBalanceExplainLedgerSinceAnchor = {
     rowCount: number;
     net: string;
@@ -142,6 +145,7 @@ export type BankBalanceExplainLedgerRecentRowsItem = {
 export type BankBalanceExplainLedger = {
     /** @nullable */
     anchorDay: string | null;
+    /** What the bank balance adds on top of the snapshot, by the ledger's own rule (PR4e): rows the snapshot already held, rows off the account and the pending half of a replaced pair add nothing; manual rows on the account count. When the snapshot has a balance and both are read at the same moment, snapshot.balance + net equals displayed.bankToday to the cent; a row landing between the two reads, or a household midnight between them, can break that. rowCount is the rows that count, dated through today, including a posted row that adds 0.00. Null when the snapshot has no read time. */
     sinceAnchor: BankBalanceExplainLedgerSinceAnchor;
     recentRows: BankBalanceExplainLedgerRecentRowsItem[];
 };
