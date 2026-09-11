@@ -7,7 +7,13 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, afterEach, it, expect, vi } from "vitest";
+import { afterAll, beforeEach, afterEach, it, expect, vi } from "vitest";
+import {
+  createFakeLedgerServer,
+  type FakeLedgerOptions,
+  type FakeLedgerServer,
+  type FakeRowInput,
+} from "./__test-helpers__/fakeLedgerServer";
 
 // The Chase page after `inForecast` (2026-09-10). A checking row that has
 // already happened is in the forecast — on the curve and in Review — whatever
@@ -19,23 +25,38 @@ import { beforeEach, afterEach, it, expect, vi } from "vitest";
 //   - bulk Remove flips the flag only on future rows and records "not a
 //     planned payment" for posted ones.
 // "Today" comes from the forecast bundle, so the rows sit either side of a
-// fixed server date inside the current month.
+// fixed server date inside the viewed month.
+//
+// (PR14) The list reads the server's ledger. The page opens on September 2026
+// in Month mode (`?month=2026-09-01`) with the clock pinned to 2026-09-16: the
+// posted row (the 2nd) comes through the register, the future row (the 27th)
+// through the after-today request. The ledger, balances, bulk-review and
+// UI-preference hooks are the real generated hooks, answered by
+// `fakeLedgerServer.ts`; the forecast writes stay spies.
 
 const state = vi.hoisted(() => ({
-  rows: [] as any[],
   empty: [] as any[],
   toast: vi.fn(),
   upsert: vi.fn(),
   upsertAsync: vi.fn(),
   bulkFlag: vi.fn(),
   updateTx: vi.fn(),
+  listTransactions: vi.fn(),
   forecast: {} as Record<string, unknown>,
 }));
 vi.mock("@workspace/api-client-react", async (original) => {
   const actual = await original<Record<string, unknown>>();
+  const real = new Set([
+    "useGetTransactionsLedgerInfinite",
+    "useGetTransactionsBalances",
+    "useBulkUpdateTransactions",
+    "useBulkReviewMatchingTransactions",
+    "useGetUiPreferences",
+    "useUpdateUiPreferences",
+  ]);
   const hooks = Object.fromEntries(
     Object.keys(actual)
-      .filter((k) => /^use[A-Z]/.test(k))
+      .filter((k) => /^use[A-Z]/.test(k) && !real.has(k))
       .map((k) => [
         k,
         () => ({
@@ -50,11 +71,16 @@ vi.mock("@workspace/api-client-react", async (original) => {
   return {
     ...actual,
     ...hooks,
-    useListTransactions: () => ({ data: state.rows, isLoading: false }),
+    // The old 1,000-row pull. The Chase view must never call it.
+    useListTransactions: (...args: unknown[]) => {
+      state.listTransactions(...args);
+      return { data: [], isLoading: false, refetch: vi.fn() };
+    },
     useListCategories: () => ({ data: state.empty }),
     useListMappingRules: () => ({ data: state.empty }),
     useListPlaidItems: () => ({ data: state.empty }),
     useGetForecast: () => ({ data: state.forecast }),
+    useGetSpine: () => ({ data: undefined, isLoading: false, isFetching: false, refetch: vi.fn() }),
     useUpsertForecastResolution: () => ({
       mutate: state.upsert,
       mutateAsync: state.upsertAsync,
@@ -124,32 +150,38 @@ vi.mock("@/components/account-page/transaction-row", () => ({
 }));
 import TransactionsPage from "./transactions";
 
-const now = new Date();
-const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-const POSTED = `${ym}-02`;
-const FUTURE = `${ym}-27`;
-const SERVER_TODAY = `${ym}-15`;
+// Wednesday 2026-09-16 (07:00 in Chicago).
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date(Date.UTC(2026, 8, 16, 12, 0, 0)));
+afterAll(() => {
+  vi.useRealTimers();
+});
 
-function row(
-  id: string,
-  occurredOn: string,
-  extra: Record<string, unknown> = {},
-) {
+const POSTED = "2026-09-02";
+const FUTURE = "2026-09-27";
+const SERVER_TODAY = "2026-09-15";
+
+function row(id: string, occurredOn: string, extra: Partial<FakeRowInput> = {}): FakeRowInput {
   return {
     id,
     occurredOn,
     description: id,
-    amount: "-40",
-    source: "manual",
+    amount: "-40.00",
     categoryId: "cat-1",
     forecastFlag: false,
-    pending: false,
-    reviewed: false,
+    // The ledger labels a row dated after the household's today.
+    afterToday: occurredOn > "2026-09-16",
     ...extra,
   };
 }
 
 let qc: QueryClient;
+let server: FakeLedgerServer;
+function serve(opts: FakeLedgerOptions): FakeLedgerServer {
+  server = createFakeLedgerServer(opts);
+  vi.stubGlobal("fetch", server.fetch);
+  return server;
+}
 function show() {
   return render(
     <QueryClientProvider client={qc}>
@@ -160,6 +192,7 @@ function show() {
 
 beforeEach(() => {
   localStorage.clear();
+  window.history.replaceState(null, "", "/transactions?month=2026-09-01");
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   for (const spy of [
     state.toast,
@@ -167,10 +200,11 @@ beforeEach(() => {
     state.upsertAsync,
     state.bulkFlag,
     state.updateTx,
+    state.listTransactions,
   ]) {
     spy.mockReset();
   }
-  state.rows = [row("posted", POSTED), row("future", FUTURE)];
+  serve({ rows: [row("posted", POSTED), row("future", FUTURE)] });
   state.forecast = {
     bankSnapshot: null,
     resolutions: [],
@@ -186,14 +220,15 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   qc.clear();
+  vi.unstubAllGlobals();
 });
 
-it("a posted row with its flag off is In Review: its × records 'Not a planned payment' and there is no Send", () => {
+it("a posted row with its flag off is In Review: its × records 'Not a planned payment' and there is no Send", async () => {
   show();
   expect(
-    screen
-      .getByTestId("badge-forecast-state-posted")
-      .getAttribute("data-forecast-state"),
+    (await screen.findByTestId("badge-forecast-state-posted")).getAttribute(
+      "data-forecast-state",
+    ),
   ).toBe("in-review-bucket");
   expect(screen.queryByTestId("button-send-forecast-posted")).toBeNull();
   expect(screen.getByTestId("row-tx-posted").getAttribute("data-sent")).toBe(
@@ -209,49 +244,55 @@ it("a posted row with its flag off is In Review: its × records 'Not a planned p
   );
   // Never the flag: a posted row stays cash either way.
   expect(state.updateTx).not.toHaveBeenCalled();
+  // Never the old 1,000-row list.
+  expect(state.listTransactions).not.toHaveBeenCalled();
+  expect(server.calls.some((c) => c.path === "/api/transactions")).toBe(false);
 });
 
-it("a future row with its flag off is not in the forecast yet: Send, no chip", () => {
+it("a future row with its flag off is not in the forecast yet: Send, no chip", async () => {
   show();
+  const futureRow = await screen.findByTestId("row-tx-future");
   expect(screen.queryByTestId("badge-forecast-state-future")).toBeNull();
   expect(screen.getByTestId("button-send-forecast-future")).toBeTruthy();
-  expect(screen.getByTestId("row-tx-future").getAttribute("data-sent")).toBe(
-    "false",
-  );
+  expect(futureRow.getAttribute("data-sent")).toBe("false");
+  // Month mode on the linked month: the register runs through today, and the
+  // future row came through the after-today request.
+  const registerQuery = server.ledgerGets("2026-09-01")[0]!.query;
+  expect(registerQuery.get("to")).toBe("2026-09-16");
+  expect(server.ledgerGets("2026-09-17")[0]!.query.get("to")).toBe("2026-09-30");
 });
 
-it("a posted row that is already matched keeps its match: chip, no ×", () => {
+it("a posted row that is already matched keeps its match: chip, no ×", async () => {
   state.forecast = {
     ...state.forecast,
     resolutions: [{ matchedTxnId: "posted", status: "matched" }],
   };
   show();
   expect(
-    screen
-      .getByTestId("badge-forecast-state-posted")
-      .getAttribute("data-forecast-state"),
+    (await screen.findByTestId("badge-forecast-state-posted")).getAttribute(
+      "data-forecast-state",
+    ),
   ).toBe("matched");
   expect(screen.queryByTestId("button-remove-forecast-posted")).toBeNull();
 });
 
-it("a future row sent to the forecast keeps its 'Remove from forecast' ×", () => {
-  state.rows = [row("future", FUTURE, { forecastFlag: true })];
+it("a future row sent to the forecast keeps its 'Remove from forecast' ×", async () => {
+  serve({ rows: [row("future", FUTURE, { forecastFlag: true })] });
   show();
   expect(
-    screen
-      .getByTestId("button-remove-forecast-future")
-      .getAttribute("aria-label"),
+    (await screen.findByTestId("button-remove-forecast-future")).getAttribute(
+      "aria-label",
+    ),
   ).toBe("Remove from forecast");
 });
 
 it("bulk Remove flips the flag only on future rows and records 'not a planned payment' for posted ones", async () => {
-  state.rows = [
-    row("posted", POSTED),
-    row("future", FUTURE, { forecastFlag: true }),
-  ];
+  serve({
+    rows: [row("posted", POSTED), row("future", FUTURE, { forecastFlag: true })],
+  });
   show();
-  fireEvent.click(screen.getByText("Select posted"));
-  fireEvent.click(screen.getByText("Select future"));
+  fireEvent.click(await screen.findByText("Select posted"));
+  fireEvent.click(await screen.findByText("Select future"));
   fireEvent.click(screen.getByTestId("bulk-remove-forecast"));
 
   await waitFor(() =>
