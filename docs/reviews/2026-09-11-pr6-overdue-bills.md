@@ -10,15 +10,37 @@ asked for changes; they are below under **Review fixes**. Plan: `~/.claude/plans
 - **Paid** — any of these, to a checking row dated on or before today:
   - a row the matcher pairs with the bill and nothing else competes for (any confidence: the payee's name, or the same
     amount within max($1, 1%) and 3 days);
-  - for a card's minimum: a payment that names the card and pays at least the minimum ($40 due, $812.40 paid).
+  - for a card's minimum: a **card payment** (PR7's rule) that names the card and pays at least the minimum ($40 due,
+    $812.40 paid). A store purchase or a loan payment carrying the same word never counts (second review).
 - A paid bill is **off the forecast** and listed in `overdueAssumedPaid`. If the row paid less, the **unpaid
   remainder** (over $1) still weighs on the next business day.
 - **Unpaid** (no such row, or two rows that can't be told apart): it weighs on the next business day for 14 days, then
   is listed in `overdueOutsideForecast`.
-- **⚠️ Accepted risk.** An unrelated payment of exactly the bill's amount, within 3 days, with no name, hides that bill.
-  Each row can hide only one bill, and every bill it hides is listed in `overdueAssumedPaid`, so it is never silent.
-  The alternative — only confident pairs count — made every paid-but-unnamed bill (rent by Zelle, a mortgage "LOAN PMT",
-  card minimums) come back as a dip; the reviewer measured $3,131.57 of phantom dips in one household.
+- **⚠️ Accepted risk — at its real width (second review).** For a bill already due, a row counts as paying it when the
+  matcher pairs them and nothing else competes. That is wider than "an exact nameless amount":
+  - **any row sharing ONE distinctive word of the label**, within the matcher's loose band (max($25, 25%) of the bill),
+    dated 10 days before to 14 days after the bill — which includes a different bill from the same payee;
+  - or, with no shared word, the same amount within max($1, 1%) and 3 days.
+
+  Measured by the reviewer:
+
+  | Probe | Unpaid bill | Row that hid it | Overstated by |
+  |---|---|---|---|
+  | X2 | Verizon Wireless $120 | "VERIZON FIOS" −130 | $120 (max safe extra 2,140 instead of 2,020) |
+  | X3 | Amazon Prime $14.99 | "AMAZON MKTPL" −18.40 | $14.99 |
+  | E6 | Toyota Motor Credit minimum $672.80 | "TOYOTA OF MADISON SERVICE" −712.40 | $672.80 |
+
+  - **Each row hides at most one bill**, and every bill treated as paid is listed in `overdueAssumedPaid`.
+  - **Why we keep it (decision A + C):** requiring an exact amount on partial-name pairs would put the HELOC ("Figure
+    HELOC", paid "FIGURE LENDING" $1,185.19) back on the curve at $1,130 every month (reviewer's R7: 5,653.33 →
+    4,523.33). The alternative — only confident pairs count — made every paid-but-unnamed bill (rent by Zelle, a
+    mortgage "LOAN PMT", card minimums) come back as a dip: $3,131.57 of phantom dips in one household.
+  - **What the user can see today:**
+    - pairs from the main pass are in `matches`, so PR5b's "Suggested" list shows them with "Not this";
+    - **card-payment pairs (`card_payment`) and listing-pass pairs (bills before today−45) are NOT in `matches`**, so the
+      user cannot see or reject those until PR12.
+  - **⏳ Pending Brad's decision:** accept this width (A + C as built), or narrow partial-name pairs for bills already due
+    (the HELOC returns as a monthly dip until confirmed)?
 - Bills due after today are unchanged: they leave the curve only on PR5a's confident (`offCurve`) pair.
 - Weekly and biweekly expenses keep the old rule until PR8 (below).
 
@@ -31,8 +53,11 @@ asked for changes; they are below under **Review fixes**. Plan: `~/.claude/plans
 | `074661f` | Golden re-recorded; the cash-signal tests clean up avalanche settings. |
 | `03815aa` | First review note. |
 | `26e1c62` | Merge of `origin/main` (`1144682`: PR5b, PR7b, settings fix). Conflicts resolved (below). |
-| _review fixes_ | The evidence rule, the card-payment rule, `overdueAssumedPaid`, the moved-to-date fix, the Avalanche start, the lists' bounds, the dashboard; tests; golden. |
-| _this note_ | This note, rewritten with the review fixes. |
+| `8303cc4` | The evidence rule, the card-payment rule, `overdueAssumedPaid`, the moved-to-date fix, the Avalanche start, the lists' bounds, the dashboard; tests; golden. |
+| `66b48ee` | This note, rewritten with the review fixes. |
+| `8acc42e` | Second review: a card's minimum is paid only by a real card payment (PR7's rule); tests. |
+| _merge_ | Merge of `origin/main` (`11a6f75`, household clock leftovers). `dashboard.ts` imported `householdClock` twice; combined into one import, keeping the household month window and the past one-time exclusion. |
+| _this note_ | Second-review additions to this note. |
 
 ## The problem
 
@@ -69,6 +94,51 @@ asked for changes; they are below under **Review fixes**. Plan: `~/.claude/plans
 | LOW | `dashboard.ts` `upcomingBills` included kept past one-time bills. | Excluded in the query (as before PR6). | — |
 | LOW | One old-card resolution closes two occurrences of a weekly item moved to the same non-occurrence date. | Disclosed (Residuals). | — |
 | — | The golden's "ties" entry changed order between runs. | Found while re-recording: the lists broke same-day ties by a key that embeds a random id. They now sort by due date, then label, then key. The golden passes three runs in a row. | golden |
+
+## Second review (`66b48ee`: REQUEST CHANGES, narrowly)
+
+Both HIGHs were verified fixed on the reviewer's own fixtures (R1–R5 at base, R6 still dragging, HIGH 2 on 05-14 and 05-17,
+the bounded lists, day 0 at the bank, the weekly exception, the merge, the golden). One fix was required.
+
+### Required: a card's minimum is paid only by a real card payment
+
+- **Finding (probe E6, today 05-05):** `plansPaidInFullByName` checked sign, window, amount and a shared name word, never
+  that the row was a card payment. Each of these minimums was taken off the curve by the wrong row:
+
+  | Minimum | Row that paid it | What the row is |
+  |---|---|---|
+  | Target RedCard $35 | "TARGET T-2331" −84.12 | a store purchase |
+  | Apple Card $25 | "APPLE STORE" −1,299.00 | a store purchase |
+  | Capital One $38 | "CAPITAL ONE AUTO CARPAY" −452 | a car-loan payment |
+
+  A refund ("DISCOVER CASHBACK" +40) was already refused (wrong sign).
+- **Fix:** the row must also be a card payment by PR7's rule (`isCardPaymentRow`, next to the helper): the user's
+  "card payment" flag, Plaid's `LOAN_PAYMENTS_CREDIT_CARD_PAYMENT`, or `matchesCardPaymentPattern`. The name word is
+  still required, so a Discover payment never pays a Capital One minimum. The ledger passes each candidate row's flag
+  and Plaid category.
+- **PR7 was checked first, not widened:** it classifies "TARGET T-2331", "APPLE STORE", "CAPITAL ONE AUTO CARPAY" and
+  "DISCOVER CASHBACK" as not card payments, so no loan-word exclusion was needed.
+- **Figures (our E6 test: balance 3,000, buffer 500):** with all four minimums unpaid, 05-06 is 2,862.00 and the max safe
+  extra 2,362.00. On `66b48ee` the three wrong rows paid their minimums: 2,460.00.
+- **R4 stays at base (2,500).** Its statement payments use PR7's issuer phrases. ⚠️ The earlier R4/R7 fixtures used
+  "CAPITAL ONE MOBILE PMT", which PR7 does NOT recognise (its phrase is "CAPITAL ONE MOBILE PYMT"); they now use PR7's
+  phrase. A real Capital One payment without PR7's phrase now leaves its minimum dragging, unless Plaid's category or the
+  user's flag marks it (errs low).
+
+### Also stated at the reviewer's request
+
+- **E4 (errs low):** a `partial` confirmed for $500 of a $1,500 bill, whose rest is paid by a later row, still drags the
+  $1,000 remainder. Plans with a partial are excluded from matching, so the later row can't pay the remainder.
+- **E2 / E2b (errs low):** $1,500 rent paid by two $750 Zelles: neither row pairs, so the full $1,500 drags until the user
+  matches it.
+- **R7 figures:** the reviewer's R7 household reads 5,653.33 (max safe extra), not our fixture's 6,000. Variable
+  utilities paid under a different name have no pair and drag (MGE 241.00 + Water 101.02), plus a Verizon remainder of
+  4.65. That is correct under the rule. With a stale snapshot the reviewer's R7 is 4,753.33 (base 1,968.43).
+- **X1 (lists only):** a paycheck that did not arrive can be missing from `incomeNotArrived` when a savings transfer of
+  the same amount comes in around its date (it pairs). The curve is unaffected: income that hasn't arrived is never on
+  it.
+- **A2 (already disclosed):** re-saving the avalanche settings moves the extra's start, which can hide a real unpaid
+  month-end extra. Last month's "Avalanche payment" budget line would be a better start signal; no change here.
 
 ### The merge with PR5b (`26e1c62`)
 
@@ -238,13 +308,26 @@ so the max safe extra reflects the overdue plans only.
 - The review count (nothing is written) and spending.
 - The Budget page `plannedTotal` / `planBySource` (a test: a kept one-time bill changes neither).
 - Server auto-match stays off; PR5a's `offCurve` and the matcher's pairing are unchanged for plans due after today.
-- No DDL, no new dependencies (`pnpm-lock.yaml` unchanged); landing bundle 572.5 KB of 580.
+- No DDL, no new dependencies (`pnpm-lock.yaml` unchanged); landing bundle 572.6 KB of 580 (572.5 before merging
+  main's household-clock leftovers).
 - Send-to-Forecast single flow.
 
 ## Residuals
 
-- **⚠️ The accepted risk** (top of this note): an unrelated nameless payment of the same amount within 3 days hides an
-  unpaid bill. It is capped at one bill per row and always listed in `overdueAssumedPaid`.
+- **⚠️ The accepted risk, at its real width** (top of this note; X2, X3, E6): a row sharing one word of the label
+  within max($25, 25%) and 10 days before to 14 after, or an exact nameless amount within 3 days, hides an unpaid bill.
+  One bill per row, always listed in `overdueAssumedPaid`. ⏳ Pending Brad's decision.
+- **Not visible to the user yet:** `card_payment` and listing-pass pairs are not in `matches`, so the "Suggested" list
+  can't offer "Not this" for them until PR12.
+- **Errs low:**
+  - E4: a partial's remainder paid by a later row still drags;
+  - E2/E2b: a bill paid by two smaller rows drags in full.
+- **A card payment must use PR7's rule and name the card as a word.**
+  - "APPLECARD GSBANK PAYMENT" is a card payment with no word "apple", so an Apple Card minimum paid that way still
+    drags (errs low).
+  - A Capital One payment without PR7's phrase ("CAPITAL ONE MOBILE PMT") still drags, unless Plaid's category or the
+    user's flag marks it.
+- **X1:** a same-amount savings transfer can keep a missing paycheck out of `incomeNotArrived` (list only).
 - **A named underpayment** counts as paid except for its remainder. If the row was actually a different bill from the
   same payee, the curve is high by the row until the user answers "Not this".
 - **Two cards from one issuer.** Both minimums match a payment carrying the issuer's name ("CAPITAL ONE"); one payment
@@ -275,6 +358,15 @@ so the max safe extra reflects the overdue plans only.
 
 ## Tests
 
+- **Second review:**
+  - `planMatch.test.ts` (+6):
+    - E6: a Target purchase, an Apple Store receipt and a Capital One car loan pay nothing;
+    - the Discover refund pays nothing;
+    - the issuers' payment phrases pay;
+    - a flagged row and a Plaid-categorised row pay, but only with the card's name;
+    - "APPLECARD GSBANK" (no word "apple") pays nothing.
+  - `cashSignalOverdueEvidence` (+1): E6 end to end, where all four minimums drag (05-06 2,862.00, max safe extra
+    2,362.00). R4 and R7 use PR7's "CAPITAL ONE MOBILE PYMT" and stay at base.
 - **`cashSignalOverdueEvidence.integration.test.ts` (18, review):**
   - R1–R7 with the figures above;
   - a named remainder (−30.00 on 05-06);
@@ -320,6 +412,12 @@ so the max safe extra reflects the overdue plans only.
 
 ## Failing before
 
+**Second review** — against `66b48ee` with the new tests copied in: both E6 tests fail (the unit test and the end-to-end
+test).
+- The other new unit tests pass there, as they should: the refund, the issuer phrases paying, the flag or Plaid category
+  paying with the name, and "APPLECARD GSBANK" not paying.
+- R4 and R7 with PR7's issuer phrase also pass there; they pin that real card payments keep paying.
+
 **Review fixes** — against the source before them (`26e1c62`, with the new tests and snapshot copied in): **36 of the 38
 new or changed tests fail.**
 - **`cashSignalOverdueEvidence`, 18 of 18.** The 05-17 Move test was strengthened to pin the low point's date: before
@@ -344,12 +442,19 @@ new or changed tests fail.**
 
 ## Verification
 
+**After the second review and the merge of `origin/main` (`11a6f75`):**
 - **Workspace typecheck:** clean.
-- **Full API suite (`CI=true`):** **135 files, 1243 pass, 7 todo**. The golden compares clean and passed three separate
-  runs.
-- **Web suite:** **127 files, 1015 pass** (after merging PR5b).
-- **Build and landing guard:** `pnpm run build` exit 0; `check-entry-graph` OK, **572.5 KB of 580**, unchanged.
-- **Codegen:** regenerated after the spec change and after both merges; a fresh run changes nothing further.
+- **Full API suite (`CI=true`):** **136 files, 1268 pass, 7 todo**. The golden compares clean.
+  - Before the merge, with the card-payment fix alone: 135 files, 1249 pass, 7 todo.
+- **Web suite:** **128 files, 1025 pass** (the merge brought web week-helper changes).
+- **Build and landing guard:** `pnpm run build` exit 0; `check-entry-graph` OK, **572.6 KB of 580**. It was 572.5 KB
+  before the merge; the 0.1 KB came with main's household-clock leftovers, since PR6's changes this round are server-side.
+- **Codegen:** a fresh run changes nothing (no spec change this round).
+
+**After the first review fixes:**
+- API suite: 135 files, 1243 pass, 7 todo.
+- Web suite: 127 files, 1015 pass.
+- The golden passed three separate runs.
 
 ## Left for later
 

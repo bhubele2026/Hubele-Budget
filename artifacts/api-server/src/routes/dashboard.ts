@@ -1,5 +1,4 @@
 import { Router, type IRouter } from "express";
-import { householdTodayISO as pr6HouseholdTodayISO } from "../lib/householdClock";
 import { and, desc, eq, sql } from "drizzle-orm";
 import {
   db,
@@ -197,7 +196,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
         eq(recurringItemsTable.active, "true"),
         // (PR6) A one-time bill dated before today counts as archived, as before
         // PR6 (the forecast now keeps an unresolved one active; `isPastOneTime`).
-        sql`not (${recurringItemsTable.frequency} = 'onetime' and ${recurringItemsTable.anchorDate} is not null and ${recurringItemsTable.anchorDate} < ${pr6HouseholdTodayISO()})`,
+        sql`not (${recurringItemsTable.frequency} = 'onetime' and ${recurringItemsTable.anchorDate} is not null and ${recurringItemsTable.anchorDate} < ${householdTodayISO()})`,
       ),
     )
     .orderBy(recurringItemsTable.dayOfMonth)
