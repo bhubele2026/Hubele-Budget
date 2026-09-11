@@ -13,7 +13,10 @@ This PR covers the reviewer's follow-ups to PR7 (`docs/reviews/2026-09-11-pr7-on
 | `7c924b2` | This note, and an "Update (PR7b)" section in the PR7 note |
 | `6e3d68b` | Review M1, M2, N2, N3: bounded pairing read, read once per spine request; guard tests |
 | `30d41cc` | Review L1, N1: a card-payment phrase counts only in a payment's position |
-| docs commit | **Review fixes** below |
+| `dbd949e` | **Review fixes** below |
+| `35baa91` | Second review: PR7's issuer phrases are strong again; the positioned tail reads real ACH layouts; labels need their colon |
+| `e82266f` | Second review: the disclosed test's title says which cases match `main` |
+| docs commit | **Second review** below |
 
 ## The problem
 
@@ -82,44 +85,59 @@ re-tagged.
 
 ### 2. Card-payment strings
 
-These changes are in `lib/avalanche-core/src/spendingRule.ts`. Rule 9 now has three parts.
+These changes are in `lib/avalanche-core/src/spendingRule.ts`. As revised after the second review, rule 9 has two
+tiers.
 
-**`CARD_PAYMENT_PATTERNS`** (issuer phrases, whole words, as in PR7) gains four phrases:
-- `payment to chase card ending in`
-- `us bank credit card payment`
-- `wf credit card auto pay`
-- `target card services`
+**Tier 1, strong: `CARD_PAYMENT_PATTERNS`.** These are PR7's issuer phrases, matched as whole words anywhere, exactly
+as on `main`. "APPLECARD GSBANK PAYMENT 260901 3920178 JANE DOE" is a payment whatever follows.
+- Gains `goldman sachs apple card payment`.
+- Loses `credit card pymt`, which is now a generic phrase.
 
-It loses `credit card pymt` (see the generic phrases below).
+**Tier 2, positioned.** These words also name purchases, so they count only in a payment's position:
+- **`POSITIONED_ISSUER_PHRASES`**, the issuer phrases PR7b added:
+  - `payment to chase card ending in`
+  - `us bank credit card payment`
+  - `wf credit card auto pay`
+  - `target card services`
+- **`GENERIC_CARD_PAYMENT_PHRASES`:** `credit card pymt`, `credit card payment`, `credit card auto pay`.
+- **`CARD_PAYMENT_WORD_PREFIXES` = `["crcardpmt"]`:** a word that STARTS with the code, where the rest of the word is
+  empty or carries a digit.
+  - "CRCARDPMT5KX9ABC" matches.
+  - "XCRCARDPMTX", "ABCRCARDPMT5KX9" and "CRCARDPMTSHOP" do not.
 
-**`CARD_PAYMENT_WORD_PREFIXES` = `["crcardpmt"]`:** a word that STARTS with an issuer code.
-- "CRCARDPMT5KX9ABC" matches.
-- "XCRCARDPMTX" and "ABCRCARDPMT5KX9" do not.
+**A payment's position** is any one of:
+- **not after a leading card processor:** "SQ *", "PAYPAL *", "TST*", "SP ", "TOAST", "STRIPE", "CLOVER", "POS";
+- **right after an entry-description label, with its colon**, whatever follows: Chase "… CO ENTRY DESCR:CREDIT CARD
+  PAYMENT …", BofA "… DES:CREDIT CARD PYMT …";
+- **followed by nothing but:**
+  - **ACH fields, each a label with its colon plus its value.** A value never runs past the next label; names can be
+    up to eight words.
+    - Chase's long layout: `ORIG CO NAME:`, `ORIG ID:`, `DESC DATE:`, `CO ENTRY DESCR:`, `SEC:`, `TRACE#:`, `EED:`,
+      `IND ID:`, `IND NAME:`, `TRN:`.
+    - BofA's layout: `DES:`, `ID:`, `INDN:`, `CO ID:`.
+  - **References:**
+    - a word with a digit;
+    - ACH boilerplate (`ppd`, `web`, `ccd`, `tc`, `pymt`, `thank you`, …);
+    - the word after an unlabelled `ID` / `REF` / `CONF` / `TRN`;
+    - `CO` / `ORIG` / `IND` before an unlabelled `ID`.
+  - **"to <issuer or network>"** ("TO VISA", "TO CAPITAL ONE").
 
-**`GENERIC_CARD_PAYMENT_PHRASES`** are `credit card pymt`, `credit card payment` and `credit card auto pay`.
+**A label counts only with its colon**, so "CAFE DES CREDIT CARD PAYMENT CO" and "CREDIT CARD PAYMENT INDN BOB'S BAIT
+SHOP" are purchases.
 
-**Every phrase (issuer, generic, or glued code) counts only in a payment's position.** The first revision applied
-this to generic phrases only; review N1 and L1 widened it:
-- **never after a leading card processor:** "SQ *", "PAYPAL *", "TST*", "SP ", "TOAST", "STRIPE", "CLOVER", "POS".
-  The exception is a phrase that itself starts the description: "PAYPAL *PAYMTHLY" is PayPal Credit's own payment;
-- **right after an ACH entry-description label**, whatever follows: Chase "… CO ENTRY DESCR:CREDIT CARD PAYMENT …",
-  BofA "… DES:CREDIT CARD PYMT …";
-- **or followed by nothing but references:**
-  - words containing a digit;
-  - ACH boilerplate (`ppd`, `web`, `id`, `ach`, `pymt`, `thank you`, …);
-  - the one word after an ID label ("PPD ID: WFCCAUTOPY");
-  - `CO ID` / `ORIG ID` / `IND ID`;
-  - up to four name words after BofA's `INDN:`;
-  - "to <issuer or network>" ("TO VISA", "TO CAPITAL ONE").
-- **A glued code** ("CRCARDPMT5KX9ABC") also needs a digit in the rest of the word, so "CRCARDPMTSHOP" is not a payment.
+Examples:
 
-"BEST BUY CREDIT CARD PYMT 0412 WEB ID: 1234" and "FIRST NATIONAL DES:CREDIT CARD PYMT ID:1234 INDN:JANE DOE CO
-ID:9999 PPD" are payments. "CREDIT CARD PYMT SUPPLIES INC", "TARGET CARD SERVICES GIFT CARD" and "SQ *CREDIT CARD
-PAYMENT" are purchases.
+| Payments | Purchases |
+|---|---|
+| "BEST BUY CREDIT CARD PYMT 0412 WEB ID: 1234" | "CREDIT CARD PYMT SUPPLIES INC" |
+| "FIRST NATIONAL DES:CREDIT CARD PYMT ID:1234 INDN:JANE DOE CO ID:9999 PPD" | "TARGET CARD SERVICES GIFT CARD" |
+| "ORIG CO NAME:TARGET CARD SERVICES ORIG ID:… CO ENTRY DESCR:PAYMENT SEC:PPD TRACE#:… IND NAME:JANE DOE TRN: …TC" | "SQ *CREDIT CARD PAYMENT" |
 
-- **It errs toward missing, on purpose.** A payment it misses can be flagged by the user (`isExternalCardPayment`,
-  rule 3). A purchase it wrongly caught cannot be put back, because there is no "this was a purchase" override yet.
-- **PR7's 32-purchase table** is untouched and green. A second table adds 11 purchases built to trip the new phrases.
+- **Tier 2 errs toward missing, on purpose.** A payment it misses can be flagged by the user
+  (`isExternalCardPayment`, rule 3). A purchase it wrongly caught cannot be put back, because there is no "this was a
+  purchase" override yet.
+- **PR7's 32-purchase table** is untouched and green. PR7b's purchase table has 25 entries built to trip the new
+  phrases.
 
 ### 3. Mono numerals
 
@@ -295,15 +313,21 @@ almost all SQL (a hash join on account, then the date and amount filters). There
 **The popover's list does not pair.** It comes from `/transactions`, so an uncategorized replaced pending row is listed
 while the banner leaves it out. This is rare: a worked pending row is usually categorized.
 
-**Phrase recall** (after review N1).
-- **What now counts as spending until the user flags it:** any phrase, issuer or generic, followed by an unlabelled
-  name or free text. Example: "US BANK CREDIT CARD PAYMENT JANE DOE". Without a name list it cannot be told from
-  "… PROCESSING CENTER".
-- **What still reads as a payment:** the same name after BofA's `INDN:`, or the phrase as an entry description.
-- **What PR7 caught:** its phrases anywhere, so some of these read as a card payment on `main`.
-- **A payment after a processor-like first word** ("POS", "SP") also reads as a purchase.
+**Card-payment recall against `main`** (after the second review).
+- **PR7's issuer phrases: no loss.** Tier 1 is PR7's rule, word for word.
+- **Lost against `main`: only `credit card pymt`.** PR7 matched it anywhere; it is now positioned. It reads as
+  spending, until the user flags it, when:
+  - an unlabelled name or free text follows it ("BEST BUY CREDIT CARD PYMT JANE DOE", "CREDIT CARD PYMT INDN JANE DOE"
+    with no colon);
+  - a leading processor word precedes it ("TST* CREDIT CARD PYMT 0412", "POS …", "SP …");
+  - or an `INDN:` / `IND NAME:` name runs past eight words.
+- **PR7b's own phrases** (not on `main`, so no loss) have the same limits. "US BANK CREDIT CARD PAYMENT JANE DOE"
+  reads as a purchase: without a name list it cannot be told from "… PROCESSING CENTER".
+- **Wrong in both directions, exactly as on `main`:**
+  - "CREDIT CARD PYMT REF SUPPLIES" is caught, because an unlabelled `REF` vouches for the next word;
+  - "CRCARDPMTABCDEFG" is missed.
 - **The trade is deliberate:** a missed payment can be flagged (rule 3), and a caught purchase cannot be put back.
-- **Pinned** by the disclosed-name test.
+- **Pinned** by the disclosed-name test and the "second review, disclosed" test.
 
 **`target card services` has no payment word.** Any outflow to Target Card Services is treated as a card payment.
 
@@ -318,7 +342,7 @@ while the banner leaves it out. This is rare: a worked pending row is usually ca
 
 ## Tests
 
-**After review:** `spendingFilter.test.ts` is 121; `spendingPendingPairs.integration.test.ts` is 10;
+**After review:** `spendingFilter.test.ts` is 121 (136 after the second review); `spendingPendingPairs.integration.test.ts` is 10;
 `supersededPending.integration.test.ts` is new (4); `pendingSupersede.test.ts` is +2. Details are under **Review
 fixes**. The lists below describe the first revision.
 
@@ -377,14 +401,15 @@ restored.
 
 ## Verification
 
-| Gate | After review (`30d41cc`) | First revision (`7c924b2`) | `main` (`56596f3`) |
-|---|---|---|---|
-| **Full API suite** | **127 files, 1097 pass, 7 todo** | 126 files, 1071 pass, 7 todo | 125 files, 1036 pass, 7 todo |
-| **Full web suite** | **120 files, 935 pass** | 120 files, 935 pass | 119 files, 933 pass |
-| **Workspace typecheck** | exit 0 | exit 0 | — |
-| **Workspace build** | exit 0 | exit 0 | — |
-| **Landing bundle guard** | **572.5 KB of 580**; entry chunk 239.9 KB | same | unchanged |
-| **Codegen** | re-run, no diff (no spec change in review fixes) | no diff | — |
+| Gate | Second review (`e82266f`) | After review (`30d41cc`) | First revision (`7c924b2`) | `main` (`56596f3`) |
+|---|---|---|---|---|
+| **Rule unit tests** (`spendingFilter.test.ts`) | **136 pass** | 121 pass | 103 pass | 76 pass |
+| **Full API suite** | **127 files, 1112 pass, 7 todo** | 127 files, 1097 pass, 7 todo | 126 files, 1071 pass, 7 todo | 125 files, 1036 pass, 7 todo |
+| **Full web suite** | **120 files, 935 pass** | 120 files, 935 pass | 120 files, 935 pass | 119 files, 933 pass |
+| **Workspace typecheck** | exit 0 | exit 0 | exit 0 | — |
+| **Workspace build** | exit 0 | exit 0 | exit 0 | — |
+| **Landing bundle guard** | **572.5 KB of 580**; entry chunk 239.9 KB | same | same | unchanged |
+| **Codegen** | re-run, no diff (no spec change) | no diff | no diff | — |
 
 ## Review fixes
 
@@ -395,9 +420,9 @@ household scope and spine parity were confirmed.
 |---|---|---|
 | **M1** — the pairing read was unbounded, quadratic in JS, and ran twice per spine request | (1) The spine reads the set once and passes it to both `buildSpendingFacts` calls (`opts.replacedPendingIds`; `.then` on one promise, so a failure rejects the `Promise.all`). (2) One join returns only (pending, posted) pairs that could supersede: account, 0–7 days, created after, same sign, amount band with rounding slack. (3) `pairPendingWithPostedAmong` runs PR4c's loop over each posted row's candidates; `pairPendingWithPosted` delegates to it, so cash and spending share one loop. (4) No DDL; index proposed below. | `supersededPending.integration.test.ts`: equals whole-ledger pairing on a 400-row randomized ledger (two accounts, look-alike merchants, out-of-order arrivals) and on the 92.40 / 11.00 fixtures, exact ids. **Cost guard:** 3,060 rows, 3,000 unrelated, reads **60** rows / **30** candidate pairs, under 5 s. `pendingSupersede.test.ts` (+2): the "among" loop equals the full loop with complete candidates (plus extras, any order); a missing candidate changes the answer, so the precondition is real. |
 | **M2** — the Budget page now disagrees with Spending, undisclosed | Budget page **not changed** (financial calculation; needs Brad). Disclosed under Figures and Residuals with the reviewer's numbers; added to **Pending Brad's decision**. | "⚠️ KNOWN RESIDUAL (pending Brad's decision)": June "Eating out", Spending **69.40**, Budget **134.40**, gap 65.00. Written to be updated, not deleted, when Budget adopts pairing. |
-| **L1** — BofA's layout and "… TO VISA" regressed | `des` is an entry-description label beside `descr`; `INDN` names (≤ 4 words), `CO ID` / `ORIG ID` / `IND ID` count as references; "to <issuer or network>" is accepted. | Recognized: "FIRST NATIONAL DES:CREDIT CARD PYMT ID:1234 INDN:JANE DOE CO ID:9999 PPD", "CAPITAL ONE DES:CRCARDPMT ID:… INDN:… CO ID:… PPD", "US BANK CREDIT CARD PAYMENT ID:1234 INDN:JANE DOE CO ID:9999 PPD", "CREDIT CARD PYMT TO VISA", "CREDIT CARD PAYMENT TO CAPITAL ONE 1234". |
+| **L1** — BofA's layout and "… TO VISA" regressed | `des` is an entry-description label beside `descr`; `INDN` names (≤ 4 words), `CO ID` / `ORIG ID` / `IND ID` count as references; "to <issuer or network>" is accepted. (The second review found real Chase and BofA layouts still regressed; fixed there, names now ≤ 8 words.) | Recognized: "FIRST NATIONAL DES:CREDIT CARD PYMT ID:1234 INDN:JANE DOE CO ID:9999 PPD", "CAPITAL ONE DES:CRCARDPMT ID:… INDN:… CO ID:… PPD", "US BANK CREDIT CARD PAYMENT ID:1234 INDN:JANE DOE CO ID:9999 PPD", "CREDIT CARD PYMT TO VISA", "CREDIT CARD PAYMENT TO CAPITAL ONE 1234". |
 | **L2** — note residuals missed the Amex payoff | Residuals now name the Amex weekly payoff for closed windows (the Saturday case, possible double payment, same as `main`) and for false pairs (they lower the payoff). | — (note) |
-| **N1** — seven purchases newly caught | Every phrase counts only in a payment's position (What changed §2). A leading processor means purchase. A glued code needs a digit. `online` / `mobile` are no longer references. | The seven as purchases, plus "CRCARDPMTSHOP", "TST* CREDIT CARD PYMT 0412", "CREDIT CARD PYMT TO VISA SUPPLIES", "CREDIT CARD PAYMENT TO", an over-long INDN name. Processor test ("PAYPAL *PAYMTHLY" stays a payment). Disclosed test: an unlabelled name reads as a purchase. Every PR7 and PR7b payment case stays green. |
+| **N1** — seven purchases newly caught | Every phrase counts only in a payment's position. (That was this revision; since the second review only tier 2 does, see What changed §2.) A leading processor means purchase. A glued code needs a digit. `online` / `mobile` are no longer references. | The seven as purchases, plus "CRCARDPMTSHOP", "TST* CREDIT CARD PYMT 0412", "CREDIT CARD PYMT TO VISA SUPPLIES", "CREDIT CARD PAYMENT TO", an over-long INDN name. Processor test ("PAYPAL *PAYMTHLY" stays a payment). Disclosed test: an unlabelled name reads as a purchase. Every PR7 and PR7b payment case **in the tables** stayed green, but real layouts outside them regressed. The second review caught this, and **Second review** below fixes it. |
 | **N2** — a test depended on another | "pending rows that are not the other half…" has its own week and accounts: **210.00**, `replacedPending` 0. | Passes alone (`-t`), 1 passed / 9 skipped. |
 | **N3** — guard tests | Added. | Household scope: the same external account id in two households, 0 candidate pairs each; a control household pairs. **Every bucket**, `replacedPending` included, sums to raw outflow in each of two weeks (587.00, 62.40) and the fortnight (649.40); the weeks add up bucket by bucket. Plus the Budget residual, the cost guard and BofA above. |
 
@@ -432,6 +457,42 @@ autovacuum would; same replaced set in every case):
   whole-ledger answer; its cost is the difference (above).
 - **The cost guard and `pairPendingWithPostedAmong` do not exist on `7c924b2`.**
 - **The Budget residual pins today's behaviour** and passes on `7c924b2` too.
+
+## Second review
+
+Second look at `dbd949e`: **REQUEST CHANGES**, narrowly.
+
+**Verified sound:**
+- the bounded join equals whole-ledger pairing (8 edge-case seeds, exact band arithmetic);
+- the shared spine set;
+- cost;
+- must-not-change;
+- a trial merge onto `9923add`: only two generated maps conflict, and codegen resolves them.
+
+| Finding | Fix | Test |
+|---|---|---|
+| **MEDIUM** — an issuer phrase followed by a bank's ACH labels counted as spending (Chase's long layout, BofA's `DES:`). `main` and `7c924b2` recognised these; `dbd949e` did not. | **Tier 1:** PR7's issuer phrases (`CARD_PAYMENT_PATTERNS`) match anywhere as whole words again, exactly as on `main`. **Tier 2:** the issuer phrases PR7b added move to `POSITIONED_ISSUER_PHRASES` and keep the position rule. Its tail now reads **colon-marked ACH fields** with their values, never past the next label: `ORIG CO NAME`, `ORIG ID`, `DESC DATE`, `CO ENTRY DESCR`, `SEC`, `TRACE#`, `EED`, `IND ID`, `IND NAME`, `TRN` (plus a trailing `TC`), and `DES`, `ID`, `INDN`, `CO ID`. So the claims under What changed §2 and Residuals, that BofA's layout is handled, now hold for real layouts, not only the test strings. | The reviewer's six strings, the first three built out in Chase's full long format (trace, dates, IND ID, TRN … TC). Plus the same two layouts after **positioned** phrases, which read the tail field by field: "ORIG CO NAME:TARGET CARD SERVICES … CO ENTRY DESCR:PAYMENT SEC:PPD TRACE#:… IND NAME:JANE DOE TRN: 2440011111TC", "TARGET CARD SERVICES DES:PAYMENT ID:… INDN:JANE DOE CO ID:… WEB", "US BANK CREDIT CARD PAYMENT DES:ONLINE PMT ID:… INDN:MARIA DE LA CRUZ GONZALEZ CO ID:… PPD". |
+| **LOW** — PR7 issuer phrases followed by an unlabelled name or text regressed | Fixed by tier 1. `goldman sachs apple card payment` added. The N1 purchases stay purchases, because their phrases ("target card services", "wf credit card auto pay", "us bank credit card payment") are tier 2. | "CAPITAL ONE MOBILE PYMT JANE DOE", "GOLDMAN SACHS APPLE CARD PAYMENT 1234", "APPLECARD GSBANK PAYMENT 260901 3920178 JANE DOE". The N1 purchase table and PR7's 32-purchase table stay green. |
+| **NIT** — "CAFE DES CREDIT CARD PAYMENT CO" and "CREDIT CARD PAYMENT INDN BOB'S BAIT SHOP" caught | A label counts only with its colon: `DES:` / `DESCR:` before a phrase, and every field label in the tail. | Both added to the purchase table. |
+| **NIT** — "CREDIT CARD PYMT REF SUPPLIES" caught (as on `main`); a 5+ word `INDN:` name missed; "CRCARDPMTABCDEFG" missed (as on `main`) | Names are now read up to **8** words (was 4). The other two are disclosed. | The "second review, disclosed" test: REF SUPPLIES caught; CRCARDPMTABCDEFG missed; a 9-word name missed, an 8-word name read. A 5-word name is in the recognised table. |
+
+**What is still lost against `main`:** only `credit card pymt`, which PR7 matched anywhere and PR7b positions. It is
+lost when an unlabelled name or text follows it, when a leading processor precedes it, or when a name runs past 8
+words. See Residuals, "Card-payment recall against `main`". PR7's other issuer phrases lose nothing.
+
+**Fails before.** Rule unit file, 136 tests. The rule files were swapped, the test run, and the files restored.
+- **`dbd949e`'s rule: 16 fail.**
+  - the six MEDIUM and three LOW strings;
+  - the three positioned-layout strings;
+  - both NIT purchases;
+  - the disclosed test;
+  - the lists test (`POSITIONED_ISSUER_PHRASES` does not exist there).
+- **`main`'s rule (`56596f3`): 24 fail.**
+  - **The nine reviewer strings pass there,** as the reviewer said, and both NIT strings are purchases there.
+  - **What fails there** is PR7b's own additions `main` never had: the new issuer phrases, the glued code, "to
+    <issuer>", and the positioned layouts. It also fails on `main`'s false catches ("CREDIT CARD PYMT SUPPLIES INC",
+    "TST* CREDIT CARD PYMT 0412", "CREDIT CARD PYMT TO VISA SUPPLIES").
+- **This revision: all 136 pass.**
 
 ## Pending Brad's decision
 
