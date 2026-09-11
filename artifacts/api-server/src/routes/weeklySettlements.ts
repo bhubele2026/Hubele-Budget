@@ -2,11 +2,26 @@ import { Router, type IRouter } from "express";
 import { and, eq } from "drizzle-orm";
 import { db, weeklySettlementsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
-import { householdTodayISO } from "../lib/householdClock";
+import { householdTodayISO, weekBounds } from "../lib/householdClock";
 
 const router: IRouter = Router();
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * (PR2) A settlement is keyed by the Sunday that starts its household week
+ * (Sun–Sat). A Wednesday key names no week, so every verb refuses one instead
+ * of storing or looking up a row no screen can reach.
+ *
+ * `weekBounds` is pure calendar arithmetic on the string, so the answer is the
+ * same on any server timezone. It also refuses a date that does not exist:
+ * 2026-02-29 rolls over to March 1st and no longer equals itself.
+ */
+function isSundayISO(iso: string): boolean {
+  return weekBounds(iso).start === iso;
+}
+
+const NOT_A_SUNDAY = "weekStart must be a Sunday";
 
 router.get("/weekly-settlements", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;
@@ -15,6 +30,10 @@ router.get("/weekly-settlements", requireAuth, async (req, res): Promise<void> =
   if (weekStart) {
     if (!ISO_DATE.test(weekStart)) {
       res.status(400).json({ error: "weekStart must be YYYY-MM-DD" });
+      return;
+    }
+    if (!isSundayISO(weekStart)) {
+      res.status(400).json({ error: NOT_A_SUNDAY });
       return;
     }
     conds.push(eq(weeklySettlementsTable.weekStart, weekStart));
@@ -36,6 +55,10 @@ router.put("/weekly-settlements", requireAuth, async (req, res): Promise<void> =
   const { weekStart } = req.body ?? {};
   if (typeof weekStart !== "string" || !ISO_DATE.test(weekStart)) {
     res.status(400).json({ error: "weekStart must be YYYY-MM-DD" });
+    return;
+  }
+  if (!isSundayISO(weekStart)) {
+    res.status(400).json({ error: NOT_A_SUNDAY });
     return;
   }
   // (#629) Reject future weeks — there's nothing to settle yet, and a
@@ -66,6 +89,10 @@ router.delete("/weekly-settlements", requireAuth, async (req, res): Promise<void
   const weekStart = typeof req.query.weekStart === "string" ? req.query.weekStart : undefined;
   if (!weekStart || !ISO_DATE.test(weekStart)) {
     res.status(400).json({ error: "weekStart (YYYY-MM-DD) required" });
+    return;
+  }
+  if (!isSundayISO(weekStart)) {
+    res.status(400).json({ error: NOT_A_SUNDAY });
     return;
   }
   await db

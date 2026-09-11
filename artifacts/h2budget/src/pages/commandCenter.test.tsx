@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import React from "react";
+import { householdToday } from "@/lib/householdDay";
 
 /**
  * Banking (`/banking`) — the C1 rebuild.
@@ -515,11 +516,10 @@ describe("Banking — a hint is a claim, so it waits for the spine", () => {
   });
 });
 
-/** An ISO date inside the current Sun–Sat week, so weekly-bucket spend lands
- *  in the window the page is showing. */
+/** The household's today — inside the household Sun–Sat week the page shows
+ *  (PR2), so weekly-bucket spend lands in that window on any test timezone. */
 function todayISOForWeek(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return householdToday();
 }
 
 describe("Banking — why this number?", () => {

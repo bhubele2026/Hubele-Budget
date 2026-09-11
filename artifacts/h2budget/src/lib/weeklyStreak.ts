@@ -1,78 +1,25 @@
-import type { Transaction } from "@workspace/api-client-react";
+// (PR2) Week and day bounds for the Banking page, on the household calendar
+// (America/Chicago). They used to read the browser's local date, so a phone
+// outside Central time put "this week" and "today" a day off every evening.
+// `now` is an INSTANT.
+//
+// The unused `weeklyBudgetStreak` that lived here is gone (PR2): nothing called
+// it, and Allowances keeps its own streaks.
 
-export type WeeklyStreak = {
-  weeks: number;
-  direction: "under" | "over" | "none";
-};
+import { addDaysISO, householdToday, weekBounds } from "./householdDay";
 
-function fmtISO(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
-}
-function addDays(d: Date, n: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-function sundayOf(d: Date): Date {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() - x.getDay());
-  return x;
-}
-
-/** ISO date `n` days before `now` — for bounding the transactions query. */
+/** Household date `n` days before `now` — for bounding the transactions query. */
 export function isoDaysAgo(now: Date, n: number): string {
-  return fmtISO(addDays(now, -n));
+  return addDaysISO(householdToday(now), -n);
 }
+
+/** The household's today (YYYY-MM-DD) at the instant `now`. */
 export function todayISO(now: Date): string {
-  return fmtISO(now);
+  return householdToday(now);
 }
 
-/** ISO bounds of the Sun–Sat week containing `now`. */
+/** ISO bounds of the household's Sun–Sat week containing `now`. */
 export function currentWeekBounds(now: Date): { startISO: string; endISO: string } {
-  const sun = sundayOf(now);
-  return { startISO: fmtISO(sun), endISO: fmtISO(addDays(sun, 6)) };
-}
-
-/**
- * Trailing run of COMPLETED weeks that all landed the same side of the weekly
- * allowance — `under` (good) or `over` (the warning). Walks back from last week
- * and stops at the first week that flips direction or has no spend data.
- * Mirrors the allowances over-budget streak but reports either direction.
- */
-export function weeklyBudgetStreak(
-  txns: Transaction[],
-  weeklyAmt: number,
-  overrides: Record<string, string> | undefined,
-  now: Date,
-): WeeklyStreak {
-  if (weeklyAmt <= 0) return { weeks: 0, direction: "none" };
-  const ov = overrides ?? {};
-  let weekSun = addDays(sundayOf(now), -7); // last fully-completed week
-  let direction: "under" | "over" | "none" = "none";
-  let weeks = 0;
-  for (let i = 0; i < 26; i++) {
-    const start = fmtISO(weekSun);
-    const end = fmtISO(addDays(weekSun, 6));
-    let spend = 0;
-    let any = false;
-    for (const t of txns) {
-      if (!t.weeklyAllowance) continue;
-      if (t.occurredOn >= start && t.occurredOn <= end) {
-        const a = Number(t.amount) || 0;
-        if (a < 0) spend += -a;
-        any = true;
-      }
-    }
-    if (!any) break;
-    const planned = ov[start] != null ? Number(ov[start]) : weeklyAmt;
-    if (!(planned > 0)) break;
-    const thisDir: "under" | "over" = spend > planned ? "over" : "under";
-    if (direction === "none") direction = thisDir;
-    if (thisDir !== direction) break;
-    weeks++;
-    weekSun = addDays(weekSun, -7);
-  }
-  return weeks > 0 ? { weeks, direction } : { weeks: 0, direction: "none" };
+  const { start, end } = weekBounds(householdToday(now));
+  return { startISO: start, endISO: end };
 }

@@ -57,6 +57,7 @@ import {
   type CashSignalStatus,
 } from "@/lib/reportsBalances";
 import { formatCurrency, cn } from "@/lib/utils";
+import { moneyFace } from "@/components/data-state";
 import { CHART } from "@/lib/chartTokens";
 import { card, cardHead, emptyNote, fieldLabel, Stat, Help } from "@/ui";
 
@@ -308,8 +309,11 @@ export function ReportsBalanceTiles({
 
   const status = (spine?.forecast?.status ?? "no_data") as CashSignalStatus;
   const statusMeta = cashBufferStatusMeta(status);
-  const buffer = Number(spine?.forecast?.cashBuffer ?? 0) || 0;
-  const lowest = Number(spine?.forecast?.lowPoint ?? 0) || 0;
+  // (PR3) A low point or buffer that did not arrive shows the kit's missing
+  // face, "—". It used to fall back to 0 and print "Lowest $0.00", which reads
+  // as a real (and alarming) projection.
+  const buffer = spine?.forecast?.cashBuffer;
+  const lowest = spine?.forecast?.lowPoint;
   // ⚠️ A MISSING SPINE IS NOT "NO SNAPSHOT". Without it the tile says it is
   // loading or failed; the setup hint is only true once the spine says so.
   const cashValue = spine ? statusMeta.label : "—";
@@ -319,7 +323,7 @@ export function ReportsBalanceTiles({
       : "Loading…"
     : status === "no_data"
       ? "Set a checking balance on Forecast"
-      : `Lowest ${formatCurrency(lowest)} · buffer ${formatCurrency(buffer)}`;
+      : `Lowest ${moneyFace(lowest)} · buffer ${moneyFace(buffer)}`;
 
   return (
     <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
