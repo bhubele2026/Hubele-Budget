@@ -3,6 +3,7 @@ import {
   getGetSpineQueryKey,
   type Spine,
 } from "@workspace/api-client-react";
+import { dataState, type DataState } from "@/lib/queryState";
 
 /**
  * ⭐ THE SPINE — one snapshot, read once, shared by every surface that quotes
@@ -21,6 +22,12 @@ import {
  * two tiles come to disagree, which is the exact failure this endpoint exists
  * to make impossible.
  *
+ * ⚠️ IT SAYS WHEN IT CANNOT BE TRUSTED. `state` separates still loading,
+ * loaded, refreshing, a failed refresh (the last good numbers stay on screen)
+ * and a failed first load, so no surface paints "$0.00" or "All reconciled" for
+ * a spine it never received. `updatedAt` is when the numbers on screen were
+ * fetched.
+ *
  * `staleTime` is 60s: long enough that moving between pages never refetches,
  * short enough that the numbers can't visibly age during a session. Every
  * successful mutation invalidates it centrally (see the `mutationCache` in
@@ -28,13 +35,32 @@ import {
  */
 export const SPINE_QUERY_KEY = getGetSpineQueryKey();
 
-export function useSpine(): { data: Spine | undefined; isLoading: boolean } {
-  const { data, isLoading } = useGetSpine({
+export interface SpineRead {
+  data: Spine | undefined;
+  isLoading: boolean;
+  state: DataState;
+  error: unknown;
+  /** When the data on screen was fetched (ISO), or null before the first success. */
+  updatedAt: string | null;
+  refetch: () => void;
+}
+
+export function useSpine(): SpineRead {
+  const q = useGetSpine({
     query: {
       queryKey: SPINE_QUERY_KEY,
       staleTime: 60_000,
       gcTime: 30 * 60_000,
     },
   });
-  return { data, isLoading };
+  return {
+    data: q.data,
+    isLoading: q.isLoading,
+    state: dataState(q),
+    error: q.error ?? null,
+    updatedAt: q.dataUpdatedAt ? new Date(q.dataUpdatedAt).toISOString() : null,
+    refetch: () => {
+      void q.refetch();
+    },
+  };
 }

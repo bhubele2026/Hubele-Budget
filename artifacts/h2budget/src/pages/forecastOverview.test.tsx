@@ -20,11 +20,21 @@ import React from "react";
 
 const state = vi.hoisted(() => ({
   spine: undefined as unknown,
+  // What useSpine says about that data: loaded, unless a test says otherwise.
+  spineState: "loaded" as string,
+  spineUpdatedAt: null as string | null,
+  refetchSpine: vi.fn(),
   cashSignal: undefined as unknown,
 }));
 
 vi.mock("@/hooks/useSpine", () => ({
-  useSpine: () => ({ data: state.spine, isLoading: false }),
+  useSpine: () => ({
+    data: state.spine,
+    isLoading: false,
+    state: state.spineState,
+    updatedAt: state.spineUpdatedAt,
+    refetch: state.refetchSpine,
+  }),
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -198,4 +208,37 @@ it("does not show a fallback starting balance as a validated projection", () => 
   render(<ForecastOverviewPage />);
   expect(statOf("fo-stat-ending")).toContain("—");
   expect(statOf("fo-stat-runway")).not.toContain("Clear");
+});
+
+describe("Forecast Overview — a failed spine refresh keeps the numbers and says so", () => {
+  afterEach(() => {
+    state.spineState = "loaded";
+    state.spineUpdatedAt = null;
+  });
+
+  it("shows the refresh banner and keeps the spine's figures", () => {
+    state.spineState = "refresh-failed";
+    state.spineUpdatedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    render(<ForecastOverviewPage />);
+    expect(screen.getByTestId("fo-refresh-banner").textContent).toContain(
+      "Couldn't refresh",
+    );
+    expect(statOf("fo-stat-bank")).toContain(usd(SPINE.bank.balance));
+  });
+
+  it("after a failed first load, says so and shows em dashes, never $0", () => {
+    state.spine = undefined;
+    state.spineState = "failed";
+    render(<ForecastOverviewPage />);
+    expect(screen.getByTestId("fo-refresh-banner").textContent).toContain(
+      "Couldn't load",
+    );
+    expect(statOf("fo-stat-bank")).toContain("—");
+    expect(statOf("fo-stat-bank")).not.toContain("$0.00");
+  });
+
+  it("shows no spine banner when the spine loaded", () => {
+    render(<ForecastOverviewPage />);
+    expect(screen.queryByTestId("fo-refresh-banner")).toBeNull();
+  });
 });

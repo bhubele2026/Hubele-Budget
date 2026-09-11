@@ -72,8 +72,8 @@ What the rule reads, after both review rounds:
 |---|---|
 | `syncPlaidItem` (any origin) | `transactions` success or failure. It also writes `PRODUCT_NOT_READY` failures, which the rule skips. |
 | `syncPlaidItem`, a manual Sync on an anchored snapshot whose account resolves (by pointer or recovery) to this item | `balance`, **only when the balance call ran**: success when a balance was re-read, `no_balance` when Plaid returned none, `PRODUCT_NOT_READY` while preparing (skipped by the rule), or a failure with Plaid's code |
-| `POST /forecast/refresh-bank`, for the bank snapshot account only | `balance` success, `no_balance`, or failure with Plaid's code |
-| `POST /forecast/bank-snapshot` from a Plaid account | `balance` success whenever it sets the snapshot; `no_balance` or a failure only when the account is already the bank balance's |
+| `POST /forecast/refresh-bank`, for the bank snapshot account, or any account while none is set | `balance` success, `no_balance`, or failure with Plaid's code |
+| `POST /forecast/bank-snapshot` from a Plaid account | `balance` success whenever it sets the snapshot; `no_balance` or a failure only when the account is already the bank balance's, or while no bank balance account is set |
 
 - **The two routes write their rows for the signed-in user.** Settings → Recent activity lists by that user.
 - **They also carry Plaid's display message, request id, HTTP status and error kind,** so a login failure shows
@@ -246,6 +246,12 @@ It left four follow-ups, none blocking, all applied:
    signed-in user, and they lacked Plaid's error kind. Both routes now write for the signed-in user and pass
    the error details.
 4. **NIT — fixed.** The rows table no longer implies the sync skips `PRODUCT_NOT_READY` rows.
+
+**The same reviewer then read `725d79e` and approved it.** It left one wording nit, now fixed in the rows table:
+- Both balance routes also record a row while no bank balance account is set yet.
+- In that state, a failed read of another account on the same bank login can mark a typed-in balance
+  `refresh_failed`.
+- That is rare, and it is accepted.
 
 ## Left for PR3b
 

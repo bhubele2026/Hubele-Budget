@@ -30,10 +30,18 @@ describe("useReviewInboxCount (reads the shared spine)", () => {
     expect(result.current).toBe(3);
   });
 
-  it("returns 0 while loading / when no data", () => {
-    mockData.current = undefined;
+  it("returns a real zero when the spine says zero", () => {
+    mockData.current = { reviewCount: 0 };
     const { result } = renderHook(() => useReviewInboxCount());
     expect(result.current).toBe(0);
+  });
+
+  it("returns null — unknown, not zero — while the spine has no data", () => {
+    // (PR3b1) This used to return 0, which let the Chase page say "All
+    // reconciled" while the spine was still loading or had failed.
+    mockData.current = undefined;
+    const { result } = renderHook(() => useReviewInboxCount());
+    expect(result.current).toBeNull();
   });
 
   it("sources the badge from the spine, not a second request", () => {

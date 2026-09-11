@@ -37,6 +37,10 @@ vi.mock("@/components/sync-button", () => ({
 
 const state = vi.hoisted(() => ({
   spine: undefined as unknown,
+  // What useSpine says about that data: loaded, unless a test says otherwise.
+  spineState: "loaded" as string,
+  spineUpdatedAt: null as string | null,
+  refetchSpine: vi.fn(),
   txns: [] as Array<Record<string, unknown>>,
   recurring: [] as Array<Record<string, unknown>>,
   settings: undefined as unknown,
@@ -45,15 +49,22 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/useSpine", () => ({
-  useSpine: () => ({ data: state.spine, isLoading: false }),
+  useSpine: () => ({
+    data: state.spine,
+    isLoading: false,
+    state: state.spineState,
+    updatedAt: state.spineUpdatedAt,
+    refetch: state.refetchSpine,
+  }),
 }));
 
+// (PR3b1) No cash-signal query here any more: the spine carries the snapshot's
+// source and freshness. Leaving it out of the mock makes the page fail loudly
+// if it ever starts calling it again.
 vi.mock("@workspace/api-client-react", () => ({
   useGetSettings: () => ({ data: state.settings }),
   useListTransactions: () => ({ data: state.txns }),
   useListRecurringItems: () => ({ data: state.recurring }),
-  useGetForecastCashSignal: () => ({ data: state.cashSignal }),
-  getGetForecastCashSignalQueryKey: () => ["/api/forecast/cash-signal"],
   useGetReportsSpendingFacts: () => ({ data: state.spendingFacts }),
   getGetReportsSpendingFactsQueryKey: () => ["/api/reports/spending-facts"],
 }));
@@ -81,7 +92,16 @@ const usd = (v: string | number) =>
 /** The single source the parity assertions read from. */
 const SPINE = {
   asOf: `${ym}-15T12:00:00.000Z`,
-  bank: { balance: "4218.55", asOfDate: `${ym}-14` },
+  bank: {
+    balance: "4218.55",
+    asOfDate: `${ym}-14`,
+    // The server's freshness verdict (PR3a): a fresh Plaid balance.
+    source: "plaid",
+    lastContactAt: `${ym}-14`,
+    lastFailureAt: null,
+    stale: false,
+    staleReason: null,
+  },
   spentMonth: 2310.4,
   spentWeek: 486.25,
   nextBill: { name: "Verizon", amount: "184.32", dueDate: `${ym}-28` },
@@ -385,7 +405,12 @@ describe("Banking — allowance buckets", () => {
 
 // ── the card head carries the sync controls ─────────────────────────────────
 
-describe("Banking — sync docks in the card head", () => {
+describe("Banking — sync docks in the card head, beside the server's freshness verdict", () => {
+  afterEach(() => {
+    state.spineState = "loaded";
+    state.spineUpdatedAt = null;
+  });
+
   it("renders the sync button and the snapshot freshness label", () => {
     render(<CommandCenterPage />);
     expect(screen.getByTestId("sync-button")).toBeTruthy();
@@ -395,14 +420,62 @@ describe("Banking — sync docks in the card head", () => {
   });
 
   it("says 'Set manually' for a hand-entered snapshot", () => {
-    state.cashSignal = {
-      snapshotAt: `${ym}-14T09:30:00.000Z`,
-      snapshotSource: "manual",
-    };
+    // (PR3b1) The source now comes from the spine, not the cash-signal query.
+    state.spine = { ...SPINE, bank: { ...SPINE.bank, source: "manual" } };
     render(<CommandCenterPage />);
     expect(screen.getByTestId("text-bank-snapshot-freshness").textContent).toContain(
       "Set manually",
     );
+  });
+
+  it("shows the freshness label at phone width too", () => {
+    render(<CommandCenterPage />);
+    const label = screen.getByTestId("text-bank-snapshot-freshness");
+    // It used to sit inside `hidden sm:block`.
+    expect(label.closest(".hidden")).toBeNull();
+  });
+
+  it("says the refresh failed when the server marks the balance stale", () => {
+    state.spine = {
+      ...SPINE,
+      bank: {
+        ...SPINE.bank,
+        stale: true,
+        staleReason: "refresh_failed",
+        lastFailureAt: `${ym}-14`,
+      },
+    };
+    render(<CommandCenterPage />);
+    expect(screen.getByTestId("text-bank-freshness-stale").textContent).toContain(
+      "Refresh failed",
+    );
+    expect(screen.queryByTestId("text-bank-snapshot-freshness")).toBeNull();
+  });
+});
+
+describe("Banking — a failed spine refresh keeps the numbers and says so", () => {
+  afterEach(() => {
+    state.spineState = "loaded";
+    state.spineUpdatedAt = null;
+  });
+
+  it("shows the refresh banner above the unchanged figures, with a Retry", () => {
+    state.spineState = "refresh-failed";
+    state.spineUpdatedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    render(<CommandCenterPage />);
+    const banner = screen.getByTestId("cc-refresh-banner");
+    expect(banner.textContent).toContain("Couldn't refresh");
+    // The last good figures stay on screen.
+    expect(screen.getByTestId("cc-stat-bank").textContent).toContain(
+      usd(SPINE.bank.balance),
+    );
+    fireEvent.click(within(banner).getByRole("button", { name: "Retry" }));
+    expect(state.refetchSpine).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows no banner when the spine loaded", () => {
+    render(<CommandCenterPage />);
+    expect(screen.queryByTestId("cc-refresh-banner")).toBeNull();
   });
 });
 
