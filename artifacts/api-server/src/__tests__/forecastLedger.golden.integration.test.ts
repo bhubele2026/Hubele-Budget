@@ -179,9 +179,9 @@ async function resolution(over: Partial<typeof forecastResolutionsTable.$inferIn
 }
 
 /** The full household: every branch the ledger refactor touches, on one snapshot. */
-async function fullHousehold(): Promise<void> {
+async function fullHousehold(opts: { snapshotAt?: Date } = {}): Promise<void> {
   const chase = await chaseAccount();
-  await settings({ balance: "3000", at: new Date("2026-05-08T15:00:00Z"), cashBuffer: "500" });
+  await settings({ balance: "3000", at: opts.snapshotAt ?? new Date("2026-05-08T15:00:00Z"), cashBuffer: "500" });
   await db
     .update(forecastSettingsTable)
     .set({ bankSnapshotAccountId: chase.id, bankSnapshotMask: "1111", bankSnapshotSource: "plaid" })
@@ -226,6 +226,30 @@ async function fullHousehold(): Promise<void> {
   await resolution({ recurringItemId: streaming.id, occurrenceDate: "2026-05-18", status: "matched", matchedTxnId: streamingPaid.id });
 }
 
+/**
+ * Ties and edge paths (added after PR4a's review, recorded on the merged PR4a code,
+ * which a 637-combination comparison showed equal to the pre-refactor code):
+ *   - two bills due on the 15th tie with the past-due Phone dragged onto 05-15;
+ *   - a bill due 05-07, the day before the 05-08 snapshot (#688 exception);
+ *   - a bill moved from 2026-02-15, outside the expansion range, to 05-27 (recovery).
+ */
+async function edgeHousehold(): Promise<void> {
+  const chase = await chaseAccount();
+  await settings({ balance: "2000", at: new Date("2026-05-08T15:00:00Z"), cashBuffer: "200" });
+  await db
+    .update(forecastSettingsTable)
+    .set({ bankSnapshotAccountId: chase.id, bankSnapshotMask: "1111", bankSnapshotSource: "plaid" })
+    .where(eq(forecastSettingsTable.userId, TEST_USER));
+  await recurring({ name: "Water", amount: "30", dayOfMonth: 15, anchorDate: "2026-01-15" });
+  await recurring({ name: "Internet", amount: "45", dayOfMonth: 15, anchorDate: "2026-01-15" });
+  await recurring({ name: "Phone", amount: "95", dayOfMonth: 12, anchorDate: "2026-01-12" });
+  await recurring({ name: "Early bill", amount: "70", dayOfMonth: 7, anchorDate: "2026-01-07" });
+  const moved = await recurring({ name: "Moved bill", amount: "55", frequency: "onetime", dayOfMonth: null, anchorDate: "2026-02-15" });
+  await resolution({ recurringItemId: moved.id, occurrenceDate: "2026-02-15", status: "rescheduled", rescheduledTo: "2026-05-27" });
+  await txn({ occurredOn: "2026-05-10", amount: "-120", plaidAccountId: chase.externalId, source: "plaid:chase", plaidTransactionId: "e-posted" });
+  await txn({ occurredOn: "2026-05-15", amount: "-15.37", plaidAccountId: chase.externalId, source: "plaid:chase", forecastFlag: true, plaidTransactionId: "e-future-cents" });
+}
+
 describe("PR4a golden — computeCashSignal output, byte for byte", () => {
   it("full household, default window from today", async () => {
     await fullHousehold();
@@ -246,6 +270,45 @@ describe("PR4a golden — computeCashSignal output, byte for byte", () => {
     await fullHousehold();
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { fromDate: "2026-05-01", horizonDays: 10 });
     expect(normalised(sig)).toMatchSnapshot();
+  });
+
+  it("full household, snapshot dated after today", async () => {
+    await fullHousehold({ snapshotAt: new Date("2026-05-20T15:00:00Z") });
+    const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 45 });
+    expect(normalised(sig)).toMatchSnapshot();
+  });
+
+  it("full household, a window that starts after today", async () => {
+    await fullHousehold();
+    const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { fromDate: "2026-05-20", horizonDays: 20 });
+    expect(normalised(sig)).toMatchSnapshot();
+  });
+
+  it("no snapshot, a window that starts after today: a plan before the window lands on its first day", async () => {
+    await settings({ startingBalance: "1800", cashBuffer: "200" });
+    await recurring({ name: "Mid-month bill", amount: "65", dayOfMonth: 16, anchorDate: "2026-01-16" });
+    await recurring({ name: "Paycheck", kind: "income", amount: "1500", frequency: "biweekly", dayOfMonth: null, anchorDate: "2026-05-22" });
+    const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { fromDate: "2026-05-20", horizonDays: 20 });
+    expect(normalised(sig)).toMatchSnapshot();
+  });
+
+  it("ties and edge paths: same-day bills with a dragged plan, the day-before-snapshot bill, a recovered moved bill", async () => {
+    await edgeHousehold();
+    const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 30 });
+    expect(normalised(sig)).toMatchSnapshot();
+  });
+
+  it("a snapshot time with no balance, and a balance with no time", async () => {
+    await settings({ balance: null, at: new Date("2026-05-10T15:00:00Z"), startingBalance: "700", cashBuffer: "100" });
+    await recurring({ name: "Bill", amount: "40", dayOfMonth: 18, anchorDate: "2026-01-18" });
+    await txn({ occurredOn: "2026-05-12", amount: "-10", source: "manual" });
+    const timeOnly = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 15 });
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotBalance: "900", bankSnapshotAt: null, bankSnapshotSource: "manual" })
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+    const balanceOnly = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 15 });
+    expect(normalised({ timeOnly, balanceOnly })).toMatchSnapshot();
   });
 
   it("no snapshot: the starting-balance fallback with flagged and unflagged rows", async () => {
