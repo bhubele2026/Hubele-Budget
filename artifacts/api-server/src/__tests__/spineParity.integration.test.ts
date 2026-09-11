@@ -443,6 +443,18 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(source).toBe("manual");
     expect(lastContactAt).toBeNull();
     expect(lastFailureAt).toBeNull();
+
+    // The landing-law scan below skips `bank`, so lock its shape here: these
+    // seven fields and nothing else, and nothing that reads like a debt figure.
+    expect(Object.keys(spine.bank).sort()).toEqual([
+      "asOfDate",
+      "balance",
+      "lastContactAt",
+      "lastFailureAt",
+      "source",
+      "stale",
+      "staleReason",
+    ]);
   });
 
   it("forecast low point + runway match /forecast/cash-signal", async () => {

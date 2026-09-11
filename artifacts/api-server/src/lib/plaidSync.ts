@@ -2010,12 +2010,17 @@ export async function syncPlaidItem(
         "[plaid-sync] no resolvable bank snapshot account — balance anchor NOT refreshed by this Sync",
       );
     }
-    if (
+    // ⚠️ ONE CONDITION for the balance call AND its `balance` attempt row below.
+    // The row used to have its own condition, so a webhook sync that never
+    // called Plaid logged "balance: success" over a real failure, and a pointer
+    // recovered by mask called Plaid but logged nothing. `bankFreshness` reads
+    // these rows to decide whether the bank balance is stale.
+    const balanceRefreshAttempted =
       syncOrigin === "manual" &&
       hasSnapshotAnchor &&
-      checkingPlaidAccountId &&
-      bankSnapshotBelongsToThisItem
-    ) {
+      !!checkingPlaidAccountId &&
+      bankSnapshotBelongsToThisItem;
+    if (balanceRefreshAttempted && checkingPlaidAccountId) {
       try {
         const resp = await plaid().accountsBalanceGet({
           access_token: item.accessToken,
@@ -2110,11 +2115,9 @@ export async function syncPlaidItem(
       errorCode: null,
       errorMessage: null,
     });
-    if (
-      checkingPlaidAccountId &&
-      forecastSettings?.bankSnapshotAccountId &&
-      bankSnapshotBelongsToThisItem
-    ) {
+    // Exactly when the balance call above ran: a manual Sync, on an anchored
+    // snapshot, whose account resolved (by pointer or recovery) to this item.
+    if (balanceRefreshAttempted) {
       await recordPlaidSyncAttempt({
         userId,
         plaidItemId: itemRowId,

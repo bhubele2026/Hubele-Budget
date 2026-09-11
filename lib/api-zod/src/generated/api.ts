@@ -2815,7 +2815,7 @@ export const GetForecastBankBalanceExplainResponse = zod
           .string()
           .nullable()
           .describe(
-            "Newest failed transactions or balance refresh not yet followed by a success of the same kind",
+            "Newest failed transactions or balance refresh not yet followed by a success of the same kind (PRODUCT_NOT_READY is not a failure)",
           ),
         stale: zod.boolean(),
         staleReason: zod
@@ -2827,7 +2827,7 @@ export const GetForecastBankBalanceExplainResponse = zod
           ])
           .nullable()
           .describe(
-            "refresh_failed when the feed behind the snapshot account failed and has not recovered, or needs a reconnect (immediate, for either source). old for a Plaid snapshot older than 48 hours. manual_old for a typed-in balance older than 7 days. Null when not stale.",
+            "refresh_failed when the feed behind the snapshot account failed and has not recovered, or needs a reconnect (immediate, for either source). old when a Plaid balance's feed has been quiet for 48 hours, with no balance re-read and no successful sync. manual_old for a typed-in balance older than 7 days. Null when not stale.",
           ),
       })
       .describe(
