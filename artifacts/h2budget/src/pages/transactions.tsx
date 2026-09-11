@@ -2233,8 +2233,9 @@ export default function TransactionsPage() {
   // Plaid checking account so the user can populate / advance that
   // account's snapshot directly from this page.
   const hasLinkedChecking = !!effectiveSnapshot;
-  // The page returns early until its rows are here (`if (!transactions)` above),
-  // so the range stats only ever render over loaded rows. A missing balance
+  // These cards render only behind `hasLinkedChecking`, so a snapshot anchors
+  // the balance closures and `computeBalanceAtEndOfDate` always returns a
+  // number: the balances below are never null today. Should that change, a null
   // shows "—", never a `?? 0` dressed as $0.00.
   const checkingEnd = rangeBalances.endBal ?? endingBalance;
   const isPlaidLinked =
@@ -2309,9 +2310,12 @@ export default function TransactionsPage() {
               <div className="p-4">
                 <div className="mb-3 flex items-baseline justify-between gap-2">
                   <span className={fieldLabel}>Change</span>
-                  {/* No start balance, or a start of $0: there is no percentage to
-                      state, so no pill. A "0%" must never stand in for it. */}
-                  {rangeBalances.startBal ? (
+                  {/* No start balance, or a start of $0 to the cent (the roll-back
+                      sums decimals, so a true $0 can land a hair off zero): there
+                      is no percentage to state, so no pill. Never a "0%", nor an
+                      absurd figure divided by a rounding error. A display gate,
+                      not money maths. */}
+                  {rangeBalances.startBal != null && Math.abs(rangeBalances.startBal) >= 0.005 ? (
                     <DeltaPill
                       value={(rangeTotals.net / Math.abs(rangeBalances.startBal)) * 100}
                     />

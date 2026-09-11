@@ -230,8 +230,11 @@ export function PanelCard({
  */
 export function ReportsBalanceTiles({
   forecast,
+  forecastError = false,
 }: {
   forecast: ForecastBundle | null | undefined;
+  /** The forecast bundle's query failed: with no bundle, the bank hint says so. */
+  forecastError?: boolean;
 }) {
   const { data: dashboard } = useGetDashboard();
   const { data: spine, state: spineState } = useSpine();
@@ -257,10 +260,12 @@ export function ReportsBalanceTiles({
   const bankSub = effective
     ? `${effective.source === "plaid" ? "Plaid" : "Manual"} · ${effective.name ?? "Bank"}${effective.mask ? ` ··${effective.mask}` : ""}`
     : forecast === undefined
-      ? undefined // the bundle has not answered: no claim about a snapshot yet
+      ? forecastError
+        ? "Couldn't load"
+        : undefined // the bundle has not answered: no claim about a snapshot yet
       : "No checking snapshot yet";
 
-  const { data: amexCardAccounts } = useListPlaidLiabilityAccounts();
+  const { data: amexCardAccounts, isError: amexCardAccountsError } = useListPlaidLiabilityAccounts();
   const amex = useMemo(
     () => resolveAmexRevolvingBalance(amexCardAccounts),
     [amexCardAccounts],
@@ -270,7 +275,9 @@ export function ReportsBalanceTiles({
   // Before the card accounts answer, no card is "linked" or "not linked" yet.
   const amexSub =
     amexCardAccounts === undefined
-      ? undefined
+      ? amexCardAccountsError
+        ? "Couldn't load"
+        : undefined
       : amexNoCardLinked
         ? "Link an Amex card to track your revolving balance"
         : describeReportsAmexTileSub(amex);

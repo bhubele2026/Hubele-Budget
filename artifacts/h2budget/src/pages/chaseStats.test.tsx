@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, afterEach, it, expect, vi, describe } from "vitest";
+import { beforeEach, afterEach, afterAll, it, expect, vi, describe } from "vitest";
 
 /**
  * The Chase page's range stats: "Money in vs out" and "Checking balance".
@@ -89,10 +89,21 @@ vi.mock("@/components/account-page/transaction-row", () => ({
 }));
 import TransactionsPage from "./transactions";
 
+// ⚠️ PIN THE CLOCK MID-MONTH. The snapshot below is dated the 1st and the stats
+// cover this week. On the 1st, the day before the week starts falls before the
+// snapshot, so today's row is rolled back into the start balance and a "$0
+// start" is no longer $0. Wednesday 2026-09-16: its week starts Sunday the 13th.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date(2026, 8, 16, 12, 0, 0));
+afterAll(() => {
+  vi.useRealTimers();
+});
+
 const pad = (n: number) => String(n).padStart(2, "0");
 const now = new Date();
 const TODAY = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-const MONTH_START = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+const MONTH_PREFIX = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+const MONTH_START = `${MONTH_PREFIX}-01`;
 
 /** A typed-in balance with no Plaid account: the page's "manual" account. */
 const LINKED_FORECAST = {
@@ -131,6 +142,10 @@ function show() {
   );
 }
 const text = (id: string) => screen.getByTestId(id).textContent ?? "";
+/** The "Change" label's own row: its pill or dash, never the In/Out legend. */
+const changeRow = () =>
+  within(screen.getByTestId("chase-stats-in-out")).getByText("Change")
+    .parentElement as HTMLElement;
 
 beforeEach(() => {
   localStorage.clear();
@@ -172,19 +187,31 @@ describe("Chase stats — the change states a percentage only when there is one"
     };
     state.rows = [todayRow];
     show();
-    const inOut = text("chase-stats-in-out");
-    expect(inOut).toContain("$40.00");
-    // The In/Out legend carries its own "100%" share; the Change row must not.
-    expect(inOut).toContain("Change—");
+    expect(text("chase-stats-in-out")).toContain("$40.00");
+    expect(changeRow().textContent).toBe("Change—");
+  });
+
+  it("with a start that is $0 to the cent but a hair off in floating point: still a dash", () => {
+    // 0.30 - 0.10 - 0.20 in floating point is about -2.8e-17, not 0.
+    state.forecast = {
+      ...LINKED_FORECAST,
+      bankSnapshot: { ...LINKED_FORECAST.bankSnapshot, balance: "0.3" },
+    };
+    state.rows = [
+      { ...todayRow, id: "a", occurredOn: `${MONTH_PREFIX}-05`, amount: "-0.1" },
+      { ...todayRow, id: "b", occurredOn: `${MONTH_PREFIX}-06`, amount: "-0.2" },
+      todayRow,
+    ];
+    show();
+    expect(changeRow().textContent).toBe("Change—");
   });
 
   it("with a real start balance: the change pill and every balance", () => {
     state.forecast = LINKED_FORECAST;
     state.rows = [todayRow];
     show();
-    const inOut = text("chase-stats-in-out");
-    expect(inOut).not.toContain("Change—");
-    expect(inOut).toMatch(/Change[^O]*%/);
+    expect(changeRow().textContent).toMatch(/^Change.*\d%$/);
+    expect(changeRow().textContent).not.toContain("—");
     expect(text("chase-stats-balance")).toContain("$");
     expect(text("chase-stats-balance")).not.toContain("—");
   });

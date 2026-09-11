@@ -107,6 +107,8 @@ const hub = vi.hoisted(() => ({
   spineFailed: false,
   forecast: null as unknown,
   liabilities: [] as unknown,
+  forecastFailed: false,
+  liabilitiesFailed: false,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -120,7 +122,7 @@ vi.mock("@workspace/api-client-react", () => ({
   }),
   useListDebts: () => ({ data: [{ id: "d1", balance: "5000.00", status: "active" }] }),
   useListDebtBalanceHistory: () => ({ data: [] }),
-  useGetForecast: () => ({ data: hub.forecast }),
+  useGetForecast: () => ({ data: hub.forecast, isError: hub.forecastFailed }),
   useGetDashboard: () => ({ data: { totalDebt: "5000.00", activeDebtCount: 1 } }),
   useGetSpine: () => ({
     data: hub.spine === "default" ? SPINE : hub.spine,
@@ -128,7 +130,7 @@ vi.mock("@workspace/api-client-react", () => ({
     isLoadingError: hub.spineFailed,
   }),
   getGetSpineQueryKey: () => ["/api/spine"],
-  useListPlaidLiabilityAccounts: () => ({ data: hub.liabilities }),
+  useListPlaidLiabilityAccounts: () => ({ data: hub.liabilities, isError: hub.liabilitiesFailed }),
 }));
 
 import ReportsPage from "./reports";
@@ -153,6 +155,8 @@ beforeEach(() => {
   hub.spineFailed = false;
   hub.forecast = null;
   hub.liabilities = [];
+  hub.forecastFailed = false;
+  hub.liabilitiesFailed = false;
 });
 
 afterEach(() => {
@@ -296,6 +300,8 @@ describe("Reports hub — no claims before the figures arrive", () => {
     renderPage();
     expect(tileText("report-tile-spending")).toContain("Couldn't load");
     expect(tileText("report-tile-budget")).toContain("Couldn't load");
+    expect(tileText("report-tile-cashflow")).toContain("Couldn't load");
+    expect(tileText("report-tile-behavior")).toContain("Couldn't load");
   });
 
   it("with facts but no income: the ring shows a dash, not 0%", () => {
@@ -335,5 +341,17 @@ describe("Reports hub — no claims before the figures arrive", () => {
     renderPage();
     expect(tileText("reports-tile-bank")).toContain("No checking snapshot yet");
     expect(tileText("reports-tile-amex")).toContain("Link an Amex card");
+  });
+});
+
+describe("Reports hub — the account and card hints after a failure", () => {
+  it("says couldn't load when the forecast bundle or the card accounts failed, never blank for good", () => {
+    hub.forecast = undefined;
+    hub.forecastFailed = true;
+    hub.liabilities = undefined;
+    hub.liabilitiesFailed = true;
+    renderPage();
+    expect(screen.getByTestId("reports-tile-bank").textContent).toContain("Couldn't load");
+    expect(screen.getByTestId("reports-tile-amex").textContent).toContain("Couldn't load");
   });
 });

@@ -81,10 +81,11 @@ export default function ReportsPage() {
   // ⚠️ NO FACTS, NO CLAIMS. Until the aggregate arrives (or after it failed) a
   // tile says so, rather than "$0.00", "No spend in range" or "No income
   // recorded" standing in for figures it never received.
-  const factsNote = dataState(factsQuery) === "failed" ? "Couldn't load" : "Loading…";
+  const factsFailed = dataState(factsQuery) === "failed";
+  const factsNote = factsFailed ? "Couldn't load" : "Loading…";
   const { data: debts } = useListDebts();
   const { data: debtBalanceHistory } = useListDebtBalanceHistory();
-  const { data: forecast } = useGetForecast({ days: 90 });
+  const { data: forecast, isError: forecastError } = useGetForecast({ days: 90 });
 
   // Debt momentum — total debt over time, carrying each debt's last-known
   // balance forward so the curve reads as one declining line.
@@ -163,7 +164,7 @@ export default function ReportsPage() {
       <h1 className="text-display font-semibold text-brand-navy">Reports</h1>
 
       {/* At-a-glance balance tiles — the household's live vitals */}
-      <ReportsBalanceTiles forecast={forecast} />
+      <ReportsBalanceTiles forecast={forecast} forecastError={forecastError} />
 
       {/* The five drill destinations */}
       <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -277,14 +278,20 @@ export default function ReportsPage() {
           value="Weekday rhythm"
           sub="When you spend, and how often"
           visual={
-            <div>
-              <MiniBars data={dowSpend} height={36} accent={CHART.navy} />
-              <div className="mt-1 flex justify-between text-micro uppercase tracking-wide text-neutral-400">
-                {DOW.map((day) => (
-                  <span key={day}>{day[0]}</span>
-                ))}
+            // While loading, the empty bars keep their seven columns; after a
+            // failure they would stay flat for good, so the tile says so.
+            factsFailed ? (
+              <div className={noteClass}>Couldn't load</div>
+            ) : (
+              <div>
+                <MiniBars data={dowSpend} height={36} accent={CHART.navy} />
+                <div className="mt-1 flex justify-between text-micro uppercase tracking-wide text-neutral-400">
+                  {DOW.map((day) => (
+                    <span key={day}>{day[0]}</span>
+                  ))}
+                </div>
               </div>
-            </div>
+            )
           }
         />
       </div>
