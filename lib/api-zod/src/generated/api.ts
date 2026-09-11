@@ -3187,7 +3187,7 @@ export const GetForecastResponse = zod.object({
                 confidence: zod
                   .string()
                   .describe(
-                    '\"high\", \"medium\" or \"low\" (the pair\'s), or \"card_payment\".',
+                    '\"high\", \"medium\" or \"low\" (the pair\'s), \"card_payment\", or \"debt_tag\" (a row the user tagged to the debt).',
                   ),
                 unpaidRemainder: zod
                   .string()
@@ -3201,7 +3201,7 @@ export const GetForecastResponse = zod.object({
           )
           .optional()
           .describe(
-            "(PR6 review) Overdue expenses the forecast treats as PAID because\nof a bank row: a non-ambiguous pair of any confidence\n(`matches`-style; older occurrences pair for this list only), or\n`card_payment` — a payment naming the card for at least a debt's\nminimum. Off the curve except `unpaidRemainder`, which drags while\nthe plan is at most 14 days overdue. Listed so an unrelated row\nthat hid an unpaid bill is never silent. Sorted by due date.\n",
+            "(PR6 review) Overdue expenses the forecast treats as PAID because\nof a bank row: a non-ambiguous pair of any confidence\n(`matches`-style; older occurrences pair for this list only), or,\nfor a debt's minimum, a payment of at least the minimum that either\nnames the card (`card_payment`) or is tagged to that debt\n(`debt_tag`). Off the curve except `unpaidRemainder`, which drags while\nthe plan is at most 14 days overdue. Listed so an unrelated row\nthat hid an unpaid bill is never silent. Sorted by due date.\n",
           ),
         matches: zod
           .array(
@@ -3523,7 +3523,7 @@ export const GetForecastCashSignalResponse = zod.object({
           confidence: zod
             .string()
             .describe(
-              '\"high\", \"medium\" or \"low\" (the pair\'s), or \"card_payment\".',
+              '\"high\", \"medium\" or \"low\" (the pair\'s), \"card_payment\", or \"debt_tag\" (a row the user tagged to the debt).',
             ),
           unpaidRemainder: zod
             .string()
@@ -3537,7 +3537,7 @@ export const GetForecastCashSignalResponse = zod.object({
     )
     .optional()
     .describe(
-      "(PR6 review) Overdue expenses the forecast treats as PAID because\nof a bank row: a non-ambiguous pair of any confidence\n(`matches`-style; older occurrences pair for this list only), or\n`card_payment` — a payment naming the card for at least a debt's\nminimum. Off the curve except `unpaidRemainder`, which drags while\nthe plan is at most 14 days overdue. Listed so an unrelated row\nthat hid an unpaid bill is never silent. Sorted by due date.\n",
+      "(PR6 review) Overdue expenses the forecast treats as PAID because\nof a bank row: a non-ambiguous pair of any confidence\n(`matches`-style; older occurrences pair for this list only), or,\nfor a debt's minimum, a payment of at least the minimum that either\nnames the card (`card_payment`) or is tagged to that debt\n(`debt_tag`). Off the curve except `unpaidRemainder`, which drags while\nthe plan is at most 14 days overdue. Listed so an unrelated row\nthat hid an unpaid bill is never silent. Sorted by due date.\n",
     ),
   matches: zod
     .array(

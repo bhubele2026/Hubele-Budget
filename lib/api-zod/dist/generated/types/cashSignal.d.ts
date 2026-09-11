@@ -49,9 +49,10 @@ export interface CashSignal {
     incomeNotArrived?: CashSignalListedPlan[];
     /** (PR6 review) Overdue expenses the forecast treats as PAID because
   of a bank row: a non-ambiguous pair of any confidence
-  (`matches`-style; older occurrences pair for this list only), or
-  `card_payment` — a payment naming the card for at least a debt's
-  minimum. Off the curve except `unpaidRemainder`, which drags while
+  (`matches`-style; older occurrences pair for this list only), or,
+  for a debt's minimum, a payment of at least the minimum that either
+  names the card (`card_payment`) or is tagged to that debt
+  (`debt_tag`). Off the curve except `unpaidRemainder`, which drags while
   the plan is at most 14 days overdue. Listed so an unrelated row
   that hid an unpaid bill is never silent. Sorted by due date.
    */

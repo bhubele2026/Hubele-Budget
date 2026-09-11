@@ -22,7 +22,7 @@ export interface CashSignalAssumedPaidPlan {
     txnId: string;
     /** Signed like the row. */
     txnAmount: string;
-    /** "high", "medium" or "low" (the pair's), or "card_payment". */
+    /** "high", "medium" or "low" (the pair's), "card_payment", or "debt_tag" (a row the user tagged to the debt). */
     confidence: string;
     /** Signed; "0.00" when the row covered it (within $1). On the curve only while at most 14 days overdue. */
     unpaidRemainder: string;

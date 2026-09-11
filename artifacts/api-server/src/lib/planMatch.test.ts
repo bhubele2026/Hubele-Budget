@@ -186,8 +186,8 @@ describe("plansPaidInFullByName", () => {
       ],
     );
     expect(out).toEqual([
-      { planKey: "debt:cap1|2026-05-01", txnId: "t-cap", txnAmount: -812.4 },
-      { planKey: "debt:disc|2026-05-03", txnId: "t-disc", txnAmount: -400 },
+      { planKey: "debt:cap1|2026-05-01", txnId: "t-cap", txnAmount: -812.4, evidence: "card_payment" },
+      { planKey: "debt:disc|2026-05-03", txnId: "t-disc", txnAmount: -400, evidence: "card_payment" },
     ]);
   });
 
@@ -221,7 +221,7 @@ describe("plansPaidInFullByName", () => {
     const may = plan("debt:cap1", "2026-04-20", -40, "Capital One Platinum minimum");
     const pay = row("t", "2026-04-18", -500, "CAPITAL ONE MOBILE PYMT");
     expect(plansPaidInFullByName([earlier, may], [pay])).toEqual([
-      { planKey: "debt:cap1|2026-04-20", txnId: "t", txnAmount: -500 },
+      { planKey: "debt:cap1|2026-04-20", txnId: "t", txnAmount: -500, evidence: "card_payment" },
     ]);
     expect(plansPaidInFullByName([may], [pay], new Set(["debt:cap1|2026-04-20#t"]))).toEqual([]);
   });
@@ -257,9 +257,9 @@ describe("plansPaidInFullByName — the row must be a card payment", () => {
         ],
       ),
     ).toEqual([
-      { planKey: "debt:apple|2026-05-02", txnId: "a", txnAmount: -300 },
-      { planKey: "debt:disc|2026-05-04", txnId: "d", txnAmount: -200 },
-      { planKey: "debt:red|2026-05-01", txnId: "t", txnAmount: -120 },
+      { planKey: "debt:apple|2026-05-02", txnId: "a", txnAmount: -300, evidence: "card_payment" },
+      { planKey: "debt:disc|2026-05-04", txnId: "d", txnAmount: -200, evidence: "card_payment" },
+      { planKey: "debt:red|2026-05-01", txnId: "t", txnAmount: -120, evidence: "card_payment" },
     ]);
   });
 
@@ -270,10 +270,97 @@ describe("plansPaidInFullByName — the row must be a card payment", () => {
   it("a row the user flagged as a card payment, or Plaid calls one, pays — with the card's name", () => {
     const flagged: MatchRow = { ...row("f", "2026-05-03", -100, "CAPITAL ONE XFER 88"), isExternalCardPayment: true };
     const plaid: MatchRow = { ...row("q", "2026-05-03", -100, "CAPITAL ONE 88"), pfcDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" };
-    expect(plansPaidInFullByName([capOne], [flagged])).toEqual([{ planKey: "debt:cap1|2026-05-03", txnId: "f", txnAmount: -100 }]);
-    expect(plansPaidInFullByName([capOne], [plaid])).toEqual([{ planKey: "debt:cap1|2026-05-03", txnId: "q", txnAmount: -100 }]);
+    expect(plansPaidInFullByName([capOne], [flagged])).toEqual([{ planKey: "debt:cap1|2026-05-03", txnId: "f", txnAmount: -100, evidence: "card_payment" }]);
+    expect(plansPaidInFullByName([capOne], [plaid])).toEqual([{ planKey: "debt:cap1|2026-05-03", txnId: "q", txnAmount: -100, evidence: "card_payment" }]);
     // Still needs the name: a flagged Discover payment never pays Capital One.
     const otherCard: MatchRow = { ...row("o", "2026-05-03", -100, "DISCOVER E-PAYMENT"), isExternalCardPayment: true };
     expect(plansPaidInFullByName([capOne], [otherCard])).toEqual([]);
+  });
+});
+
+// ⭐ PR6 third look, LOW 2 — a row the user TAGGED to a debt (PR7 rule 2) pays
+// that debt's overdue minimum. The tag is the strongest evidence: no name and no
+// card-payment phrase is needed. Overdue evidence only.
+describe("plansPaidInFullByName — a row tagged to the debt", () => {
+  const minimum = (debtId: string, date: string, amount: number, label: string): MatchPlan => ({
+    ...plan(`debt:${debtId}`, date, amount, label),
+    debtId,
+  });
+  const tagged = (txnId: string, occurredOn: string, amount: number, description: string, debtId: string): MatchRow => ({
+    ...row(txnId, occurredOn, amount, description),
+    debtId,
+  });
+  const sapphire = minimum("sapphire", "2026-05-01", -40, "Chase Sapphire minimum");
+  const freedom = minimum("freedom", "2026-05-03", -30, "Chase Freedom minimum");
+
+  it("C5: 'CHASE ONLINE PAYMENT' −600 tagged to Chase Sapphire pays its $40 minimum (not a card payment by PR7's phrases)", () => {
+    const pay = tagged("t", "2026-05-01", -600, "CHASE ONLINE PAYMENT", "sapphire");
+    expect(plansPaidInFullByName([sapphire], [{ ...pay, debtId: null }])).toEqual([]); // untagged: nothing
+    expect(plansPaidInFullByName([sapphire], [pay])).toEqual([
+      { planKey: "debt:sapphire|2026-05-01", txnId: "t", txnAmount: -600, evidence: "debt_tag" },
+    ]);
+    // No name needed either.
+    expect(plansPaidInFullByName([sapphire], [tagged("z", "2026-05-01", -60, "ZELLE 88213", "sapphire")])).toEqual([
+      { planKey: "debt:sapphire|2026-05-01", txnId: "z", txnAmount: -60, evidence: "debt_tag" },
+    ]);
+  });
+
+  it("never pays another debt's minimum — not by tag, and not by name or card-payment phrase either", () => {
+    expect(plansPaidInFullByName([sapphire], [tagged("t", "2026-05-01", -600, "CHASE ONLINE PAYMENT", "freedom")])).toEqual([]);
+    // A card payment naming the card, but tagged to another debt: the tag wins.
+    const flagged: MatchRow = { ...tagged("f", "2026-05-01", -600, "CHASE SAPPHIRE PAYMENT", "freedom"), isExternalCardPayment: true };
+    expect(plansPaidInFullByName([sapphire], [flagged])).toEqual([]);
+    // Both minimums in the window: the tagged row goes to its own debt only.
+    expect(plansPaidInFullByName([sapphire, freedom], [tagged("t", "2026-05-02", -600, "CHASE ONLINE PAYMENT", "freedom")])).toEqual([
+      { planKey: "debt:freedom|2026-05-03", txnId: "t", txnAmount: -600, evidence: "debt_tag" },
+    ]);
+    // A plan that doesn't say which debt it is never takes a tagged row.
+    expect(plansPaidInFullByName([plan("debt:sapphire", "2026-05-01", -40, "Chase Sapphire minimum")], [tagged("t", "2026-05-01", -600, "CHASE ONLINE PAYMENT", "sapphire")])).toEqual([]);
+  });
+
+  it("an amount below the minimum pays nothing; exactly the minimum pays", () => {
+    expect(plansPaidInFullByName([sapphire], [tagged("u", "2026-05-01", -39.99, "CHASE ONLINE PAYMENT", "sapphire")])).toEqual([]);
+    expect(plansPaidInFullByName([sapphire], [tagged("e", "2026-05-01", -40, "CHASE ONLINE PAYMENT", "sapphire")])).toHaveLength(1);
+  });
+
+  it("the wrong sign pays nothing (a refund or credit tagged to the debt)", () => {
+    expect(plansPaidInFullByName([sapphire], [tagged("r", "2026-05-01", 600, "CHASE ONLINE PAYMENT", "sapphire")])).toEqual([]);
+  });
+
+  it("only inside the window: 10 days before to 14 days after the minimum", () => {
+    const at = (d: string) => plansPaidInFullByName([sapphire], [tagged("t", d, -600, "CHASE ONLINE PAYMENT", "sapphire")]);
+    expect(at("2026-04-21")).toHaveLength(1);
+    expect(at("2026-05-15")).toHaveLength(1);
+    expect(at("2026-04-20")).toEqual([]);
+    expect(at("2026-05-16")).toEqual([]);
+  });
+
+  it("one tagged row pays one occurrence, even inside two occurrences' windows and big enough for both", () => {
+    const earlier = minimum("sapphire", "2026-04-24", -40, "Chase Sapphire minimum");
+    const later = minimum("sapphire", "2026-05-01", -40, "Chase Sapphire minimum");
+    const pay = tagged("t", "2026-04-30", -600, "CHASE ONLINE PAYMENT", "sapphire");
+    expect(plansPaidInFullByName([earlier, later], [pay])).toEqual([
+      { planKey: "debt:sapphire|2026-05-01", txnId: "t", txnAmount: -600, evidence: "debt_tag" },
+    ]);
+    // A second tagged row pays the other occurrence.
+    expect(
+      plansPaidInFullByName([earlier, later], [pay, tagged("t2", "2026-04-25", -40, "CHASE ONLINE PAYMENT", "sapphire")]),
+    ).toEqual([
+      { planKey: "debt:sapphire|2026-04-24", txnId: "t2", txnAmount: -40, evidence: "debt_tag" },
+      { planKey: "debt:sapphire|2026-05-01", txnId: "t", txnAmount: -600, evidence: "debt_tag" },
+    ]);
+    // A rejected pair ("Not this") never counts.
+    expect(plansPaidInFullByName([later], [pay], new Set(["debt:sapphire|2026-05-01#t"]))).toEqual([]);
+  });
+
+  it("a tagged pair is taken before a nearer name pair, so one issuer's two payments land on the right cards", () => {
+    // "CHASE CREDIT CRD" names both Chase cards; Plaid calls it a card payment. It is nearer to Sapphire,
+    // but the tagged row is Sapphire's; the named row then pays Freedom.
+    const named: MatchRow = { ...row("n", "2026-05-01", -300, "CHASE CREDIT CRD 4411"), pfcDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" };
+    const tag = tagged("t", "2026-05-04", -600, "ONLINE PAYMENT 88", "sapphire");
+    expect(plansPaidInFullByName([sapphire, freedom], [named, tag])).toEqual([
+      { planKey: "debt:sapphire|2026-05-01", txnId: "t", txnAmount: -600, evidence: "debt_tag" },
+      { planKey: "debt:freedom|2026-05-03", txnId: "n", txnAmount: -300, evidence: "card_payment" },
+    ]);
   });
 });

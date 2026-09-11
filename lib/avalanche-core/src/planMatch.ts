@@ -40,6 +40,11 @@ export type MatchPlan = {
   /** Signed: negative is money out. */
   amount: number;
   label: string;
+  /**
+   * (Debt tag) The debt this plan is the minimum of. Read only by
+   * `plansPaidInFullByName`; the matcher ignores it.
+   */
+  debtId?: string | null;
 };
 
 export type MatchRow = {
@@ -52,6 +57,11 @@ export type MatchRow = {
   isExternalCardPayment?: boolean;
   /** (PR6 second review) Plaid's detailed category (PR7 rule 8). */
   pfcDetailed?: string | null;
+  /**
+   * (Debt tag) The debt the user tagged this row to (PR7 rule 2). Read only by
+   * `plansPaidInFullByName`; the matcher ignores it.
+   */
+  debtId?: string | null;
 };
 
 /**
@@ -142,34 +152,49 @@ export function labelEvidence(label: string, description: string | null): boolea
   return nameMatch(tokenizeDescription(label), tokenizeDescription(description)) > 0;
 }
 
-export type PaidInFull = { planKey: string; txnId: string; txnAmount: number };
+export type PaidInFull = {
+  planKey: string;
+  txnId: string;
+  txnAmount: number;
+  /**
+   * What made the row a payment of this plan: `card_payment` (a card payment
+   * naming the card) or `debt_tag` (the user tagged the row to the plan's debt).
+   */
+  evidence: "card_payment" | "debt_tag";
+};
 
 /**
- * ⭐ (PR6 review) A PAYMENT THAT NAMES THE PAYEE AND PAYS AT LEAST THE PLAN.
+ * ⭐ (PR6 review) A PAYMENT OF THE DEBT THAT PAYS AT LEAST THE PLAN.
  *
  * Overdue evidence only: the ledger asks this about debt minimums already due,
  * never about a plan due after today, and it never changes `matchPlansToRows`.
  * A card's minimum is rarely paid at the minimum ($40 due, $812.40 paid), and the
  * matcher caps a named row at max($25, 25%) off the plan, so an overdue minimum
  * would drag although the card was paid. A plan is paid by a row when:
- *   - (second review) the row is a CARD PAYMENT by PR7's rule (`isCardPaymentRow`):
- *     a name word alone let "TARGET T-2331" (a purchase) pay the Target RedCard
- *     minimum, "APPLE STORE" the Apple Card, and "CAPITAL ONE AUTO CARPAY" (a car
- *     loan) a Capital One card;
  *   - same sign;
  *   - the row is dated 10 days before to 14 days after the plan;
- *   - a distinctive word of the plan's label is a word of the description (the
- *     matcher's name rule: "Capital One Platinum minimum" ↔ "CAPITAL ONE MOBILE PMT");
  *   - the row pays at least the plan;
- *   - the pair was not rejected ("Not this").
- * One row pays one plan, nearest date first.
+ *   - the pair was not rejected ("Not this");
+ *   - and the row is a payment OF THIS DEBT, by one of:
+ *     - (debt tag) the user tagged the row to the plan's debt (`debtId`, PR7's
+ *       rule 2). The name is not needed: "CHASE ONLINE PAYMENT" tagged to Chase
+ *       Sapphire pays its minimum, although PR7's phrases don't know it.
+ *       ⚠️ A row tagged to ANOTHER debt never pays this plan, by tag or by name;
+ *     - (card_payment) an untagged row that is a CARD PAYMENT by PR7's rule
+ *       (`isCardPaymentRow`; second review: a name word alone let "TARGET T-2331",
+ *       a purchase, pay the Target RedCard minimum, "APPLE STORE" the Apple Card,
+ *       and "CAPITAL ONE AUTO CARPAY", a car loan, a Capital One card) AND carries a
+ *       distinctive word of the plan's label as a word of its description (the
+ *       matcher's name rule: "Capital One Platinum minimum" ↔ "CAPITAL ONE MOBILE PYMT").
+ * One row pays one plan and one plan takes one row: tagged pairs first, then
+ * nearest date first. A row inside two occurrences' windows pays only one.
  */
 export function plansPaidInFullByName(
   plans: readonly MatchPlan[],
   rows: readonly MatchRow[],
   notMatch: ReadonlySet<string> = new Set(),
 ): PaidInFull[] {
-  const candidates: Array<{ plan: MatchPlan; row: MatchRow; days: number }> = [];
+  const candidates: Array<{ plan: MatchPlan; row: MatchRow; days: number; evidence: PaidInFull["evidence"] }> = [];
   const rowWords = rows.map((r) => tokenizeDescription(r.description));
   for (const plan of plans) {
     if (plan.amount === 0) continue;
@@ -181,13 +206,20 @@ export function plansPaidInFullByName(
       if (days < -MATCH_EARLY_DAYS || days > MATCH_LATE_DAYS) return;
       if (cents(row.amount) < cents(plan.amount)) return;
       if (notMatch.has(`${plan.key}#${row.txnId}`)) return;
+      if (row.debtId) {
+        // The user's tag decides: this debt's payment, or not this plan at all.
+        if (plan.debtId && row.debtId === plan.debtId) candidates.push({ plan, row, days, evidence: "debt_tag" });
+        return;
+      }
       if (nameMatch(planWords, rowWords[j]!) === 0) return;
       if (!isCardPaymentRow(row)) return;
-      candidates.push({ plan, row, days });
+      candidates.push({ plan, row, days, evidence: "card_payment" });
     });
   }
+  const rank = (e: PaidInFull["evidence"]) => (e === "debt_tag" ? 0 : 1);
   candidates.sort(
     (a, b) =>
+      rank(a.evidence) - rank(b.evidence) ||
       Math.abs(a.days) - Math.abs(b.days) ||
       a.plan.key.localeCompare(b.plan.key) ||
       a.row.txnId.localeCompare(b.row.txnId),
@@ -199,7 +231,7 @@ export function plansPaidInFullByName(
     if (usedPlans.has(c.plan.key) || usedRows.has(c.row.txnId)) continue;
     usedPlans.add(c.plan.key);
     usedRows.add(c.row.txnId);
-    out.push({ planKey: c.plan.key, txnId: c.row.txnId, txnAmount: c.row.amount });
+    out.push({ planKey: c.plan.key, txnId: c.row.txnId, txnAmount: c.row.amount, evidence: c.evidence });
   }
   return out;
 }
