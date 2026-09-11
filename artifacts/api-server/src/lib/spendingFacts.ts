@@ -17,6 +17,7 @@ import {
   type SpendContext,
   type SpendTxn,
 } from "./spendingFilter";
+import { loadSupersededPendingIds } from "./supersededPending";
 
 // The household only started tracking transactions on this date; ranges that
 // reach further back are clamped so day/total math is not diluted by empty
@@ -56,6 +57,11 @@ export interface SpendingFacts {
     cardPayments: number;
     /** Charges flagged reimbursable (rule 7). */
     reimbursable: number;
+    /**
+     * (PR7b) Pending outflows a posted row replaced (`loadSupersededPendingIds`).
+     * The charge counts once, on its posted row; this is the half left out.
+     */
+    replacedPending: number;
   };
   byCategory: {
     categoryId: string;
@@ -178,6 +184,10 @@ export async function buildSpendingFacts(
       ),
     );
 
+  // (PR7b) Pending rows a posted row replaced, paired over the whole ledger so
+  // the answer does not depend on where this window starts or ends.
+  const replacedPendingIds = await loadSupersededPendingIds(householdId);
+
   // --- Accumulators -------------------------------------------------------
   let householdTotal = 0;
   let householdCount = 0;
@@ -199,6 +209,7 @@ export async function buildSpendingFacts(
   let ignoreTotal = 0;
   let cardPaymentsTotal = 0;
   let reimbursableExcludedTotal = 0;
+  let replacedPendingTotal = 0;
 
   const byCat = new Map<string, { total: number; txnCount: number }>();
   const byMerch = new Map<
@@ -224,6 +235,15 @@ export async function buildSpendingFacts(
   for (const t of txns) {
     const tx: SpendTxn = t;
     const spend = spendAmount(tx);
+
+    // (PR7b) The pending half of a pair its posted row replaced is not a second
+    // charge: it counts nowhere (not spend, not income, not another bucket).
+    // The posted row carries the charge, with its own date, amount and
+    // classification.
+    if (replacedPendingIds.has(t.id)) {
+      replacedPendingTotal += spend;
+      continue;
+    }
 
     // Amex reimbursable accounting is independent of the real-spend buckets.
     if (t.source === "amex" && spend > 0) {
@@ -456,6 +476,7 @@ export async function buildSpendingFacts(
       ignoreTotal: round2(ignoreTotal),
       cardPayments: round2(cardPaymentsTotal),
       reimbursable: round2(reimbursableExcludedTotal),
+      replacedPending: round2(replacedPendingTotal),
     },
     byCategory,
     byMerchant,

@@ -4048,7 +4048,7 @@ components:
         excluded:
           type: object
           required:
-            [transfersTotal, debtPaymentsTotal, reimbursementTotal, ignoreTotal, cardPayments, reimbursable]
+            [transfersTotal, debtPaymentsTotal, reimbursementTotal, ignoreTotal, cardPayments, reimbursable, replacedPending]
           properties:
             transfersTotal: { type: number }
             debtPaymentsTotal: { type: number }
@@ -4056,6 +4056,7 @@ components:
             ignoreTotal: { type: number }
             cardPayments: { type: number, description: Payments to a credit card from another account — flagged, Plaid-classified or matched by description. Recognized in totals only; no row is re-tagged. }
             reimbursable: { type: number, description: Charges flagged reimbursable. }
+            replacedPending: { type: number, description: "Pending outflows a posted row replaced when the sync never linked them (pairPendingWithPosted, PR4c). The charge counts once, on its posted row; this is the pending half left out. No row is deleted or re-tagged." }
         byCategory:
           type: array
           items:

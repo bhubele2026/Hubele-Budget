@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, gte, lte, isNull, ilike, sql, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, lte, isNull, ilike, sql, inArray, notExists, or } from "drizzle-orm";
 import {
   db,
+  budgetCategoriesTable,
   transactionsTable,
   forecastResolutionsTable,
   mappingRulesTable,
@@ -66,7 +67,27 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
     }
   }
   if (q.data.uncategorized === true) {
-    conds.push(isNull(transactionsTable.categoryId));
+    // (PR7b) No category, or one that no longer exists in this household. The
+    // spending rule counts a row whose category was deleted as uncategorized
+    // spend (`classifyOutflow`), so the Spending page's popover must be able to
+    // list it; `category_id IS NULL` alone left it in the banner's total but
+    // out of the list. Some delete paths null the rows; others do not.
+    conds.push(
+      or(
+        isNull(transactionsTable.categoryId),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(budgetCategoriesTable)
+            .where(
+              and(
+                eq(budgetCategoriesTable.id, transactionsTable.categoryId),
+                eq(budgetCategoriesTable.householdId, req.householdId!),
+              ),
+            ),
+        ),
+      )!,
+    );
   }
   if (q.data.excludeTransfers === true) {
     conds.push(eq(transactionsTable.isTransfer, false));

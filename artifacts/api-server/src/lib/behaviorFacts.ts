@@ -32,6 +32,7 @@ import {
   type SpendTxn,
 } from "./spendingFilter";
 import { TRACKING_START } from "./spendingFacts";
+import { loadSupersededPendingIds } from "./supersededPending";
 import { expandItem } from "./cashSignal";
 import { addDaysISO, householdTodayDate, householdTodayISO } from "./householdClock";
 
@@ -351,6 +352,7 @@ function computeStreak(
 }
 
 type BehaviorTxnRow = {
+  id: string;
   occurredOn: string;
   occurredAt: string | null;
   description: string;
@@ -500,9 +502,14 @@ export async function buildBehaviorFacts(
   const catName = (id: string | null): string | null =>
     id ? categoriesById.get(id)?.name ?? null : null;
 
+  // (PR7b) Pending rows a posted row replaced: one charge, counted on its
+  // posted row, so it is never a second visit, a second splurge or a streak day.
+  const replacedPendingIds = await loadSupersededPendingIds(householdId);
+
   // --- Range transactions (for range-bound facts) ------------------------
   const rangeTxnsAll = (await db
     .select({
+      id: transactionsTable.id,
       occurredOn: transactionsTable.occurredOn,
       occurredAt: transactionsTable.occurredAt,
       description: transactionsTable.description,
@@ -526,13 +533,16 @@ export async function buildBehaviorFacts(
   // (#reimbursable) Reimbursable charges (e.g. a work expense you'll be paid
   // back for) aren't really "your" spending, so they're dropped from every
   // behavior insight — most-visited merchant, splurges, streaks, etc.
-  const rangeTxns = rangeTxnsAll.filter((t) => !t.reimbursable);
+  const rangeTxns = rangeTxnsAll.filter(
+    (t) => !t.reimbursable && !replacedPendingIds.has(t.id),
+  );
 
   // --- Streak transactions (always trackingStart..today) -----------------
   // Streaks are anchored to the tracking start and "today", independent of
   // the requested window, so a narrow range can't fake a long streak.
   const streakTxnsAll = (await db
     .select({
+      id: transactionsTable.id,
       occurredOn: transactionsTable.occurredOn,
       occurredAt: transactionsTable.occurredAt,
       description: transactionsTable.description,
@@ -553,7 +563,9 @@ export async function buildBehaviorFacts(
         lte(transactionsTable.occurredOn, todayIso),
       ),
     )) as BehaviorTxnRow[];
-  const streakTxns = streakTxnsAll.filter((t) => !t.reimbursable);
+  const streakTxns = streakTxnsAll.filter(
+    (t) => !t.reimbursable && !replacedPendingIds.has(t.id),
+  );
 
   // --- daysSinceLast ------------------------------------------------------
   const BUCKETS: Bucket[] = [

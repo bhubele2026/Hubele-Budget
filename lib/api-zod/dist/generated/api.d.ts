@@ -6402,6 +6402,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         ignoreTotal: zod.ZodNumber;
         cardPayments: zod.ZodNumber;
         reimbursable: zod.ZodNumber;
+        replacedPending: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         reimbursable: number;
         transfersTotal: number;
@@ -6409,6 +6410,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         cardPayments: number;
+        replacedPending: number;
     }, {
         reimbursable: number;
         transfersTotal: number;
@@ -6416,6 +6418,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         cardPayments: number;
+        replacedPending: number;
     }>;
     byCategory: zod.ZodArray<zod.ZodObject<{
         categoryId: zod.ZodString;
@@ -6600,6 +6603,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         cardPayments: number;
+        replacedPending: number;
     };
     byCategory: {
         categoryId: string;
@@ -6692,6 +6696,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         cardPayments: number;
+        replacedPending: number;
     };
     byCategory: {
         categoryId: string;

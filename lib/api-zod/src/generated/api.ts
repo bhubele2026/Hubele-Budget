@@ -3059,6 +3059,11 @@ export const GetReportsSpendingFactsResponse = zod.object({
       .number()
       .describe("Payments to a credit card from another account — flagged"),
     reimbursable: zod.number().describe("Charges flagged reimbursable."),
+    replacedPending: zod
+      .number()
+      .describe(
+        "Pending outflows a posted row replaced when the sync never linked them (pairPendingWithPosted, PR4c). The charge counts once, on its posted row; this is the pending half left out. No row is deleted or re-tagged.",
+      ),
   }),
   byCategory: zod.array(
     zod.object({
