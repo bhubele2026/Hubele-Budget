@@ -40,7 +40,11 @@ function round2(n: number): number {
 export function reconcileBankBalance(args: {
   /** `bank_snapshot_balance` as it stood before this sync. */
   anchorBalance: number;
-  /** Net of every ledger row on the account dated after the anchor day. */
+  /**
+   * What the ledger's cash rule (`classifyCashRows`) adds to the anchor through
+   * today, over the rows with a Plaid account on the snapshot's account only
+   * (PR4e; manual rows stay out — see the caller in `plaidSync`).
+   */
   ledgerNetSinceAnchor: number;
   /** Plaid's live `available` for that same account. */
   bankAvailable: number;

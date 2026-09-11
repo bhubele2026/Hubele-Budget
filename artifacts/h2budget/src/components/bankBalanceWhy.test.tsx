@@ -197,11 +197,13 @@ describe("Why this number? — the server's lines", () => {
     expect(popoverText()).not.toContain("=");
   });
 
-  it("says the lines are counted differently when they don't add up, still with no equation", () => {
+  it("says the lines don't add up when they don't, still with no equation", () => {
+    // (PR4e) Both lines follow one rule now, so the note names no cause.
     state.result = { data: explain({ displayed: { bankToday: "1925.10" } }) };
     render(<BankBalanceWhy />);
     open();
-    expect(screen.getByTestId("bank-why-mismatch").textContent).toContain("different rules");
+    expect(screen.getByTestId("bank-why-mismatch").textContent).toContain("do not add up to the cent");
+    expect(screen.getByTestId("bank-why-mismatch").textContent).not.toContain("different rules");
     expect(popoverText()).not.toContain("=");
   });
 

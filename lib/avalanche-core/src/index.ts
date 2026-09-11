@@ -29,6 +29,15 @@ export {
   type SupersedeRow,
 } from "./pendingSupersede";
 export {
+  classifyCashRows,
+  isBankRow,
+  type CashAnchor,
+  type CashRow,
+  type CashRowOutcome,
+  type CashRowReason,
+  type CashRowsResult,
+} from "./cashRows";
+export {
   HOUSEHOLD_TZ,
   householdDateOf,
   householdToday,

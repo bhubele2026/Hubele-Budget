@@ -56,6 +56,7 @@ let accountsBalanceGetMock: AccountsBalanceGetFn = async () => ({
   data: { accounts: [] },
 });
 let accountsBalanceGetCalls: Parameters<AccountsBalanceGetFn>[0][] = [];
+let transactionsGetCalls = 0;
 
 vi.mock("../lib/plaid", async () => {
   const actual = await vi.importActual<typeof import("../lib/plaid")>(
@@ -84,9 +85,10 @@ vi.mock("../lib/plaid", async () => {
       // the ledger and the bank disagree. Empty is the honest answer here:
       // Plaid has nothing more to give, so the difference stays unexplained
       // and gets reported rather than silently swallowed.
-      transactionsGet: async () => ({
-        data: { transactions: [], total_transactions: 0 },
-      }),
+      transactionsGet: async () => {
+        transactionsGetCalls += 1;
+        return { data: { transactions: [], total_transactions: 0 } };
+      },
     }),
   };
 });
@@ -100,6 +102,8 @@ import {
 } from "@workspace/db";
 import { syncAllForAllUsers, syncPlaidItem } from "../lib/plaidSync";
 import { logger } from "../lib/logger";
+import { householdDayOf } from "../lib/householdClock";
+import { addDaysISO } from "@workspace/avalanche-core";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 
@@ -129,6 +133,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await cleanup();
   accountsBalanceGetCalls = [];
+  transactionsGetCalls = 0;
   accountsBalanceGetMock = async () => ({ data: { accounts: [] } });
 });
 
@@ -326,6 +331,161 @@ describe("bank reconciliation on a manual Sync (2026-08-25)", () => {
       .where(eq(forecastSettingsTable.userId, TEST_USER));
     expect(settings!.bankSnapshotAccountId).toBe(plaidAccountRowId);
     expect(settings!.bankSnapshotSource).toBe("plaid");
+  });
+});
+
+// ⭐ PR4e — the reconciliation predicts with the ledger's own rule
+// (`classifyCashRows`), from the PRE-sync anchor, over the rows with a Plaid
+// account. A day sum added charges the anchor already held and both halves of an
+// unlinked pending/posted pair, so an honest ledger raised drift: a false
+// "doesn't match our records" toast plus a /transactions/get backfill. Manual
+// rows stay out (PR4e review): "Log payment" writes one for every debt payment,
+// and the bank feed never merges it.
+//
+// The anchor is read four days ago; S is its household day. Every row is dated
+// S..S+2, on or before today. No test passes `forceRefresh`, so the stale-cursor
+// backfill never runs and a /transactions/get call here can only be the
+// reconciliation's own.
+describe("(PR4e) bank reconciliation uses the ledger's cash rule", () => {
+  const DRIFT_LOG = "[plaid-sync] bank reconciliation: our rows do not explain the bank balance";
+
+  async function setUp(bankAvailable: number) {
+    const { itemRowId, plaidAccountRowId, externalAccountId } =
+      await seedItemAndCheckingAccount({ institutionName: "Chase" });
+    const readAt = new Date(Date.now() - 4 * 86_400_000);
+    await db.insert(forecastSettingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      bankSnapshotAccountId: plaidAccountRowId,
+      bankSnapshotName: "Chase Checking",
+      bankSnapshotMask: "1234",
+      bankSnapshotBalance: "1000.00",
+      bankSnapshotAt: readAt,
+      bankSnapshotSource: "plaid",
+    });
+    accountsBalanceGetMock = async () => ({
+      data: {
+        accounts: [
+          { account_id: externalAccountId, balances: { available: bankAvailable, current: bankAvailable } },
+        ],
+      },
+    });
+    const S = householdDayOf(readAt);
+    const add = (row: {
+      day: number;
+      amount: string;
+      createdAt?: Date;
+      pending?: boolean;
+      description?: string;
+      manual?: boolean;
+    }) => {
+      const occurredOn = addDaysISO(S, row.day);
+      return db.insert(transactionsTable).values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn,
+        description: row.description ?? "ledger row",
+        amount: row.amount,
+        pending: row.pending ?? false,
+        plaidAccountId: row.manual ? null : externalAccountId,
+        source: row.manual ? "manual" : "plaid:chase",
+        createdAt: row.createdAt ?? createdAtStartOfHouseholdDay(occurredOn),
+      });
+    };
+    const beforeRead = new Date(readAt.getTime() - 3_600_000);
+    const sync = async () => {
+      const warnSpy = vi.spyOn(logger, "warn");
+      try {
+        const result = await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });
+        const driftLogged = warnSpy.mock.calls.some((c) => c[1] === DRIFT_LOG);
+        return { result, driftLogged };
+      } finally {
+        warnSpy.mockRestore();
+      }
+    };
+    return { add, beforeRead, sync };
+  }
+
+  it("a charge dated ahead that the anchor already held raises no drift and no backfill", async () => {
+    // The −25.00 was pending inside `available` at the read and posted dated the
+    // next day. The bank still holds 1,000.00. The day sum predicted 975.00.
+    const { add, beforeRead, sync } = await setUp(1000);
+    await add({ day: 1, amount: "-25.00", createdAt: beforeRead, description: "PARKING" });
+
+    const { result, driftLogged } = await sync();
+    expect(result.balanceDrift ?? null).toBeNull();
+    expect(driftLogged).toBe(false);
+    expect(transactionsGetCalls).toBe(0);
+  });
+
+  it("an unlinked pending/posted pair counts once: no drift", async () => {
+    // Pending −48.20, posted −55.00 with the tip, neither in the anchor. The bank
+    // holds 945.00. The day sum counted both halves and predicted 896.80.
+    const { add, sync } = await setUp(945);
+    await add({ day: 1, amount: "-48.20", pending: true, description: "TST* CORNER BISTRO" });
+    await add({ day: 2, amount: "-55.00", description: "CORNER BISTRO" });
+
+    const { result, driftLogged } = await sync();
+    expect(result.balanceDrift ?? null).toBeNull();
+    expect(driftLogged).toBe(false);
+    expect(transactionsGetCalls).toBe(0);
+  });
+
+  it("a pair whose pending half the anchor held adds only the tip: no drift", async () => {
+    // The anchor held the −48.20 authorisation; it posted at −55.00. The bank
+    // holds 993.20. The day sum skipped the snapshot-day pending row and
+    // predicted 945.00.
+    const { add, beforeRead, sync } = await setUp(993.2);
+    await add({ day: 0, amount: "-48.20", pending: true, createdAt: beforeRead, description: "TST* CORNER BISTRO" });
+    await add({ day: 1, amount: "-55.00", description: "CORNER BISTRO" });
+
+    const { result, driftLogged } = await sync();
+    expect(result.balanceDrift ?? null).toBeNull();
+    expect(driftLogged).toBe(false);
+  });
+
+  it("(review A) a payment logged on the Avalanche page that the bank has not debited yet: no drift", async () => {
+    // "Log payment" writes a manual −500.00 checking row. The bank still holds
+    // 1,000.00. Counting the manual row predicted 500.00 and toasted.
+    const { add, sync } = await setUp(1000);
+    await add({ day: 1, amount: "-500.00", manual: true, description: "Payment — Chase Freedom" });
+
+    const { result, driftLogged } = await sync();
+    expect(result.balanceDrift ?? null).toBeNull();
+    expect(driftLogged).toBe(false);
+    expect(transactionsGetCalls).toBe(0);
+  });
+
+  it("(review B) the same logged payment once the bank's own debit arrived: no drift, no backfill", async () => {
+    // The manual row never merges with the Plaid debit, so both sit in the
+    // ledger. The bank holds 500.00. Counting the manual row predicted 0.00,
+    // toasted, and spent a /transactions/get call.
+    const { add, sync } = await setUp(500);
+    await add({ day: 1, amount: "-500.00", manual: true, description: "Payment — Chase Freedom" });
+    await add({ day: 1, amount: "-500.00", description: "CHASE CREDIT CRD AUTOPAY" });
+
+    const { result, driftLogged } = await sync();
+    expect(result.balanceDrift ?? null).toBeNull();
+    expect(driftLogged).toBe(false);
+    expect(transactionsGetCalls).toBe(0);
+  });
+
+  it("⭐ a row that is really missing still raises drift, at exactly its own amount, beside a held charge", async () => {
+    // The ⭐ case above with a held charge added: a −25.00 the anchor held, a
+    // −100.00 after it, and a +169.90 deposit that never arrived. The day sum
+    // reported 194.90 unexplained; the missing row is 169.90.
+    const { add, beforeRead, sync } = await setUp(1069.9);
+    await add({ day: 1, amount: "-25.00", createdAt: beforeRead, description: "PARKING" });
+    await add({ day: 1, amount: "-100.00", description: "HY-VEE" });
+
+    const { result, driftLogged } = await sync();
+    expect(result.balanceDrift).toEqual({
+      bank: "1069.90",
+      ledger: "900.00",
+      unexplained: "169.90",
+    });
+    expect(driftLogged).toBe(true);
+    expect(transactionsGetCalls).toBeGreaterThan(0);
   });
 });
 
