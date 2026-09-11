@@ -14,11 +14,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { ClerkProvider, Show, useAuth, useClerk } from "@clerk/react";
-import {
-  getSpine,
-  getGetSpineQueryKey,
-  getGetForecastBankBalanceExplainQueryKey,
-} from "@workspace/api-client-react";
+import { getSpine, getGetSpineQueryKey } from "@workspace/api-client-react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 
@@ -29,6 +25,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { PageErrorBoundary } from "@/components/page-error-boundary";
 import { askForSpineAgainIfFailed } from "@/lib/spineRecovery";
+import { invalidateAfterWrite } from "@/lib/mutationInvalidation";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -112,14 +109,14 @@ const NotFound = lazy(() => import("./pages/not-found"));
  * stale and the next screen that reads the spine picks up fresh numbers.
  */
 const mutationCache = new MutationCache({
+  // The rule itself (the spine, "Why this number?", every /api/reports/
+  // aggregate) lives in `lib/mutationInvalidation.ts`, where a test pins each
+  // key it must mark stale.
+  // A block body, not `() => invalidateAfterWrite(queryClient)`: an expression
+  // body makes TypeScript infer the return through `queryClient`, which is built
+  // from this very cache, and the types go circular (TS7022).
   onSuccess: () => {
-    void queryClient.invalidateQueries({ queryKey: getGetSpineQueryKey() });
-    // "Why this number?" explains the spine's bank balance, so it can never be
-    // older than it: a write that moves the balance moves the explanation too.
-    void queryClient.invalidateQueries({ queryKey: getGetForecastBankBalanceExplainQueryKey() });
-    // Spending aggregates include category and UN edits. They must refresh
-    // alongside the ledger, even when a page only invalidates transactions.
-    void queryClient.invalidateQueries({ predicate: q => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/") });
+    invalidateAfterWrite(queryClient);
   },
 });
 
