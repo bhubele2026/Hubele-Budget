@@ -55,6 +55,8 @@ type GetTxn = {
 };
 
 let nextGetResponse: GetTxn[] = [];
+// Accounts the balance read answers with (PR4b re-stamp test); empty by default.
+let nextBalanceAccounts: Array<{ account_id: string; balances: { available: number | null; current: number | null } }> = [];
 
 vi.mock("../lib/plaid", async () => {
   const actual =
@@ -93,7 +95,7 @@ vi.mock("../lib/plaid", async () => {
         };
         throw err;
       },
-      accountsBalanceGet: async () => ({ data: { accounts: [] } }),
+      accountsBalanceGet: async () => ({ data: { accounts: nextBalanceAccounts } }),
       itemGet: async () => ({
         data: {
           item: { item_id: "item-default", consent_expiration_time: null },
@@ -105,13 +107,19 @@ vi.mock("../lib/plaid", async () => {
 
 import {
   db,
+  forecastSettingsTable,
   plaidAccountsTable,
   plaidItemsTable,
   transactionsTable,
 } from "@workspace/db";
 import { syncPlaidItem } from "../lib/plaidSync";
+import { computeCashSignal } from "../lib/cashSignal";
+import { householdTodayISO } from "../lib/householdClock";
 
 async function cleanup(): Promise<void> {
+  await db
+    .delete(forecastSettingsTable)
+    .where(eq(forecastSettingsTable.userId, TEST_USER));
   await db
     .delete(transactionsTable)
     .where(eq(transactionsTable.userId, TEST_USER));
@@ -134,6 +142,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await cleanup();
   nextGetResponse = [];
+  nextBalanceAccounts = [];
 });
 
 async function seedStaleChase(): Promise<{
@@ -315,5 +324,70 @@ describe("(#720) Stale-cursor gap-backfill fallback", () => {
     // Only the pre-existing seed row — the webhook-poisoned /get
     // response was never consulted.
     expect(allRows).toHaveLength(1);
+  });
+});
+
+/**
+ * ⭐ PR4b — THE SNAPSHOT IS RE-STAMPED AFTER THE SYNC'S OWN BACKFILL.
+ *
+ * A manual Sync reads the bank balance first and writes `bankSnapshotAt`, then
+ * a backfill can import rows the cursor missed. Those rows get `created_at`
+ * AFTER the read. Under the PR4b rule a row dated on the snapshot day that
+ * reached the ledger after the read counts — but the balance read seconds
+ * earlier already held it, so without the re-stamp it would be counted twice.
+ */
+describe("(PR4b) bank snapshot vs rows the same Sync backfilled", () => {
+  it("does not add a backfilled snapshot-day row on top of the balance the Sync just read", async () => {
+    const { itemRowId, externalAcctId } = await seedStaleChase();
+    const [acctRow] = await db
+      .select({ id: plaidAccountsTable.id })
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.accountId, externalAcctId));
+    await db.insert(forecastSettingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      daysAhead: 90,
+      startingBalance: "0",
+      cashBuffer: "0",
+      bankSnapshotBalance: "1000.00",
+      bankSnapshotAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      bankSnapshotSource: "plaid",
+      bankSnapshotAccountId: acctRow!.id,
+    });
+
+    // The bank says 2,500.00 now, and that already includes today's −40 charge.
+    nextBalanceAccounts = [
+      { account_id: externalAcctId, balances: { available: 2500, current: 2500 } },
+    ];
+    nextGetResponse = [
+      {
+        transaction_id: "restamp-today-charge",
+        account_id: externalAcctId,
+        date: householdTodayISO(),
+        amount: 40, // Plaid sign: positive = debit → our −40.00
+        name: "Corner Grocery",
+      },
+    ];
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: true,
+      syncOrigin: "manual",
+    });
+    expect(result.deliveryMode).toBe("gap-backfill");
+
+    const [settings] = await db
+      .select()
+      .from(forecastSettingsTable)
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+    const [imported] = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.plaidTransactionId, "restamp-today-charge"));
+    expect(settings!.bankSnapshotBalance).toBe("2500.00");
+    expect(imported).toBeDefined();
+    expect(imported!.createdAt.getTime()).toBeLessThanOrEqual(settings!.bankSnapshotAt!.getTime());
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.bankToday).toBe("2500.00");
   });
 });

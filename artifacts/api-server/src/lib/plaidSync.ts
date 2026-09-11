@@ -2025,6 +2025,10 @@ export async function syncPlaidItem(
     // it under this code. It stays out of the item's error columns, which
     // surface as an error chip.
     let balanceNotReread: "no_balance" | "PRODUCT_NOT_READY" | null = null;
+    // The instant this Sync wrote the balance it read (PR4b). The snapshot rule
+    // compares `created_at` with it, so rows this Sync imports AFTER the read are
+    // re-stamped below.
+    let snapshotReadAt: Date | null = null;
     if (balanceRefreshAttempted && checkingPlaidAccountId) {
       try {
         const resp = await plaid().accountsBalanceGet({
@@ -2041,11 +2045,12 @@ export async function syncPlaidItem(
         // number the bank does NOT present as the balance.)
         const live = acct?.balances.available ?? acct?.balances.current;
         if (live != null) {
+          snapshotReadAt = new Date();
           await db
             .update(forecastSettingsTable)
             .set({
               bankSnapshotBalance: Number(live).toFixed(2),
-              bankSnapshotAt: new Date(),
+              bankSnapshotAt: snapshotReadAt,
               bankSnapshotSource: "plaid",
               // Heal the pointer while we are here. Plaid just answered for
               // this account, so it demonstrably exists — write it back and the
@@ -2435,6 +2440,36 @@ export async function syncPlaidItem(
           }
         }
       }
+    }
+    // ⚠️ RE-STAMP THE SNAPSHOT AFTER THIS SYNC'S OWN IMPORTS (PR4b).
+    //
+    // The balance above was read BEFORE the backfills (heal, stale cursor,
+    // reconciliation), so every row they imported has `created_at` after
+    // `bankSnapshotAt`. The snapshot rule (`isInSnapshot`) counts a row dated on
+    // the snapshot day that reached the ledger after the read — correct for a
+    // purchase that happens later, wrong here: the bank had these rows when it
+    // answered seconds ago, so the balance already holds them and they would be
+    // counted twice. Moving the stamp to now makes them "already in the
+    // balance". What it can wrongly hold is only a row that genuinely posted at
+    // the bank in the seconds between the read and this line. No Plaid call.
+    //
+    // The WHERE matches the instant this Sync wrote, so a newer snapshot (a
+    // manual entry, another Sync) is never overwritten.
+    if (snapshotReadAt && backfillAdded > 0) {
+      const restampedAt = new Date();
+      await db
+        .update(forecastSettingsTable)
+        .set({ bankSnapshotAt: restampedAt })
+        .where(
+          and(
+            eq(forecastSettingsTable.userId, ownerUserId),
+            eq(forecastSettingsTable.bankSnapshotAt, snapshotReadAt),
+          ),
+        );
+      logger.info(
+        { householdId, itemRowId, backfillAdded, snapshotReadAt, restampedAt },
+        "[plaid-sync] bank snapshot re-stamped after this sync's backfill imported rows",
+      );
     }
 
     // (#671) Single structured delivery-metrics log line per successful

@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, lte } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, lte } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -11,6 +11,7 @@ import {
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdDayOf, householdTodayDate } from "./householdClock";
+import { isInSnapshot } from "@workspace/avalanche-core";
 import {
   addDays,
   expandItem,
@@ -90,7 +91,10 @@ export type ForecastLedger = {
  * the full `computeCashSignal` output recorded before the extraction.
  *
  * Anchored on the bank snapshot when present:
- *   - Skip checking transactions on/before the snapshot date (already counted).
+ *   - A checking row counts unless the snapshot already holds it (PR4b,
+ *     `isInSnapshot`): rows dated before the snapshot day; snapshot-day rows
+ *     that reached the ledger before the balance was read; and Plaid rows that
+ *     existed at the read and are dated up to five days after it.
  *   - (#666) Planned events dated on/before the snapshot are dropped entirely
  *     — bills AND income, real AND synthetic. The bank snapshot is the
  *     truth: anything dated on or before it is already reflected in the
@@ -310,6 +314,15 @@ export async function buildForecastLedger(
   //
   // Without a snapshot there is no roll: `bankToday` is the starting balance,
   // and the curve takes only forecast-flagged rows after today.
+  //
+  // ⭐ WHICH ROWS THE SNAPSHOT ALREADY HOLDS — ONE RULE, APPLIED HERE ONLY (PR4b).
+  // A calendar day is not enough: the balance is read at an INSTANT, so a row
+  // dated on the snapshot day can land after the read, and a Plaid row dated a
+  // few days ahead can already be inside it (a pending authorisation). With a
+  // snapshot the query therefore reads the snapshot day too, and
+  // `isInSnapshot` compares each row's `created_at` with the read. Because
+  // `bankToday` and the curve take their rows from this one loop, they cannot
+  // disagree about it.
   const actualUpperISO = toISO > todayISO ? toISO : todayISO;
   const actualRowsAll = await db
     .select()
@@ -320,7 +333,9 @@ export async function buildForecastLedger(
         snapshotISO
           ? inForecastWhere(todayISO)
           : eq(transactionsTable.forecastFlag, true),
-        gt(transactionsTable.occurredOn, anchorISO),
+        snapshotISO
+          ? gte(transactionsTable.occurredOn, anchorISO)
+          : gt(transactionsTable.occurredOn, anchorISO),
         lte(transactionsTable.occurredOn, actualUpperISO),
       ),
     );
@@ -329,6 +344,17 @@ export async function buildForecastLedger(
   // Defensive only: `transactions.plaid_transaction_id` is unique.
   const seenPlaidIds = new Set<string>();
   for (const t of actualRowsAll) {
+    if (
+      snapshotISO &&
+      snapshotAt &&
+      isInSnapshot(
+        { occurredOn: t.occurredOn, createdAt: t.createdAt, plaidAccountId: t.plaidAccountId ?? null },
+        snapshotAt,
+        snapshotISO,
+      )
+    ) {
+      continue;
+    }
     if (!isBankRow(t.source, t.plaidAccountId ?? null)) continue;
     if (t.plaidTransactionId) {
       if (seenPlaidIds.has(t.plaidTransactionId)) continue;

@@ -1788,3 +1788,290 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > ties and edge
   "toDate": "2026-06-13",
 }
 `;
+
+exports[`PR4b golden — the snapshot rule > counts rows that reached the ledger after the read, and holds Plaid rows the bank already had 1`] = `
+{
+  "acceptedImpact": "0.00",
+  "bankToday": "2630.00",
+  "cashBuffer": "500.00",
+  "daily": [
+    {
+      "balance": "2630.00",
+      "date": "2026-05-14",
+    },
+    {
+      "balance": "2535.00",
+      "date": "2026-05-15",
+    },
+    {
+      "balance": "2535.00",
+      "date": "2026-05-16",
+    },
+    {
+      "balance": "2535.00",
+      "date": "2026-05-17",
+    },
+    {
+      "balance": "2535.00",
+      "date": "2026-05-18",
+    },
+    {
+      "balance": "2535.00",
+      "date": "2026-05-19",
+    },
+    {
+      "balance": "2535.00",
+      "date": "2026-05-20",
+    },
+    {
+      "balance": "2535.00",
+      "date": "2026-05-21",
+    },
+    {
+      "balance": "4395.00",
+      "date": "2026-05-22",
+    },
+    {
+      "balance": "4395.00",
+      "date": "2026-05-23",
+    },
+    {
+      "balance": "4395.00",
+      "date": "2026-05-24",
+    },
+    {
+      "balance": "4257.00",
+      "date": "2026-05-25",
+    },
+    {
+      "balance": "4257.00",
+      "date": "2026-05-26",
+    },
+    {
+      "balance": "4257.00",
+      "date": "2026-05-27",
+    },
+    {
+      "balance": "4257.00",
+      "date": "2026-05-28",
+    },
+    {
+      "balance": "4257.00",
+      "date": "2026-05-29",
+    },
+    {
+      "balance": "4257.00",
+      "date": "2026-05-30",
+    },
+    {
+      "balance": "4107.00",
+      "date": "2026-05-31",
+    },
+    {
+      "balance": "2607.00",
+      "date": "2026-06-01",
+    },
+    {
+      "balance": "2607.00",
+      "date": "2026-06-02",
+    },
+    {
+      "balance": "2607.00",
+      "date": "2026-06-03",
+    },
+    {
+      "balance": "2607.00",
+      "date": "2026-06-04",
+    },
+    {
+      "balance": "4607.00",
+      "date": "2026-06-05",
+    },
+    {
+      "balance": "4607.00",
+      "date": "2026-06-06",
+    },
+    {
+      "balance": "4607.00",
+      "date": "2026-06-07",
+    },
+    {
+      "balance": "4607.00",
+      "date": "2026-06-08",
+    },
+    {
+      "balance": "4607.00",
+      "date": "2026-06-09",
+    },
+    {
+      "balance": "4607.00",
+      "date": "2026-06-10",
+    },
+    {
+      "balance": "4607.00",
+      "date": "2026-06-11",
+    },
+    {
+      "balance": "4512.00",
+      "date": "2026-06-12",
+    },
+    {
+      "balance": "4392.00",
+      "date": "2026-06-13",
+    },
+    {
+      "balance": "4392.00",
+      "date": "2026-06-14",
+    },
+    {
+      "balance": "4392.00",
+      "date": "2026-06-15",
+    },
+    {
+      "balance": "4352.00",
+      "date": "2026-06-16",
+    },
+    {
+      "balance": "4352.00",
+      "date": "2026-06-17",
+    },
+    {
+      "balance": "4337.00",
+      "date": "2026-06-18",
+    },
+    {
+      "balance": "6337.00",
+      "date": "2026-06-19",
+    },
+    {
+      "balance": "6197.00",
+      "date": "2026-06-20",
+    },
+    {
+      "balance": "6197.00",
+      "date": "2026-06-21",
+    },
+    {
+      "balance": "6197.00",
+      "date": "2026-06-22",
+    },
+    {
+      "balance": "6197.00",
+      "date": "2026-06-23",
+    },
+    {
+      "balance": "6197.00",
+      "date": "2026-06-24",
+    },
+    {
+      "balance": "6159.00",
+      "date": "2026-06-25",
+    },
+    {
+      "balance": "6159.00",
+      "date": "2026-06-26",
+    },
+    {
+      "balance": "6159.00",
+      "date": "2026-06-27",
+    },
+    {
+      "balance": "6159.00",
+      "date": "2026-06-28",
+    },
+  ],
+  "endingBalance": "6159.00",
+  "endingDate": "2026-06-28",
+  "events": [
+    {
+      "amount": "-95.00",
+      "date": "2026-05-15",
+      "itemId": "<uuid>",
+      "label": "Phone",
+      "originalDate": "2026-05-12",
+    },
+    {
+      "amount": "-140.00",
+      "date": "2026-05-22",
+      "itemId": "<uuid>",
+      "label": "Utility",
+      "originalDate": "2026-05-22",
+    },
+    {
+      "amount": "-38.00",
+      "date": "2026-05-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "originalDate": "2026-05-25",
+    },
+    {
+      "amount": "-150.00",
+      "date": "2026-05-31",
+      "itemId": "avalanche:extra",
+      "label": "Avalanche extra payment",
+      "originalDate": "2026-05-31",
+    },
+    {
+      "amount": "-1500.00",
+      "date": "2026-06-01",
+      "itemId": "<uuid>",
+      "label": "Rent",
+      "originalDate": "2026-06-01",
+    },
+    {
+      "amount": "-95.00",
+      "date": "2026-06-12",
+      "itemId": "<uuid>",
+      "label": "Phone",
+      "originalDate": "2026-06-12",
+    },
+    {
+      "amount": "-120.00",
+      "date": "2026-06-13",
+      "itemId": "<uuid>",
+      "label": "Insurance",
+      "originalDate": "2026-06-13",
+    },
+    {
+      "amount": "-40.00",
+      "date": "2026-06-16",
+      "itemId": "<uuid>",
+      "label": "Gym",
+      "originalDate": "2026-06-16",
+    },
+    {
+      "amount": "-15.00",
+      "date": "2026-06-18",
+      "itemId": "<uuid>",
+      "label": "Streaming",
+      "originalDate": "2026-06-18",
+    },
+    {
+      "amount": "-140.00",
+      "date": "2026-06-20",
+      "itemId": "<uuid>",
+      "label": "Utility",
+      "originalDate": "2026-06-20",
+    },
+    {
+      "amount": "-38.00",
+      "date": "2026-06-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "originalDate": "2026-06-25",
+    },
+  ],
+  "fromDate": "2026-05-14",
+  "horizonDays": 45,
+  "lowestDate": "2026-05-15",
+  "lowestProjected": "2535.00",
+  "maxSafeExtra": "2035.00",
+  "projectedExpenses": "2561.00",
+  "projectedIncome": "6000.00",
+  "snapshotAt": "2026-05-08T15:00:00.000Z",
+  "snapshotSource": "plaid",
+  "startingBalance": "2720.00",
+  "status": "ready",
+  "toDate": "2026-06-28",
+}
+`;
