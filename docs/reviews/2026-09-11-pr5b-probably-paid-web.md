@@ -18,7 +18,9 @@ final with the stricter full-name `offCurve`). Plan: `~/.claude/plans/h2-budget-
 | `d3de6ec` | Review fixes, part 1 (H1, H2, M1, LOW 1–2, NIT). |
 | `67d4d75` | Merge `origin/main` @ `9923add`. No conflicts; codegen re-run: no diff. |
 | `c1a0259` | Review fixes, part 2: tests, deterministic e2e, server-path e2e spec. |
-| final | This note: "Review fixes", final gates. |
+| `852c717` | This note: "Review fixes", final gates. **Second look: REQUEST CHANGES** (N1, N2, LOW, NIT). |
+| `77c16e0` | Second-review fixes: answers written into the cached bundle (N2), anchored e2e seed (N1), partial guard by occurrence (NIT), tests. |
+| final | This note: "Second review" section, reworded residuals, gates. |
 
 ## The problem
 
@@ -142,8 +144,8 @@ rebuilds that list).
   time zone: the original assertions are restored, the date branch and the skip are gone, and the one-click and
   pinned specs also assert that no "Suggested" strip appears.
 - **New `forecast-probably-paid.spec.ts`** covers the server path: seeded on the household date (the server's `today`
-  from `GET /api/forecast`, browser in `America/Chicago`), a bill "Aqualine <tag>" and a row "AQUALINE <TAG> WEB" for
-  the same amount on the same day. Suggested → Confirm (POST body, toast, Resolved list, persisted `matched`), and
+  from `GET /api/forecast`, browser in `America/Chicago`), a bill "Aqualine <tag>" anchored today and a row "AQUALINE
+  <TAG> WEB" for the same amount on the same day. Suggested → Confirm (POST body, toast, Resolved list, persisted `matched`), and
   Suggested → Not this (POST body; strip gone, row still in Review with no chips, no one-click, no Enter wrapper, no
   "Match all confident"; cash signal no longer pairs it; only the `not_match` persisted).
 - `bulk-match-confident` needed no change: its rows are strictly future, which the server never pairs.
@@ -184,6 +186,26 @@ rebuilds that list).
 **PR5a head `bcc3ea9`** (stricter `offCurve`): merged, then superseded by `origin/main` `9923add`. The web contract is
 unchanged and no fixture needed to change.
 
+## Second review (of `852c717`, REQUEST CHANGES)
+
+| Finding | Fix | Tests |
+|---|---|---|
+| **N1** `forecast-probably-paid.spec.ts` failed every run: the bill had no `anchorDate`, so `expandItem` also gave it an unpaid occurrence last month and PR5a's earlier-unpaid rule kept today's pair `offCurve: false`. | `seedPair` sends `anchorDate: today` (household date). Checked by reading `expandItem` (monthly: an anchor month later than the window's first month starts the series there). | e2e only; `typecheck:e2e` clean. |
+| **N2** "Not this" (and Partial, and Confirm) leaked in the refetch window: old bundle + new signal re-offered the rejected pair / showed the partialled plan pending. | `answerSuggestion` writes the answer into every cached `/api/forecast` bundle with `applyResolutionWrite` (the route's replacement rules) before `invalidate()`. Covers Confirm, Not this, Partial and the pinned Match (which calls it). The row is built from the request (the route returns the inserted row; only its `id` is used). | `forecastProbablyPaidRefetch.test.tsx` ×3 (signal refetch lands, bundle refetch never does: Not this, Partial, Confirm); `forecastResolutionCache.test.ts` ×4. |
+| **LOW** Snapshot-day residual understated. | Reworded: plans on **or** before the snapshot day; D2 and S9 cited. | — |
+| **NIT** The partial guard keyed on a plan's current date refused a pending occurrence sharing a date with a moved partial. | `writeKeyIsPartial`: the line that owns the write key (its occurrence key) decides; the current date is only a fallback for Past due / tooltip rows. | `forecastProbablyPaid.test.tsx` "(second review NIT)". |
+
+- **Failing before:** with `852c717`'s `forecast.tsx` swapped in, **all 4 new page tests fail** — the three
+  refetch-window tests (Not this, Partial, Confirm) and the NIT test. The 4 `forecastResolutionCache` unit tests
+  pass there: they test the new helper module, which the swap does not remove.
+- **N1 not runnable here** (e2e): the anchor fix is checked by reading `expandItem` and PR5a's earlier-unpaid rule.
+- **Gates after the second-review fixes (`77c16e0`):**
+  - workspace typecheck clean; `typecheck:e2e` clean;
+  - web suite **125 files, 1008 pass** (`TZ=UTC CI=true`; 123 / 1000 before);
+  - `forecastResolutionsPairs.integration.test.ts` + `cashSignalProbablyPaid.integration.test.ts`: **2 files, 27
+    pass** (own database, dropped after; no server code changed, so the full API suite was not re-run);
+  - build exit 0; landing **572.5 KB of 580**, unchanged; no recharts on open.
+
 ## Figures and screens that should move
 
 - **Review → From Chase, "Forecast $X"** and **Planned items, "Projected end"**: up by every off-curve plan in the
@@ -213,20 +235,32 @@ unchanged and no fixture needed to change.
   must change both. It is pinned by a unit test.
 - **A partly-paid plan's remainder can't be matched to a second row.** The server keeps one decision per plan; a
   second match would replace the partial. Undo the partial first.
-- **Snapshot-day plans (pre-existing, review LOW 5).** `forecastReconcile` leaves out plans dated on or before the
-  snapshot day, while the server still carries the day-before-snapshot expense forward (#688). In the reviewer's D2
-  case the web "Forecast" showed 1000.00 against the curve's 750.00. PR6 reworks that rule, so it is not changed here.
+- **Snapshot-day plans (pre-existing, review LOW 5; second review LOW).** `forecastReconcile` leaves out every plan
+  dated on or before the snapshot day, while the server still carries a pending expense dated on or before the
+  snapshot day forward onto tomorrow (#681/#688). In the reviewer's D2 case the web "Forecast" showed 1000.00 against
+  the curve's 750.00 (a day-before-snapshot plan); in S9, 1000.00 against 850.00 (a $150 plan due on the snapshot day).
+  PR6 reworks that rule, so it is not changed here.
 - **Pairs whose plan is outside the bundle window** (the server looks back to today−45, rows to today−59; the bundle
   starts at the first of last month) are ignored on the web. Their row keeps the client's suggestions.
 - **An underpaid named pair is on the curve** (`offCurve: false`) until the user answers Partial or Confirm; the strip
   says "Still in forecast". That is PR5a's rule, shown as is.
-- **Two queries.** Until the cash signal loads, a row shows the client's suggestions, then switches. A cash signal
-  older than the bundle can't resurrect a decided pair (the stale guards above).
+- **Two queries, either order.** The bundle and the cash signal are separate queries.
+  - *Signal older than the bundle* (e.g. the bundle's refetch lands first): a stale pair can't resurrect a decided
+    plan or row — the register drops pairs whose plan is resolved, whose row is claimed, or which were rejected.
+  - *Bundle older than the signal* (the usual order after an answer: the lighter signal lands first): every answer to
+    a server pair — Confirm, Not this, Partial, and the pinned row's Match — is written into the cached bundle, with
+    the route's replacement rules (`applyResolutionWrite`), before the refetch starts (second review N2). The window
+    no longer re-offers a rejected pair or shows a just-partialled plan as pending.
+  - On a cold load, until the cash signal arrives a row shows the client's suggestions, then switches.
+  - Other writes (the dropdown, drag, one-click client Match, Mark missed, Skip, Move) still wait for their refetch,
+    as before PR5; none of them answers a server pair.
 - **e2e not run.** Playwright's browsers are installed, but the specs need Clerk (`CLERK_SECRET_KEY`), a running API
   and web server, and a database; none are configured here. The four spec edits and the new spec are verified only
-  by reading and by `typecheck:e2e`. Two assumptions a run would test: the matcher's "no name ⇒ ≤ 3 days" rule (the
-  client-path seeds rely on it), and that a monthly bill created today has an occurrence today in the Review cash
-  signal (the server-path spec relies on it).
+  by reading and by `typecheck:e2e`. What each relies on, checked by reading: the client-path seeds on the matcher's
+  "no name ⇒ within $1 and ≤ 3 days" rule (`planMatch.ts`); the server-path spec on the bill's **anchor** —
+  `anchorDate: today` makes `expandItem` start the monthly item this month, so there is no earlier unpaid occurrence
+  and PR5a's earlier-unpaid rule leaves today's pair `offCurve: true`. (The first version of the spec sent no anchor
+  and failed every run: last month's occurrence kept the pair "Still in forecast" — second review N1.)
 - **The Past due card shows a partly-paid remainder with no action.** Resolving it means undoing the partial in
   Review first.
 
