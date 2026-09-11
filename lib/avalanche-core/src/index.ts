@@ -20,6 +20,13 @@ export {
   PLAID_HELD_AHEAD_DAYS,
   type SnapshotLedgerRow,
 } from "./snapshotInclusion";
+export { descriptionsFuzzyEqual, tokenizeDescription } from "./descriptionMatch";
+export {
+  canSupersede,
+  pairPendingWithPosted,
+  SUPERSEDE_MAX_DAYS,
+  type SupersedeRow,
+} from "./pendingSupersede";
 export {
   HOUSEHOLD_TZ,
   householdDateOf,
