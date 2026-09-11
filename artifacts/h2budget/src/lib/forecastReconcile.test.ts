@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { computeBankReconcile, type ReconcileInput } from "./forecastReconcile";
-import type {
-  BankLine,
-  PlanLine,
-  Transaction,
+import {
+  buildLineRegister,
+  type BankLine,
+  type PlanLine,
+  type Transaction,
 } from "./forecastMatch";
 
 const txn = (overrides: Partial<Transaction> & { id: string }): Transaction => ({
@@ -269,6 +270,84 @@ describe("computeBankReconcile", () => {
       }),
     );
     expect(result.forecastEnd).toBe(950);
+  });
+
+  const suggestedPlan = (offCurve: boolean): PlanLine => ({
+    ...planLine({ itemId: "water", date: "2026-05-22", amount: -150, status: "future" }),
+    probablyPaid: {
+      txnId: "t1",
+      planDate: "2026-05-22",
+      txnAmount: -173,
+      difference: 23,
+      dayDelta: -8,
+      confidence: "medium",
+      ambiguous: false,
+      offCurve,
+      txnDate: "2026-05-14",
+      txnDescription: "CITY WATER",
+    },
+  });
+
+  it("(PR5) skips a plan the server took off the curve (an offCurve pair)", () => {
+    const result = computeBankReconcile(
+      baseInput({
+        allPlan: [
+          planLine({ itemId: "p1", date: "2026-05-20", amount: -50, status: "pending_plan" }),
+          suggestedPlan(true),
+        ],
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 1000 },
+      }),
+    );
+    expect(result.forecastEnd).toBe(950);
+    // A suggestion is not a match: it adds no matched-amount contributor.
+    expect(result.contributors).toEqual([]);
+  });
+
+  it("(PR5) still counts a suggested plan the server kept on the curve", () => {
+    const result = computeBankReconcile(
+      baseInput({
+        allPlan: [
+          planLine({ itemId: "p1", date: "2026-05-20", amount: -50, status: "pending_plan" }),
+          suggestedPlan(false),
+        ],
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 1000 },
+      }),
+    );
+    expect(result.forecastEnd).toBe(800);
+  });
+
+  it("(PR5) counts only the unpaid remainder of a partly-paid plan, as the curve does", () => {
+    // $500 rent, $250 paid by t1 → $250 still planned after the snapshot.
+    const { allPlan, allBank } = buildLineRegister({
+      events: [{ itemId: "rent", date: "2026-05-25", label: "Rent", amount: -500 }],
+      txns: [txn({ id: "t1", occurredOn: "2026-05-12", amount: "-250.00" })],
+      resolutions: [
+        {
+          id: "rp",
+          status: "partial",
+          recurringItemId: "rent",
+          occurrenceDate: "2026-05-25",
+          matchedTxnId: "t1",
+        },
+      ],
+      closedMonths: new Set<string>(),
+      startBalance: 1000,
+      fromISO: "2026-05-01",
+      toISO: "2026-05-31",
+      today: new Date(2026, 4, 15),
+    });
+    const result = computeBankReconcile(
+      baseInput({
+        allBank,
+        allPlan,
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 750 },
+        settingsStartingBalance: 1000,
+      }),
+    );
+    expect(result.forecastEnd).toBe(500);
+    // The paid row counts as matched; a partial is not matched-amount drift.
+    expect(result.matched).toBe(1);
+    expect(result.matchedAmountDelta).toBe(0);
   });
 
   it("counts a plan dated the day after a 9:30pm Central snapshot", () => {

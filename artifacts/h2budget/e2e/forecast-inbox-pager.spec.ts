@@ -214,7 +214,15 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
     // to be the one with the matching plan; if not, page through until we
     // find it (the picker assigns the one-click button to the lone txn
     // matching the lone plan).
-    let oneClickBtn = page.getByTestId(`one-click-match-${firstId}`);
+    // (PR5b) Row A carries ONE suggestion: the client's one-click Match while
+    // it is dated after today, or — once the calendar reaches the bill day and
+    // the server's "probably paid" matcher can pair it — the server's Confirm.
+    // Either writes the same `matched` pair.
+    const matchFor = (id: string) =>
+      page.locator(
+        `[data-testid="one-click-match-${id}"], [data-testid="probably-paid-confirm-${id}"]`,
+      );
+    let oneClickBtn = matchFor(firstId);
     let activeId = firstId;
     let activeIndex = 1;
     while ((await oneClickBtn.count()) === 0) {
@@ -222,7 +230,7 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
       activeIndex += 1;
       await expect(indicator).toHaveText(`${activeIndex} of 3`);
       activeId = await visibleInboxTxnId(page);
-      oneClickBtn = page.getByTestId(`one-click-match-${activeId}`);
+      oneClickBtn = matchFor(activeId);
       if (activeIndex >= 3) break;
     }
     await expect(oneClickBtn).toBeVisible();

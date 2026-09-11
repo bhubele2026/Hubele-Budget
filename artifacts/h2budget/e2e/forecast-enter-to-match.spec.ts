@@ -105,6 +105,17 @@ test.describe("Forecast inbox Enter-to-match keyboard shortcut (#386)", () => {
     });
 
     const { iso: anchorIso, day: anchorDay } = pickAnchorDay();
+    // (PR5b) The Enter shortcut belongs to the CLIENT's one-click suggestion.
+    // A row dated today or earlier (the last days of a month, where
+    // `pickAnchorDay` clamps to the 28th) is paired by the server's "probably
+    // paid" matcher instead, and its card carries Confirm with no shortcut —
+    // covered by forecast-one-click-match.spec.ts and the unit tests.
+    const now = new Date();
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    test.skip(
+      anchorIso <= todayIso,
+      "row dated today or earlier: the server pairs it, so there is no Enter shortcut",
+    );
     const suffix = Math.random().toString(36).slice(2, 8);
     const billName = `EnterMatchBill-${suffix}`;
 

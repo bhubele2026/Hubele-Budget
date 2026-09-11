@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildClientSuggestions,
   pickOneClickBankMatches,
+  type BankLine,
   type PlanLine,
   type PlanSuggestion,
 } from "./forecastMatch";
@@ -68,6 +70,46 @@ describe("pickOneClickBankMatches (#28)", () => {
     const out = pickOneClickBankMatches(m);
     expect(out.size).toBe(1);
     expect(out.get("t1")?.plan.itemId).toBe("rent");
+  });
+
+  it("(PR5) never offers a one-click pick for a plan the server already paired", () => {
+    // Built through the page's own path (`buildClientSuggestions`): the
+    // server paired Rent with t-server; t-client is an exact same-day $100
+    // that would otherwise be Rent's sole high-confidence one-click.
+    const rentPlan: PlanLine = {
+      ...plan("rent", "2026-05-01"),
+      probablyPaid: {
+        txnId: "t-server",
+        planDate: "2026-05-01",
+        txnAmount: -104,
+        difference: 4,
+        dayDelta: -2,
+        confidence: "medium",
+        ambiguous: false,
+        offCurve: true,
+        txnDate: "2026-04-29",
+        txnDescription: "RENT",
+      },
+    };
+    const bank = (id: string, date: string, amount: number, suggestedPlan?: PlanLine): BankLine => ({
+      kind: "bank",
+      date,
+      amount,
+      status: "pending_bank",
+      txn: { id, occurredOn: date, description: id, amount: String(amount), forecastFlag: true },
+      ...(suggestedPlan ? { suggestedPlan } : {}),
+    });
+    const sugs = buildClientSuggestions(
+      [bank("t-server", "2026-04-29", -104, rentPlan), bank("t-client", "2026-05-01", -100)],
+      [rentPlan],
+    );
+    expect(pickOneClickBankMatches(sugs).size).toBe(0);
+    // Control: the same plan without the server pair IS the one-click pick.
+    const control = buildClientSuggestions(
+      [bank("t-client", "2026-05-01", -100)],
+      [plan("rent", "2026-05-01")],
+    );
+    expect(pickOneClickBankMatches(control).get("t-client")?.plan.itemId).toBe("rent");
   });
 
   it("returns one-click picks for multiple cards independently", () => {

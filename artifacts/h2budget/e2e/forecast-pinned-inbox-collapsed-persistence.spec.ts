@@ -141,7 +141,12 @@ test.describe("Forecast pinned inbox collapsed-state persistence (#530)", () => 
     const collapsedRow = page.getByTestId("pinned-inbox-collapsed-row");
     const collapsedMatch = page.getByTestId("pinned-inbox-collapsed-match");
     const fullCheckbox = page.getByTestId(`select-bank-${txn.id}`);
-    const suggestionStrip = page.getByTestId(`bank-suggestions-${txn.id}`);
+    // (PR5b) The expanded card shows the client's suggestion chips, or — once
+    // the row is dated today or earlier and the server pairs it with the bill
+    // — the server's "Suggested" strip instead. Never both.
+    const suggestionStrip = page.locator(
+      `[data-testid="bank-suggestions-${txn.id}"], [data-testid="probably-paid-${txn.id}"]`,
+    );
 
     // --- Initial state: pinned inbox is expanded.
     await expect(pinnedArea).toBeVisible({ timeout: 15_000 });

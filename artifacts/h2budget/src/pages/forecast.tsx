@@ -89,7 +89,8 @@ import {
   type BucketEntry,
   monthKey,
   isBankTxn,
-  suggestPlanMatchesForBank,
+  buildClientSuggestions,
+  partialRemainder,
   filterDropdownPlans,
   rankPlansForBank,
   pickConfidentBankMatches,
@@ -137,6 +138,8 @@ import {
   type InboxCard,
 } from "./forecast/InboxCardView";
 import { SuggestionStrip } from "./forecast/SuggestionStrip";
+import { ProbablyPaidStrip } from "./forecast/ProbablyPaidStrip";
+import type { SuggestionAnswer } from "./forecast/probablyPaidText";
 import {
   PlannedItemsList,
   type PlannedItem,
@@ -711,6 +714,9 @@ export default function ForecastPage({
       // drop off the moment today passes their date. The forward-looking
       // /forecast (overall) view leaves this off.
       lingerPastDuePlans: mode === "review",
+      // (PR5) Plans a bank row probably paid. They show as "Suggested" until
+      // the user answers; only `offCurve` pairs are off the server's curve.
+      matches: cashProjection?.matches ?? null,
     });
   }, [
     data,
@@ -722,6 +728,7 @@ export default function ForecastPage({
     payoffsByDebt,
     deferredForecastFromDate,
     mode,
+    cashProjection?.matches,
   ]);
 
   const bucket = useMemo(() => {
@@ -808,37 +815,36 @@ export default function ForecastPage({
 
   // Bank rows already resolved (matched or marked unplanned) in the current
   // month — used for an undo affordance directly on the bank card.
+  // (PR5) The resolution id comes from the register, which ignores "Not this"
+  // answers — a rejection recorded after a row's match must not put its id
+  // behind this Undo (that would delete the rejection, not the match).
   const bankResolvedThisMonth = useMemo(() => {
-    if (!register || !data) return [] as Array<{
-      bank: BankLine;
-      resolutionId: string;
-      kind: "matched" | "unplanned";
-    }>;
-    const byMatchedTxn = new Map<string, Resolution>();
-    for (const r of (data.resolutions ?? []) as Resolution[]) {
-      if (r.matchedTxnId) byMatchedTxn.set(r.matchedTxnId, r);
-    }
     const out: Array<{
       bank: BankLine;
       resolutionId: string;
-      kind: "matched" | "unplanned";
+      kind: "matched" | "partial" | "unplanned";
     }> = [];
+    if (!register) return out;
     for (const b of register.allBank) {
       if (!isBankTxn(b.txn, checkingPlaidAccountIds)) continue;
       if (monthKey(b.date) !== deferredMonthFilter) continue;
       if (b.status !== "matched" && b.status !== "ignored_unforecasted")
         continue;
-      const res = byMatchedTxn.get(b.txn.id);
-      if (!res) continue;
+      if (!b.resolutionId) continue;
       out.push({
         bank: b,
-        resolutionId: res.id,
-        kind: b.status === "matched" ? "matched" : "unplanned",
+        resolutionId: b.resolutionId,
+        kind:
+          b.status !== "matched"
+            ? "unplanned"
+            : b.resolutionStatus === "partial"
+              ? "partial"
+              : "matched",
       });
     }
     out.sort((a, b) => (a.bank.date < b.bank.date ? 1 : -1));
     return out;
-  }, [register, data, deferredMonthFilter, checkingPlaidAccountIds]);
+  }, [register, deferredMonthFilter, checkingPlaidAccountIds]);
 
   // Bank reconciliation stats scoped to the selected month.
   //
@@ -922,16 +928,15 @@ export default function ForecastPage({
   // Source from `register.allPlan` (not the visible `planRows`) so that bank
   // rows in a selected month or near a window edge can still match planned
   // occurrences that fall just outside the active register view.
+  // (PR5) Server pairs win: a row the server paired, and a plan it paired,
+  // get no client suggestion — so the confident bulk match and the one-click
+  // button below never offer a second, different pick for the same plan.
   const bankSuggestions = useMemo(() => {
-    const m = new Map<string, PlanSuggestion[]>();
-    if (!register) return m;
-    const candidatePlans = register.allPlan.filter(
-      (r) => r.status === "pending_plan" || r.status === "future",
+    if (!register) return new Map<string, PlanSuggestion[]>();
+    return buildClientSuggestions(
+      bankInbox.map((c) => c.bank),
+      register.allPlan,
     );
-    for (const c of bankInbox) {
-      m.set(c.bank.txn.id, suggestPlanMatchesForBank(c.bank, candidatePlans));
-    }
-    return m;
   }, [bankInbox, register]);
 
   // Greedy uniqueness pass: how many of the pending bank rows have a `high`
@@ -960,6 +965,8 @@ export default function ForecastPage({
     if (!cardId) return null;
     const card = bankInbox.find((c) => c.id === cardId);
     if (!card) return null;
+    const serverPlan = card.bank.suggestedPlan;
+    if (serverPlan) return `${serverPlan.itemId}|${serverPlan.date}`;
     const sugs = bankSuggestions.get(card.bank.txn.id) ?? [];
     const top = sugs.find(
       (s) => s.confidence === "high" || s.confidence === "medium",
@@ -1075,6 +1082,55 @@ export default function ForecastPage({
     );
   };
 
+  // (PR5) The three answers to a server "probably paid" pair. Each posts the
+  // pair's resolution key (the occurrence date before any reschedule) and row.
+  // `invalidate()` refreshes the whole /api/forecast namespace — the bundle
+  // AND the cash signal, whose `matches` and curve both move on an answer.
+  const answerSuggestion = (plan: PlanLine, answer: SuggestionAnswer) => {
+    const pp = plan.probablyPaid;
+    if (!pp) return;
+    upsertResolution.mutate(
+      {
+        data: {
+          status: answer,
+          recurringItemId: plan.itemId,
+          occurrenceDate: pp.planDate,
+          matchedTxnId: pp.txnId,
+        },
+      },
+      {
+        onSuccess: (created: { id?: string } | undefined) => {
+          invalidate();
+          const newId = created?.id;
+          const undo = newId ? (
+            <ToastAction
+              altText="Undo"
+              onClick={() => onUndo(newId)}
+              data-testid={`toast-undo-${answer}`}
+            >
+              Undo
+            </ToastAction>
+          ) : undefined;
+          if (answer === "matched") {
+            toast({ title: `Matched to ${plan.label}` });
+          } else if (answer === "not_match") {
+            toast({
+              title: "Not this row",
+              description: `${plan.label || "Occurrence"} · ${formatDate(plan.date)} stays planned`,
+              action: undo,
+            });
+          } else {
+            toast({
+              title: "Partial payment",
+              description: `${formatCurrency(partialRemainder(plan.amount, pp.txnAmount))} still planned`,
+              action: undo,
+            });
+          }
+        },
+      },
+    );
+  };
+
   const onDragStart = (e: DragStartEvent) => {
     setActiveDragId(String(e.active.id));
   };
@@ -1099,7 +1155,9 @@ export default function ForecastPage({
             ? "already matched"
             : planRow.status === "missed"
               ? "marked missed"
-              : `not available (${planRow.status})`;
+              : planRow.status === "partial"
+                ? "partly paid"
+                : `not available (${planRow.status})`;
         toast({
           title: `Can't match here`,
           description: `${planRow.label} on ${formatDate(planRow.date)} is ${reason}.`,
@@ -1197,8 +1255,16 @@ export default function ForecastPage({
   // Transfers and card payments are left out on purpose: they are the rows
   // most likely to pay a planned bill or debt minimum, so they stay in the
   // inbox to be matched rather than swept into "not planned".
+  // (PR5) For the same reason a row the server paired with a plan is left out:
+  // it is waiting for Confirm / Not this, and marking it unplanned would put an
+  // off-curve plan back on the curve.
   const returnedUnflaggedIds = bankInbox
-    .filter((c) => c.bank.txn.forecastFlag === false && !c.bank.txn.isTransfer)
+    .filter(
+      (c) =>
+        c.bank.txn.forecastFlag === false &&
+        !c.bank.txn.isTransfer &&
+        !c.bank.suggestedPlan,
+    )
     .map((c) => c.bank.txn.id);
   const bulkMarkReturnedUnplanned = async () => {
     if (!returnedUnflaggedIds.length) return;
@@ -1297,7 +1363,9 @@ export default function ForecastPage({
   // matches the rest of the app (toast-driven, non-blocking) while
   // still being recoverable from a misclick.
   const onMarkMissed = (row: PlanLine) => {
-    if (row.status === "matched" || row.status === "missed") return;
+    // (PR5) Only an open plan can be missed. A partly-paid plan cannot: the
+    // write would replace its partial resolution and un-pay its row.
+    if (!isPlanRowMatchEligible(row)) return;
     upsertResolution.mutate(
       {
         data: {
@@ -1332,7 +1400,9 @@ export default function ForecastPage({
   // for muscle-memory users while the explicit button is the
   // discoverable path.
   const onSelectPlan = (row: PlanLine) => {
-    if (row.status === "matched" || row.status === "missed") return;
+    // (PR5) A "Suggested" row answers with its own three buttons; a stray
+    // row click must not mark a probably-paid plan missed.
+    if (row.probablyPaid) return;
     onMarkMissed(row);
   };
 
@@ -2632,9 +2702,9 @@ export default function ForecastPage({
                         className="flex items-center gap-2 rounded-control bg-white px-2 py-1 text-micro ring-1 ring-brand-line"
                       >
                         <span
-                          className={`chip ${r.kind === "matched" ? "ok" : "gray"}`}
+                          className={`chip ${r.kind === "matched" ? "ok" : r.kind === "partial" ? "warn" : "gray"}`}
                         >
-                          {r.kind === "matched" ? "matched" : "unplanned"}
+                          {r.kind}
                         </span>
                         <span className="flex-1 truncate text-neutral-600">
                           {r.bank.txn.description}
@@ -2778,16 +2848,22 @@ export default function ForecastPage({
                           {formatCurrency(card.bank.amount)}
                         </span>
                         {(() => {
+                          // (PR5) The server's pair, when there is one, is
+                          // the only suggestion this row carries.
+                          const serverPlan = card.bank.suggestedPlan;
                           const oneClick = oneClickByTxnId.get(
                             card.bank.txn.id,
                           );
+                          const canMatch = !!serverPlan || !!oneClick;
                           return (
                             <button
                               type="button"
                               className={btnLink}
-                              disabled={!oneClick}
+                              disabled={!canMatch}
                               onClick={() => {
-                                if (oneClick) {
+                                if (serverPlan) {
+                                  answerSuggestion(serverPlan, "matched");
+                                } else if (oneClick) {
                                   matchInboxToPlan(
                                     card.bank.txn.id,
                                     oneClick.plan,
@@ -2796,7 +2872,7 @@ export default function ForecastPage({
                               }}
                               data-testid="pinned-inbox-collapsed-match"
                               title={
-                                oneClick
+                                canMatch
                                   ? "Match to the suggested plan row"
                                   : "Expand to match this row"
                               }
@@ -2854,14 +2930,29 @@ export default function ForecastPage({
                               oneClickByTxnId.get(card.bank.txn.id)?.plan ??
                               null
                             }
+                            serverSuggested={!!card.bank.suggestedPlan}
                           />
-                          <SuggestionStrip
-                            suggestions={sugs}
-                            txnId={card.bank.txn.id}
-                            onPick={(p) =>
-                              matchInboxToPlan(card.bank.txn.id, p)
-                            }
-                          />
+                          {card.bank.suggestedPlan ? (
+                            <ProbablyPaidStrip
+                              plan={card.bank.suggestedPlan}
+                              txnId={card.bank.txn.id}
+                              disabled={upsertResolution.isPending}
+                              onAnswer={(answer) =>
+                                answerSuggestion(
+                                  card.bank.suggestedPlan!,
+                                  answer,
+                                )
+                              }
+                            />
+                          ) : (
+                            <SuggestionStrip
+                              suggestions={sugs}
+                              txnId={card.bank.txn.id}
+                              onPick={(p) =>
+                                matchInboxToPlan(card.bank.txn.id, p)
+                              }
+                            />
+                          )}
                         </div>
                         {/* The single flow, in reverse. Send-to-Forecast puts a
                             Chase row straight into Review; this puts it back.
@@ -2929,6 +3020,8 @@ export default function ForecastPage({
                     onSelectPlan={onSelectPlan}
                     onMoveStart={onMoveStart}
                     onMarkMissed={onMarkMissed}
+                    onAnswerSuggestion={answerSuggestion}
+                    answerDisabled={upsertResolution.isPending}
                   />
                 )}
               </div>

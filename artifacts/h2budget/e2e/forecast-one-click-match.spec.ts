@@ -140,14 +140,25 @@ test.describe("Forecast inbox one-click Match button (#318)", () => {
       timeout: 15_000,
     });
 
-    const matchBtn = page.getByTestId(`one-click-match-${txn.id}`);
+    // (PR5b) The row is dated `anchorIso`. Dated after today, only the client
+    // suggests the bill: the one-click Match button. Dated today or earlier
+    // (the last days of a month, where `pickAnchorDay` clamps to the 28th),
+    // the server's "probably paid" matcher pairs it and the card carries the
+    // server's Confirm instead — the same `matched` write, the same toast.
+    const now = new Date();
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const serverPairs = anchorIso <= todayIso;
+    const matchTestId = serverPairs
+      ? `probably-paid-confirm-${txn.id}`
+      : `one-click-match-${txn.id}`;
+    const matchBtn = page.getByTestId(matchTestId);
     await expect(matchBtn).toBeVisible({ timeout: 15_000 });
-    await expect(matchBtn).toHaveText(/Match/);
+    await expect(matchBtn).toHaveText(serverPairs ? /Confirm/ : /Match/);
     // Title/aria-label encode the chosen plan so a regression that picks
     // the wrong plan would surface here.
     await expect(matchBtn).toHaveAttribute(
       "aria-label",
-      new RegExp(`Match to ${billName}`),
+      new RegExp(`${serverPairs ? "Confirm" : "Match to"} ${billName}`),
     );
 
     // Watch for the matched-resolution POST so we can confirm the click
@@ -183,7 +194,7 @@ test.describe("Forecast inbox one-click Match button (#318)", () => {
     ).toBeVisible({ timeout: 10_000 });
 
     // The card leaves the inbox …
-    await expect(page.getByTestId(`one-click-match-${txn.id}`)).toHaveCount(0, {
+    await expect(page.getByTestId(matchTestId)).toHaveCount(0, {
       timeout: 10_000,
     });
     await expect(page.getByTestId(`select-bank-${txn.id}`)).toHaveCount(0);
@@ -224,7 +235,7 @@ test.describe("Forecast inbox one-click Match button (#318)", () => {
     await expect(notifications.getByText(/Undone/i)).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByTestId(`one-click-match-${txn.id}`)).toBeVisible({
+    await expect(page.getByTestId(matchTestId)).toBeVisible({
       timeout: 10_000,
     });
 
