@@ -17,12 +17,15 @@ import { tokenizeDescription } from "./descriptionMatch";
  * flagged `ambiguous`.
  *
  * ⚠️ (PR5 review) Only an `offCurve` pair may take its plan off the forecast
- * curve before the user answers: the payee's name, not ambiguous, and the row
- * paid no less than the plan − max($1, 1%) and no more than the plan +
+ * curve before the user answers: not ambiguous, and either "high" (the payee's
+ * name, within max($1, 1%) and 5 days) or the plan's FULL name with the row
+ * paying no less than the plan − max($1, 1%) and no more than the plan +
  * max($25, 10%). An unconfirmed guess must never overstate projected cash — the
  * reviewer found $1,500 rent taken off the curve by an unrelated $1,500 Zelle
  * with no name, and "rent" inside "PARENTS". An UNDERPAID bill stays on the
  * curve (the user confirms "partial"): dropping it would hide what is still due.
+ * A different bill from the same payee ("VERIZON FIOS" for "Verizon Wireless")
+ * shares only part of the name and stays a suggestion too (second review).
  */
 
 export type MatchPlan = {
@@ -68,7 +71,7 @@ export type PlanRowMatch = {
 export const MATCH_EARLY_DAYS = 10;
 export const MATCH_LATE_DAYS = 14;
 export const MATCH_STRICT_DAYS = 3;
-/** A named, unambiguous pair overpaid by at most max($25, this share of the plan) may leave the curve. */
+/** A pair carrying the plan's full name, overpaid by at most max($25, this share of the plan), may leave the curve. */
 export const MATCH_OFF_CURVE_SHARE = 0.1;
 
 /**
@@ -93,21 +96,32 @@ const ALIASES: ReadonlyArray<ReadonlyArray<readonly string[]>> = [[["amex"], ["a
 const cents = (n: number): number => Math.round(Math.abs(n) * 100);
 const dayNumber = (iso: string): number => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
 
-function evidenceFromWords(label: ReadonlySet<string>, desc: ReadonlySet<string>): boolean {
+/**
+ * How much of the plan's name the description carries: 0 = none, 1 = some
+ * distinctive word, 2 = every distinctive word (an alias group counts as one).
+ */
+function nameMatch(label: ReadonlySet<string>, desc: ReadonlySet<string>): 0 | 1 | 2 {
+  let distinctive = 0;
+  let matched = 0;
+  const aliasWords = new Set<string>();
   for (const group of ALIASES) {
     const has = (words: ReadonlySet<string>) => group.some((form) => form.every((w) => words.has(w)));
-    if (has(label) && has(desc)) return true;
+    if (!has(label)) continue;
+    for (const form of group) for (const w of form) aliasWords.add(w);
+    distinctive++;
+    if (has(desc)) matched++;
   }
   for (const word of label) {
-    if (word.length < 4 || MATCH_STOP_WORDS.has(word)) continue;
-    if (desc.has(word)) return true;
+    if (word.length < 4 || MATCH_STOP_WORDS.has(word) || aliasWords.has(word)) continue;
+    distinctive++;
+    if (desc.has(word)) matched++;
   }
-  return false;
+  return matched === 0 ? 0 : matched === distinctive ? 2 : 1;
 }
 
 /** Does a distinctive word of the plan's label appear as a word in the row's description? */
 export function labelEvidence(label: string, description: string | null): boolean {
-  return evidenceFromWords(tokenizeDescription(label), tokenizeDescription(description));
+  return nameMatch(tokenizeDescription(label), tokenizeDescription(description)) > 0;
 }
 
 type Candidate = {
@@ -116,6 +130,7 @@ type Candidate = {
   gapCents: number;
   dayDelta: number;
   evidence: boolean;
+  name: 0 | 1 | 2;
   score: number;
 };
 
@@ -148,9 +163,10 @@ export function matchPlansToRows(
       if (notMatch.has(`${plan.key}#${row.txnId}`)) return;
       planWords ??= tokenizeDescription(plan.label);
       const words = (rowWords[j] ??= tokenizeDescription(row.description));
-      const evidence = evidenceFromWords(planWords, words);
+      const name = nameMatch(planWords, words);
+      const evidence = name > 0;
       if (!evidence && (gapCents > strict || Math.abs(dayDelta) > MATCH_STRICT_DAYS)) return;
-      all.push({ plan, row, gapCents, dayDelta, evidence, score: gapCents + 100 * Math.abs(dayDelta) - (evidence ? 5000 : 0) });
+      all.push({ plan, row, gapCents, dayDelta, evidence, name, score: gapCents + 100 * Math.abs(dayDelta) - (evidence ? 5000 : 0) });
     });
   }
   all.sort(
@@ -190,9 +206,14 @@ export function matchPlansToRows(
       dayDelta: c.dayDelta,
       confidence,
       ambiguous,
-      // Asymmetric: an overpaid bill already weighs its full amount as the row; an
-      // underpaid one would hide the remainder still due.
-      offCurve: c.evidence && !ambiguous && c.gapCents <= (cents(c.row.amount) >= p ? offCurveGap : strict),
+      // A "high" pair, or the plan's FULL name with a row paying no less than the
+      // plan (an underpaid bill would hide the remainder still due) and at most
+      // max($25, 10%) more. Part of a name ("VERIZON FIOS" for "Verizon Wireless")
+      // may be a different bill from the same payee, so it stays a suggestion.
+      offCurve:
+        !ambiguous &&
+        (confidence === "high" ||
+          (c.name === 2 && c.gapCents <= (cents(c.row.amount) >= p ? offCurveGap : strict))),
     });
   }
   return out;
