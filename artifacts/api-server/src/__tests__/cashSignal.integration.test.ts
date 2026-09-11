@@ -47,6 +47,11 @@ async function cleanup(): Promise<void> {
     .delete(recurringItemsTable)
     .where(eq(recurringItemsTable.userId, TEST_USER));
   await db.delete(debtsTable).where(eq(debtsTable.userId, TEST_USER));
+  // (PR6) The Avalanche extra test's $200 used to leak into later tests unseen:
+  // #666 dropped its 04-30 occurrence. It now drags, so every test starts clean.
+  await db
+    .delete(avalancheSettingsTable)
+    .where(eq(avalancheSettingsTable.userId, TEST_USER));
   await db
     .delete(forecastSettingsTable)
     .where(eq(forecastSettingsTable.userId, TEST_USER));
