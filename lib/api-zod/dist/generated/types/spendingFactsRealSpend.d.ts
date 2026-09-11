@@ -5,6 +5,9 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * The categorized part of householdSpend; the basis of byCategory, byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends.
+ */
 export type SpendingFactsRealSpend = {
     total: number;
     transactionCount: number;

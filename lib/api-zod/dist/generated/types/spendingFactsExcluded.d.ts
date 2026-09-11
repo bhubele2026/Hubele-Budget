@@ -10,5 +10,9 @@ export type SpendingFactsExcluded = {
     debtPaymentsTotal: number;
     reimbursementTotal: number;
     ignoreTotal: number;
+    /** Payments to a credit card from another account — flagged */
+    cardPayments: number;
+    /** Charges flagged reimbursable. */
+    reimbursable: number;
 };
 //# sourceMappingURL=spendingFactsExcluded.d.ts.map

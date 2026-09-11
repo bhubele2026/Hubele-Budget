@@ -33,6 +33,10 @@ export interface OneOffTxn {
   source: string | null;
   categoryId: string | null;
   isTransfer: boolean;
+  debtId: string | null;
+  isExternalCardPayment: boolean;
+  reimbursable: boolean;
+  pfcDetailed: string | null;
 }
 
 export interface OneOffResult {
@@ -63,6 +67,10 @@ export function computeOneOff(
       isTransfer: t.isTransfer,
       categoryId: t.categoryId,
       description: t.description ?? "",
+      debtId: t.debtId,
+      isExternalCardPayment: t.isExternalCardPayment,
+      reimbursable: t.reimbursable,
+      pfcDetailed: t.pfcDetailed,
     };
     if (!isRealSpend(tx, ctx)) continue;
     if (matchesRecurring(tx.description)) continue; // tracked recurring, not one-off

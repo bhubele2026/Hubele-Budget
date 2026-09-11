@@ -403,6 +403,10 @@ export async function computeWeeklyPayoff(
             isTransfer: transactionsTable.isTransfer,
             categoryId: transactionsTable.categoryId,
             description: transactionsTable.description,
+            debtId: transactionsTable.debtId,
+            isExternalCardPayment: transactionsTable.isExternalCardPayment,
+            reimbursable: transactionsTable.reimbursable,
+            pfcDetailed: transactionsTable.pfcDetailed,
           })
           .from(transactionsTable)
           .where(
@@ -427,25 +431,12 @@ export async function computeWeeklyPayoff(
     if (t.occurredOn < win.start || t.occurredOn > win.end) continue;
     // Skip "not mine" charges (reimbursements) — user-excluded from payoff.
     if (excludedTxnIds.has(t.id)) continue;
-    if (!isRealSpend(
-      {
-        amount: t.amount,
-        source: t.source,
-        isTransfer: t.isTransfer,
-        categoryId: t.categoryId,
-        description: t.description,
-      },
-      ctx,
-    )) {
+    // (PR7) The one spending rule, with one exception: a reimbursable charge
+    // is still owed to Amex, so it stays in what to pay this card.
+    if (!isRealSpend(t, ctx, { reimbursableIsSpend: true })) {
       continue;
     }
-    const amt = spendAmount({
-      amount: t.amount,
-      source: t.source,
-      isTransfer: t.isTransfer,
-      categoryId: t.categoryId,
-      description: t.description,
-    });
+    const amt = spendAmount(t);
     agg.charges += amt;
     agg.count += 1;
     if (!agg.top || amt > agg.top.amount) {

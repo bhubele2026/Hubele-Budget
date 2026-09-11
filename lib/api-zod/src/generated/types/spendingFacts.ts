@@ -11,6 +11,7 @@ import type { SpendingFactsDailyBucketsItem } from "./spendingFactsDailyBucketsI
 import type { SpendingFactsDailyNetItem } from "./spendingFactsDailyNetItem";
 import type { SpendingFactsDayOfWeekItem } from "./spendingFactsDayOfWeekItem";
 import type { SpendingFactsExcluded } from "./spendingFactsExcluded";
+import type { SpendingFactsHouseholdSpend } from "./spendingFactsHouseholdSpend";
 import type { SpendingFactsMonthlyTrendsItem } from "./spendingFactsMonthlyTrendsItem";
 import type { SpendingFactsRange } from "./spendingFactsRange";
 import type { SpendingFactsRealIncome } from "./spendingFactsRealIncome";
@@ -21,8 +22,11 @@ import type { SpendingFactsUnplanned } from "./spendingFactsUnplanned";
 
 export interface SpendingFacts {
   range: SpendingFactsRange;
-  /** Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window. */
-  unplanned?: SpendingFactsUnplanned;
+  /** Every purchase on any account, categorized or not — realSpend plus uncategorized — through the one spending rule (spendingFilter.ts classifyOutflow). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth. */
+  householdSpend: SpendingFactsHouseholdSpend;
+  /** Purchases explicitly marked UN, categorized or not, through the same rule as householdSpend (so never a transfer, debt payment, card payment or reimbursable charge). Details are the largest 20 purchases; total covers the whole window. */
+  unplanned: SpendingFactsUnplanned;
+  /** The categorized part of householdSpend; the basis of byCategory, byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends. */
   realSpend: SpendingFactsRealSpend;
   /** The mirror of realSpend — money arriving from outside the household, through the same filter that decides real spending. Transfers between the household's own accounts, reimbursements, debt-payment counterparts and card refunds are all excluded, so this is what was EARNED in the range rather than everything that landed in an account. */
   realIncome: SpendingFactsRealIncome;
