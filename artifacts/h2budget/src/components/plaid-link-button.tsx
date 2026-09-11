@@ -42,6 +42,7 @@ import {
   isPlaidReauthCode,
   isSyntheticPlaidItem,
 } from "@/components/plaid-reconnect-button";
+import { householdMonthStartOf } from "@/lib/householdDay";
 
 export const PLAID_LINK_TOKEN_STORAGE_KEY = "h2:plaid:link_token";
 export const PLAID_RETURN_TO_STORAGE_KEY = "h2:plaid:return_to";
@@ -379,7 +380,7 @@ export function PlaidLinkButton({
           const mostRecentMonth =
             occurredOn && occurredOn.length >= 7
               ? `${occurredOn.slice(0, 7)}-01`
-              : `${new Date().toISOString().slice(0, 7)}-01`;
+              : householdMonthStartOf();
           // (#408) Fetch live item state so the panel can suppress a
           // stale Ready pill when the item still needs reconnecting,
           // and so a zero-row heal can render "No new transactions
@@ -755,12 +756,6 @@ export function formatImportedDateRange(min: string, max: string): string {
   return `${formatYmdShort(min)} – ${formatYmdShort(max)}`;
 }
 
-function firstOfCurrentMonthIso(today: Date = new Date()): string {
-  const yyyy = today.getUTCFullYear();
-  const mm = String(today.getUTCMonth() + 1).padStart(2, "0");
-  return `${yyyy}-${mm}-01`;
-}
-
 export function PostLinkProgressPanel({
   status,
   viewTransactionsPath,
@@ -794,7 +789,7 @@ export function PostLinkProgressPanel({
   const recentActivityMissing =
     phase === "ready" &&
     importedDateRange != null &&
-    importedDateRange.max < firstOfCurrentMonthIso();
+    importedDateRange.max < householdMonthStartOf();
   const percent = Math.min(
     100,
     Math.round(((phase === "ready" || phase === "still-preparing" || phase === "error" ? totalAttempts : attempt) / totalAttempts) * 100),

@@ -211,7 +211,10 @@ describe("POST /amex/anchor", () => {
     });
   });
 
-  it("normalizes asOf to ISO when given a non-ISO but parseable date string", async () => {
+  it("stores a bare YYYY-MM-DD asOf as noon UTC, so the anchor stays on that household day", async () => {
+    // "2026-04-01" read as an instant is UTC midnight: 7pm on Mar 31 in Chicago,
+    // which would count Apr 1's rows after the anchor a second time. Noon UTC is
+    // Apr 1 in Chicago all year.
     const res = await fetch(`${baseUrl}/amex/anchor`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -219,7 +222,7 @@ describe("POST /amex/anchor", () => {
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { asOf: string };
-    expect(body.asOf).toBe(new Date("2026-04-01").toISOString());
+    expect(body.asOf).toBe("2026-04-01T12:00:00.000Z");
 
     const [row] = await db
       .select({ preferences: settingsTable.preferences })
@@ -228,7 +231,38 @@ describe("POST /amex/anchor", () => {
     const prefs = (row?.preferences ?? {}) as {
       amexAnchor?: { asOf?: string };
     };
-    expect(prefs.amexAnchor?.asOf).toBe(new Date("2026-04-01").toISOString());
+    expect(prefs.amexAnchor?.asOf).toBe("2026-04-01T12:00:00.000Z");
+  });
+
+  it("returns 400 on a bare day that does not exist, including one V8 would roll over", async () => {
+    // `new Date("2026-02-30T12:00:00.000Z")` is Mar 2, not an error. Without the
+    // round-trip check that anchor would silently land on Mar 2.
+    for (const asOf of ["2026-13-45", "2026-02-29", "2026-02-30", "2026-04-31"]) {
+      const res = await fetch(`${baseUrl}/amex/anchor`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ balance: 42, asOf }),
+      });
+      expect(res.status).toBe(400);
+    }
+
+    const rows = await db
+      .select({ userId: settingsTable.userId })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, TEST_USER));
+    expect(rows.length).toBe(0);
+  });
+
+  it("accepts a real leap day and stores it at noon UTC", async () => {
+    // The round-trip check must not turn away Feb 29 in a leap year.
+    const res = await fetch(`${baseUrl}/amex/anchor`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ balance: 42, asOf: "2028-02-29" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { asOf: string };
+    expect(body.asOf).toBe("2028-02-29T12:00:00.000Z");
   });
 
   it("returns 400 on a non-finite balance", async () => {
@@ -335,5 +369,41 @@ describe("GET /amex/anchor", () => {
     // But asOf advanced past the stale debt.updatedAt because the
     // settings anchor was just refreshed.
     expect(new Date(body.asOf).getTime()).toBeGreaterThan(oldDate.getTime());
+  });
+
+  it("dates a computed balance by its latest transaction's day, as a bare YYYY-MM-DD", async () => {
+    // No debt, no Plaid liability, no saved anchor → the running sum of the Amex
+    // rows. That sum already holds every row through the latest day, so the day
+    // must travel as a day: as UTC midnight it is 7pm the evening before in
+    // Chicago, and the browser counted the latest day's rows a second time.
+    await db.insert(transactionsTable).values([
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-09-02",
+        description: "Amex groceries",
+        amount: "30.00",
+        source: "amex",
+      },
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-09-10",
+        description: "Amex gas",
+        amount: "50.00",
+        source: "amex",
+      },
+    ]);
+
+    const res = await fetch(`${baseUrl}/amex/anchor`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      amexEndingBalance: number;
+      asOf: string;
+      source: string;
+    };
+    expect(body.source).toBe("computed");
+    expect(body.amexEndingBalance).toBeCloseTo(80, 2);
+    expect(body.asOf).toBe("2026-09-10");
   });
 });

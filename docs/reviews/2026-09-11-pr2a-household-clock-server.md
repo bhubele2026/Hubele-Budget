@@ -59,8 +59,9 @@ server's clock is already on tomorrow. Every server figure built from it drifted
 
 ## Figures that should move
 
-Only between **7pm and midnight Central**, and only on the live server. From 9am to 7pm the UTC date
-and the Central date are the same, and a Central laptop already matched.
+Only between **7pm and midnight Central** (6pm to midnight in winter), and only on the live server.
+From midnight to 7pm Central the UTC date and the Central date are the same, and a Central laptop
+already matched.
 
 | Where | Evening behaviour now |
 |---|---|

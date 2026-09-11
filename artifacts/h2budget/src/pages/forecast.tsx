@@ -78,6 +78,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { householdDayOfAt } from "@/lib/householdDay";
 import {
   buildLineRegister,
   filterForecastTxns,
@@ -678,7 +679,9 @@ export default function ForecastPage({
     const startBalance = snapshot
       ? Number(snapshot.balance) || 0
       : Number(data.settings.startingBalance) || 0;
-    const snapshotISO = snapshot?.at ? snapshot.at.slice(0, 10) : null;
+    // The household calendar day of the snapshot, matching the server's
+    // roll-forward — a 9pm Central snapshot belongs to that day, not tomorrow.
+    const snapshotISO = snapshot?.at ? householdDayOfAt(snapshot.at) : null;
     return buildLineRegister({
       events,
       txns,
@@ -2318,7 +2321,7 @@ export default function ForecastPage({
                   {data.bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
                   {data.bankSnapshot.name ?? "Checking"}
                   {data.bankSnapshot.mask ? ` ••${data.bankSnapshot.mask}` : ""} ·{" "}
-                  {formatDate(data.bankSnapshot.at.slice(0, 10))}
+                  {formatDate(householdDayOfAt(data.bankSnapshot.at))}
                   <BankSnapshotFreshness
                     source={data.bankSnapshot.source}
                     at={data.bankSnapshot.at}

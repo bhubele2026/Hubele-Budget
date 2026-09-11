@@ -166,6 +166,19 @@ describe("Budget row analysis strip (#419 — covers strip added in #417)", () =
     expect(within(strip).getByTestId("analysis-pace-cat-1")).toBe(pace);
   });
 
+  it("keeps the pace indicator through the month's last evening in Central time", () => {
+    // 2026-06-01T03:00Z is 10pm on May 31 in Chicago — still May for the
+    // household. The UTC date already read June, which hid the pace pill for the
+    // last five hours of every month.
+    vi.setSystemTime(new Date("2026-06-01T03:00:00Z"));
+    renderPage();
+
+    const pace = screen.getByTestId("analysis-pace-cat-1");
+    expect((pace.textContent ?? "").trim()).toMatch(
+      /^(on pace|\d+% ahead of pace|\d+% under pace)$/,
+    );
+  });
+
   // Task #433 — covers the opposite branch from #419: when an expense line's
   // actual exceeds planned, the strip should swap "remaining" wording for the
   // alarm-y "over" wording and the percent-of-plan should read > 100%.

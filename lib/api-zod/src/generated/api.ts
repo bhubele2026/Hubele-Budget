@@ -3314,7 +3314,11 @@ export const ReopenForecastMonthParams = zod.object({
 
 export const GetAmexAnchorResponse = zod.object({
   amexEndingBalance: zod.number().nullable(),
-  asOf: zod.string(),
+  asOf: zod
+    .string()
+    .describe(
+      'An ISO instant, except for source \"computed\", which sends the latest Amex transaction\'s calendar day as a bare YYYY-MM-DD. Read it with the household calendar; never pass it to `new Date()` as-is.',
+    ),
   source: zod.enum(["debt", "anchor", "computed", "missing"]),
 });
 
@@ -3325,7 +3329,11 @@ export const SetAmexAnchorBody = zod.object({
 
 export const SetAmexAnchorResponse = zod.object({
   amexEndingBalance: zod.number().nullable(),
-  asOf: zod.string(),
+  asOf: zod
+    .string()
+    .describe(
+      'An ISO instant, except for source \"computed\", which sends the latest Amex transaction\'s calendar day as a bare YYYY-MM-DD. Read it with the household calendar; never pass it to `new Date()` as-is.',
+    ),
   source: zod.enum(["debt", "anchor", "computed", "missing"]),
 });
 

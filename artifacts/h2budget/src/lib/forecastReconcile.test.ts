@@ -120,7 +120,7 @@ describe("computeBankReconcile", () => {
         // Settings start matches the snapshot so we isolate matched drift.
         settingsStartingBalance: 1000,
         // Snapshot must reflect what bank actually shows: 1000 + (-120) = 880.
-        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 880 },
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 880 },
       }),
     );
     expect(result.matchedAmountDelta).toBe(20);
@@ -137,7 +137,7 @@ describe("computeBankReconcile", () => {
     const result = computeBankReconcile(
       baseInput({
         settingsStartingBalance: 1000,
-        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 950 },
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 950 },
       }),
     );
     expect(result.matchedAmountDelta).toBe(0);
@@ -172,7 +172,7 @@ describe("computeBankReconcile", () => {
         allBank: [bank],
         allPlan: [plan],
         settingsStartingBalance: 1000,
-        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 830 },
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 830 },
       }),
     );
     expect(result.matchedAmountDelta).toBe(20);
@@ -204,7 +204,7 @@ describe("computeBankReconcile", () => {
         allBank: [bA, bB],
         allPlan: [pA, pB],
         settingsStartingBalance: 1000,
-        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 800 },
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 800 },
       }),
     );
     // Plan-A drift = -100 - (-120) = +20; Plan-B drift = -100 - (-80) = -20.
@@ -233,7 +233,7 @@ describe("computeBankReconcile", () => {
           planLine({ itemId: "p3", date: "2026-05-20", amount: -100, status: "future" }),
         ],
         settingsStartingBalance: 1000,
-        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 1000 },
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 1000 },
       }),
     );
     expect(result.gap).toBe(0);
@@ -247,7 +247,7 @@ describe("computeBankReconcile", () => {
     const result = computeBankReconcile(
       baseInput({
         monthFilter: "2026-04",
-        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 1234 },
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 1234 },
       }),
     );
     expect(result.isPriorMonth).toBe(true);
@@ -265,10 +265,38 @@ describe("computeBankReconcile", () => {
           planLine({ itemId: "p2", date: "2026-05-25", amount: -75, status: "matched", matchedTxnId: "x" }),
           planLine({ itemId: "p3", date: "2026-06-02", amount: -999, status: "future" }),
         ],
-        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 1000 },
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 1000 },
       }),
     );
     expect(result.forecastEnd).toBe(950);
+  });
+
+  it("counts a plan dated the day after a 9:30pm Central snapshot", () => {
+    // 2026-05-16T02:30Z is 9:30pm on May 15 in Chicago. The UTC slice read it as
+    // May 16 and skipped May 16's −$40 as if the snapshot already held it.
+    const result = computeBankReconcile(
+      baseInput({
+        allPlan: [
+          planLine({ itemId: "p1", date: "2026-05-16", amount: -40, status: "pending_plan" }),
+        ],
+        bankSnapshot: { at: "2026-05-16T02:30:00.000Z", balance: 1000 },
+      }),
+    );
+    expect(result.forecastEnd).toBe(960);
+  });
+
+  it("keeps a snapshot from the last evening of April in April", () => {
+    // 2026-05-01T02:30Z is 9:30pm on Apr 30 in Chicago, so April is not a prior
+    // month. The UTC slice said May 1, which marked April a prior period on the
+    // Forecast page.
+    const result = computeBankReconcile(
+      baseInput({
+        monthFilter: "2026-04",
+        fromDate: "2026-04-01",
+        bankSnapshot: { at: "2026-05-01T02:30:00.000Z", balance: 1234 },
+      }),
+    );
+    expect(result.isPriorMonth).toBe(false);
   });
 
   it("partial match leaves a residual: bank cleared LESS than the planned bill ⇒ non-zero gap, does not reconcile-to-zero", () => {
@@ -300,7 +328,7 @@ describe("computeBankReconcile", () => {
         settingsStartingBalance: 1000,
         // Bank actually shows 1000 + (-60) = 940 so the ONLY drift is the
         // matched-amount residual, isolating the partial-match signal.
-        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 940 },
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 940 },
       }),
     );
     // plan(-100) - bank(-60) = -40 residual.
@@ -338,7 +366,7 @@ describe("computeBankReconcile", () => {
         allPlan: [plan],
         settingsStartingBalance: 1000,
         // 1000 + (-100.004) rounds to 899.996 → 900.00 at 2dp.
-        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 900 },
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 900 },
       }),
     );
     expect(result.gap).toBe(0);

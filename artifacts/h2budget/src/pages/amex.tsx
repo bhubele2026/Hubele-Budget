@@ -65,6 +65,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
+import { householdDayOfAt, householdToday } from "@/lib/householdDay";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { PostLinkProgressBanner } from "@/components/post-link-progress";
@@ -114,8 +115,9 @@ import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
 // arrive from the iOS app).
 const AMEX_SOURCES = ["amex", "plaid:amex", "plaid:apple-card", "apple-card"];
 
+/** The household calendar day (America/Chicago) of an instant — never the UTC date. */
 function ymd(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return householdToday(d);
 }
 
 function parseAbs(amount: string) {
@@ -1036,12 +1038,16 @@ export default function AmexPage() {
             : "Calculated";
     let asOfLabel: string | null = null;
     if (endingBalance.asOf) {
-      const d = new Date(endingBalance.asOf);
+      // Label the household day of the anchor. The computed source sends a bare
+      // day, and `new Date("2026-09-10")` is UTC midnight — the day before once
+      // shown in Central time.
+      const d = new Date(`${householdDayOfAt(endingBalance.asOf)}T12:00:00Z`);
       if (!Number.isNaN(d.getTime())) {
         asOfLabel = d.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
           year: "numeric",
+          timeZone: "UTC",
         });
       }
     }

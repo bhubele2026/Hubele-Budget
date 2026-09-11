@@ -16,6 +16,7 @@ import {
   PostLinkProgressPanel,
   type PostLinkStatus,
 } from "@/components/plaid-link-button";
+import { householdMonthStartOf } from "@/lib/householdDay";
 
 // (#379) Shared in-page post-link progress channel. The PlaidLinkButton's
 // background poll loop publishes its current state here; pages render a
@@ -156,7 +157,7 @@ export function PostLinkProgressBanner({
         const mostRecentMonth =
           occurredOn && occurredOn.length >= 7
             ? `${occurredOn.slice(0, 7)}-01`
-            : `${new Date().toISOString().slice(0, 7)}-01`;
+            : householdMonthStartOf();
         setPostLinkProgress({
           ...status,
           phase: "ready",

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeBalanceAtEndOf } from "./accountBalance";
+import { householdDayOfAt } from "./householdDay";
 import { monthKeyFromISO } from "@/components/account-page";
 
 describe("computeBalanceAtEndOf (snapshot-anchored)", () => {
@@ -97,18 +98,41 @@ describe("computeBalanceAtEndOf (snapshot-anchored)", () => {
   });
 
   it("treats an anchorAt exactly at month-end as having zero post-anchor activity", () => {
-    // Anchor at end-of-day Apr 30; only April 28 txns exist (pre-anchor).
-    // End-of-April should equal the snapshot, with the txn ignored.
-    const aprEnd = "2026-04-30T23:59:59Z";
+    // Anchor at 11:59:59pm Central on Apr 30, the household's end of month. The
+    // Apr 28 and Apr 30 txns are on or before the anchor's day, so End-of-April
+    // should equal the snapshot, with both txns ignored.
+    const aprEnd = "2026-05-01T04:59:59Z";
     const result = computeBalanceAtEndOf({
       anchorBalance: 500,
-      anchorMonth: monthKeyFromISO(aprEnd),
+      // Callers take the anchor month from the household day, not the UTC text.
+      anchorMonth: monthKeyFromISO(householdDayOfAt(aprEnd)),
       netChangeByMonth: new Map(),
       target: monthKeyFromISO("2026-04-15"),
       anchorAt: aprEnd,
-      anchorMonthTxns: [{ occurredOn: "2026-04-28", amount: -123.45 }],
+      anchorMonthTxns: [
+        { occurredOn: "2026-04-28", amount: -123.45 },
+        { occurredOn: "2026-04-30", amount: -10 },
+      ],
     });
     expect(result).toBeCloseTo(500, 2);
+  });
+
+  it("anchors a 9:30pm Central snapshot to its own day, so the next day's rows count after it", () => {
+    // 2026-04-16T02:30Z is 9:30pm on Apr 15 in Chicago. Slicing the UTC text read
+    // it as Apr 16 and dropped Apr 16's −$60 as if the snapshot already held it.
+    const eveningSnap = "2026-04-16T02:30:00Z";
+    const result = computeBalanceAtEndOf({
+      anchorBalance: 1000,
+      anchorMonth: monthKeyFromISO("2026-04-15"),
+      netChangeByMonth: new Map(),
+      target: monthKeyFromISO("2026-04-30"),
+      anchorAt: eveningSnap,
+      anchorMonthTxns: [
+        { occurredOn: "2026-04-15", amount: -25 }, // the snapshot's own day: already in it
+        { occurredOn: "2026-04-16", amount: -60 }, // the next day: counted
+      ],
+    });
+    expect(result).toBeCloseTo(940, 2);
   });
 
   it("rolls a mid-month-anchored balance forward to a later month", () => {

@@ -77,6 +77,7 @@ type BudgetLineWithActual = {
   plannedSource?: PlannedSource | null;
 };
 import { formatCurrency, cn } from "@/lib/utils";
+import { householdToday } from "@/lib/householdDay";
 import {
   card,
   cardHead,
@@ -1989,15 +1990,15 @@ function BudgetLineRow({
         data-testid={`analysis-strip-${line.categoryId}`}
       >
         {planned > 0 && !isIncome && (() => {
-          const monthDate = new Date(monthStart + "T00:00:00");
-          const year = monthDate.getUTCFullYear();
-          const month = monthDate.getUTCMonth();
+          // The household's month and today (America/Chicago) — never UTC,
+          // which is already tomorrow after 7pm Central.
+          const year = Number(monthStart.slice(0, 4));
+          const month = Number(monthStart.slice(5, 7)) - 1;
           const daysInMonth = new Date(year, month + 1, 0).getDate();
-          const today = new Date();
-          const sameMonth =
-            today.getUTCFullYear() === year && today.getUTCMonth() === month;
+          const today = householdToday();
+          const sameMonth = today.slice(0, 7) === monthStart.slice(0, 7);
           if (!sameMonth) return null;
-          const dayOfMonth = today.getUTCDate();
+          const dayOfMonth = Number(today.slice(8, 10));
           const expectedPct = Math.round((dayOfMonth / daysInMonth) * 100);
           if (pct === null) return null;
           const aheadBy = pct - expectedPct;

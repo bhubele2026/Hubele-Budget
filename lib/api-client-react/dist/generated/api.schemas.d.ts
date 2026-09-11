@@ -2420,6 +2420,7 @@ export declare const AmexAnchorSource: {
 export interface AmexAnchor {
     /** @nullable */
     amexEndingBalance: number | null;
+    /** An ISO instant, except for source "computed", which sends the latest Amex transaction's calendar day as a bare YYYY-MM-DD. Read it with the household calendar; never pass it to `new Date()` as-is. */
     asOf: string;
     source: AmexAnchorSource;
 }

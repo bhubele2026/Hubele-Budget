@@ -26,6 +26,7 @@ import {
   type MonthKey,
 } from "@/components/account-page/month-navigator";
 import { computeBalanceAtEndOf } from "./accountBalance";
+import { householdDayOfAt } from "./householdDay";
 
 export type AmexTxnInput = {
   occurredOn: string;
@@ -294,8 +295,9 @@ export function makeAmexBalanceAtEndOf(args: {
   const { anchor, amexTransactions, fallbackMonth } = args;
   if (!anchor) return () => null;
 
+  // Household month (America/Chicago) of the anchor instant, as the server uses.
   const anchorMonth = anchor.asOf
-    ? monthKeyFromISO(anchor.asOf)
+    ? monthKeyFromISO(householdDayOfAt(anchor.asOf))
     : (fallbackMonth ?? monthKeyOf(new Date()));
 
   const netChangeByMonth = new Map<string, number>();

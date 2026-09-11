@@ -11,6 +11,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { AMEX_TXN_SOURCES, computeWeeklyPayoff } from "../lib/amexAnchor";
 import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
+import { householdTodayISO } from "../lib/householdClock";
 
 const router: IRouter = Router();
 
@@ -447,9 +448,11 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   if (agg && (agg.cnt ?? 0) > 0) {
     res.json({
       amexEndingBalance: Number(agg.net),
-      asOf:
-        (agg.latest ?? new Date().toISOString().slice(0, 10)) +
-        "T00:00:00.000Z",
+      // A bare household day (YYYY-MM-DD), never an instant: this balance already
+      // holds every Amex row dated through its latest day. Sent as UTC midnight it
+      // read as 7pm the evening before in Chicago, and the browser added that
+      // day's rows a second time on top of the balance.
+      asOf: agg.latest ?? householdTodayISO(),
       source: "computed" as const,
     });
     return;
@@ -482,8 +485,20 @@ router.post("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   }
   let asOf: string;
   if (typeof body.asOf === "string" && body.asOf) {
-    const d = new Date(body.asOf);
-    if (Number.isNaN(d.getTime())) {
+    // A bare YYYY-MM-DD is a day. Parsed as-is it is UTC midnight, 7pm the evening
+    // before in Chicago, so that day's rows would count after the anchor on top of
+    // a balance that already holds them. Noon UTC keeps it an instant on the same
+    // household day all year.
+    const bareDay = /^\d{4}-\d{2}-\d{2}$/.test(body.asOf);
+    const d = bareDay
+      ? new Date(`${body.asOf}T12:00:00.000Z`)
+      : new Date(body.asOf);
+    // A bare day must also exist: V8 rolls 2026-02-30 over to Mar 2 rather than
+    // failing, so check that the day survives the round trip.
+    if (
+      Number.isNaN(d.getTime()) ||
+      (bareDay && d.toISOString().slice(0, 10) !== body.asOf)
+    ) {
       res.status(400).json({ error: "asOf must be a valid ISO date string" });
       return;
     }
