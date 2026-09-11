@@ -136,13 +136,21 @@ On Brad's Chase page, after deploy:
 | "Showing the 1,000 most recent…" note | shown at 1,000 rows | gone |
 | Freshness line | not on this page | "Last auto-updated …" / stale reasons, from the spine |
 | "To review: N" | "N reviewed" | unreviewed Chase rows in the range through today |
+| A posting that reached only a mask twin during a re-link *(second review N3)* | counted (the client scope took twin rows) | listed, "Not counted", out of every total: PR13's server counts every twin row 0 (`not_bank`), as the bank balance and spine have since PR4e. Temporary: account dedupe re-points the twin's rows onto the survivor (`dedupePlaidAccounts.ts`) |
+| A `plaid:*` row with no Plaid account *(second review N3)* | with a linked account: not listed (as now); with no linked Chase account: listed by the source fallback | not listed in either case: PR13's rule (`isBankRow`). Affects only a household with no linked Chase account and an orphaned `plaid:chase` row, which the bank balance ignores too |
 
 PR13's "When PR14 moves the page" figures now apply to the page: totals and running balances cover every row on
 those amounts, and today's Chase balance is the spine's.
 
 ## Must not change
 
-- **Reviewing moves no money.** `reviewed` is the only field either review path writes.
+- **Reviewing moves no money today; one caveat for pending rows** *(second review N1)*. `reviewed` is the only field
+  either review path writes, and at the moment of the write no figure moves (below). But the sync's removed-row delete
+  and vanished-pending sweep skip a reviewed row (`plaidSync.ts`), so **a reviewed pending row is shielded from the
+  sweep**: if the bank drops that hold, it stays listed and counted in money out and the register's start balance until
+  someone removes it. Today's balance and the spine are unaffected (the snapshot rule reads the bank's balance). The old
+  page's per-row Mark reviewed, and categorising, already did this for one row; this PR's "Select all" could have done
+  it for up to 1,000, so it now leaves pending rows out (Second review).
   `chaseReviewMovesNoMoney.integration.test.ts` reviews 20 rows by id and then the other 40 by filter, and asserts after
   each that the whole `/spine` body (less `asOf`), the whole `/forecast/cash-signal` body, `/reports/spending-facts`
   for the month and the week, the forecast review count, and the ledger's totals and every running balance are
@@ -172,6 +180,12 @@ those amounts, and today's Chase balance is the spine's.
 - **"Select all matching" stops at 1,000** (server rule). The banner says so and offers nothing.
 - **Dead helpers.** `lib/chaseEndingBalance.ts` and `lib/runningBalance.ts`'s `computeRunningBalances` /
   `sortNewestFirst` now have no caller but their own tests. Left for PR15's clean-up.
+- **Codegen is not enforced in CI** *(second review NIT)*, and there are now two generated react targets (the main
+  client and `ledger`) that could drift from the spec. Every PR re-runs codegen by hand and checks the diff.
+- **The "chase" name match** *(second review NIT)* also admits an institution such as "Purchase Federal Credit Union".
+  It is the household's own linked data, and the page's picker uses the same rule.
+- **A duplicate row (same Plaid transaction id) cannot be seeded in e2e:** `transactions_plaid_txn_uq` is a unique
+  index. The per-row rule's `duplicate` reason is covered by PR13's server tests and the page's unit tests.
 - **PR13's open residuals are unchanged:** the logged debt payment beside its ACH, and a leftover pending row its
   posted row cannot replace (now labelled "Pending 14+ days" on screen), both Brad's decisions; past days on the
   register versus the bank balance.
@@ -379,6 +393,122 @@ On `efc3fef` with this note on top (branch head after the merge of `d73f3bf` and
   production (untouched).
 - **Local only:** the darwin binaries for rollup, lightningcss and `@tailwindcss/oxide` were copied from the main
   checkout into the worktree's `node_modules`. Nothing about that is committed.
+
+### Pending Brad's decision
+
+- **Should `reviewed` protect a pending row from the sync's sweep at all?** Today a reviewed (or categorised) pending
+  row survives when the bank drops it and stays counted in money out and the start balance. It is a sync rule
+  (`plaidSync.ts` removed-row delete and vanished-pending sweep), not a ledger rule.
+- **Should a posting that reached only a mask twin count?** Today it counts 0 in the ledger and in cash today alike,
+  until dedupe re-points it. Counting it changes cash today and the ledger together (`classifyCashRows` and
+  `registerAmount`).
+
+## Second review
+
+The second review of `a508b1b` came back **REQUEST CHANGES, limited to tests and this note**.
+- **Verified on a real server:** the server and web code are sound. H1's second account (rows, twin, totals, null
+  balances, bulk scope, spine unchanged, refusals); M1 day totals plus pending equal to the card net; M3's opt-out;
+  M4's deterministic codegen and 574.3 KB; the uncategorized rule; the LOWs.
+- **Before the fixes:** merged `origin/main` `11a6f75` (merge `5c9a46f`, clean).
+- **After the fixes:** merged `500473e` (PR6, merge `eabb26e`). Only the two generated `.d.ts.map` files conflicted;
+  `openapi.yaml` kept both sides. Codegen re-ran for both react targets and zod. The ledger module's hooks file did not
+  change; its `api.schemas.ts` gained PR6's new schema types, because that file carries a full copy of the schema types.
+
+### N1 (MEDIUM) — "reviewing moves no money" was overstated
+
+- **The finding.** The sync's removed-row delete and its vanished-pending sweep skip `reviewed = true` rows
+  (`plaidSync.ts`), so a reviewed pending hold survives when the bank drops it. The reviewer's probe:
+
+  | | Before the sweep | After, reviewed | After, not reviewed |
+  |---|---|---|---|
+  | The $77 hold | listed | survives, counted | deleted |
+  | Money out | $171 | $105 | $28 |
+  | Start balance | $1,171 | $1,105 | $1,028 |
+  | Today / spine | $1,000 | $1,000 | $1,000 |
+
+  The old page's per-row Mark reviewed (and categorising) already did this for one row; "Select all" could do it for up
+  to 1,000.
+- **Server.** `POST /transactions/bulk-review-matching` with `reviewed: true` requires `filter.pending: false`, else
+  400 `pending_not_excluded`. It is checked after the account, so a refused account keeps its code. Un-reviewing by
+  filter is not restricted (it shields nothing). One pending row by id (`/transactions/bulk-update`) is still allowed,
+  as the old page's per-row button. Spec: the operation's summary and its 400 text; no schema change (`LedgerFilter`
+  already had `pending`).
+- **Web.** "Select all N posted": the count is the server's `matchingCount` for the register's filter with
+  `pending=false` (`limit=1`, asked only while the banner is up, generated `useGetTransactionsLedger`). The bulk filter
+  sends `pending: false`, so `expectedCount` matches. A `Help` chip says why pending rows are left out.
+- **Must not change** above now states the caveat; **Pending Brad's decision** asks whether `reviewed` should protect
+  a pending row from the sweep at all.
+- **Tests.**
+  - API, new: 400 without the filter (and with `pending: true`), 409 on the list's count, the posted count reviews and
+    every pending row stays unreviewed, one pending row by id still allowed.
+  - API, adjusted: PR13's bulk test now reviews 239 of the 240 unreviewed rows and asserts the pending row stays
+    unreviewed; account B's bulk test reviews 5 of 7 and asserts `b4` and `b8` untouched (6 reviewed, 3 not).
+  - Web, new: 120 posted plus 3 pending rows give "Select all 120 posted"; the count request is the register's range
+    with `pending=false&limit=1`; the POST is `{ from, to, pending: false }` with `expectedCount: 120`; the three
+    pending rows stay unreviewed; one pending row still reviews by id.
+  - Web, adjusted: the select-all, 409 and mono tests wait for the posted count and assert the new filter and wording.
+
+### N2 (MEDIUM) — e2e fixes
+
+| Spec | Fix |
+|---|---|
+| `transactions-chase-account-stale` | Step 1's reload now holds `/api/forecast` as step 2 does. Before, a forecast bundle answering first let the older self-heal clear the pick, React Query aborted the refused request, and the test waited 60 s for a response that never came. |
+| `transactions-chase-account-picker-hidden` | The row and `?month=` both use the Chicago household date (the row was dated in UTC while the month was the host's, so a Chicago evening on a month's last day put the row in the next month). |
+| both relink specs | The "twin is not a picker option" checks are dropped: `listCheckingAccounts` merges twins by institution and mask and keeps the snapshot account, so the twin is never offered in any phase and the check could not fail. |
+
+### N3 — behaviour changes documented, not reversed
+
+- **Twin-only postings during a re-link.** Now under **Figures that should move** and **Pending Brad's decision**.
+  `chase-relink-duplicate-with-transactions-no-double-balance` seeds a distinct twin-only posting (−$7.77 on the grocer
+  day) and asserts it is listed, "Not counted", and out of the day total (−$25.00) and money out.
+- **`plaid:*` rows with no account.** Disclosed under **Figures that should move** (PR13's rule).
+  `transactions-chase-hides-amex` restores the original fixture's `plaid:chase` row with no account and asserts it is
+  absent.
+- **No change needed:** "Balance unavailable" for B and C is intended H1 behaviour; a same-Plaid-id duplicate cannot be
+  seeded (Residuals).
+
+### LOW and NIT
+
+| Finding | Fix |
+|---|---|
+| LOW: failed Undo ids beyond the loaded pages are pruned from the selection, yet the toast said "Failed rows remain selected" | When a failed id is not on a loaded page the toast says "Failed rows on the loaded pages remain selected. Try again." Test: an Undo of a 120-row review with the oldest (unloaded) row refused. |
+| NIT: after-today day groups still showed a total | A day group whose rows are all after today shows "—" (title: days after today are not totalled). Asserted in the after-today test. |
+| NIT: "chase" name match | Residual. |
+| NIT: codegen not enforced in CI across two targets | Residual. |
+
+### Fails before (second review)
+
+`chaseReviewInbox.test.tsx` (and its fake server) from `fb3d908` was run on `5c9a46f`, the branch before this round,
+in a temporary worktree: **6 of 29 fail**.
+- The two new tests: "N1: Select all leaves pending rows out" (the old banner offers "Select all 123 matching" and
+  sends no `pending` filter) and "LOW: an Undo whose failed ids are not on a loaded page".
+- Four existing tests whose assertions this round tightened: the after-today test (its day total is now "—"), and the
+  select-all, 409 and mono tests (they now require the posted count, `pending: false` and "posted" wording; the fake
+  server, like the real one, refuses a review by filter without `pending: false`).
+- The other 23 pass, as they should.
+
+The new API test ("review by filter never covers pending rows") targets a server check that did not exist before this
+round: on `5c9a46f` its first request (no `pending` filter) would answer 200 and review the pending rows, not 400. It
+was not run there.
+
+### Verification (second review)
+
+On the merge `0cff278` (branch head before this note), with `origin/main` `500473e` in it:
+
+- **Typecheck:** `pnpm run typecheck` exit 0, which includes `typecheck:e2e`.
+- **Web suite** (`TZ=UTC CI=true pnpm --filter h2budget exec vitest run`): **130 files, 1,078 passed.**
+- **Full API suite** (local test database `h2budget_test_pr14s`, since dropped): **138 files, 1,285 passed, 7 todo.**
+- **Build:** `pnpm run build` exit 0. **Entry-graph guard:** OK (no recharts on open; react-dom only in
+  `vendor-react`). **Landing JS 574.4 KB of 580.0 KB** (173.1 KB gzipped): `index` 240.6 KB, `vendor-query` 52.5 KB.
+  That is 0.1 KB above the first review's 574.3 KB, from this round's page code and PR6's merge together.
+- **Codegen:** re-run on the committed merge for both react targets and zod; no file changed. After the PR6 merge the
+  ledger module's hooks (`api.ts`, `index.ts`) were unchanged; its `api.schemas.ts` gained PR6's two new types, as the
+  main module's did.
+- **Unchanged from `main` `500473e`:** `routes/transactions.ts`, `routes/spine.ts`, `lib/cashSignal.ts`,
+  `lib/forecastLedger.ts`, `lib/ledgerCashRows.ts`, `lib/plaidSync.ts`, `lib/routePrefetch.ts`, `lib/avalanche-core`,
+  `lib/db`.
+- **Not verified here:** any e2e run (Clerk and a running app), a browser pass at 1280 and 390 wide, Brad's live data,
+  production (untouched).
 
 ## Tests
 
