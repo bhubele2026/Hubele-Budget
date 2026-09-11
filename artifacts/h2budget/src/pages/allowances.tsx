@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, cn } from "@/lib/utils";
+import { householdToday, weekBounds } from "@/lib/householdDay";
 import {
   card,
   cardHead,
@@ -61,10 +62,19 @@ import {
 function fmtISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-function sundayOf(d: Date): Date {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() - x.getDay());
-  return x;
+/**
+ * (PR2) Sunday of the HOUSEHOLD's week (America/Chicago, Sun–Sat) containing
+ * the instant `now`, never the browser's local week. It comes back as a
+ * browser-local midnight Date so the page's local-field week arithmetic below
+ * stays self-consistent. Every caller passes "now", never a midnight Date.
+ */
+function sundayOf(now: Date): Date {
+  const start = weekBounds(householdToday(now)).start;
+  return new Date(
+    Number(start.slice(0, 4)),
+    Number(start.slice(5, 7)) - 1,
+    Number(start.slice(8, 10)),
+  );
 }
 function addDays(d: Date, n: number): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());

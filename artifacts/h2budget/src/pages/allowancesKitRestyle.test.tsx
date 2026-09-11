@@ -16,7 +16,8 @@ import React from "react";
  * are the money math under test.
  */
 
-// Friday 15 May 2026. sundayOf() → 2026-05-10, so the weekly window is
+// Friday 15 May 2026 (a Friday in Chicago under TZ=UTC too). The household
+// week's Sunday is 2026-05-10, so the weekly window is
 // 05-10…05-16 and the month window is 05-01…05-31.
 const TEST_TODAY = new Date(2026, 4, 15, 12, 0, 0);
 
@@ -310,5 +311,23 @@ describe("Allowances — the public surface is stable", () => {
     // Under-budget weeks (money left) must NOT take the bad colour.
     expect(fills).toContain(NAVY_RGB);
     expect(container).toBeTruthy();
+  });
+});
+
+describe("Allowances — the household's week (PR2)", () => {
+  // Saturday 9/12, 8:30pm Central — 01:30 on Sunday in UTC. Under TZ=UTC the
+  // old browser-local week had already moved on to Sun 9/13 – Sat 9/19.
+  const SATURDAY_EVENING = new Date("2026-09-13T01:30:00Z");
+
+  it("still counts Saturday's weekly spend on Saturday evening, not Sunday's", () => {
+    vi.setSystemTime(SATURDAY_EVENING);
+    txns = [
+      tx({ id: "sat", amount: "-61.25", occurredOn: "2026-09-12", weeklyAllowance: true, weeklyBucket: "groceries" }),
+      tx({ id: "sun", amount: "-88.40", occurredOn: "2026-09-13", weeklyAllowance: true, weeklyBucket: "groceries" }),
+    ];
+    renderPage();
+    const row = screen.getByTestId("allowance-summary-weekly");
+    expect(within(row).getByText(usd(61.25))).toBeTruthy();
+    expect(within(row).queryByText(usd(88.4))).toBeNull();
   });
 });
