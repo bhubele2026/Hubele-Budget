@@ -166,7 +166,7 @@ async function avalanche(manualExtra: string, updatedAt: Date): Promise<void> {
   await db.insert(avalancheSettingsTable).values({ userId: TEST_USER, manualExtra, updatedAt });
 }
 
-async function row(occurredOn: string, amount: string, description: string): Promise<string> {
+async function row(occurredOn: string, amount: string, description: string, debtId: string | null = null): Promise<string> {
   const [t] = await db
     .insert(transactionsTable)
     .values({
@@ -175,6 +175,7 @@ async function row(occurredOn: string, amount: string, description: string): Pro
       occurredOn,
       description,
       amount,
+      debtId,
       plaidAccountId: CHASE,
       source: "plaid:chase",
       createdAt: createdAtStartOfHouseholdDay(occurredOn),
@@ -549,5 +550,78 @@ describe("PR6 review, MEDIUM 2 — the lists", () => {
     ]);
     // The older pair is for the list only: it never reaches `matches`.
     expect((sig.matches ?? []).map((m) => m.planDate)).toEqual(["2026-05-05"]);
+  });
+});
+
+// ⭐ PR6 third look, LOW 2 — A ROW THE USER TAGGED TO A DEBT PAYS THAT DEBT'S
+// OVERDUE MINIMUM. "CHASE ONLINE PAYMENT" is not a card payment by PR7's phrases,
+// so before this change a payment the user had tagged to Chase Sapphire still
+// dragged its $40 minimum. Today = snapshot = Tue 05-05, balance 3,000, buffer 500.
+describe("debt tag — a row tagged to a debt pays that debt's overdue minimum", () => {
+  it("C5 'CHASE ONLINE PAYMENT' −600 tagged to Chase Sapphire pays the $40 minimum: max safe extra 2,460 → 2,500", async () => {
+    await snapshot({ balance: "3000" });
+    const sapphire = await debt("Chase Sapphire", "40", 1);
+    await paycheck("40");
+    await row("2026-04-01", "-550.00", "CHASE ONLINE PAYMENT", sapphire);
+    const may = await row("2026-05-01", "-600.00", "CHASE ONLINE PAYMENT", sapphire);
+    await row("2026-04-28", "40.00", "ACME PAYROLL");
+    const sig = await signal();
+    expect(sig.bankToday).toBe("3000.00");
+    // Before: 3,000.00 − 40 on Wed 05-06, max safe extra 2,460.00, April listed as unpaid.
+    expect(balanceOn(sig, "2026-05-06")).toBe("3000.00");
+    expect(sig.lowestProjected).toBe("3000.00");
+    expect(sig.maxSafeExtra).toBe("2500.00");
+    expect(dragged(sig)).toEqual([]);
+    expect(sig.overdueOutsideForecast).toEqual([]);
+    expect(paidList(sig)).toEqual([
+      ["Chase Sapphire minimum", "2026-04-01", "debt_tag", "0.00"],
+      ["Chase Sapphire minimum", "2026-05-01", "debt_tag", "0.00"],
+    ]);
+    expect(sig.overdueAssumedPaid?.find((p) => p.dueDate === "2026-05-01")).toMatchObject({
+      planKey: `debt:${sapphire}|2026-05-01`,
+      txnId: may,
+      txnAmount: "-600.00",
+      planAmount: "-40.00",
+    });
+    // Overdue evidence only: nothing reaches `matches`.
+    expect(sig.matches?.filter((m) => m.planItemId.startsWith("debt:"))).toEqual([]);
+  });
+
+  it("a row tagged to Chase Freedom pays Freedom's minimum, never Sapphire's: Sapphire's $40 still drags", async () => {
+    await snapshot({ balance: "3000" });
+    const sapphire = await debt("Chase Sapphire", "40", 1);
+    const freedom = await debt("Chase Freedom", "30", 3);
+    await paycheck("70");
+    await row("2026-05-01", "-600.00", "CHASE ONLINE PAYMENT", freedom);
+    await row("2026-04-28", "70.00", "ACME PAYROLL");
+    const sig = await signal();
+    // 3,000.00 − 40 on Wed 05-06 (before: − 40 − 30 = 2,930.00).
+    expect(balanceOn(sig, "2026-05-06")).toBe("2960.00");
+    expect(sig.maxSafeExtra).toBe("2460.00");
+    expect(dragged(sig)).toEqual([["Chase Sapphire minimum", "2026-05-06", "-40.00", "overdue_assumed_unpaid"]]);
+    expect(paidList(sig).filter((p) => p[1] >= "2026-05-01")).toEqual([
+      ["Chase Freedom minimum", "2026-05-03", "debt_tag", "0.00"],
+    ]);
+    expect(sig.overdueAssumedPaid?.some((p) => p.planKey.startsWith(`debt:${sapphire}|`))).toBe(false);
+  });
+
+  it("a row tagged to Freedom that the matcher pairs with Sapphire's minimum is not evidence for Sapphire; the pair stays a suggestion", async () => {
+    await snapshot({ balance: "3000" });
+    const sapphire = await debt("Chase Sapphire", "40", 1);
+    const freedom = await debt("Chase Freedom", "30", 3);
+    await paycheck("70");
+    // The shared word "chase", $5 over the $40 minimum and a day late: a medium pair with Sapphire.
+    const pay = await row("2026-05-02", "-45.00", "CHASE ONLINE PAYMENT", freedom);
+    await row("2026-04-28", "70.00", "ACME PAYROLL");
+    const sig = await signal();
+    // Before: Sapphire paid by the pair and Freedom dragging, 2,970.00. After: Sapphire drags, Freedom paid.
+    expect(balanceOn(sig, "2026-05-06")).toBe("2960.00");
+    expect(sig.maxSafeExtra).toBe("2460.00");
+    expect(dragged(sig)).toEqual([["Chase Sapphire minimum", "2026-05-06", "-40.00", "overdue_assumed_unpaid"]]);
+    expect(paidList(sig).filter((p) => p[1] >= "2026-05-01")).toEqual([
+      ["Chase Freedom minimum", "2026-05-03", "debt_tag", "0.00"],
+    ]);
+    // The matcher is unchanged: the pair is still offered as a suggestion.
+    expect(sig.matches?.find((m) => m.planItemId === `debt:${sapphire}`)).toMatchObject({ txnId: pay, confidence: "medium", ambiguous: false, offCurve: false });
   });
 });

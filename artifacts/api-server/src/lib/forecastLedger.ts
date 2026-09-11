@@ -109,9 +109,10 @@ export type LedgerListedPlan = {
 
 /**
  * (PR6 review) An overdue plan the forecast treats as PAID because of a bank row:
- * a non-ambiguous pair of any confidence, or (`card_payment`) a payment naming
- * the card for at least a debt's minimum. Listed so it is never silent, and so
- * the user can confirm or reject the pair.
+ * a non-ambiguous pair of any confidence, or, for a debt's minimum, a payment of
+ * at least the minimum that names the card (`card_payment`) or that the user
+ * tagged to that debt (`debt_tag`). Listed so it is never silent, and so the user
+ * can confirm or reject the pair.
  */
 export type LedgerAssumedPaidPlan = {
   planKey: string;
@@ -125,7 +126,7 @@ export type LedgerAssumedPaidPlan = {
   txnId: string;
   /** Signed, like the row. */
   txnAmount: number;
-  /** "high" | "medium" | "low" (the pair's), or "card_payment". */
+  /** "high" | "medium" | "low" (the pair's), "card_payment", or "debt_tag". */
   confidence: string;
   /**
    * Signed; 0 when the row paid it all (or within $1). On the curve only while
@@ -221,9 +222,11 @@ export function keepsPreSnapshotRule(
  *       1. resolved (matched / skipped / missed / dismissed; a `partial` keeps
  *          its remainder) → as the resolution says;
  *       2. ⭐ (PR6 review) PAID ON EVIDENCE, once due: a non-ambiguous pair of
- *          ANY confidence (PR5) to a checking row dated on or before today, or,
- *          for a debt minimum, a payment naming the card for at least the
- *          minimum → off the curve and listed in `overdueAssumedPaid`; an unpaid
+ *          ANY confidence (PR5) to a checking row dated on or before today (never
+ *          a row the user tagged to a different debt than the plan's), or, for a
+ *          debt minimum, a payment of at least the minimum that names the card or
+ *          (debt tag) that the user tagged to that debt → off the curve and
+ *          listed in `overdueAssumedPaid`; an unpaid
  *          remainder over $1 still drags (`overdue_remainder_assumed_unpaid`).
  *          ⚠️ Accepted risk: an unrelated row of the same amount within 3 days
  *          hides an unpaid bill — one plan per row, and always listed.
@@ -745,6 +748,8 @@ export async function buildForecastLedger(
   let matches: PlanRowMatch[] = [];
   let listingMatches: PlanRowMatch[] = [];
   let cardPayments: PaidInFull[] = [];
+  // Pairs that count as overdue evidence: non-ambiguous, and never a row tagged to another debt.
+  let evidencePairs: PlanRowMatch[] = [];
   if (matchPlans.length > 0 || listingPlans.length > 0) {
     const candidateRowsAll = await db
       .select()
@@ -772,6 +777,7 @@ export async function buildForecastLedger(
       if (claimedTxnIds.has(row.id) || (o.replacedId && claimedTxnIds.has(o.replacedId))) return;
       // (PR6 second review) PR7's card-payment signals travel with the row, for
       // `plansPaidInFullByName`: only a real card payment pays a card's minimum.
+      // (Debt tag) So does the user's debt tag (PR7 rule 2).
       const full = candidateRowsAll[i]!;
       const candidate: MatchRow = {
         txnId: row.id,
@@ -780,6 +786,7 @@ export async function buildForecastLedger(
         description: row.description,
         isExternalCardPayment: full.isExternalCardPayment === true,
         pfcDetailed: full.pfcDetailed ?? null,
+        debtId: full.debtId ?? null,
       };
       if (row.occurredOn >= listRowFromISO) listingRows.push(candidate);
       if (row.occurredOn >= rowMatchFromISO) matchRows.push(candidate);
@@ -806,26 +813,40 @@ export async function buildForecastLedger(
       );
       return earlierUnpaid ? { ...m, offCurve: false } : m;
     });
+    // (Debt tag) A row the user tagged to one debt is never overdue evidence for
+    // ANOTHER debt's payment, even when the matcher paired them ("CHASE ONLINE
+    // PAYMENT" −45 tagged to Chase Freedom, a day after a $40 Chase Sapphire
+    // minimum). The pair stays in `matches` as a suggestion, untouched; only the
+    // evidence rule skips it, and the row stays free to pay its own debt below.
+    // A plan's debt: a minimum's own debt, or the debt a recurring bill is linked to.
+    const planDebtId = (itemId: string): string | null =>
+      itemId.startsWith("debt:") ? itemId.slice("debt:".length) : (recurringById.get(itemId)?.debtId ?? null);
+    const rowDebtById = new Map([...matchRows, ...listingRows].map((r) => [r.txnId, r.debtId ?? null] as const));
+    const isEvidence = (m: PlanRowMatch): boolean => {
+      if (m.ambiguous) return false;
+      const rowDebt = rowDebtById.get(m.txnId) ?? null;
+      const planDebt = planDebtId(m.planItemId);
+      return !(rowDebt && planDebt && rowDebt !== planDebt);
+    };
     // (PR6 review, M2) The older overdue occurrences pair with the rows the pass
     // above left unpaired — for the lists only.
-    const usedRows = new Set(matches.filter((m) => !m.ambiguous).map((m) => m.txnId));
+    const usedRows = new Set(matches.filter(isEvidence).map((m) => m.txnId));
     if (listingPlans.length > 0) {
       listingMatches = matchPlansToRows(
         listingPlans,
         listingRows.filter((r) => !usedRows.has(r.txnId)),
         notMatchPairs,
       );
-      for (const m of listingMatches) if (!m.ambiguous) usedRows.add(m.txnId);
+      for (const m of listingMatches) if (isEvidence(m)) usedRows.add(m.txnId);
     }
-    // (PR6 review, H1-R4) A debt minimum already due is paid by a payment that
-    // names the card and pays at least the minimum, even when no pair was found
-    // ($40 due, $812.40 paid). Overdue evidence only.
-    const pairedKeys2 = new Set(
-      [...matches, ...listingMatches].filter((m) => !m.ambiguous).map((m) => m.planKey),
-    );
-    const dueMinimums = [...matchPlans, ...listingPlans].filter(
-      (p) => p.itemId.startsWith("debt:") && p.date <= dragCutoffISO && !pairedKeys2.has(p.key),
-    );
+    // (PR6 review, H1-R4) A debt minimum already due is paid by a payment of at
+    // least the minimum even when no pair was found ($40 due, $812.40 paid): a card
+    // payment naming the card, or (debt tag) a row the user tagged to that debt.
+    // Overdue evidence only.
+    const pairedKeys2 = new Set([...matches, ...listingMatches].filter(isEvidence).map((m) => m.planKey));
+    const dueMinimums = [...matchPlans, ...listingPlans]
+      .filter((p) => p.itemId.startsWith("debt:") && p.date <= dragCutoffISO && !pairedKeys2.has(p.key))
+      .map((p) => ({ ...p, debtId: planDebtId(p.itemId) }));
     if (dueMinimums.length > 0) {
       cardPayments = plansPaidInFullByName(
         dueMinimums,
@@ -833,19 +854,22 @@ export async function buildForecastLedger(
         notMatchPairs,
       );
     }
+    evidencePairs = [...matches, ...listingMatches].filter(isEvidence);
   }
   // Only confident pairs take a plan off the curve; the rest are suggestions.
   const probablyPaidKeys = new Set(matches.filter((m) => m.offCurve).map((m) => m.planKey));
   // ⭐ (PR6 review, H1) EVIDENCE THAT AN OVERDUE PLAN WAS PAID: a non-ambiguous pair
-  // of any confidence, or a card payment for a debt minimum. Read only for plans
-  // due on or before today (the plans loop); a plan due later still needs `offCurve`.
+  // of any confidence (never a row tagged to another debt), or, for a debt
+  // minimum, a card payment naming the card or a row tagged to that debt. Read
+  // only for plans due on or before today (the plans loop); a plan due later
+  // still needs `offCurve`.
   const paidByKey = new Map<string, { txnId: string; txnAmount: number; confidence: string }>();
-  for (const m of [...matches, ...listingMatches]) {
-    if (!m.ambiguous) paidByKey.set(m.planKey, { txnId: m.txnId, txnAmount: m.txnAmount, confidence: m.confidence });
+  for (const m of evidencePairs) {
+    paidByKey.set(m.planKey, { txnId: m.txnId, txnAmount: m.txnAmount, confidence: m.confidence });
   }
   for (const c of cardPayments) {
     if (!paidByKey.has(c.planKey)) {
-      paidByKey.set(c.planKey, { txnId: c.txnId, txnAmount: c.txnAmount, confidence: "card_payment" });
+      paidByKey.set(c.planKey, { txnId: c.txnId, txnAmount: c.txnAmount, confidence: c.evidence });
     }
   }
 
