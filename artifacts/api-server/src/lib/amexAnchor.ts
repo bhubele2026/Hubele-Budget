@@ -13,6 +13,7 @@ import {
   spendAmount,
   type SpendContext,
 } from "./spendingFilter";
+import { loadSupersededPendingIds } from "./supersededPending";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
@@ -419,6 +420,10 @@ export async function computeWeeklyPayoff(
           )
       : [];
 
+  // (PR7b) A pending charge its posted row replaced is owed once, not twice.
+  const replacedPendingIds =
+    externalIds.length > 0 ? await loadSupersededPendingIds(householdId) : new Set<string>();
+
   type Agg = { charges: number; count: number; top: { name: string; amount: number } | null };
   const byCard = new Map<string, Agg>();
   for (const ext of externalIds) byCard.set(ext, { charges: 0, count: 0, top: null });
@@ -431,6 +436,7 @@ export async function computeWeeklyPayoff(
     if (t.occurredOn < win.start || t.occurredOn > win.end) continue;
     // Skip "not mine" charges (reimbursements) — user-excluded from payoff.
     if (excludedTxnIds.has(t.id)) continue;
+    if (replacedPendingIds.has(t.id)) continue;
     // (PR7) The one spending rule, with one exception: a reimbursable charge
     // is still owed to Amex, so it stays in what to pay this card.
     if (!isRealSpend(t, ctx, { reimbursableIsSpend: true })) {

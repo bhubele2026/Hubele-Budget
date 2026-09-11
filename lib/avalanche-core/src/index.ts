@@ -24,8 +24,22 @@ export {
 } from "./snapshotInclusion";
 export { descriptionsFuzzyEqual, tokenizeDescription } from "./descriptionMatch";
 export {
+  labelEvidence,
+  matchPlansToRows,
+  MATCH_EARLY_DAYS,
+  MATCH_LATE_DAYS,
+  MATCH_OFF_CURVE_SHARE,
+  MATCH_STOP_WORDS,
+  MATCH_STRICT_DAYS,
+  type MatchConfidence,
+  type MatchPlan,
+  type MatchRow,
+  type PlanRowMatch,
+} from "./planMatch";
+export {
   canSupersede,
   pairPendingWithPosted,
+  pairPendingWithPostedAmong,
   SUPERSEDE_MAX_DAYS,
   type SupersedeRow,
 } from "./pendingSupersede";
@@ -40,6 +54,9 @@ export {
 } from "./cashRows";
 export {
   CARD_PAYMENT_PATTERNS,
+  CARD_PAYMENT_WORD_PREFIXES,
+  GENERIC_CARD_PAYMENT_PHRASES,
+  POSITIONED_ISSUER_PHRASES,
   PFC_CARD_PAYMENT,
   classifyOutflow,
   incomeAmount,

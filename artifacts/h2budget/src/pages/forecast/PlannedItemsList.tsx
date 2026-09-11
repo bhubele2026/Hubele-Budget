@@ -4,6 +4,7 @@ import type { PlanLine } from "@/lib/forecastMatch";
 import type { PayoffInfo, PayoffTransition } from "@/lib/forecastDebts";
 import { CashFreedBanner } from "./CashFreedBanner";
 import { PlanDropRow } from "./PlanDropRow";
+import type { SuggestionAnswer } from "./probablyPaidText";
 
 /**
  * (#618) Flat item descriptor for the virtualized "Planned forecast items"
@@ -37,6 +38,8 @@ export function PlannedItemsList({
   onSelectPlan,
   onMoveStart,
   onMarkMissed,
+  onAnswerSuggestion,
+  answerDisabled,
 }: {
   items: PlannedItem[];
   payoffsByItem: Map<string, PayoffInfo>;
@@ -46,6 +49,9 @@ export function PlannedItemsList({
   onSelectPlan: (row: PlanLine) => void;
   onMoveStart: (row: PlanLine) => void;
   onMarkMissed: (row: PlanLine) => void;
+  /** (PR5) Confirm / Not this / Partial on a "Suggested" row. */
+  onAnswerSuggestion?: (row: PlanLine, answer: SuggestionAnswer) => void;
+  answerDisabled?: boolean;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -170,6 +176,8 @@ export function PlannedItemsList({
           onSelect={onSelectPlan}
           onMove={onMoveStart}
           onMarkMissed={onMarkMissed}
+          onAnswer={onAnswerSuggestion}
+          answerDisabled={answerDisabled}
           activeDragId={activeDragId}
           payoff={payoffsByItem.get(row.itemId)}
           isBestSuggestion={bestSuggestionPlanKey === planKey}
@@ -202,6 +210,8 @@ export function PlannedItemsList({
               onSelect={onSelectPlan}
               onMove={onMoveStart}
               onMarkMissed={onMarkMissed}
+              onAnswer={onAnswerSuggestion}
+              answerDisabled={answerDisabled}
               activeDragId={activeDragId}
               payoff={payoffsByItem.get(row.itemId)}
               isBestSuggestion={bestSuggestionPlanKey === planKey}

@@ -75,6 +75,23 @@ function rankPending(a: SupersedeRow, b: SupersedeRow, posted: SupersedeRow): nu
  */
 export function pairPendingWithPosted(rows: readonly SupersedeRow[]): Map<string, SupersedeRow> {
   const pendings = rows.filter((r) => r.pending && r.plaidAccountId);
+  return pairPendingWithPostedAmong(rows, () => pendings);
+}
+
+/**
+ * `pairPendingWithPosted`, offering each posted row only `candidatesFor(posted)`
+ * instead of every pending row (PR7b review M1: the spending read has hundreds
+ * of pending rows and must not test each against every posted row).
+ *
+ * ⚠️ SAME ANSWER ONLY IF THE CANDIDATES ARE COMPLETE: every pending row in
+ * `rows` that `canSupersede`s a posted row must be among that posted row's
+ * candidates. Extra candidates are harmless (`canSupersede` still decides), and
+ * their order does not matter (`rankPending` is a total order).
+ */
+export function pairPendingWithPostedAmong(
+  rows: readonly SupersedeRow[],
+  candidatesFor: (posted: SupersedeRow) => readonly SupersedeRow[],
+): Map<string, SupersedeRow> {
   const posteds = rows
     .filter((r) => !r.pending && r.plaidAccountId)
     .sort(
@@ -87,7 +104,7 @@ export function pairPendingWithPosted(rows: readonly SupersedeRow[]): Map<string
   const pairs = new Map<string, SupersedeRow>();
   for (const posted of posteds) {
     let best: SupersedeRow | null = null;
-    for (const pending of pendings) {
+    for (const pending of candidatesFor(posted)) {
       if (taken.has(pending.id) || !canSupersede(pending, posted)) continue;
       if (!best || rankPending(pending, best, posted) < 0) best = pending;
     }

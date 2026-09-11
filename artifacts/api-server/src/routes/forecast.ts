@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, lte, sql, ne, inArray } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -438,6 +438,9 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // says: the row is still on the curve, and dropping the match here would
   // show the bill unpaid while the curve treats it as paid.
   const forecastToday = forecastTodayISO(now);
+  // (PR5b) Pair-level answers ("Not this", partial) are in the bundle: the web
+  // register reads a `not_match` as deciding neither side, and a `partial` as a
+  // matched row plus the plan's unpaid remainder.
   const resolutions = resolutionRows
     .filter(
       (r) =>
@@ -1075,6 +1078,11 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
       return;
     }
   }
+  // (PR5) Pair-level statuses name one plan occurrence AND one bank row.
+  if ((status === "not_match" || status === "partial") && (!recurringItemId || !occurrenceDate || !matchedTxnId)) {
+    res.status(400).json({ error: `${status} requires recurringItemId, occurrenceDate, matchedTxnId` });
+    return;
+  }
   if (status === "rescheduled") {
     if (!recurringItemId || !occurrenceDate || !rescheduledTo) {
       res.status(400).json({
@@ -1100,26 +1108,67 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
     }
   }
 
-  if (recurringItemId && occurrenceDate) {
+  // (PR5) The neighbour delete keeps one resolution per plan occurrence and one
+  // per bank row — except "Not this" (`not_match`) answers, which are about a
+  // single plan/row PAIR and must survive other decisions on either side (a
+  // rejected suggestion must never come back). A `not_match` write only
+  // replaces the identical pair; any other write leaves `not_match` rows alone,
+  // except the exact pair it now confirms.
+  if (status === "not_match") {
+    // Rejecting a pair replaces that pair's earlier answers: a previous
+    // rejection, or a match / partial confirmation the user now takes back.
     await db
       .delete(forecastResolutionsTable)
       .where(
         and(
           eq(forecastResolutionsTable.householdId, householdId),
+          inArray(forecastResolutionsTable.status, ["not_match", "matched", "partial"]),
           eq(forecastResolutionsTable.recurringItemId, recurringItemId),
           eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
-        ),
-      );
-  }
-  if (matchedTxnId) {
-    await db
-      .delete(forecastResolutionsTable)
-      .where(
-        and(
-          eq(forecastResolutionsTable.householdId, householdId),
           eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
         ),
       );
+  } else {
+    if (recurringItemId && occurrenceDate) {
+      await db
+        .delete(forecastResolutionsTable)
+        .where(
+          and(
+            eq(forecastResolutionsTable.householdId, householdId),
+            eq(forecastResolutionsTable.recurringItemId, recurringItemId),
+            eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
+            ne(forecastResolutionsTable.status, "not_match"),
+            // (PR5 review) A partial confirmation and a reschedule of the same
+            // plan coexist: the remainder is due on the date the user moved it to.
+            ...(status === "partial" ? [ne(forecastResolutionsTable.status, "rescheduled")] : []),
+            ...(status === "rescheduled" ? [ne(forecastResolutionsTable.status, "partial")] : []),
+          ),
+        );
+    }
+    if (matchedTxnId) {
+      await db
+        .delete(forecastResolutionsTable)
+        .where(
+          and(
+            eq(forecastResolutionsTable.householdId, householdId),
+            eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
+            ne(forecastResolutionsTable.status, "not_match"),
+          ),
+        );
+    }
+    if (recurringItemId && occurrenceDate && matchedTxnId) {
+      await db
+        .delete(forecastResolutionsTable)
+        .where(
+          and(
+            eq(forecastResolutionsTable.householdId, householdId),
+            eq(forecastResolutionsTable.status, "not_match"),
+            eq(forecastResolutionsTable.recurringItemId, recurringItemId),
+            eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
+            eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
+          ),
+        );
+    }
   }
 
   const [row] = await db

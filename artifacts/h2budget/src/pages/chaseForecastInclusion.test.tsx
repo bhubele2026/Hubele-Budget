@@ -286,6 +286,69 @@ it("a future row sent to the forecast keeps its 'Remove from forecast' ×", asyn
   ).toBe("Remove from forecast");
 });
 
+// (PR5b review H2) The bundle now carries "Not this" and partial answers.
+// (PR14 merge) On the fake ledger server, like the tests above; every assertion kept.
+it("a posted row with a partial reads 'Partly paid' and offers no ×: every write here would replace the partial", async () => {
+  state.forecast = {
+    ...state.forecast,
+    resolutions: [{ matchedTxnId: "posted", status: "partial" }],
+  };
+  show();
+  const chip = await screen.findByTestId("badge-forecast-state-posted");
+  expect(chip.getAttribute("data-forecast-state")).toBe("partial");
+  expect(chip.textContent).toContain("Partly paid");
+  expect(screen.queryByTestId("button-remove-forecast-posted")).toBeNull();
+});
+
+it("a future row with a partial offers no × either", async () => {
+  serve({ rows: [row("future", FUTURE, { forecastFlag: true })] });
+  state.forecast = {
+    ...state.forecast,
+    resolutions: [{ matchedTxnId: "future", status: "partial" }],
+  };
+  show();
+  expect(
+    (await screen.findByTestId("badge-forecast-state-future")).getAttribute("data-forecast-state"),
+  ).toBe("partial");
+  expect(screen.queryByTestId("button-remove-forecast-future")).toBeNull();
+});
+
+it("a 'Not this' answer beside a match never hides the match, in either order: chip Matched, no ×", async () => {
+  const matched = { matchedTxnId: "posted", status: "matched" };
+  const rejected = { matchedTxnId: "posted", status: "not_match" };
+  for (const resolutions of [[matched, rejected], [rejected, matched]]) {
+    state.forecast = { ...state.forecast, resolutions };
+    show();
+    expect(
+      (await screen.findByTestId("badge-forecast-state-posted")).getAttribute("data-forecast-state"),
+    ).toBe("matched");
+    expect(screen.queryByTestId("button-remove-forecast-posted")).toBeNull();
+    cleanup();
+  }
+});
+
+it("bulk Remove records 'not a planned payment' for a posted row whose only answer is 'Not this', and never for a partial", async () => {
+  serve({ rows: [row("posted", POSTED), row("paid", POSTED)] });
+  state.forecast = {
+    ...state.forecast,
+    resolutions: [
+      { matchedTxnId: "posted", status: "not_match" },
+      { matchedTxnId: "paid", status: "partial" },
+    ],
+  };
+  show();
+  expect(
+    (await screen.findByTestId("badge-forecast-state-posted")).getAttribute("data-forecast-state"),
+  ).toBe("in-review-bucket");
+  fireEvent.click(screen.getByText("Select posted"));
+  fireEvent.click(screen.getByText("Select paid"));
+  fireEvent.click(screen.getByTestId("bulk-remove-forecast"));
+  await waitFor(() => expect(state.upsertAsync).toHaveBeenCalledTimes(1));
+  expect(state.upsertAsync).toHaveBeenCalledWith({
+    data: { status: "ignored_unforecasted", matchedTxnId: "posted" },
+  });
+});
+
 it("bulk Remove flips the flag only on future rows and records 'not a planned payment' for posted ones", async () => {
   serve({
     rows: [row("posted", POSTED), row("future", FUTURE, { forecastFlag: true })],

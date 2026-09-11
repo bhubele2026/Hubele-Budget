@@ -4283,6 +4283,32 @@ components:
                   forward by the pre-snapshot drag-to-today rule. Used
                   by the chart tooltip to distinguish dragged plans
                   from bills naturally due that day.
+        matches:
+          type: array
+          description: |
+            (PR5) Plans a bank row probably paid, as suggestions for the user
+            to confirm ("matched"/"partial") or reject ("not_match"). Only a
+            match with `offCurve` true is off the forecast curve (the payee's
+            name, not ambiguous, and either an exact prompt payment or the
+            plan's full name paying at most max($25, 10%) more); every other plan still
+            counts. The bank row always counts. Amounts are signed;
+            `difference` is |txn| − |plan| (positive = paid more than planned).
+            `confidence` is "high", "medium" or "low".
+          items:
+            type: object
+            required: [planKey, planItemId, planDate, txnId, planAmount, txnAmount, difference, dayDelta, confidence, ambiguous, offCurve]
+            properties:
+              planKey: { type: string }
+              planItemId: { type: string }
+              planDate: { type: string }
+              txnId: { type: string }
+              planAmount: { type: string }
+              txnAmount: { type: string }
+              difference: { type: string }
+              dayDelta: { type: integer }
+              confidence: { type: string }
+              ambiguous: { type: boolean }
+              offCurve: { type: boolean }
     SpendingFacts:
       type: object
       required:
@@ -4379,7 +4405,7 @@ components:
         excluded:
           type: object
           required:
-            [transfersTotal, debtPaymentsTotal, reimbursementTotal, ignoreTotal, cardPayments, reimbursable]
+            [transfersTotal, debtPaymentsTotal, reimbursementTotal, ignoreTotal, cardPayments, reimbursable, replacedPending]
           properties:
             transfersTotal: { type: number }
             debtPaymentsTotal: { type: number }
@@ -4387,6 +4413,7 @@ components:
             ignoreTotal: { type: number }
             cardPayments: { type: number, description: Payments to a credit card from another account — flagged, Plaid-classified or matched by description. Recognized in totals only; no row is re-tagged. }
             reimbursable: { type: number, description: Charges flagged reimbursable. }
+            replacedPending: { type: number, description: "Pending outflows a posted row replaced when the sync never linked them (pairPendingWithPosted, PR4c). The charge counts once, on its posted row; this is the pending half left out. No row is deleted or re-tagged." }
         byCategory:
           type: array
           items:

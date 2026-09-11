@@ -216,6 +216,25 @@ export type CashSignal = {
     itemId: string;
     originalDate: string;
   }>;
+  /**
+   * (PR5) Plans a bank row probably paid: each one is off the curve until the
+   * user confirms ("matched"/"partial") or rejects ("not_match") it. Amounts are
+   * signed like the ledger; `difference` is |txn| − |plan| (positive = paid more).
+   */
+  matches?: Array<{
+    planKey: string;
+    planItemId: string;
+    planDate: string;
+    txnId: string;
+    planAmount: string;
+    txnAmount: string;
+    difference: string;
+    dayDelta: number;
+    confidence: string;
+    ambiguous: boolean;
+    /** Only these plans are off the curve; every other match is a suggestion. */
+    offCurve: boolean;
+  }>;
 };
 
 function r2(n: number): string {
@@ -369,5 +388,18 @@ export async function computeCashSignal(
         itemId: e.itemId,
         originalDate: e.originalDate,
       })),
+    matches: ledger.matches.map((m) => ({
+      planKey: m.planKey,
+      planItemId: m.planItemId,
+      planDate: m.planDate,
+      txnId: m.txnId,
+      planAmount: r2(m.planAmount),
+      txnAmount: r2(m.txnAmount),
+      difference: r2(m.difference),
+      dayDelta: m.dayDelta,
+      confidence: m.confidence,
+      ambiguous: m.ambiguous,
+      offCurve: m.offCurve,
+    })),
   };
 }

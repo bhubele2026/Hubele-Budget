@@ -5754,6 +5754,43 @@ export declare const GetForecastResponse: zod.ZodObject<{
             itemId?: string | undefined;
             originalDate?: string | undefined;
         }>, "many">>;
+        matches: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            planKey: zod.ZodString;
+            planItemId: zod.ZodString;
+            planDate: zod.ZodString;
+            txnId: zod.ZodString;
+            planAmount: zod.ZodString;
+            txnAmount: zod.ZodString;
+            difference: zod.ZodString;
+            dayDelta: zod.ZodNumber;
+            confidence: zod.ZodString;
+            ambiguous: zod.ZodBoolean;
+            offCurve: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            txnAmount: string;
+            planKey: string;
+            planItemId: string;
+            planDate: string;
+            txnId: string;
+            planAmount: string;
+            difference: string;
+            dayDelta: number;
+            confidence: string;
+            ambiguous: boolean;
+            offCurve: boolean;
+        }, {
+            txnAmount: string;
+            planKey: string;
+            planItemId: string;
+            planDate: string;
+            txnId: string;
+            planAmount: string;
+            difference: string;
+            dayDelta: number;
+            confidence: string;
+            ambiguous: boolean;
+            offCurve: boolean;
+        }>, "many">>;
     }, "strip", zod.ZodTypeAny, {
         status: "ready" | "tight" | "not_yet" | "no_data";
         cashBuffer: string;
@@ -5762,6 +5799,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestDate: string | null;
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
+        matches?: {
+            txnAmount: string;
+            planKey: string;
+            planItemId: string;
+            planDate: string;
+            txnId: string;
+            planAmount: string;
+            difference: string;
+            dayDelta: number;
+            confidence: string;
+            ambiguous: boolean;
+            offCurve: boolean;
+        }[] | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
         events?: {
@@ -5791,6 +5841,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestDate: string | null;
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
+        matches?: {
+            txnAmount: string;
+            planKey: string;
+            planItemId: string;
+            planDate: string;
+            txnId: string;
+            planAmount: string;
+            difference: string;
+            dayDelta: number;
+            confidence: string;
+            ambiguous: boolean;
+            offCurve: boolean;
+        }[] | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
         events?: {
@@ -5970,6 +6033,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestDate: string | null;
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
+        matches?: {
+            txnAmount: string;
+            planKey: string;
+            planItemId: string;
+            planDate: string;
+            txnId: string;
+            planAmount: string;
+            difference: string;
+            dayDelta: number;
+            confidence: string;
+            ambiguous: boolean;
+            offCurve: boolean;
+        }[] | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
         events?: {
@@ -6096,6 +6172,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestDate: string | null;
         maxSafeExtra: string;
         snapshotAt?: string | null | undefined;
+        matches?: {
+            txnAmount: string;
+            planKey: string;
+            planItemId: string;
+            planDate: string;
+            txnId: string;
+            planAmount: string;
+            difference: string;
+            dayDelta: number;
+            confidence: string;
+            ambiguous: boolean;
+            offCurve: boolean;
+        }[] | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
         events?: {
@@ -6387,6 +6476,43 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         itemId?: string | undefined;
         originalDate?: string | undefined;
     }>, "many">>;
+    matches: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        planKey: zod.ZodString;
+        planItemId: zod.ZodString;
+        planDate: zod.ZodString;
+        txnId: zod.ZodString;
+        planAmount: zod.ZodString;
+        txnAmount: zod.ZodString;
+        difference: zod.ZodString;
+        dayDelta: zod.ZodNumber;
+        confidence: zod.ZodString;
+        ambiguous: zod.ZodBoolean;
+        offCurve: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        txnAmount: string;
+        planKey: string;
+        planItemId: string;
+        planDate: string;
+        txnId: string;
+        planAmount: string;
+        difference: string;
+        dayDelta: number;
+        confidence: string;
+        ambiguous: boolean;
+        offCurve: boolean;
+    }, {
+        txnAmount: string;
+        planKey: string;
+        planItemId: string;
+        planDate: string;
+        txnId: string;
+        planAmount: string;
+        difference: string;
+        dayDelta: number;
+        confidence: string;
+        ambiguous: boolean;
+        offCurve: boolean;
+    }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     status: "ready" | "tight" | "not_yet" | "no_data";
     cashBuffer: string;
@@ -6395,6 +6521,19 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     lowestDate: string | null;
     maxSafeExtra: string;
     snapshotAt?: string | null | undefined;
+    matches?: {
+        txnAmount: string;
+        planKey: string;
+        planItemId: string;
+        planDate: string;
+        txnId: string;
+        planAmount: string;
+        difference: string;
+        dayDelta: number;
+        confidence: string;
+        ambiguous: boolean;
+        offCurve: boolean;
+    }[] | undefined;
     fromDate?: string | undefined;
     toDate?: string | undefined;
     events?: {
@@ -6424,6 +6563,19 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     lowestDate: string | null;
     maxSafeExtra: string;
     snapshotAt?: string | null | undefined;
+    matches?: {
+        txnAmount: string;
+        planKey: string;
+        planItemId: string;
+        planDate: string;
+        txnId: string;
+        planAmount: string;
+        difference: string;
+        dayDelta: number;
+        confidence: string;
+        ambiguous: boolean;
+        offCurve: boolean;
+    }[] | undefined;
     fromDate?: string | undefined;
     toDate?: string | undefined;
     events?: {
@@ -6770,16 +6922,16 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         date: string;
         amount: number;
-        rationale: string;
         confidence: "high" | "medium" | "low";
+        rationale: string;
         paycheckAnchor: string;
         lowestBetweenThisAndNextPaycheck: number;
         headroom: number;
     }, {
         date: string;
         amount: number;
-        rationale: string;
         confidence: "high" | "medium" | "low";
+        rationale: string;
         paycheckAnchor: string;
         lowestBetweenThisAndNextPaycheck: number;
         headroom: number;
@@ -6808,8 +6960,8 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
     proposedPayments: {
         date: string;
         amount: number;
-        rationale: string;
         confidence: "high" | "medium" | "low";
+        rationale: string;
         paycheckAnchor: string;
         lowestBetweenThisAndNextPaycheck: number;
         headroom: number;
@@ -6829,8 +6981,8 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
     proposedPayments: {
         date: string;
         amount: number;
-        rationale: string;
         confidence: "high" | "medium" | "low";
+        rationale: string;
         paycheckAnchor: string;
         lowestBetweenThisAndNextPaycheck: number;
         headroom: number;
@@ -6993,6 +7145,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         ignoreTotal: zod.ZodNumber;
         cardPayments: zod.ZodNumber;
         reimbursable: zod.ZodNumber;
+        replacedPending: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         reimbursable: number;
         transfersTotal: number;
@@ -7000,6 +7153,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         cardPayments: number;
+        replacedPending: number;
     }, {
         reimbursable: number;
         transfersTotal: number;
@@ -7007,6 +7161,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         cardPayments: number;
+        replacedPending: number;
     }>;
     byCategory: zod.ZodArray<zod.ZodObject<{
         categoryId: zod.ZodString;
@@ -7191,6 +7346,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         cardPayments: number;
+        replacedPending: number;
     };
     byCategory: {
         categoryId: string;
@@ -7283,6 +7439,7 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         reimbursementTotal: number;
         ignoreTotal: number;
         cardPayments: number;
+        replacedPending: number;
     };
     byCategory: {
         categoryId: string;

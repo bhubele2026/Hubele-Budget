@@ -204,8 +204,14 @@ export function ChaseInsightStrip({
               className="mt-1 text-micro text-neutral-500"
               data-testid="strip-uncategorized-note"
             >
-              Includes {formatCurrency(cur!.uncategorized.total)} not yet
-              categorized
+              Includes{" "}
+              <span
+                className="font-mono tabular-nums"
+                data-testid="strip-uncategorized-amount"
+              >
+                {formatCurrency(cur!.uncategorized.total)}
+              </span>{" "}
+              not yet categorized
             </div>
           )}
         </div>

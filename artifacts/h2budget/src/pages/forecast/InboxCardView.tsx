@@ -27,6 +27,7 @@ export function InboxCardView({
   onHoverChange,
   planRows,
   oneClickSuggestion,
+  serverSuggested,
   isOverlay,
 }: {
   card: InboxCard;
@@ -42,6 +43,9 @@ export function InboxCardView({
    *  isn't contested by any other inbox card. We render a primary "Match"
    *  button that confirms it in one click via `onMatchPick`. */
   oneClickSuggestion?: PlanLine | null;
+  /** (PR5) The server paired this row with a plan; its "Suggested" strip
+   *  renders below the card, so the drag hint stays hidden. */
+  serverSuggested?: boolean;
   isOverlay?: boolean;
 }) {
   const draggable = useDraggable({
@@ -58,7 +62,7 @@ export function InboxCardView({
   // (#456) Show the explicit drag hint only on rows where the user has no
   // one-click match to fall back on — those are the rows where users
   // historically miss that drag-to-match exists at all.
-  const showDragHint = !isOverlay && !oneClickSuggestion;
+  const showDragHint = !isOverlay && !oneClickSuggestion && !serverSuggested;
   return (
     <div
       ref={setNodeRef}

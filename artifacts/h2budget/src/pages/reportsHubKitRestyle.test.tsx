@@ -251,6 +251,11 @@ describe("Reports hub — one basis, no local money maths", () => {
     const tile = screen.getByTestId("report-tile-spending").textContent ?? "";
     expect(tile).toContain("$195.75");
     expect(tile).toContain("+ $24.50 uncategorized");
+    // (PR7b) The figure is in mono numerals.
+    const amount = screen.getByTestId("report-tile-spending-uncategorized");
+    expect(amount.textContent).toBe("$24.50");
+    expect(amount.className).toContain("font-mono");
+    expect(amount.className).toContain("tabular-nums");
   });
 
   it("measures the budget ring against real income", () => {

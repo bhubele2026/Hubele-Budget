@@ -207,6 +207,8 @@ const FORECAST_BASE = {
 };
 
 let forecastData: typeof FORECAST_BASE = { ...FORECAST_BASE };
+// (PR5b) Server "probably paid" pairs; undefined unless a test sets them.
+let cashSignalData: unknown = undefined;
 const upsertMutate = vi.fn();
 
 vi.mock("@workspace/api-client-react", () => {
@@ -218,7 +220,7 @@ vi.mock("@workspace/api-client-react", () => {
   const empty = { data: [], isLoading: false };
   return {
     useGetForecast: () => ({ data: forecastData, isLoading: false }),
-    useGetForecastCashSignal: () => ({ data: undefined, isLoading: false }),
+    useGetForecastCashSignal: () => ({ data: cashSignalData, isLoading: false }),
     useUpsertForecastResolution: () => ({
       mutate: (vars: unknown, opts?: { onSuccess?: () => void }) => {
         upsertMutate(vars);
@@ -305,6 +307,7 @@ function buildBankTxn(
 beforeEach(() => {
   cleanup();
   forecastData = { ...FORECAST_BASE };
+  cashSignalData = undefined;
   upsertMutate.mockClear();
   // Anchor "today" at May 11, 2026 so the May 2026 month is the active
   // month filter. Mirrors the sibling dropdown test's clock setup.
@@ -385,6 +388,58 @@ describe("Forecast — per-card 'Match' one-click button (#473)", () => {
     // clicking the Match button — the keyboard shortcut and the button
     // share `oneClickSuggestion`.
     fireEvent.keyDown(cardRoot, { key: "Enter" });
+    expect(upsertMutate).toHaveBeenCalledTimes(1);
+    expect(upsertMutate).toHaveBeenCalledWith({
+      data: {
+        status: "matched",
+        recurringItemId: "netflix",
+        occurrenceDate: "2026-05-15",
+        matchedTxnId: "txn_inbox_1",
+      },
+    });
+  });
+
+  it("(PR5) a card the server paired carries Confirm instead of the client Match button and its Enter shortcut", () => {
+    // The same obvious card as the first test — but the server's cash signal
+    // already paired it, so the server's pair is its one suggestion.
+    forecastData = {
+      ...FORECAST_BASE,
+      events: [buildPlanEvent("netflix", "2026-05-15", -50)],
+      transactions: [
+        buildBankTxn("txn_inbox_1", "2026-05-12", "Acme Charge", "-50"),
+      ],
+      resolutions: [],
+    };
+    cashSignalData = {
+      matches: [
+        {
+          planKey: "netflix|2026-05-15",
+          planItemId: "netflix",
+          planDate: "2026-05-15",
+          txnId: "txn_inbox_1",
+          planAmount: "-50.00",
+          txnAmount: "-50.00",
+          difference: "0.00",
+          dayDelta: -3,
+          // An exact amount with no payee name: low, a suggestion only.
+          confidence: "low",
+          ambiguous: false,
+          offCurve: false,
+        },
+      ],
+    };
+
+    renderPage();
+
+    expect(screen.queryByTestId("one-click-match-txn_inbox_1")).toBeNull();
+    expect(screen.queryByTestId("inbox-card-txn_inbox_1")).toBeNull();
+    const card = screen.getByTestId("inbox-card-draggable-txn_inbox_1");
+    expect(card.getAttribute("aria-keyshortcuts")).toBeNull();
+    fireEvent.keyDown(card, { key: "Enter" });
+    expect(upsertMutate).not.toHaveBeenCalled();
+
+    // Confirm posts the same body the one-click button would have.
+    fireEvent.click(screen.getByTestId("probably-paid-confirm-txn_inbox_1"));
     expect(upsertMutate).toHaveBeenCalledTimes(1);
     expect(upsertMutate).toHaveBeenCalledWith({
       data: {

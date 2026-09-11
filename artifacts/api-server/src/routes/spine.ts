@@ -11,6 +11,7 @@ import {
   fmtISO,
 } from "../lib/cashSignal";
 import { buildSpendingFacts } from "../lib/spendingFacts";
+import { loadSupersededPendingIds } from "../lib/supersededPending";
 import { buildBillsSummary, pickNextBill, todayDate } from "../lib/billsSummary";
 import { computeReviewCount } from "../lib/reviewCount";
 import { withPendingPayments } from "../lib/debtPending";
@@ -72,11 +73,23 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   // ⚠️ `horizonDays: 90` is not a default — it is the horizon the Forecast tile
   // and the Forecast Overview page both request. Ask for a different window and
   // the low point stops matching the page that shows it.
+  // (PR7b review M1) The pending rows a posted row replaced, read ONCE and
+  // shared by both spend windows. It is the same set `buildSpendingFacts`
+  // loads on its own for /reports/spending-facts, so parity is unchanged.
+  // `.then` attaches both consumers at once, so a failed read rejects the
+  // Promise.all instead of surfacing as an unhandled rejection.
+  const replacedPending = loadSupersededPendingIds(householdId);
   const [signal, monthFacts, weekFacts, billsSummary, debtRows, reviewCount, freshness] =
     await Promise.all([
       computeCashSignal(householdId, ownerUserId, { horizonDays: 90 }),
-      buildSpendingFacts(householdId, monthStartISO, todayISO),
-      buildSpendingFacts(householdId, weekStartFor(today), weekEndFor(today)),
+      replacedPending.then((replacedPendingIds) =>
+        buildSpendingFacts(householdId, monthStartISO, todayISO, { replacedPendingIds }),
+      ),
+      replacedPending.then((replacedPendingIds) =>
+        buildSpendingFacts(householdId, weekStartFor(today), weekEndFor(today), {
+          replacedPendingIds,
+        }),
+      ),
       buildBillsSummary(householdId, ownerUserId),
       db.select().from(debtsTable).where(eq(debtsTable.householdId, householdId)),
       computeReviewCount(householdId, ownerUserId),
