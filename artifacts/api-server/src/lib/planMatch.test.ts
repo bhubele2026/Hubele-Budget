@@ -82,6 +82,21 @@ describe("matchPlansToRows", () => {
     expect(close).toMatchObject({ confidence: "high", offCurve: true });
   });
 
+  it("(PR5 second review) a different bill from the same payee never leaves the curve; the full name does", () => {
+    const [fios] = matchPlansToRows([plan("vzw", "2026-05-20", -120, "Verizon Wireless")], [
+      row("t", "2026-05-12", -130, "VERIZON FIOS"),
+    ]);
+    expect(fios).toMatchObject({ confidence: "medium", ambiguous: false, offCurve: false });
+    const [mktpl] = matchPlansToRows([plan("prime", "2026-05-15", -14.99, "Amazon Prime")], [
+      row("t", "2026-05-13", -29.99, "AMAZON MKTPL US"),
+    ]);
+    expect(mktpl).toMatchObject({ confidence: "medium", offCurve: false });
+    const [full] = matchPlansToRows([plan("vzw", "2026-05-20", -120, "Verizon Wireless")], [
+      row("t", "2026-05-18", -130, "VERIZON WIRELESS PAYMENTS"),
+    ]);
+    expect(full).toMatchObject({ confidence: "medium", offCurve: true });
+  });
+
   it("paid 6 days early and 5 days late both match with the payee's name; 11 early and 15 late do not", () => {
     const p = [plan("rent", "2026-05-15", -1200, "Oak Street Rent")];
     expect(matchPlansToRows(p, [row("t", "2026-05-09", -1200, "OAK STREET PROPERTIES")])[0]?.dayDelta).toBe(-6);

@@ -525,8 +525,8 @@ export async function buildForecastLedger(
   //     plan off the curve. Every other pair is a suggestion: the plan still
   //     counts, so an unconfirmed guess never overstates projected cash. A later
   //     occurrence also stays on the curve when an earlier occurrence of the same
-  //     item that no row paid is due on or before the row: the row may be that
-  //     earlier bill, paid late.
+  //     item that no named pair paid is due on or before the row: the row may be
+  //     that earlier bill, paid late.
   const notMatchPairs = new Set<string>();
   const partialTxnByKey = new Map<string, string>();
   const claimedTxnIds = new Set<string>();
@@ -590,7 +590,9 @@ export async function buildForecastLedger(
     matches = matchPlansToRows(matchPlans, matchRows, notMatchPairs);
     // (PR5 review) A later occurrence never leaves the curve on a row dated on or
     // after an earlier occurrence of the same item that no row paid.
-    const pairedKeys = new Set(matches.map((m) => m.planKey));
+    // (PR5 second review) Only a pair carrying the payee's name counts as paying an
+    // occurrence: a coincidental nameless "low" pair never marks last month paid.
+    const pairedKeys = new Set(matches.filter((m) => m.confidence !== "low").map((m) => m.planKey));
     const unpaidByItem = new Map<string, string[]>();
     for (const p of matchPlans) {
       if (pairedKeys.has(p.key)) continue;

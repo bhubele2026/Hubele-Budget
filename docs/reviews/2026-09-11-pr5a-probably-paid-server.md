@@ -52,14 +52,16 @@ Confirm / Not this / Partial — is PR5b. Built on `main` with PR4c, PR4e and PR
 
 **Only `offCurve` pairs leave the curve.** Everything else is a suggestion, and its plan still counts. A pair is
 `offCurve` only when all of these hold:
-- the payee's name;
-- not ambiguous;
-- the row paid no less than the plan minus max($1, 1%);
-- the row paid no more than the plan plus max($25, 10%).
+- not ambiguous; and
+- either a "high" pair (the payee's name, within max($1, 1%), within 5 days),
+- or the plan's **full name** (every distinctive word of the label is a word of the description, an alias counting as
+  one word) with the row paying no less than the plan minus max($1, 1%) and no more than the plan plus max($25, 10%).
 
-The rule is asymmetric on purpose:
-- **An overpaid bill** ($150 plan, $173 row) leaves the curve: the row already takes the full $173, so the bill counts
-  once.
+The rule is asymmetric and name-strict on purpose:
+- **An overpaid bill** ($150 "City Water" plan, $173 "CITY WATER UTIL" row) leaves the curve: the row already takes
+  the full $173, so the bill counts once.
+- **A different bill from the same payee** stays a suggestion: "VERIZON FIOS" −130 shares only "verizon" with the
+  "Verizon Wireless" plan, and "AMAZON MKTPL US" −29.99 only "amazon" with "Amazon Prime".
 - **An underpaid bill** ($38 plan, $20 row) stays on the curve until the user confirms "partial". Taking it off would
   hide the $18 still due and overstate projected cash. Keeping it understates cash by $20 at most, until the user
   answers.
@@ -79,7 +81,7 @@ After the resolutions are read, and before the plans loop:
 - **Earlier occurrences compete.**
   - Last month's occurrence is a candidate too, so a late payment pairs with the bill it paid.
   - A later occurrence is never `offCurve` when an earlier occurrence of the same item, dated on or before the row, has
-    no row. The row may be that earlier bill, paid late.
+    no named pair (a nameless "low" pair never counts as paying it). The row may be that earlier bill, paid late.
 - **In the plans loop:**
   - an `offCurve` plan is skipped before the pre-snapshot rule (#666). `bankToday` is final before this point and
     never moves.
@@ -121,6 +123,10 @@ After the resolutions are read, and before the plans loop:
 | L8 | A second `partial` for a plan replaces the first. | Disclosed (Residuals). | — |
 | L9 | Missing tests. | Added (see Tests). | — |
 | NIT | This note miscounted the golden fixture and misstated "medium". | Corrected below. | — |
+| 2-M1 | _Second look (`f40c4b0`):_ a named row overpaying by up to max($25, 10%) took the plan off even when it was a different bill from the same payee: Verizon Wireless $120 vs VERIZON FIOS −130 (overstated $120); Amazon Prime $14.99 vs AMAZON MKTPL −29.99. | Beyond a "high" pair, `offCurve` needs the plan's full name. The reviewer's alternative (high pairs only) would put the $150/$173 acceptance case back at −$323 until answered. | Verizon/Amazon unit test; Verizon integration: 05-20 750.00 |
+| 2-L2 | A nameless "low" pair counted last month's bill as paid, so its late payment took this month's bill off: HOME DEPOT −150 "paid" April, CITY WATER −150 21 days late took May off (overstated $150). | Only pairs with the name (`confidence` not "low") count as paying an earlier occurrence. | HOME DEPOT integration: 05-20 700.00 |
+| 2-L3 | Many correct pairs stay on the curve (errs low). | Disclosed under Figures. | — |
+| 2-NIT | Plan window, income below plan. | Disclosed under Residuals. | — |
 
 ## Figures that should move
 
@@ -135,6 +141,14 @@ After the resolutions are read, and before the plans loop:
   - the Budget page;
   - plans with no likely row, and plans whose only pair is a suggestion (not `offCurve`);
   - plans outside today−45 to today+10.
+- **Still counted twice until the user answers (errs low, by design):**
+  - weekly items paid a few days early (ambiguous with the neighbouring week, so both weeks stay);
+  - every later occurrence while an earlier occurrence of the item has no named pair (up to 45 days);
+  - new weekly or biweekly items whose expansion invents occurrences before the anchor (PR6 scopes overdue plans to the
+    anchor);
+  - variable bills whose previous payment fell outside the band;
+  - a named overpayment that carries only part of the plan's name ("Oak Street Rent" paid to "OAK STREET PROPERTIES" at
+    +$20).
 - **Golden:** every cash-signal snapshot gains `"matches"`, and no curve figure changes.
   - 6 lists hold one suggestion each, all for the same $38 debt minimum dated 04-25 ("golden" appears in both the debt
     name and the row descriptions):
@@ -150,9 +164,12 @@ After the resolutions are read, and before the plans loop:
 
 - **An unanswered underpayment understates cash.** A named row that paid less than the plan leaves both on the curve
   until the user confirms "partial" (at most the row's amount too low).
-- **An overpaid pair can be wrong.** A named, unambiguous row within max($25, 10%) above the plan takes the plan off
-  the curve before the user answers. If that row was a different bill from the same payee, the curve is too high by
-  the plan until the user answers "Not this".
+- **An overpaid pair can still be wrong.** A row carrying the plan's full name, unambiguous and within max($25, 10%)
+  above the plan, takes the plan off before the user answers. If the payee bills twice under the same name (two plans
+  labelled only "Verizon"), the curve is too high by the plan until "Not this".
+- **Income below plan.** A deposit more than max($1, 1%) below its plan keeps the plan on the curve, so both count, as on
+  `main`.
+- **The plan window** is the later of today−45 and the first of last month (the curve's expansion start).
 - **The web doesn't show matches yet (PR5b).** Until then:
   - the Forecast register still lists an `offCurve` plan as "Pending plan", while the curve has already dropped it;
   - the web's own suggestion list runs its own rules;
@@ -179,12 +196,14 @@ After the resolutions are read, and before the plans loop:
 
 ## Tests
 
-- **`lib/planMatch.test.ts` (18):**
+- **`lib/planMatch.test.ts` (19):**
   - evidence: stop-words; whole words only (PARENTS, WATERFORD, HOMEGOODS); generic nouns; the Amex alias and
     "American Water";
   - $150/$150 high and `offCurve`;
   - $150/$173 medium, difference +23, `offCurve`;
   - $38 plan with a named $20 row: a suggestion, not `offCurve`;
+  - Verizon Wireless vs VERIZON FIOS and Amazon Prime vs AMAZON MKTPL: medium, not `offCurve`; VERIZON WIRELESS PAYMENTS
+    (the full name, +$10): `offCurve`;
   - $1,500 plan with a named $1,200 row: low, not `offCurve`;
   - 6 days early and 5 days late match, 11 early and 15 late do not;
   - no name: exact within 3 days is low and never `offCurve`; $23 off or 4 days does not pair;
@@ -206,7 +225,7 @@ After the resolutions are read, and before the plans loop:
   - the review count with "Not this";
   - partial keeps a reschedule, and a reschedule keeps a partial;
   - rejecting a pair takes back its match.
-- **`__tests__/cashSignalProbablyPaid.integration.test.ts` (13).** Balance 1,000.00 read 05-01, today 05-14:
+- **`__tests__/cashSignalProbablyPaid.integration.test.ts` (15).** Balance 1,000.00 read 05-01, today 05-14:
   - $150 paid 8 days early (April paid in April) → `bankToday` 850.00, 05-20 850.00 (not 700.00), 06-20 700.00, and
     the exact match object with `offCurve: true`;
   - $150 paid $173 → 05-20 827.00 (never 677.00), difference 23.00;
@@ -220,7 +239,9 @@ After the resolutions are read, and before the plans loop:
   - $15.49 Netflix vs a $15.00 lunch → 05-15 969.51;
   - "Rent" vs "ZELLE TO PARENTS" → 05-20 −1,700.00, no match;
   - a logged payment plus its ACH vs two card minimums → 05-20 810.00, nothing `offCurve`;
-  - April's bill paid 21 days late → May's plan stays: 05-20 700.00.
+  - April's bill paid 21 days late → May's plan stays: 05-20 700.00;
+  - a $120 Verizon Wireless plan and a −130 VERIZON FIOS row → 05-20 750.00, not `offCurve`;
+  - April "paid" by a nameless HOME DEPOT −150 and April's real payment 21 days late → May stays: 05-20 700.00.
 - **Failing before:** with the reviewed head's source (`3d207e8`: `planMatch.ts`, `index.ts`, `forecastLedger.ts`,
   `cashSignal.ts`, `routes/forecast.ts`) swapped in, **22 of the 42 tests fail**:
   - **on a curve figure:** the Zelle vs rent, Netflix vs lunch, "PARENTS", logged payment plus ACH, and late-payment
@@ -234,11 +255,16 @@ After the resolutions are read, and before the plans loop:
   - **Still passing on `3d207e8`:** the earlier resolution tests, the earlier curve figures, and the partial on a moved
     plan when both resolutions already exist (the ledger already handled it; the route deleted the reschedule).
   - Against `main` (`56596f3`), the first round's 12 of 28 still hold for the original tests.
+  - **Second look:** with `f40c4b0`'s `planMatch.ts` and `forecastLedger.ts` swapped in, all 3 new tests fail —
+    Verizon 05-20 870.00 (expected 750.00), HOME DEPOT 05-20 850.00 (expected 700.00), and the Verizon/Amazon unit
+    test (`offCurve` true).
 
 ## Verification
 
 - **Full API suite:** **128 files, 1078 pass, 7 todo** (`CI=true`; golden compares clean after the re-record).
-- **Targeted:** 42 of 42 (`planMatch` 18, probably-paid 13, resolutions 11).
+- **Targeted (second look):** 56 of 56 — `planMatch` 19, probably-paid 15, resolutions 11, golden 11 (compares clean;
+  no snapshot change from the full-name rule).
+- **Full API suite:** 128 files, 1078 pass, 7 todo before the second look; CI runs the suite on the new head.
 - **Web suite:** **119 files, 933 pass**.
 - **Workspace typecheck and build:** typecheck clean; workspace build exit 0.
 - **Landing bundle guard:** 572.5 KB of 580, unchanged.
