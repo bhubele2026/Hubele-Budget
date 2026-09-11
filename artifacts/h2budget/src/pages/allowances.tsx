@@ -31,7 +31,12 @@ import {
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, cn } from "@/lib/utils";
-import { householdToday, weekBounds } from "@/lib/householdDay";
+import {
+  householdToday,
+  localDateOf,
+  monthBounds,
+  weekBounds,
+} from "@/lib/householdDay";
 import {
   card,
   cardHead,
@@ -83,6 +88,15 @@ function addDays(d: Date, n: number): Date {
 }
 function firstOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+/**
+ * (PR2) First day of the HOUSEHOLD's month (America/Chicago) containing the
+ * instant `now`, as a browser-local midnight Date — the month twin of
+ * `sundayOf`. Only for "now"; `firstOfMonth` stays for Dates that are already
+ * on the page's local calendar (a selected month).
+ */
+function householdFirstOfMonth(now: Date): Date {
+  return localDateOf(monthBounds(householdToday(now)).start);
 }
 function lastOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
@@ -633,11 +647,11 @@ export default function AllowancesPage() {
   // cycles Sun–Sat weeks; Monthly + Unplanned cycle whole calendar months.
   const [weekStart, setWeekStart] = useState<Date>(() => sundayOf(new Date()));
   const [monthStart, setMonthStart] = useState<Date>(() =>
-    firstOfMonth(new Date()),
+    householdFirstOfMonth(new Date()),
   );
 
   const currentWeekStart = useMemo(() => sundayOf(today), [today]);
-  const currentMonthStart = useMemo(() => firstOfMonth(today), [today]);
+  const currentMonthStart = useMemo(() => householdFirstOfMonth(today), [today]);
 
   // Weekly card window (always the selected Sun–Sat week).
   const windowStart = fmtISO(weekStart);
