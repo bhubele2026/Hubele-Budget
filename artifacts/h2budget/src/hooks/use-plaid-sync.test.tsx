@@ -724,3 +724,25 @@ describe("usePlaidSync — #723 no-rows toast copy", () => {
     expect(arg.description).not.toContain("Real-time refresh isn't enabled");
   });
 });
+
+describe("usePlaidSync — keeps 'Why this number?' current", () => {
+  it("marks the bank-balance explanation stale after every Sync, even when no rows changed", async () => {
+    // A Sync can re-read the bank balance with no row changes, so this
+    // invalidation is deliberately not gated on added/modified/removed.
+    syncResponse = { items: [] };
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    render(
+      <QueryClientProvider client={qc}>
+        <Harness />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => {
+      expect(toastFn).toHaveBeenCalled();
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["/api/forecast/bank-balance-explain"],
+    });
+  });
+});

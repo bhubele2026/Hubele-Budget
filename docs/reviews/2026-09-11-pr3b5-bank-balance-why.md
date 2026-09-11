@@ -66,7 +66,7 @@ why a figure reads what it reads. This is the last web part of plan PR3, on top 
 ## Must not change
 
 - **The bank balance figure** is still the spine's, and the parity tests are unchanged.
-- **No new request on open.** The explain endpoint is called only while the popover is open.
+- **No new request when the app opens.** The explain endpoint is called only while the popover is open.
 - **No server change.** The popover invents no prose: its sentences are fixed labels around the server's
   figures and reasons.
 - **The landing page's content.** Untouched. The popover itself is in Banking's lazy chunk (`command-center-*.js`).
@@ -145,6 +145,10 @@ bundle decision. All findings are fixed in the follow-up commit, except where no
   the kit's `?` chip, because `Help` is a hover-only `role="note"`, not a button that opens content.
 - **NIT, noted:** while the popover is open, the freshness test id appears twice on the page. The e2e spec's strict
   single match would only trip if it ran with the popover open, which it does not.
+
+**Second look:** the reviewer approved `df05051`, with NITs only. Two are fixed in the PR3 close-out: tests for
+the new invalidations, and this note's "No new request on open" heading. One is noted: each open recomputes the
+whole cash signal, which is deliberate for a one-tap diagnostic. Merged as `a71243e`.
 
 ## Left for later PRs
 
