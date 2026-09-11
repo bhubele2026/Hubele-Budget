@@ -40,7 +40,7 @@ import { currentMonthRange, rangeForMode, type RangeMode } from "@/lib/timeRange
 import { Sparkline, StackBar, DeltaPill, MoneyText } from "@/components/viz";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, cn, moneyColorClass } from "@/lib/utils";
-import { householdToday } from "@/lib/householdDay";
+import { householdMonthStartOf, householdToday } from "@/lib/householdDay";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
@@ -421,7 +421,9 @@ export default function TransactionsPage() {
 
 
   // ---- Filters & month navigation ----
-  const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
+  // (PR14 third review) The household's month (America/Chicago), not the browser's:
+  // at 21:00 on September 30 in Chicago a UTC browser is already in October.
+  const currentMonth = useMemo<MonthKey>(() => monthKeyFromISO(householdMonthStartOf()), []);
   // Seed selectedMonth from a `?month=YYYY-MM-01` URL param (used by Budget
   // page deep-links), falling back to the current month.
   // (#400) Track whether the initial selected month came from a `?month=`
@@ -482,7 +484,16 @@ export default function TransactionsPage() {
   const range = useMemo(
     () =>
       rangeMode === "mo"
-        ? currentMonthRange(new Date(selectedMonth.year, selectedMonth.month, 1))
+        ? currentMonthRange(
+            // (PR14 third review) `currentMonthRange` reads an INSTANT on the household
+            // calendar (main, household months). Noon UTC on the 1st is inside that
+            // day in Chicago from any browser; a browser-local midnight is still the
+            // previous month in Chicago for a UTC or Eastern browser, which loaded
+            // last month's rows, totals and select-all count.
+            new Date(
+              `${selectedMonth.year}-${String(selectedMonth.month + 1).padStart(2, "0")}-01T12:00:00Z`,
+            ),
+          )
         : rangeForMode(rangeMode),
     [rangeMode, selectedMonth],
   );
@@ -1580,6 +1591,11 @@ export default function TransactionsPage() {
   }, [registerFilterKey]);
   const pageIds = registerRows.map((t) => t.id);
   const pageAllSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  // (PR14 third review NIT) The select-all banner's condition, shared by the banner and
+  // the posted count below, so the count is asked for only while the banner is up.
+  const selectAllBannerShown =
+    matchingCount != null &&
+    (!!allMatching || (pageAllSelected && matchingCount > registerRows.length));
   // (PR14 second review N1) "Select all" never covers pending rows. The sync keeps a
   // reviewed row when the bank drops it (plaidSync skips reviewed rows), so a
   // reviewed pending hold would stay counted in money out and the start balance.
@@ -1592,7 +1608,7 @@ export default function TransactionsPage() {
   const postedCountQuery = useGetTransactionsLedger(postedParams, {
     query: {
       queryKey: getGetTransactionsLedgerQueryKey(postedParams),
-      enabled: !!postedFilter && (pageAllSelected || !!allMatching),
+      enabled: !!postedFilter && selectAllBannerShown,
       staleTime: LEDGER_CACHE.staleTime,
       gcTime: LEDGER_CACHE.gcTime,
     },
@@ -1611,7 +1627,7 @@ export default function TransactionsPage() {
 
   // Reviewing writes only `reviewed`: no balance, total or forecast moves.
   const reviewWrites = useChaseReviewWrites();
-  const reviewByIds = async (ids: string[], reviewed: boolean) => {
+  const reviewByIds = async (ids: string[], reviewed: boolean, pendingLeft = 0) => {
     if (!ids.length) return;
     // The write refetches the Chase lists itself, once (PR14 review M3).
     const { succeeded, failed } = await reviewWrites.reviewIds(ids, reviewed);
@@ -1638,6 +1654,12 @@ export default function TransactionsPage() {
               , <MonoCount n={failed.length} /> failed
             </>
           ) : null}
+          {pendingLeft ? (
+            <>
+              {" · "}
+              <MonoCount n={pendingLeft} /> pending left unreviewed
+            </>
+          ) : null}
         </>
       ),
       description: !failed.length
@@ -1651,6 +1673,29 @@ export default function TransactionsPage() {
   };
   const setReviewed = async (rows: Transaction[], reviewed: boolean) => {
     await reviewByIds(rows.filter((t) => !!t.reviewed !== reviewed).map((t) => t.id), reviewed);
+  };
+  // (PR14 third review LOW) The bulk bar never marks a pending row reviewed, as
+  // "Select all" does not (second review N1): the sync keeps a reviewed pending row
+  // when the bank drops it, and "Select this page" or the Pending group's checkbox
+  // would shield every loaded one at once. A pending row's own button still can.
+  const reviewSelection = async () => {
+    const rows = filtered.filter((t) => selected.has(t.id));
+    const pendingLeft = rows.filter((t) => t.pending && !t.reviewed).length;
+    const ids = rows.filter((t) => !t.pending && !t.reviewed).map((t) => t.id);
+    if (!ids.length) {
+      if (pendingLeft) {
+        toast({
+          title: (
+            <>
+              <MonoCount n={pendingLeft} /> pending left unreviewed
+            </>
+          ),
+          description: "Review a pending row on its own row.",
+        });
+      }
+      return;
+    }
+    await reviewByIds(ids, true, pendingLeft);
   };
   const reviewAllMatching = async (reviewed: boolean) => {
     if (!allMatching) return;
@@ -2584,8 +2629,7 @@ export default function TransactionsPage() {
             </button>
           </div>
         )}
-      {matchingCount != null &&
-        (allMatching || (pageAllSelected && matchingCount > registerRows.length)) && (
+      {selectAllBannerShown && (
           <ChaseSelectAllBanner
             pageSelected={pageIds.length}
             postedCount={postedCount}
@@ -2626,7 +2670,7 @@ export default function TransactionsPage() {
           </Button>
           </>
           )}
-          <Button size="sm" variant="outline" disabled={reviewWrites.isPending} onClick={() => void (allMatching ? reviewAllMatching(true) : setReviewed(filtered.filter(t => selected.has(t.id)), true))} data-testid="bulk-mark-reviewed">Mark reviewed</Button>
+          <Button size="sm" variant="outline" disabled={reviewWrites.isPending} onClick={() => void (allMatching ? reviewAllMatching(true) : reviewSelection())} data-testid="bulk-mark-reviewed">Mark reviewed</Button>
           <Button size="sm" variant="outline" disabled={reviewWrites.isPending} onClick={() => void (allMatching ? reviewAllMatching(false) : setReviewed(filtered.filter(t => selected.has(t.id)), false))} data-testid="bulk-mark-unreviewed">Mark unreviewed</Button>
           {/* Single-flow restore: "Send to Forecast" IS "in Review" now.
               The separate bulk Send-to-Review button (#762 Phase B) is

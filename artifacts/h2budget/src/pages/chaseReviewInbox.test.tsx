@@ -877,3 +877,61 @@ describe("(PR14 second review)", () => {
     );
   });
 });
+
+describe("(PR14 third review)", () => {
+  it("LOW: the bulk bar leaves selected pending rows unreviewed and says so; a pending row alone sends nothing; its own button still reviews it", async () => {
+    const pendingRow = {
+      id: "p0",
+      occurredOn: TODAY,
+      occurredAt: `${TODAY}T23:59:00.000Z`,
+      pending: true,
+      amount: "-77.00",
+    };
+    serve({ rows: [...weekRows(3), pendingRow] });
+    show();
+    await ready("Showing 4 of 4 · 4 to review");
+
+    // "Select this page" takes the pending row too.
+    fireEvent.click(screen.getByTestId("chase-select-page"));
+    expect(screen.getByTestId("bulk-bar").textContent).toContain("4 selected");
+    fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
+    await waitFor(() =>
+      expect(toastTexts(state.toast)).toContainEqual(
+        expect.objectContaining({ title: "3 marked reviewed · 1 pending left unreviewed" }),
+      ),
+    );
+    const writes = server.calls.filter((c) => c.path === "/api/transactions/bulk-update");
+    expect(writes).toHaveLength(1);
+    expect([...writes[0]!.body.ids].sort()).toEqual(["r000", "r001", "r002"]);
+    expect(server.rows.find((r) => r.id === "p0")!.reviewed).toBe(false);
+    // The pending row is still selected; the reviewed rows left the selection.
+    expect(screen.getByTestId("bulk-bar").textContent).toContain("1 selected");
+
+    // Only the pending row selected: nothing is sent.
+    fireEvent.click(screen.getByTestId("bulk-mark-reviewed"));
+    await waitFor(() =>
+      expect(toastTexts(state.toast)).toContainEqual(
+        expect.objectContaining({ title: "1 pending left unreviewed" }),
+      ),
+    );
+    expect(server.calls.filter((c) => c.path === "/api/transactions/bulk-update")).toHaveLength(1);
+
+    // Its own row's button still reviews it.
+    fireEvent.click(within(screen.getByTestId("row-tx-p0")).getByText("Mark reviewed"));
+    await waitFor(() => expect(server.rows.find((r) => r.id === "p0")!.reviewed).toBe(true));
+  });
+
+  it("NIT: the posted count is asked for only while the select-all banner is shown", async () => {
+    serve({ rows: weekRows(3) });
+    show();
+    await ready("Showing 3 of 3 · 3 to review");
+    fireEvent.click(screen.getByTestId("chase-select-page"));
+    expect(screen.getByTestId("bulk-bar").textContent).toContain("3 selected");
+    // Every row is loaded, so there is no banner and no count request.
+    expect(screen.queryByTestId("chase-select-all-banner")).toBeNull();
+    await new Promise((r) => setTimeout(r, 30));
+    const countRequests = () =>
+      server.calls.filter((c) => c.path === "/api/transactions/ledger" && c.query.get("pending") === "false");
+    expect(countRequests()).toHaveLength(0);
+  });
+});
