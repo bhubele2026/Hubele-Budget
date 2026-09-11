@@ -11,12 +11,16 @@
 // never the payoff simulator behind the package root.
 
 import {
+  addDaysISO,
   householdDateOf,
   householdToday,
   monthBounds,
+  weekBounds,
 } from "@workspace/avalanche-core/householdTime";
 
-export { householdToday, monthBounds };
+// `weekBounds` is the household's Sun–Sat week of a YYYY-MM-DD date; pair it
+// with `householdToday(now)`, never with a browser-local date.
+export { addDaysISO, householdToday, monthBounds, weekBounds };
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 

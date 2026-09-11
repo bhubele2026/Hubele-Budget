@@ -10,6 +10,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { findMatchedRuleId, loadUserRules } from "../lib/autoCategorize";
 import { withPendingPayments } from "../lib/debtPending";
+import { householdTodayISO, monthBounds } from "../lib/householdClock";
 import { effectiveDebtBalance } from "@workspace/avalanche-core";
 
 const router: IRouter = Router();
@@ -17,13 +18,13 @@ const router: IRouter = Router();
 router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const householdId = req.householdId!;
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    .toISOString()
-    .slice(0, 10);
+  // (PR2) The household's month (America/Chicago), not the server clock's.
+  // On a UTC server the last evening of a month after 7pm Central was already
+  // next month, so every "this month" figure below reset to the new month for
+  // those five hours. Only the WINDOW moved; what each figure sums is unchanged.
+  const { start: monthStart, endExclusive: monthEnd } = monthBounds(
+    householdTodayISO(),
+  );
 
   // (C10) `totalDebt` feeds the Reports "Total Debt" hero tile. It used to be
   // a raw `sum(debts.balance)` in SQL, which is why that tile could quote a
