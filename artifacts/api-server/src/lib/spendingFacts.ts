@@ -113,6 +113,15 @@ export async function buildSpendingFacts(
   householdId: string,
   rangeStart?: string,
   rangeEnd?: string,
+  opts: {
+    /**
+     * (PR7b review M1) The household's replaced pending ids
+     * (`loadSupersededPendingIds`), when the caller already has them — the
+     * spine reads them once for both of its windows. Omitted, they are loaded
+     * here. Either way it is the same whole-ledger set.
+     */
+    replacedPendingIds?: ReadonlySet<string>;
+  } = {},
 ): Promise<SpendingFacts> {
   const today = new Date();
   const defaultEnd = isoDate(today);
@@ -186,7 +195,8 @@ export async function buildSpendingFacts(
 
   // (PR7b) Pending rows a posted row replaced, paired over the whole ledger so
   // the answer does not depend on where this window starts or ends.
-  const replacedPendingIds = await loadSupersededPendingIds(householdId);
+  const replacedPendingIds =
+    opts.replacedPendingIds ?? (await loadSupersededPendingIds(householdId));
 
   // --- Accumulators -------------------------------------------------------
   let householdTotal = 0;

@@ -26,6 +26,7 @@ export { descriptionsFuzzyEqual, tokenizeDescription } from "./descriptionMatch"
 export {
   canSupersede,
   pairPendingWithPosted,
+  pairPendingWithPostedAmong,
   SUPERSEDE_MAX_DAYS,
   type SupersedeRow,
 } from "./pendingSupersede";

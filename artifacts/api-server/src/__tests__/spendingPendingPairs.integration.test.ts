@@ -52,6 +52,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import amexRouter from "../routes/amex";
+import budgetRouter from "../routes/budget";
 import reportsRouter from "../routes/reports";
 import spineRouter from "../routes/spine";
 import transactionsRouter from "../routes/transactions";
@@ -65,6 +66,7 @@ app.use((req: { log?: unknown }, _res, next) => {
   next();
 });
 app.use(amexRouter);
+app.use(budgetRouter);
 app.use(reportsRouter);
 app.use(spineRouter);
 app.use(transactionsRouter);
@@ -87,7 +89,15 @@ type Facts = {
   realIncome: { total: number; transactionCount: number };
   uncategorized: { total: number; transactionCount: number };
   byCategory: { categoryId: string; total: number; txnCount: number }[];
-  excluded: { cardPayments: number; replacedPending: number };
+  excluded: {
+    transfersTotal: number;
+    debtPaymentsTotal: number;
+    reimbursementTotal: number;
+    ignoreTotal: number;
+    cardPayments: number;
+    reimbursable: number;
+    replacedPending: number;
+  };
 };
 type Spine = { spentWeek: number; spentMonth: number };
 
@@ -122,6 +132,7 @@ async function addTxn(row: {
   categoryId?: string | null;
   source?: string;
   minutes?: number;
+  extra?: Partial<typeof transactionsTable.$inferInsert>;
 }): Promise<string> {
   const createdAt = new Date(`${row.occurredOn}T15:00:00Z`);
   createdAt.setUTCMinutes(row.minutes ?? 0);
@@ -138,6 +149,7 @@ async function addTxn(row: {
       pending: row.pending ?? false,
       categoryId: row.categoryId === undefined ? cat.dining : row.categoryId,
       createdAt,
+      ...row.extra,
     })
     .returning({ id: transactionsTable.id });
   return t!.id;
@@ -151,6 +163,8 @@ beforeAll(async () => {
     ["dining", "Dining", "expense"],
     ["groceries", "Groceries", "expense"],
     ["paycheck", "Paycheck", "income"],
+    ["ignore", "Ignore", "expense"],
+    ["eatingOut", "Eating out", "expense"],
   ] as const) {
     const [c] = await db
       .insert(budgetCategoriesTable)
@@ -210,24 +224,22 @@ describe("PR7b — a pending charge and its posted row count once in spending", 
   });
 
   it("pending rows that are not the other half of a pair still count", async () => {
+    // (review N2) Its own week and accounts: passes run alone (`-t`).
     const card = acct("mastercard");
     const other = acct("discover");
     // Still waiting to post.
-    await addTxn({ occurredOn: "2026-10-06", description: "TARGET 00012345", amount: "-30.00", plaidAccountId: card, pending: true });
+    await addTxn({ occurredOn: "2026-07-20", description: "TARGET 00012345", amount: "-30.00", plaidAccountId: card, pending: true });
     // The same charge text and amount on a DIFFERENT card: two charges.
-    await addTxn({ occurredOn: "2026-10-06", description: "HY-VEE 1502", amount: "-60.00", plaidAccountId: card, pending: true, categoryId: cat.groceries });
-    await addTxn({ occurredOn: "2026-10-07", description: "HY-VEE 1502", amount: "-60.00", plaidAccountId: other, categoryId: cat.groceries });
+    await addTxn({ occurredOn: "2026-07-20", description: "HY-VEE 1502", amount: "-60.00", plaidAccountId: card, pending: true, categoryId: cat.groceries });
+    await addTxn({ occurredOn: "2026-07-21", description: "HY-VEE 1502", amount: "-60.00", plaidAccountId: other, categoryId: cat.groceries });
     // A posted amount over 1.30 × pending + $1: a second, different charge.
-    await addTxn({ occurredOn: "2026-10-06", description: "KWIK TRIP 812", amount: "-20.00", plaidAccountId: card, pending: true });
-    await addTxn({ occurredOn: "2026-10-07", description: "KWIK TRIP 812", amount: "-40.00", plaidAccountId: card });
+    await addTxn({ occurredOn: "2026-07-20", description: "KWIK TRIP 812", amount: "-20.00", plaidAccountId: card, pending: true });
+    await addTxn({ occurredOn: "2026-07-21", description: "KWIK TRIP 812", amount: "-40.00", plaidAccountId: card });
 
-    const f = await facts(WEEK);
-    // 47.40 (the pair above, once) + 30 + 60 + 60 + 20 + 40.
-    expect(f.householdSpend).toEqual({ total: 257.4, transactionCount: 6 });
-    expect(f.excluded.replacedPending).toBe(45);
-    const spine = await get<Spine>("/spine");
-    expect(spine.spentWeek).toBe(257.4);
-    expect(spine.spentMonth).toBe((await facts(MONTH_TO_DATE)).householdSpend.total);
+    const f = await facts({ from: "2026-07-19", to: "2026-07-25" });
+    // 30 + 60 + 60 + 20 + 40: every row counts.
+    expect(f.householdSpend).toEqual({ total: 210, transactionCount: 5 });
+    expect(f.excluded.replacedPending).toBe(0);
   });
 
   it("a pair straddling a week boundary counts once, in the week it posted; the weeks add up to the fortnight", async () => {
@@ -354,5 +366,102 @@ describe("PR7b — the Spending popover can list a purchase whose category was d
     const f = await facts({ from: "2026-07-05", to: "2026-07-11" });
     expect(f.uncategorized).toMatchObject({ total: 22, transactionCount: 2 });
     expect(ids).toHaveLength(2);
+  });
+});
+
+describe("PR7b review N3 — every dollar that left lands in exactly one bucket, across a week boundary", () => {
+  it("spend + every excluded bucket (replacedPending included) = raw outflow, per week and for the fortnight", async () => {
+    const card = acct("buckets-card");
+    const checking = acct("buckets-checking");
+    const rows: { occurredOn: string; amount: string }[] = [];
+    const add = async (r: Parameters<typeof addTxn>[0]) => {
+      rows.push({ occurredOn: r.occurredOn, amount: r.amount });
+      await addTxn(r);
+    };
+    // Week A, Sun 6/07 – Sat 6/13.
+    await add({ occurredOn: "2026-06-08", description: "HY-VEE 1502", amount: "-30.00", plaidAccountId: card });
+    await add({ occurredOn: "2026-06-09", description: "FARMERS MARKET", amount: "-12.00", plaidAccountId: card, categoryId: null });
+    await add({ occurredOn: "2026-06-10", description: "CLIENT DINNER", amount: "-40.00", plaidAccountId: card, extra: { reimbursable: true } });
+    await add({ occurredOn: "2026-06-11", description: "CAPITAL ONE CRCARDPMT 5KX9", amount: "-100.00", plaidAccountId: checking, categoryId: null });
+    await add({ occurredOn: "2026-06-12", description: "ONLINE TRANSFER TO SAV 8801", amount: "-200.00", plaidAccountId: checking, categoryId: null, extra: { isTransfer: true } });
+    // A card payment that sat pending and then posted, both in week A.
+    await add({ occurredOn: "2026-06-12", description: "CAPITAL ONE CRCARDPMT 7Q2", amount: "-80.00", plaidAccountId: checking, pending: true, categoryId: null });
+    await add({ occurredOn: "2026-06-13", description: "CAPITAL ONE CRCARDPMT 7Q2", amount: "-80.00", plaidAccountId: checking, categoryId: null });
+    // A purchase pending Saturday of week A, posted Monday of week B.
+    await add({ occurredOn: "2026-06-13", description: "BLUE APRON", amount: "-45.00", plaidAccountId: card, pending: true });
+    // Week B, Sun 6/14 – Sat 6/20.
+    await add({ occurredOn: "2026-06-15", description: "BLUE APRON", amount: "-47.40", plaidAccountId: card });
+    await add({ occurredOn: "2026-06-16", description: "COSTCO WHSE 1035", amount: "-15.00", plaidAccountId: card, categoryId: cat.ignore });
+    // An inflow: not an outflow, in no bucket.
+    await add({ occurredOn: "2026-06-17", description: "ACME CORP PAYROLL", amount: "500.00", plaidAccountId: checking, categoryId: cat.paycheck });
+
+    const rawOutflow = (from: string, to: string) =>
+      Math.round(
+        rows
+          .filter((r) => r.occurredOn >= from && r.occurredOn <= to && Number(r.amount) < 0)
+          .reduce((s, r) => s - Number(r.amount) * 100, 0),
+      ) / 100;
+    const buckets = (f: Facts) =>
+      Math.round(
+        (f.householdSpend.total +
+          f.excluded.transfersTotal +
+          f.excluded.debtPaymentsTotal +
+          f.excluded.reimbursementTotal +
+          f.excluded.ignoreTotal +
+          f.excluded.cardPayments +
+          f.excluded.reimbursable +
+          f.excluded.replacedPending) *
+          100,
+      ) / 100;
+
+    const A = { from: "2026-06-07", to: "2026-06-13" };
+    const B = { from: "2026-06-14", to: "2026-06-20" };
+    const AB = { from: "2026-06-07", to: "2026-06-20" };
+    const [fa, fb, fab] = [await facts(A), await facts(B), await facts(AB)];
+
+    expect(rawOutflow(A.from, A.to)).toBe(587);
+    expect(rawOutflow(B.from, B.to)).toBe(62.4);
+    expect(buckets(fa)).toBe(587);
+    expect(buckets(fb)).toBe(62.4);
+    expect(buckets(fab)).toBe(649.4);
+
+    expect(fa.householdSpend.total).toBe(42);
+    expect(fa.excluded).toMatchObject({ cardPayments: 180, transfersTotal: 200, reimbursable: 40, replacedPending: 125 });
+    expect(fb.householdSpend.total).toBe(47.4);
+    expect(fb.excluded).toMatchObject({ ignoreTotal: 15, replacedPending: 0 });
+
+    // The weeks add up to the fortnight, bucket by bucket.
+    expect(fab.householdSpend.total).toBeCloseTo(fa.householdSpend.total + fb.householdSpend.total, 2);
+    for (const k of Object.keys(fab.excluded) as (keyof Facts["excluded"])[]) {
+      expect(fab.excluded[k], k).toBeCloseTo(fa.excluded[k] + fb.excluded[k], 2);
+    }
+  });
+});
+
+describe("⚠️ KNOWN RESIDUAL (pending Brad's decision) — the Budget page still counts both halves of a pair", () => {
+  // PR7b review M2. The Budget page's per-category actual
+  // (`GET /budget/months/:m`, routes/budget.ts) sums rows in SQL and does not
+  // pair pending with posted rows. Changing it is a financial calculation on
+  // the Budget page and needs the owner's decision, so this PR leaves it.
+  // On `main` both pages double-counted and agreed; now they differ by the
+  // replaced pending rows. When the Budget page adopts pairing, UPDATE this
+  // test to assert agreement — do not delete it.
+  it("June 'Eating out': Spending shows 69.40, the Budget page 134.40 — the 65.00 of replaced pending rows", async () => {
+    const card = acct("budget-residual");
+    await addTxn({ occurredOn: "2026-06-23", description: "OLIVE GARDEN 1234", amount: "-45.00", plaidAccountId: card, pending: true, categoryId: cat.eatingOut });
+    await addTxn({ occurredOn: "2026-06-24", description: "OLIVE GARDEN 1234", amount: "-47.40", plaidAccountId: card, categoryId: cat.eatingOut });
+    await addTxn({ occurredOn: "2026-06-25", description: "CHIPOTLE 9", amount: "-20.00", plaidAccountId: card, pending: true, categoryId: cat.eatingOut });
+    await addTxn({ occurredOn: "2026-06-26", description: "CHIPOTLE 9", amount: "-22.00", plaidAccountId: card, categoryId: cat.eatingOut });
+
+    const june = await facts({ from: "2026-06-01", to: "2026-06-30" });
+    const spending = june.byCategory.find((c) => c.categoryId === cat.eatingOut);
+    expect(spending).toMatchObject({ total: 69.4, txnCount: 2 });
+
+    const budget = await get<{ lines: { categoryId: string; actualAmount: string }[] }>(
+      "/budget/months/2026-06-01",
+    );
+    const line = budget.lines.find((l) => l.categoryId === cat.eatingOut);
+    expect(line?.actualAmount).toBe("134.40");
+    expect(Number(line!.actualAmount) - spending!.total).toBeCloseTo(65, 2);
   });
 });
