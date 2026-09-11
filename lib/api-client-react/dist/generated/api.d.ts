@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkReviewMatchingInput, BulkReviewMatchingResult, BulkReviewMatchingTransactions409, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, GetTransactionsBalancesParams, GetTransactionsLedgerParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LedgerPage, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionBalances, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -521,6 +521,125 @@ export declare const useBulkSetForecastFlag: <TError = ErrorType<unknown>, TCont
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof bulkSetForecastFlag>>, TError, {
     data: BodyType<BulkSetForecastFlagInput>;
+}, TContext>;
+/**
+ * @summary (PR13) One page of the bank ledger, newest first. The account is the
+one behind the bank balance, chosen on the server: the Plaid account
+the snapshot resolves to, its same-institution mask twins, and manual
+rows (no Plaid account, source neither "amex" nor "plaid:*"), which is
+the rule the bank balance counts by. Ordered by occurredOn desc,
+occurredAt desc (nulls last), id desc, and paged with an opaque keyset
+cursor. `matchingCount` counts every row matching the filters;
+`totals` and `review` cover every row matching the filters other than
+`reviewed`. `runningBalance`, `balanceStart`, `balanceEnd` and
+`anchor` never depend on the non-date filters or the page. The
+boolean filters take the strings "true" or "false"; anything else is
+a 400.
+
+ */
+export declare const getGetTransactionsLedgerUrl: (params?: GetTransactionsLedgerParams) => string;
+export declare const getTransactionsLedger: (params?: GetTransactionsLedgerParams, options?: RequestInit) => Promise<LedgerPage>;
+export declare const getGetTransactionsLedgerQueryKey: (params?: GetTransactionsLedgerParams) => readonly ["/api/transactions/ledger", ...GetTransactionsLedgerParams[]];
+export declare const getGetTransactionsLedgerQueryOptions: <TData = Awaited<ReturnType<typeof getTransactionsLedger>>, TError = ErrorType<void>>(params?: GetTransactionsLedgerParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetTransactionsLedgerQueryResult = NonNullable<Awaited<ReturnType<typeof getTransactionsLedger>>>;
+export type GetTransactionsLedgerQueryError = ErrorType<void>;
+/**
+ * @summary (PR13) One page of the bank ledger, newest first. The account is the
+one behind the bank balance, chosen on the server: the Plaid account
+the snapshot resolves to, its same-institution mask twins, and manual
+rows (no Plaid account, source neither "amex" nor "plaid:*"), which is
+the rule the bank balance counts by. Ordered by occurredOn desc,
+occurredAt desc (nulls last), id desc, and paged with an opaque keyset
+cursor. `matchingCount` counts every row matching the filters;
+`totals` and `review` cover every row matching the filters other than
+`reviewed`. `runningBalance`, `balanceStart`, `balanceEnd` and
+`anchor` never depend on the non-date filters or the page. The
+boolean filters take the strings "true" or "false"; anything else is
+a 400.
+
+ */
+export declare function useGetTransactionsLedger<TData = Awaited<ReturnType<typeof getTransactionsLedger>>, TError = ErrorType<void>>(params?: GetTransactionsLedgerParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary (PR13) End-of-day balances of the ledger account for up to 120 dates,
+on the same register as GET /transactions/ledger: a date's balance is
+the runningBalance after the last account row dated on or before it.
+Today's equals the bank balance on the spine.
+
+ */
+export declare const getGetTransactionsBalancesUrl: (params: GetTransactionsBalancesParams) => string;
+export declare const getTransactionsBalances: (params: GetTransactionsBalancesParams, options?: RequestInit) => Promise<TransactionBalances>;
+export declare const getGetTransactionsBalancesQueryKey: (params?: GetTransactionsBalancesParams) => readonly ["/api/transactions/balances", ...GetTransactionsBalancesParams[]];
+export declare const getGetTransactionsBalancesQueryOptions: <TData = Awaited<ReturnType<typeof getTransactionsBalances>>, TError = ErrorType<void>>(params: GetTransactionsBalancesParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getTransactionsBalances>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getTransactionsBalances>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetTransactionsBalancesQueryResult = NonNullable<Awaited<ReturnType<typeof getTransactionsBalances>>>;
+export type GetTransactionsBalancesQueryError = ErrorType<void>;
+/**
+ * @summary (PR13) End-of-day balances of the ledger account for up to 120 dates,
+on the same register as GET /transactions/ledger: a date's balance is
+the runningBalance after the last account row dated on or before it.
+Today's equals the bank balance on the spine.
+
+ */
+export declare function useGetTransactionsBalances<TData = Awaited<ReturnType<typeof getTransactionsBalances>>, TError = ErrorType<void>>(params: GetTransactionsBalancesParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getTransactionsBalances>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary (PR13) Mark every ledger row matching a filter reviewed (or not) in
+one request, without the client holding the ids. The filter is the
+ledger's, `reviewed` included. `expectedCount` is the `matchingCount`
+the client showed: when a different number of rows matches now, the
+request is refused with 409 and nothing changes. More than 1,000
+matching rows is a 400. Rows already in the target state count in
+`matched` but not in `updated`.
+
+ */
+export declare const getBulkReviewMatchingTransactionsUrl: () => string;
+export declare const bulkReviewMatchingTransactions: (bulkReviewMatchingInput: BulkReviewMatchingInput, options?: RequestInit) => Promise<BulkReviewMatchingResult>;
+export declare const getBulkReviewMatchingTransactionsMutationOptions: <TError = ErrorType<void | BulkReviewMatchingTransactions409>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof bulkReviewMatchingTransactions>>, TError, {
+        data: BodyType<BulkReviewMatchingInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof bulkReviewMatchingTransactions>>, TError, {
+    data: BodyType<BulkReviewMatchingInput>;
+}, TContext>;
+export type BulkReviewMatchingTransactionsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkReviewMatchingTransactions>>>;
+export type BulkReviewMatchingTransactionsMutationBody = BodyType<BulkReviewMatchingInput>;
+export type BulkReviewMatchingTransactionsMutationError = ErrorType<void | BulkReviewMatchingTransactions409>;
+/**
+ * @summary (PR13) Mark every ledger row matching a filter reviewed (or not) in
+one request, without the client holding the ids. The filter is the
+ledger's, `reviewed` included. `expectedCount` is the `matchingCount`
+the client showed: when a different number of rows matches now, the
+request is refused with 409 and nothing changes. More than 1,000
+matching rows is a 400. Rows already in the target state count in
+`matched` but not in `updated`.
+
+ */
+export declare const useBulkReviewMatchingTransactions: <TError = ErrorType<void | BulkReviewMatchingTransactions409>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof bulkReviewMatchingTransactions>>, TError, {
+        data: BodyType<BulkReviewMatchingInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof bulkReviewMatchingTransactions>>, TError, {
+    data: BodyType<BulkReviewMatchingInput>;
 }, TContext>;
 export declare const getListDebtsUrl: () => string;
 export declare const listDebts: (options?: RequestInit) => Promise<Debt[]>;

@@ -1399,6 +1399,549 @@ export declare const BulkSetForecastFlagResponse: zod.ZodObject<{
     updated: number;
     affectedIds: string[];
 }>;
+/**
+ * @summary (PR13) One page of the bank ledger, newest first. The account is the
+one behind the bank balance, chosen on the server: the Plaid account
+the snapshot resolves to, its same-institution mask twins, and manual
+rows (no Plaid account, source neither "amex" nor "plaid:*"), which is
+the rule the bank balance counts by. Ordered by occurredOn desc,
+occurredAt desc (nulls last), id desc, and paged with an opaque keyset
+cursor. `matchingCount` counts every row matching the filters;
+`totals` and `review` cover every row matching the filters other than
+`reviewed`. `runningBalance`, `balanceStart`, `balanceEnd` and
+`anchor` never depend on the non-date filters or the page. The
+boolean filters take the strings "true" or "false"; anything else is
+a 400.
+
+ */
+export declare const getTransactionsLedgerQueryAccountMax = 64;
+export declare const getTransactionsLedgerQueryFromMax = 10;
+export declare const getTransactionsLedgerQueryToMax = 10;
+export declare const getTransactionsLedgerQuerySearchMax = 200;
+export declare const getTransactionsLedgerQueryReviewedMax = 5;
+export declare const getTransactionsLedgerQueryPendingMax = 5;
+export declare const getTransactionsLedgerQueryUncategorizedMax = 5;
+export declare const getTransactionsLedgerQueryCategoryIdMax = 64;
+export declare const getTransactionsLedgerQuerySourceMax = 100;
+export declare const getTransactionsLedgerQueryMemberMax = 100;
+export declare const getTransactionsLedgerQueryLimitDefault = 50;
+export declare const getTransactionsLedgerQueryLimitMax = 100;
+export declare const getTransactionsLedgerQueryCursorMax = 512;
+export declare const GetTransactionsLedgerQueryParams: zod.ZodObject<{
+    account: zod.ZodOptional<zod.ZodString>;
+    from: zod.ZodOptional<zod.ZodString>;
+    to: zod.ZodOptional<zod.ZodString>;
+    search: zod.ZodOptional<zod.ZodString>;
+    reviewed: zod.ZodOptional<zod.ZodString>;
+    pending: zod.ZodOptional<zod.ZodString>;
+    uncategorized: zod.ZodOptional<zod.ZodString>;
+    categoryId: zod.ZodOptional<zod.ZodString>;
+    source: zod.ZodOptional<zod.ZodString>;
+    member: zod.ZodOptional<zod.ZodString>;
+    limit: zod.ZodDefault<zod.ZodNumber>;
+    cursor: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    limit: number;
+    account?: string | undefined;
+    categoryId?: string | undefined;
+    reviewed?: string | undefined;
+    source?: string | undefined;
+    member?: string | undefined;
+    pending?: string | undefined;
+    from?: string | undefined;
+    to?: string | undefined;
+    uncategorized?: string | undefined;
+    search?: string | undefined;
+    cursor?: string | undefined;
+}, {
+    account?: string | undefined;
+    categoryId?: string | undefined;
+    reviewed?: string | undefined;
+    source?: string | undefined;
+    member?: string | undefined;
+    pending?: string | undefined;
+    from?: string | undefined;
+    to?: string | undefined;
+    limit?: number | undefined;
+    uncategorized?: string | undefined;
+    search?: string | undefined;
+    cursor?: string | undefined;
+}>;
+export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
+    rows: zod.ZodArray<zod.ZodIntersection<zod.ZodObject<{
+        id: zod.ZodString;
+        occurredOn: zod.ZodString;
+        occurredAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        description: zod.ZodString;
+        amount: zod.ZodString;
+        account: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        forecastFlag: zod.ZodBoolean;
+        weeklyAllowance: zod.ZodBoolean;
+        weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"alcohol">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+        monthlyAllowance: zod.ZodBoolean;
+        unplannedAllowance: zod.ZodBoolean;
+        reimbursable: zod.ZodBoolean;
+        reimbursed: zod.ZodBoolean;
+        reviewed: zod.ZodBoolean;
+        isTransfer: zod.ZodBoolean;
+        isTransferUserOverridden: zod.ZodBoolean;
+        isExternalCardPayment: zod.ZodBoolean;
+        sentToReviewAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        source: zod.ZodString;
+        member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        pending: zod.ZodBoolean;
+        matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        displayName: zod.ZodOptional<zod.ZodString>;
+        merchantSignature: zod.ZodOptional<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        occurredOn: string;
+        description: string;
+        amount: string;
+        forecastFlag: boolean;
+        weeklyAllowance: boolean;
+        monthlyAllowance: boolean;
+        unplannedAllowance: boolean;
+        reimbursable: boolean;
+        reimbursed: boolean;
+        reviewed: boolean;
+        isTransfer: boolean;
+        isTransferUserOverridden: boolean;
+        isExternalCardPayment: boolean;
+        source: string;
+        pending: boolean;
+        occurredAt?: string | null | undefined;
+        account?: string | null | undefined;
+        categoryId?: string | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        sentToReviewAt?: string | null | undefined;
+        notes?: string | null | undefined;
+        member?: string | null | undefined;
+        owedBy?: string | null | undefined;
+        plaidTransactionId?: string | null | undefined;
+        plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
+        displayName?: string | undefined;
+        merchantSignature?: string | undefined;
+    }, {
+        id: string;
+        occurredOn: string;
+        description: string;
+        amount: string;
+        forecastFlag: boolean;
+        weeklyAllowance: boolean;
+        monthlyAllowance: boolean;
+        unplannedAllowance: boolean;
+        reimbursable: boolean;
+        reimbursed: boolean;
+        reviewed: boolean;
+        isTransfer: boolean;
+        isTransferUserOverridden: boolean;
+        isExternalCardPayment: boolean;
+        source: string;
+        pending: boolean;
+        occurredAt?: string | null | undefined;
+        account?: string | null | undefined;
+        categoryId?: string | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        sentToReviewAt?: string | null | undefined;
+        notes?: string | null | undefined;
+        member?: string | null | undefined;
+        owedBy?: string | null | undefined;
+        plaidTransactionId?: string | null | undefined;
+        plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
+        displayName?: string | undefined;
+        merchantSignature?: string | undefined;
+    }>, zod.ZodObject<{
+        runningBalance: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        runningBalance: string | null;
+    }, {
+        runningBalance: string | null;
+    }>>, "many">;
+    nextCursor: zod.ZodNullable<zod.ZodString>;
+    limit: zod.ZodNumber;
+    matchingCount: zod.ZodNumber;
+    totals: zod.ZodObject<{
+        count: zod.ZodNumber;
+        moneyIn: zod.ZodString;
+        moneyOut: zod.ZodString;
+        net: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        count: number;
+        moneyIn: string;
+        moneyOut: string;
+        net: string;
+    }, {
+        count: number;
+        moneyIn: string;
+        moneyOut: string;
+        net: string;
+    }>;
+    review: zod.ZodObject<{
+        reviewed: zod.ZodNumber;
+        unreviewed: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        reviewed: number;
+        unreviewed: number;
+    }, {
+        reviewed: number;
+        unreviewed: number;
+    }>;
+    balanceStart: zod.ZodNullable<zod.ZodString>;
+    balanceEnd: zod.ZodNullable<zod.ZodString>;
+    anchor: zod.ZodObject<{
+        today: zod.ZodString;
+        todayBalance: zod.ZodNullable<zod.ZodString>;
+        snapshotBalance: zod.ZodNullable<zod.ZodString>;
+        snapshotAt: zod.ZodNullable<zod.ZodString>;
+        snapshotDay: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        today: string;
+        todayBalance: string | null;
+        snapshotBalance: string | null;
+        snapshotAt: string | null;
+        snapshotDay: string | null;
+    }, {
+        today: string;
+        todayBalance: string | null;
+        snapshotBalance: string | null;
+        snapshotAt: string | null;
+        snapshotDay: string | null;
+    }>;
+    account: zod.ZodObject<{
+        via: zod.ZodString;
+        plaidAccountIds: zod.ZodArray<zod.ZodString, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        via: string;
+        plaidAccountIds: string[];
+    }, {
+        via: string;
+        plaidAccountIds: string[];
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    account: {
+        via: string;
+        plaidAccountIds: string[];
+    };
+    limit: number;
+    rows: ({
+        id: string;
+        occurredOn: string;
+        description: string;
+        amount: string;
+        forecastFlag: boolean;
+        weeklyAllowance: boolean;
+        monthlyAllowance: boolean;
+        unplannedAllowance: boolean;
+        reimbursable: boolean;
+        reimbursed: boolean;
+        reviewed: boolean;
+        isTransfer: boolean;
+        isTransferUserOverridden: boolean;
+        isExternalCardPayment: boolean;
+        source: string;
+        pending: boolean;
+        occurredAt?: string | null | undefined;
+        account?: string | null | undefined;
+        categoryId?: string | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        sentToReviewAt?: string | null | undefined;
+        notes?: string | null | undefined;
+        member?: string | null | undefined;
+        owedBy?: string | null | undefined;
+        plaidTransactionId?: string | null | undefined;
+        plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
+        displayName?: string | undefined;
+        merchantSignature?: string | undefined;
+    } & {
+        runningBalance: string | null;
+    })[];
+    nextCursor: string | null;
+    matchingCount: number;
+    totals: {
+        count: number;
+        moneyIn: string;
+        moneyOut: string;
+        net: string;
+    };
+    review: {
+        reviewed: number;
+        unreviewed: number;
+    };
+    balanceStart: string | null;
+    balanceEnd: string | null;
+    anchor: {
+        today: string;
+        todayBalance: string | null;
+        snapshotBalance: string | null;
+        snapshotAt: string | null;
+        snapshotDay: string | null;
+    };
+}, {
+    account: {
+        via: string;
+        plaidAccountIds: string[];
+    };
+    limit: number;
+    rows: ({
+        id: string;
+        occurredOn: string;
+        description: string;
+        amount: string;
+        forecastFlag: boolean;
+        weeklyAllowance: boolean;
+        monthlyAllowance: boolean;
+        unplannedAllowance: boolean;
+        reimbursable: boolean;
+        reimbursed: boolean;
+        reviewed: boolean;
+        isTransfer: boolean;
+        isTransferUserOverridden: boolean;
+        isExternalCardPayment: boolean;
+        source: string;
+        pending: boolean;
+        occurredAt?: string | null | undefined;
+        account?: string | null | undefined;
+        categoryId?: string | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        sentToReviewAt?: string | null | undefined;
+        notes?: string | null | undefined;
+        member?: string | null | undefined;
+        owedBy?: string | null | undefined;
+        plaidTransactionId?: string | null | undefined;
+        plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
+        displayName?: string | undefined;
+        merchantSignature?: string | undefined;
+    } & {
+        runningBalance: string | null;
+    })[];
+    nextCursor: string | null;
+    matchingCount: number;
+    totals: {
+        count: number;
+        moneyIn: string;
+        moneyOut: string;
+        net: string;
+    };
+    review: {
+        reviewed: number;
+        unreviewed: number;
+    };
+    balanceStart: string | null;
+    balanceEnd: string | null;
+    anchor: {
+        today: string;
+        todayBalance: string | null;
+        snapshotBalance: string | null;
+        snapshotAt: string | null;
+        snapshotDay: string | null;
+    };
+}>;
+/**
+ * @summary (PR13) End-of-day balances of the ledger account for up to 120 dates,
+on the same register as GET /transactions/ledger: a date's balance is
+the runningBalance after the last account row dated on or before it.
+Today's equals the bank balance on the spine.
+
+ */
+export declare const getTransactionsBalancesQueryAccountMax = 64;
+export declare const getTransactionsBalancesQueryDatesMax = 1400;
+export declare const GetTransactionsBalancesQueryParams: zod.ZodObject<{
+    account: zod.ZodOptional<zod.ZodString>;
+    dates: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    dates: string;
+    account?: string | undefined;
+}, {
+    dates: string;
+    account?: string | undefined;
+}>;
+export declare const GetTransactionsBalancesResponse: zod.ZodObject<{
+    balances: zod.ZodArray<zod.ZodObject<{
+        date: zod.ZodString;
+        balance: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        balance: string | null;
+    }, {
+        date: string;
+        balance: string | null;
+    }>, "many">;
+    anchor: zod.ZodObject<{
+        today: zod.ZodString;
+        todayBalance: zod.ZodNullable<zod.ZodString>;
+        snapshotBalance: zod.ZodNullable<zod.ZodString>;
+        snapshotAt: zod.ZodNullable<zod.ZodString>;
+        snapshotDay: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        today: string;
+        todayBalance: string | null;
+        snapshotBalance: string | null;
+        snapshotAt: string | null;
+        snapshotDay: string | null;
+    }, {
+        today: string;
+        todayBalance: string | null;
+        snapshotBalance: string | null;
+        snapshotAt: string | null;
+        snapshotDay: string | null;
+    }>;
+    account: zod.ZodObject<{
+        via: zod.ZodString;
+        plaidAccountIds: zod.ZodArray<zod.ZodString, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        via: string;
+        plaidAccountIds: string[];
+    }, {
+        via: string;
+        plaidAccountIds: string[];
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    account: {
+        via: string;
+        plaidAccountIds: string[];
+    };
+    anchor: {
+        today: string;
+        todayBalance: string | null;
+        snapshotBalance: string | null;
+        snapshotAt: string | null;
+        snapshotDay: string | null;
+    };
+    balances: {
+        date: string;
+        balance: string | null;
+    }[];
+}, {
+    account: {
+        via: string;
+        plaidAccountIds: string[];
+    };
+    anchor: {
+        today: string;
+        todayBalance: string | null;
+        snapshotBalance: string | null;
+        snapshotAt: string | null;
+        snapshotDay: string | null;
+    };
+    balances: {
+        date: string;
+        balance: string | null;
+    }[];
+}>;
+/**
+ * @summary (PR13) Mark every ledger row matching a filter reviewed (or not) in
+one request, without the client holding the ids. The filter is the
+ledger's, `reviewed` included. `expectedCount` is the `matchingCount`
+the client showed: when a different number of rows matches now, the
+request is refused with 409 and nothing changes. More than 1,000
+matching rows is a 400. Rows already in the target state count in
+`matched` but not in `updated`.
+
+ */
+export declare const bulkReviewMatchingTransactionsBodyFilterAccountMax = 64;
+export declare const bulkReviewMatchingTransactionsBodyFilterFromMax = 10;
+export declare const bulkReviewMatchingTransactionsBodyFilterToMax = 10;
+export declare const bulkReviewMatchingTransactionsBodyFilterSearchMax = 200;
+export declare const bulkReviewMatchingTransactionsBodyFilterCategoryIdMax = 64;
+export declare const bulkReviewMatchingTransactionsBodyFilterSourceMax = 100;
+export declare const bulkReviewMatchingTransactionsBodyFilterMemberMax = 100;
+export declare const bulkReviewMatchingTransactionsBodyExpectedCountMin = 0;
+export declare const BulkReviewMatchingTransactionsBody: zod.ZodObject<{
+    filter: zod.ZodObject<{
+        account: zod.ZodOptional<zod.ZodString>;
+        from: zod.ZodOptional<zod.ZodString>;
+        to: zod.ZodOptional<zod.ZodString>;
+        search: zod.ZodOptional<zod.ZodString>;
+        reviewed: zod.ZodOptional<zod.ZodBoolean>;
+        pending: zod.ZodOptional<zod.ZodBoolean>;
+        uncategorized: zod.ZodOptional<zod.ZodBoolean>;
+        categoryId: zod.ZodOptional<zod.ZodString>;
+        source: zod.ZodOptional<zod.ZodString>;
+        member: zod.ZodOptional<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        account?: string | undefined;
+        categoryId?: string | undefined;
+        reviewed?: boolean | undefined;
+        source?: string | undefined;
+        member?: string | undefined;
+        pending?: boolean | undefined;
+        from?: string | undefined;
+        to?: string | undefined;
+        uncategorized?: boolean | undefined;
+        search?: string | undefined;
+    }, {
+        account?: string | undefined;
+        categoryId?: string | undefined;
+        reviewed?: boolean | undefined;
+        source?: string | undefined;
+        member?: string | undefined;
+        pending?: boolean | undefined;
+        from?: string | undefined;
+        to?: string | undefined;
+        uncategorized?: boolean | undefined;
+        search?: string | undefined;
+    }>;
+    reviewed: zod.ZodBoolean;
+    expectedCount: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    filter: {
+        account?: string | undefined;
+        categoryId?: string | undefined;
+        reviewed?: boolean | undefined;
+        source?: string | undefined;
+        member?: string | undefined;
+        pending?: boolean | undefined;
+        from?: string | undefined;
+        to?: string | undefined;
+        uncategorized?: boolean | undefined;
+        search?: string | undefined;
+    };
+    reviewed: boolean;
+    expectedCount: number;
+}, {
+    filter: {
+        account?: string | undefined;
+        categoryId?: string | undefined;
+        reviewed?: boolean | undefined;
+        source?: string | undefined;
+        member?: string | undefined;
+        pending?: boolean | undefined;
+        from?: string | undefined;
+        to?: string | undefined;
+        uncategorized?: boolean | undefined;
+        search?: string | undefined;
+    };
+    reviewed: boolean;
+    expectedCount: number;
+}>;
+export declare const BulkReviewMatchingTransactionsResponse: zod.ZodObject<{
+    matched: zod.ZodNumber;
+    updated: zod.ZodNumber;
+    updatedIds: zod.ZodArray<zod.ZodString, "many">;
+}, "strip", zod.ZodTypeAny, {
+    updated: number;
+    matched: number;
+    updatedIds: string[];
+}, {
+    updated: number;
+    matched: number;
+    updatedIds: string[];
+}>;
 export declare const ListDebtsResponseItem: zod.ZodObject<{
     id: zod.ZodString;
     name: zod.ZodString;
@@ -3464,15 +4007,15 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             budget: string;
         }>;
     }, "strip", zod.ZodTypeAny, {
+        net: {
+            actual: string;
+            budget: string;
+        };
         income: {
             actual: string;
             budget: string;
         };
         expenses: {
-            actual: string;
-            budget: string;
-        };
-        net: {
             actual: string;
             budget: string;
         };
@@ -3481,15 +4024,15 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             budget: string;
         };
     }, {
+        net: {
+            actual: string;
+            budget: string;
+        };
         income: {
             actual: string;
             budget: string;
         };
         expenses: {
-            actual: string;
-            budget: string;
-        };
-        net: {
             actual: string;
             budget: string;
         };
@@ -3555,6 +4098,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         actualTotal: zod.ZodString;
         net: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
+        net: string;
         income: {
             actual: string;
             planned: string;
@@ -3577,8 +4121,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         };
         plannedTotal: string;
         actualTotal: string;
-        net: string;
     }, {
+        net: string;
         income: {
             actual: string;
             planned: string;
@@ -3601,7 +4145,6 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         };
         plannedTotal: string;
         actualTotal: string;
-        net: string;
     }>;
     allowance: zod.ZodObject<{
         lines: zod.ZodArray<zod.ZodObject<{
@@ -3614,32 +4157,32 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 actual: zod.ZodString;
                 count: zod.ZodNumber;
             }, "strip", zod.ZodTypeAny, {
-                actual: string;
                 count: number;
+                actual: string;
                 bucket: "groceries" | "dining" | "alcohol" | "entertainment" | "misc";
             }, {
-                actual: string;
                 count: number;
+                actual: string;
                 bucket: "groceries" | "dining" | "alcohol" | "entertainment" | "misc";
             }>, "many">;
         }, "strip", zod.ZodTypeAny, {
+            count: number;
             actual: string;
             planned: string;
-            count: number;
             bucket: "weekly" | "monthly" | "unplanned";
             subBuckets: {
-                actual: string;
                 count: number;
+                actual: string;
                 bucket: "groceries" | "dining" | "alcohol" | "entertainment" | "misc";
             }[];
         }, {
+            count: number;
             actual: string;
             planned: string;
-            count: number;
             bucket: "weekly" | "monthly" | "unplanned";
             subBuckets: {
-                actual: string;
                 count: number;
+                actual: string;
                 bucket: "groceries" | "dining" | "alcohol" | "entertainment" | "misc";
             }[];
         }>, "many">;
@@ -3650,13 +4193,13 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         actual: string;
         planned: string;
         lines: {
+            count: number;
             actual: string;
             planned: string;
-            count: number;
             bucket: "weekly" | "monthly" | "unplanned";
             subBuckets: {
-                actual: string;
                 count: number;
+                actual: string;
                 bucket: "groceries" | "dining" | "alcohol" | "entertainment" | "misc";
             }[];
         }[];
@@ -3665,13 +4208,13 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         actual: string;
         planned: string;
         lines: {
+            count: number;
             actual: string;
             planned: string;
-            count: number;
             bucket: "weekly" | "monthly" | "unplanned";
             subBuckets: {
-                actual: string;
                 count: number;
+                actual: string;
                 bucket: "groceries" | "dining" | "alcohol" | "entertainment" | "misc";
             }[];
         }[];
@@ -3744,15 +4287,15 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         actualTotal: string;
     }[];
     summary: {
+        net: {
+            actual: string;
+            budget: string;
+        };
         income: {
             actual: string;
             budget: string;
         };
         expenses: {
-            actual: string;
-            budget: string;
-        };
-        net: {
             actual: string;
             budget: string;
         };
@@ -3762,6 +4305,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         };
     };
     planBySource: {
+        net: string;
         income: {
             actual: string;
             planned: string;
@@ -3784,19 +4328,18 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         };
         plannedTotal: string;
         actualTotal: string;
-        net: string;
     };
     allowance: {
         actual: string;
         planned: string;
         lines: {
+            count: number;
             actual: string;
             planned: string;
-            count: number;
             bucket: "weekly" | "monthly" | "unplanned";
             subBuckets: {
-                actual: string;
                 count: number;
+                actual: string;
                 bucket: "groceries" | "dining" | "alcohol" | "entertainment" | "misc";
             }[];
         }[];
@@ -3870,15 +4413,15 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         actualTotal: string;
     }[];
     summary: {
+        net: {
+            actual: string;
+            budget: string;
+        };
         income: {
             actual: string;
             budget: string;
         };
         expenses: {
-            actual: string;
-            budget: string;
-        };
-        net: {
             actual: string;
             budget: string;
         };
@@ -3888,6 +4431,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         };
     };
     planBySource: {
+        net: string;
         income: {
             actual: string;
             planned: string;
@@ -3910,19 +4454,18 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         };
         plannedTotal: string;
         actualTotal: string;
-        net: string;
     };
     allowance: {
         actual: string;
         planned: string;
         lines: {
+            count: number;
             actual: string;
             planned: string;
-            count: number;
             bucket: "weekly" | "monthly" | "unplanned";
             subBuckets: {
-                actual: string;
                 count: number;
+                actual: string;
                 bucket: "groceries" | "dining" | "alcohol" | "entertainment" | "misc";
             }[];
         }[];
@@ -5150,6 +5693,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
+        snapshotAt?: string | null | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
         events?: {
@@ -5160,7 +5704,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
             originalDate?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
-        snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
         horizonDays?: number | undefined;
         endingBalance?: string | undefined;
@@ -5179,6 +5722,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
+        snapshotAt?: string | null | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
         events?: {
@@ -5189,7 +5733,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
             originalDate?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
-        snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
         horizonDays?: number | undefined;
         endingBalance?: string | undefined;
@@ -5341,6 +5884,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         subtype?: string | null | undefined;
         institutionName?: string | null | undefined;
     }[];
+    today?: string | undefined;
     bankSnapshot?: {
         at: string;
         source: "plaid" | "manual";
@@ -5356,6 +5900,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
+        snapshotAt?: string | null | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
         events?: {
@@ -5366,7 +5911,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
             originalDate?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
-        snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
         horizonDays?: number | undefined;
         endingBalance?: string | undefined;
@@ -5380,7 +5924,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
         }[] | undefined;
     } | null | undefined;
     checkingAccountExternalId?: string | null | undefined;
-    today?: string | undefined;
     monthSnapshots?: Record<string, {
         at: string;
         balance: string;
@@ -5466,6 +6009,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         subtype?: string | null | undefined;
         institutionName?: string | null | undefined;
     }[];
+    today?: string | undefined;
     bankSnapshot?: {
         at: string;
         source: "plaid" | "manual";
@@ -5481,6 +6025,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
+        snapshotAt?: string | null | undefined;
         fromDate?: string | undefined;
         toDate?: string | undefined;
         events?: {
@@ -5491,7 +6036,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
             originalDate?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
-        snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
         horizonDays?: number | undefined;
         endingBalance?: string | undefined;
@@ -5505,7 +6049,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
         }[] | undefined;
     } | null | undefined;
     checkingAccountExternalId?: string | null | undefined;
-    today?: string | undefined;
     monthSnapshots?: Record<string, {
         at: string;
         balance: string;
@@ -5781,6 +6324,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     lowestProjected: string;
     lowestDate: string | null;
     maxSafeExtra: string;
+    snapshotAt?: string | null | undefined;
     fromDate?: string | undefined;
     toDate?: string | undefined;
     events?: {
@@ -5791,7 +6335,6 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         originalDate?: string | undefined;
     }[] | undefined;
     startingBalance?: string | undefined;
-    snapshotAt?: string | null | undefined;
     snapshotSource?: string | null | undefined;
     horizonDays?: number | undefined;
     endingBalance?: string | undefined;
@@ -5810,6 +6353,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     lowestProjected: string;
     lowestDate: string | null;
     maxSafeExtra: string;
+    snapshotAt?: string | null | undefined;
     fromDate?: string | undefined;
     toDate?: string | undefined;
     events?: {
@@ -5820,7 +6364,6 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         originalDate?: string | undefined;
     }[] | undefined;
     startingBalance?: string | undefined;
-    snapshotAt?: string | null | undefined;
     snapshotSource?: string | null | undefined;
     horizonDays?: number | undefined;
     endingBalance?: string | undefined;
@@ -5895,17 +6438,17 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
         belongsToItem: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         name: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         mask: string | null;
         resolvedExternalId: string | null;
         resolvedRowId: string | null;
-        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         belongsToItem: string | null;
     }, {
         name: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         mask: string | null;
         resolvedExternalId: string | null;
         resolvedRowId: string | null;
-        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         belongsToItem: string | null;
     }>;
     nextSync: zod.ZodObject<{
@@ -6018,10 +6561,10 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     account: {
         name: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         mask: string | null;
         resolvedExternalId: string | null;
         resolvedRowId: string | null;
-        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         belongsToItem: string | null;
     };
     accounts: {
@@ -6079,10 +6622,10 @@ export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
 }, {
     account: {
         name: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         mask: string | null;
         resolvedExternalId: string | null;
         resolvedRowId: string | null;
-        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         belongsToItem: string | null;
     };
     accounts: {
@@ -7854,7 +8397,6 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
             } | null)[];
         }>, "many">;
     }, "strip", zod.ZodTypeAny, {
-        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -7866,8 +8408,8 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
+        monthKeys: string[];
     }, {
-        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -7879,6 +8421,7 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
+        monthKeys: string[];
     }>;
 }, "strip", zod.ZodTypeAny, {
     income: {
@@ -7956,7 +8499,6 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
         }[];
     };
     streak: {
-        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -7968,6 +8510,7 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
+        monthKeys: string[];
     };
 }, {
     income: {
@@ -8045,7 +8588,6 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
         }[];
     };
     streak: {
-        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -8057,6 +8599,7 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
+        monthKeys: string[];
     };
 }>;
 export declare const CloseForecastMonthBody: zod.ZodObject<{
@@ -8103,11 +8646,11 @@ export declare const GetAmexAnchorResponse: zod.ZodObject<{
     asOf: zod.ZodString;
     source: zod.ZodEnum<["debt", "anchor", "computed", "missing"]>;
 }, "strip", zod.ZodTypeAny, {
-    source: "debt" | "anchor" | "computed" | "missing";
+    source: "anchor" | "debt" | "computed" | "missing";
     asOf: string;
     amexEndingBalance: number | null;
 }, {
-    source: "debt" | "anchor" | "computed" | "missing";
+    source: "anchor" | "debt" | "computed" | "missing";
     asOf: string;
     amexEndingBalance: number | null;
 }>;
@@ -8126,11 +8669,11 @@ export declare const SetAmexAnchorResponse: zod.ZodObject<{
     asOf: zod.ZodString;
     source: zod.ZodEnum<["debt", "anchor", "computed", "missing"]>;
 }, "strip", zod.ZodTypeAny, {
-    source: "debt" | "anchor" | "computed" | "missing";
+    source: "anchor" | "debt" | "computed" | "missing";
     asOf: string;
     amexEndingBalance: number | null;
 }, {
-    source: "debt" | "anchor" | "computed" | "missing";
+    source: "anchor" | "debt" | "computed" | "missing";
     asOf: string;
     amexEndingBalance: number | null;
 }>;
@@ -9867,19 +10410,19 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         monthEnd: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
         active: number;
+        net: string;
         monthStart: string;
         income: string;
         bills: string;
-        net: string;
         monthEnd: string;
         debtMin: string;
         totalOutflow: string;
     }, {
         active: number;
+        net: string;
         monthStart: string;
         income: string;
         bills: string;
-        net: string;
         monthEnd: string;
         debtMin: string;
         totalOutflow: string;
@@ -9921,10 +10464,10 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
     }[];
     monthly: {
         active: number;
+        net: string;
         monthStart: string;
         income: string;
         bills: string;
-        net: string;
         monthEnd: string;
         debtMin: string;
         totalOutflow: string;
@@ -9978,10 +10521,10 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
     }[];
     monthly: {
         active: number;
+        net: string;
         monthStart: string;
         income: string;
         bills: string;
-        net: string;
         monthEnd: string;
         debtMin: string;
         totalOutflow: string;
