@@ -92,6 +92,7 @@ export function ProjectedBalanceChart({
   eventsByDate,
   onJumpToPlan,
   onMarkMissed,
+  lockedPlanKeys,
 }: {
   data: DailyPoint[];
   cashBuffer: number;
@@ -100,6 +101,9 @@ export function ProjectedBalanceChart({
   eventsByDate: Map<string, DayEvent[]>;
   onJumpToPlan: (itemId: string, date: string) => void;
   onMarkMissed: (row: PlanLine) => void;
+  /** (PR5b) `<itemId>|<date>` of partly-paid plans: no Mark missed for them —
+   *  the write would replace the partial and un-pay its row. */
+  lockedPlanKeys?: ReadonlySet<string>;
 }) {
   // Content fingerprint — see the draw-restart note above.
   const fp = data.map((d) => `${d.rawDate}:${d.balance}`).join("|");
@@ -212,7 +216,10 @@ export function ProjectedBalanceChart({
                               // for dragged rows — that is the recurring source
                               // of the day-1 dip this tooltip exists to explain.
                               const canMarkMissed =
-                                !!b.itemId && !!b.originalDate && b.dragged;
+                                !!b.itemId &&
+                                !!b.originalDate &&
+                                b.dragged &&
+                                !lockedPlanKeys?.has(`${b.itemId}|${b.originalDate}`);
                               return (
                                 <div
                                   key={`${b.itemId ?? "_"}-${idx}`}

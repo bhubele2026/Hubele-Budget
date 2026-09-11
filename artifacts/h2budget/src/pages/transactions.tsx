@@ -67,6 +67,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { isBankTxn } from "@/lib/forecastMatch";
+import { rowDecisionsByTxn } from "@/lib/forecastRowState";
 import { inForecast } from "@workspace/avalanche-core";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
@@ -1188,13 +1189,13 @@ export default function TransactionsPage() {
   // chip without an extra API call. Both surfaces stay live because the
   // Forecast page already invalidates `getGetForecastQueryKey()` on
   // every match / unplanned action.
-  const resolutionByTxnId = useMemo(() => {
-    const m = new Map<string, { status: string }>();
-    for (const r of forecastData?.resolutions ?? []) {
-      if (r.matchedTxnId) m.set(r.matchedTxnId, { status: r.status });
-    }
-    return m;
-  }, [forecastData?.resolutions]);
+  // (PR5b) "Not this" answers never decide a row, so they are left out — a
+  // rejection beside a real match can't hide it, and a row whose only answer
+  // is a rejection is still in Review. See `rowDecisionsByTxn`.
+  const resolutionByTxnId = useMemo(
+    () => rowDecisionsByTxn(forecastData?.resolutions ?? []),
+    [forecastData?.resolutions],
+  );
 
   // (#fix) Powers the clickable header chip. Previously this was a local
   // tally over the *viewed* month's forecast-flagged rows (including pending
@@ -1308,6 +1309,8 @@ export default function TransactionsPage() {
     const state =
       r?.status === "matched"
         ? { attr: "matched", label: "Matched", icon: Check, tone: "ok" }
+        : r?.status === "partial"
+          ? { attr: "partial", label: "Partly paid", icon: Check, tone: "ok" }
         : r?.status === "ignored_unforecasted" || r?.status === "unplanned"
           ? { attr: "unplanned", label: "Not planned", icon: Inbox, tone: "gray" }
           : { attr: "in-review-bucket", label: "In Review", icon: Inbox, tone: "info" };
@@ -1317,7 +1320,11 @@ export default function TransactionsPage() {
     // already matched or marked not planned has nothing to take away here —
     // its match is managed in Review, and flipping its flag would change
     // nothing (it stays cash).
-    const removal = !isPostedCheckingRow(tx)
+    // (PR5b) A partly-paid row offers nothing here: it paid part of a plan,
+    // and every write this chip could make would replace that partial.
+    const removal = state.attr === "partial"
+      ? null
+      : !isPostedCheckingRow(tx)
       ? {
           label: "Remove from forecast",
           onClick: () => handleToggleForecast(tx),

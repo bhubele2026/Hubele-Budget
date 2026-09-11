@@ -886,6 +886,21 @@ export default function ForecastPage({
     bankReconcile.pending === 0 &&
     bankReconcile.gap < 0.01;
 
+  // (PR5b) Partly-paid occurrences, keyed by every date the curve's events may
+  // carry for them (the occurrence and its moved date). Mark missed / Skip /
+  // "Mark matched to…" written from the Past due card or the chart tooltip
+  // would replace the partial server-side and un-pay its row, so those
+  // surfaces hide them and the handlers refuse them.
+  const partialPlanKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of register?.allPlan ?? []) {
+      if (p.status !== "partial") continue;
+      s.add(`${p.itemId}|${p.date}`);
+      if (p.originalDate) s.add(`${p.itemId}|${p.originalDate}`);
+    }
+    return s;
+  }, [register]);
+
   // Plan rows used as drop targets (active register, plan-only)
   const planRows: PlanLine[] = useMemo(() => {
     if (!register) return [];
@@ -936,6 +951,7 @@ export default function ForecastPage({
     return buildClientSuggestions(
       bankInbox.map((c) => c.bank),
       register.allPlan,
+      register.rejectedPairs,
     );
   }, [bankInbox, register]);
 
@@ -1228,8 +1244,13 @@ export default function ForecastPage({
     }
   };
 
+  // (PR5b) Every bulk "unplanned" action leaves out rows the server paired
+  // with a plan: they wait for Confirm / Not this, and marking one unplanned
+  // would put an off-curve plan back on the curve.
   const bulkMarkBankUnplanned = async () => {
-    const ids = bankInbox.map((c) => c.bank.txn.id);
+    const ids = bankInbox
+      .filter((c) => !c.bank.suggestedPlan)
+      .map((c) => c.bank.txn.id);
     if (!ids.length) return;
     const result = await markTxnsUnplanned(ids);
     invalidate();
@@ -1239,7 +1260,7 @@ export default function ForecastPage({
   // (#27) Bulk-mark just the selected inbox cards as unplanned.
   const bulkMarkBankUnplannedSelected = async () => {
     const ids = Array.from(selectedBankIds).filter((id) =>
-      bankInbox.some((c) => c.bank.txn.id === id),
+      bankInbox.some((c) => c.bank.txn.id === id && !c.bank.suggestedPlan),
     );
     if (!ids.length) return;
     const result = await markTxnsUnplanned(ids);
@@ -1364,8 +1385,16 @@ export default function ForecastPage({
   // still being recoverable from a misclick.
   const onMarkMissed = (row: PlanLine) => {
     // (PR5) Only an open plan can be missed. A partly-paid plan cannot: the
-    // write would replace its partial resolution and un-pay its row.
+    // write would replace its partial resolution and un-pay its row. The Past
+    // due card and the chart tooltip build a "pending" line from the curve's
+    // event, so the register's own record is checked too.
     if (!isPlanRowMatchEligible(row)) return;
+    if (
+      partialPlanKeys.has(`${row.itemId}|${row.date}`) ||
+      partialPlanKeys.has(`${row.itemId}|${row.originalDate ?? row.date}`)
+    ) {
+      return;
+    }
     upsertResolution.mutate(
       {
         data: {
@@ -1400,9 +1429,10 @@ export default function ForecastPage({
   // for muscle-memory users while the explicit button is the
   // discoverable path.
   const onSelectPlan = (row: PlanLine) => {
-    // (PR5) A "Suggested" row answers with its own three buttons; a stray
-    // row click must not mark a probably-paid plan missed.
-    if (row.probablyPaid) return;
+    // (PR5) An off-curve "Suggested" row answers with its own three buttons;
+    // a stray row click must not mark it missed. A suggestion still counted
+    // on the curve keeps the row click, like its Mark missed button.
+    if (row.probablyPaid?.offCurve) return;
     onMarkMissed(row);
   };
 
@@ -1538,6 +1568,8 @@ export default function ForecastPage({
     effectiveDate: string;
   }) => {
     if (!row.itemId || !row.originalDate) return;
+    // (PR5b) Never over a partial: the skip would replace it (see partialPlanKeys).
+    if (partialPlanKeys.has(`${row.itemId}|${row.originalDate}`)) return;
     upsertResolution.mutate(
       {
         data: {
@@ -2201,6 +2233,9 @@ export default function ForecastPage({
                   status: "pending_plan",
                   originalDate: row.originalDate,
                 };
+                const partlyPaid =
+                  partialPlanKeys.has(`${row.itemId}|${row.originalDate}`) ||
+                  partialPlanKeys.has(`${row.itemId}|${row.effectiveDate}`);
                 return (
                   <li
                     key={`${row.itemId}|${row.originalDate}`}
@@ -2228,6 +2263,17 @@ export default function ForecastPage({
                         {formatCurrency(row.amount)}
                       </span>
                     </button>
+                    {partlyPaid ? (
+                      // (PR5b) The remainder of a partial: resolved in Review
+                      // (Undo the partial there). Missed / Skip / Match here
+                      // would replace the partial and un-pay its row.
+                      <span
+                        className="chip warn"
+                        data-testid={`dragging-plan-partial-${row.itemId}-${row.originalDate}`}
+                      >
+                        Partly paid
+                      </span>
+                    ) : (
                     <div
                       className="flex items-center gap-1.5 flex-wrap"
                       data-testid={`dragging-plan-actions-${row.itemId}-${row.originalDate}`}
@@ -2297,6 +2343,7 @@ export default function ForecastPage({
                         </SelectContent>
                       </Select>
                     </div>
+                    )}
                   </li>
                 );
               })}
@@ -2354,6 +2401,7 @@ export default function ForecastPage({
               eventsByDate={eventsByDate}
               onJumpToPlan={jumpToPlan}
               onMarkMissed={onMarkMissed}
+              lockedPlanKeys={partialPlanKeys}
             />
           )}
         </div>

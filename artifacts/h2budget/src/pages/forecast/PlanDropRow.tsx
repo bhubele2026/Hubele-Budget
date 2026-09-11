@@ -79,15 +79,17 @@ export function PlanDropRow({
   const isOverEligible = droppable.isOver && isDragActive && isEligible;
   const isOverBlocked = droppable.isOver && isDragActive && !isEligible;
   const showSuggestion = !isOverEligible && isBestSuggestion;
-  // (PR5) A "Suggested" row shows its three answers instead of Move / Mark
-  // missed: a bank row probably paid it (and, for an `offCurve` pair, the
-  // server's curve already leaves it out).
+  // (PR5) A "Suggested" row shows its three answers. An `offCurve` pair —
+  // the server's curve already leaves the plan out — shows them INSTEAD of
+  // Move / Mark missed; a pair still counted on the curve keeps both (it may
+  // be the wrong row, and the plan can still move or be missed).
   const pp = row.probablyPaid;
   const suggested = !!pp && !!onAnswer;
+  const offCurveSuggestion = suggested && !!pp?.offCurve;
   // A partly-paid plan can move: the server keeps its `partial` beside the
   // `rescheduled` row, so the remainder lands on the new date.
   const canMove =
-    !suggested &&
+    !offCurveSuggestion &&
     !!onMove &&
     (row.status === "pending_plan" ||
       row.status === "future" ||
@@ -95,7 +97,7 @@ export function PlanDropRow({
   // (#480) Mark-missed is only meaningful while the row is still pending —
   // once it's matched/missed/rescheduled there's nothing to "miss".
   const canMarkMissed =
-    !suggested &&
+    !offCurveSuggestion &&
     !!onMarkMissed &&
     (row.status === "pending_plan" || row.status === "future");
   const answer = (e: { stopPropagation: () => void }, a: SuggestionAnswer) => {

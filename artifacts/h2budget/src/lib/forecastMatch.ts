@@ -271,7 +271,14 @@ export function buildLineRegister(opts: {
    *  client already knows is decided (plan or row resolved, pair rejected) is
    *  ignored, so a cash signal older than the bundle can't resurrect it. */
   matches?: ReadonlyArray<CashSignalMatch> | null;
-}): { rows: LineRow[]; allPlan: PlanLine[]; allBank: BankLine[] } {
+}): {
+  rows: LineRow[];
+  allPlan: PlanLine[];
+  allBank: BankLine[];
+  /** (PR5b) Pairs the user answered "Not this", as `<itemId>|<occurrenceDate>#<txnId>`.
+   *  No suggestion — the server's or the client's — may offer one again. */
+  rejectedPairs: ReadonlySet<string>;
+} {
   const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO, visibleFromISO, lingerPastDuePlans, matches } = opts;
   const today = opts.today ?? new Date();
   const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
@@ -475,9 +482,12 @@ export function buildLineRegister(opts: {
   // never lingered — only the upper-bound window applies to them.
   const visiblePlan = activePlan.filter((p) => {
     if (inVisibleWindow(p.date)) return true;
+    // (PR5b) A past-due partly-paid plan lingers too while a remainder is
+    // planned: the curve still carries that remainder forward.
     if (
       lingerPastDuePlans &&
-      p.status === "pending_plan" &&
+      (p.status === "pending_plan" ||
+        (p.status === "partial" && p.amount !== 0 && parseISO(p.date) <= todayMs)) &&
       parseISO(p.date) >= fromMs
     ) {
       return true;
@@ -515,7 +525,7 @@ export function buildLineRegister(opts: {
     }
   }
 
-  return { rows, allPlan, allBank };
+  return { rows, allPlan, allBank, rejectedPairs };
 }
 
 export function findCandidates(row: LineRow, rows: LineRow[], days = 7): LineRow[] {
@@ -624,13 +634,28 @@ export function suggestPlanMatchesForBank(
 export function buildClientSuggestions(
   bankRows: BankLine[],
   allPlan: PlanLine[],
+  /** (PR5b) `buildLineRegister().rejectedPairs`. A pair the user answered
+   *  "Not this" is never suggested again — not as a chip, a one-click Match,
+   *  the Enter shortcut or "Match all confident". Confirming it would write
+   *  `matched`, and the server would delete the rejection. */
+  rejectedPairs: ReadonlySet<string> = new Set(),
 ): Map<string, PlanSuggestion[]> {
   const candidates = allPlan.filter(
     (p) => (p.status === "pending_plan" || p.status === "future") && !p.probablyPaid,
   );
   const out = new Map<string, PlanSuggestion[]>();
   for (const b of bankRows) {
-    out.set(b.txn.id, b.suggestedPlan ? [] : suggestPlanMatchesForBank(b, candidates));
+    if (b.suggestedPlan) {
+      out.set(b.txn.id, []);
+      continue;
+    }
+    const open =
+      rejectedPairs.size === 0
+        ? candidates
+        : candidates.filter(
+            (p) => !rejectedPairs.has(`${p.itemId}|${p.originalDate ?? p.date}#${b.txn.id}`),
+          );
+    out.set(b.txn.id, suggestPlanMatchesForBank(b, open));
   }
   return out;
 }
@@ -885,10 +910,12 @@ export function buildBucket(opts: {
         date = p.date;
         label = p.label;
         // A partial's plan line carries the remainder; the bucket shows the
-        // part that was settled (planned − remainder).
+        // part that was settled — what the row actually paid when known (a
+        // shortfall of $1 or less leaves no remainder, but was not paid in
+        // full), else planned − remainder.
         amount =
           r.status === "partial" && p.plannedAmount != null
-            ? Math.round((p.plannedAmount - p.amount) * 100) / 100
+            ? p.paidAmount ?? Math.round((p.plannedAmount - p.amount) * 100) / 100
             : p.amount;
       } else {
         date = r.occurrenceDate;

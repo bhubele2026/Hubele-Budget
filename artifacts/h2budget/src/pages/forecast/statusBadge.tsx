@@ -22,7 +22,8 @@ const CHIP: Record<string, { label: string; tone: string }> = {
   pending_plan: { label: "Pending plan", tone: "warn" },
   pending_bank: { label: "Pending bank", tone: "info" },
   future: { label: "Upcoming", tone: "gray" },
-  /** (PR5) A bank row probably paid it; the curve already leaves it out. */
+  /** (PR5) A bank row probably paid it. Whether the curve still counts it is
+   *  said separately ("Out of forecast" / "Still in forecast"). */
   suggested: { label: "Suggested", tone: "info" },
   matched: { label: "Matched", tone: "ok" },
   partial: { label: "Partly paid", tone: "warn" },
