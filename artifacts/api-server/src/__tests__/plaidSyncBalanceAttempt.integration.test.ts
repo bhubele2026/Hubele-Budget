@@ -1,11 +1,12 @@
-// ⭐ THE `balance` ATTEMPT ROW MEANS A BALANCE CALL WAS MADE. `bankFreshness`
+// ⭐ THE `balance` ATTEMPT ROW SAYS WHAT THE BALANCE CALL DID. `bankFreshness`
 // reads these rows to decide whether the bank balance is stale. The row used to
 // have its own condition, separate from the call's:
 //   - a webhook sync, which never calls /accounts/balance/get, logged
 //     "balance: success" over a real failure;
 //   - a manual Sync whose stored pointer was gone, but whose account still
 //     resolved by mask, called Plaid and logged nothing.
-// Now the row is written exactly when the call ran.
+// Now the row is written exactly when the call ran, and it is a success only
+// when a balance was actually re-read.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -88,7 +89,9 @@ beforeEach(async () => {
 async function seedItemWithChecking(mask: string): Promise<{
   itemRowId: string;
   accountRowId: string;
+  externalId: string;
 }> {
+  const externalId = `acct-${randomUUID()}`;
   const [item] = await db
     .insert(plaidItemsTable)
     .values({
@@ -106,14 +109,14 @@ async function seedItemWithChecking(mask: string): Promise<{
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
-      accountId: `acct-${randomUUID()}`,
+      accountId: externalId,
       name: "TOTAL CHECKING",
       mask,
       type: "depository",
       subtype: "checking",
     })
     .returning();
-  return { itemRowId: item!.id, accountRowId: acct!.id };
+  return { itemRowId: item!.id, accountRowId: acct!.id, externalId };
 }
 
 async function seedSnapshot(opts: { pointer: string | null; mask: string | null }) {
@@ -143,6 +146,16 @@ async function rowsOfKind(itemRowId: string, kind: string) {
     );
 }
 
+function plaidError(status: number, code: string, message: string) {
+  return {
+    message: `Request failed with status code ${status}`,
+    response: {
+      status,
+      data: { error_code: code, error_message: message, error_type: "API_ERROR" },
+    },
+  };
+}
+
 describe("the `balance` attempt row follows the balance call", () => {
   it("a webhook sync makes no balance call and writes no balance row, even with a stored pointer", async () => {
     const { itemRowId, accountRowId } = await seedItemWithChecking("5526");
@@ -158,8 +171,16 @@ describe("the `balance` attempt row follows the balance call", () => {
   });
 
   it("a manual Sync with the pointer gone but the account found by its mask re-reads the balance and records it", async () => {
-    const { itemRowId } = await seedItemWithChecking("5526");
+    const { itemRowId, externalId } = await seedItemWithChecking("5526");
     await seedSnapshot({ pointer: null, mask: "5526" });
+    // The same figure as the snapshot, with no ledger rows, so nothing drifts.
+    accountsBalanceGetMock = async () => ({
+      data: {
+        accounts: [
+          { account_id: externalId, balances: { available: 1000, current: 1000 } },
+        ],
+      },
+    });
 
     await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });
 
@@ -169,21 +190,42 @@ describe("the `balance` attempt row follows the balance call", () => {
     ]);
   });
 
+  it("a manual Sync whose balance call returns no balance records no_balance, not a success", async () => {
+    const { itemRowId, accountRowId } = await seedItemWithChecking("5526");
+    await seedSnapshot({ pointer: accountRowId, mask: "5526" });
+
+    await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });
+
+    expect(balanceCalls).toBe(1);
+    expect(await rowsOfKind(itemRowId, "balance")).toEqual([
+      { success: false, errorCode: "no_balance" },
+    ]);
+  });
+
+  it("PRODUCT_NOT_READY on the balance call records that code, not a success, and no error chip", async () => {
+    const { itemRowId, accountRowId } = await seedItemWithChecking("5526");
+    await seedSnapshot({ pointer: accountRowId, mask: "5526" });
+    accountsBalanceGetMock = async () => {
+      throw plaidError(400, "PRODUCT_NOT_READY", "the requested product is not yet ready");
+    };
+
+    await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });
+
+    expect(await rowsOfKind(itemRowId, "balance")).toEqual([
+      { success: false, errorCode: "PRODUCT_NOT_READY" },
+    ]);
+    const [item] = await db
+      .select({ lastSyncError: plaidItemsTable.lastSyncError })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(item!.lastSyncError).toBeNull();
+  });
+
   it("a manual Sync whose balance re-read fails records the failure with Plaid's code", async () => {
     const { itemRowId, accountRowId } = await seedItemWithChecking("5526");
     await seedSnapshot({ pointer: accountRowId, mask: "5526" });
     accountsBalanceGetMock = async () => {
-      throw {
-        message: "Request failed with status code 500",
-        response: {
-          status: 500,
-          data: {
-            error_code: "INTERNAL_SERVER_ERROR",
-            error_message: "an unexpected error occurred",
-            error_type: "API_ERROR",
-          },
-        },
-      };
+      throw plaidError(500, "INTERNAL_SERVER_ERROR", "an unexpected error occurred");
     };
 
     await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });

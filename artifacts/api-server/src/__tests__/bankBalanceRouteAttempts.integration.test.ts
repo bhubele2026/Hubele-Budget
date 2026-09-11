@@ -4,6 +4,10 @@
 // snapshot account, success or failure. Without them, a successful Refresh after
 // a failed Sync left the balance marked "refresh failed" until the next Sync, and
 // a failed Refresh was never recorded at all.
+//
+// The rows are written for the signed-in user (the Settings → Recent activity
+// list filters on it) and carry Plaid's error kind, which the Reconnect button
+// keys on. The bank here is linked by a different user on purpose.
 
 import {
   describe,
@@ -17,14 +21,17 @@ import {
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import express from "express";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 // Production tokens pass the env-match preflight, so the request reaches the
 // Plaid mock whatever the runner's ambient PLAID_ENV is.
 const PRIOR_PLAID_ENV = process.env.PLAID_ENV;
 process.env.PLAID_ENV = "production";
 
-const TEST_USER = `balance-route-attempts-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+const SUFFIX = `${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+const TEST_USER = `balance-route-attempts-${SUFFIX}`;
+/** The household member who linked the bank: not the one pressing Refresh. */
+const LINKER = `balance-route-linker-${SUFFIX}`;
 let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
@@ -85,12 +92,16 @@ let baseUrl: string;
 async function cleanup(): Promise<void> {
   await db
     .delete(plaidSyncAttemptsTable)
-    .where(eq(plaidSyncAttemptsTable.userId, TEST_USER));
+    .where(inArray(plaidSyncAttemptsTable.userId, [TEST_USER, LINKER]));
   await db
     .delete(forecastSettingsTable)
     .where(eq(forecastSettingsTable.userId, TEST_USER));
-  await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.userId, TEST_USER));
-  await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
+  await db
+    .delete(plaidAccountsTable)
+    .where(inArray(plaidAccountsTable.userId, [TEST_USER, LINKER]));
+  await db
+    .delete(plaidItemsTable)
+    .where(inArray(plaidItemsTable.userId, [TEST_USER, LINKER]));
 }
 
 beforeAll(async () => {
@@ -115,7 +126,7 @@ beforeEach(async () => {
   accountsBalanceGetMock = async () => ({ data: { accounts: [] } });
 });
 
-/** One item with the snapshot checking account and a second, non-snapshot account. */
+/** One item, linked by LINKER, with the snapshot checking account and a second, non-snapshot account. */
 async function seed(): Promise<{
   itemRowId: string;
   snapshotRowId: string;
@@ -128,7 +139,7 @@ async function seed(): Promise<{
   const [item] = await db
     .insert(plaidItemsTable)
     .values({
-      userId: TEST_USER,
+      userId: LINKER,
       householdId: TEST_HOUSEHOLD_ID,
       itemId: `item-${randomUUID()}`,
       accessToken: `access-production-${randomUUID()}`,
@@ -139,7 +150,7 @@ async function seed(): Promise<{
   const [snapshot] = await db
     .insert(plaidAccountsTable)
     .values({
-      userId: TEST_USER,
+      userId: LINKER,
       householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: snapshotExternalId,
@@ -152,7 +163,7 @@ async function seed(): Promise<{
   const [other] = await db
     .insert(plaidAccountsTable)
     .values({
-      userId: TEST_USER,
+      userId: LINKER,
       householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: otherExternalId,
@@ -215,6 +226,22 @@ async function balanceRows(itemRowId: string) {
     .orderBy(asc(plaidSyncAttemptsTable.attemptedAt));
 }
 
+async function balanceRowDetail(itemRowId: string) {
+  const [row] = await db
+    .select({
+      userId: plaidSyncAttemptsTable.userId,
+      errorKind: plaidSyncAttemptsTable.errorKind,
+    })
+    .from(plaidSyncAttemptsTable)
+    .where(
+      and(
+        eq(plaidSyncAttemptsTable.plaidItemId, itemRowId),
+        eq(plaidSyncAttemptsTable.kind, "balance"),
+      ),
+    );
+  return row;
+}
+
 async function post(path: string, body: unknown): Promise<number> {
   const r = await fetch(`${baseUrl}${path}`, {
     method: "POST",
@@ -226,11 +253,12 @@ async function post(path: string, body: unknown): Promise<number> {
 }
 
 describe("POST /forecast/refresh-bank records the snapshot account's balance re-read", () => {
-  it("a successful re-read records a balance success", async () => {
+  it("a successful re-read records a balance success, for the signed-in user", async () => {
     const s = await seed();
     accountsBalanceGetMock = balanceFor(s.snapshotExternalId, 1234.56);
     expect(await post("/forecast/refresh-bank", {})).toBe(200);
     expect(await balanceRows(s.itemRowId)).toEqual([{ success: true, errorCode: null }]);
+    expect((await balanceRowDetail(s.itemRowId))!.userId).toBe(TEST_USER);
   });
 
   it("a Plaid outage records a balance failure with Plaid's code", async () => {
@@ -244,7 +272,7 @@ describe("POST /forecast/refresh-bank records the snapshot account's balance re-
     ]);
   });
 
-  it("a reconnect error records a failure too", async () => {
+  it("a reconnect error records a failure that carries its error kind, for the Reconnect button", async () => {
     const s = await seed();
     accountsBalanceGetMock = async () => {
       throw plaidAxiosError("ITEM_LOGIN_REQUIRED", "the login details have changed");
@@ -253,6 +281,10 @@ describe("POST /forecast/refresh-bank records the snapshot account's balance re-
     expect(await balanceRows(s.itemRowId)).toEqual([
       { success: false, errorCode: "ITEM_LOGIN_REQUIRED" },
     ]);
+    expect(await balanceRowDetail(s.itemRowId)).toEqual({
+      userId: TEST_USER,
+      errorKind: "reauth",
+    });
   });
 
   it("no balance from Plaid records a failure", async () => {
@@ -272,14 +304,15 @@ describe("POST /forecast/refresh-bank records the snapshot account's balance re-
 });
 
 describe("POST /forecast/bank-snapshot records the Plaid read that sets the snapshot", () => {
-  it("setting the snapshot from Plaid records a balance success", async () => {
+  it("setting the snapshot from Plaid records a balance success, for the signed-in user", async () => {
     const s = await seed();
     accountsBalanceGetMock = balanceFor(s.snapshotExternalId, 2000);
     expect(await post("/forecast/bank-snapshot", { plaidAccountId: s.snapshotRowId })).toBe(200);
     expect(await balanceRows(s.itemRowId)).toEqual([{ success: true, errorCode: null }]);
+    expect((await balanceRowDetail(s.itemRowId))!.userId).toBe(TEST_USER);
   });
 
-  it("a failed Plaid read records a balance failure", async () => {
+  it("a failed Plaid read of the bank balance's account records a balance failure", async () => {
     const s = await seed();
     accountsBalanceGetMock = async () => {
       throw plaidAxiosError("INTERNAL_SERVER_ERROR", "Plaid had a transient outage");
@@ -290,11 +323,30 @@ describe("POST /forecast/bank-snapshot records the Plaid read that sets the snap
     ]);
   });
 
-  it("no balance from Plaid records a failure", async () => {
+  it("no balance for the bank balance's account records a failure", async () => {
     const s = await seed();
     expect(await post("/forecast/bank-snapshot", { plaidAccountId: s.snapshotRowId })).toBe(502);
     expect(await balanceRows(s.itemRowId)).toEqual([
       { success: false, errorCode: "no_balance" },
     ]);
+  });
+
+  it("a failed switch to another account on the same item records nothing against the unchanged bank balance", async () => {
+    const s = await seed();
+    accountsBalanceGetMock = async () => {
+      throw plaidAxiosError("INTERNAL_SERVER_ERROR", "Plaid had a transient outage");
+    };
+    expect(await post("/forecast/bank-snapshot", { plaidAccountId: s.otherRowId })).toBe(502);
+    // And with no balance returned for that account either.
+    accountsBalanceGetMock = async () => ({ data: { accounts: [] } });
+    expect(await post("/forecast/bank-snapshot", { plaidAccountId: s.otherRowId })).toBe(502);
+    expect(await balanceRows(s.itemRowId)).toEqual([]);
+  });
+
+  it("a successful switch records a success: that account is now the bank balance", async () => {
+    const s = await seed();
+    accountsBalanceGetMock = balanceFor(s.otherExternalId, 75);
+    expect(await post("/forecast/bank-snapshot", { plaidAccountId: s.otherRowId })).toBe(200);
+    expect(await balanceRows(s.itemRowId)).toEqual([{ success: true, errorCode: null }]);
   });
 });

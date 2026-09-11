@@ -2020,6 +2020,11 @@ export async function syncPlaidItem(
       hasSnapshotAnchor &&
       !!checkingPlaidAccountId &&
       bankSnapshotBelongsToThisItem;
+    // The call ran but re-read nothing: Plaid returned no balance, or is still
+    // preparing the account. That is not a success, so the `balance` row records
+    // it under this code. It stays out of the item's error columns, which
+    // surface as an error chip.
+    let balanceNotReread: "no_balance" | "PRODUCT_NOT_READY" | null = null;
     if (balanceRefreshAttempted && checkingPlaidAccountId) {
       try {
         const resp = await plaid().accountsBalanceGet({
@@ -2057,6 +2062,8 @@ export async function syncPlaidItem(
             );
           }
           liveAvailableBalance = Number(live);
+        } else {
+          balanceNotReread = "no_balance";
         }
       } catch (e) {
         // Don't break the sync — but capture Plaid's real reason so the
@@ -2071,6 +2078,8 @@ export async function syncPlaidItem(
           balanceRefreshError = `Balance refresh failed: ${message}`;
           balanceRefreshErrorCode = code;
           balanceErrorDetails = extracted;
+        } else {
+          balanceNotReread = "PRODUCT_NOT_READY";
         }
         // (#45) Log per-item context so support can trace which user /
         // institution / Plaid error surfaced the lastSyncError chip on
@@ -2116,15 +2125,22 @@ export async function syncPlaidItem(
       errorMessage: null,
     });
     // Exactly when the balance call above ran: a manual Sync, on an anchored
-    // snapshot, whose account resolved (by pointer or recovery) to this item.
+    // snapshot, whose account resolved (by pointer or recovery) to this item. A
+    // success only when a balance was actually re-read.
     if (balanceRefreshAttempted) {
       await recordPlaidSyncAttempt({
         userId,
         plaidItemId: itemRowId,
         kind: "balance",
-        success: !balanceRefreshError,
-        errorCode: balanceRefreshErrorCode,
-        errorMessage: balanceRefreshError,
+        success: !balanceRefreshError && !balanceNotReread,
+        errorCode: balanceRefreshErrorCode ?? balanceNotReread,
+        errorMessage:
+          balanceRefreshError ??
+          (balanceNotReread === "no_balance"
+            ? "Plaid did not return a balance"
+            : balanceNotReread === "PRODUCT_NOT_READY"
+              ? "Plaid is still preparing this account's balance"
+              : null),
         // (#357) Persist the structured Plaid failure so the Settings →
         // Recent activity row carries the same plain-English reason +
         // Reconnect CTA the live toast does, without re-deriving from

@@ -592,7 +592,7 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
   const userId = req.userId!;
   const householdId = req.householdId!;
   const ownerUserId = req.householdOwnerId!;
-  await ensureSettings(ownerUserId, householdId);
+  const settings = await ensureSettings(ownerUserId, householdId);
   const { balance, plaidAccountId } = req.body ?? {};
 
   let snapshotBalance: string | null = null;
@@ -668,14 +668,21 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
         // page's link-checking / manual-set flows can surface the
         // same account-aware "doesn't have a refreshable balance"
         // toast instead of the dead-end raw error string.
-        await recordPlaidSyncAttempt({
-          userId: item.userId,
-          plaidItemId: item.id,
-          kind: "balance",
-          success: false,
-          errorCode: "no_balance",
-          errorMessage: "Plaid did not return a balance",
-        });
+        // Only a failure on the bank balance's own account marks it stale. A
+        // failed switch to another account leaves the balance as it was.
+        if (
+          !settings.bankSnapshotAccountId ||
+          settings.bankSnapshotAccountId === acct.id
+        ) {
+          await recordPlaidSyncAttempt({
+            userId,
+            plaidItemId: item.id,
+            kind: "balance",
+            success: false,
+            errorCode: "no_balance",
+            errorMessage: "Plaid did not return a balance",
+          });
+        }
         res.status(502).json({
           error: "Plaid did not return a balance",
           code: "no_balance",
@@ -684,9 +691,10 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
         return;
       }
       // This account becomes the bank snapshot below, so the re-read counts for
-      // `bankFreshness` exactly as a Sync's balance re-read does.
+      // `bankFreshness` exactly as a Sync's balance re-read does. Written for the
+      // signed-in user, whom Settings → Recent activity lists by.
       await recordPlaidSyncAttempt({
-        userId: item.userId,
+        userId,
         plaidItemId: item.id,
         kind: "balance",
         success: true,
@@ -719,16 +727,29 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
         .set({ accountSnapshots: nextMap })
         .where(eq(forecastSettingsTable.userId, ownerUserId));
     } catch (e) {
-      const { code: plaidCode, message: plaidMsg } = extractPlaidError(e);
+      const plaidErr = extractPlaidError(e);
+      const { code: plaidCode, message: plaidMsg } = plaidErr;
       req.log.error({ err: e, code: plaidCode }, "accountsBalanceGet failed");
-      await recordPlaidSyncAttempt({
-        userId: item.userId,
-        plaidItemId: item.id,
-        kind: "balance",
-        success: false,
-        errorCode: plaidCode ?? null,
-        errorMessage: plaidMsg,
-      });
+      // As above: only a failure on the bank balance's own account counts.
+      if (
+        !settings.bankSnapshotAccountId ||
+        settings.bankSnapshotAccountId === acct.id
+      ) {
+        await recordPlaidSyncAttempt({
+          userId,
+          plaidItemId: item.id,
+          kind: "balance",
+          success: false,
+          errorCode: plaidCode ?? null,
+          errorMessage: plaidMsg,
+          // What Settings → Recent activity needs for the plain-English reason
+          // and the Reconnect button.
+          plaidDisplayMessage: plaidErr.displayMessage ?? null,
+          requestId: plaidErr.requestId ?? null,
+          httpStatus: plaidErr.httpStatus ?? null,
+          errorKind: plaidErr.kind ?? null,
+        });
+      }
       // (#655) Mirror the /plaid/link-token/update catch (#654): if Plaid
       // rejects the stored access_token at runtime (e.g. after a server
       // credential rotation), surface the same 409 + relink shape the
@@ -864,11 +885,20 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
   const recordSnapshotBalanceAttempt = (
     outcome:
       | { success: true }
-      | { success: false; errorCode: string | null; errorMessage: string },
+      | {
+          success: false;
+          errorCode: string | null;
+          errorMessage: string;
+          plaidDisplayMessage?: string | null;
+          requestId?: string | null;
+          httpStatus?: number | null;
+          errorKind?: string | null;
+        },
   ): Promise<void> =>
     isPrimary
       ? recordPlaidSyncAttempt({
-          userId: item.userId,
+          // The signed-in user, whom Settings → Recent activity lists by.
+          userId: req.userId!,
           plaidItemId: item.id,
           kind: "balance",
           ...outcome,
@@ -952,12 +982,19 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
       });
     }
   } catch (e) {
-    const { code: plaidCode, message: plaidMsg } = extractPlaidError(e);
+    const plaidErr = extractPlaidError(e);
+    const { code: plaidCode, message: plaidMsg } = plaidErr;
     req.log.error({ err: e, code: plaidCode }, "refresh-bank failed");
     await recordSnapshotBalanceAttempt({
       success: false,
       errorCode: plaidCode ?? null,
       errorMessage: plaidMsg,
+      // What Settings → Recent activity needs for the plain-English reason and
+      // the Reconnect button.
+      plaidDisplayMessage: plaidErr.displayMessage ?? null,
+      requestId: plaidErr.requestId ?? null,
+      httpStatus: plaidErr.httpStatus ?? null,
+      errorKind: plaidErr.kind ?? null,
     });
     // (#655) See the matching catch in /forecast/bank-snapshot above.
     // Translate runtime Plaid reauth errors (INVALID_ACCESS_TOKEN /

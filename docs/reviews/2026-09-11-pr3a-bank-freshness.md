@@ -24,8 +24,10 @@ of plan PR3. PR3b (web) follows and puts it on screen. Plan: `~/.claude/plans/h2
 - **`lib/api-spec/openapi.yaml`** adds a `BankFreshness` schema, a fully typed `BankBalanceExplain` and the five
   `Spine.bank` fields. The regenerated client is committed.
 - **Truthful attempt rows** (after review; see "Where the rows come from"):
-  - `lib/plaidSync.ts` writes the `balance` attempt row under the same condition as the balance call.
-  - `POST /forecast/refresh-bank` and `POST /forecast/bank-snapshot` record their balance re-reads.
+  - `lib/plaidSync.ts` writes the `balance` attempt row under the same condition as the balance call. It is a
+    success only when a balance was actually re-read.
+  - `POST /forecast/refresh-bank` and `POST /forecast/bank-snapshot` record their balance re-reads, for the
+    signed-in user, with Plaid's error details.
 
 ## The rule
 
@@ -39,8 +41,10 @@ of plan PR3. PR3b (web) follows and puts it on screen. Plan: `~/.claude/plans/h2
 - **No snapshot is not stale.** It stays `status: no_data`, as before.
 - **Recovery is per kind.** A newer success of the same kind recovers a failure. A balance re-read does not
   recover a failed transactions sync, because rows still are not arriving.
-- **`PRODUCT_NOT_READY` is not a failure.** A new link answers it while Plaid prepares. The sync logs it as
-  `success=false` for the Recent activity panel, and those rows are skipped here.
+- **`PRODUCT_NOT_READY` is not a failure, and not a success either.**
+  - A new link answers it while Plaid prepares. The sync writes it as `success=false`, on both kinds, so the
+    Recent activity panel shows the warm-up.
+  - The freshness rule skips those rows, so the attempt before it decides.
 - **`BANK_FEED_DEAD_CODES`:**
   - `ITEM_LOGIN_REQUIRED` and `INVALID_ACCESS_TOKEN`, from the existing reauth list.
   - `USER_PERMISSION_REVOKED` and `USER_ACCOUNT_REVOKED`, which arrive by webhook.
@@ -52,6 +56,8 @@ of plan PR3. PR3b (web) follows and puts it on screen. Plan: `~/.claude/plans/h2
   - Free webhook syncs still land rows on top of the anchor. A balance re-read three days ago plus rows an hour
     ago is a current roll-forward.
   - Judging the anchor alone would have marked every healthy feed `old` 48 hours after the last manual Sync.
+  - An account with no new transactions for 48 hours will read `old`. That is accepted: nothing has confirmed
+    the balance in two days.
 - **A live feed does not refresh a typed-in number.** `manual_old` goes by the snapshot's own age.
 - **`lastContactAt`** is the item's `last_synced_at`, stamped by the last successful transactions sync.
 - **`lastFailureAt`** is when the newest unrecovered attempt failed. It is null when failure is known only from
@@ -60,28 +66,33 @@ of plan PR3. PR3b (web) follows and puts it on screen. Plan: `~/.claude/plans/h2
 
 ## Where the rows come from
 
-What the rule reads, after the review's fixes:
+What the rule reads, after both review rounds:
 
 | Writer | Row |
 |---|---|
-| `syncPlaidItem` (any origin) | `transactions` success, or failure (`PRODUCT_NOT_READY` failures are skipped) |
-| `syncPlaidItem`, manual Sync on an anchored snapshot whose account resolves (by pointer or recovery) to this item | `balance` success or failure — **only when the balance call ran** |
-| `POST /forecast/refresh-bank`, for the bank snapshot account | `balance` success, `no_balance`, or failure with Plaid's code |
-| `POST /forecast/bank-snapshot` from a Plaid account | `balance` success, `no_balance`, or failure with Plaid's code |
+| `syncPlaidItem` (any origin) | `transactions` success or failure. It also writes `PRODUCT_NOT_READY` failures, which the rule skips. |
+| `syncPlaidItem`, a manual Sync on an anchored snapshot whose account resolves (by pointer or recovery) to this item | `balance`, **only when the balance call ran**: success when a balance was re-read, `no_balance` when Plaid returned none, `PRODUCT_NOT_READY` while preparing (skipped by the rule), or a failure with Plaid's code |
+| `POST /forecast/refresh-bank`, for the bank snapshot account only | `balance` success, `no_balance`, or failure with Plaid's code |
+| `POST /forecast/bank-snapshot` from a Plaid account | `balance` success whenever it sets the snapshot; `no_balance` or a failure only when the account is already the bank balance's |
 
-**Dead-feed codes with no attempt row** come from several places:
-- ITEM webhooks
-- `markItemMalformedToken` (the forecast balance routes, link-token/update, the malformed-token sweep)
-- the liabilities refresh
-
-For those, `staleReason` is `refresh_failed` and `lastFailureAt` is null.
+- **The two routes write their rows for the signed-in user.** Settings → Recent activity lists by that user.
+- **They also carry Plaid's display message, request id, HTTP status and error kind,** so a login failure shows
+  the Reconnect button there.
+- **Dead-feed codes with no attempt row** come from several places:
+  - ITEM webhooks
+  - `markItemMalformedToken` (the forecast balance routes, link-token/update, the malformed-token sweep)
+  - the liabilities refresh
+  
+  For those, `staleReason` is `refresh_failed` and `lastFailureAt` is null.
 
 ## Figures that should move
 
-**No money figure moves, and nothing on screen reads these fields yet** (PR3b is first). Two visible changes:
+**No money figure moves, and nothing on screen reads these fields yet** (PR3b is first). The visible changes:
 - **Settings → Recent activity:**
   - Webhook syncs no longer log a "balance" row, since they never re-read the balance.
-  - A Refresh from the Forecast or Chase page now logs one.
+  - A manual Sync that gets no balance back logs `no_balance` rather than a success.
+  - A Refresh from the Forecast or Chase page now logs a row for whoever pressed it, and a login failure there
+    offers Reconnect.
 - **The API payloads grow:**
   - `/spine` `bank`: five more fields.
   - `/forecast/bank-balance-explain`: `freshness`.
@@ -95,6 +106,8 @@ For those, `staleReason` is `refresh_failed` and `lastFailureAt` is null.
 - **When Plaid is called.**
   - The Sync's balance-call condition is the same expression as before, now named `balanceRefreshAttempted`.
   - The routes' calls are untouched; only the attempt rows moved.
+- **The item's error columns.** An empty or still-preparing balance answer still never sets
+  `last_sync_error`.
 - **No DDL.**
 
 ## Tests
@@ -120,15 +133,21 @@ For those, `staleReason` is `refresh_failed` and `lastFailureAt` is null.
     - `ITEM_LOGIN_REQUIRED` is stale, but `PENDING_EXPIRATION` is not.
     - A typed-in balance on a revoked feed is stale.
   - **Constants:** the dead-feed codes and the 48-hour and 7-day limits.
-- **New `plaidSyncBalanceAttempt.integration.test.ts`** (4):
+- **New `plaidSyncBalanceAttempt.integration.test.ts`** (6):
   - A webhook sync makes no balance call and writes no balance row.
-  - A manual Sync with the pointer gone but the account found by mask calls Plaid and records it.
+  - A manual Sync with the pointer gone but the account found by mask re-reads a real balance and records a
+    success.
+  - An empty balance answer records `no_balance`, not a success.
+  - `PRODUCT_NOT_READY` records that code and leaves `last_sync_error` empty.
   - A failed re-read records Plaid's code.
   - An item that does not own the snapshot account records nothing.
-- **New `bankBalanceRouteAttempts.integration.test.ts`** (8):
-  - `refresh-bank` records success, an outage, a reconnect error and `no_balance`, and records nothing for a
-    non-snapshot account.
-  - `bank-snapshot` records success, a failure and `no_balance`.
+- **New `bankBalanceRouteAttempts.integration.test.ts`** (10). The bank is linked by a different user from the
+  one pressing Refresh.
+  - `refresh-bank` records success for the signed-in user, an outage, a reconnect error carrying its error kind,
+    and `no_balance`. It records nothing for a non-snapshot account.
+  - `bank-snapshot` records success for the signed-in user, a failure and `no_balance` for the bank balance's
+    account.
+  - A failed switch to another account records nothing; a successful switch records a success.
 - **`spineParity.integration.test.ts`:** the spine's five fields equal the explain endpoint's `freshness`, and
   the bank object's keys are locked.
 - **`bankBalanceExplain.integration.test.ts`:** a real response parses against the generated
@@ -137,17 +156,19 @@ For those, `staleReason` is `refresh_failed` and `lastFailureAt` is null.
 ## Verification
 
 - **Workspace typecheck:** passes.
-- **Codegen:** the new schema types, the `Spine.bank` fields, and after review only description wording.
+- **Codegen:** the new schema types, the `Spine.bank` fields, and after the first review only description
+  wording.
   - The old untyped `GetForecastBankBalanceExplain200` is replaced by `BankBalanceExplain`, and nothing used it.
   - Its two tracked `dist` files would have stayed behind as orphans, since a build never deletes output for a
     removed source. They are removed. No other generated file is orphaned.
   - `lib/api-zod/dist/generated/api.d.ts` also carries reorder-only hunks in unrelated responses. That is
     compiler noise.
-- **Affected API tests:** 4 attempt files, 22 pass. `bankFreshness` and spine parity: 29 pass.
-- **Full API suite:** **115 files, 826 pass plus 8 pending**, on an isolated database with the Mac held awake.
-  That is two files and 19 tests more than `fab2a9d`: seven more freshness cases, four sync attempt cases and
-  eight route attempt cases.
-- **Full web suite (clock in UTC):** 109 files, 802 pass. No web code changed.
+- **Affected API tests:** the attempt, refresh-bank, freshness and spine parity files, 6 files, 55 pass.
+- **Full API suite:** **115 files, 830 pass plus 8 pending**, on an isolated database with the Mac held awake.
+  That is two files and 23 tests more than `fab2a9d`: seven more freshness cases, six sync attempt cases and ten
+  route attempt cases.
+- **Full web suite (clock in UTC):** 109 files, 802 pass on `7d6adba`. The last commit changes no web code, spec
+  or generated file.
 - **Build:** passes. **Landing bundle guard:** 571.3 KB of 580, unchanged.
 
 ## Cost
@@ -168,7 +189,7 @@ For those, `staleReason` is `refresh_failed` and `lastFailureAt` is null.
 - **`old` reads the feed, not the anchor's age.** The plan said "more than 48 hours". Decided after review,
   for the reason given under "The rule".
 
-## Independent review, and what was done
+## First independent review, and what was done
 
 A separate reviewer read `fab2a9d`, and the verdict was **changes needed**. It confirmed these areas were clean:
 - **No stuck state.** Every dead-feed code is cleared by a successful sync, a relink, LOGIN_REPAIRED, a cursor
@@ -201,6 +222,30 @@ A separate reviewer read `fab2a9d`, and the verdict was **changes needed**. It c
    - This note no longer says `lastFailureAt` is null only for webhook codes.
    - It no longer claims the landing scan covers `bank`; the new shape lock does.
    - It names the reorder-only compiler hunks.
+
+## Second look, and what was done
+
+The same reviewer read `7d6adba` and **approved**. It confirmed:
+- The balance call's condition is unchanged, and the row is written if and only if the call ran.
+- `refresh-bank`'s primary-account logic and return paths are right.
+- The `PRODUCT_NOT_READY` filter handles null codes.
+- The new `old` rule suits a household with no background sync.
+- Every wrong implementation it listed now fails a case.
+
+It left four follow-ups, none blocking, all applied:
+
+1. **LOW — fixed. A failed switch blamed the unchanged balance.** Switching the snapshot to another account on
+   the same item, with Plaid failing or returning no balance, recorded the failure against the current bank
+   balance's item. `bank-snapshot` now records a failure only for the bank balance's own account, as
+   `refresh-bank` does.
+2. **LOW — fixed. An empty answer counted as a success.** A manual Sync whose balance call returned no balance,
+   or `PRODUCT_NOT_READY`, logged a success, which could clear `refresh_failed` without the balance moving.
+   - It now records `no_balance` or `PRODUCT_NOT_READY`, still without touching the item's error columns.
+   - The success test now uses a real balance.
+3. **NIT — fixed. The route rows were written for whoever linked the bank,** while Recent activity lists by the
+   signed-in user, and they lacked Plaid's error kind. Both routes now write for the signed-in user and pass
+   the error details.
+4. **NIT — fixed.** The rows table no longer implies the sync skips `PRODUCT_NOT_READY` rows.
 
 ## Left for PR3b
 
