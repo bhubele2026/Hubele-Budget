@@ -494,6 +494,45 @@ describe("Forecast — a partly-paid plan past due (PR5b review M1)", () => {
     ],
   };
 
+  it("(second review NIT) Mark missed still works on an occurrence that shares its date with a moved partial", () => {
+    // Rent3's 05-13 occurrence was moved onto 05-20 and partly paid; its 05-20
+    // occurrence is still pending. Both lines sit on 05-20.
+    forecastData = {
+      ...FORECAST,
+      events: [
+        { itemId: "rent3", date: "2026-05-13", label: "Rent", kind: "expense", amount: -500 },
+        { itemId: "rent3", date: "2026-05-20", label: "Rent", kind: "expense", amount: -500 },
+      ],
+      transactions: [txn("t-rent3", "2026-05-12", "RENT PORTAL", "-250.00")],
+      resolutions: [
+        {
+          id: "r-move",
+          recurringItemId: "rent3",
+          occurrenceDate: "2026-05-13",
+          status: "rescheduled",
+          matchedTxnId: null,
+          rescheduledTo: "2026-05-20",
+        },
+        {
+          id: "r-part",
+          recurringItemId: "rent3",
+          occurrenceDate: "2026-05-13",
+          status: "partial",
+          matchedTxnId: "t-rent3",
+          txnAmount: "-250.00",
+        },
+      ],
+    };
+    cashSignalData = cashSignal([]);
+    renderPage("review");
+    const buttons = screen.getAllByTestId("mark-missed-rent3-2026-05-20");
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    expect(upsertMutate).toHaveBeenCalledWith({
+      data: { status: "missed", recurringItemId: "rent3", occurrenceDate: "2026-05-20" },
+    });
+  });
+
   it("stays on Review's register as Partly paid with its remainder", () => {
     forecastData = RENT_PARTIAL;
     cashSignalData = DRAGGED;

@@ -12,10 +12,16 @@ import {
  * Seeds are deterministic relative to the HOUSEHOLD date — the server's own
  * `today` from GET /api/forecast — and the browser runs in the household's
  * time zone, so Review's month is the household month on every run:
- *   - a monthly bill "Aqualine <tag>" for $150, due today;
+ *   - a monthly bill "Aqualine <tag>" for $150, due today, ANCHORED today;
  *   - a bank row "AQUALINE <TAG> WEB" for $150, dated today.
  * The row carries the bill's full name, the exact amount, on the same day, so
  * the server pairs them (high confidence, off the curve) on every calendar day.
+ *
+ * ⚠️ The anchor is load-bearing. Without `anchorDate`, `expandItem` starts a
+ * monthly item at the bundle's first day, so the bill also has an occurrence
+ * on the same day LAST month. Nothing pays it, and PR5a's earlier-unpaid rule
+ * keeps today's pair `offCurve: false` ("Still in forecast"). Anchored this
+ * month, the first occurrence is today's.
  */
 test.use({ timezoneId: "America/Chicago" });
 
@@ -92,6 +98,8 @@ async function seedPair(page: Page): Promise<Seeded> {
     amount: "150.00",
     frequency: "monthly",
     dayOfMonth: Number(today.slice(8, 10)),
+    // No occurrence before today (see the file header).
+    anchorDate: today,
     active: "true",
   });
   const description = `AQUALINE ${tag.toUpperCase()} WEB`;

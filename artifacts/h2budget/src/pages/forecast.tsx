@@ -105,6 +105,7 @@ import {
 } from "@/lib/forecastMatch";
 import type { CashEvent } from "@/lib/forecast";
 import { computeBankReconcile, EMPTY_RECONCILE } from "@/lib/forecastReconcile";
+import { withResolutionWrite } from "@/lib/forecastResolutionCache";
 import {
   linkRecurringToDebts,
   computePayoffsByDebt,
@@ -901,6 +902,23 @@ export default function ForecastPage({
     return s;
   }, [register]);
 
+  // (PR5b second review NIT) Would a missed / skipped write keyed on
+  // `<itemId>|<writeDate>` replace a partial? The line that OWNS that key is
+  // the occurrence whose resolution key it is; only when no occurrence owns it
+  // (a Past due / tooltip row carries a moved plan's current date) is the line
+  // found by its current date. So a pending occurrence that shares a date
+  // with another occurrence moved onto that day is not refused.
+  const writeKeyIsPartial = (itemId: string, writeDate: string): boolean => {
+    const lines = register?.allPlan ?? [];
+    const owner = lines.find(
+      (p) => p.itemId === itemId && (p.originalDate ?? p.date) === writeDate,
+    );
+    if (owner) return owner.status === "partial";
+    return lines.some(
+      (p) => p.itemId === itemId && p.date === writeDate && p.status === "partial",
+    );
+  };
+
   // Plan rows used as drop targets (active register, plan-only)
   const planRows: PlanLine[] = useMemo(() => {
     if (!register) return [];
@@ -1116,6 +1134,27 @@ export default function ForecastPage({
       },
       {
         onSuccess: (created: { id?: string } | undefined) => {
+          // (PR5b second review N2) Put the answer into the cached bundle
+          // BEFORE refetching. `invalidate()` refetches the bundle and the
+          // cash signal together and the lighter signal usually lands first:
+          // the old bundle plus the new signal would rebuild a rejected pair
+          // as a client suggestion (or a just-partialled plan as pending), and
+          // one click in that window would write `matched` over the answer.
+          const written: Resolution = {
+            id: created?.id ?? `pending:${plan.itemId}|${pp.planDate}#${pp.txnId}:${answer}`,
+            recurringItemId: plan.itemId,
+            occurrenceDate: pp.planDate,
+            status: answer,
+            matchedTxnId: pp.txnId,
+            rescheduledTo: null,
+            txnDate: pp.txnDate,
+            txnDescription: pp.txnDescription,
+            txnAmount: String(pp.txnAmount),
+          };
+          qc.setQueriesData(
+            { predicate: (q) => q.queryKey[0] === "/api/forecast" },
+            (old: unknown) => withResolutionWrite(old, written),
+          );
           invalidate();
           const newId = created?.id;
           const undo = newId ? (
@@ -1389,12 +1428,7 @@ export default function ForecastPage({
     // due card and the chart tooltip build a "pending" line from the curve's
     // event, so the register's own record is checked too.
     if (!isPlanRowMatchEligible(row)) return;
-    if (
-      partialPlanKeys.has(`${row.itemId}|${row.date}`) ||
-      partialPlanKeys.has(`${row.itemId}|${row.originalDate ?? row.date}`)
-    ) {
-      return;
-    }
+    if (writeKeyIsPartial(row.itemId, row.originalDate ?? row.date)) return;
     upsertResolution.mutate(
       {
         data: {
@@ -1568,8 +1602,8 @@ export default function ForecastPage({
     effectiveDate: string;
   }) => {
     if (!row.itemId || !row.originalDate) return;
-    // (PR5b) Never over a partial: the skip would replace it (see partialPlanKeys).
-    if (partialPlanKeys.has(`${row.itemId}|${row.originalDate}`)) return;
+    // (PR5b) Never over a partial: the skip would replace it (see writeKeyIsPartial).
+    if (writeKeyIsPartial(row.itemId, row.originalDate)) return;
     upsertResolution.mutate(
       {
         data: {
