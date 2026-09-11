@@ -264,3 +264,20 @@ describe("/weekly-settlements takes only a Sunday", () => {
     expect(await get<unknown[]>(`/weekly-settlements?weekStart=${SUNDAY}`)).toEqual([]);
   });
 });
+
+type BudgetFacts = { range: { monthStart: string } };
+
+describe("/reports/budget-facts with no monthStart, the last evening of September on a UTC server", () => {
+  it("reports September", async () => {
+    vi.setSystemTime(LAST_EVENING_OF_SEPTEMBER);
+    const facts = await get<BudgetFacts>("/reports/budget-facts");
+    // The old default read the UTC month, already October: 2026-10-01.
+    expect(facts.range.monthStart).toBe("2026-09-01");
+  });
+
+  it("an explicit monthStart is still honoured as given", async () => {
+    vi.setSystemTime(LAST_EVENING_OF_SEPTEMBER);
+    const facts = await get<BudgetFacts>("/reports/budget-facts?monthStart=2026-08-15");
+    expect(facts.range.monthStart).toBe("2026-08-01");
+  });
+});

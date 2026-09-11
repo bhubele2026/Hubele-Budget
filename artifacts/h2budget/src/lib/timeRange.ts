@@ -3,10 +3,10 @@
 // match the app's existing convention (weekStartFor / allowance sundayOf /
 // currentWeekBounds) — never a new week definition.
 //
-// (PR2) The week is the HOUSEHOLD's (America/Chicago), whatever timezone the
-// browser is in. Month and year still read the browser's local date.
+// (PR2) Week, month and year are the HOUSEHOLD's (America/Chicago), whatever
+// timezone the browser is in. `ref` is an INSTANT.
 
-import { householdToday, weekBounds } from "./householdDay";
+import { householdToday, monthBounds, weekBounds } from "./householdDay";
 
 export type RangeMode = "wk" | "mo" | "yr";
 
@@ -17,9 +17,6 @@ export interface DateRange {
   mode: RangeMode;
 }
 
-function isoOf(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 /**
  * "Sep 6" (or "6") for a YYYY-MM-DD. Formatted at noon UTC in UTC, so the
  * browser's own timezone can never shift the day being labelled.
@@ -57,20 +54,23 @@ export function currentWeekRange(ref: Date = new Date()): DateRange {
 }
 
 export function currentMonthRange(ref: Date = new Date()): DateRange {
-  const first = new Date(ref.getFullYear(), ref.getMonth(), 1);
-  const last = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+  const { start, end } = monthBounds(householdToday(ref));
   return {
-    from: isoOf(first),
-    to: isoOf(last),
-    label: ref.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    from: start,
+    to: end,
+    // "September 2026", formatted in UTC from the day itself (see dayLabel).
+    label: new Date(`${start}T12:00:00Z`).toLocaleDateString("en-US", {
+      timeZone: "UTC",
+      month: "long",
+      year: "numeric",
+    }),
     mode: "mo",
   };
 }
 
 export function currentYearRange(ref: Date = new Date()): DateRange {
-  const first = new Date(ref.getFullYear(), 0, 1);
-  const last = new Date(ref.getFullYear(), 11, 31);
-  return { from: isoOf(first), to: isoOf(last), label: `${ref.getFullYear()}`, mode: "yr" };
+  const year = householdToday(ref).slice(0, 4);
+  return { from: `${year}-01-01`, to: `${year}-12-31`, label: year, mode: "yr" };
 }
 
 /** Resolve a range for the given mode, anchored to `ref` (defaults to today). */

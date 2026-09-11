@@ -522,6 +522,46 @@ function todayISOForWeek(): string {
   return householdToday();
 }
 
+describe("Banking — the household's month (PR2)", () => {
+  // The week beside these tiles is already the household's; the month must be
+  // too. A UTC browser is ahead of Chicago in the evening, a Pacific one behind.
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const row = (id: string) =>
+    screen.getByTestId(id).closest(String.raw`[role="row"]`) as HTMLElement;
+
+  beforeEach(() => {
+    state.txns = [
+      txn({ id: "m-sep", amount: "-90.00", monthlyAllowance: true, occurredOn: "2026-09-30" }),
+      txn({ id: "m-oct", amount: "-55.00", monthlyAllowance: true, occurredOn: "2026-10-01" }),
+      txn({ id: "u-sep", amount: "-175.00", unplannedAllowance: true, occurredOn: "2026-09-15" }),
+    ];
+  });
+
+  it("Wed 9/30 at 9pm Central is still September, even on a UTC browser", () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-10-01T02:00:00Z"));
+    render(<CommandCenterPage />);
+    // Old, under UTC: October — $55.00 in the month and nothing unplanned.
+    expect(row("cc-month-tile").textContent).toContain("This month");
+    expect(row("cc-month-tile").textContent).toContain("$90.00");
+    expect(row("cc-month-tile").textContent).not.toContain("$55.00");
+    expect(row("cc-unplanned-tile").textContent).toContain("$175.00");
+  });
+
+  it("Thu 10/1 at 12:30am Central is October, even on a Pacific browser still on 9/30", () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-10-01T05:30:00Z"));
+    render(<CommandCenterPage />);
+    // Old, under Pacific: September — $90.00 and $175.00.
+    expect(row("cc-month-tile").textContent).toContain("$55.00");
+    expect(row("cc-month-tile").textContent).not.toContain("$90.00");
+    expect(row("cc-unplanned-tile").textContent).not.toContain("$175.00");
+  });
+});
+
 describe("Banking — why this number?", () => {
   it("puts a 'Why this number?' button on the bank balance tile", () => {
     render(<CommandCenterPage />);
