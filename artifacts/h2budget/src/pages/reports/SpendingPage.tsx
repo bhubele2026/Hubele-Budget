@@ -517,11 +517,23 @@ function SpendingSection({
           index={0}
           label="Total real spend"
           value={formatCurrency(facts.realSpend.total)}
-          hint={`${facts.realSpend.transactionCount} transactions · ${rangeLabel(facts.range.start, facts.range.end)}${
-            facts.uncategorized.total > 0
-              ? ` · + ${formatCurrency(facts.uncategorized.total)} uncategorized`
-              : ""
-          }`}
+          hint={
+            <>
+              {`${facts.realSpend.transactionCount} transactions · ${rangeLabel(facts.range.start, facts.range.end)}`}
+              {facts.uncategorized.total > 0 && (
+                <>
+                  {" · + "}
+                  <span
+                    className="font-mono tabular-nums"
+                    data-testid="spending-total-uncategorized"
+                  >
+                    {formatCurrency(facts.uncategorized.total)}
+                  </span>
+                  {" uncategorized"}
+                </>
+              )}
+            </>
+          }
           data-testid="spending-total"
         />
         <Stat
