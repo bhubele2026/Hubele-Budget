@@ -101,11 +101,17 @@ export function isBankRow(
  *
  * ⚠️ THE CALLER CHOOSES THE ROWS, AND PAIRING MAKES THAT MATTER. A row's outcome
  * depends on the other rows passed in: a pending row is superseded only if its
- * posted row is among them. For outcomes dated on or before a day D to be
- * complete, pass every row dated from the anchor day − SUPERSEDE_MAX_DAYS
- * through D + SUPERSEDE_MAX_DAYS (a posted row replaces a pending row dated at
- * most that many days earlier, and posted rows pair in date order, so later rows
- * cannot change earlier pairs). `lib/ledgerCashRows.ts` holds that query.
+ * posted row is among them, and because pairing is one to one, a row can change
+ * which pending row a later posted row takes. To get the ledger's outcomes for
+ * rows dated on or before a day D, pass the same rows the ledger reads — from the
+ * anchor day − SUPERSEDE_MAX_DAYS — through at least D + SUPERSEDE_MAX_DAYS.
+ *   - The upper edge is safe: posted rows pair in date order, and a posted row
+ *     replaces a pending row dated at most SUPERSEDE_MAX_DAYS earlier, so later
+ *     rows cannot change those outcomes.
+ *   - The lower edge is the ledger's, not a complete one: a pending row dated
+ *     before it, left out, can leave a posted row to take a different pending row
+ *     and so change a pair after the anchor. The ledger reads the same bound, so
+ *     every caller of `lib/ledgerCashRows.ts` still agrees with it.
  */
 export function classifyCashRows(
   rows: readonly CashRow[],

@@ -179,6 +179,20 @@ describe("classifyCashRows", () => {
     ]);
   });
 
+  it("⚠️ the lower bound is the ledger's, not a complete one: a row before anchor − 7 can change a later pair", () => {
+    // All rows: q1 takes p1 (closer amount), leaving p2 — held, a charge — for q2,
+    // which adds only −5.00. From anchor − 7 (04-24) p1 is gone, q1 takes p2, and
+    // q2 counts in full. The ledger reads from the same bound, so it agrees.
+    const rows = [
+      row("p1", "2026-04-22", -54, { pending: true }),
+      row("q1", "2026-04-28", -55),
+      row("p2", "2026-04-26", -50, { pending: true }),
+      row("q2", "2026-05-03", -55),
+    ];
+    expect(classify(rows).throughToday).toEqual({ rowCount: 1, net: -5 });
+    expect(classify(rows.filter((r) => r.occurredOn >= "2026-04-24")).throughToday).toEqual({ rowCount: 1, net: -55 });
+  });
+
   it("with no anchor nothing is held, and pairing still applies", () => {
     const r = classify(
       [

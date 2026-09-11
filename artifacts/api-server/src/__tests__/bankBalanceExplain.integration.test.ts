@@ -43,6 +43,8 @@ import { GetForecastBankBalanceExplainResponse } from "@workspace/api-zod";
 import bankBalanceExplainRouter from "../routes/bankBalanceExplain";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
+import { householdTodayISO } from "../lib/householdClock";
+import { addDaysISO } from "@workspace/avalanche-core";
 
 const app = express();
 app.use(express.json());
@@ -206,6 +208,71 @@ describe("GET /forecast/bank-balance-explain", () => {
     expect(e.displayed.bankToday).toBe("4429.06");
     const cents = (v: string) => Math.round(Number(v) * 100);
     expect(cents(e.snapshot.balance!) + cents(e.ledger.sinceAnchor!.net)).toBe(cents(e.displayed.bankToday));
+  });
+
+  it("(review E) a typed (manual) snapshot ties the same way", async () => {
+    // A balance typed in at 10:00 CT on 08-20. The rule does not care where the
+    // anchor came from: a Plaid charge dated ahead that the ledger had before the
+    // read is held; a later Plaid charge and a manual row count.
+    await reset();
+    const { rowId } = await seedAccount({ externalId: "chase-5526", mask: "5526" });
+    await db.insert(forecastSettingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      bankSnapshotAccountId: rowId,
+      bankSnapshotBalance: "2500.00",
+      bankSnapshotAt: new Date("2026-08-20T15:00:00Z"),
+      bankSnapshotSource: "manual",
+      bankSnapshotMask: "5526",
+      cashBuffer: "0",
+    });
+    const base = { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, plaidAccountId: "chase-5526", source: "plaid:chase" };
+    await db.insert(transactionsTable).values([
+      { ...base, occurredOn: "2026-08-22", description: "NETFLIX", amount: "-40.00", createdAt: new Date("2026-08-20T14:00:00Z") },
+      { ...base, occurredOn: "2026-08-21", description: "HY-VEE", amount: "-60.00", createdAt: createdAtStartOfHouseholdDay("2026-08-21") },
+      { ...base, plaidAccountId: null, source: "manual", occurredOn: "2026-08-21", description: "Check 1043", amount: "-25.00", createdAt: createdAtStartOfHouseholdDay("2026-08-21") },
+    ]);
+
+    const e = await explain();
+    expect(e.snapshot.balance).toBe("2500.00");
+    expect(e.ledger.sinceAnchor).toEqual({ rowCount: 2, net: "-85.00" });
+    expect(e.displayed.bankToday).toBe("2415.00");
+    const cents = (v: string) => Math.round(Number(v) * 100);
+    expect(cents(e.snapshot.balance!) + cents(e.ledger.sinceAnchor!.net)).toBe(cents(e.displayed.bankToday));
+  });
+
+  it("(review) a pair split across the today + 7 edge still ties: a posted row at today + 6 replaces today's pending row", async () => {
+    // The explain query reads through today + 7; the balance's 90-day ledger reads
+    // further. Today's pending −30.00 is replaced by the posted −32.00 at today + 6,
+    // so it adds nothing today. The competing posted −31.00 at today + 8 is past
+    // explain's bound and, dated more than 7 days after the pending row, could not
+    // take it anyway. Both reads therefore add only HY-VEE.
+    await reset();
+    const { rowId } = await seedAccount({ externalId: "chase-5526", mask: "5526" });
+    await db.insert(forecastSettingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      bankSnapshotAccountId: rowId,
+      bankSnapshotBalance: "4726.97",
+      bankSnapshotAt: new Date("2026-08-20T12:00:00Z"),
+      bankSnapshotSource: "plaid",
+      bankSnapshotMask: "5526",
+      cashBuffer: "0",
+    });
+    const today = householdTodayISO();
+    const plus6 = addDaysISO(today, 6);
+    const plus8 = addDaysISO(today, 8);
+    const base = { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, plaidAccountId: "chase-5526", source: "plaid:chase" };
+    await db.insert(transactionsTable).values([
+      { ...base, occurredOn: "2026-08-21", description: "HY-VEE", amount: "-442.91", createdAt: createdAtStartOfHouseholdDay("2026-08-21") },
+      { ...base, occurredOn: today, description: "TST* CORNER BISTRO", amount: "-30.00", pending: true, createdAt: createdAtStartOfHouseholdDay(today) },
+      { ...base, occurredOn: plus6, description: "CORNER BISTRO", amount: "-32.00", forecastFlag: true, createdAt: createdAtStartOfHouseholdDay(plus6) },
+      { ...base, occurredOn: plus8, description: "CORNER BISTRO", amount: "-31.00", forecastFlag: true, createdAt: createdAtStartOfHouseholdDay(plus8) },
+    ]);
+
+    const e = await explain();
+    expect(e.ledger.sinceAnchor).toEqual({ rowCount: 1, net: "-442.91" });
+    expect(e.displayed.bankToday).toBe("4284.06");
   });
 
   it("(PR4e) an unresolved account still rolls its manual rows, and the rows line says so", async () => {

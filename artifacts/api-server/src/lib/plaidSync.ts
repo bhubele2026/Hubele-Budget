@@ -2451,14 +2451,22 @@ export async function syncPlaidItem(
         // Household calendar days (America/Chicago), matching the roll-forward.
         const anchorDay = householdDayOf(new Date(prevSnapshotAt));
         const todayDay = householdTodayISO();
-        // ⭐ THE LEDGER'S OWN RULE (PR4e). The prediction is what cash today
-        // would read on the PRE-sync anchor: `classifyCashRows` over the rows
-        // the ledger reads. A day sum here used to add charges the anchor
-        // already held and both halves of an unlinked pending/posted pair, so
-        // an honest ledger raised drift — a false "doesn't match our records"
-        // toast and an extra /transactions/get backfill. Manual rows on the
-        // account count, as they do in the balance on screen. Re-read after a
-        // backfill: it can add rows.
+        // ⭐ THE LEDGER'S OWN RULE, OVER THE BANK FEED'S OWN ROWS (PR4e). The
+        // prediction is `classifyCashRows` on the PRE-sync anchor, over the rows
+        // the ledger reads, summing only rows with a Plaid account. A day sum
+        // here used to add charges the anchor already held and both halves of an
+        // unlinked pending/posted pair, so an honest ledger raised drift — a
+        // false "doesn't match our records" toast and an extra
+        // /transactions/get backfill.
+        //
+        // ⚠️ MANUAL ROWS STAY OUT, although cash today counts them. "Log
+        // payment" (routes/debts.ts) writes a `source: "manual"` checking row
+        // for every debt payment. The sync merges manual rows only on an
+        // account's first sync (#361) and dedupe is per Plaid account, so the
+        // row stays for good, beside the bank's own debit once it posts.
+        // Counting it here raised drift after every logged payment: before the
+        // debit, the bank has not moved; after it, the payment counts twice.
+        // Re-read after a backfill: it can add rows.
         const ledgerSince = async (): Promise<number> =>
           (
             await classifyLedgerRowsThroughToday({
@@ -2467,7 +2475,7 @@ export async function syncPlaidItem(
               accountExternalId: checkingPlaidAccountId,
               todayISO: todayDay,
             })
-          ).throughToday.net;
+          ).plaidRowsThroughToday.net;
 
         let recon = reconcileBankBalance({
           anchorBalance: prevSnapshotBalance,

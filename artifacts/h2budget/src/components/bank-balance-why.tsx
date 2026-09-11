@@ -97,7 +97,7 @@ function Explanation({ explain }: { explain: BankBalanceExplain }) {
   const { snapshot, ledger, nextSync, freshness, displayed } = explain;
   const since = ledger.sinceAnchor;
   const cents = (v: string | number) => Math.round(Number(v) * 100);
-  // With no rows figure (the snapshot's account did not resolve), the snapshot
+  // With no rows figure (the snapshot has no read time), the snapshot
   // alone is compared with the balance: they can still differ.
   const addsUp =
     snapshot.balance == null

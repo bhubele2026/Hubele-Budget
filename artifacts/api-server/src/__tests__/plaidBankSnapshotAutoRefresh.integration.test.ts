@@ -335,10 +335,12 @@ describe("bank reconciliation on a manual Sync (2026-08-25)", () => {
 });
 
 // ⭐ PR4e — the reconciliation predicts with the ledger's own rule
-// (`classifyCashRows`), from the PRE-sync anchor. A day sum added charges the
-// anchor already held, both halves of an unlinked pending/posted pair, and left
-// out manual rows, so an honest ledger raised drift: a false "doesn't match our
-// records" toast plus a /transactions/get backfill.
+// (`classifyCashRows`), from the PRE-sync anchor, over the rows with a Plaid
+// account. A day sum added charges the anchor already held and both halves of an
+// unlinked pending/posted pair, so an honest ledger raised drift: a false
+// "doesn't match our records" toast plus a /transactions/get backfill. Manual
+// rows stay out (PR4e review): "Log payment" writes one for every debt payment,
+// and the bank feed never merges it.
 //
 // The anchor is read four days ago; S is its household day. Every row is dated
 // S..S+2, on or before today. No test passes `forceRefresh`, so the stale-cursor
@@ -442,15 +444,30 @@ describe("(PR4e) bank reconciliation uses the ledger's cash rule", () => {
     expect(driftLogged).toBe(false);
   });
 
-  it("a manual row on the account counts, as it does in the balance on screen: no drift", async () => {
-    // A check typed in by hand that the feed has not delivered. The bank holds
-    // 940.00; the day sum left manual rows out and predicted 1,000.00.
-    const { add, sync } = await setUp(940);
-    await add({ day: 1, amount: "-60.00", manual: true, description: "Check 1043" });
+  it("(review A) a payment logged on the Avalanche page that the bank has not debited yet: no drift", async () => {
+    // "Log payment" writes a manual −500.00 checking row. The bank still holds
+    // 1,000.00. Counting the manual row predicted 500.00 and toasted.
+    const { add, sync } = await setUp(1000);
+    await add({ day: 1, amount: "-500.00", manual: true, description: "Payment — Chase Freedom" });
 
     const { result, driftLogged } = await sync();
     expect(result.balanceDrift ?? null).toBeNull();
     expect(driftLogged).toBe(false);
+    expect(transactionsGetCalls).toBe(0);
+  });
+
+  it("(review B) the same logged payment once the bank's own debit arrived: no drift, no backfill", async () => {
+    // The manual row never merges with the Plaid debit, so both sit in the
+    // ledger. The bank holds 500.00. Counting the manual row predicted 0.00,
+    // toasted, and spent a /transactions/get call.
+    const { add, sync } = await setUp(500);
+    await add({ day: 1, amount: "-500.00", manual: true, description: "Payment — Chase Freedom" });
+    await add({ day: 1, amount: "-500.00", description: "CHASE CREDIT CRD AUTOPAY" });
+
+    const { result, driftLogged } = await sync();
+    expect(result.balanceDrift ?? null).toBeNull();
+    expect(driftLogged).toBe(false);
+    expect(transactionsGetCalls).toBe(0);
   });
 
   it("⭐ a row that is really missing still raises drift, at exactly its own amount, beside a held charge", async () => {

@@ -21,6 +21,11 @@ type TransactionRow = typeof transactionsTable.$inferSelect;
  * days before the anchor find the pending half of a pair (PR4c); `isInSnapshot`
  * holds every row dated before the snapshot day, so they add nothing on their own.
  *
+ * ⚠️ That lower bound is the ledger's, not a complete one: a pending row dated
+ * before it can still change a pair after the anchor through pairing order (see
+ * `classifyCashRows`). Every caller reads the same bound, so they agree with the
+ * ledger — which is what they exist to do.
+ *
  * Without a snapshot: forecast-flagged rows dated after today.
  */
 export function ledgerActualRowsWhere(opts: {
@@ -58,25 +63,34 @@ export function toCashRow(t: TransactionRow): CashRow {
   };
 }
 
+export type LedgerCashRows = CashRowsResult & {
+  /**
+   * `throughToday` over the rows with a Plaid account only: what the bank's own
+   * feed can confirm. The Sync's reconciliation uses this (PR4e review) — see
+   * `plaidSync` for why manual rows stay out of it.
+   */
+  plaidRowsThroughToday: { rowCount: number; net: number };
+};
+
 /**
  * What the ledger adds to `anchor` for cash today, row by row — for the
  * diagnostics that explain or test that figure against the bank.
  *
  * ⚠️ WHY THE ROWS REACH SUPERSEDE_MAX_DAYS PAST TODAY. A pending row dated today
  * is superseded by a posted row dated up to that many days later, so the outcome
- * of every row dated on or before today is final only once those rows are in.
- * Later rows cannot change it: posted rows pair in date order, and a posted row
- * only replaces a pending row dated at most SUPERSEDE_MAX_DAYS before it. The
- * ledger reads through its window's end, which for the 90-day horizon the spine
- * and the explain route use is past this bound, so `throughToday` is exactly what
- * their `bankToday` adds.
+ * of a row dated on or before today can depend on those rows. Later rows cannot
+ * change it: posted rows pair in date order, and a posted row only replaces a
+ * pending row dated at most SUPERSEDE_MAX_DAYS before it. The query is otherwise
+ * the ledger's (same lower bound, same filters), and the ledger reads through its
+ * window's end — for the 90-day horizon the spine and the explain route use, past
+ * this bound — so `throughToday` is exactly what their `bankToday` adds.
  */
 export async function classifyLedgerRowsThroughToday(opts: {
   householdId: string;
   anchor: CashAnchor;
   accountExternalId: string | null;
   todayISO: string;
-}): Promise<CashRowsResult> {
+}): Promise<LedgerCashRows> {
   const { householdId, anchor, accountExternalId, todayISO } = opts;
   const rows = await db
     .select()
@@ -89,5 +103,17 @@ export async function classifyLedgerRowsThroughToday(opts: {
         upperISO: addDaysISO(todayISO, SUPERSEDE_MAX_DAYS),
       }),
     );
-  return classifyCashRows(rows.map(toCashRow), { anchor, accountExternalId, todayISO });
+  const cashRows = rows.map(toCashRow);
+  const result = classifyCashRows(cashRows, { anchor, accountExternalId, todayISO });
+  // Outcomes come back in input order. A manual row never pairs and never shares
+  // a Plaid id, so leaving it out moves no other row's outcome.
+  let rowCount = 0;
+  let net = 0;
+  result.rows.forEach((o, i) => {
+    if (o.counts && o.occurredOn <= todayISO && cashRows[i]!.plaidAccountId) {
+      rowCount += 1;
+      net += o.contribution;
+    }
+  });
+  return { ...result, plaidRowsThroughToday: { rowCount, net } };
 }
