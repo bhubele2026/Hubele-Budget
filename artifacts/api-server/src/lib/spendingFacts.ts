@@ -168,7 +168,6 @@ export async function buildSpendingFacts(
       debtId: transactionsTable.debtId,
       isExternalCardPayment: transactionsTable.isExternalCardPayment,
       pfcDetailed: transactionsTable.pfcDetailed,
-      isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
     })
     .from(transactionsTable)
     .where(

@@ -36,7 +36,6 @@ function tx(over: Partial<SpendTxn> = {}): SpendTxn {
     isExternalCardPayment: false,
     reimbursable: false,
     pfcDetailed: null,
-    isTransferUserOverridden: false,
     ...over,
   };
 }

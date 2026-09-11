@@ -37,7 +37,6 @@ export interface OneOffTxn {
   isExternalCardPayment: boolean;
   reimbursable: boolean;
   pfcDetailed: string | null;
-  isTransferUserOverridden: boolean;
 }
 
 export interface OneOffResult {
@@ -72,7 +71,6 @@ export function computeOneOff(
       isExternalCardPayment: t.isExternalCardPayment,
       reimbursable: t.reimbursable,
       pfcDetailed: t.pfcDetailed,
-      isTransferUserOverridden: t.isTransferUserOverridden,
     };
     if (!isRealSpend(tx, ctx)) continue;
     if (matchesRecurring(tx.description)) continue; // tracked recurring, not one-off

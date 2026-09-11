@@ -407,7 +407,6 @@ export async function computeWeeklyPayoff(
             isExternalCardPayment: transactionsTable.isExternalCardPayment,
             reimbursable: transactionsTable.reimbursable,
             pfcDetailed: transactionsTable.pfcDetailed,
-            isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
           })
           .from(transactionsTable)
           .where(

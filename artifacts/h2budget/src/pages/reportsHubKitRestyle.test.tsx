@@ -242,6 +242,17 @@ describe("Reports hub — one basis, no local money maths", () => {
     );
   });
 
+  it("(PR7) says what real spend leaves out: + the uncategorized total", () => {
+    hub.facts = {
+      ...SPENDING_FACTS,
+      uncategorized: { total: 24.5, transactionCount: 1, sampleMerchants: [] },
+    };
+    renderPage();
+    const tile = screen.getByTestId("report-tile-spending").textContent ?? "";
+    expect(tile).toContain("$195.75");
+    expect(tile).toContain("+ $24.50 uncategorized");
+  });
+
   it("measures the budget ring against real income", () => {
     renderPage();
     // 195.75 / 2000 = 9.8% -> 10%

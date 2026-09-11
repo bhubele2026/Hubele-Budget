@@ -4,6 +4,8 @@ import {
   isRealSpend,
   isUncategorizedSpend,
   matchesCardPaymentPattern,
+  matchesTransferPattern,
+  normalizeDescription,
   PFC_CARD_PAYMENT,
   type OutflowKind,
   type OutflowRule,
@@ -39,7 +41,6 @@ const base: SpendTxn = {
   isExternalCardPayment: false,
   reimbursable: false,
   pfcDetailed: null,
-  isTransferUserOverridden: false,
 };
 
 type Row = [
@@ -128,40 +129,6 @@ describe("classifyOutflow — the edges", () => {
     expect(classifyOutflow({ ...base, categoryId: "uncat" }, ctx).kind).toBe("spend");
   });
 
-  describe("'this was a purchase' (isTransferUserOverridden with isTransfer=false)", () => {
-    const said = { isTransferUserOverridden: true, isTransfer: false };
-
-    it("skips the description match (rule 9)", () => {
-      const tx = { ...base, ...said, categoryId: "misc", description: "APPLECARD GSBANK PAYMENT" };
-      expect(classifyOutflow({ ...tx, isTransferUserOverridden: false }, ctx).rule).toBe(
-        "9-card-payment-pattern",
-      );
-      expect(classifyOutflow(tx, ctx)).toEqual({ kind: "spend", rule: "10-spend", categorized: true });
-    });
-
-    it("skips Plaid's card-payment category (rule 8)", () => {
-      const tx = { ...base, ...said, pfcDetailed: PFC_CARD_PAYMENT };
-      expect(classifyOutflow(tx, ctx).rule).toBe("10-spend");
-    });
-
-    it("never beats a recorded fact (rules 1–7) or bank noise (9b)", () => {
-      expect(classifyOutflow({ ...base, ...said, isExternalCardPayment: true }, ctx).rule).toBe(
-        "3-external-card-payment",
-      );
-      expect(classifyOutflow({ ...base, ...said, debtId: "debt-sky" }, ctx).rule).toBe("2-debt-id");
-      expect(classifyOutflow({ ...base, ...said, reimbursable: true }, ctx).rule).toBe("7-reimbursable");
-      expect(
-        classifyOutflow({ ...base, ...said, description: "AMERICAN EXPRESS ACH PMT" }, ctx).rule,
-      ).toBe("9b-bank-noise");
-    });
-
-    it("a user-set transfer stays a transfer", () => {
-      expect(classifyOutflow({ ...base, isTransferUserOverridden: true, isTransfer: true }, ctx).rule).toBe(
-        "1-transfer",
-      );
-    });
-  });
-
   it("the Amex payoff option counts a reimbursable charge and nothing else", () => {
     const reimb = { ...base, reimbursable: true };
     expect(isRealSpend(reimb, ctx)).toBe(false);
@@ -171,7 +138,99 @@ describe("classifyOutflow — the edges", () => {
   });
 });
 
+describe("recognition is automatic (review H1)", () => {
+  const payment = { ...base, description: "CAPITAL ONE CRCARDPMT 5KX9" };
+
+  it.each([
+    ["uncategorized", null],
+    ["filed under Misc / Buffer", "misc"],
+    ["filed under Groceries", "groceries"],
+    ["in the system Uncategorized category", "uncat"],
+    ["in a category since deleted", "gone"],
+  ])("a card payment %s is still a card payment", (_label, categoryId) => {
+    expect(classifyOutflow({ ...payment, categoryId }, ctx).rule).toBe("9-card-payment-pattern");
+  });
+
+  it("ignores the transfer-override flag a hand-picked category sets", () => {
+    // Not part of SpendTxn any more; a row read with `select()` still carries it.
+    const handFiled = { ...payment, categoryId: "misc", isTransferUserOverridden: true } as SpendTxn;
+    expect(classifyOutflow(handFiled, ctx).kind).toBe("card_payment");
+    const plaidFiled = { ...base, pfcDetailed: PFC_CARD_PAYMENT, isTransferUserOverridden: true } as SpendTxn;
+    expect(classifyOutflow(plaidFiled, ctx).kind).toBe("card_payment");
+  });
+});
+
 describe("CARD_PAYMENT_PATTERNS", () => {
+  it.each([
+    "CAPITAL ONE CRCARDPMT 5KX9",
+    "CAPITAL ONE MOBILE PYMT",
+    "CAPITAL ONE ONLINE PYMT",
+    "APPLECARD GSBANK PAYMENT 12345",
+    "DISCOVER E-PAYMENT 7788",
+    "DISCOVER DC PYMNTS 200112",
+    "CITI CARD ONLINE PAYMENT",
+    "SYNCHRONY BANK/PAYPAL",
+    "SYNCHRONY BANK PAYMENT",
+    "PAYPAL *PAYMTHLY",
+    "BARCLAYCARD US CREDITCARD",
+    "BEST BUY CREDIT CARD PYMT",
+    "TARGET CARD SRVC PAYMENT",
+    "AMEX EPAYMENT ACH PMT",
+    "AMERICAN EXPRESS ACH PMT M1234 WEB ID: 0005000008",
+    "ORIG CO NAME:CAPITAL ONE CRCARDPMT ORIG ID:9279744380",
+  ])("recognizes %s", (d) => {
+    expect(classifyOutflow({ ...base, categoryId: null, description: d }, ctx).rule).toBe(
+      "9-card-payment-pattern",
+    );
+  });
+
+  // Purchases at merchants whose names share words with card issuers, plus the
+  // everyday merchants a household ledger is made of. None is a card payment.
+  it.each([
+    "APPLE STORE R123",
+    "APPLE.COM/BILL",
+    "APPLECARE PROTECTION",
+    "CAPITAL ONE CAFE",
+    "Capital One Café #12",
+    "CAPITAL ONE ARENA TICKETS",
+    "DISCOVER BOOKS",
+    "DISCOVERY PLACE MUSEUM",
+    "AMERICAN EXPRESS TRAVEL",
+    "PAYPAL *NETFLIX",
+    "PAYPAL *EBAY INC",
+    "ZELLE TO JANE DOE",
+    "VENMO *JOHN SMITH",
+    "TARGET 00012345",
+    "TARGET.COM *ORDER",
+    "BEST BUY 00001234",
+    "BESTBUY.COM 8053",
+    "MATTRESS FIRM #1123",
+    "MENARDS 3011",
+    "AFFIRM *CASPER",
+    "CITI TRENDS 4421",
+    "CITIBIKE NYC",
+    "CREDIT ONE STADIUM",
+    "BARCLAYS CENTER",
+    "SYNCHRONY THEATRE",
+    "WHOLE FOODS MARKET",
+    "HY-VEE 1502",
+    "KWIK TRIP 812",
+    "DOORDASH*CHIPOTLE",
+    "UBER *TRIP",
+    "SHELL OIL 57442",
+    "COSTCO WHSE #1035",
+  ])("does not catch %s", (d) => {
+    expect(matchesCardPaymentPattern(d)).toBe(false);
+    expect(classifyOutflow({ ...base, categoryId: null, description: d }, ctx).kind).toBe("spend");
+  });
+
+  it("matches whole words after punctuation and padding are normalized", () => {
+    expect(normalizeDescription("  SYNCHRONY BANK/PAYPAL*  ")).toBe("synchrony bank paypal");
+    expect(matchesCardPaymentPattern("capital one    crcardpmt")).toBe(true);
+    // A phrase never fires inside a longer word.
+    expect(matchesCardPaymentPattern("XCRCARDPMTX")).toBe(false);
+  });
+
   it("recognizes the card payments the seed rules name", () => {
     const merchants = new Set(["MATTRESS FIRM", "AFFIRM"]); // a store charge, not a payment
     const seeded = SEED_MAPPING_RULES.filter(
@@ -186,16 +245,15 @@ describe("CARD_PAYMENT_PATTERNS", () => {
     }
   });
 
-  it("does not catch a purchase at a store that also offers a card", () => {
-    for (const d of ["MATTRESS FIRM #1123", "MENARDS 3011", "AFFIRM *BEST BUY", "CITI TRENDS 4421", "DISCOVER BOOKS"]) {
-      expect(matchesCardPaymentPattern(d), d).toBe(false);
-    }
-  });
-
-  it("are lowercase, whitespace-normal and unique, so a raw bank string can match", () => {
+  it("are written normalized and unique", () => {
     for (const p of CARD_PAYMENT_PATTERNS) {
-      expect(p).toBe(p.toLowerCase().replace(/\s+/g, " ").trim());
+      expect(p).toBe(normalizeDescription(p));
     }
     expect(new Set(CARD_PAYMENT_PATTERNS).size).toBe(CARD_PAYMENT_PATTERNS.length);
+  });
+
+  it("⚠️ the pre-PR7 bank-noise list is unchanged, including its loose 'epay' (disclosed)", () => {
+    expect(matchesTransferPattern("REPAY *PEST CONTROL")).toBe(true);
+    expect(matchesTransferPattern("EPAYMENTS PLUMBING LLC")).toBe(true);
   });
 });

@@ -96,6 +96,12 @@ export const GetDashboardResponse = zod.object({
       plaidTransactionId: zod.string().nullish(),
       plaidAccountId: zod.string().nullish(),
       debtId: zod.string().nullish(),
+      pfcDetailed: zod
+        .string()
+        .nullish()
+        .describe(
+          "Plaid personal_finance_category.detailed, persisted on sync (#636); null for manual and imported rows. Read by the one spending rule (classifyOutflow, rule 8), which the web shares.",
+        ),
       pending: zod
         .boolean()
         .describe(
@@ -210,6 +216,12 @@ export const ListTransactionsResponseItem = zod.object({
   plaidTransactionId: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
   debtId: zod.string().nullish(),
+  pfcDetailed: zod
+    .string()
+    .nullish()
+    .describe(
+      "Plaid personal_finance_category.detailed, persisted on sync (#636); null for manual and imported rows. Read by the one spending rule (classifyOutflow, rule 8), which the web shares.",
+    ),
   pending: zod
     .boolean()
     .describe(
@@ -366,6 +378,12 @@ export const UpdateTransactionResponse = zod
     plaidTransactionId: zod.string().nullish(),
     plaidAccountId: zod.string().nullish(),
     debtId: zod.string().nullish(),
+    pfcDetailed: zod
+      .string()
+      .nullish()
+      .describe(
+        "Plaid personal_finance_category.detailed, persisted on sync (#636); null for manual and imported rows. Read by the one spending rule (classifyOutflow, rule 8), which the web shares.",
+      ),
     pending: zod
       .boolean()
       .describe(
@@ -564,6 +582,12 @@ export const ClearTransferOverrideResponse = zod.object({
   plaidTransactionId: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
   debtId: zod.string().nullish(),
+  pfcDetailed: zod
+    .string()
+    .nullish()
+    .describe(
+      "Plaid personal_finance_category.detailed, persisted on sync (#636); null for manual and imported rows. Read by the one spending rule (classifyOutflow, rule 8), which the web shares.",
+    ),
   pending: zod
     .boolean()
     .describe(
@@ -2488,6 +2512,12 @@ export const GetForecastResponse = zod.object({
       plaidTransactionId: zod.string().nullish(),
       plaidAccountId: zod.string().nullish(),
       debtId: zod.string().nullish(),
+      pfcDetailed: zod
+        .string()
+        .nullish()
+        .describe(
+          "Plaid personal_finance_category.detailed, persisted on sync (#636); null for manual and imported rows. Read by the one spending rule (classifyOutflow, rule 8), which the web shares.",
+        ),
       pending: zod
         .boolean()
         .describe(

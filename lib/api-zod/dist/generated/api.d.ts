@@ -70,6 +70,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        pfcDetailed: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         pending: zod.ZodBoolean;
         matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         displayName: zod.ZodOptional<zod.ZodString>;
@@ -102,6 +103,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        pfcDetailed?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
         merchantSignature?: string | undefined;
@@ -133,6 +135,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        pfcDetailed?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
         merchantSignature?: string | undefined;
@@ -219,6 +222,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        pfcDetailed?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
         merchantSignature?: string | undefined;
@@ -277,6 +281,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        pfcDetailed?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
         merchantSignature?: string | undefined;
@@ -362,6 +367,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pfcDetailed: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     displayName: zod.ZodOptional<zod.ZodString>;
@@ -394,6 +400,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    pfcDetailed?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
     merchantSignature?: string | undefined;
@@ -425,6 +432,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    pfcDetailed?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
     merchantSignature?: string | undefined;
@@ -456,6 +464,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pfcDetailed: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     displayName: zod.ZodOptional<zod.ZodString>;
@@ -488,6 +497,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    pfcDetailed?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
     merchantSignature?: string | undefined;
@@ -519,6 +529,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    pfcDetailed?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
     merchantSignature?: string | undefined;
@@ -694,6 +705,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pfcDetailed: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     displayName: zod.ZodOptional<zod.ZodString>;
@@ -726,6 +738,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    pfcDetailed?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
     merchantSignature?: string | undefined;
@@ -757,6 +770,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    pfcDetailed?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
     merchantSignature?: string | undefined;
@@ -946,6 +960,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pfcDetailed: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     displayName: zod.ZodOptional<zod.ZodString>;
@@ -978,6 +993,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    pfcDetailed?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
     merchantSignature?: string | undefined;
@@ -1009,6 +1025,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    pfcDetailed?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
     merchantSignature?: string | undefined;
@@ -4959,6 +4976,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        pfcDetailed: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         pending: zod.ZodBoolean;
         matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         displayName: zod.ZodOptional<zod.ZodString>;
@@ -4991,6 +5009,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        pfcDetailed?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
         merchantSignature?: string | undefined;
@@ -5022,6 +5041,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        pfcDetailed?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
         merchantSignature?: string | undefined;
@@ -5311,6 +5331,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        pfcDetailed?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
         merchantSignature?: string | undefined;
@@ -5436,6 +5457,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        pfcDetailed?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
         merchantSignature?: string | undefined;

@@ -2202,6 +2202,12 @@ components:
         plaidTransactionId: { type: ["string", "null"] }
         plaidAccountId: { type: ["string", "null"] }
         debtId: { type: ["string", "null"] }
+        pfcDetailed:
+          type: ["string", "null"]
+          description: >-
+            Plaid personal_finance_category.detailed, persisted on sync (#636);
+            null for manual and imported rows. Read by the one spending rule
+            (classifyOutflow, rule 8), which the web shares.
         pending:
           type: boolean
           description: |

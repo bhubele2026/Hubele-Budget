@@ -196,6 +196,18 @@ export function ChaseInsightStrip({
                   : "Loading comparison…"}
             </span>
           </div>
+          {/* (PR7) The headline is household spending, categorized or not;
+              the category mix beside it is categorized only. Say by how much
+              they differ rather than let the bars look short. */}
+          {(cur?.uncategorized?.total ?? 0) > 0 && (
+            <div
+              className="mt-1 text-micro text-neutral-500"
+              data-testid="strip-uncategorized-note"
+            >
+              Includes {formatCurrency(cur!.uncategorized.total)} not yet
+              categorized
+            </div>
+          )}
         </div>
 
         <div className="min-w-0">
@@ -223,7 +235,7 @@ export function ChaseInsightStrip({
           value={
             cur?.uncategorized ? formatCurrency(cur.uncategorized.total) : "—"
           }
-          hint="Excluded from categorized spending above; may overlap UN"
+          hint="Included in the total above, not in the category mix; may overlap UN"
         />
       </div>
       <details

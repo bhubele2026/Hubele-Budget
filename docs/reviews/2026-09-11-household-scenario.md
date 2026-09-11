@@ -103,7 +103,7 @@ Starts at the snapshot and walks Chase rows dated after Sun 10/4.
 | S3 | + hardware $85.00. The transfer ("online transfer") and the Amex payoff ("ach pmt") are not spending. | $226.60 |
 | S4 | + Shell $45.00 | $271.60 |
 | S5 | Shell at $47.40 | $274.00 |
-| S10 | Unchanged: the Capital One payment ("crcardpmt") is a card payment | $274.00 |
+| S10 | Unchanged: the Capital One payment ("crcardpmt") is a card payment, even filed by hand under Misc / Buffer | $274.00 |
 
 ### Review count
 Unresolved Chase rows in October.

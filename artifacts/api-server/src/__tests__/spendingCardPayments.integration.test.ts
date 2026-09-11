@@ -33,9 +33,26 @@ vi.mock("../middlewares/requireAuth", () => ({
   },
 }));
 
-import { db, budgetCategoriesTable, transactionsTable } from "@workspace/db";
+// The PATCH route never calls Plaid; make sure of it.
+vi.mock("../lib/plaid", async () => {
+  const actual = await vi.importActual<typeof import("../lib/plaid")>("../lib/plaid");
+  return {
+    ...actual,
+    plaid: () => {
+      throw new Error("no Plaid calls in this test");
+    },
+  };
+});
+
+import {
+  db,
+  budgetCategoriesTable,
+  mappingRulesTable,
+  transactionsTable,
+} from "@workspace/db";
 import reportsRouter from "../routes/reports";
 import spineRouter from "../routes/spine";
+import transactionsRouter from "../routes/transactions";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
@@ -46,6 +63,7 @@ app.use((req: { log?: unknown }, _res, next) => {
 });
 app.use(reportsRouter);
 app.use(spineRouter);
+app.use(transactionsRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -76,11 +94,20 @@ async function get<T>(path: string): Promise<T> {
   if (!r.ok) throw new Error(`GET ${path} -> ${r.status} ${await r.text()}`);
   return (await r.json()) as T;
 }
+async function patch(path: string, body: unknown): Promise<number> {
+  const r = await fetch(`${baseUrl}${path}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.status;
+}
 const facts = (w: { from: string; to: string }) =>
   get<Facts>(`/reports/spending-facts?from=${w.from}&to=${w.to}`);
 
 async function cleanup(): Promise<void> {
   await db.delete(transactionsTable).where(eq(transactionsTable.userId, TEST_USER));
+  await db.delete(mappingRulesTable).where(eq(mappingRulesTable.userId, TEST_USER));
   await db.delete(budgetCategoriesTable).where(eq(budgetCategoriesTable.userId, TEST_USER));
 }
 
@@ -96,6 +123,11 @@ async function addTxn(row: Partial<typeof transactionsTable.$inferInsert> & {
     .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, source: "plaid:chase", ...row })
     .returning({ id: transactionsTable.id });
   return t!.id;
+}
+
+async function readRow(id: string) {
+  const [row] = await db.select().from(transactionsTable).where(eq(transactionsTable.id, id));
+  return row!;
 }
 
 beforeAll(async () => {
@@ -136,52 +168,68 @@ describe("PR7 — a card payment is never spending twice", () => {
       categoryId: cat.groceries,
       source: "plaid:amex",
     });
-    // The seed mapping rules file this under Misc / Buffer, a plain expense
-    // category — which is exactly why it used to count.
     paymentId = await addTxn({
       occurredOn: "2026-10-07",
       description: "CAPITAL ONE CRCARDPMT 5KX9",
       amount: "-100.00",
-      categoryId: cat.misc,
+      categoryId: null,
     });
 
     const f = await facts(WEEK);
     expect(f.householdSpend).toEqual({ total: 100, transactionCount: 1 });
     expect(f.realSpend).toEqual({ total: 100, transactionCount: 1 });
+    expect(f.uncategorized.total).toBe(0);
     expect(f.excluded.cardPayments).toBe(100);
 
     const spine = await get<Spine>("/spine");
     expect(spine.spentWeek).toBe(100);
     expect(spine.spentMonth).toBe(100);
-    expect(spine.spentWeek).toBe(f.householdSpend.total);
   });
 
-  it("'this was a purchase' counts the row, on the report and the spine together, and nothing is re-tagged", async () => {
-    await db
-      .update(transactionsTable)
-      .set({ isTransferUserOverridden: true })
-      .where(eq(transactionsTable.id, paymentId));
+  it("(review H1) filing the card payment under a category by hand keeps it out of spending", async () => {
+    // The Spending page's Recategorize popover and the Chase row picker send
+    // exactly this; the route sets isTransferUserOverridden on the row.
+    expect(await patch(`/transactions/${paymentId}`, { categoryId: cat.misc })).toBe(200);
+    let row = await readRow(paymentId);
+    expect(row.categoryId).toBe(cat.misc);
+    expect(row.isTransferUserOverridden).toBe(true);
+
+    let f = await facts(WEEK);
+    expect(f.householdSpend).toEqual({ total: 100, transactionCount: 1 });
+    expect(f.excluded.cardPayments).toBe(100);
+    let spine = await get<Spine>("/spine");
+    expect(spine.spentWeek).toBe(100);
+    expect(spine.spentMonth).toBe(100);
+
+    // Clearing the Transfer flag by hand sets the same flag; still a card payment.
+    expect(await patch(`/transactions/${paymentId}`, { isTransfer: false })).toBe(200);
+    f = await facts(WEEK);
+    expect(f.householdSpend.total).toBe(100);
+    spine = await get<Spine>("/spine");
+    expect(spine.spentWeek).toBe(100);
+
+    // Recognition is in totals only: the row itself was never re-tagged.
+    row = await readRow(paymentId);
+    expect(row.isTransfer).toBe(false);
+    expect(row.isExternalCardPayment).toBe(false);
+    expect(row.categoryId).toBe(cat.misc);
+  });
+
+  it("(review M1) the spine's spent week and month are household spending, uncategorized included", async () => {
+    await addTxn({ occurredOn: "2026-10-06", description: "FARMERS MARKET", amount: "-12.34", categoryId: null });
 
     const f = await facts(WEEK);
-    expect(f.householdSpend.total).toBe(200);
-    expect(f.excluded.cardPayments).toBe(0);
-    expect((await get<Spine>("/spine")).spentWeek).toBe(200);
+    expect(f.householdSpend).toEqual({ total: 112.34, transactionCount: 2 });
+    expect(f.realSpend.total).toBe(100);
+    expect(f.uncategorized.total).toBe(12.34);
 
-    // Undo (the existing "reset to auto"): back to a card payment.
-    await db
-      .update(transactionsTable)
-      .set({ isTransferUserOverridden: false })
-      .where(eq(transactionsTable.id, paymentId));
-    expect((await facts(WEEK)).householdSpend.total).toBe(100);
-
-    // Recognition is in totals only: the row itself was never rewritten.
-    const [row] = await db
-      .select()
-      .from(transactionsTable)
-      .where(eq(transactionsTable.id, paymentId));
-    expect(row!.isTransfer).toBe(false);
-    expect(row!.isExternalCardPayment).toBe(false);
-    expect(row!.categoryId).toBe(cat.misc);
+    const spine = await get<Spine>("/spine");
+    expect(spine.spentWeek).toBe(f.householdSpend.total);
+    expect(spine.spentWeek).not.toBe(f.realSpend.total);
+    const month = await facts({ from: "2026-10-01", to: "2026-10-08" });
+    expect(spine.spentMonth).toBe(month.householdSpend.total);
+    expect(spine.spentMonth).not.toBe(month.realSpend.total);
+    expect(spine.spentMonth).toBe(112.34);
   });
 
   it("the rest of the rule on one ledger: every outflow lands in exactly one bucket", async () => {

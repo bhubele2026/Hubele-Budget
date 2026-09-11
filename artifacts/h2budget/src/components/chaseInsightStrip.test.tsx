@@ -48,6 +48,24 @@ describe("ChaseInsightStrip — the comparison says what it knows", () => {
     expect(screen.getByTestId("strip-comparison").textContent).toBe("Comparison unavailable");
   });
 
+  it("(PR7) says how much of the headline is not yet categorized", () => {
+    facts.cur = {
+      householdSpend: { total: 290 },
+      uncategorized: { total: 40 },
+      byCategory: [],
+    };
+    render(<ChaseInsightStrip range={RANGE} />);
+    expect(screen.getByTestId("strip-spend-total").textContent).toBe("$290.00");
+    expect(screen.getByTestId("strip-uncategorized-note").textContent).toContain(
+      "$40.00",
+    );
+  });
+
+  it("shows no uncategorized note when everything is categorized", () => {
+    render(<ChaseInsightStrip range={RANGE} />);
+    expect(screen.queryByTestId("strip-uncategorized-note")).toBeNull();
+  });
+
   it("compares against the previous window once it arrives", () => {
     facts.prev = { householdSpend: { total: 200 }, byCategory: [] };
     render(<ChaseInsightStrip range={RANGE} />);

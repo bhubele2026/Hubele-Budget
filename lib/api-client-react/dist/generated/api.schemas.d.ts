@@ -347,6 +347,11 @@ export interface Transaction {
     plaidAccountId?: string | null;
     /** @nullable */
     debtId?: string | null;
+    /**
+     * Plaid personal_finance_category.detailed, persisted on sync (#636); null for manual and imported rows. Read by the one spending rule (classifyOutflow, rule 8), which the web shares.
+     * @nullable
+     */
+    pfcDetailed?: string | null;
     /** (#728) True when Plaid reported this transaction as pending
   on the most recent /transactions/sync. Replaces the legacy
   `notes='[pending]'` string marker the sync used to write.
