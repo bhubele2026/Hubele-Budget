@@ -101,6 +101,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { syncAllForAllUsers, syncPlaidItem } from "../lib/plaidSync";
+import { computeCashSignal } from "../lib/cashSignal";
 import { logger } from "../lib/logger";
 import { householdDayOf } from "../lib/householdClock";
 import { addDaysISO } from "@workspace/avalanche-core";
@@ -486,6 +487,31 @@ describe("(PR4e) bank reconciliation uses the ledger's cash rule", () => {
     });
     expect(driftLogged).toBe(true);
     expect(transactionsGetCalls).toBeGreaterThan(0);
+  });
+
+  it("⚠️ (residual, pinned — not the goal) a hand-typed check the bank cleared but the feed has not delivered reports drift", async () => {
+    // Review C1. A check typed in by hand as a manual −60.00 row; the bank has
+    // cleared it (available 940.00) but Plaid has not delivered the row yet. The
+    // reconciliation sums Plaid rows only, so it predicts 1,000.00 and reports
+    // −60.00 as drift, a toast the owner cannot act on. This pins today's
+    // disclosed behaviour (PR4e note, residuals). It is not a desired end state:
+    // when manual rows can be matched to the feed's debits, change this test.
+    const { add, sync } = await setUp(940);
+    await add({ day: 1, amount: "-60.00", manual: true, description: "Check #1042" });
+
+    const { result, driftLogged } = await sync();
+    expect(result.balanceDrift).toEqual({
+      bank: "940.00",
+      ledger: "1000.00",
+      unexplained: "-60.00",
+    });
+    expect(driftLogged).toBe(true);
+
+    // Cash today on screen (the spine's call) is right regardless: the Sync
+    // re-anchored at 940.00, and that snapshot holds the manual row dated before
+    // its day.
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 90 });
+    expect(sig.bankToday).toBe("940.00");
   });
 });
 

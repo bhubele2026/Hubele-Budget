@@ -10,6 +10,16 @@ Codex work-order point **1** (cash today, one rule), plan PR4e. Server only. Bas
 | `dcc7202` | Review fixes (table below): the reconciliation sums Plaid rows only; window and spec wording; two stale comments; five tests. |
 | review-note commit | This note, updated. |
 
+**Update (follow-up to the approval, `fix/pr4e-review-nits`).** Three non-blocking review notes; tests and this note
+only, no source change.
+- **Wording:** a logged payment beside its bank debit keeps cash today low only until the next manual Sync, not "until
+  the row is removed". The re-read snapshot holds both rows, as the reviewer's case B showed (no drift on the second
+  Sync). Fixed under residuals and left for later.
+- **Edge test:** the explain today + 7 case put its posted row at today + 6, so a window ending at today + 6 also
+  passed. It now sits at exactly today + 7 and fails with that bound.
+- **C1 test:** a hand-typed check the bank cleared before the feed delivered it is now pinned through
+  `syncPlaidItem`. It shows drift −60.00 while cash today reads 940.00, a disclosed residual rather than a goal.
+
 ## Review findings and what was done
 
 The independent review of `24a8ce1` returned REQUEST CHANGES. It confirmed that `bankToday` does not move, that explain
@@ -87,7 +97,8 @@ per-row loop moved verbatim, carrying PR4c's review semantics from `62c7db0`.
   posted rows pair in date order, so rows after today + 7 cannot change an outcome dated on or before today. The spine
   and explain ledgers use a 90-day window, which reads past that bound, so `throughToday.net` is exactly what their
   `bankToday` adds. Tests pin this at the unit level (a posted row after today supersedes today's pending row) and
-  through explain (a posted row at today + 6 replaces today's pending row, beside a competing posted row at today + 8).
+  through explain (a posted row at exactly today + 7 replaces today's pending row, beside a competing posted row at
+  today + 8).
 - **Lower edge, anchor − 7:** the ledger's bound, not a complete one. A pending row dated before it can change a pair
   after the anchor through pairing order. Every caller reads the same bound, so all agree with the ledger (see
   residuals).
@@ -206,8 +217,9 @@ The production database stays locked.
   - A checking transaction recorded only by hand (a typed check the feed has not delivered) is left out of the
     prediction, so it can show as drift until the feed delivers it. That is the base's behaviour.
   - The balance on screen still counts a logged payment's manual row beside the bank's own debit: cash today is low by
-    that payment until the row is removed. This was true before PR4e and is not changed here. The reconciliation no
-    longer reports it, because it compares the bank with the feed's rows.
+    that payment until the next manual Sync re-reads the balance. The new snapshot then holds both rows, because both
+    are dated before its day. This was true before PR4e and is not changed here. The reconciliation does not report
+    it, because it compares the bank with the feed's rows.
 - **The reconciliation inherits the ledger's other residuals** (PR4b and PR4c notes). When the Plaid-row figure is wrong
   because of one, the drift toast says so.
 - **Row volume.** Explain now reads the household's forecast rows from anchor − 7 through today + 7, not one account's
@@ -236,8 +248,8 @@ The production database stays locked.
   - an unresolved account with a manual −84.06 and a Plaid −10.00: `{1, "-84.06"}`, balance 4200.00;
   - **(review E)** a typed snapshot of 2,500.00 with a held −40.00, a Plaid −60.00 and a manual −25.00: `{2, "-85.00"}`,
     balance 2415.00, tie in cents;
-  - **(review)** a pending −30.00 today replaced by a posted −32.00 at today + 6, beside a posted −31.00 at today + 8:
-    `{1, "-442.91"}`, balance 4284.06.
+  - **(review)** a pending −30.00 today replaced by a posted −32.00 at exactly today + 7, beside a posted −31.00 at
+    today + 8: `{1, "-442.91"}`, balance 4284.06.
 - **`__tests__/plaidBankSnapshotAutoRefresh.integration.test.ts`** (+6). A `transactionsGet` call counter was added to
   the existing mock. No test passes `forceRefresh`, so a call can only be the reconciliation's backfill. The cases:
   - **D1:** a held-ahead −25.00, bank 1000.00. No drift, no drift log, no backfill.
@@ -289,8 +301,9 @@ All from the worktree root, on `dcc7202`.
 
 - **PR14:** the web Chase page's balances move to server balances. `classifyCashRows` is already shared for the web
   ledger.
-- **A logged payment beside its bank debit:** both count in cash today (a double count that predates PR4e). It needs a
-  merge or match between "Log payment" rows and the feed's debits, which is sync write-path work.
+- **A logged payment beside its bank debit:** both count in cash today until the next manual Sync re-reads the balance
+  (a double count that predates PR4e). Closing that gap needs a merge or match between "Log payment" rows and the
+  feed's debits, which is sync write-path work.
 - **Window edges:** reading from before anchor − 7, or posted rows through today + 7 regardless of the window, would
   close the two window residuals above, but it moves the ledger's output. It needs its own PR and golden entries.
 - **Measuring** how often held-ahead charges and unlinked pairs raised false drift in production. This needs an

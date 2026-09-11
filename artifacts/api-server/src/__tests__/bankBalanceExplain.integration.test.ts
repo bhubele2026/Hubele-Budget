@@ -241,12 +241,14 @@ describe("GET /forecast/bank-balance-explain", () => {
     expect(cents(e.snapshot.balance!) + cents(e.ledger.sinceAnchor!.net)).toBe(cents(e.displayed.bankToday));
   });
 
-  it("(review) a pair split across the today + 7 edge still ties: a posted row at today + 6 replaces today's pending row", async () => {
+  it("(review) a pair split across the today + 7 edge still ties: a posted row at exactly today + 7 replaces today's pending row", async () => {
     // The explain query reads through today + 7; the balance's 90-day ledger reads
-    // further. Today's pending −30.00 is replaced by the posted −32.00 at today + 6,
-    // so it adds nothing today. The competing posted −31.00 at today + 8 is past
-    // explain's bound and, dated more than 7 days after the pending row, could not
-    // take it anyway. Both reads therefore add only HY-VEE.
+    // further. Today's pending −30.00 is replaced by the posted −32.00 dated on the
+    // bound itself, today + 7, so it adds nothing today. The competing posted
+    // −31.00 at today + 8 is past explain's bound and, dated more than 7 days after
+    // the pending row, could not take it anyway. Both reads therefore add only
+    // HY-VEE. (PR4e follow-up) The posted row sits ON the bound so a window ending
+    // at today + 6 fails here: it misses the −32.00 and counts the −30.00.
     await reset();
     const { rowId } = await seedAccount({ externalId: "chase-5526", mask: "5526" });
     await db.insert(forecastSettingsTable).values({
@@ -260,13 +262,13 @@ describe("GET /forecast/bank-balance-explain", () => {
       cashBuffer: "0",
     });
     const today = householdTodayISO();
-    const plus6 = addDaysISO(today, 6);
+    const plus7 = addDaysISO(today, 7);
     const plus8 = addDaysISO(today, 8);
     const base = { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, plaidAccountId: "chase-5526", source: "plaid:chase" };
     await db.insert(transactionsTable).values([
       { ...base, occurredOn: "2026-08-21", description: "HY-VEE", amount: "-442.91", createdAt: createdAtStartOfHouseholdDay("2026-08-21") },
       { ...base, occurredOn: today, description: "TST* CORNER BISTRO", amount: "-30.00", pending: true, createdAt: createdAtStartOfHouseholdDay(today) },
-      { ...base, occurredOn: plus6, description: "CORNER BISTRO", amount: "-32.00", forecastFlag: true, createdAt: createdAtStartOfHouseholdDay(plus6) },
+      { ...base, occurredOn: plus7, description: "CORNER BISTRO", amount: "-32.00", forecastFlag: true, createdAt: createdAtStartOfHouseholdDay(plus7) },
       { ...base, occurredOn: plus8, description: "CORNER BISTRO", amount: "-31.00", forecastFlag: true, createdAt: createdAtStartOfHouseholdDay(plus8) },
     ]);
 
