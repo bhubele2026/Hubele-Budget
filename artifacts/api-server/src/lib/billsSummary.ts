@@ -7,7 +7,7 @@ import {
   transactionsTable,
   avalancheSettingsTable,
 } from "@workspace/db";
-import { expandItem, fmtISO } from "./cashSignal";
+import { expandItem, fmtISO, isPastOneTime } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
 import {
   buildDebtMinSchedule,
@@ -64,17 +64,77 @@ export function todayDate(): Date {
   return householdTodayDate();
 }
 
+/** (PR6) How long an unresolved one-time bill stays active after the day it was due. */
+export const ONE_TIME_UNRESOLVED_KEEP_DAYS = 60;
+
+/**
+ * Archives (`active = "false"`) one-time bills whose date has passed.
+ *
+ * ⭐ (PR6) An UNRESOLVED one-time bill stays active while the day it is due —
+ * after any reschedule — is within the last 60 days (or still ahead), so the
+ * forecast can drag it (overdue up to 14 days), list it (older), or match it,
+ * and a moved one-time bill can still be recovered. Before PR6 it was archived
+ * the day after its date and simply vanished.
+ *   - "Resolved" = a matched, skipped, missed or dismissed resolution on its
+ *     occurrence — or on its moved-to date, where the pre-PR6 Past-due card
+ *     wrote it. A `partial` is not resolved: a remainder may still be owed.
+ *   - Everything that counted only active bills treats a one-time bill dated
+ *     before today as archived (`isPastOneTime`), so the Budget page plan and
+ *     the Bills totals do not change.
+ */
 export async function archiveExpiredOneTime(householdId: string): Promise<void> {
-  const todayISO = fmtISO(todayDate());
-  await db
-    .update(recurringItemsTable)
-    .set({ active: "false" })
+  const today = todayDate();
+  const todayISO = fmtISO(today);
+  const keepFromISO = fmtISO(
+    new Date(today.getFullYear(), today.getMonth(), today.getDate() - ONE_TIME_UNRESOLVED_KEEP_DAYS),
+  );
+  const expired = await db
+    .select({ id: recurringItemsTable.id, anchorDate: recurringItemsTable.anchorDate })
+    .from(recurringItemsTable)
     .where(
       and(
         eq(recurringItemsTable.householdId, householdId),
         eq(recurringItemsTable.frequency, "onetime"),
         eq(recurringItemsTable.active, "true"),
         lt(recurringItemsTable.anchorDate, todayISO),
+      ),
+    );
+  if (expired.length === 0) return;
+  const resolutions = await db
+    .select({
+      recurringItemId: forecastResolutionsTable.recurringItemId,
+      occurrenceDate: forecastResolutionsTable.occurrenceDate,
+      status: forecastResolutionsTable.status,
+      rescheduledTo: forecastResolutionsTable.rescheduledTo,
+    })
+    .from(forecastResolutionsTable)
+    .where(
+      and(
+        eq(forecastResolutionsTable.householdId, householdId),
+        inArray(forecastResolutionsTable.recurringItemId, expired.map((e) => e.id)),
+      ),
+    );
+  const archive = expired
+    .filter((item) => {
+      const own = resolutions.filter((r) => r.recurringItemId === item.id);
+      const moved = own.find((r) => r.status === "rescheduled" && r.occurrenceDate === item.anchorDate);
+      const dueISO = moved?.rescheduledTo ?? item.anchorDate!;
+      const resolved = own.some(
+        (r) =>
+          (r.status === "matched" || r.status === "skipped" || r.status === "missed" || r.status === "dismissed") &&
+          (r.occurrenceDate === item.anchorDate || r.occurrenceDate === dueISO),
+      );
+      return resolved || dueISO < keepFromISO;
+    })
+    .map((item) => item.id);
+  if (archive.length === 0) return;
+  await db
+    .update(recurringItemsTable)
+    .set({ active: "false" })
+    .where(
+      and(
+        eq(recurringItemsTable.householdId, householdId),
+        inArray(recurringItemsTable.id, archive),
       ),
     );
 }
@@ -92,6 +152,8 @@ function nextOccurrenceISO(item: RecurringRow): string | null {
 
 function monthlyAmountAbs(item: RecurringRow, from: Date, to: Date): number {
   if (item.active !== "true") return 0;
+  // (PR6) A one-time bill dated before today counts as archived, as before PR6.
+  if (isPastOneTime(item, fmtISO(todayDate()))) return 0;
   const events = expandItem(item, from, to);
   return events.reduce((s, e) => s + Math.abs(e.amount), 0);
 }
@@ -223,7 +285,7 @@ export async function buildBillsSummary(
     };
     if (item.kind === "income") incomeRows.push(row);
     else billRows.push(row);
-    if (item.active === "true") {
+    if (item.active === "true" && !isPastOneTime(item, fmtISO(today))) {
       active++;
       if (item.kind === "income") incomeTotal += monthlyAmount;
       else billsTotal += monthlyAmount;

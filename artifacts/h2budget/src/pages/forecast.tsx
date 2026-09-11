@@ -104,6 +104,12 @@ import {
   type PlanSuggestion,
 } from "@/lib/forecastMatch";
 import type { CashEvent } from "@/lib/forecast";
+import {
+  buildDraggingPlans,
+  buildEventsByDate,
+  draggingPlanLine,
+  type DraggingPlanRow,
+} from "@/lib/forecastPastDue";
 import { computeBankReconcile, EMPTY_RECONCILE } from "@/lib/forecastReconcile";
 import { withResolutionWrite } from "@/lib/forecastResolutionCache";
 import {
@@ -1595,21 +1601,17 @@ export default function ForecastPage({
   // the dragging-plans summary so we don't have to synthesize a full
   // BucketEntry. Server filters `skipped` resolutions out of the cash
   // signal, so the card hides itself once no plans are dragging anymore.
-  const onSkipDraggingPlan = (row: {
-    itemId: string;
-    label: string;
-    originalDate: string;
-    effectiveDate: string;
-  }) => {
-    if (!row.itemId || !row.originalDate) return;
+  const onSkipDraggingPlan = (row: DraggingPlanRow) => {
+    // (PR6) The occurrence key, never the moved-to date.
+    if (!row.itemId || !row.occurrenceDate) return;
     // (PR5b) Never over a partial: the skip would replace it (see writeKeyIsPartial).
-    if (writeKeyIsPartial(row.itemId, row.originalDate)) return;
+    if (writeKeyIsPartial(row.itemId, row.occurrenceDate)) return;
     upsertResolution.mutate(
       {
         data: {
           status: "skipped",
           recurringItemId: row.itemId,
-          occurrenceDate: row.originalDate,
+          occurrenceDate: row.occurrenceDate,
         },
       },
       {
@@ -1915,40 +1917,9 @@ export default function ForecastPage({
   // point clearly surfaces which pending plans are dragging that day's
   // projected balance — addresses the "are pending transactions actually
   // affecting the line?" confusion.
-  const eventsByDate = (() => {
-    const evs = proj?.events ?? [];
-    const map = new Map<
-      string,
-      Array<{
-        label: string;
-        amount: number;
-        itemId?: string;
-        // (#650) True iff the cash signal pulled this event forward
-        // onto `date` from a pre-snapshot pending plan. The chart
-        // tooltip uses this flag to keep the "Pending plans dragging
-        // this day" list focused on the actual drag — bills naturally
-        // due today do NOT belong in that section.
-        dragged: boolean;
-        originalDate?: string;
-      }>
-    >();
-    for (const e of evs) {
-      const amt = Number(e.amount);
-      if (!Number.isFinite(amt) || amt >= 0) continue;
-      const slot = map.get(e.date) ?? [];
-      const orig = (e as { originalDate?: string }).originalDate;
-      slot.push({
-        label: e.label,
-        amount: amt,
-        itemId: e.itemId,
-        dragged: !!orig && orig !== e.date,
-        originalDate: orig,
-      });
-      map.set(e.date, slot);
-    }
-    for (const [, list] of map) list.sort((a, b) => a.amount - b.amount);
-    return map;
-  })();
+  // (PR6) Built in lib/forecastPastDue, which also carries each event's
+  // occurrence key for the tooltip's Mark missed.
+  const eventsByDate = buildEventsByDate(proj?.events ?? []);
 
   // (#683) Past-due plans dragging tomorrow's projection. The cash signal
   // collapses every still-pending pre-snapshot/today expense onto
@@ -1956,38 +1927,8 @@ export default function ForecastPage({
   // understand why tomorrow looks lower than the calendar would suggest.
   // All dragged events share the same `date` (today+1) and carry their
   // original scheduled date in `originalDate`.
-  const draggingPlans = (() => {
-    const evs = proj?.events ?? [];
-    type Row = {
-      itemId: string;
-      label: string;
-      amount: number;
-      originalDate: string;
-      effectiveDate: string;
-    };
-    const rows: Row[] = [];
-    for (const e of evs) {
-      const orig = (e as { originalDate?: string }).originalDate;
-      if (!orig || orig === e.date) continue;
-      const amt = Number(e.amount);
-      if (!Number.isFinite(amt) || amt >= 0) continue;
-      rows.push({
-        itemId: e.itemId ?? "",
-        label: e.label,
-        amount: amt,
-        originalDate: orig,
-        effectiveDate: e.date,
-      });
-    }
-    rows.sort((a, b) =>
-      a.originalDate < b.originalDate
-        ? -1
-        : a.originalDate > b.originalDate
-          ? 1
-          : a.amount - b.amount,
-    );
-    return rows;
-  })();
+  // (PR6) Each row carries `occurrenceDate`, the key its actions send.
+  const draggingPlans = buildDraggingPlans(proj?.events ?? []);
   const draggingTotal = draggingPlans.reduce((s, r) => s + r.amount, 0);
   const draggingTargetDate = draggingPlans[0]?.effectiveDate ?? null;
 
@@ -2258,16 +2199,13 @@ export default function ForecastPage({
           <div>
             <ul data-testid="dragging-plans-list">
               {draggingPlans.map((row) => {
-                const planLine: PlanLine = {
-                  kind: "plan",
-                  date: row.effectiveDate,
-                  itemId: row.itemId,
-                  label: row.label,
-                  amount: row.amount,
-                  status: "pending_plan",
-                  originalDate: row.originalDate,
-                };
+                // (PR6) `originalDate` on this line is the occurrence key, so
+                // Mark missed and "Mark matched to…" act on a moved bill too.
+                const planLine: PlanLine = draggingPlanLine(row);
+                // (PR5b) Partly paid, by any date the event may carry for it;
+                // (PR6) the occurrence key included.
                 const partlyPaid =
+                  partialPlanKeys.has(`${row.itemId}|${row.occurrenceDate}`) ||
                   partialPlanKeys.has(`${row.itemId}|${row.originalDate}`) ||
                   partialPlanKeys.has(`${row.itemId}|${row.effectiveDate}`);
                 return (

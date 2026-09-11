@@ -11,11 +11,33 @@ export type CashSignalEventsItem = {
   label: string;
   amount: string;
   itemId?: string;
-  /** Original (pre-drag) date the plan was scheduled for.
-When `originalDate !== date`, this event was dragged
-forward by the pre-snapshot drag-to-today rule. Used
-by the chart tooltip to distinguish dragged plans
-from bills naturally due that day.
+  /** The date the plan was due (after any reschedule), before
+any drag. When `originalDate !== date`, the curve moved
+the event (see `assumption`). Used by the chart tooltip to
+distinguish dragged plans from bills naturally due that
+day. ⚠️ Not the resolution key for a moved bill: actions
+send `occurrenceDate`.
  */
   originalDate?: string;
+  /**
+   * (PR6) Why the plan is not on its due date, or null.
+`overdue_assumed_unpaid`: due in the last 14 days,
+unresolved and not confidently paid by a bank row, so it
+lands on the next business day. `due_today_not_posted`:
+due today, lands on the next business day (day 0 equals
+the bank). `overdue_remainder_assumed_unpaid` (PR6 review):
+overdue, a bank row paid part of it, and the unpaid
+remainder lands on the next business day.
+`dragged_past_due`: the pre-PR6 rule, kept for
+weekly-cadence expenses due before today until PR8.
+`pre_window_on_first_day`: no snapshot, due before the
+window, placed on its first day.
+
+   * @nullable
+   */
+  assumption?: string | null;
+  /** (PR6) `<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`. */
+  occurrenceKey?: string;
+  /** (PR6) The occurrence's own date (before any reschedule), which resolutions are keyed on. */
+  occurrenceDate?: string;
 };

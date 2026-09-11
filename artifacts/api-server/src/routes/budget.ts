@@ -43,7 +43,8 @@ import {
   SEED_MAPPING_RULES,
   SEED_MAPPING_PRIORITY,
 } from "../lib/mappingSeed";
-import { expandItem, parseISO, addDays } from "../lib/cashSignal";
+import { expandItem, parseISO, addDays, isPastOneTime } from "../lib/cashSignal";
+import { householdTodayISO } from "../lib/householdClock";
 import { planSourceOf, rollUpPlanBySource } from "../lib/budgetPlanSource";
 import { buildAllowanceRollup } from "../lib/budgetAllowance";
 import { monthEndExclusive, daysInMonth } from "../lib/monthBounds";
@@ -344,11 +345,14 @@ async function healLegacyRecurringBillLinks(householdId: string): Promise<void> 
     .select({
       categoryId: recurringItemsTable.categoryId,
       active: recurringItemsTable.active,
+      frequency: recurringItemsTable.frequency,
+      anchorDate: recurringItemsTable.anchorDate,
     })
     .from(recurringItemsTable)
     .where(eq(recurringItemsTable.householdId, householdId));
   for (const r of refreshedItems) {
-    if (r.active === "true" && r.categoryId) stillLinked.add(r.categoryId);
+    // (PR6) A one-time bill dated before today counts as archived, as before PR6.
+    if (r.active === "true" && !isPastOneTime(r, householdTodayISO()) && r.categoryId) stillLinked.add(r.categoryId);
   }
 
   const orphans = autoExpenseCats
@@ -409,7 +413,7 @@ async function syncAutoBillsFromRecurring(
           eq(recurringItemsTable.active, "true"),
         ),
       )
-  ).filter((i) => i.kind === "income");
+  ).filter((i) => i.kind === "income" && !isPastOneTime(i, householdTodayISO()));
   if (items.length === 0) return;
 
   // A recurring item needs an auto category when it has no categoryId, OR
@@ -1834,7 +1838,7 @@ router.get(
         .where(eq(recurringItemsTable.householdId, householdId));
       const sums = new Map<string, number>();
       for (const r of recurring) {
-        if (r.active === "false") continue;
+        if (r.active === "false" || isPastOneTime(r, householdTodayISO())) continue;
         if (!r.categoryId || !catIdSet.has(r.categoryId)) continue;
         const events = expandItem(r, monthFromDate, monthToDate);
         let total = 0;
@@ -2300,7 +2304,7 @@ async function snapshotAutoLinesForMonth(
       .where(eq(recurringItemsTable.householdId, householdId));
     const sums = new Map<string, number>();
     for (const r of recurring) {
-      if (r.active === "false") continue;
+      if (r.active === "false" || isPastOneTime(r, householdTodayISO())) continue;
       if (!r.categoryId || !catIdSet.has(r.categoryId)) continue;
       const events = expandItem(r, monthFromDate, monthToDate);
       let total = 0;

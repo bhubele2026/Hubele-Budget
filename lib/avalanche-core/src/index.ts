@@ -36,6 +36,7 @@ export {
   type MatchRow,
   type PlanRowMatch,
 } from "./planMatch";
+export { plansPaidInFullByName, type PaidInFull } from "./planMatch";
 export {
   canSupersede,
   pairPendingWithPosted,

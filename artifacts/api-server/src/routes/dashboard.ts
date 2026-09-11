@@ -194,6 +194,9 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       and(
         eq(recurringItemsTable.householdId, householdId),
         eq(recurringItemsTable.active, "true"),
+        // (PR6) A one-time bill dated before today counts as archived, as before
+        // PR6 (the forecast now keeps an unresolved one active; `isPastOneTime`).
+        sql`not (${recurringItemsTable.frequency} = 'onetime' and ${recurringItemsTable.anchorDate} is not null and ${recurringItemsTable.anchorDate} < ${householdTodayISO()})`,
       ),
     )
     .orderBy(recurringItemsTable.dayOfMonth)
