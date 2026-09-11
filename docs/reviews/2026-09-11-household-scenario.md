@@ -35,9 +35,9 @@ column on here.
   - Starts from the snapshot and adds every Chase row dated after the snapshot day through today.
   - Pending rows are included. The forecast flag is irrelevant.
   - Card activity never touches it; the card payment from checking does.
-- **Spent this week (now; card payments from PR7):**
-  - Sums categorized purchases on any account, Sun 10/4 – Sat 10/10, pending included.
-  - Transfers, card payments and income are excluded.
+- **Spent this week (now; the one spending rule since PR7):**
+  - Sums purchases on any account, categorized or not, Sun 10/4 – Sat 10/10, pending included.
+  - Transfers, debt payments, card payments, reimbursable charges and income are excluded.
   - Unplanned purchases are spending too.
 - **Review count (now):** unresolved Chase rows this month in the forecast.
   - A row that has already happened always counts until resolved (`inForecast`).
@@ -74,10 +74,11 @@ needs classification, expected on 10/16, lowest before payday, Chase to review, 
 | S7 | Thu 10/8 15:00 | Electric 140 → 165 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,175.00 | 2,072.60 Thu 10/8 | 3 | — |
 | S8 | Thu 10/8 16:00 | Chase refresh fails | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,175.00 | 2,072.60 Thu 10/8 | 3 | refresh_failed |
 | S9 | Fri 10/9 09:00 | Refresh OK; Paycheck A 2,000.00 posts | 4,072.60 | 274.00 | 4 | 111.00 | 85.00 | 0.00 | 3,175.00 | 1,675.00 Wed 10/14 | 4 | — |
-| S10 | Sat 10/10 10:00 | Chase: Capital One card payment 150.00; payroll match confirmed; all Chase rows reviewed | 3,922.60 | **274.00** ¹ | 4 | 111.00 | 85.00 | 0.00 | 3,025.00 | 1,525.00 Wed 10/14 | 0 | — |
+| S10 | Sat 10/10 10:00 | Chase: Capital One card payment 150.00; payroll match confirmed; all Chase rows reviewed | 3,922.60 | 274.00 | 4 | 111.00 | 85.00 | 0.00 | 3,025.00 | 1,525.00 Wed 10/14 | 0 | — |
 
-¹ The app reports **424.00** today: it counts the Capital One payment as spending. PR7 fixes this. The
-test pins today's value so PR7 has to change it deliberately.
+Before PR7 the app reported **424.00** at S10: it counted the Capital One payment as spending. PR7
+recognizes card payments in spending totals, and S10 is asserted at 274.00
+(`docs/reviews/2026-09-11-pr7-one-spending-rule.md`).
 
 ## The arithmetic
 
@@ -102,7 +103,7 @@ Starts at the snapshot and walks Chase rows dated after Sun 10/4.
 | S3 | + hardware $85.00. The transfer ("online transfer") and the Amex payoff ("ach pmt") are not spending. | $226.60 |
 | S4 | + Shell $45.00 | $271.60 |
 | S5 | Shell at $47.40 | $274.00 |
-| S10 | Unchanged: the Capital One payment is a card payment | $274.00 |
+| S10 | Unchanged: the Capital One payment ("crcardpmt") is a card payment | $274.00 |
 
 ### Review count
 Unresolved Chase rows in October.
@@ -183,3 +184,4 @@ Every purchase is tagged weekly or unplanned, so this is $0.00 all week. PR10 mu
   through the PRs named in the table.
 - **Verification:** see the commit and CI for this PR. The test must pass with every current column
   asserted, and the pending items must list exactly one known-wrong value (S10 spending, PR7).
+  PR7 switched that value on; no step carries a known-wrong value now.

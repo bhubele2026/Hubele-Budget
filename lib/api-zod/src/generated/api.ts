@@ -2965,6 +2965,14 @@ export const GetReportsSpendingFactsResponse = zod.object({
     trackingStart: zod.string(),
     floorApplied: zod.boolean(),
   }),
+  householdSpend: zod
+    .object({
+      total: zod.number(),
+      transactionCount: zod.number(),
+    })
+    .describe(
+      "Every purchase on any account, categorized or not — realSpend plus uncategorized — through the one spending rule (spendingFilter.ts classifyOutflow). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth.",
+    ),
   unplanned: zod
     .object({
       total: zod.number(),
@@ -2978,14 +2986,17 @@ export const GetReportsSpendingFactsResponse = zod.object({
         }),
       ),
     })
-    .optional()
     .describe(
-      "Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window.",
+      "Purchases explicitly marked UN, categorized or not, through the same rule as householdSpend (so never a transfer, debt payment, card payment or reimbursable charge). Details are the largest 20 purchases; total covers the whole window.",
     ),
-  realSpend: zod.object({
-    total: zod.number(),
-    transactionCount: zod.number(),
-  }),
+  realSpend: zod
+    .object({
+      total: zod.number(),
+      transactionCount: zod.number(),
+    })
+    .describe(
+      "The categorized part of householdSpend; the basis of byCategory, byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends.",
+    ),
   realIncome: zod
     .object({
       total: zod.number(),
@@ -3010,6 +3021,10 @@ export const GetReportsSpendingFactsResponse = zod.object({
     debtPaymentsTotal: zod.number(),
     reimbursementTotal: zod.number(),
     ignoreTotal: zod.number(),
+    cardPayments: zod
+      .number()
+      .describe("Payments to a credit card from another account — flagged"),
+    reimbursable: zod.number().describe("Charges flagged reimbursable."),
   }),
   byCategory: zod.array(
     zod.object({
@@ -4270,10 +4285,10 @@ export const GetSpineResponse = zod.object({
   }),
   spentMonth: zod
     .number()
-    .describe("buildSpendingFacts(monthStart..today).realSpend.total"),
+    .describe("buildSpendingFacts(monthStart..today).householdSpend.total"),
   spentWeek: zod
     .number()
-    .describe("buildSpendingFacts(weekStart..weekEnd).realSpend.total"),
+    .describe("buildSpendingFacts(weekStart..weekEnd).householdSpend.total"),
   nextBill: zod
     .union([
       zod.object({

@@ -360,6 +360,9 @@ type BehaviorTxnRow = {
   isExternalCardPayment: boolean;
   reimbursable: boolean;
   source: string;
+  debtId: string | null;
+  pfcDetailed: string | null;
+  isTransferUserOverridden: boolean;
 };
 
 // Normalize the yearly/weekly/biweekly cadence into an equivalent monthly cost.
@@ -510,6 +513,9 @@ export async function buildBehaviorFacts(
       isExternalCardPayment: transactionsTable.isExternalCardPayment,
       reimbursable: transactionsTable.reimbursable,
       source: transactionsTable.source,
+      debtId: transactionsTable.debtId,
+      pfcDetailed: transactionsTable.pfcDetailed,
+      isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
     })
     .from(transactionsTable)
     .where(
@@ -538,6 +544,9 @@ export async function buildBehaviorFacts(
       isExternalCardPayment: transactionsTable.isExternalCardPayment,
       reimbursable: transactionsTable.reimbursable,
       source: transactionsTable.source,
+      debtId: transactionsTable.debtId,
+      pfcDetailed: transactionsTable.pfcDetailed,
+      isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
     })
     .from(transactionsTable)
     .where(
@@ -593,6 +602,11 @@ export async function buildBehaviorFacts(
       isTransfer: t.isTransfer,
       categoryId: t.categoryId,
       description: t.description,
+      debtId: t.debtId,
+      isExternalCardPayment: t.isExternalCardPayment,
+      reimbursable: t.reimbursable,
+      pfcDetailed: t.pfcDetailed,
+      isTransferUserOverridden: t.isTransferUserOverridden,
     };
     const merchant = cleanMerchant(t.description) || "Unknown";
     const cName = catName(t.categoryId);
@@ -743,6 +757,11 @@ export async function buildBehaviorFacts(
       isTransfer: t.isTransfer,
       categoryId: t.categoryId,
       description: t.description,
+      debtId: t.debtId,
+      isExternalCardPayment: t.isExternalCardPayment,
+      reimbursable: t.reimbursable,
+      pfcDetailed: t.pfcDetailed,
+      isTransferUserOverridden: t.isTransferUserOverridden,
     };
     if (!isRealSpend(tx, ctx)) continue;
     const merchant = cleanMerchant(t.description) || "Unknown";

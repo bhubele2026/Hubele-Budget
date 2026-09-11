@@ -80,3 +80,36 @@ export const SEED_MAPPING_RULES: SeedMappingRule[] = [
 ];
 
 export const SEED_MAPPING_PRIORITY = 50;
+
+/**
+ * (PR7) Raw-description fragments that identify a payment TO a credit card
+ * from another account. `classifyOutflow` (spendingFilter.ts, rule 9) keeps
+ * these out of spending: the purchases were already counted when they were
+ * made on the card, so the payment is the household moving its own money.
+ *
+ * Matched case-insensitively against the raw bank string with runs of
+ * whitespace collapsed ("CAPITAL ONE   CRCARDPMT" still matches). Only the
+ * card-payment patterns from the seed rules above that cannot also be a
+ * purchase belong here: "MATTRESS FIRM" and "AFFIRM" name merchants, so a
+ * store charge would be dropped from spending, and they are left out.
+ *
+ * Nothing here re-tags a row. It decides spending totals only; `isTransfer`
+ * stays a manual decision (#666), and a row the user has overridden
+ * (`isTransferUserOverridden` with `isTransfer=false`) skips this list.
+ */
+export const CARD_PAYMENT_PATTERNS: readonly string[] = [
+  "crcardpmt",
+  "capital one mobile pymt",
+  "applecard gsbank",
+  "goldman sachs apple",
+  "discover e-payment",
+  "citi card online",
+  "credit one bank",
+  "synchrony paypal",
+  "synchrony ashley",
+  "paypal paymthly",
+  "menards big card",
+  "amex epayment",
+  "amex ach pmt",
+  "american express ach",
+];

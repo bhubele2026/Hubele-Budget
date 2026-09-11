@@ -141,7 +141,11 @@ beforeEach(() => {
     unplannedAllowanceAmount: "150",
     preferences: {},
   };
-  state.spendingFacts = { realSpend: { total: 0 }, byCategory: [] };
+  state.spendingFacts = {
+    householdSpend: { total: 0 },
+    realSpend: { total: 0 },
+    byCategory: [],
+  };
   state.recurring = [];
   state.txns = [];
 });

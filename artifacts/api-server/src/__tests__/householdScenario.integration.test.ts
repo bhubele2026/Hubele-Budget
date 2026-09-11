@@ -494,10 +494,6 @@ describe("household scenario — Sun 10/4 to Sat 10/10, 2026", () => {
     await expectToday("S10");
   });
 
-  it.todo(
-    `S10 spent this week = $274.00 once card payments stop counting as spending (${EXPECTED.S10.notYet!.turnsOnIn}); the app reports $424.00 today`,
-  );
-
   for (const column of CONTRACT_COLUMNS) {
     const perStep = (Object.keys(EXPECTED) as StepId[])
       .map((id) => `${id} ${JSON.stringify(EXPECTED[id][column.key])}`)

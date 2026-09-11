@@ -39,7 +39,7 @@ const router: IRouter = Router();
  *   forecast.lowPoint / .lowPointDate → computeCashSignal().lowestProjected / .lowestDate
  *   forecast.runwayDays           → runwayDaysFrom(signal.daily)      [lib/cashSignal]
  *   forecast.cashBuffer / .status → computeCashSignal().cashBuffer / .status
- *   spentMonth / spentWeek        → buildSpendingFacts().realSpend.total
+ *   spentMonth / spentWeek        → buildSpendingFacts().householdSpend.total
  *   nextBill / billsDueCount      → pickNextBill(buildBillsSummary())  [lib/billsSummary]
  *   debt.payoffPct                → payoffPct()          [@workspace/avalanche-core]
  *                                   over withPendingPayments() rows [lib/debtPending]
@@ -108,8 +108,11 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       stale: freshness.stale,
       staleReason: freshness.staleReason,
     },
-    spentMonth: monthFacts.realSpend.total,
-    spentWeek: weekFacts.realSpend.total,
+    // (PR7) Household spending: every purchase on any account, categorized or
+    // not, through the one spending rule (card payments, transfers, debt
+    // payments and reimbursable charges out).
+    spentMonth: monthFacts.householdSpend.total,
+    spentWeek: weekFacts.householdSpend.total,
     nextBill,
     billsDueCount,
     forecast: {

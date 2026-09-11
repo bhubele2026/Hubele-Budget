@@ -499,18 +499,29 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
   it("spentMonth + spentWeek match /reports/spending-facts for the same windows", async () => {
     const spine = await get<Spine>("/spine");
 
-    const month = await get<{ realSpend: { total: number } }>(
+    // (PR7) Household spending: the one spending rule, categorized or not.
+    type Facts = {
+      householdSpend: { total: number };
+      realSpend: { total: number };
+      uncategorized: { total: number };
+    };
+    const month = await get<Facts>(
       `/reports/spending-facts?from=${MONTH_START_ISO}&to=${TODAY_ISO}`,
     );
-    expect(spine.spentMonth).toBe(month.realSpend.total);
+    expect(spine.spentMonth).toBe(month.householdSpend.total);
+    // The household figure is the categorized and uncategorized buckets, no more.
+    expect(month.householdSpend.total).toBeCloseTo(
+      month.realSpend.total + month.uncategorized.total,
+      2,
+    );
 
     // Week window = the server's own Sun–Sat helpers, which is what the spine
     // asks for; re-deriving them here would only test my arithmetic.
     const { weekStartFor, weekEndFor } = await import("../lib/cashSignal");
-    const week = await get<{ realSpend: { total: number } }>(
+    const week = await get<Facts>(
       `/reports/spending-facts?from=${weekStartFor(TODAY)}&to=${weekEndFor(TODAY)}`,
     );
-    expect(spine.spentWeek).toBe(week.realSpend.total);
+    expect(spine.spentWeek).toBe(week.householdSpend.total);
 
     // Not vacuous, and internally coherent: a week cannot outspend its month.
     expect(spine.spentMonth).toBeGreaterThan(0);

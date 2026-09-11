@@ -284,9 +284,9 @@ export interface Spine {
   /** ISO timestamp the snapshot was read */
   asOf: string;
   bank: SpineBank;
-  /** buildSpendingFacts(monthStart..today).realSpend.total */
+  /** buildSpendingFacts(monthStart..today).householdSpend.total */
   spentMonth: number;
-  /** buildSpendingFacts(weekStart..weekEnd).realSpend.total */
+  /** buildSpendingFacts(weekStart..weekEnd).householdSpend.total */
   spentWeek: number;
   /** Earliest upcoming bill or debt minimum on/after today; null when nothing is scheduled */
   nextBill: SpineNextBill | null;
@@ -2413,6 +2413,14 @@ export type SpendingFactsRange = {
   floorApplied: boolean;
 };
 
+/**
+ * Every purchase on any account, categorized or not — realSpend plus uncategorized — through the one spending rule (spendingFilter.ts classifyOutflow). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth.
+ */
+export type SpendingFactsHouseholdSpend = {
+  total: number;
+  transactionCount: number;
+};
+
 export type SpendingFactsUnplannedTransactionsItem = {
   id: string;
   date: string;
@@ -2421,7 +2429,7 @@ export type SpendingFactsUnplannedTransactionsItem = {
 };
 
 /**
- * Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window.
+ * Purchases explicitly marked UN, categorized or not, through the same rule as householdSpend (so never a transfer, debt payment, card payment or reimbursable charge). Details are the largest 20 purchases; total covers the whole window.
  */
 export type SpendingFactsUnplanned = {
   total: number;
@@ -2429,6 +2437,9 @@ export type SpendingFactsUnplanned = {
   transactions: SpendingFactsUnplannedTransactionsItem[];
 };
 
+/**
+ * The categorized part of householdSpend; the basis of byCategory, byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends.
+ */
 export type SpendingFactsRealSpend = {
   total: number;
   transactionCount: number;
@@ -2459,6 +2470,10 @@ export type SpendingFactsExcluded = {
   debtPaymentsTotal: number;
   reimbursementTotal: number;
   ignoreTotal: number;
+  /** Payments to a credit card from another account — flagged */
+  cardPayments: number;
+  /** Charges flagged reimbursable. */
+  reimbursable: number;
 };
 
 export type SpendingFactsByCategoryItem = {
@@ -2521,8 +2536,11 @@ export type SpendingFactsReimbursable = {
 
 export interface SpendingFacts {
   range: SpendingFactsRange;
-  /** Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window. */
-  unplanned?: SpendingFactsUnplanned;
+  /** Every purchase on any account, categorized or not — realSpend plus uncategorized — through the one spending rule (spendingFilter.ts classifyOutflow). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth. */
+  householdSpend: SpendingFactsHouseholdSpend;
+  /** Purchases explicitly marked UN, categorized or not, through the same rule as householdSpend (so never a transfer, debt payment, card payment or reimbursable charge). Details are the largest 20 purchases; total covers the whole window. */
+  unplanned: SpendingFactsUnplanned;
+  /** The categorized part of householdSpend; the basis of byCategory, byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends. */
   realSpend: SpendingFactsRealSpend;
   /** The mirror of realSpend — money arriving from outside the household, through the same filter that decides real spending. Transfers between the household's own accounts, reimbursements, debt-payment counterparts and card refunds are all excluded, so this is what was EARNED in the range rather than everything that landed in an account. */
   realIncome: SpendingFactsRealIncome;

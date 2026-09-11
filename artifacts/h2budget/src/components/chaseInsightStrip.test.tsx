@@ -30,7 +30,7 @@ import { ChaseInsightStrip } from "./chase-insight-strip";
 const RANGE = { mode: "mo", from: "2026-09-01", to: "2026-09-30", label: "September" } as any;
 
 beforeEach(() => {
-  facts.cur = { realSpend: { total: 250 }, byCategory: [] };
+  facts.cur = { householdSpend: { total: 250 }, byCategory: [] };
   facts.prev = undefined;
   facts.prevError = false;
 });
@@ -49,7 +49,7 @@ describe("ChaseInsightStrip — the comparison says what it knows", () => {
   });
 
   it("compares against the previous window once it arrives", () => {
-    facts.prev = { realSpend: { total: 200 }, byCategory: [] };
+    facts.prev = { householdSpend: { total: 200 }, byCategory: [] };
     render(<ChaseInsightStrip range={RANGE} />);
     expect(screen.getByTestId("strip-comparison").textContent).toContain("vs $200.00 last");
   });

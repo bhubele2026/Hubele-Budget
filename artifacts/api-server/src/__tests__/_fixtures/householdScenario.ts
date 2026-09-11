@@ -210,7 +210,6 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     cash: "3922.60",
     spentWeek: 274,
     reviewCount: 4,
-    notYet: { column: "spentWeek", turnsOnIn: "PR7", appReportsToday: 424 },
     remainingWeek: "111.00",
     unplannedWeek: "85.00",
     needsClassificationWeek: "0.00",

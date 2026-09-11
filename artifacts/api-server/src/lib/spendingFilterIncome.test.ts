@@ -32,6 +32,11 @@ function tx(over: Partial<SpendTxn> = {}): SpendTxn {
     isTransfer: false,
     categoryId: PAYCHECK_CAT,
     description: "PAYROLL DEPOSIT",
+    debtId: null,
+    isExternalCardPayment: false,
+    reimbursable: false,
+    pfcDetailed: null,
+    isTransferUserOverridden: false,
     ...over,
   };
 }

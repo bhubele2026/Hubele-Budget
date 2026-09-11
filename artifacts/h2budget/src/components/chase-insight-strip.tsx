@@ -114,8 +114,11 @@ export function ChaseInsightStrip({
   );
 
   const period = PERIOD_WORD[range.mode];
-  const curTotal = cur?.realSpend.total ?? 0;
-  const prevTotal = prev?.realSpend.total ?? 0;
+  // Household spending — the spine's figure, from the same server rule.
+  // Optional access: a payload cached from before the field existed must not
+  // take the whole page down.
+  const curTotal = cur?.householdSpend?.total ?? 0;
+  const prevTotal = prev?.householdSpend?.total ?? 0;
   const pct = prevTotal > 0 ? ((curTotal - prevTotal) / prevTotal) * 100 : null;
 
   // Top 5 real categories for the window (spending-facts already excludes the
@@ -151,9 +154,9 @@ export function ChaseInsightStrip({
           Household spending this {period}
         </h2>
         <Help>
-          Real spend only, classified by the server: transfers, debt and loan
-          payments, and uncategorized rows are excluded. Compared against the
-          equal-length window immediately before this one.
+          Every purchase on any account, categorized or not. Transfers, card
+          and loan payments, and reimbursable charges are excluded. Compared
+          against the equal-length window immediately before this one.
         </Help>
         {actions && (
           <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>
