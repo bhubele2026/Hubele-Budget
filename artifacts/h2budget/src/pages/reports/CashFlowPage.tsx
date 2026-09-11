@@ -294,10 +294,20 @@ function CashFlowSection({
     return { income, expense };
   }, [recurringItems]);
 
+  // (PR3) NO STARTING BALANCE, NO PROJECTION. A missing starting balance used
+  // to fall back to $0 and draw the whole 90-day curve from zero, which reads
+  // as a real (and alarming) forecast. A real 0 is a balance and still draws.
+  const startingBalanceRaw = forecast?.settings?.startingBalance;
+  const startingBalanceMissing =
+    forecast != null &&
+    (startingBalanceRaw == null ||
+      String(startingBalanceRaw).trim() === "" ||
+      !Number.isFinite(Number(startingBalanceRaw)));
+
   // Build a 90-day projected balance from forecast events + starting balance.
   const forecastSeries = useMemo(() => {
-    if (!forecast) return [];
-    const startBal = Number(forecast.settings?.startingBalance ?? 0) || 0;
+    if (!forecast || startingBalanceMissing) return [];
+    const startBal = Number(forecast.settings.startingBalance);
     const sorted = [...(forecast.events ?? [])].sort((a, b) =>
       a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
     );
@@ -312,7 +322,7 @@ function CashFlowSection({
       date,
       balance: Math.round(balance * 100) / 100,
     }));
-  }, [forecast]);
+  }, [forecast, startingBalanceMissing]);
   const burn = useMemo(() => rolling30DayBurn(dailyCurr), [dailyCurr]);
   const kpis = useMemo(() => cashFlowKpis(dailyCurr), [dailyCurr]);
   const prevKpis = useMemo(
@@ -542,8 +552,17 @@ function CashFlowSection({
         <ChartCard
           title="Forecast balance · next 90 days"
           help="Projected checking balance from the forecast's starting balance and its scheduled events."
-          empty={forecastSeries.length === 0 ? "No forecast data yet" : null}
-          hideWhenEmpty
+          testId="cashflow-forecast-card"
+          // A missing starting balance keeps the card and says so — the kit's
+          // empty state — rather than vanishing like an empty forecast does.
+          empty={
+            startingBalanceMissing
+              ? "No starting balance set on Forecast"
+              : forecastSeries.length === 0
+                ? "No forecast data yet"
+                : null
+          }
+          hideWhenEmpty={!startingBalanceMissing}
         >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={forecastSeries} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>

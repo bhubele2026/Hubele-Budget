@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BankBalanceWhy } from "@/components/bank-balance-why";
-import { householdDayOfAt } from "@/lib/householdDay";
+import {
+  householdDayOfAt,
+  householdToday,
+  localDateOf,
+  monthBounds,
+} from "@/lib/householdDay";
 import {
   useGetSettings,
   useListTransactions,
@@ -251,7 +256,12 @@ export default function CommandCenterPage() {
   );
 
   const now = new Date();
-  const monthRange = useMemo(() => currentMonthRange(now), [now.getMonth()]); // eslint-disable-line react-hooks/exhaustive-deps
+  // (PR2) The household's month (America/Chicago), on the same calendar as the
+  // week beside it. A browser outside Central used to pair the household week
+  // with its own local month, so on a month's last evening "this month" had
+  // already moved on while the week, the fetch and the spine had not.
+  const monthStartISO = monthBounds(householdToday(now)).start;
+  const monthRange = useMemo(() => currentMonthRange(now), [monthStartISO]); // eslint-disable-line react-hooks/exhaustive-deps
   const weekRange = useMemo(() => currentWeekRange(now), [todayISO(now)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Period pickers for the two allowance buckets that have one. 0 = current
@@ -307,7 +317,8 @@ export default function CommandCenterPage() {
 
   // ── B) Selected calendar MONTH allowance spend ─────────────────────────────
   const monthView = useMemo(() => {
-    const m = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    const current = localDateOf(monthStartISO);
+    const m = new Date(current.getFullYear(), current.getMonth() + monthOffset, 1);
     const pad = (n: number) => String(n).padStart(2, "0");
     const iso = (d: Date) =>
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -318,28 +329,28 @@ export default function CommandCenterPage() {
     const cap = Number(settings?.monthlyAllowanceAmount) || 0;
     const name = m.toLocaleDateString("en-US", {
       month: "long",
-      year: m.getFullYear() === now.getFullYear() ? undefined : "numeric",
+      year: m.getFullYear() === current.getFullYear() ? undefined : "numeric",
     });
     const label = monthOffset === 0 ? "This month" : name;
     const canPrev = endISO >= earliestFetchedISO;
     return { spend, cap, label, name, canPrev, startISO, endISO };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthOffset, bucketSum, settings]);
+  }, [monthOffset, bucketSum, settings, monthStartISO]);
 
   // ── C) Unplanned-allowance spend, CURRENT month. ───────────────────────────
   const unplannedView = useMemo(() => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const iso = (d: Date) =>
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const first = new Date(now.getFullYear(), now.getMonth(), 1);
-    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const first = localDateOf(monthStartISO);
+    const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
     const startISO = iso(first);
     const endISO = iso(last);
     const spend = bucketSum("unplanned", startISO, endISO);
     const cap = Number(settings?.unplannedAllowanceAmount) || 0;
     return { spend, cap };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bucketSum, settings]);
+  }, [bucketSum, settings, monthStartISO]);
 
   /**
    * The month's largest one-off charges. Same filter the page has always used
@@ -351,7 +362,7 @@ export default function CommandCenterPage() {
    * between renders would swap DOM nodes and defeat the glide.
    */
   const chargeRows = useMemo<CssBarRow[]>(() => {
-    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const ym = monthStartISO.slice(0, 7);
     const isRecurring = makeRecurringMatcher(recurringNames);
     const recurringMerchants = recurringMerchantsFrom(weeklyTxns ?? []);
     return (weeklyTxns ?? [])

@@ -7,12 +7,9 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { buildSpendingFacts } from "../lib/spendingFacts";
 import { buildBehaviorFacts } from "../lib/behaviorFacts";
 import { buildBudgetFacts } from "../lib/budgetFacts";
+import { householdTodayISO, monthBounds } from "../lib/householdClock";
 
 const router: IRouter = Router();
-
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 // (#850 — Spending overhaul, Phase 1) Clean merchant-centric Spending facts.
 // Phase 2 will swap the Spending tab UI onto this endpoint. `from`/`to` are
@@ -108,10 +105,9 @@ router.get(
       return;
     }
 
-    const today = new Date();
-    const defaultMonthStart = isoDate(
-      new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)),
-    );
+    // (PR2) The household's month (America/Chicago). The UTC month was already
+    // next month between 7pm and midnight Central on a month's last evening.
+    const defaultMonthStart = monthBounds(householdTodayISO()).start;
     // Normalize any supplied date to the first of its month so a mid-month
     // value (e.g. 2026-05-15) does not produce partial month results.
     let monthStart = monthStartRaw
