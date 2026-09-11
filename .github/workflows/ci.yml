@@ -38,10 +38,39 @@ jobs:
       #    scripts (e.g. @clerk/shared); esbuild/@swc ARE built via the
       #    onlyBuiltDependencies allowlist in pnpm-workspace.yaml.
       #  - verify-deps-before-run=false: skip the pre-`run` auto-reinstall.
-      - run: |
+      - id: install
+        run: |
           printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc
           pnpm install --frozen-lockfile
       - run: pnpm run typecheck
+      # Codegen drift guard. Codegen is not in the deploy build, so the committed
+      # generated clients ARE what ships: a spec edit without a regen would pass
+      # typecheck (the stale output agrees with itself) and deploy stale hooks.
+      # Regenerate every orval target (`@workspace/api-client-react`, its
+      # `/ledger` module, and `@workspace/api-zod`) plus the `tsc --build`
+      # declaration output, then require the tree to be unchanged. `git diff`
+      # alone misses NEW files (a new schema/operation), so untracked files
+      # under the generated packages fail too. Runs even when typecheck failed,
+      # so both signals show, but not when install did.
+      #
+      # dist is deleted first: orval's `clean` empties src/generated, but
+      # `tsc --build` never deletes a declaration whose source is gone, so a
+      # removed schema's committed .d.ts would otherwise survive every regen.
+      # The .d.ts.map files hold only relative paths, so a from-scratch dist is
+      # byte-identical on any machine.
+      - name: Codegen drift (committed api-zod / api-client-react match the spec)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          rm -rf lib/api-zod/dist lib/api-client-react/dist lib/api-zod/tsconfig.tsbuildinfo lib/api-client-react/tsconfig.tsbuildinfo
+          pnpm --filter @workspace/api-spec run codegen
+          git diff --stat -- lib/api-zod lib/api-client-react
+          git diff --exit-code -- lib/api-zod lib/api-client-react
+          untracked="$(git ls-files --others --exclude-standard -- lib/api-zod lib/api-client-react)"
+          if [ -n "$untracked" ]; then
+            echo "::error::Codegen created files that are not committed:"
+            echo "$untracked"
+            exit 1
+          fi
 
   web-tests:
     runs-on: ubuntu-latest
@@ -60,11 +89,38 @@ jobs:
       #    scripts (e.g. @clerk/shared); esbuild/@swc ARE built via the
       #    onlyBuiltDependencies allowlist in pnpm-workspace.yaml.
       #  - verify-deps-before-run=false: skip the pre-`run` auto-reinstall.
-      - run: |
+      - id: install
+        run: |
           printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc
           pnpm install --frozen-lockfile
-      - name: Web unit tests (jsdom — no DB)
+      # The web suite runs once per timezone, one install. The runner's clock is
+      # UTC, so a date bug that only bites east (or west) of Chicago, the
+      # household's calendar, passed CI until a reviewer ran TZ=America/New_York
+      # locally. Later zones run even after an earlier zone fails (but not after
+      # a failed install), so one push shows every zone that breaks.
+      - name: Web unit tests (jsdom, no DB), TZ=UTC
         run: pnpm --filter ./artifacts/h2budget run test
+        env:
+          CI: "true"
+          TZ: UTC
+      - name: Web unit tests (jsdom, no DB), TZ=America/Chicago
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm --filter ./artifacts/h2budget run test
+        env:
+          CI: "true"
+          TZ: America/Chicago
+      - name: Web unit tests (jsdom, no DB), TZ=America/New_York
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm --filter ./artifacts/h2budget run test
+        env:
+          CI: "true"
+          TZ: America/New_York
+      - name: Web unit tests (jsdom, no DB), TZ=America/Los_Angeles
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm --filter ./artifacts/h2budget run test
+        env:
+          CI: "true"
+          TZ: America/Los_Angeles
 
   api-tests:
     runs-on: ubuntu-latest
