@@ -159,23 +159,28 @@ Two pinned instants, both still Wednesday September 30 in Chicago:
   hand-rolled date formatting became a helper call the page already imported.
 - **Not run locally:** GitHub Actions. CI runs on the push to this branch.
 
-## Added CI time (estimate)
+## Added CI time (measured)
 
-**Measured locally** (Apple silicon):
-- the web suite takes **10–13 s per zone** (Vitest's reported duration; about 11–13 s wall clock);
-- the codegen step takes **4 s**, including the from-scratch `dist`.
+**Corrected after the merge.** The first version of this note estimated GitHub's `ubuntu-latest` at 2–3× this
+machine. The real run (one GitHub run, `34654376853`; a later run's UTC zone took 88 s, so treat these as a single sample) was slower, so the estimate was low. The measured figures replace it.
 
-**Estimated on GitHub's `ubuntu-latest`**, assuming it runs 2–3× slower than this machine. Not measured; this branch's
-run will show it.
-
-| Job | Added | Estimate |
+| Figure | Estimated | Measured |
 |---|---|---|
-| `web-tests` | three more zones on the same install | **+1 to 2 min** (≈ 25–40 s per zone) |
-| `typecheck` | the codegen step | **+10 to 20 s** |
+| `web-tests`, per zone | 25–40 s | **64–65 s** |
+| `web-tests`, added by the three extra zones | +1 to 2 min | **about +3.2 min** (job total 289 s) |
+| `typecheck`, codegen drift step | +10 to 20 s | **+10 s** |
+| Billed minutes per push | +1.5 to 2.5 | **about +3.4** |
+| Pipeline wall clock | "moves less" | **about +1.5 min** |
 
-- **Billed minutes rise by roughly 1.5–2.5 min per push.**
-- **The pipeline's wall clock moves less.** Jobs run in parallel, so the push waits on the slowest job. That is likely
-  `api-tests` (the serial Postgres suite) or `build`, neither of which changed.
+- **`web-tests` is now the longest job** (289 s), ahead of `api-tests` (197 s). The earlier claim that the push waits
+  on `api-tests` or `build`, "neither of which changed", no longer holds: a push now waits about 90 s longer.
+- **Local, for scale** (Apple silicon): 10–13 s per zone, and 4 s for the codegen step. The runner is about 5–6×
+  slower on the web suite, not 2–3×.
+- **Option: a matrix.** The zones are sequential steps to avoid repeating the install, but the install took about 2 s
+  on the runner (cached store). A `strategy.matrix` over the four zones, with `fail-fast: false` to keep "every
+  failing zone shows", would run them in parallel. `web-tests` would fall back to about one zone's time plus setup.
+  The costs: four job setups (checkout, pnpm, node) in billed minutes, and four status checks instead of one. Not
+  changed yet.
 
 ## Residuals
 
@@ -185,14 +190,132 @@ run will show it.
 - **e2e is still not enabled** (`E2E_ENABLED`). No browser-level test runs in CI, in any zone.
 - **The zones are the runner's `TZ` only.** Browser locale, `Intl` default time zone overrides and DST transitions are
   covered only where a test pins its own clock. Nothing forces every date test to pin one.
-- **Still browser-local on the Transactions page: the trend chart's window** (`trendWindow`): its look-back month,
-  its end date and its week-ending Saturdays come from `new Date()`'s local fields.
+- **~~Still browser-local on the Transactions page: the trend chart's window~~ (`trendWindow`). Fixed in the
+  follow-up below.** Its look-back month, end date and week-ending Saturdays came from `new Date()`'s local fields.
   - **Effect:** on the evening of a month's last day in Chicago, a browser east of Chicago is already in the next
     month. The window then starts a month later, so the axis loses its first month of weeks, and it ends a day later,
     so it can gain one Saturday at the far end. The Saturdays themselves are still real Saturdays.
-  - Left alone on purpose: the task named `todayISO` only, and the window decides which balances the chart requests.
-    Worth a follow-up on `householdToday` / `monthBounds`.
 - **Codegen drift is checked only in CI and only against the committed tree.** It does not check that the running API
   implements the spec.
 - **The drift step rebuilds `dist` from scratch.** A future hand-written, committed file under either package's `dist`
   (none today) would fail the check.
+
+---
+
+## Follow-up: timezone canary, trend window, workflow permissions
+
+- **Base:** `main` = `b6c51174` (the merge of the branch above).
+- **Branch:** `chore/tz-canary-trend-window`.
+- **Scope:** one new test file; one line of the Transactions page's trend window, its import and its tests; the
+  workflow's token permissions. No financial calculation, query, stored value, spec or dependency changes.
+
+| Commit | What it does |
+|---|---|
+| `d597c2e9` | `lib/tzCanary.test.ts`: the web suite fails when `TZ` does not resolve to itself |
+| `52ed75d7` | `trendWindow` starts from the household day; window assertions in `chaseTrendToday.test.tsx` |
+| `27727549` | Top-level `permissions: contents: read` in `ci.yml` |
+| docs commit | This section, and the measured CI time above |
+
+### 1. Timezone canary (LOW 1)
+
+**A mistyped zone raises nothing.** Measured on Node 24.18:
+
+| `TZ` | `resolvedOptions().timeZone` | Offset at 2026-01-15T12:00Z |
+|---|---|---|
+| `UTC` | `UTC` | 0 |
+| `America/Chicago`, `America/New_York`, `America/Los_Angeles` | the same name | 360, 300, 480 |
+| `America/Chicgo` | `undefined` | **0 (silent UTC)** |
+| unset (this Mac) | `America/Chicago`, the machine's zone | 360 |
+
+`artifacts/h2budget/src/lib/tzCanary.test.ts` has three tests, each gated on `TZ`:
+- **`TZ=UTC`:** the resolved zone is `UTC` and the offset is 0.
+- **Any other `TZ`:** the resolved zone equals `TZ`.
+- **The three non-UTC CI zones:** the offset is non-zero, and exactly 360, 300 or 480.
+- **`TZ` unset:** all three skip. The process then uses the machine's zone, which is neither known nor wrong.
+  Asserting UTC would fail every local run on a Mac set to Central.
+
+| Run (file alone) | Result |
+|---|---|
+| `TZ=America/Chicgo` | **fails**: `expected undefined to be 'America/Chicgo'` (1 failed, 2 skipped) |
+| `TZ=UTC` | 1 passed, 2 skipped |
+| `TZ=America/Chicago`, `America/New_York`, `America/Los_Angeles` | 2 passed, 1 skipped, in each |
+| `TZ` unset | 3 skipped |
+
+So every suite run now reports 1 or 2 skipped tests. All of them are the canary's.
+
+### 2. Trend window on the household calendar (LOW 2)
+
+`transactions.tsx`, `trendWindow`: `const now = new Date()` became `const now = localDateOf(householdToday(new Date()))`.
+The month arithmetic after it is unchanged. It now runs on a local-midnight Date of the household day, the calendar
+`todayISO` already uses.
+
+The window decides the chart's subtitle, the axis's Saturdays, and the Saturdays before today that are sent to
+`/transactions/balances`.
+
+**Finding: the pinned September 30 instants cannot move the window's start.** Six months back from September or
+October is April or May, and both clamp to the May 2026 tracking floor. At those instants only the end month differs
+(`Sep 2027` against `Oct 2027`). So a New Year's Eve pair was added, where every end of the window moves:
+
+| | Household (December 31, 2026) | Browser east of Chicago (January 1, 2027) |
+|---|---|---|
+| Subtitle | `Jul 2026 – Dec 2027` | `Aug 2026 – Jan 2028` |
+| First Saturday | 2026-07-04 | 2026-08-01 |
+| Last Saturday | 2027-12-25 | 2028-01-01 |
+| First date in the balances request | 2026-07-04 | 2026-08-01 (July's four Saturdays dropped) |
+
+`chaseTrendToday.test.tsx` goes from 4 tests to 8:
+- **At `2026-10-01T02:00Z` and `04:30Z`,** on every render: subtitle `May 2026 – Sep 2027`, first Saturday 2026-05-02,
+  last Saturday 2027-09-25.
+- **At `2027-01-01T02:00Z`** (20:00 on December 31 in Chicago) **and `05:30Z`** (00:30 on January 1 in New York, 23:30
+  in Chicago): the household column above on every render and every balances request, and no `2028-01-01` on the axis.
+  The chart is lazy, so the test waits for both the balances request and a chart render.
+
+**Before the fix** (the file alone, against `main`'s `trendWindow`):
+
+| TZ | Result |
+|---|---|
+| UTC | **4 of 8 fail**: both September window tests (`May 2026 – Oct 2027`) and both New Year's Eve tests (`Aug 2026 – Jan 2028`) |
+| America/New_York | **2 of 8 fail**: the 04:30Z and 05:30Z instants. At 02:00Z New York is still on the household's day. |
+| America/Chicago | 8 pass |
+| America/Los_Angeles | 8 pass |
+
+**After the fix:** 8 of 8 pass in all four zones, inside the full-suite runs under the gates below.
+
+**Not changed:** totals, list rows, the register and its balances, `todayISO`, the projection request.
+
+### 3. Workflow permissions (NIT)
+
+- **What changed:** a top-level `permissions: contents: read`. No job overrides it.
+- **Every step in all five jobs was checked.** They are `actions/checkout@v4`, which reads the repo;
+  `pnpm/action-setup@v4`; `actions/setup-node@v4` with `cache: pnpm`; and `run` steps.
+- **No step needs more.** None pushes, comments, creates a release or check, publishes a package or uploads an
+  artifact (`upload-artifact` appears nowhere), and none reads `GITHUB_TOKEN` or a secret.
+- **The pnpm cache is unaffected.** setup-node reaches the Actions cache service with the runner's own token, which
+  `permissions` does not govern.
+- **Not verified locally:** the run on GitHub. This branch's push shows it.
+
+### Gates (follow-up)
+
+| Gate | This branch | `main` (`b6c51174`) |
+|---|---|---|
+| `pnpm run typecheck` | exit 0 | — |
+| Web suite, `TZ=UTC` | **135 files; 1112 pass, 2 skipped** (1114) | 134 files, 1107 pass |
+| Web suite, `TZ=America/Chicago` | **135 files; 1113 pass, 1 skipped** (1114) | 134 files, 1107 pass |
+| Web suite, `TZ=America/New_York` | **135 files; 1113 pass, 1 skipped** (1114) | 134 files, 1107 pass |
+| Web suite, `TZ=America/Los_Angeles` | **135 files; 1113 pass, 1 skipped** (1114) | 134 files, 1107 pass |
+| `pnpm run build` + `node scripts/check-entry-graph.mjs` | exit 0 / exit 0: landing **574.4 KB of 580** (173.1 KB gz) | 574.4 KB |
+| Landing chunks, exact bytes | index 240,641; vendor-react 192,196; vendor-clerk 89,108; vendor-query 52,498: **identical** | as recorded above |
+| Workflow YAML | `yaml.safe_load` parses; top-level `permissions` is `{contents: read}`; all 5 jobs and their steps listed | — |
+
+- **+1 file and +7 tests:** the canary (3) and the four new window tests. `main`'s counts are this branch's minus
+  those.
+- **The lazy `transactions` chunk** is 59,015 bytes, against the 58,999 recorded above. That is +16 bytes for the
+  `localDateOf` call. It is not on the landing path.
+- **Local suite time:** 9.7–10.3 s per zone.
+
+### Residuals (follow-up)
+
+- **The canary checks the zone the process resolved,** not that any date test depends on it.
+- **The window is still computed once per mount** (`useMemo` with no dependencies), like `todayISO`. A page left
+  open across the household's midnight keeps the previous day's window until it remounts. Unchanged here.
+- **The zones still run as sequential steps.** See the matrix option under "Added CI time".

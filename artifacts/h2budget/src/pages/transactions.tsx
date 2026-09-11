@@ -40,7 +40,7 @@ import { currentMonthRange, rangeForMode, type RangeMode } from "@/lib/timeRange
 import { Sparkline, StackBar, DeltaPill, MoneyText } from "@/components/viz";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, cn, moneyColorClass } from "@/lib/utils";
-import { householdMonthStartOf, householdToday } from "@/lib/householdDay";
+import { householdMonthStartOf, householdToday, localDateOf } from "@/lib/householdDay";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
@@ -615,7 +615,11 @@ export default function TransactionsPage() {
     const pad = (n: number) => String(n).padStart(2, "0");
     const toISO = (d: Date) =>
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const now = new Date();
+    // The household's day as a local-midnight Date, so the month arithmetic below
+    // runs on the same calendar as `todayISO`: late in the Chicago evening a
+    // browser east of Chicago is already in tomorrow, and on a month's last day
+    // its window would start a month late and end a day late.
+    const now = localDateOf(householdToday(new Date()));
     // Look back ~6 months so the ACTUAL line has history to draw, never before
     // the tracking-start floor (May 2026); forward 12 months.
     const FLOOR = new Date(2026, 4, 1); // 2026-05-01

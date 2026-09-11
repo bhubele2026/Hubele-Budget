@@ -12,6 +12,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege for GITHUB_TOKEN. No step pushes, comments, publishes a
+# package or uploads an artifact: checkout only reads the repo, and the
+# setup-node pnpm cache goes through the Actions cache service, not this token.
+permissions:
+  contents: read
+
 env:
   # Match Replit's toolchain (Node 24 + pnpm 10) so the committed lockfile's
   # `overrides` snapshot validates under --frozen-lockfile. pnpm 9 normalizes
