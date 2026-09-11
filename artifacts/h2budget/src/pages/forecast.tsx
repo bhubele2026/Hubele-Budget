@@ -311,7 +311,8 @@ export default function ForecastPage({
   const { data: cashProjection, isLoading: cashProjectionLoading, isError: projectionError, refetch: refetchProjection } =
     cashProjectionQuery;
   // The spine carries the server's freshness verdict for the bank card's
-  // snapshot line (cached app-wide: no extra request).
+  // snapshot line. It shares the app-wide spine cache, so it adds no endpoint,
+  // but mounting refetches a copy older than the spine's 60s staleTime.
   const { data: spineData } = useSpine();
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
@@ -1696,7 +1697,7 @@ export default function ForecastPage({
   if (!data || !register) {
     return (
       <div className="space-y-4">
-        {forecastError ? <div role="alert" className={errorBanner}>Forecast could not load. <button className={btnLink} onClick={() => void refetchForecast()}>Retry forecast</button></div> : <Skeleton className="h-10 w-48" />}
+        {forecastError ? <div role="alert" className={errorBanner}>Couldn't load the forecast. <button type="button" className={btnLink} onClick={() => void refetchForecast()}>Retry forecast</button></div> : <Skeleton className="h-10 w-48" />}
         <Skeleton className="h-96 w-full" />
       </div>
     );
@@ -1859,7 +1860,9 @@ export default function ForecastPage({
       <PlaidReauthBanner />
       {(forecastError || projectionError) && (
         <div role="alert" className={errorBanner}>
-          <p>{data || cashProjection ? "Couldn't refresh the forecast." : "Couldn't load the forecast."}</p>
+          {/* The bundle has loaded by here (a failed first load returns early
+              above), so "load" can only mean the projection never arrived. */}
+          <p>{projectionError && !cashProjection ? "Couldn't load the forecast." : "Couldn't refresh the forecast."}</p>
           <button type="button" className={btnLink} onClick={() => { void refetchForecast(); void refetchProjection(); }}>Retry forecast</button>
         </div>
       )}

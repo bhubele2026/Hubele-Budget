@@ -79,18 +79,6 @@ export default function BillsOverviewPage() {
           one. */}
       <h1 className="sr-only">Bills overview</h1>
 
-      <RefreshBanner
-        state={summaryState}
-        updatedAt={
-          summaryQuery.dataUpdatedAt
-            ? new Date(summaryQuery.dataUpdatedAt).toISOString()
-            : null
-        }
-        onRetry={() => void summaryQuery.refetch()}
-        refreshing={summaryQuery.isFetching ?? false}
-        data-testid="bills-refresh-banner"
-      />
-
       {/* ── Headline: the spine's two numbers ──────────────────────────────── */}
       <div className="flex flex-wrap gap-3">
         <Stat
@@ -115,6 +103,20 @@ export default function BillsOverviewPage() {
           hint="rest of this month"
         />
       </div>
+
+      {/* Under the headline, not above it: that row is the spine's and has
+          likely loaded. This banner speaks for the month below. */}
+      <RefreshBanner
+        state={summaryState}
+        updatedAt={
+          summaryQuery.dataUpdatedAt
+            ? new Date(summaryQuery.dataUpdatedAt).toISOString()
+            : null
+        }
+        onRetry={() => void summaryQuery.refetch()}
+        refreshing={summaryQuery.isFetching ?? false}
+        data-testid="bills-refresh-banner"
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* ── This month ──────────────────────────────────────────────────── */}

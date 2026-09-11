@@ -275,6 +275,8 @@ let cashSignal: typeof CASH_SIGNAL = CASH_SIGNAL;
 let debtsData: unknown[] = [];
 let recurringData: unknown[] = [];
 let spineData: unknown = undefined;
+let forecastError = false;
+let cashSignalError = false;
 
 vi.mock("@workspace/api-client-react", () => {
   const noopMutation = () => ({
@@ -284,8 +286,8 @@ vi.mock("@workspace/api-client-react", () => {
   });
   const empty = { data: [], isLoading: false };
   return {
-    useGetForecast: () => ({ data: forecastData, isLoading: false }),
-    useGetForecastCashSignal: () => ({ data: cashSignal, isLoading: false }),
+    useGetForecast: () => ({ data: forecastData, isLoading: false, isError: forecastError }),
+    useGetForecastCashSignal: () => ({ data: cashSignal, isLoading: false, isError: cashSignalError }),
     useUpsertForecastResolution: noopMutation,
     useDeleteForecastResolution: noopMutation,
     useCloseForecastMonth: noopMutation,
@@ -352,6 +354,8 @@ beforeEach(() => {
   debtsData = [];
   recurringData = [];
   spineData = undefined;
+  forecastError = false;
+  cashSignalError = false;
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 4, 15, 12, 0, 0));
 });
@@ -510,5 +514,81 @@ describe("Forecast — the bank card's snapshot line takes the server's freshnes
     const meta = screen.getByTestId("text-bank-snapshot-meta");
     expect(within(meta).queryByTestId("text-bank-freshness-stale")).toBeNull();
     expect(within(meta).getByTestId("text-bank-snapshot-freshness")).toBeTruthy();
+  });
+});
+
+describe("Forecast — the bank line's verdict: the main path, and one instant written two ways", () => {
+  const withSnapshotAt = (at: string) => {
+    forecastData = {
+      ...FORECAST_BASE,
+      bankSnapshot: {
+        balance: "5000",
+        at,
+        source: "plaid",
+        accountId: "acct-1",
+        name: "Checking",
+        mask: "1111",
+      },
+    } as unknown as typeof FORECAST_BASE;
+  };
+  const bankVerdict = (asOfDate: string, stale: boolean) => ({
+    bank: {
+      balance: "5000",
+      asOfDate,
+      source: "plaid",
+      lastContactAt: asOfDate,
+      lastFailureAt: stale ? "2026-05-15T11:00:00.000Z" : null,
+      stale,
+      staleReason: stale ? "refresh_failed" : null,
+    },
+  });
+
+  it("with a fresh verdict for this snapshot, shows exactly one freshness label and no stale line", () => {
+    withSnapshotAt("2026-05-15T10:00:00.000Z");
+    spineData = bankVerdict("2026-05-15T10:00:00.000Z", false);
+    renderPage();
+    const meta = screen.getByTestId("text-bank-snapshot-meta");
+    expect(within(meta).getAllByTestId("text-bank-snapshot-freshness")).toHaveLength(1);
+    expect(within(meta).queryByTestId("text-bank-freshness-stale")).toBeNull();
+  });
+
+  it("matches the same instant with and without milliseconds", () => {
+    withSnapshotAt("2026-05-15T10:00:00.000Z");
+    spineData = bankVerdict("2026-05-15T10:00:00Z", true);
+    renderPage();
+    const meta = screen.getByTestId("text-bank-snapshot-meta");
+    expect(within(meta).getByTestId("text-bank-freshness-stale").textContent).toContain(
+      "Refresh failed",
+    );
+  });
+});
+
+describe("Forecast — the error banner says load or refresh, truthfully", () => {
+  const alertsText = () =>
+    screen
+      .getAllByRole("alert")
+      .map((a) => a.textContent ?? "")
+      .join(" | ");
+
+  it("when the projection never loaded, says it couldn't load the forecast", () => {
+    cashSignal = undefined as unknown as typeof CASH_SIGNAL;
+    cashSignalError = true;
+    renderPage();
+    expect(alertsText()).toContain("Couldn't load the forecast.");
+    expect(alertsText()).not.toContain("Couldn't refresh");
+  });
+
+  it("when a refresh failed with figures on screen, says it couldn't refresh", () => {
+    cashSignalError = true;
+    renderPage();
+    expect(alertsText()).toContain("Couldn't refresh the forecast.");
+    expect(alertsText()).not.toContain("Couldn't load");
+  });
+
+  it("when the page's forecast never loaded, says it couldn't load the forecast", () => {
+    forecastData = undefined as unknown as typeof FORECAST_BASE;
+    forecastError = true;
+    renderPage();
+    expect(alertsText()).toContain("Couldn't load the forecast.");
   });
 });
