@@ -42,7 +42,7 @@ counts. The posted half adds:
 
 | Case | Posted row adds | Why |
 |---|---|---|
-| Posted and pending both held by the snapshot | 0 | The balance already has the charge. |
+| Posted and pending both held by the snapshot | 0 | The balance holds the charge — or, for a snapshot-day pair with no evidence of when it happened, PR4b's rule counts neither half (see Residuals). |
 | Pending **charge** with evidence it was inside the balance (`pendingChargeWasInBalance`) | posted − pending (−55.00 − −48.20 = **−6.80**) | `available` held the pending amount, so only the tip is new. |
 | Anything else | posted, in full | Neither was in the balance, or there is no evidence either was. |
 
@@ -88,8 +88,9 @@ count before merge. The production database is locked, so that needs Brad's appr
 **False pair — overstates cash by the dropped pending charge until it posts.**
 - A real charge that is still pending gets paired with a *different* same-merchant charge that posted first, within
   7 days and 1.30× + $1.
-- A re-keyed posted row keeps its own pending row's `created_at`. That blocks pairing with an *older* pending row, so
-  charges posting in order are safe. It does not block a *newer* one.
+- A re-keyed posted row keeps its own pending row's `created_at`, so it cannot pair with a pending row that reached the
+  ledger *after* its own. Charges posting in order are safe. It can still pair with an *older* pending row that is still
+  pending — the out-of-order case (R4).
 - Descriptions are the sync's `merchant_name || name`. Short labels ("Amazon", "Uber", "PayPal", "Starbucks") are
   token subsets across different purchases.
 - The +$1 slack lets a $3.00 charge pair with a $4.00 one.
@@ -98,6 +99,28 @@ count before merge. The production database is locked, so that needs Brad's appr
 **Snapshot-day pending charge, no evidence.** Its posting counts in full. If it was in fact authorised before the read
 and only reached the ledger late, cash is understated by the pending amount. That is `main`'s behaviour and the
 linked path's.
+
+**A hold voided before the read (overstates).**
+- A user-worked pending hold dated before the snapshot day, already released before the balance was read, is still
+  treated as inside the balance. The rule assumes a pending row dated before the snapshot day was still pending at the
+  read.
+- If a different or re-billed same-merchant charge then posts within 7 days and 1.30× + $1, it counts only the
+  difference, and cash reads too high by the hold.
+- Reviewer's case A1: 950.00 against a true 750.00; `main` gives 750.00.
+- It can't be told apart from the case this PR fixes without a schema change. Restaurant holds usually drop when the
+  final amount posts; hotel and rental holds, often hundreds of dollars, are the risk.
+
+**Both halves on the snapshot day after the read, with no evidence (overstates, as on `main`).**
+- PR4b's rule holds snapshot-day rows that have no time. A pair that posts the same day counts 0.
+- Reviewer's case A4: 1000.00 against a true 945.00. The same pair posting the next day counts in full (R2, 945.00).
+
+**Contradicting times (understates).**
+- A pending row with no time, or a time after the read, whose posted row carries a real time before the read: the
+  posting counts in full.
+- Reviewer's case A3: 945.00 against a true 993.20; `main` gives 951.80.
+
+**Ranking by amount first** can pick an unrelated older pending row of exactly the posted amount over the true pending
+row with a tip. The error is bounded by the amount gap.
 
 **`current` anchor.** When Plaid returned no `available` and the snapshot used `current`, pending charges were not in
 the balance, so "posted − pending" is too small a charge. The same happens with a typed-in balance that left pending
@@ -184,6 +207,26 @@ charges out. The source only records "plaid" or "manual", so this can't be detec
 | LOW L1: the date tie-break took the newest pending row (R6) | Rank by closest amount, then oldest. Unit test and ledger test (930.00). |
 | LOW L2: `current` anchor; LOW L3: arrival-order misses | Disclosed. |
 | NITs: `acceptedImpact`; the figure direction for deposits; missing tests | Disclosed; the figures section is corrected; tests added. There is no no-snapshot ledger test: `heldBySnapshot` is always false there, so the posted row counts in full and the pending row is skipped. |
+
+**Second look, `62c7db0`: APPROVE.** H1, H2, M1 and L1 hold under new cases. The reviewer's figures (1,000.00 read at
+10:00 CT on 05-01):
+
+| Case | `main` | `4f2969c` | `62c7db0` | Truth |
+|---|---|---|---|---|
+| R4 false pair (a different coffee posts first) | 989.00 | 994.25 | 994.25 | 989.00 (disclosed) |
+| R5 held hold, later same-merchant charge | 975.00 | 995.00 | 995.00 | 995.00 |
+| R6 two pendings, the older posts | 930.00 | 960.00 | **970.00** | 970.00 |
+| A1 hold voided before the read, a different −250 later | 750.00 | 950.00 | 950.00 | 750.00 (disclosed) |
+| A2 ahead-dated pending −40 the ledger had, posts −53 | — | 987.00 | 987.00 | 987.00 |
+| A3 pending with no time, posted with a real time before the read | 951.80 | 1000.00 | **945.00** | 993.20 (disclosed) |
+| A4 both halves on the snapshot day after the read, no evidence | 1000.00 | 1000.00 | 1000.00 | 945.00 (disclosed) |
+| A5 pending deposit dated after the snapshot day, posted later | 5000.00 | 3000.00 | 3000.00 | 3000.00 |
+
+- **Not blocking:** tightening the false-pair rule. A minimum token count would drop true pairs with short labels, and
+  relative-only slack would miss small tips.
+- **The gate for the false-pair risk** is the production count.
+- **Corrected in this note:** the older/newer wording on re-keyed rows, plus residuals A1, A3 and A4 and the ranking
+  side effect.
 
 ## Left for later
 
