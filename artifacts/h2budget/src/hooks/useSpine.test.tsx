@@ -23,6 +23,7 @@ describe("useSpine — says when the numbers cannot be trusted", () => {
     query.current = { data: undefined, isLoading: true, isFetching: true, dataUpdatedAt: 0 };
     const { result } = renderHook(() => useSpine());
     expect(result.current.state).toBe("cold");
+    expect(result.current.isFetching).toBe(true);
     expect(result.current.data).toBeUndefined();
     expect(result.current.updatedAt).toBeNull();
   });
@@ -33,6 +34,7 @@ describe("useSpine — says when the numbers cannot be trusted", () => {
     const { result } = renderHook(() => useSpine());
     expect(result.current.state).toBe("failed");
     expect(result.current.error).toBe(error);
+    expect(result.current.isFetching).toBe(false);
   });
 
   it("is loaded with the time the data was fetched", () => {
@@ -54,6 +56,18 @@ describe("useSpine — says when the numbers cannot be trusted", () => {
     expect(result.current.state).toBe("refresh-failed");
     expect(result.current.data).toBe(SPINE);
     expect(result.current.updatedAt).toBe("2026-09-11T17:00:00.000Z");
+  });
+
+  it("says a Retry is in flight after a failed refresh", () => {
+    query.current = {
+      data: SPINE,
+      isRefetchError: true,
+      isFetching: true,
+      dataUpdatedAt: FETCHED_AT,
+    };
+    const { result } = renderHook(() => useSpine());
+    expect(result.current.state).toBe("refresh-failed");
+    expect(result.current.isFetching).toBe(true);
   });
 
   it("retries through the query", () => {

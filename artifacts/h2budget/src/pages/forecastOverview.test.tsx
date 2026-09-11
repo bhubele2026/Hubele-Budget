@@ -242,3 +242,16 @@ describe("Forecast Overview — a failed spine refresh keeps the numbers and say
     expect(screen.queryByTestId("fo-refresh-banner")).toBeNull();
   });
 });
+
+describe("Forecast Overview — no bar drawn from zeros", () => {
+  it("shows a dash, not an In/Out bar, until there is a projection", () => {
+    state.cashSignal = undefined;
+    render(<ForecastOverviewPage />);
+    expect(screen.getByTestId("fo-in-out-empty").textContent).toBe("—");
+  });
+
+  it("draws the In/Out bar once the projection is ready", () => {
+    render(<ForecastOverviewPage />);
+    expect(screen.queryByTestId("fo-in-out-empty")).toBeNull();
+  });
+});

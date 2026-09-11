@@ -99,7 +99,7 @@ export function ChaseInsightStrip({
       },
     },
   );
-  const { data: prev } = useGetReportsSpendingFacts(
+  const { data: prev, isError: prevError } = useGetReportsSpendingFacts(
     { from: prior.from, to: prior.to },
     {
       query: {
@@ -144,7 +144,9 @@ export function ChaseInsightStrip({
 
   return (
     <section className={card} data-testid="chase-insight-strip">
-      <div className={cardHead}>
+      {/* The head wraps on a phone: the title, the freshness line and Sync do
+          not fit one 390px row, and a squeezed label is as good as hidden. */}
+      <div className={`${cardHead} flex-wrap gap-y-1.5`}>
         <h2 className="text-title font-semibold text-brand-navy">
           Household spending this {period}
         </h2>
@@ -154,7 +156,7 @@ export function ChaseInsightStrip({
           equal-length window immediately before this one.
         </Help>
         {actions && (
-          <div className="ml-auto flex items-center gap-2">{actions}</div>
+          <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>
         )}
       </div>
 
@@ -181,10 +183,14 @@ export function ChaseInsightStrip({
                 {Math.abs(pctRounded)}%
               </span>
             )}
-            <span className="text-micro text-neutral-400">
+            <span className="text-micro text-neutral-400" data-testid="strip-comparison">
+              {/* "Loading" only while it can still arrive: a failed comparison
+                  used to read "Loading comparison…" forever. */}
               {prev
                 ? `vs ${formatCurrency(prevTotal)} last ${period}`
-                : "Loading comparison…"}
+                : prevError
+                  ? "Comparison unavailable"
+                  : "Loading comparison…"}
             </span>
           </div>
         </div>

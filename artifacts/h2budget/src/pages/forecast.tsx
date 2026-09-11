@@ -77,6 +77,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
+import { moneyFace } from "@/components/data-state";
+import { dataState } from "@/lib/queryState";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { householdDayOfAt } from "@/lib/householdDay";
 import {
@@ -1999,29 +2001,28 @@ export default function ForecastPage({
           }`}
           data-testid="hero-forecast-balance"
         >
-          {Number.isFinite(endingNum)
-            ? formatCurrency(endingNum)
-            : formatCurrency(0)}
+          {/* No projection yet: a dash, never $0.00 dressed as a real ending balance. */}
+          {Number.isFinite(endingNum) ? formatCurrency(endingNum) : "—"}
         </div>
         <Foot>
           <span className="flex flex-wrap items-center gap-x-5 gap-y-1">
             <span>
               Bank before {formatDate(forecastFromDate)}{" "}
               <span className="font-mono tabular-nums text-neutral-600">
-                {formatCurrency(proj?.startingBalance ?? "0")}
+                {moneyFace(proj?.startingBalance)}
               </span>
             </span>
             <span>
               Matched impact{" "}
               <span className="font-mono tabular-nums text-neutral-600">
-                {formatCurrency(proj?.acceptedImpact ?? "0")}
+                {moneyFace(proj?.acceptedImpact)}
               </span>
             </span>
             <span>
               Through{" "}
               {formatDate(proj?.endingDate ?? proj?.toDate ?? forecastFromDate)}{" "}
               <span className="font-mono tabular-nums text-neutral-600">
-                {formatCurrency(proj?.endingBalance ?? "0")}
+                {moneyFace(proj?.endingBalance)}
               </span>
             </span>
           </span>
@@ -2085,7 +2086,14 @@ export default function ForecastPage({
         );
       })()}
 
-      <ForecastDateBalance signal={cashProjection} />
+      <ForecastDateBalance
+        signal={cashProjection}
+        state={dataState({
+          data: cashProjection,
+          isLoadingError: projectionError && !cashProjection,
+          isRefetchError: projectionError && !!cashProjection,
+        })}
+      />
 
       {/* (#683) Past-due plans dragging tomorrow — discoverable summary */}
       {draggingPlans.length > 0 && draggingTargetDate && (

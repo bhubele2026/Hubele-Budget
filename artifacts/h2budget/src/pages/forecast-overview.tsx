@@ -66,6 +66,7 @@ export default function ForecastOverviewPage() {
     data: spine,
     state: spineState,
     updatedAt: spineUpdatedAt,
+    isFetching: spineFetching,
     refetch: refetchSpine,
   } = useSpine();
   const { data: signal, isError, refetch } = useGetForecastCashSignal(
@@ -129,9 +130,18 @@ export default function ForecastOverviewPage() {
         state={spineState}
         updatedAt={spineUpdatedAt}
         onRetry={refetchSpine}
+        refreshing={spineFetching}
         data-testid="fo-refresh-banner"
       />
-      {isError && <div className={errorBanner} role="alert">Forecast refresh failed. <button className={btnLink} onClick={() => void refetch()}>Retry forecast</button></div>}
+      {/* Worded like the spine banner above, so two banners on a bad day read as one voice. */}
+      {isError && (
+        <div className={errorBanner} role="alert" data-testid="fo-forecast-error">
+          Couldn't refresh the forecast.{" "}
+          <button type="button" className={btnLink} onClick={() => void refetch()}>
+            Retry
+          </button>
+        </div>
+      )}
       {signal?.status === "no_data" && <div className={emptyNote}>Set a bank balance in Forecast to calculate future cash.</div>}
       {/* ── The spine row. Three of these four are the shared snapshot. ────── */}
       <div
@@ -226,14 +236,22 @@ export default function ForecastOverviewPage() {
             </span>
           </div>
           <div className="px-4 py-4">
-            <StackBar
-              segments={[
-                { label: "In", value: income, color: CHART.navy },
-                { label: "Out", value: expenses, color: CHART.orangeDeep },
-              ]}
-              height={14}
-              money
-            />
+            {/* No projection yet (loading, failed, or no snapshot): no bar drawn
+                from zeros. */}
+            {forecastReady ? (
+              <StackBar
+                segments={[
+                  { label: "In", value: income, color: CHART.navy },
+                  { label: "Out", value: expenses, color: CHART.orangeDeep },
+                ]}
+                height={14}
+                money
+              />
+            ) : (
+              <p className="text-micro text-neutral-400" data-testid="fo-in-out-empty">
+                —
+              </p>
+            )}
           </div>
         </section>
 

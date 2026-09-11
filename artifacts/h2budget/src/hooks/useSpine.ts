@@ -26,7 +26,7 @@ import { dataState, type DataState } from "@/lib/queryState";
  * loaded, refreshing, a failed refresh (the last good numbers stay on screen)
  * and a failed first load, so no surface paints "$0.00" or "All reconciled" for
  * a spine it never received. `updatedAt` is when the numbers on screen were
- * fetched.
+ * fetched, and `isFetching` says a request (a Retry, say) is in flight.
  *
  * `staleTime` is 60s: long enough that moving between pages never refetches,
  * short enough that the numbers can't visibly age during a session. Every
@@ -38,6 +38,8 @@ export const SPINE_QUERY_KEY = getGetSpineQueryKey();
 export interface SpineRead {
   data: Spine | undefined;
   isLoading: boolean;
+  /** A request is in flight: the first load, a refresh, or a Retry. */
+  isFetching: boolean;
   state: DataState;
   error: unknown;
   /** When the data on screen was fetched (ISO), or null before the first success. */
@@ -56,6 +58,7 @@ export function useSpine(): SpineRead {
   return {
     data: q.data,
     isLoading: q.isLoading,
+    isFetching: q.isFetching ?? false,
     state: dataState(q),
     error: q.error ?? null,
     updatedAt: q.dataUpdatedAt ? new Date(q.dataUpdatedAt).toISOString() : null,

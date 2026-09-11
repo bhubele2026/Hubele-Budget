@@ -50,9 +50,17 @@ test.describe("Bank balance freshness label — Banking + Forecast", () => {
     await expect(freshness).not.toContainText("Last auto-updated");
     await expect(page.getByTestId("text-bank-freshness-stale")).toHaveCount(0);
 
-    // The label used to be hidden below the `sm` breakpoint.
+    // The label used to be hidden below the `sm` breakpoint. At 390px it must
+    // be on screen and whole: visible alone would pass for a label squeezed or
+    // clipped by the card head.
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(freshness).toBeVisible();
+    const box = await freshness.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    const textWidth = await freshness.evaluate((el) => el.scrollWidth);
+    expect(box!.width).toBeGreaterThanOrEqual(textWidth - 1);
   });
 
   test("renders 'Set manually …' in the Forecast bank card's meta line", async ({
