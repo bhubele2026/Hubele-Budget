@@ -770,7 +770,17 @@ export async function buildForecastLedger(
       if (!o.counts) return;
       if (row.occurredOn < rowReadFromISO || row.occurredOn > todayISO) return;
       if (claimedTxnIds.has(row.id) || (o.replacedId && claimedTxnIds.has(o.replacedId))) return;
-      const candidate: MatchRow = { txnId: row.id, occurredOn: row.occurredOn, amount: row.amount, description: row.description };
+      // (PR6 second review) PR7's card-payment signals travel with the row, for
+      // `plansPaidInFullByName`: only a real card payment pays a card's minimum.
+      const full = candidateRowsAll[i]!;
+      const candidate: MatchRow = {
+        txnId: row.id,
+        occurredOn: row.occurredOn,
+        amount: row.amount,
+        description: row.description,
+        isExternalCardPayment: full.isExternalCardPayment === true,
+        pfcDetailed: full.pfcDetailed ?? null,
+      };
       if (row.occurredOn >= listRowFromISO) listingRows.push(candidate);
       if (row.occurredOn >= rowMatchFromISO) matchRows.push(candidate);
     });

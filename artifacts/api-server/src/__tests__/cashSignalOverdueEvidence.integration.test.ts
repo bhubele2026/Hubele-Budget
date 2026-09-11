@@ -264,9 +264,9 @@ describe("PR6 review, HIGH 1 — the reviewer's R1–R7", () => {
     const capOne = await debt("Capital One Platinum", "40", 1);
     await debt("Discover It", "38", 3);
     await paycheck("78");
-    await row("2026-04-01", "-650.00", "CAPITAL ONE MOBILE PMT");
+    await row("2026-04-01", "-650.00", "CAPITAL ONE MOBILE PYMT");
     await row("2026-04-03", "-300.00", "DISCOVER E-PAYMENT");
-    const may = await row("2026-05-01", "-812.40", "CAPITAL ONE MOBILE PMT");
+    const may = await row("2026-05-01", "-812.40", "CAPITAL ONE MOBILE PYMT");
     await row("2026-05-02", "-400.00", "DISCOVER E-PAYMENT");
     await row("2026-04-28", "78.00", "ACME PAYROLL");
     const sig = await signal();
@@ -285,6 +285,34 @@ describe("PR6 review, HIGH 1 — the reviewer's R1–R7", () => {
       txnAmount: "-812.40",
       planAmount: "-40.00",
     });
+  });
+
+  // ⭐ PR6 second review, probe E6: a card's minimum is paid only by a real card
+  // payment. Before the fix each of the first three rows took its minimum off the
+  // curve (max safe extra 2,460 instead of 2,362).
+  it("E6 a Target purchase, an Apple Store receipt, a Capital One car loan and a Discover refund pay no minimum: all four drag", async () => {
+    await snapshot({ balance: "3000" });
+    await debt("Target RedCard", "35", 1);
+    await debt("Apple Card", "25", 2);
+    await debt("Capital One Platinum", "38", 3);
+    await debt("Discover It", "40", 4);
+    await paycheck("138");
+    await row("2026-05-01", "-84.12", "TARGET T-2331");
+    await row("2026-05-02", "-1299.00", "APPLE STORE");
+    await row("2026-05-03", "-452.00", "CAPITAL ONE AUTO CARPAY");
+    await row("2026-05-04", "40.00", "DISCOVER CASHBACK");
+    await row("2026-04-28", "138.00", "ACME PAYROLL");
+    const sig = await signal();
+    // 3,000.00 − 35 − 25 − 38 − 40 on Wed 05-06.
+    expect(balanceOn(sig, "2026-05-06")).toBe("2862.00");
+    expect(sig.maxSafeExtra).toBe("2362.00");
+    expect(dragged(sig).map((d) => d[0]).sort()).toEqual([
+      "Apple Card minimum",
+      "Capital One Platinum minimum",
+      "Discover It minimum",
+      "Target RedCard minimum",
+    ]);
+    expect(sig.overdueAssumedPaid).toEqual([]);
   });
 
   it("R5 Avalanche extra $500 paid 04-30 by 'ONLINE PAYMENT THANK YOU': 2,500", async () => {
@@ -333,8 +361,8 @@ describe("PR6 review, HIGH 1 — the reviewer's R1–R7", () => {
       await row(`2026-${m}-02`, "-431.57", "AUTO LOAN PMT 8812");
       await row(`2026-${m}-03`, "-660.00", "SF RO 27 PREM");
     }
-    await row("2026-04-04", "-650.00", "CAPITAL ONE MOBILE PMT");
-    await row("2026-05-04", "-812.40", "CAPITAL ONE MOBILE PMT");
+    await row("2026-04-04", "-650.00", "CAPITAL ONE MOBILE PYMT");
+    await row("2026-05-04", "-812.40", "CAPITAL ONE MOBILE PYMT");
     await row("2026-04-30", "-500.00", "ONLINE PAYMENT THANK YOU");
     await row("2026-04-10", "2000.00", "ACME PAYROLL");
     await row("2026-04-24", "2000.00", "ACME PAYROLL");

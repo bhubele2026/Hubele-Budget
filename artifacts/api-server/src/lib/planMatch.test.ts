@@ -181,7 +181,7 @@ describe("plansPaidInFullByName", () => {
     const out = plansPaidInFullByName(
       [capOne, discover],
       [
-        row("t-cap", "2026-05-01", -812.4, "CAPITAL ONE MOBILE PMT"),
+        row("t-cap", "2026-05-01", -812.4, "CAPITAL ONE MOBILE PYMT"),
         row("t-disc", "2026-05-02", -400, "DISCOVER E-PAYMENT 4411"),
       ],
     );
@@ -193,22 +193,22 @@ describe("plansPaidInFullByName", () => {
 
   it("the matcher itself finds no pair for these (a named row is capped at max($25, 25%) off)", () => {
     expect(
-      matchPlansToRows([capOne], [row("t-cap", "2026-05-01", -812.4, "CAPITAL ONE MOBILE PMT")]),
+      matchPlansToRows([capOne], [row("t-cap", "2026-05-01", -812.4, "CAPITAL ONE MOBILE PYMT")]),
     ).toEqual([]);
   });
 
   it("never pays with less than the minimum, another card's name, no name, or the wrong sign", () => {
     const rows = [
-      row("under", "2026-05-01", -39.99, "CAPITAL ONE MOBILE PMT"),
+      row("under", "2026-05-01", -39.99, "CAPITAL ONE MOBILE PYMT"),
       row("other", "2026-05-01", -812.4, "DISCOVER E-PAYMENT"),
       row("noname", "2026-05-01", -812.4, "ONLINE PAYMENT THANK YOU"),
-      row("refund", "2026-05-01", 812.4, "CAPITAL ONE MOBILE PMT"),
+      row("refund", "2026-05-01", 812.4, "CAPITAL ONE MOBILE PYMT"),
     ];
     expect(plansPaidInFullByName([capOne], rows)).toEqual([]);
   });
 
   it("only inside the matching window: 10 days before to 14 days after", () => {
-    const at = (d: string) => plansPaidInFullByName([capOne], [row("t", d, -100, "CAPITAL ONE PMT")]);
+    const at = (d: string) => plansPaidInFullByName([capOne], [row("t", d, -100, "CAPITAL ONE ONLINE PYMT")]);
     expect(at("2026-04-21")).toHaveLength(1);
     expect(at("2026-05-15")).toHaveLength(1);
     expect(at("2026-04-20")).toEqual([]);
@@ -219,10 +219,61 @@ describe("plansPaidInFullByName", () => {
     // Both minimums are inside the row's window (8 and 2 days away); the nearer one takes it.
     const earlier = plan("debt:cap1", "2026-04-10", -40, "Capital One Platinum minimum");
     const may = plan("debt:cap1", "2026-04-20", -40, "Capital One Platinum minimum");
-    const pay = row("t", "2026-04-18", -500, "CAPITAL ONE MOBILE PMT");
+    const pay = row("t", "2026-04-18", -500, "CAPITAL ONE MOBILE PYMT");
     expect(plansPaidInFullByName([earlier, may], [pay])).toEqual([
       { planKey: "debt:cap1|2026-04-20", txnId: "t", txnAmount: -500 },
     ]);
     expect(plansPaidInFullByName([may], [pay], new Set(["debt:cap1|2026-04-20#t"]))).toEqual([]);
+  });
+});
+
+// ⭐ PR6 second review — only a real CARD PAYMENT (PR7's rule) pays a card's
+// minimum. A shared name word is not enough: probe E6 found a store purchase, an
+// Apple Store receipt and a car-loan payment each paying a card's minimum.
+describe("plansPaidInFullByName — the row must be a card payment", () => {
+  const target = plan("debt:red", "2026-05-01", -35, "Target RedCard minimum");
+  const apple = plan("debt:apple", "2026-05-02", -25, "Apple Card minimum");
+  const capOne = plan("debt:cap1", "2026-05-03", -38, "Capital One Platinum minimum");
+  const discover = plan("debt:disc", "2026-05-04", -40, "Discover It minimum");
+
+  it("E6: a Target purchase, an Apple Store receipt and a Capital One car-loan payment pay nothing", () => {
+    expect(plansPaidInFullByName([target], [row("p1", "2026-05-01", -84.12, "TARGET T-2331")])).toEqual([]);
+    expect(plansPaidInFullByName([apple], [row("p2", "2026-05-02", -1299, "APPLE STORE")])).toEqual([]);
+    expect(plansPaidInFullByName([capOne], [row("p3", "2026-05-03", -452, "CAPITAL ONE AUTO CARPAY")])).toEqual([]);
+  });
+
+  it("a refund naming the card never pays (wrong sign, and not a payment)", () => {
+    expect(plansPaidInFullByName([discover], [row("r", "2026-05-04", 40, "DISCOVER CASHBACK")])).toEqual([]);
+  });
+
+  it("the issuers' own payment descriptions do pay", () => {
+    expect(
+      plansPaidInFullByName(
+        [target, apple, discover],
+        [
+          row("t", "2026-05-01", -120, "TARGET CARD SRVC PAYMENT"),
+          row("a", "2026-05-02", -300, "GOLDMAN SACHS APPLE CARD PAYMENT"),
+          row("d", "2026-05-04", -200, "DISCOVER E-PAYMENT 4411"),
+        ],
+      ),
+    ).toEqual([
+      { planKey: "debt:apple|2026-05-02", txnId: "a", txnAmount: -300 },
+      { planKey: "debt:disc|2026-05-04", txnId: "d", txnAmount: -200 },
+      { planKey: "debt:red|2026-05-01", txnId: "t", txnAmount: -120 },
+    ]);
+  });
+
+  it("a card payment that doesn't name the card as a word pays nothing ('APPLECARD GSBANK' has no word 'apple')", () => {
+    expect(plansPaidInFullByName([apple], [row("a", "2026-05-02", -300, "APPLECARD GSBANK PAYMENT 260502")])).toEqual([]);
+  });
+
+  it("a row the user flagged as a card payment, or Plaid calls one, pays — with the card's name", () => {
+    const flagged: MatchRow = { ...row("f", "2026-05-03", -100, "CAPITAL ONE XFER 88"), isExternalCardPayment: true };
+    const plaid: MatchRow = { ...row("q", "2026-05-03", -100, "CAPITAL ONE 88"), pfcDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" };
+    expect(plansPaidInFullByName([capOne], [flagged])).toEqual([{ planKey: "debt:cap1|2026-05-03", txnId: "f", txnAmount: -100 }]);
+    expect(plansPaidInFullByName([capOne], [plaid])).toEqual([{ planKey: "debt:cap1|2026-05-03", txnId: "q", txnAmount: -100 }]);
+    // Still needs the name: a flagged Discover payment never pays Capital One.
+    const otherCard: MatchRow = { ...row("o", "2026-05-03", -100, "DISCOVER E-PAYMENT"), isExternalCardPayment: true };
+    expect(plansPaidInFullByName([capOne], [otherCard])).toEqual([]);
   });
 });
