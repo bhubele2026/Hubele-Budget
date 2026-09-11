@@ -8,6 +8,7 @@ const entry = (id: string, date: string, extra: Partial<RemintBatchEntry> = {}):
   signedAmount: "-25.00",
   namesPendingRow: false,
   onFileAtStart: false,
+  firstCopy: true,
   ...extra,
 });
 
@@ -18,19 +19,26 @@ describe("laterRowIsNearer", () => {
     expect(laterRowIsNearer(batch, 1, "2026-09-10")).toBe(false);
   });
 
-  it("never defers to an earlier row, to an equal distance, or to itself", () => {
+  it("never defers to an earlier row, to itself, or on a tie with a later-dated row", () => {
     expect(laterRowIsNearer([entry("NEW", "2026-09-10"), entry("B", "2026-09-11")], 1, "2026-09-10")).toBe(false);
-    expect(laterRowIsNearer([entry("B", "2026-09-11"), entry("C", "2026-09-09")], 0, "2026-09-10")).toBe(false);
     expect(laterRowIsNearer([entry("B", "2026-09-11"), entry("B", "2026-09-10")], 0, "2026-09-10")).toBe(false);
+    expect(laterRowIsNearer([entry("NEW", "2026-09-09"), entry("X", "2026-09-11")], 0, "2026-09-10")).toBe(false);
   });
 
-  it("ignores later rows that cannot claim it: another account or amount, on file, or naming a pending row", () => {
+  it("(PR4d-2) an exact tie goes to the earlier-dated row, whatever the list order", () => {
+    expect(laterRowIsNearer([entry("X", "2026-09-11"), entry("NEW", "2026-09-09")], 0, "2026-09-10")).toBe(true);
+    // Same date: the tie is left to list order (without institution times either pick moves cash the same way).
+    expect(laterRowIsNearer([entry("X", "2026-09-11"), entry("Y", "2026-09-11")], 0, "2026-09-10")).toBe(false);
+  });
+
+  it("ignores later rows that cannot claim it: another account or amount, on file, naming a pending row, or a later copy", () => {
     const at = (extra: Partial<RemintBatchEntry>) =>
       laterRowIsNearer([entry("B", "2026-09-11"), entry("X", "2026-09-10", extra)], 0, "2026-09-10");
     expect(at({ accountId: "savings" })).toBe(false);
     expect(at({ signedAmount: "-26.00" })).toBe(false);
     expect(at({ onFileAtStart: true })).toBe(false);
     expect(at({ namesPendingRow: true })).toBe(false);
+    expect(at({ firstCopy: false })).toBe(false);
     expect(at({})).toBe(true);
   });
 });

@@ -48,6 +48,8 @@ export type RemintBatchEntry = {
   namesPendingRow: boolean;
   /** A ledger row already held this id when the batch started: it is an update, never a claimant. */
   onFileAtStart: boolean;
+  /** The first occurrence of this id in the batch. A later copy only updates the row the first one wrote. */
+  firstCopy: boolean;
 };
 
 /**
@@ -57,9 +59,17 @@ export type RemintBatchEntry = {
  * takes a gone row even when a later one is its re-mint: a separate charge dated
  * today took yesterday's re-minted row (keeping its pre-read `created_at`, so the
  * snapshot rule held it) and the re-mint was inserted as a second held row — cash
- * overstated. True when a later row on the same account with the same amount,
- * not on file at the start and not naming a pending row, is strictly nearer the
- * candidate's date. Equal distances keep list order.
+ * overstated. True when a later row on the same account with the same amount —
+ * the first copy of its id, not on file at the start, not naming a pending row —
+ * is nearer the candidate's date.
+ *
+ * (PR4d-2) An exact tie goes to the earlier-dated row. The snapshot already holds
+ * rows dated before its day, so without institution times an ambiguous tie errs
+ * toward understating cash (or nets to the true figure). ⚠️ Not always with times:
+ * a re-mint carrying its old row's pre-read authorisation time is held by the
+ * snapshot rule, so if the separate charge wins the tie nothing offsets it and
+ * cash is overstated by one charge (PR4d-2 review, case T1). Rare: it needs a
+ * bank that sends times and a tie in one cursor batch.
  */
 export function laterRowIsNearer(
   batch: readonly RemintBatchEntry[],
@@ -73,8 +83,9 @@ export function laterRowIsNearer(
   for (let j = index + 1; j < batch.length; j++) {
     const other = batch[j]!;
     if (other.id === me.id || other.accountId !== me.accountId || other.signedAmount !== me.signedAmount) continue;
-    if (other.namesPendingRow || other.onFileAtStart) continue;
-    if (Math.abs(dayNumber(other.date) - target) < myGap) return true;
+    if (other.namesPendingRow || other.onFileAtStart || !other.firstCopy) continue;
+    const otherGap = Math.abs(dayNumber(other.date) - target);
+    if (otherGap < myGap || (otherGap === myGap && other.date < me.date)) return true;
   }
   return false;
 }
