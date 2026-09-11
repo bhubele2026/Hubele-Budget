@@ -2590,6 +2590,25 @@ export const GetForecastResponse = zod.object({
             }),
           )
           .optional(),
+        matches: zod
+          .array(
+            zod.object({
+              planKey: zod.string(),
+              planItemId: zod.string(),
+              planDate: zod.string(),
+              txnId: zod.string(),
+              planAmount: zod.string(),
+              txnAmount: zod.string(),
+              difference: zod.string(),
+              dayDelta: zod.number(),
+              confidence: zod.string(),
+              ambiguous: zod.boolean(),
+            }),
+          )
+          .optional()
+          .describe(
+            '(PR5) Plans a bank row probably paid. Each one is off the curve\nuntil the user confirms (\"matched\"\/\"partial\") or rejects\n(\"not_match\") it; the bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+          ),
       }),
       zod.null(),
     ])
@@ -2780,6 +2799,25 @@ export const GetForecastCashSignalResponse = zod.object({
       }),
     )
     .optional(),
+  matches: zod
+    .array(
+      zod.object({
+        planKey: zod.string(),
+        planItemId: zod.string(),
+        planDate: zod.string(),
+        txnId: zod.string(),
+        planAmount: zod.string(),
+        txnAmount: zod.string(),
+        difference: zod.string(),
+        dayDelta: zod.number(),
+        confidence: zod.string(),
+        ambiguous: zod.boolean(),
+      }),
+    )
+    .optional()
+    .describe(
+      '(PR5) Plans a bank row probably paid. Each one is off the curve\nuntil the user confirms (\"matched\"\/\"partial\") or rejects\n(\"not_match\") it; the bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+    ),
 });
 
 /**

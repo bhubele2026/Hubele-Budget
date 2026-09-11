@@ -2383,6 +2383,19 @@ from bills naturally due that day.
   originalDate?: string;
 };
 
+export type CashSignalMatchesItem = {
+  planKey: string;
+  planItemId: string;
+  planDate: string;
+  txnId: string;
+  planAmount: string;
+  txnAmount: string;
+  difference: string;
+  dayDelta: number;
+  confidence: string;
+  ambiguous: boolean;
+};
+
 export interface CashSignal {
   bankToday: string;
   lowestProjected: string;
@@ -2407,6 +2420,13 @@ export interface CashSignal {
   acceptedImpact?: string;
   daily?: CashSignalDailyItem[];
   events?: CashSignalEventsItem[];
+  /** (PR5) Plans a bank row probably paid. Each one is off the curve
+until the user confirms ("matched"/"partial") or rejects
+("not_match") it; the bank row always counts. Amounts are signed;
+`difference` is |txn| − |plan| (positive = paid more than planned).
+`confidence` is "high", "medium" or "low".
+ */
+  matches?: CashSignalMatchesItem[];
 }
 
 export type SpendingFactsRange = {

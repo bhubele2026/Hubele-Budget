@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, gte, lte } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -10,8 +10,18 @@ import {
 } from "@workspace/db";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { ledgerActualRowsWhere, toCashRow } from "./ledgerCashRows";
+import { inForecastWhere } from "./forecastInclusion";
 import { householdDayOf, householdTodayDate } from "./householdClock";
-import { classifyCashRows, isBankRow } from "@workspace/avalanche-core";
+import {
+  addDaysISO,
+  classifyCashRows,
+  isBankRow,
+  matchPlansToRows,
+  SUPERSEDE_MAX_DAYS,
+  type MatchPlan,
+  type MatchRow,
+  type PlanRowMatch,
+} from "@workspace/avalanche-core";
 import {
   addDays,
   expandItem,
@@ -80,6 +90,11 @@ export type ForecastLedger = {
    * actuals are capped at `toISO`. Consumers window the items themselves.
    */
   items: LedgerItem[];
+  /**
+   * (PR5) Plans a bank row probably paid — suggestions, never written. Each one
+   * took its plan off the curve (`items`); the row itself still counts.
+   */
+  matches: PlanRowMatch[];
 };
 
 /**
@@ -410,12 +425,14 @@ export async function buildForecastLedger(
     ),
   );
   const matchedTxnBankSet = new Set<string>();
+  const resolvedTxnAmount = new Map<string, number>();
   if (matchedIds.length > 0) {
     const matchedTxns = await db
       .select({
         id: transactionsTable.id,
         source: transactionsTable.source,
         plaidAccountId: transactionsTable.plaidAccountId,
+        amount: transactionsTable.amount,
       })
       .from(transactionsTable)
       .where(
@@ -425,6 +442,7 @@ export async function buildForecastLedger(
         ),
       );
     for (const t of matchedTxns) {
+      resolvedTxnAmount.set(t.id, Number(t.amount) || 0);
       if (isBankRow(t.source, t.plaidAccountId ?? null, configuredCheckingExternalId)) {
         matchedTxnBankSet.add(t.id);
       }
@@ -456,6 +474,12 @@ export async function buildForecastLedger(
       if (r.matchedTxnId && matchedTxnBankSet.has(r.matchedTxnId)) {
         matchedTxnIds.add(r.matchedTxnId);
       }
+    } else if (r.status === "partial") {
+      // (PR5) A partial confirmation accepts the row like a match; its plan's
+      // remainder stays scheduled (plans loop below).
+      if (r.matchedTxnId && matchedTxnBankSet.has(r.matchedTxnId)) {
+        matchedTxnIds.add(r.matchedTxnId);
+      }
     } else if (
       r.status === "rescheduled" &&
       r.recurringItemId &&
@@ -481,6 +505,83 @@ export async function buildForecastLedger(
     }
   }
 
+  // ⭐ "PROBABLY PAID" (PR5). A planned payment a bank row probably paid leaves
+  // the curve — the row already counts, so keeping the plan too would count the
+  // bill twice (a $150 bill paid at $173 would weigh −$323). Read-only: nothing
+  // is written; the user confirms ("matched" / "partial") or rejects
+  // ("not_match") on the Forecast page. `bankToday` is final above and never
+  // moves here.
+  //   - Plans: unresolved occurrences dated today−21 .. today+10 (after any
+  //     reschedule), from the same expansion the curve uses.
+  //   - Rows: checking rows dated today−31 .. today, from their own read (rows
+  //     the snapshot holds are fine candidates), counted by the cash-row rule,
+  //     and not claimed by any resolution other than "Not this". A posted row
+  //     whose replaced pending row is claimed counts as claimed.
+  //   - `matchPlansToRows` (avalanche-core) pairs them one to one.
+  const notMatchPairs = new Set<string>();
+  const partialTxnByKey = new Map<string, string>();
+  const claimedTxnIds = new Set<string>();
+  for (const r of resolutionsAll) {
+    if (r.status === "not_match") {
+      if (r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
+        notMatchPairs.add(`${r.recurringItemId}|${r.occurrenceDate}#${r.matchedTxnId}`);
+      }
+      continue;
+    }
+    if (r.matchedTxnId) claimedTxnIds.add(r.matchedTxnId);
+    if (r.status === "partial" && r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
+      partialTxnByKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, r.matchedTxnId);
+    }
+  }
+  const planMatchFromISO = addDaysISO(todayISO, -21);
+  const planMatchToISO = addDaysISO(todayISO, 10);
+  const rowMatchFromISO = addDaysISO(todayISO, -31);
+  const matchPlans: MatchPlan[] = [];
+  for (const ev of events) {
+    const key = `${ev.itemId}|${ev.date}`;
+    if (
+      matchedPlanKeys.has(key) ||
+      skippedPlanKeys.has(key) ||
+      missedPlanKeys.has(key) ||
+      partialTxnByKey.has(key)
+    ) {
+      continue;
+    }
+    const planDate = rescheduledByKey.get(key) ?? ev.date;
+    if (planDate < planMatchFromISO || planDate > planMatchToISO) continue;
+    matchPlans.push({ key, itemId: ev.itemId, occurrenceDate: ev.date, date: planDate, amount: ev.amount, label: ev.label });
+  }
+  let matches: PlanRowMatch[] = [];
+  if (matchPlans.length > 0) {
+    const candidateRowsAll = await db
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, householdId),
+          inForecastWhere(todayISO),
+          gte(transactionsTable.occurredOn, addDaysISO(rowMatchFromISO, -SUPERSEDE_MAX_DAYS)),
+          lte(transactionsTable.occurredOn, addDaysISO(todayISO, SUPERSEDE_MAX_DAYS)),
+        ),
+      );
+    const candidateCashRows = candidateRowsAll.map(toCashRow);
+    const classified = classifyCashRows(candidateCashRows, {
+      anchor: null,
+      accountExternalId: configuredCheckingExternalId,
+      todayISO,
+    });
+    const matchRows: MatchRow[] = [];
+    classified.rows.forEach((o, i) => {
+      const row = candidateCashRows[i]!;
+      if (!o.counts) return;
+      if (row.occurredOn < rowMatchFromISO || row.occurredOn > todayISO) return;
+      if (claimedTxnIds.has(row.id) || (o.replacedId && claimedTxnIds.has(o.replacedId))) return;
+      matchRows.push({ txnId: row.id, occurredOn: row.occurredOn, amount: row.amount, description: row.description });
+    });
+    matches = matchPlansToRows(matchPlans, matchRows, notMatchPairs);
+  }
+  const probablyPaidKeys = new Set(matches.map((m) => m.planKey));
+
   const plans: LedgerPlan[] = [];
   for (const ev of events) {
     const origKey = `${ev.itemId}|${ev.date}`;
@@ -493,6 +594,20 @@ export async function buildForecastLedger(
     // Plans the user explicitly marked missed/dismissed are likewise
     // dropped — the user has acknowledged they won't post.
     if (missedPlanKeys.has(origKey)) continue;
+    // (PR5) A plan a bank row probably paid is off the curve until the user
+    // confirms or rejects the suggestion; the row already counts.
+    if (probablyPaidKeys.has(origKey)) continue;
+    // (PR5) A partial confirmation leaves only the unpaid remainder scheduled.
+    let planAmount = ev.amount;
+    const partialTxn = partialTxnByKey.get(origKey);
+    if (partialTxn) {
+      const paid = resolvedTxnAmount.get(partialTxn);
+      if (paid != null) {
+        const remainder = Math.round((ev.amount - paid) * 100) / 100;
+        if (Math.abs(remainder) <= 1 || Math.sign(remainder) !== Math.sign(ev.amount)) continue;
+        planAmount = remainder;
+      }
+    }
     // (#666) BANK SNAPSHOT IS THE TRUTH: events dated STRICTLY before
     // the snapshot are dropped. The bank balance already reflects
     // them — even if the auto-matcher didn't write a `matched`
@@ -541,7 +656,7 @@ export async function buildForecastLedger(
           eventKind: ev.kind,
           date: dragTargetISO,
           originalDate: rawEffectiveDate,
-          amount: ev.amount,
+          amount: planAmount,
           itemId: ev.itemId,
           label: ev.label,
           assumption: "dragged_past_due",
@@ -561,7 +676,7 @@ export async function buildForecastLedger(
       eventKind: ev.kind,
       date: effectiveDate,
       originalDate: rawEffectiveDate,
-      amount: ev.amount,
+      amount: planAmount,
       itemId: ev.itemId,
       label: ev.label,
       ...(effectiveDate !== rawEffectiveDate
@@ -590,5 +705,6 @@ export async function buildForecastLedger(
     startBalanceAtAnchor,
     bankToday,
     items,
+    matches,
   };
 }

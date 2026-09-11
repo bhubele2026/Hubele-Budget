@@ -7,6 +7,7 @@
  */
 import type { CashSignalDailyItem } from "./cashSignalDailyItem";
 import type { CashSignalEventsItem } from "./cashSignalEventsItem";
+import type { CashSignalMatchesItem } from "./cashSignalMatchesItem";
 import type { CashSignalStatus } from "./cashSignalStatus";
 
 export interface CashSignal {
@@ -33,4 +34,11 @@ export interface CashSignal {
   acceptedImpact?: string;
   daily?: CashSignalDailyItem[];
   events?: CashSignalEventsItem[];
+  /** (PR5) Plans a bank row probably paid. Each one is off the curve
+until the user confirms ("matched"/"partial") or rejects
+("not_match") it; the bank row always counts. Amounts are signed;
+`difference` is |txn| − |plan| (positive = paid more than planned).
+`confidence` is "high", "medium" or "low".
+ */
+  matches?: CashSignalMatchesItem[];
 }
