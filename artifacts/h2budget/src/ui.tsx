@@ -126,7 +126,8 @@ export function Crumbs(props: { trail: Array<{ label: string; href?: string }> }
 export function Stat(props: {
   value: ReactNode;
   label: string;
-  hint?: string;
+  /** Usually a string; a node when a figure inside it needs mono numerals. */
+  hint?: ReactNode;
   tone?: "ok" | "bad" | "navy";
   /** Staggers the entrance, one --stagger step apart, like the landing grid. */
   index?: number;
@@ -158,7 +159,7 @@ export function Stat(props: {
       <div className={`mt-0.5 font-mono text-title font-semibold tabular-nums ${tone}`}>
         {shown}
       </div>
-      {props.hint && <div className="mt-0.5 text-micro text-neutral-400">{props.hint}</div>}
+      {props.hint ? <div className="mt-0.5 text-micro text-neutral-400">{props.hint}</div> : null}
     </Tag>
   );
 }

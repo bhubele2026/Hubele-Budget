@@ -3,6 +3,7 @@ import {
   canSupersede,
   descriptionsFuzzyEqual,
   pairPendingWithPosted,
+  pairPendingWithPostedAmong,
   SUPERSEDE_MAX_DAYS,
   type SupersedeRow,
 } from "@workspace/avalanche-core";
@@ -113,5 +114,64 @@ describe("pairPendingWithPosted", () => {
 
   it("returns nothing when no posted row qualifies", () => {
     expect(pairPendingWithPosted([pending("p", "2026-05-01", -20), posted("q", "2026-05-02", -90)]).size).toBe(0);
+  });
+});
+
+describe("pairPendingWithPostedAmong (PR7b review M1)", () => {
+  // A dense in-memory ledger: look-alike merchants, repeated amounts, rows
+  // that arrive out of order. Fixed seed.
+  function ledger(): SupersedeRow[] {
+    let seed = 4242;
+    const rand = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
+    const rows: SupersedeRow[] = [];
+    for (let i = 0; i < 300; i += 1) {
+      const d = new Date(Date.UTC(2026, 4, 1 + Math.floor(rand() * 30), 12, Math.floor(rand() * 2880)));
+      const occurredOn = new Date(Date.UTC(2026, 4, 1 + Math.floor((d.getTime() - Date.UTC(2026, 4, 1)) / 86_400_000))).toISOString().slice(0, 10);
+      rows.push({
+        id: `r${i}`,
+        plaidAccountId: pick(["chase", "amex"]),
+        pending: rand() < 0.4,
+        occurredOn,
+        amount: -pick([5, 5.5, 6, 20, 22, 45, 47.4]),
+        description: pick(["STARBUCKS", "STARBUCKS STORE 1234", "PANERA BREAD 601"]),
+        createdAt: d,
+      });
+    }
+    return rows;
+  }
+
+  it("with complete candidates (plus harmless extras, in any order) it returns exactly what pairPendingWithPosted returns", () => {
+    const rows = ledger();
+    const reference = pairPendingWithPosted(rows);
+    expect(reference.size).toBeGreaterThan(10);
+    const pendings = rows.filter((r) => r.pending);
+    // Same-account pending rows, reversed: every qualifying one is present, most are extras.
+    const got = pairPendingWithPostedAmong(rows, (q) =>
+      pendings.filter((p) => p.plaidAccountId === q.plaidAccountId).reverse(),
+    );
+    expect([...got.entries()].map(([q, p]) => [q, p.id]).sort()).toEqual(
+      [...reference.entries()].map(([q, p]) => [q, p.id]).sort(),
+    );
+  });
+
+  it("only qualifying candidates also suffice; a missing one can change the answer (the precondition is real)", () => {
+    const rows = ledger();
+    const reference = pairPendingWithPosted(rows);
+    const pendings = rows.filter((r) => r.pending);
+    const exact = pairPendingWithPostedAmong(rows, (q) => pendings.filter((p) => canSupersede(p, q)));
+    expect([...exact.values()].map((p) => p.id).sort()).toEqual([...reference.values()].map((p) => p.id).sort());
+
+    const p0905 = pending("p0905", "2026-09-05", -45);
+    const p0906 = pending("p0906", "2026-09-06", -45);
+    const q0907 = posted("q0907", "2026-09-07", -47.4);
+    const incomplete = pairPendingWithPostedAmong([p0905, p0906, q0907], () => [p0906]);
+    expect(pairPendingWithPosted([p0905, p0906, q0907]).get("q0907")?.id).toBe("p0905");
+    expect(incomplete.get("q0907")?.id).toBe("p0906");
   });
 });

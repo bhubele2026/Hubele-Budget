@@ -256,6 +256,7 @@ describe("PR7 — a card payment is never spending twice", () => {
       ignoreTotal: 0,
       cardPayments: 375,
       reimbursable: 40,
+      replacedPending: 0,
     });
     // Reconciles: 95 + 200 + 375 + 40 = 710, every dollar that left.
     const e = f.excluded;

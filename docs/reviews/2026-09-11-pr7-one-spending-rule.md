@@ -7,6 +7,18 @@ are recognized **automatically, in spending totals only**; nothing is re-tagged.
 - **First look:** `aecbf38`, REQUEST CHANGES (one HIGH, two MEDIUM, three LOW, one NIT).
 - **This revision:** `0198bb8` plus this note. The findings and what was done are in **Review** below.
 
+## Update (PR7b)
+
+This note was written before PR4c merged. PR4c is on `main` as `2874a7b`, so three statements below are out of date:
+**Deviations 7**, the last **Residual** and the pending/posted item under **Left for later**. The text below is left as
+written.
+
+- **Pending/posted pairs** are now counted once in spending totals.
+- **The other PR7 follow-ups:** more card-payment strings, mono numerals on the new lines, and the popover listing
+  purchases in a deleted category.
+
+Both are in `docs/reviews/2026-09-11-pr7b-spending-rule-followups.md`.
+
 ## The problem
 
 **A payment to a credit card counted as spending.**

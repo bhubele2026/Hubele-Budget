@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  CARD_PAYMENT_WORD_PREFIXES,
+  GENERIC_CARD_PAYMENT_PHRASES,
+  POSITIONED_ISSUER_PHRASES,
   classifyOutflow,
   isRealSpend,
   isUncategorizedSpend,
@@ -246,10 +249,148 @@ describe("CARD_PAYMENT_PATTERNS", () => {
   });
 
   it("are written normalized and unique", () => {
-    for (const p of CARD_PAYMENT_PATTERNS) {
-      expect(p).toBe(normalizeDescription(p));
+    for (const list of [
+      CARD_PAYMENT_PATTERNS,
+      POSITIONED_ISSUER_PHRASES,
+      CARD_PAYMENT_WORD_PREFIXES,
+      GENERIC_CARD_PAYMENT_PHRASES,
+    ]) {
+      for (const p of list) {
+        expect(p).toBe(normalizeDescription(p));
+      }
+      expect(new Set(list).size).toBe(list.length);
     }
-    expect(new Set(CARD_PAYMENT_PATTERNS).size).toBe(CARD_PAYMENT_PATTERNS.length);
+    // A prefix is one word; a generic phrase is never also an issuer phrase.
+    for (const p of CARD_PAYMENT_WORD_PREFIXES) expect(p).not.toContain(" ");
+    for (const p of GENERIC_CARD_PAYMENT_PHRASES) expect(CARD_PAYMENT_PATTERNS).not.toContain(p);
+    // (second review) A positioned issuer phrase is never also a strong one.
+    for (const p of POSITIONED_ISSUER_PHRASES) expect(CARD_PAYMENT_PATTERNS).not.toContain(p);
+  });
+
+  // ── (PR7b) The reviewer's missed strings, and the purchases they must not drag in.
+  it.each([
+    "Payment to Chase card ending in 1234 09/01",
+    "US BANK CREDIT CARD PAYMENT",
+    "WF CREDIT CARD AUTO PAY",
+    "TARGET CARD SERVICES PAYMENT",
+    "CRCARDPMT5KX9ABC",
+    "CAPITAL ONE CRCARDPMT5KX9ABC",
+    // The same issuers in the forms a bank adds around them.
+    "U.S. BANK CREDIT CARD PAYMENT PPD ID: 9000000001",
+    "WF Credit Card AUTO PAY 260901 PPD ID: WFCCAUTOPY",
+    // (review L1) BofA's layout, and a payee after "to".
+    "FIRST NATIONAL DES:CREDIT CARD PYMT ID:1234 INDN:JANE DOE CO ID:9999 PPD",
+    // (second review MEDIUM) PR7 issuers in Chase's long layout and BofA's.
+    "ORIG CO NAME:APPLECARD GSBANK ORIG ID:9999999999 DESC DATE:260901 CO ENTRY DESCR:PAYMENT SEC:WEB TRACE#:021000029876543 EED:260902 IND ID:3920178 IND NAME:JANE DOE TRN: 2449876543 TC",
+    "ORIG CO NAME:CITI CARD ONLINE ORIG ID:CITICARDAP DESC DATE:260901 CO ENTRY DESCR:PAYMENT SEC:WEB TRACE#:021000021234567 EED:260902 IND ID:123456789012345 IND NAME:JANE DOE TRN: 2449912345 TC",
+    "ORIG CO NAME:CREDIT ONE BANK ORIG ID:9876543210 DESC DATE:260901 CO ENTRY DESCR:PAYMENT SEC:PPD TRACE#:021000027654321 EED:260902 IND ID:1234 IND NAME:JANE DOE TRN: 2449912346 TC",
+    "APPLECARD GSBANK DES:PAYMENT ID:3920178 INDN:JANE DOE CO ID:9999999999 WEB",
+    "CITI CARD ONLINE DES:PAYMENT ID:123456 INDN:JANE DOE CO ID:CITICARDAP WEB",
+    "CREDIT ONE BANK DES:PAYMENT ID:1234 INDN:JANE DOE CO ID:1234 WEB",
+    // The same two layouts after a POSITIONED phrase, which reads the tail field by field.
+    "ORIG CO NAME:TARGET CARD SERVICES ORIG ID:1041000124 DESC DATE:260901 CO ENTRY DESCR:PAYMENT SEC:PPD TRACE#:021000021111111 EED:260902 IND ID:5555 IND NAME:JANE DOE TRN: 2440011111TC",
+    "TARGET CARD SERVICES DES:PAYMENT ID:3920178 INDN:JANE DOE CO ID:1041000124 WEB",
+    "US BANK CREDIT CARD PAYMENT DES:ONLINE PMT ID:1234 INDN:MARIA DE LA CRUZ GONZALEZ CO ID:9999 PPD",
+    // (second review LOW) PR7 issuers followed by a name or free text: strong evidence.
+    "CAPITAL ONE MOBILE PYMT JANE DOE",
+    "GOLDMAN SACHS APPLE CARD PAYMENT 1234",
+    "APPLECARD GSBANK PAYMENT 260901 3920178 JANE DOE",
+    "CAPITAL ONE DES:CRCARDPMT ID:5KX9ABC INDN:JANE DOE CO ID:9279744380 PPD",
+    "US BANK CREDIT CARD PAYMENT ID:1234 INDN:JANE DOE CO ID:9999 PPD",
+    "CREDIT CARD PYMT TO VISA",
+    "CREDIT CARD PAYMENT TO CAPITAL ONE 1234",
+    // A generic phrase where only a payment puts it.
+    "CREDIT CARD PAYMENT",
+    "CREDIT CARD PYMT 0412",
+    "ELAN CREDIT CARD PYMT PPD ID: ELANCARDAP",
+    "FIRST BANKCARD CREDIT CARD AUTO PAY 88231",
+    "ORIG CO NAME:FIRST NATIONAL ORIG ID:1234 DESC DATE:0901 CO ENTRY DESCR:CREDIT CARD PAYMENT SEC:PPD TRACE#:0210 EED:260901 IND ID:1234 IND NAME:JANE DOE TRN: 2440 TC",
+  ])("(PR7b) recognizes %s", (d) => {
+    expect(matchesCardPaymentPattern(d)).toBe(true);
+    expect(classifyOutflow({ ...base, categoryId: null, description: d }, ctx).rule).toBe(
+      "9-card-payment-pattern",
+    );
+  });
+
+  it.each([
+    // The NIT: a generic phrase inside a business name.
+    "CREDIT CARD PYMT SUPPLIES INC",
+    "ACME CREDIT CARD PAYMENT SOLUTIONS",
+    "SQ *CREDIT CARD PAYMENT SYSTEMS",
+    "CREDIT CARD PAYMENT PROCESSING FEE",
+    "CREDIT CARD AUTO PAY CENTER LLC",
+    // Issuer words in venues and stores.
+    "US BANK STADIUM",
+    "U.S. BANK STADIUM CONCESSIONS",
+    "CHASE CENTER TICKETS",
+    "WF CAFE 12",
+    "TARGET 00012345 CARD",
+    "SERVICES CARD TARGET",
+    // (review N1) Purchases the first PR7b revision caught as card payments.
+    "TARGET CARD SERVICES GIFT CARD",
+    "WF CREDIT CARD AUTO PAY CAFE",
+    "US BANK CREDIT CARD PAYMENT PROCESSING CENTER",
+    "CRCARDPMTSHOP LLC",
+    "SQ *CREDIT CARD PAYMENT",
+    "PAYPAL *CREDIT CARD PAYMENT",
+    "CREDIT CARD PAYMENT ONLINE",
+    // And their neighbours.
+    "CRCARDPMTSHOP",
+    "TST* CREDIT CARD PYMT 0412",
+    "CREDIT CARD PYMT TO VISA SUPPLIES",
+    "CREDIT CARD PAYMENT TO",
+    "CREDIT CARD PAYMENT INDN JANE DOE BAKERY SUPPLY CO",
+    // (second review NIT) A label needs its colon.
+    "CAFE DES CREDIT CARD PAYMENT CO",
+    "CREDIT CARD PAYMENT INDN BOB'S BAIT SHOP",
+  ])("(PR7b) does not catch %s", (d) => {
+    expect(matchesCardPaymentPattern(d)).toBe(false);
+    expect(classifyOutflow({ ...base, categoryId: null, description: d }, ctx).kind).toBe("spend");
+  });
+
+  it("(review N1) a leading processor makes it a purchase, unless the phrase itself starts there", () => {
+    expect(matchesCardPaymentPattern("SQ *CREDIT CARD PAYMENT")).toBe(false);
+    expect(matchesCardPaymentPattern("PAYPAL *PAYMTHLY")).toBe(true);
+  });
+
+  it("⚠️ (review N1, disclosed) an unlabelled name after a phrase reads as a purchase", () => {
+    // Indistinguishable from "… PROCESSING CENTER" without a name list. A missed
+    // payment can be flagged (rule 3); a caught purchase cannot be put back.
+    expect(matchesCardPaymentPattern("US BANK CREDIT CARD PAYMENT JANE DOE")).toBe(false);
+    // With BofA's INDN label the same name is fine.
+    expect(matchesCardPaymentPattern("US BANK CREDIT CARD PAYMENT INDN:JANE DOE")).toBe(true);
+  });
+
+  it("⚠️ (second review, disclosed) what the positioned rule still gets wrong (the first two exactly as on main)", () => {
+    // Caught, though it reads like a purchase: an unlabelled "REF" vouches for the
+    // next word. `main` caught it too ("credit card pymt" anywhere).
+    expect(matchesCardPaymentPattern("CREDIT CARD PYMT REF SUPPLIES")).toBe(true);
+    // Missed: a glued code with no digit after it. `main` missed it too.
+    expect(matchesCardPaymentPattern("CRCARDPMTABCDEFG")).toBe(false);
+    // Missed: a name longer than eight words after "INDN:".
+    expect(
+      matchesCardPaymentPattern("US BANK CREDIT CARD PAYMENT ID:1 INDN:A B C D E F G H I CO ID:9 PPD"),
+    ).toBe(false);
+    expect(
+      matchesCardPaymentPattern("US BANK CREDIT CARD PAYMENT ID:1 INDN:A B C D E F G H CO ID:9 PPD"),
+    ).toBe(true);
+  });
+
+  it("(PR7b) an issuer code matches at the start of a word only", () => {
+    expect(matchesCardPaymentPattern("CRCARDPMT5KX9ABC")).toBe(true);
+    expect(matchesCardPaymentPattern("capital one crcardpmt")).toBe(true);
+    expect(matchesCardPaymentPattern("XCRCARDPMTX")).toBe(false);
+    expect(matchesCardPaymentPattern("ABCRCARDPMT5KX9")).toBe(false);
+  });
+
+  it("(PR7b review NIT) 'credit card pymt' is a payment only where a payment puts it", () => {
+    expect(matchesCardPaymentPattern("BEST BUY CREDIT CARD PYMT")).toBe(true);
+    expect(matchesCardPaymentPattern("BEST BUY CREDIT CARD PYMT 0412 WEB ID: 1234")).toBe(true);
+    expect(matchesCardPaymentPattern("CO ENTRY DESCR:CREDIT CARD PYMT SEC:PPD IND NAME:JANE DOE")).toBe(true);
+    expect(matchesCardPaymentPattern("CREDIT CARD PYMT SUPPLIES INC")).toBe(false);
+    // An ID label vouches for the one word after it, not for everything after.
+    expect(matchesCardPaymentPattern("CREDIT CARD PYMT ID 12 SUPPLIES INC")).toBe(false);
+    expect(matchesCardPaymentPattern("")).toBe(false);
   });
 
   it("⚠️ the pre-PR7 bank-noise list is unchanged, including its loose 'epay' (disclosed)", () => {
