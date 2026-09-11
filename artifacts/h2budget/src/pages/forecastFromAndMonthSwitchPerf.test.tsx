@@ -212,6 +212,21 @@ vi.mock("@workspace/api-client-react", () => {
   };
 });
 
+// The Forecast page reads the spine for the bank card's freshness verdict. Mock
+// the hook itself: loading `useSpine.ts` would call the client's spine query-key
+// helper at import, and this file's client mock does not carry it.
+vi.mock("@/hooks/useSpine", () => ({
+  useSpine: () => ({
+    data: undefined,
+    isLoading: false,
+    isFetching: false,
+    state: "cold",
+    error: null,
+    updatedAt: null,
+    refetch: () => {},
+  }),
+}));
+
 import ForecastPage from "./forecast";
 
 function renderPage() {

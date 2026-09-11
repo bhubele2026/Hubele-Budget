@@ -274,6 +274,7 @@ let forecastData: typeof FORECAST_BASE = FORECAST_BASE;
 let cashSignal: typeof CASH_SIGNAL = CASH_SIGNAL;
 let debtsData: unknown[] = [];
 let recurringData: unknown[] = [];
+let spineData: unknown = undefined;
 
 vi.mock("@workspace/api-client-react", () => {
   const noopMutation = () => ({
@@ -309,6 +310,21 @@ vi.mock("@workspace/api-client-react", () => {
   };
 });
 
+// The page reads the spine for the bank card's freshness verdict. Mock the hook
+// itself: loading `useSpine.ts` would call the client's spine query-key helper
+// at import, and the client mock above does not carry it.
+vi.mock("@/hooks/useSpine", () => ({
+  useSpine: () => ({
+    data: spineData,
+    isLoading: false,
+    isFetching: false,
+    state: spineData ? "loaded" : "cold",
+    error: null,
+    updatedAt: null,
+    refetch: () => {},
+  }),
+}));
+
 import ForecastPage from "./forecast";
 
 function renderPage(props?: { mode?: "review" | "overall" }) {
@@ -335,6 +351,7 @@ beforeEach(() => {
   cashSignal = CASH_SIGNAL;
   debtsData = [];
   recurringData = [];
+  spineData = undefined;
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 4, 15, 12, 0, 0));
 });
@@ -437,5 +454,61 @@ describe("Forecast accuracy — freed cash appears when a debt is paid off (c)",
     renderPage({ mode: "review" });
 
     expect(screen.queryByTestId("cash-freed-debt-visa")).toBeNull();
+  });
+});
+
+describe("Forecast — the bank card's snapshot line takes the server's freshness verdict", () => {
+  // Before the frozen "now" (2026-05-15 12:00 in the test clock).
+  const SNAPSHOT_AT = "2026-05-15T10:00:00.000Z";
+  const withSnapshot = () => {
+    forecastData = {
+      ...FORECAST_BASE,
+      bankSnapshot: {
+        balance: "5000",
+        at: SNAPSHOT_AT,
+        source: "plaid",
+        accountId: "acct-1",
+        name: "Checking",
+        mask: "1111",
+      },
+    } as unknown as typeof FORECAST_BASE;
+  };
+  const staleBank = (asOfDate: string) => ({
+    bank: {
+      balance: "5000",
+      asOfDate,
+      source: "plaid",
+      lastContactAt: asOfDate,
+      lastFailureAt: "2026-05-15T11:00:00.000Z",
+      stale: true,
+      staleReason: "refresh_failed",
+    },
+  });
+
+  it("says 'Refresh failed' when the spine judges this snapshot stale", () => {
+    withSnapshot();
+    spineData = staleBank(SNAPSHOT_AT);
+    renderPage();
+    const meta = screen.getByTestId("text-bank-snapshot-meta");
+    expect(within(meta).getByTestId("text-bank-freshness-stale").textContent).toContain(
+      "Refresh failed",
+    );
+  });
+
+  it("keeps the timestamp label while the spine has not answered", () => {
+    withSnapshot();
+    renderPage();
+    const meta = screen.getByTestId("text-bank-snapshot-meta");
+    expect(within(meta).getByTestId("text-bank-snapshot-freshness")).toBeTruthy();
+    expect(within(meta).queryByTestId("text-bank-freshness-stale")).toBeNull();
+  });
+
+  it("ignores a verdict about a different snapshot", () => {
+    withSnapshot();
+    spineData = staleBank("2026-05-10T09:00:00.000Z");
+    renderPage();
+    const meta = screen.getByTestId("text-bank-snapshot-meta");
+    expect(within(meta).queryByTestId("text-bank-freshness-stale")).toBeNull();
+    expect(within(meta).getByTestId("text-bank-snapshot-freshness")).toBeTruthy();
   });
 });

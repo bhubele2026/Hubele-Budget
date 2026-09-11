@@ -118,6 +118,8 @@ afterEach(() => cleanup());
 beforeEach(() => {
   vi.clearAllMocks();
   state.spine = SPINE;
+  state.spineState = "loaded";
+  state.spineUpdatedAt = null;
   state.cashSignal = CASH_SIGNAL;
   state.cashSignalError = false;
 });
@@ -279,7 +281,6 @@ describe("Forecast Overview — the forecast's own banner says refresh or load, 
     retryForecast.click();
     expect(state.refetchSignal).toHaveBeenCalledTimes(1);
     expect(state.refetchSpine).not.toHaveBeenCalled();
-    state.spineState = "loaded";
   });
 });
 
