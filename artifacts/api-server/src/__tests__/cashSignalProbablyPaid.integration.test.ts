@@ -312,6 +312,32 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
     expect(sig.matches?.filter((m) => m.planDate === "2026-05-20").every((m) => !m.offCurve)).toBe(true);
   });
 
+  it("(PR5 second review) 'VERIZON FIOS' −130 never takes the 'Verizon Wireless' $120 plan off the curve", async () => {
+    await snapshotOnChase();
+    const vzw = await plan("Verizon Wireless", "120");
+    await row("2026-04-20", "-120", "VERIZON WIRELESS PAYMENTS");
+    await row("2026-05-12", "-130", "VERIZON FIOS");
+
+    const sig = await signal();
+
+    expect(sig.bankToday).toBe("870.00");
+    expect(balanceOn(sig, "2026-05-20")).toBe("750.00");
+    expect(matchFor(sig, `${vzw}|2026-05-20`)).toMatchObject({ confidence: "medium", offCurve: false });
+  });
+
+  it("(PR5 second review) a nameless pair never marks last month paid: April 'paid' by HOME DEPOT, its late payment can't take May off", async () => {
+    await snapshotOnChase();
+    const water = await plan("City Water", "150");
+    await row("2026-04-21", "-150", "HOME DEPOT 4411");
+    await row("2026-05-11", "-150", "CITY WATER UTIL");
+
+    const sig = await signal();
+
+    expect(sig.bankToday).toBe("850.00");
+    expect(balanceOn(sig, "2026-05-20")).toBe("700.00");
+    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ offCurve: false });
+  });
+
   it("last month's bill paid late never takes this month's bill off the curve", async () => {
     await snapshotOnChase();
     const water = await plan("City Water", "150");
