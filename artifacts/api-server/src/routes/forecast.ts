@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, lte, sql, ne } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -1075,6 +1075,11 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
       return;
     }
   }
+  // (PR5) Pair-level statuses name one plan occurrence AND one bank row.
+  if ((status === "not_match" || status === "partial") && (!recurringItemId || !occurrenceDate || !matchedTxnId)) {
+    res.status(400).json({ error: `${status} requires recurringItemId, occurrenceDate, matchedTxnId` });
+    return;
+  }
   if (status === "rescheduled") {
     if (!recurringItemId || !occurrenceDate || !rescheduledTo) {
       res.status(400).json({
@@ -1100,26 +1105,61 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
     }
   }
 
-  if (recurringItemId && occurrenceDate) {
+  // (PR5) The neighbour delete keeps one resolution per plan occurrence and one
+  // per bank row — except "Not this" (`not_match`) answers, which are about a
+  // single plan/row PAIR and must survive other decisions on either side (a
+  // rejected suggestion must never come back). A `not_match` write only
+  // replaces the identical pair; any other write leaves `not_match` rows alone,
+  // except the exact pair it now confirms.
+  if (status === "not_match") {
     await db
       .delete(forecastResolutionsTable)
       .where(
         and(
           eq(forecastResolutionsTable.householdId, householdId),
+          eq(forecastResolutionsTable.status, "not_match"),
           eq(forecastResolutionsTable.recurringItemId, recurringItemId),
           eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
-        ),
-      );
-  }
-  if (matchedTxnId) {
-    await db
-      .delete(forecastResolutionsTable)
-      .where(
-        and(
-          eq(forecastResolutionsTable.householdId, householdId),
           eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
         ),
       );
+  } else {
+    if (recurringItemId && occurrenceDate) {
+      await db
+        .delete(forecastResolutionsTable)
+        .where(
+          and(
+            eq(forecastResolutionsTable.householdId, householdId),
+            eq(forecastResolutionsTable.recurringItemId, recurringItemId),
+            eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
+            ne(forecastResolutionsTable.status, "not_match"),
+          ),
+        );
+    }
+    if (matchedTxnId) {
+      await db
+        .delete(forecastResolutionsTable)
+        .where(
+          and(
+            eq(forecastResolutionsTable.householdId, householdId),
+            eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
+            ne(forecastResolutionsTable.status, "not_match"),
+          ),
+        );
+    }
+    if (recurringItemId && occurrenceDate && matchedTxnId) {
+      await db
+        .delete(forecastResolutionsTable)
+        .where(
+          and(
+            eq(forecastResolutionsTable.householdId, householdId),
+            eq(forecastResolutionsTable.status, "not_match"),
+            eq(forecastResolutionsTable.recurringItemId, recurringItemId),
+            eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
+            eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
+          ),
+        );
+    }
   }
 
   const [row] = await db
