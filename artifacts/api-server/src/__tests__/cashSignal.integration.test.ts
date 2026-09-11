@@ -240,10 +240,12 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(sig.overdueOutsideForecast).toEqual([]);
   });
 
-  it("(PR6, was #666) when fromDate == today, a snapshot-day plan drags to the next business day; day 0 is the bank balance", async () => {
-    // Was "(#666) … snapshot-day plans are dropped", which checked day 0 only.
-    // Stricter: day 0 still equals the bank balance to the cent, and day 1 now
-    // carries the unpaid 05-13 bill (3,248.68 − 1,989.81 = 1,258.87).
+  it("(#666, PR6) when fromDate == today, a snapshot-day plan drags to the next business day; day 0 is the bank balance", async () => {
+    // Was titled "(#666) … snapshot-day plans are dropped", but it checked day 0
+    // only, and a plan dated ON the snapshot day was never dropped (#666 drops
+    // plans strictly before it): it already dragged. Stricter, no behaviour
+    // change: day 0 equals the bank balance to the cent, and day 1 carries the
+    // unpaid 05-13 bill (3,248.68 − 1,989.81 = 1,258.87).
     await setSettings({
       balance: "3248.68",
       at: new Date("2026-05-13T12:00:00Z"),
