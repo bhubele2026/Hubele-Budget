@@ -123,7 +123,18 @@ export const CARD_PAYMENT_PATTERNS: readonly string[] = [
   "amex epayment",
   "amex ach pmt",
   "american express ach",
-  // (PR7b)
+  // (PR7b second review)
+  "goldman sachs apple card payment",
+];
+
+/**
+ * (PR7b) Issuer phrases added after PR7. Unlike `CARD_PAYMENT_PATTERNS` — PR7's
+ * phrases, matched anywhere as strong evidence, exactly as on `main` — these
+ * share words with purchases ("TARGET CARD SERVICES GIFT CARD", "US BANK CREDIT
+ * CARD PAYMENT PROCESSING CENTER"), so they follow the payment-position rule
+ * in `matchesCardPaymentPattern`.
+ */
+export const POSITIONED_ISSUER_PHRASES: readonly string[] = [
   "payment to chase card ending in",
   "us bank credit card payment",
   "wf credit card auto pay",
@@ -151,7 +162,7 @@ export const GENERIC_CARD_PAYMENT_PHRASES: readonly string[] = [
   "credit card auto pay",
 ];
 
-/** ACH boilerplate that may follow a payment phrase. */
+/** ACH boilerplate that may follow a payment phrase without a label. */
 const REFERENCE_WORDS: ReadonlySet<string> = new Set([
   "ach",
   "ppd",
@@ -159,6 +170,7 @@ const REFERENCE_WORDS: ReadonlySet<string> = new Set([
   "web",
   "tel",
   "sec",
+  "tc",
   "id",
   "ref",
   "conf",
@@ -173,22 +185,49 @@ const REFERENCE_WORDS: ReadonlySet<string> = new Set([
   "you",
 ]);
 
-/** A word after one of these is an identifier, whatever its letters ("ID:WFCCAUTOPY"). */
+/** Without a colon, a word after one of these is still an identifier ("ID 12", "REF 88"). */
 const ID_LABELS: ReadonlySet<string> = new Set(["id", "ref", "conf", "trn"]);
 
-/** Words that are labels only in front of "id" ("CO ID:", "ORIG ID:", "IND ID:"). */
+/** Without a colon, these are labels only in front of "id" ("CO ID 9999"). */
 const ID_QUALIFIERS: ReadonlySet<string> = new Set(["co", "orig", "ind"]);
 
+/** The most words read as an account holder's name after "INDN:" / "IND NAME:". */
+const MAX_NAME_WORDS = 8;
+
 /**
- * BofA's individual-name label ("INDN:JANE DOE"). Up to four words after it are
- * the account holder's name, not a merchant.
+ * (PR7b second review) The ACH fields banks print around a payment, as the
+ * words before a colon:
+ *   - Chase's long layout: "ORIG CO NAME: … ORIG ID: … DESC DATE: … CO ENTRY
+ *     DESCR: … SEC: … TRACE#: … EED: … IND ID: … IND NAME: … TRN: … TC";
+ *   - BofA's: "DES: … ID: … INDN: … CO ID: … PPD".
+ * A field's value — up to `maxValue` words, and never past the next label — is
+ * the bank's text, not a merchant's. A label counts only WITH its colon, so
+ * "CAFE DES …" and "… INDN BOB'S BAIT SHOP" are names, not fields. Longest
+ * label first.
  */
-const NAME_LABELS: ReadonlySet<string> = new Set(["indn"]);
-const MAX_NAME_WORDS = 4;
+const FIELD_LABELS: ReadonlyArray<{ words: readonly string[]; maxValue: number }> = [
+  { words: ["orig", "co", "name"], maxValue: 6 },
+  { words: ["co", "entry", "descr"], maxValue: 3 },
+  { words: ["desc", "date"], maxValue: 1 },
+  { words: ["orig", "id"], maxValue: 1 },
+  { words: ["ind", "id"], maxValue: 1 },
+  { words: ["ind", "name"], maxValue: MAX_NAME_WORDS },
+  { words: ["co", "id"], maxValue: 1 },
+  { words: ["indn"], maxValue: MAX_NAME_WORDS },
+  { words: ["descr"], maxValue: 3 },
+  { words: ["des"], maxValue: 3 },
+  { words: ["sec"], maxValue: 1 },
+  { words: ["trace"], maxValue: 1 },
+  { words: ["eed"], maxValue: 1 },
+  { words: ["trn"], maxValue: 1 },
+  { words: ["id"], maxValue: 1 },
+  { words: ["ref"], maxValue: 1 },
+  { words: ["conf"], maxValue: 1 },
+];
 
 /**
  * ACH entry-description labels: Chase's "CO ENTRY DESCR:", BofA's "DES:". A
- * phrase right after one is what the payer called the payment.
+ * phrase right after one (colon included) is what the payer called the payment.
  */
 const ENTRY_DESCRIPTION_LABELS: ReadonlySet<string> = new Set(["descr", "des"]);
 
@@ -247,35 +286,68 @@ const PROCESSOR_PREFIXES: ReadonlySet<string> = new Set([
   "pos",
 ]);
 
-/** The words after a phrase: nothing but references, IDs, a labelled name or "to <issuer>". */
-function followsLikeAPayment(rest: readonly string[]): boolean {
+/** A word of a description, and whether a label colon follows it ("DES:", "TRACE#:"). */
+type Word = { w: string; labelled: boolean };
+
+/**
+ * The words `normalizeDescription` yields, in order, each marked when a colon
+ * follows it (skipping "#" and spaces, for "TRACE#:" and "ID :").
+ */
+function wordsOf(description: string | null | undefined): Word[] {
+  const s = (description ?? "").toLowerCase();
+  const words: Word[] = [];
+  const re = /[a-z0-9]+/g;
+  for (let m = re.exec(s); m; m = re.exec(s)) {
+    let j = m.index + m[0].length;
+    while (s[j] === "#" || s[j] === " ") j += 1;
+    words.push({ w: m[0], labelled: s[j] === ":" });
+  }
+  return words;
+}
+
+/** The ACH field label starting at words[k], if any (its last word carries the colon). */
+function fieldLabelAt(
+  words: readonly Word[],
+  k: number,
+): { len: number; maxValue: number } | null {
+  for (const label of FIELD_LABELS) {
+    const n = label.words.length;
+    if (k + n > words.length) continue;
+    if (!label.words.every((w, i) => words[k + i]!.w === w)) continue;
+    if (!words[k + n - 1]!.labelled) continue;
+    return { len: n, maxValue: label.maxValue };
+  }
+  return null;
+}
+
+/**
+ * The words after a phrase read like a payment's: only ACH fields and their
+ * values, references (a digit, ACH boilerplate, an unlabelled ID value), or
+ * "to <issuer>".
+ */
+function followsLikeAPayment(rest: readonly Word[]): boolean {
   let k = 0;
-  if (rest[0] === "to") {
+  if (rest[0]?.w === "to") {
     k = 1;
-    if (!PAYEE_WORDS.has(rest[k] ?? "")) return false;
-    while (k < rest.length && PAYEE_WORDS.has(rest[k]!)) k += 1;
+    if (!PAYEE_WORDS.has(rest[k]?.w ?? "")) return false;
+    while (k < rest.length && PAYEE_WORDS.has(rest[k]!.w)) k += 1;
   }
   while (k < rest.length) {
-    const w = rest[k]!;
-    if (/\d/.test(w) || REFERENCE_WORDS.has(w)) {
-      k += 1;
-    } else if (k > 0 && ID_LABELS.has(rest[k - 1]!)) {
-      k += 1;
-    } else if (ID_QUALIFIERS.has(w) && rest[k + 1] === "id") {
-      k += 1;
-    } else if (NAME_LABELS.has(w)) {
-      k += 1;
-      for (
-        let n = 0;
-        n < MAX_NAME_WORDS &&
-        k < rest.length &&
-        !/\d/.test(rest[k]!) &&
-        !REFERENCE_WORDS.has(rest[k]!) &&
-        !ID_QUALIFIERS.has(rest[k]!);
-        n += 1
-      ) {
+    const label = fieldLabelAt(rest, k);
+    if (label) {
+      k += label.len;
+      for (let n = 0; n < label.maxValue && k < rest.length && !fieldLabelAt(rest, k); n += 1) {
         k += 1;
       }
+      continue;
+    }
+    const w = rest[k]!.w;
+    if (/\d/.test(w) || REFERENCE_WORDS.has(w)) {
+      k += 1;
+    } else if (k > 0 && ID_LABELS.has(rest[k - 1]!.w)) {
+      k += 1;
+    } else if (ID_QUALIFIERS.has(w) && rest[k + 1]?.w === "id") {
+      k += 1;
     } else {
       return false;
     }
@@ -284,15 +356,16 @@ function followsLikeAPayment(rest: readonly string[]): boolean {
 }
 
 /** Does a phrase found at words[start, end) read as a payment where it sits? */
-function hitIsPayment(words: readonly string[], start: number, end: number): boolean {
-  if (start > 0 && PROCESSOR_PREFIXES.has(words[0]!)) return false;
-  if (start > 0 && ENTRY_DESCRIPTION_LABELS.has(words[start - 1]!)) return true;
+function hitIsPayment(words: readonly Word[], start: number, end: number): boolean {
+  if (start > 0 && PROCESSOR_PREFIXES.has(words[0]!.w)) return false;
+  const before = words[start - 1];
+  if (before && before.labelled && ENTRY_DESCRIPTION_LABELS.has(before.w)) return true;
   return followsLikeAPayment(words.slice(end));
 }
 
-function phraseIsPayment(words: readonly string[], phrase: readonly string[]): boolean {
+function phraseIsPayment(words: readonly Word[], phrase: readonly string[]): boolean {
   for (let i = 0; i + phrase.length <= words.length; i += 1) {
-    if (!phrase.every((w, j) => words[i + j] === w)) continue;
+    if (!phrase.every((w, j) => words[i + j]!.w === w)) continue;
     if (hitIsPayment(words, i, i + phrase.length)) return true;
   }
   return false;
@@ -321,35 +394,38 @@ export function matchesTransferPattern(description: string): boolean {
 /**
  * Rule 9: the description names a payment to a credit card.
  *
- * WHAT: an issuer phrase (`CARD_PAYMENT_PATTERNS`), a generic phrase
- * (`GENERIC_CARD_PAYMENT_PHRASES`) — both as whole words — or a word starting
- * with an issuer code (`CARD_PAYMENT_WORD_PREFIXES`).
+ * 1. STRONG: one of PR7's issuer phrases (`CARD_PAYMENT_PATTERNS`) as whole
+ *    words, anywhere — exactly PR7's rule on `main`. "APPLECARD GSBANK PAYMENT
+ *    260901 3920178 JANE DOE" is a payment whatever follows (PR7b second
+ *    review: requiring a clean tail lost real payments).
+ * 2. POSITIONED: a later issuer phrase (`POSITIONED_ISSUER_PHRASES`), a generic
+ *    phrase (`GENERIC_CARD_PAYMENT_PHRASES`) or a word starting with an issuer
+ *    code (`CARD_PAYMENT_WORD_PREFIXES`). These words also name purchases
+ *    ("TARGET CARD SERVICES GIFT CARD", "SQ *CREDIT CARD PAYMENT"), so they
+ *    count only in a payment's position (PR7b review N1, L1):
+ *    - never after a leading card processor ("SQ *", "PAYPAL *", "TST*", …);
+ *    - right after an entry-description label WITH its colon ("… DESCR:",
+ *      "… DES:"), whatever follows; or
+ *    - followed by nothing but ACH fields (`FIELD_LABELS`: Chase's long layout,
+ *      BofA's "DES: … ID: … INDN: … CO ID:"), references (a digit, ACH
+ *      boilerplate, an unlabelled ID value) or "to <issuer>" ("TO VISA").
  *
- * WHERE (PR7b review N1, L1): the same words are a merchant's name in
- * "TARGET CARD SERVICES GIFT CARD" or "SQ *CREDIT CARD PAYMENT", so a match
- * counts only in a payment's position:
- *   - never after a leading card processor ("SQ *", "PAYPAL *", "TST*", …);
- *   - right after an ACH entry-description label ("… DESCR:CRCARDPMT",
- *     "… DES:CREDIT CARD PYMT …"), whatever follows; or
- *   - followed by nothing but references: words with a digit, ACH boilerplate,
- *     the value after an ID label ("PPD ID: WFCCAUTOPY", "CO ID:9999"), a name
- *     after BofA's "INDN:", or "to <issuer>" ("TO VISA").
- *
- * ⚠️ IT ERRS TOWARD MISSING, ON PURPOSE. A payment it misses still counts as
+ * ⚠️ TIER 2 ERRS TOWARD MISSING, ON PURPOSE. A payment it misses still counts as
  * spending, but the user can flag it (`isExternalCardPayment`, rule 3). A
  * purchase it wrongly caught could not be put back: there is no "this was a
- * purchase" override yet. So an unlabelled name after a phrase
- * ("US BANK CREDIT CARD PAYMENT JANE DOE") reads as a purchase.
+ * purchase" override yet. So "US BANK CREDIT CARD PAYMENT JANE DOE" (a name
+ * with no label) reads as a purchase.
  */
 export function matchesCardPaymentPattern(description: string): boolean {
-  const norm = normalizeDescription(description);
-  if (norm === "") return false;
-  const words = norm.split(" ");
-  for (const p of [...CARD_PAYMENT_PATTERNS, ...GENERIC_CARD_PAYMENT_PHRASES]) {
+  const words = wordsOf(description);
+  if (words.length === 0) return false;
+  const joined = ` ${words.map((x) => x.w).join(" ")} `;
+  if (CARD_PAYMENT_PATTERNS.some((p) => joined.includes(` ${p} `))) return true;
+  for (const p of [...POSITIONED_ISSUER_PHRASES, ...GENERIC_CARD_PAYMENT_PHRASES]) {
     if (phraseIsPayment(words, p.split(" "))) return true;
   }
   for (let i = 0; i < words.length; i += 1) {
-    const w = words[i]!;
+    const w = words[i]!.w;
     for (const code of CARD_PAYMENT_WORD_PREFIXES) {
       if (!w.startsWith(code)) continue;
       const tail = w.slice(code.length);
