@@ -1,4 +1,4 @@
-# PR5a — "Probably paid": a plan a bank row probably paid leaves the curve (server)
+# PR5a — "Probably paid": a plan a bank row confidently paid leaves the curve (server)
 
 Codex work-order point **6** ("probably paid" matching), plan PR5, server half. The web half — "Suggested" in Review,
 Confirm / Not this / Partial — is PR5b. Built on `main` with PR4c, PR4e and PR7 merged (`56596f3`). Plan:
@@ -10,6 +10,7 @@ Confirm / Not this / Partial — is PR5b. Built on `main` with PR4c, PR4e and PR
 | `2f3d305` | Resolutions: "Not this" (`not_match`) and `partial`; narrowed neighbour delete; review count. |
 | `a7d1428` | The ledger uses the matcher; `CashSignal.matches`; OpenAPI + codegen; golden re-recorded. |
 | `faefe3d` | Merge of `origin/main` (PR7). Only generated declaration maps conflicted; regenerated. |
+| _review fixes_ | Only confident pairs leave the curve (`offCurve`); word-set evidence; earlier occurrences compete; partial keeps a reschedule; `not_match` takes back a match; bundle filter; tests. See **Review fixes** below. |
 
 ## The problem
 
@@ -26,45 +27,69 @@ Confirm / Not this / Partial — is PR5b. Built on `main` with PR4c, PR4e and PR
 
 ### The matcher (`matchPlansToRows`, `lib/avalanche-core/src/planMatch.ts`)
 
-A plan and a bank row pair when all of these hold:
+**A plan and a bank row pair (a suggestion)** when all of these hold:
 - same sign;
 - the row is dated 10 days before to 14 days after the plan;
-- **with label evidence** (a distinctive word of the plan's label appears in the row's description): the amounts
-  differ by at most max($25, 25% of the plan);
+- **with the payee's name** (a distinctive word of the plan's label appears as a whole **word** of the row's
+  description): the amounts differ by at most max($25, 25% of the plan);
 - **without it:** they differ by at most max($1, 1%), and the dates are at most 3 days apart.
 
 **How the pairing works.**
-- **Stop-words never count as evidence:** "minimum" (every debt label), "payment" (the avalanche label), "pmt", "ach",
-  "autopay", "online", and others.
-- **Aliases:** "Amex" and "American Express" count as the same payee.
-- **One to one:** best score first, where score = |Δcents| + 100·|days| − 5,000 with evidence.
+- **Words, not substrings.** Label and description are split into word sets once each (`tokenizeDescription`), so
+  "rent" never matches "PARENTS" and "water" never matches "WATERFORD".
+- **Stop-words never count as evidence:**
+  - payment words: "minimum" (every debt label), "payment", "pmt", "ach", "autopay", "online";
+  - generic nouns that name no one: city, county, state, insurance, loan, service, company, home, account, …;
+  - "american" and "express" on their own.
+- **Aliases:** "Amex" and the word sequence "American Express" count as the same payee. "American Water" is not Amex.
+- **One to one:** best score first, where score = |Δcents| + 100·|days| − 5,000 with the name.
 - **`ambiguous`:** a runner-up for the same plan or row scores within max(100, 10%).
 - **`confidence`:**
-  - "high" = evidence and within max($1, 1%) and 5 days;
-  - "medium" = evidence, or an exact amount within 3 days without it;
-  - otherwise "low".
+  - "high" = the name, within max($1, 1%), and within 5 days;
+  - "medium" = the name, within max($25, 10%);
+  - otherwise "low", including every pair without the name.
 - **A rejected pair** (`not_match`) never pairs again.
+
+**Only `offCurve` pairs leave the curve.** Everything else is a suggestion, and its plan still counts. A pair is
+`offCurve` only when all of these hold:
+- the payee's name;
+- not ambiguous;
+- the row paid no less than the plan minus max($1, 1%);
+- the row paid no more than the plan plus max($25, 10%).
+
+The rule is asymmetric on purpose:
+- **An overpaid bill** ($150 plan, $173 row) leaves the curve: the row already takes the full $173, so the bill counts
+  once.
+- **An underpaid bill** ($38 plan, $20 row) stays on the curve until the user confirms "partial". Taking it off would
+  hide the $18 still due and overstate projected cash. Keeping it understates cash by $20 at most, until the user
+  answers.
 
 ### The ledger (`buildForecastLedger`)
 
 After the resolutions are read, and before the plans loop:
 - **Candidate plans:**
-  - unresolved occurrences dated today−21 to today+10, after any reschedule, from the same expansion the curve uses;
+  - unresolved occurrences dated today−45 to today+10, after any reschedule, from the same expansion the curve uses;
   - excluded: plans matched, skipped, missed, dismissed, or with a `partial` resolution.
 - **Candidate rows:**
-  - checking rows dated today−31 to today, from their own read;
+  - checking rows dated today−59 to today, from their own read;
   - classified by the PR4e cash-row rule with no anchor, so rows the snapshot holds are still candidates, and a pending
     half its posted row replaced is not;
   - excluded: rows claimed by any resolution other than "Not this". A posted row whose replaced pending row is claimed
     counts as claimed.
+- **Earlier occurrences compete.**
+  - Last month's occurrence is a candidate too, so a late payment pairs with the bill it paid.
+  - A later occurrence is never `offCurve` when an earlier occurrence of the same item, dated on or before the row, has
+    no row. The row may be that earlier bill, paid late.
 - **In the plans loop:**
-  - a probably-paid plan is skipped before the pre-snapshot rule (#666). `bankToday` is final before this point and
+  - an `offCurve` plan is skipped before the pre-snapshot rule (#666). `bankToday` is final before this point and
     never moves.
-  - A `partial` resolution keeps only the unpaid remainder (plan − paid row) on the curve, when more than $1 remains.
+  - A `partial` resolution keeps only the unpaid remainder (plan − paid row) on the curve, when more than $1 remains,
+    on the rescheduled date if the plan was moved.
   - Its row counts as accepted, like a match (`acceptedImpact`).
-- **Output:** `ledger.matches` becomes `CashSignal.matches`. Fields: planKey, planItemId, planDate (the resolution
-  key date), txnId, the plan and row amounts, difference (|row| − |plan|), dayDelta, confidence, ambiguous. It is in
-  OpenAPI; confidence is a plain string, so no runtime constant reaches the landing bundle.
+- **Output:** `ledger.matches` becomes `CashSignal.matches`.
+  - Fields: planKey, planItemId, planDate (the resolution key date), txnId, the plan and row amounts, difference
+    (|row| − |plan|), dayDelta, confidence, ambiguous, **offCurve**.
+  - It is in OpenAPI. Confidence is a plain string, so no runtime constant reaches the landing bundle.
 
 ### Resolutions (`POST /forecast/resolutions`)
 
@@ -73,14 +98,33 @@ After the resolutions are read, and before the plans loop:
   Now:
   - it leaves `not_match` rows alone, so a rejected suggestion never comes back after another decision about either
     side;
-  - a `not_match` write replaces only the identical pair;
+  - a `not_match` write replaces the identical pair's earlier answers: a rejection, a `matched` or a `partial`;
   - confirming a pair clears its rejection;
+  - `partial` and `rescheduled` for the same plan coexist: the remainder is due on the moved date;
   - every other status behaves as before.
 - **Review count:** a row whose only resolution is "Not this" still needs review.
+- **`GET /forecast` bundle:** `not_match` and `partial` rows are left out of `resolutions` until the web register
+  understands them (PR5b removes the filter). Today's register reads resolutions last-write-wins with no ORDER BY, so
+  a "Not this" row could otherwise be read as the plan's or the row's decision.
+
+## Review fixes (independent review of `3d207e8`: REQUEST CHANGES)
+
+| # | Finding | Fix | Test |
+|---|---|---|---|
+| H1 | Any pair took its plan off the curve, including low-confidence and ambiguous ones. With no name, ±$1 within 3 days matched an unrelated purchase: $1,500 rent vs a $1,500 Zelle (overstated $1,500), Netflix vs Chipotle. | Only `offCurve` pairs leave the curve: the name, not ambiguous, and underpaid by at most max($1, 1%) or overpaid by at most max($25, 10%). Pairs without the name are always "low". | Zelle vs rent, Chipotle vs Netflix, $1,200 vs $1,500, ambiguous, no-name, income |
+| H2 | Evidence was a substring: "rent" matched "PARENTS". Generic words counted. | Word-set match; the alias matches as a word sequence; generic nouns added to the stop list. | PARENTS, WATERFORD, HOMEGOODS, CITY OF, INSURANCE BROKERS, LOAN DEPOT, American Water |
+| M3 | A logged Avalanche payment and its bank debit took two different card minimums off the curve. | Both pairs are ambiguous, so neither leaves the curve. | the logged payment plus ACH case |
+| M4 | April's bill paid late took May's plan off the curve. | Plans from today−45 and rows from today−59; a later occurrence is not `offCurve` while an earlier unpaid occurrence is due on or before the row. | the late-payment case |
+| M5 | Writing `partial` deleted the plan's reschedule, so the remainder vanished (overstated $250). | `partial` and `rescheduled` for a plan coexist in both write orders. | route: both orders; ledger: remainder on the moved date |
+| M6 | `not_match`/`partial` rows reached today's web through the bundle. | Filtered from the bundle until PR5b; a `not_match` write also deletes `matched`/`partial` for the identical pair. | route: reject after match |
+| L7 | The matcher tokenized every pair. | Sign, date and amount checks first; each label and description tokenized at most once. | — |
+| L8 | A second `partial` for a plan replaces the first. | Disclosed (Residuals). | — |
+| L9 | Missing tests. | Added (see Tests). | — |
+| NIT | This note miscounted the golden fixture and misstated "medium". | Corrected below. | — |
 
 ## Figures that should move
 
-- **The forecast curve, low point and projected balances:** up by every plan a recent bank row probably paid. The
+- **The forecast curve, low point and projected balances:** up by every plan a recent bank row confidently paid. The
   bill now counts once, as the real row.
   - $150 plan paid $173 → the curve carries −$173 once, never −$323.
   - A bill paid 8 days early no longer dips again on its due date.
@@ -89,99 +133,124 @@ After the resolutions are read, and before the plans loop:
   - the review count (a suggestion is not a decision);
   - spending;
   - the Budget page;
-  - plans with no likely row;
-  - plans outside today−21 to today+10.
-- **Golden:** all 11 entries gain `"matches"`, and no figure changes (+90 lines, additions only).
-  - Ten entries have an empty list.
-  - The full-household fixture shows one match: a $38 debt minimum dated 04-25, paired with a $20 row 14 days later
-    ("golden" appears in both the debt name and the row description).
-  - That plan is dated before the snapshot, so it was already off the curve.
-- **Not measured:** how many plans the household's live data would match. That needs a read-only production query
+  - plans with no likely row, and plans whose only pair is a suggestion (not `offCurve`);
+  - plans outside today−45 to today+10.
+- **Golden:** every cash-signal snapshot gains `"matches"`, and no curve figure changes.
+  - 6 lists hold one suggestion each, all for the same $38 debt minimum dated 04-25 ("golden" appears in both the debt
+    name and the row descriptions):
+    - the five full-household windows pair it with a $20 row 14 days later;
+    - the PR4b snapshot-rule fixture pairs it with a $35 row.
+  - The other 6 lists are empty (12 lists across the 11 snapshot entries).
+  - Both pairs are "medium" and **not** `offCurve`: each row paid less than the plan.
+  - The plan is dated before the snapshot, so it was already off the curve either way.
+- **Not measured:** how many plans the household's live data would pair. That needs a read-only production query
   Brad approves.
 
 ## Residuals
 
-- **A match can hide a shortfall until the user answers.**
-  - With label evidence the tolerance is max($25, 25%). A $20 row can take a $38 plan off the curve, and the $18
-    difference stays hidden until the user confirms "partial" or rejects the pair.
-  - "Suggested" in Review (PR5b) is where the user answers.
-  - Tightening the tolerance is a one-line change if the reviewer or Codex prefers it.
+- **An unanswered underpayment understates cash.** A named row that paid less than the plan leaves both on the curve
+  until the user confirms "partial" (at most the row's amount too low).
+- **An overpaid pair can be wrong.** A named, unambiguous row within max($25, 10%) above the plan takes the plan off
+  the curve before the user answers. If that row was a different bill from the same payee, the curve is too high by
+  the plan until the user answers "Not this".
 - **The web doesn't show matches yet (PR5b).** Until then:
-  - the Forecast register still lists a probably-paid plan as "Pending plan", while the curve has already dropped it;
+  - the Forecast register still lists an `offCurve` plan as "Pending plan", while the curve has already dropped it;
   - the web's own suggestion list runs its own rules;
   - `forecastReconcile` still adds the plan into its "Forecast" end figure.
-- **Label evidence is a word match.**
-  - A generic payee word shared by an unrelated row can pair them, as in the golden fixture's "golden".
-  - Stop-words cover the known generic label words only.
+- **One `partial` per plan.** A second partial for the same plan replaces the first; the remainder is plan − the
+  latest row.
+- **Label evidence is a word match.** A distinctive but shared word ("golden" in the fixture) still pairs unrelated
+  names. Such pairs leave the curve only when the amount also agrees and nothing competes.
 - **Horizon.** Candidate plans come from the curve's own expansion, so a request with fewer than 10 days ahead sees
   fewer candidates. Every web caller asks for 30 days or more.
 - **Only the checking account.**
   - A payment from the Amex, or another account, is matched only by an explicit resolution, as before.
-  - The logged Avalanche payment and its bank debit (a separate open question for Brad) are two checking rows. Either
-    can match a debt minimum, but not both: pairing is one to one.
+  - The logged Avalanche payment and its bank debit (a separate open question for Brad) are two checking rows. When
+    both could pay a minimum, the pairs are ambiguous and nothing leaves the curve.
 
 ## Must not change
 
 - `bankToday`, the spine bank balance, spine parity and the review count.
 - Server auto-match stays off; nothing is written.
 - The pre-snapshot rule, the past-due drag, reschedule/skip/missed behaviour.
-- The golden figures (only `matches` is added).
+- The golden curve figures (only `matches` is added).
 - No new dependencies; no DDL.
 - Landing bundle within the cap.
 
 ## Tests
 
-- **`lib/planMatch.test.ts` (13):**
-  - label evidence and stop-words; the Amex alias;
-  - $150/$150 high; $150/$173 with difference +23;
+- **`lib/planMatch.test.ts` (18):**
+  - evidence: stop-words; whole words only (PARENTS, WATERFORD, HOMEGOODS); generic nouns; the Amex alias and
+    "American Water";
+  - $150/$150 high and `offCurve`;
+  - $150/$173 medium, difference +23, `offCurve`;
+  - $38 plan with a named $20 row: a suggestion, not `offCurve`;
+  - $1,500 plan with a named $1,200 row: low, not `offCurve`;
   - 6 days early and 5 days late match, 11 early and 15 late do not;
-  - no label: exact within 3 days matches, $23 off or 4 days does not;
+  - no name: exact within 3 days is low and never `offCurve`; $23 off or 4 days does not pair;
+  - $15.49 Netflix vs a $15.00 Chipotle: low, not `offCurve`;
   - two −$50 rows never pay a −$100 plan;
   - a stop-word is not evidence;
   - a card payment matches a debt minimum by the card name;
   - opposite signs never pair;
-  - one to one with `ambiguous`;
+  - one to one, with an ambiguous pair kept on the curve;
   - a rejected pair never returns;
-  - an income deposit.
-- **`__tests__/forecastResolutionsPairs.integration.test.ts` (8):**
+  - an income deposit with no name.
+- **`__tests__/forecastResolutionsPairs.integration.test.ts` (11):**
   - validation;
   - a rejection survives another match of the plan, and another decision about the row;
   - repeat and second rejections;
   - confirming clears a rejection;
   - partial replaces a match;
   - the unchanged one-per-plan / one-per-row behaviour;
-  - the review count with "Not this".
-- **`__tests__/cashSignalProbablyPaid.integration.test.ts` (7).** Balance 1,000.00 read 05-01, today 05-14, plans due
-  on the 20th:
-  - $150 paid 8 days early → `bankToday` 850.00, 05-20 850.00 (not 700.00), 06-20 700.00, and the exact match object;
+  - the review count with "Not this";
+  - partial keeps a reschedule, and a reschedule keeps a partial;
+  - rejecting a pair takes back its match.
+- **`__tests__/cashSignalProbablyPaid.integration.test.ts` (13).** Balance 1,000.00 read 05-01, today 05-14:
+  - $150 paid 8 days early (April paid in April) → `bankToday` 850.00, 05-20 850.00 (not 700.00), 06-20 700.00, and
+    the exact match object with `offCurve: true`;
   - $150 paid $173 → 05-20 827.00 (never 677.00), difference 23.00;
   - "Not this" → 05-20 700.00, no match;
   - partial $500 / $250 → 05-20 500.00;
+  - partial on a plan moved from the 5th to the 20th → 05-19 750.00, 05-20 500.00;
   - two −$50 rows vs a −$100 plan → 05-20 800.00, no match;
   - a row already matched to another plan → not a candidate;
-  - a replaced pending half → the posted row is the match.
-- **Failing before:** with `main`'s server code (`56596f3`: `forecastLedger.ts`, `cashSignal.ts`, `routes/forecast.ts`,
-  `reviewCount.ts`) swapped in, **12 of the 28 new tests fail**:
-  - **all 7 probably-paid tests.** Two of them ("two −$50 rows" and "a row already matched") fail only because
-    `matches` is missing there; their curve figures already hold on `main`.
-  - **5 resolution tests:** validation, both survivals, repeated rejection, and the review count.
-  - **Still passing on `main`:** "confirming clears a rejection", "partial replaces a match" and the unchanged
-    behaviour, which pin behaviour `main` already had, and the 13 matcher unit tests (a new module).
+  - a replaced pending half → the posted row is the match;
+  - $1,500 rent vs an unrelated $1,500 Zelle → 05-15 −2,000.00, a low suggestion;
+  - $15.49 Netflix vs a $15.00 lunch → 05-15 969.51;
+  - "Rent" vs "ZELLE TO PARENTS" → 05-20 −1,700.00, no match;
+  - a logged payment plus its ACH vs two card minimums → 05-20 810.00, nothing `offCurve`;
+  - April's bill paid 21 days late → May's plan stays: 05-20 700.00.
+- **Failing before:** with the reviewed head's source (`3d207e8`: `planMatch.ts`, `index.ts`, `forecastLedger.ts`,
+  `cashSignal.ts`, `routes/forecast.ts`) swapped in, **22 of the 42 tests fail**:
+  - **on a curve figure:** the Zelle vs rent, Netflix vs lunch, "PARENTS", logged payment plus ACH, and late-payment
+    cases (the old code dropped the plan);
+  - **on the stored resolutions:** partial keeps a reschedule, a reschedule keeps a partial, rejecting takes back a
+    match;
+  - **on the new rules:** the whole-word, generic-word and "American Water" evidence tests, the no-name, small-bill,
+    underpaid and ambiguous matcher tests;
+  - **on the new `offCurve` field or the stricter confidence only:** $150/$150, $150/$173 (both levels), $1,200 vs
+    $1,500, the card payment, income.
+  - **Still passing on `3d207e8`:** the earlier resolution tests, the earlier curve figures, and the partial on a moved
+    plan when both resolutions already exist (the ledger already handled it; the route deleted the reschedule).
+  - Against `main` (`56596f3`), the first round's 12 of 28 still hold for the original tests.
 
 ## Verification
 
-- **Full API suite:** **128 files, 1064 pass, 7 todo** (`CI=true`, on the merge with PR7; golden compares clean).
+- **Full API suite:** **128 files, 1078 pass, 7 todo** (`CI=true`; golden compares clean after the re-record).
+- **Targeted:** 42 of 42 (`planMatch` 18, probably-paid 13, resolutions 11).
 - **Web suite:** **119 files, 933 pass**.
 - **Workspace typecheck and build:** typecheck clean; workspace build exit 0.
 - **Landing bundle guard:** 572.5 KB of 580, unchanged.
-- **Codegen:** regenerated after the merge; the working tree is clean.
+- **Codegen:** regenerated after the `offCurve` spec change; committed.
 
 ## Left for later
 
 - **PR5b (web):**
   - "Suggested" in Review, with Confirm (`matched`), Not this (`not_match`) and Partial;
   - the new statuses in `forecastMatch.ts` (`rescheduled` is missing there too);
-  - the register and `forecastReconcile` read `CashSignal.matches`.
+  - the register and `forecastReconcile` read `CashSignal.matches` and skip only `offCurve` plans;
+  - remove the bundle filter on `not_match`/`partial`.
 - **PR6:** overdue bills now have "probably paid" evidence to lean on; it replaces the pre-snapshot rule (#666) only
   after this.
 - **Brad's decision on logged Avalanche payments** vs their bank debits (options a/b/c).

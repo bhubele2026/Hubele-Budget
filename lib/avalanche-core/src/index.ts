@@ -28,6 +28,7 @@ export {
   matchPlansToRows,
   MATCH_EARLY_DAYS,
   MATCH_LATE_DAYS,
+  MATCH_OFF_CURVE_SHARE,
   MATCH_STOP_WORDS,
   MATCH_STRICT_DAYS,
   type MatchConfidence,

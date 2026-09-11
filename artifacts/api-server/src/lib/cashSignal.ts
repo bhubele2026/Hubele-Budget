@@ -232,6 +232,8 @@ export type CashSignal = {
     dayDelta: number;
     confidence: string;
     ambiguous: boolean;
+    /** Only these plans are off the curve; every other match is a suggestion. */
+    offCurve: boolean;
   }>;
 };
 
@@ -397,6 +399,7 @@ export async function computeCashSignal(
       dayDelta: m.dayDelta,
       confidence: m.confidence,
       ambiguous: m.ambiguous,
+      offCurve: m.offCurve,
     })),
   };
 }

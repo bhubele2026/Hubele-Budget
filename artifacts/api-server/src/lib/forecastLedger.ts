@@ -511,13 +511,22 @@ export async function buildForecastLedger(
   // is written; the user confirms ("matched" / "partial") or rejects
   // ("not_match") on the Forecast page. `bankToday` is final above and never
   // moves here.
-  //   - Plans: unresolved occurrences dated today−21 .. today+10 (after any
-  //     reschedule), from the same expansion the curve uses.
-  //   - Rows: checking rows dated today−31 .. today, from their own read (rows
+  //   - Plans: unresolved occurrences dated today−45 .. today+10 (after any
+  //     reschedule), from the same expansion the curve uses (it reaches back to
+  //     the first of last month). Older occurrences are candidates so they
+  //     compete for the rows that paid them.
+  //   - Rows: checking rows dated today−59 .. today, from their own read (rows
   //     the snapshot holds are fine candidates), counted by the cash-row rule,
   //     and not claimed by any resolution other than "Not this". A posted row
   //     whose replaced pending row is claimed counts as claimed.
   //   - `matchPlansToRows` (avalanche-core) pairs them one to one.
+  //   - ⚠️ (PR5 review) ONLY a pair marked `offCurve` — the payee's name as a
+  //     word in the bank row, not ambiguous, within max($25, 10%) — takes its
+  //     plan off the curve. Every other pair is a suggestion: the plan still
+  //     counts, so an unconfirmed guess never overstates projected cash. A later
+  //     occurrence also stays on the curve when an earlier occurrence of the same
+  //     item that no row paid is due on or before the row: the row may be that
+  //     earlier bill, paid late.
   const notMatchPairs = new Set<string>();
   const partialTxnByKey = new Map<string, string>();
   const claimedTxnIds = new Set<string>();
@@ -533,9 +542,9 @@ export async function buildForecastLedger(
       partialTxnByKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, r.matchedTxnId);
     }
   }
-  const planMatchFromISO = addDaysISO(todayISO, -21);
+  const planMatchFromISO = addDaysISO(todayISO, -45);
   const planMatchToISO = addDaysISO(todayISO, 10);
-  const rowMatchFromISO = addDaysISO(todayISO, -31);
+  const rowMatchFromISO = addDaysISO(todayISO, -59);
   const matchPlans: MatchPlan[] = [];
   for (const ev of events) {
     const key = `${ev.itemId}|${ev.date}`;
@@ -579,8 +588,28 @@ export async function buildForecastLedger(
       matchRows.push({ txnId: row.id, occurredOn: row.occurredOn, amount: row.amount, description: row.description });
     });
     matches = matchPlansToRows(matchPlans, matchRows, notMatchPairs);
+    // (PR5 review) A later occurrence never leaves the curve on a row dated on or
+    // after an earlier occurrence of the same item that no row paid.
+    const pairedKeys = new Set(matches.map((m) => m.planKey));
+    const unpaidByItem = new Map<string, string[]>();
+    for (const p of matchPlans) {
+      if (pairedKeys.has(p.key)) continue;
+      const list = unpaidByItem.get(p.itemId) ?? [];
+      list.push(p.occurrenceDate);
+      unpaidByItem.set(p.itemId, list);
+    }
+    const rowDateById = new Map(matchRows.map((r) => [r.txnId, r.occurredOn] as const));
+    matches = matches.map((m) => {
+      if (!m.offCurve) return m;
+      const rowDate = rowDateById.get(m.txnId) ?? "";
+      const earlierUnpaid = (unpaidByItem.get(m.planItemId) ?? []).some(
+        (d) => d < m.planDate && d <= rowDate,
+      );
+      return earlierUnpaid ? { ...m, offCurve: false } : m;
+    });
   }
-  const probablyPaidKeys = new Set(matches.map((m) => m.planKey));
+  // Only confident pairs take a plan off the curve; the rest are suggestions.
+  const probablyPaidKeys = new Set(matches.filter((m) => m.offCurve).map((m) => m.planKey));
 
   const plans: LedgerPlan[] = [];
   for (const ev of events) {

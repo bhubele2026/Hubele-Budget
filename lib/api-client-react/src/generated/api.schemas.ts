@@ -2399,6 +2399,7 @@ export type CashSignalMatchesItem = {
   dayDelta: number;
   confidence: string;
   ambiguous: boolean;
+  offCurve: boolean;
 };
 
 export interface CashSignal {
@@ -2425,9 +2426,11 @@ export interface CashSignal {
   acceptedImpact?: string;
   daily?: CashSignalDailyItem[];
   events?: CashSignalEventsItem[];
-  /** (PR5) Plans a bank row probably paid. Each one is off the curve
-until the user confirms ("matched"/"partial") or rejects
-("not_match") it; the bank row always counts. Amounts are signed;
+  /** (PR5) Plans a bank row probably paid, as suggestions for the user
+to confirm ("matched"/"partial") or reject ("not_match"). Only a
+match with `offCurve` true is off the forecast curve (the payee's
+name, not ambiguous, within max($25, 10%)); every other plan still
+counts. The bank row always counts. Amounts are signed;
 `difference` is |txn| − |plan| (positive = paid more than planned).
 `confidence` is "high", "medium" or "low".
  */

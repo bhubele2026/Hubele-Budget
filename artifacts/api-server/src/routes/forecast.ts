@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gte, lte, sql, ne } from "drizzle-orm";
+import { and, eq, gte, lte, sql, ne, inArray } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -439,6 +439,10 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // show the bill unpaid while the curve treats it as paid.
   const forecastToday = forecastTodayISO(now);
   const resolutions = resolutionRows
+    // (PR5) Pair-level answers ("Not this", partial) stay out of the bundle until
+    // the web register understands them (PR5b); the cash signal already applies
+    // them. PR5b removes this filter.
+    .filter((r) => r.status !== "not_match" && r.status !== "partial")
     .filter(
       (r) =>
         !r.matchedTxnId ||
@@ -1112,12 +1116,14 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
   // replaces the identical pair; any other write leaves `not_match` rows alone,
   // except the exact pair it now confirms.
   if (status === "not_match") {
+    // Rejecting a pair replaces that pair's earlier answers: a previous
+    // rejection, or a match / partial confirmation the user now takes back.
     await db
       .delete(forecastResolutionsTable)
       .where(
         and(
           eq(forecastResolutionsTable.householdId, householdId),
-          eq(forecastResolutionsTable.status, "not_match"),
+          inArray(forecastResolutionsTable.status, ["not_match", "matched", "partial"]),
           eq(forecastResolutionsTable.recurringItemId, recurringItemId),
           eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
           eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
@@ -1133,6 +1139,10 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
             eq(forecastResolutionsTable.recurringItemId, recurringItemId),
             eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
             ne(forecastResolutionsTable.status, "not_match"),
+            // (PR5 review) A partial confirmation and a reschedule of the same
+            // plan coexist: the remainder is due on the date the user moved it to.
+            ...(status === "partial" ? [ne(forecastResolutionsTable.status, "rescheduled")] : []),
+            ...(status === "rescheduled" ? [ne(forecastResolutionsTable.status, "partial")] : []),
           ),
         );
     }
