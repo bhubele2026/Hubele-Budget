@@ -40,6 +40,19 @@ export function householdDayOfAt(at: string): string {
   return householdDateOf(instant);
 }
 
+/**
+ * A browser-local midnight Date for a YYYY-MM-DD day, for pages whose period
+ * arithmetic runs on local Date fields. Build the day from the household
+ * calendar first (`householdToday(now)`, `monthBounds(...)`), then convert.
+ */
+export function localDateOf(iso: string): Date {
+  return new Date(
+    Number(iso.slice(0, 4)),
+    Number(iso.slice(5, 7)) - 1,
+    Number(iso.slice(8, 10)),
+  );
+}
+
 /** First day (YYYY-MM-01) of the household's month for an instant. */
 export function householdMonthStartOf(instant: Date = new Date()): string {
   return monthBounds(householdDateOf(instant)).start;

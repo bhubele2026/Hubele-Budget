@@ -331,3 +331,83 @@ describe("Allowances — the household's week (PR2)", () => {
     expect(within(row).queryByText(usd(88.4))).toBeNull();
   });
 });
+
+/** The 8 variance-bar week stamps, oldest first, read off the rendered rows. */
+function varianceBarLabels(): string[] {
+  const list = screen.getByLabelText("Weekly allowance money left or over plan, by week");
+  return Array.from(list.querySelectorAll<HTMLElement>("[title]"))
+    .map((el) => ({
+      title: el.getAttribute("title") ?? "",
+      y: Number(/translateY\(([-\d.]+)px\)/.exec(el.style.transform)?.[1] ?? 0),
+    }))
+    .sort((a, b) => a.y - b.y)
+    .map((r) => r.title.split(" — ")[0]);
+}
+
+describe("Allowances — the household's month (PR2)", () => {
+  const MONTH_EDGE_TXNS = [
+    tx({ id: "m-sep", amount: "-42.15", occurredOn: "2026-09-30", monthlyAllowance: true }),
+    tx({ id: "m-oct", amount: "-17.35", occurredOn: "2026-10-01", monthlyAllowance: true }),
+    tx({ id: "u-sep", amount: "-23.45", occurredOn: "2026-09-14", unplannedAllowance: true }),
+  ];
+
+  it("Wed 9/30 at 9pm Central still counts September, even on a UTC browser", () => {
+    vi.setSystemTime(new Date("2026-10-01T02:00:00Z"));
+    txns = MONTH_EDGE_TXNS;
+    renderPage();
+    // Old, under UTC: October — $17.35 monthly and nothing unplanned.
+    const monthly = screen.getByTestId("allowance-summary-monthly");
+    expect(within(monthly).getByText(usd(42.15))).toBeTruthy();
+    expect(within(monthly).queryByText(usd(17.35))).toBeNull();
+    expect(
+      within(screen.getByTestId("allowance-summary-unplanned")).getByText(usd(23.45)),
+    ).toBeTruthy();
+  });
+
+  it("Thu 10/1 at 12:30am Central counts October, even on a Pacific browser still on 9/30", () => {
+    vi.setSystemTime(new Date("2026-10-01T05:30:00Z"));
+    txns = MONTH_EDGE_TXNS;
+    renderPage();
+    // Old, under Pacific: September — $42.15 monthly and $23.45 unplanned.
+    const monthly = screen.getByTestId("allowance-summary-monthly");
+    expect(within(monthly).getByText(usd(17.35))).toBeTruthy();
+    expect(within(monthly).queryByText(usd(42.15))).toBeNull();
+    expect(
+      within(screen.getByTestId("allowance-summary-unplanned")).queryByText(usd(23.45)),
+    ).toBeNull();
+  });
+});
+
+describe("Allowances — streaks and variance bars walk household weeks (PR2)", () => {
+  // Weekly plan $450. Two completed household weeks over it, then the open week
+  // over it too — the open week must never count toward a streak.
+  const STREAK_TXNS = [
+    tx({ id: "w-0823", amount: "-470.00", occurredOn: "2026-08-24", weeklyAllowance: true }),
+    tx({ id: "w-0830", amount: "-510.00", occurredOn: "2026-09-05", weeklyAllowance: true }),
+    tx({ id: "w-0906", amount: "-600.00", occurredOn: "2026-09-12", weeklyAllowance: true }),
+  ];
+
+  it("Sat 9/12 at 8:30pm Central (a UTC browser's Sunday): last completed week is Aug 30", () => {
+    vi.setSystemTime(new Date("2026-09-13T01:30:00Z"));
+    txns = STREAK_TXNS;
+    renderPage();
+    // A local-UTC walk would treat Sep 6 – 12 as completed: 3 weeks, bars to Sep 6.
+    expect(screen.getByTestId("allowance-over-streak").textContent).toContain("2 weeks running");
+    const labels = varianceBarLabels();
+    expect(labels).toHaveLength(8);
+    expect(labels[0]).toBe("Jul 12");
+    expect(labels[7]).toBe("Aug 30");
+  });
+
+  it("Sun 9/13 at 12:30am Central (a Pacific browser's Saturday): last completed week is Sep 6", () => {
+    vi.setSystemTime(new Date("2026-09-13T05:30:00Z"));
+    txns = STREAK_TXNS;
+    renderPage();
+    // A local-Pacific walk would still be inside Sep 6 – 12: 2 weeks, bars to Aug 30.
+    expect(screen.getByTestId("allowance-over-streak").textContent).toContain("3 weeks running");
+    const labels = varianceBarLabels();
+    expect(labels).toHaveLength(8);
+    expect(labels[0]).toBe("Jul 19");
+    expect(labels[7]).toBe("Sep 6");
+  });
+});
