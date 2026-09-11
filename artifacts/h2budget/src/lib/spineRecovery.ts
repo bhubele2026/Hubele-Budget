@@ -17,7 +17,14 @@ import { getGetSpineQueryKey } from "@workspace/api-client-react";
  *   - anything else (loaded, or a failed refresh with numbers on screen, which
  *     the refresh banner's Retry covers): do nothing.
  *
- * It asks once, never in a loop. Returns the cleanup for the calling effect.
+ * ONE ASK, NEVER A LOOP — but read "one" carefully:
+ *   - The ask follows the query's own retry setting. Once a page is mounted the
+ *     query carries the app's `retry: 1`, so one ask can be two requests.
+ *   - It waits on whichever first spine request is out at sign-in, the prefetch
+ *     or a page's own mount fetch, and asks again only if that one fails.
+ *   So a spine that keeps failing at open costs a handful of requests, bounded.
+ *
+ * Returns the cleanup for the calling effect.
  */
 export function askForSpineAgainIfFailed(queryClient: QueryClient): () => void {
   const queryKey = getGetSpineQueryKey();

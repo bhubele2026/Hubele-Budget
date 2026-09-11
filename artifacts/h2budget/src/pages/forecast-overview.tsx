@@ -133,11 +133,18 @@ export default function ForecastOverviewPage() {
         refreshing={spineFetching}
         data-testid="fo-refresh-banner"
       />
-      {/* Worded like the spine banner above, so two banners on a bad day read as one voice. */}
+      {/* Worded like the spine banner above: "refresh" only when there are
+          figures to keep, "load" when there never were. Its Retry names what it
+          retries, because on a bad day it sits under the spine banner's own. */}
       {isError && (
         <div className={errorBanner} role="alert" data-testid="fo-forecast-error">
-          Couldn't refresh the forecast.{" "}
-          <button type="button" className={btnLink} onClick={() => void refetch()}>
+          {signal ? "Couldn't refresh the forecast." : "Couldn't load the forecast."}{" "}
+          <button
+            type="button"
+            className={btnLink}
+            onClick={() => void refetch()}
+            aria-label="Retry forecast"
+          >
             Retry
           </button>
         </div>

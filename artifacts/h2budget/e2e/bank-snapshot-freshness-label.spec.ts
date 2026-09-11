@@ -61,6 +61,14 @@ test.describe("Bank balance freshness label — Banking + Forecast", () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
     const textWidth = await freshness.evaluate((el) => el.scrollWidth);
     expect(box!.width).toBeGreaterThanOrEqual(textWidth - 1);
+    // …and on ONE line. A squeezed label wraps instead of overflowing, and the
+    // width check alone passes for a wrapped one.
+    const lineHeight = await freshness.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const lh = parseFloat(style.lineHeight);
+      return Number.isFinite(lh) ? lh : parseFloat(style.fontSize) * 1.5;
+    });
+    expect(box!.height).toBeLessThan(lineHeight * 1.5);
   });
 
   test("renders 'Set manually …' in the Forecast bank card's meta line", async ({

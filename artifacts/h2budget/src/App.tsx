@@ -404,8 +404,9 @@ function ProtectedShell() {
   }, [isLoaded, isSignedIn]);
 
   // ⚠️ A PAGE CAN JOIN THE PREFETCH'S FAILURE, and would then sit on "Couldn't
-  // load" for a valid session. Once Clerk has signed in, a spine that failed
-  // with nothing to show, or fails after this point, is asked for once more.
+  // load" for a valid session. Once Clerk has signed in, a first spine request
+  // that failed, or fails after this point, is asked for again: one ask, never
+  // a loop (the helper spells out what that costs).
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
     return askForSpineAgainIfFailed(queryClient);

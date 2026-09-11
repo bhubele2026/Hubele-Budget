@@ -491,6 +491,12 @@ describe("Banking — a hint is a claim, so it waits for the spine", () => {
     expect(screen.getByTestId("cc-stat-next-bill").textContent).toContain("none scheduled");
   });
 
+  it("says 'next 90 days' once the spine answers with a forecast that never goes negative", () => {
+    state.spine = { ...SPINE, forecast: { ...SPINE.forecast, runwayDays: null } };
+    render(<CommandCenterPage />);
+    expect(screen.getByTestId("cc-stat-low-point").textContent).toContain("next 90 days");
+  });
+
   it("leaves no empty freshness slot beside Sync without a bank snapshot", () => {
     state.spine = undefined;
     render(<CommandCenterPage />);
