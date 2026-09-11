@@ -39,6 +39,7 @@ import {
   plaidItemsTable,
   transactionsTable,
 } from "@workspace/db";
+import { GetForecastBankBalanceExplainResponse } from "@workspace/api-zod";
 import bankBalanceExplainRouter from "../routes/bankBalanceExplain";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
@@ -205,5 +206,48 @@ describe("GET /forecast/bank-balance-explain", () => {
     expect(e.account.via).toBe("snapshot mask");
     expect(e.nextSync.willRefreshBalance).toBe(true);
     expect(e.accounts.find((a) => a.externalId === "chase-5526")!.isSnapshotAccount).toBe(true);
+  });
+
+  it("returns the typed shape the spec promises, with the freshness verdict", async () => {
+    // The response used to be an untyped object. It is now `BankBalanceExplain`
+    // in the spec, and the page that explains the number reads it through the
+    // generated client, so the route has to actually match it.
+    await reset();
+    const { rowId } = await seedAccount({ externalId: "chase-5526", mask: "5526" });
+    await db.insert(forecastSettingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      bankSnapshotAccountId: rowId,
+      bankSnapshotBalance: "4726.97",
+      bankSnapshotAt: new Date("2026-08-20T12:00:00Z"),
+      bankSnapshotSource: "plaid",
+      bankSnapshotMask: "5526",
+      cashBuffer: "0",
+    });
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: "2026-08-21",
+      description: "HY-VEE",
+      amount: "-442.91",
+      plaidAccountId: "chase-5526",
+      source: "plaid:chase",
+    });
+
+    const res = await fetch(`${baseUrl}/api/forecast/bank-balance-explain`);
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    const parsed = GetForecastBankBalanceExplainResponse.safeParse(body);
+    expect(parsed.success ? null : parsed.error.issues).toBeNull();
+
+    // A Plaid snapshot from Aug 20 whose item has never synced since: old, with
+    // no contact and no failure on record.
+    expect((body as { freshness: unknown }).freshness).toEqual({
+      source: "plaid",
+      lastContactAt: null,
+      lastFailureAt: null,
+      stale: true,
+      staleReason: "old",
+    });
   });
 });

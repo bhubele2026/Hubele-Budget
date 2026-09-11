@@ -5836,7 +5836,308 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
 /**
  * Diagnostic: why the bank balance reads what it reads. Shows the anchor, which Plaid account it resolves to and how, whether the next Sync will re-read it (and if not, why not), and the ledger rows stacked on top. Read-only and free — no Plaid call, no writes. Exists because diagnosing a wrong balance used to require production credentials, which turned a money bug into a guessing game.
  */
-export declare const GetForecastBankBalanceExplainResponse: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+export declare const GetForecastBankBalanceExplainResponse: zod.ZodObject<{
+    asOf: zod.ZodString;
+    displayed: zod.ZodObject<{
+        bankToday: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        bankToday: string;
+    }, {
+        bankToday: string;
+    }>;
+    freshness: zod.ZodObject<{
+        source: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"plaid">, zod.ZodLiteral<"manual">, zod.ZodLiteral<null>]>>;
+        lastContactAt: zod.ZodNullable<zod.ZodString>;
+        lastFailureAt: zod.ZodNullable<zod.ZodString>;
+        stale: zod.ZodBoolean;
+        staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "plaid" | "manual" | null;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }, {
+        source: "plaid" | "manual" | null;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    }>;
+    snapshot: zod.ZodObject<{
+        balance: zod.ZodNullable<zod.ZodString>;
+        at: zod.ZodNullable<zod.ZodString>;
+        source: zod.ZodNullable<zod.ZodString>;
+        storedAccountId: zod.ZodNullable<zod.ZodString>;
+        name: zod.ZodNullable<zod.ZodString>;
+        mask: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        at: string | null;
+        source: string | null;
+        name: string | null;
+        balance: string | null;
+        mask: string | null;
+        storedAccountId: string | null;
+    }, {
+        at: string | null;
+        source: string | null;
+        name: string | null;
+        balance: string | null;
+        mask: string | null;
+        storedAccountId: string | null;
+    }>;
+    account: zod.ZodObject<{
+        resolvedExternalId: zod.ZodNullable<zod.ZodString>;
+        resolvedRowId: zod.ZodNullable<zod.ZodString>;
+        via: zod.ZodEnum<["pointer", "snapshot mask", "sole checking", "sole depository", "unresolved"]>;
+        name: zod.ZodNullable<zod.ZodString>;
+        mask: zod.ZodNullable<zod.ZodString>;
+        belongsToItem: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        name: string | null;
+        mask: string | null;
+        resolvedExternalId: string | null;
+        resolvedRowId: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+        belongsToItem: string | null;
+    }, {
+        name: string | null;
+        mask: string | null;
+        resolvedExternalId: string | null;
+        resolvedRowId: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+        belongsToItem: string | null;
+    }>;
+    nextSync: zod.ZodObject<{
+        willRefreshBalance: zod.ZodBoolean;
+        whyNot: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        willRefreshBalance: boolean;
+        whyNot: string | null;
+    }, {
+        willRefreshBalance: boolean;
+        whyNot: string | null;
+    }>;
+    items: zod.ZodArray<zod.ZodObject<{
+        itemRowId: zod.ZodString;
+        institutionName: zod.ZodNullable<zod.ZodString>;
+        lastSyncedAt: zod.ZodNullable<zod.ZodString>;
+        lastSyncError: zod.ZodNullable<zod.ZodString>;
+        lastSyncErrorCode: zod.ZodNullable<zod.ZodString>;
+        ownsSnapshotAccount: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        institutionName: string | null;
+        itemRowId: string;
+        lastSyncedAt: string | null;
+        lastSyncError: string | null;
+        lastSyncErrorCode: string | null;
+        ownsSnapshotAccount: boolean;
+    }, {
+        institutionName: string | null;
+        itemRowId: string;
+        lastSyncedAt: string | null;
+        lastSyncError: string | null;
+        lastSyncErrorCode: string | null;
+        ownsSnapshotAccount: boolean;
+    }>, "many">;
+    accounts: zod.ZodArray<zod.ZodObject<{
+        externalId: zod.ZodString;
+        name: zod.ZodNullable<zod.ZodString>;
+        mask: zod.ZodNullable<zod.ZodString>;
+        type: zod.ZodNullable<zod.ZodString>;
+        subtype: zod.ZodNullable<zod.ZodString>;
+        isSnapshotAccount: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        type: string | null;
+        name: string | null;
+        mask: string | null;
+        subtype: string | null;
+        externalId: string;
+        isSnapshotAccount: boolean;
+    }, {
+        type: string | null;
+        name: string | null;
+        mask: string | null;
+        subtype: string | null;
+        externalId: string;
+        isSnapshotAccount: boolean;
+    }>, "many">;
+    ledger: zod.ZodObject<{
+        anchorDay: zod.ZodNullable<zod.ZodString>;
+        sinceAnchor: zod.ZodUnion<[zod.ZodObject<{
+            rowCount: zod.ZodNumber;
+            net: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            net: string;
+            rowCount: number;
+        }, {
+            net: string;
+            rowCount: number;
+        }>, zod.ZodNull]>;
+        recentRows: zod.ZodArray<zod.ZodObject<{
+            date: zod.ZodString;
+            description: zod.ZodString;
+            amount: zod.ZodString;
+            pending: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            description: string;
+            amount: string;
+            pending: boolean;
+        }, {
+            date: string;
+            description: string;
+            amount: string;
+            pending: boolean;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        anchorDay: string | null;
+        sinceAnchor: {
+            net: string;
+            rowCount: number;
+        } | null;
+        recentRows: {
+            date: string;
+            description: string;
+            amount: string;
+            pending: boolean;
+        }[];
+    }, {
+        anchorDay: string | null;
+        sinceAnchor: {
+            net: string;
+            rowCount: number;
+        } | null;
+        recentRows: {
+            date: string;
+            description: string;
+            amount: string;
+            pending: boolean;
+        }[];
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    account: {
+        name: string | null;
+        mask: string | null;
+        resolvedExternalId: string | null;
+        resolvedRowId: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+        belongsToItem: string | null;
+    };
+    accounts: {
+        type: string | null;
+        name: string | null;
+        mask: string | null;
+        subtype: string | null;
+        externalId: string;
+        isSnapshotAccount: boolean;
+    }[];
+    asOf: string;
+    displayed: {
+        bankToday: string;
+    };
+    freshness: {
+        source: "plaid" | "manual" | null;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    };
+    snapshot: {
+        at: string | null;
+        source: string | null;
+        name: string | null;
+        balance: string | null;
+        mask: string | null;
+        storedAccountId: string | null;
+    };
+    nextSync: {
+        willRefreshBalance: boolean;
+        whyNot: string | null;
+    };
+    items: {
+        institutionName: string | null;
+        itemRowId: string;
+        lastSyncedAt: string | null;
+        lastSyncError: string | null;
+        lastSyncErrorCode: string | null;
+        ownsSnapshotAccount: boolean;
+    }[];
+    ledger: {
+        anchorDay: string | null;
+        sinceAnchor: {
+            net: string;
+            rowCount: number;
+        } | null;
+        recentRows: {
+            date: string;
+            description: string;
+            amount: string;
+            pending: boolean;
+        }[];
+    };
+}, {
+    account: {
+        name: string | null;
+        mask: string | null;
+        resolvedExternalId: string | null;
+        resolvedRowId: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+        belongsToItem: string | null;
+    };
+    accounts: {
+        type: string | null;
+        name: string | null;
+        mask: string | null;
+        subtype: string | null;
+        externalId: string;
+        isSnapshotAccount: boolean;
+    }[];
+    asOf: string;
+    displayed: {
+        bankToday: string;
+    };
+    freshness: {
+        source: "plaid" | "manual" | null;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
+    };
+    snapshot: {
+        at: string | null;
+        source: string | null;
+        name: string | null;
+        balance: string | null;
+        mask: string | null;
+        storedAccountId: string | null;
+    };
+    nextSync: {
+        willRefreshBalance: boolean;
+        whyNot: string | null;
+    };
+    items: {
+        institutionName: string | null;
+        itemRowId: string;
+        lastSyncedAt: string | null;
+        lastSyncError: string | null;
+        lastSyncErrorCode: string | null;
+        ownsSnapshotAccount: boolean;
+    }[];
+    ledger: {
+        anchorDay: string | null;
+        sinceAnchor: {
+            net: string;
+            rowCount: number;
+        } | null;
+        recentRows: {
+            date: string;
+            description: string;
+            amount: string;
+            pending: boolean;
+        }[];
+    };
+}>;
 /**
  * Returns a deterministic schedule of avalanche extra payments
 across the next ~12 months (one per safe paycheck-to-paycheck
@@ -7803,12 +8104,12 @@ export declare const GetAmexAnchorResponse: zod.ZodObject<{
     source: zod.ZodEnum<["debt", "anchor", "computed", "missing"]>;
 }, "strip", zod.ZodTypeAny, {
     source: "debt" | "anchor" | "computed" | "missing";
-    amexEndingBalance: number | null;
     asOf: string;
+    amexEndingBalance: number | null;
 }, {
     source: "debt" | "anchor" | "computed" | "missing";
-    amexEndingBalance: number | null;
     asOf: string;
+    amexEndingBalance: number | null;
 }>;
 export declare const SetAmexAnchorBody: zod.ZodObject<{
     balance: zod.ZodNumber;
@@ -7826,12 +8127,12 @@ export declare const SetAmexAnchorResponse: zod.ZodObject<{
     source: zod.ZodEnum<["debt", "anchor", "computed", "missing"]>;
 }, "strip", zod.ZodTypeAny, {
     source: "debt" | "anchor" | "computed" | "missing";
-    amexEndingBalance: number | null;
     asOf: string;
+    amexEndingBalance: number | null;
 }, {
     source: "debt" | "anchor" | "computed" | "missing";
-    amexEndingBalance: number | null;
     asOf: string;
+    amexEndingBalance: number | null;
 }>;
 export declare const DeleteAmexAnchorResponse: zod.ZodObject<{
     ok: zod.ZodBoolean;
@@ -8687,29 +8988,29 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         }, "strip", zod.ZodTypeAny, {
             plaidAccountId: string;
             count: number;
-            accountName: string | null;
-            totalAmount: string;
-            minOccurredOn: string;
-            maxOccurredOn: string;
             items: {
                 occurredOn: string;
                 description: string | null;
                 amount: string;
                 plaidTransactionId: string;
             }[];
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
         }, {
             plaidAccountId: string;
             count: number;
-            accountName: string | null;
-            totalAmount: string;
-            minOccurredOn: string;
-            maxOccurredOn: string;
             items: {
                 occurredOn: string;
                 description: string | null;
                 amount: string;
                 plaidTransactionId: string;
             }[];
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
         }>, zod.ZodNull]>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
@@ -8725,16 +9026,16 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         cleanupDetails?: {
             plaidAccountId: string;
             count: number;
-            accountName: string | null;
-            totalAmount: string;
-            minOccurredOn: string;
-            maxOccurredOn: string;
             items: {
                 occurredOn: string;
                 description: string | null;
                 amount: string;
                 plaidTransactionId: string;
             }[];
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
         } | null | undefined;
     }, {
         id: string;
@@ -8750,16 +9051,16 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         cleanupDetails?: {
             plaidAccountId: string;
             count: number;
-            accountName: string | null;
-            totalAmount: string;
-            minOccurredOn: string;
-            maxOccurredOn: string;
             items: {
                 occurredOn: string;
                 description: string | null;
                 amount: string;
                 plaidTransactionId: string;
             }[];
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
         } | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
@@ -8777,16 +9078,16 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         cleanupDetails?: {
             plaidAccountId: string;
             count: number;
-            accountName: string | null;
-            totalAmount: string;
-            minOccurredOn: string;
-            maxOccurredOn: string;
             items: {
                 occurredOn: string;
                 description: string | null;
                 amount: string;
                 plaidTransactionId: string;
             }[];
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
         } | null | undefined;
     }[];
 }, {
@@ -8804,16 +9105,16 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         cleanupDetails?: {
             plaidAccountId: string;
             count: number;
-            accountName: string | null;
-            totalAmount: string;
-            minOccurredOn: string;
-            maxOccurredOn: string;
             items: {
                 occurredOn: string;
                 description: string | null;
                 amount: string;
                 plaidTransactionId: string;
             }[];
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
         } | null | undefined;
     }[];
 }>;
@@ -9040,12 +9341,12 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             ledger: zod.ZodString;
             unexplained: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            bank: string;
             ledger: string;
+            bank: string;
             unexplained: string;
         }, {
-            bank: string;
             ledger: string;
+            bank: string;
             unexplained: string;
         }>>>;
     }, "strip", zod.ZodTypeAny, {
@@ -9078,8 +9379,8 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
         balanceDrift?: {
-            bank: string;
             ledger: string;
+            bank: string;
             unexplained: string;
         } | null | undefined;
     }, {
@@ -9112,8 +9413,8 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
         balanceDrift?: {
-            bank: string;
             ledger: string;
+            bank: string;
             unexplained: string;
         } | null | undefined;
     }>, "many">;
@@ -9148,8 +9449,8 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
         balanceDrift?: {
-            bank: string;
             ledger: string;
+            bank: string;
             unexplained: string;
         } | null | undefined;
     }[];
@@ -9184,8 +9485,8 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         refreshDisabledReason?: string | null | undefined;
         addedDescriptions?: string[] | undefined;
         balanceDrift?: {
-            bank: string;
             ledger: string;
+            bank: string;
             unexplained: string;
         } | null | undefined;
     }[];
@@ -9984,11 +10285,26 @@ export declare const GetSpineResponse: zod.ZodObject<{
     bank: zod.ZodObject<{
         balance: zod.ZodString;
         asOfDate: zod.ZodNullable<zod.ZodString>;
+        source: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"plaid">, zod.ZodLiteral<"manual">, zod.ZodLiteral<null>]>>;
+        lastContactAt: zod.ZodNullable<zod.ZodString>;
+        lastFailureAt: zod.ZodNullable<zod.ZodString>;
+        stale: zod.ZodBoolean;
+        staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
     }, "strip", zod.ZodTypeAny, {
+        source: "plaid" | "manual" | null;
         balance: string;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
         asOfDate: string | null;
     }, {
+        source: "plaid" | "manual" | null;
         balance: string;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
         asOfDate: string | null;
     }>;
     spentMonth: zod.ZodNumber;
@@ -10035,12 +10351,17 @@ export declare const GetSpineResponse: zod.ZodObject<{
     }>;
     reviewCount: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
+    asOf: string;
     debt: {
         payoffPct: number | null;
     };
-    asOf: string;
     bank: {
+        source: "plaid" | "manual" | null;
         balance: string;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
         asOfDate: string | null;
     };
     spentMonth: number;
@@ -10060,12 +10381,17 @@ export declare const GetSpineResponse: zod.ZodObject<{
     };
     reviewCount: number;
 }, {
+    asOf: string;
     debt: {
         payoffPct: number | null;
     };
-    asOf: string;
     bank: {
+        source: "plaid" | "manual" | null;
         balance: string;
+        lastContactAt: string | null;
+        lastFailureAt: string | null;
+        stale: boolean;
+        staleReason: "refresh_failed" | "old" | "manual_old" | null;
         asOfDate: string | null;
     };
     spentMonth: number;

@@ -66,6 +66,8 @@ import debtsRouter from "../routes/debts";
 // (C10) `/dashboard` owns the Reports "Total Debt" tile, so it joins the
 // parity set — its debt figure must agree with `/debts` on the same basis.
 import dashboardRouter from "../routes/dashboard";
+// `/forecast/bank-balance-explain` owns the bank freshness fields the spine carries.
+import bankBalanceExplainRouter from "../routes/bankBalanceExplain";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { householdTodayDate } from "../lib/householdClock";
 
@@ -81,6 +83,7 @@ app.use(billsRouter);
 app.use(reportsRouter);
 app.use(debtsRouter);
 app.use(dashboardRouter);
+app.use(bankBalanceExplainRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -377,9 +380,17 @@ afterAll(async () => {
   await cleanup();
 });
 
+type BankFreshness = {
+  source: "plaid" | "manual" | null;
+  lastContactAt: string | null;
+  lastFailureAt: string | null;
+  stale: boolean;
+  staleReason: "refresh_failed" | "old" | "manual_old" | null;
+};
+
 type Spine = {
   asOf: string;
-  bank: { balance: string; asOfDate: string | null };
+  bank: { balance: string; asOfDate: string | null } & BankFreshness;
   spentMonth: number;
   spentWeek: number;
   nextBill: { name: string; amount: string; dueDate: string } | null;
@@ -415,6 +426,23 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     // Not vacuous: the snapshot rolled forward over real ledger rows.
     expect(Number(spine.bank.balance)).toBeGreaterThan(0);
     expect(Number(spine.bank.balance)).not.toBe(4200);
+  });
+
+  it("bank freshness matches /forecast/bank-balance-explain (the same computeBankFreshness)", async () => {
+    const spine = await get<Spine>("/spine");
+    const explain = await get<{ freshness: BankFreshness }>(
+      "/forecast/bank-balance-explain",
+    );
+
+    const { source, lastContactAt, lastFailureAt, stale, staleReason } = spine.bank;
+    expect({ source, lastContactAt, lastFailureAt, stale, staleReason }).toEqual(
+      explain.freshness,
+    );
+    // Not vacuous: the fixture's snapshot was typed in, and the item behind its
+    // account has never synced, so there is no contact time and no failure.
+    expect(source).toBe("manual");
+    expect(lastContactAt).toBeNull();
+    expect(lastFailureAt).toBeNull();
   });
 
   it("forecast low point + runway match /forecast/cash-signal", async () => {
