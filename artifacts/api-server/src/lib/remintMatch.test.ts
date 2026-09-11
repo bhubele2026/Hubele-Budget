@@ -27,7 +27,7 @@ describe("laterRowIsNearer", () => {
 
   it("(PR4d-2) an exact tie goes to the earlier-dated row, whatever the list order", () => {
     expect(laterRowIsNearer([entry("X", "2026-09-11"), entry("NEW", "2026-09-09")], 0, "2026-09-10")).toBe(true);
-    // Same date: the tie is left to list order (either pick moves cash the same way).
+    // Same date: the tie is left to list order (without institution times either pick moves cash the same way).
     expect(laterRowIsNearer([entry("X", "2026-09-11"), entry("Y", "2026-09-11")], 0, "2026-09-10")).toBe(false);
   });
 

@@ -64,8 +64,12 @@ export type RemintBatchEntry = {
  * is nearer the candidate's date.
  *
  * (PR4d-2) An exact tie goes to the earlier-dated row. The snapshot already holds
- * rows dated before its day, so when a tie is truly ambiguous this errs toward
- * inserting the later-dated charge — cash understated, never overstated.
+ * rows dated before its day, so without institution times an ambiguous tie errs
+ * toward understating cash (or nets to the true figure). ⚠️ Not always with times:
+ * a re-mint carrying its old row's pre-read authorisation time is held by the
+ * snapshot rule, so if the separate charge wins the tie nothing offsets it and
+ * cash is overstated by one charge (PR4d-2 review, case T1). Rare: it needs a
+ * bank that sends times and a tie in one cursor batch.
  */
 export function laterRowIsNearer(
   batch: readonly RemintBatchEntry[],

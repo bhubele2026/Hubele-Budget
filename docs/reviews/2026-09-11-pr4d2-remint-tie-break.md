@@ -21,9 +21,12 @@ and `16b7720`, so older than PR4d's last commit).
 - **Ties go to the earlier-dated row** (`lib/remintMatch.ts` `laterRowIsNearer`).
   - The snapshot already holds rows dated before its day, so the earlier-dated row is the safer owner of the old row.
   - In the reviewer's case, NEW takes OLD's row and X is inserted after the read, so cash is **975.00**.
-  - In the mirror case, the re-mint dated later and the separate charge earlier, the separate charge takes the old row.
-    The re-mint is then inserted and counted, so cash is **understated** by 25.00, never overstated.
-  - Two rows on the same date are left to list order; either pick moves cash the same way.
+  - In the mirror case, the re-mint dated later and the separate charge earlier, the separate charge takes the old row
+    and the re-mint is inserted. Without institution times, cash is **understated** by 25.00 when the earlier-dated
+    row is on or before the snapshot day. After the snapshot day the two offset to the true figure.
+  - ⚠️ **With institution times a tie can still overstate** (case T1 under Review). This is rare; the tie is not
+    broken on time evidence yet.
+  - Two rows on the same date are left to list order. Without times, either pick moves cash the same way.
 - **Only the first copy of an id counts as a claimant** (`RemintBatchEntry.firstCopy`, set by `remintBatchEntries`).
   A later copy, from `added` then `modified` across poll walks, only updates the row the first copy wrote.
 - **The batch scan runs last** in both evidence predicates (`plaidSync.ts`). The result is the same with less work: it
@@ -34,8 +37,8 @@ and `16b7720`, so older than PR4d's last commit).
 
 ## Figures that should move
 
-- **Cash today:** the exact-tie case above, 1000.00 → **975.00**. The mirror tie now understates by one charge; before,
-  it depended on list order.
+- **Cash today:** the exact-tie case above, 1000.00 → **975.00**. Other ties now follow the earlier-dated rule instead
+  of list order. Without times they understate or come out right. With times, case T1 overstates.
 - **Nothing else.** The check order and the first-copy rule change no outcome in the tests. The first-copy rule only
   stops a later copy of an id from blocking an adoption, which left a duplicate (understated).
 
@@ -61,7 +64,31 @@ and `16b7720`, so older than PR4d's last commit).
 - **Landing bundle guard:** 572.5 KB of 580, unchanged.
 - **Web suite:** not run; no web or shared-library change.
 
+## Review
+
+**`ffb4c05`: APPROVE**, with one LOW to fix before merge (done here, wording only) and two NITs. The reviewer built
+tie arrangements on the cursor path (snapshot read four days ago, 1,000.00, all rows −25; S = the separate charge,
+R = OLD's re-mint):
+
+| Case | Cash | True | |
+|---|---|---|---|
+| T1: OLD dated snapshot day +2, on file before the read with an authorisation time; S at +1; R at +3 carrying that time | **1000.00** | 975.00 | overstated |
+| T2: OLD on the snapshot day; S at −1; R at +1; no times | 975.00 | 1000.00 | understated |
+| T3: as T1 with no times | 975.00 | 975.00 | correct |
+
+- **T1:** the re-mint's inherited pre-read authorisation time makes the snapshot rule hold it. Nothing offsets the
+  separate charge that won the tie, which also keeps a pre-read `created_at`. It needs a bank that sends times (Chase
+  rows mostly don't), a re-keyed row dated 2–4 days after the snapshot day and a same-amount charge a day on the
+  other side, all in one cursor batch. The backfill writes no time, so it cannot happen there.
+- **Wording corrected:** the docstring, this note and PR4d's limits no longer say "never overstated". The NITs are
+  folded into the mirror-case and same-date lines above.
+- **Not done: a time-evidence tie-break.** Prefer the incoming row whose real time equals the candidate's `occurred_at`.
+  That needs a time on `RemintBatchEntry` and `occurredAt` in the candidate select. Listed below.
+
 ## Left for later
+
+- **A time-evidence tie-break for re-mints** (T1 above): on a tie, prefer the incoming row whose real time matches the
+  candidate's `occurred_at`.
 
 - **PR4c** — a pending row superseded by its posted row leaves cash (design in the scratchpad: the pair's contribution
   depends on which half the snapshot held, and a false pair can overstate).

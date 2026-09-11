@@ -111,8 +111,9 @@ same amount, not on file when the batch started, and not naming a pending row. E
 - **Same-day, same-amount separate charges.** "Both stay" is proven only for different days. On the same day, the
   dedupe pass collapses them right after the cursor upsert (above).
 - **Batch tie-break limits** (updated by PR4d-2, `docs/reviews/2026-09-11-pr4d2-remint-tie-break.md`).
-  - An exact tie goes to the earlier-dated row. When the tie is truly ambiguous, this errs toward understating cash.
-    Two rows on the same date are left to list order; either pick moves cash the same way.
+  - An exact tie goes to the earlier-dated row. Without institution times, an ambiguous tie errs toward understating
+    cash, or nets to the true figure. With times it can overstate by one charge (PR4d-2 note, case T1). Two rows on
+    the same date are left to list order; without times either pick moves cash the same way.
   - A row can defer to a later, nearer row that never adopts. Each of these leaves a duplicate, and cash is
     understated:
     - the later row adopts a different gone row;
