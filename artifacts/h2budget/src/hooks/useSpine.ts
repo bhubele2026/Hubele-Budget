@@ -28,8 +28,9 @@ import { dataState, type DataState } from "@/lib/queryState";
  * a spine it never received. `updatedAt` is when the numbers on screen were
  * fetched, and `isFetching` says a request (a Retry, say) is in flight.
  *
- * `staleTime` is 60s: long enough that moving between pages never refetches,
- * short enough that the numbers can't visibly age during a session. Every
+ * `staleTime` is 60s. Moving between pages within a minute never refetches;
+ * after that, a page that mounts a new reader refetches once. It is short
+ * enough that the numbers can't visibly age during a session. Every
  * successful mutation invalidates it centrally (see the `mutationCache` in
  * App.tsx), so the staleTime never hides a write.
  */

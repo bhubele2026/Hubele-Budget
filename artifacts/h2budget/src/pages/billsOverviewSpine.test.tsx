@@ -27,8 +27,17 @@ vi.mock("@/hooks/useSpine", () => ({
 }));
 
 const summaryData: { current: unknown } = { current: undefined };
+// The summary query's error flag. With data it is a failed refresh; without, a
+// failed first load — the same split TanStack Query reports.
+const summaryError: { current: boolean } = { current: false };
 vi.mock("@workspace/api-client-react", () => ({
-  useGetBillsSummary: () => ({ data: summaryData.current, isLoading: false }),
+  useGetBillsSummary: () => ({
+    data: summaryData.current,
+    isLoading: false,
+    isLoadingError: summaryError.current && summaryData.current === undefined,
+    isRefetchError: summaryError.current && summaryData.current !== undefined,
+    refetch: () => {},
+  }),
   getGetBillsSummaryQueryKey: () => ["/api/bills/summary"],
 }));
 
@@ -91,6 +100,7 @@ afterEach(() => cleanup());
 beforeEach(() => {
   spineData.current = { ...SPINE };
   summaryData.current = summary();
+  summaryError.current = false;
 });
 
 describe("bills overview — the headline is the spine's", () => {
@@ -181,5 +191,55 @@ describe("bills overview — the month table is the summary's, to the cent", () 
     };
     render(<BillsOverviewPage />);
     expect(text("text-overview-committed")).toBe("0%");
+  });
+});
+
+describe("bills overview — no month drawn from a summary it does not have", () => {
+  const MONTH_FIGURES = [
+    "text-overview-income",
+    "text-overview-bills",
+    "text-overview-debt-min",
+    "text-overview-outflow",
+    "text-overview-net",
+  ];
+
+  it("while the summary loads: dashes, no Surplus chip, no meter, no 'No recurring bills'", () => {
+    summaryData.current = undefined;
+    render(<BillsOverviewPage />);
+    for (const id of MONTH_FIGURES) expect(text(id)).toBe("—");
+    expect(screen.queryByTestId("chip-net-state")).toBeNull();
+    expect(screen.queryByTestId("text-overview-committed")).toBeNull();
+    expect(text("bills-month-card")).not.toContain("spoken for");
+    expect(text("bills-biggest-card")).toContain("Loading bills…");
+    expect(text("bills-biggest-card")).not.toContain("No recurring bills");
+    expect(screen.queryByTestId("bills-refresh-banner")).toBeNull();
+  });
+
+  it("after a failed first load: says so with a Retry, and still invents no month", () => {
+    summaryData.current = undefined;
+    summaryError.current = true;
+    render(<BillsOverviewPage />);
+    expect(text("bills-refresh-banner")).toContain("Couldn't load");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    for (const id of MONTH_FIGURES) expect(text(id)).toBe("—");
+    expect(text("bills-biggest-card")).toContain("Couldn't load bills");
+  });
+
+  it("after a failed refresh: keeps the month and says the numbers are from earlier", () => {
+    summaryError.current = true;
+    render(<BillsOverviewPage />);
+    expect(text("bills-refresh-banner")).toContain("Couldn't refresh");
+    expect(text("text-overview-net")).toBe("$3,252.25");
+    expect(text("chip-net-state")).toBe("Surplus");
+  });
+
+  it("says 'nothing scheduled' only once the spine answers with no bill", () => {
+    spineData.current = undefined;
+    render(<BillsOverviewPage />);
+    expect(text("stat-next-bill")).not.toContain("nothing scheduled");
+    cleanup();
+    spineData.current = { nextBill: null, billsDueCount: 0 };
+    render(<BillsOverviewPage />);
+    expect(text("stat-next-bill")).toContain("nothing scheduled");
   });
 });

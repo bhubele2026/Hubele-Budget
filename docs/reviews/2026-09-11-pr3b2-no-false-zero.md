@@ -169,12 +169,19 @@ follow-up commit, except where noted:
   `isSignedIn` turns true. If it has not, the one ask gets a 401 too, and the page falls back to "Couldn't load
   these numbers" with Retry, as before this PR.
 
+**Second look:** the reviewer approved `820fffe`. It left two test-hygiene NITs, fixed in PR3b3:
+- `forecastOverview.test.tsx` now resets the spine state in `beforeEach`;
+- the `setInterval` spy in `dataState.test.tsx` is restored in a `finally`.
+
+Merged as `b6c32f7`.
+
 ## Left for later PRs
 
+Split again after this PR:
 - **PR3b3:**
-  - the Chase stats, Bills overview and the Reports tiles;
   - the Forecast page's snapshot meta line onto `FreshnessLine`, with the spine added to the 11 Forecast page
     test mocks;
-  - the Forecast page's own error banner ("Forecast refresh failed. Displayed figures may be out of date.") onto
-    the same wording as the others.
-- **PR3b4:** "Why this number?" on the Banking bank stat, from the typed explain response.
+  - the Forecast page's own error banner onto the same wording as the others;
+  - Bills overview.
+- **PR3b4:** the Chase stats and the Reports tiles.
+- **PR3b5:** "Why this number?" on the Banking bank stat, from the typed explain response.

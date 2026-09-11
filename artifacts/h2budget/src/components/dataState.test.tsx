@@ -159,14 +159,17 @@ describe("RefreshBanner", () => {
 
   it("runs the minute timer only while it shows an age", () => {
     const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
-    const minuteTimers = () =>
-      setIntervalSpy.mock.calls.filter(([, ms]) => ms === 60 * 1000).length;
-    render(<RefreshBanner state="loaded" updatedAt={ago(5 * MIN)} onRetry={() => {}} />);
-    render(<RefreshBanner state="failed" updatedAt={null} onRetry={() => {}} />);
-    expect(minuteTimers()).toBe(0);
-    render(<RefreshBanner state="refresh-failed" updatedAt={ago(5 * MIN)} onRetry={() => {}} />);
-    expect(minuteTimers()).toBe(1);
-    setIntervalSpy.mockRestore();
+    try {
+      const minuteTimers = () =>
+        setIntervalSpy.mock.calls.filter(([, ms]) => ms === 60 * 1000).length;
+      render(<RefreshBanner state="loaded" updatedAt={ago(5 * MIN)} onRetry={() => {}} />);
+      render(<RefreshBanner state="failed" updatedAt={null} onRetry={() => {}} />);
+      expect(minuteTimers()).toBe(0);
+      render(<RefreshBanner state="refresh-failed" updatedAt={ago(5 * MIN)} onRetry={() => {}} />);
+      expect(minuteTimers()).toBe(1);
+    } finally {
+      setIntervalSpy.mockRestore();
+    }
   });
 });
 

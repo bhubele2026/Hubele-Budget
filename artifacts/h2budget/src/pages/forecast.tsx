@@ -74,10 +74,11 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import { useToast } from "@/hooks/use-toast";
+import { useSpine } from "@/hooks/useSpine";
 import { ToastAction } from "@/components/ui/toast";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
-import { moneyFace } from "@/components/data-state";
+import { FreshnessLine, moneyFace } from "@/components/data-state";
 import { dataState } from "@/lib/queryState";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { householdDayOfAt } from "@/lib/householdDay";
@@ -309,6 +310,10 @@ export default function ForecastPage({
   });
   const { data: cashProjection, isLoading: cashProjectionLoading, isError: projectionError, refetch: refetchProjection } =
     cashProjectionQuery;
+  // The spine carries the server's freshness verdict for the bank card's
+  // snapshot line. It shares the app-wide spine cache, so it adds no endpoint,
+  // but mounting refetches a copy older than the spine's 60s staleTime.
+  const { data: spineData } = useSpine();
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
   const { data: recurringItems } = useListRecurringItems();
@@ -1692,7 +1697,7 @@ export default function ForecastPage({
   if (!data || !register) {
     return (
       <div className="space-y-4">
-        {forecastError ? <div role="alert" className={errorBanner}>Forecast could not load. <button className={btnLink} onClick={() => void refetchForecast()}>Retry forecast</button></div> : <Skeleton className="h-10 w-48" />}
+        {forecastError ? <div role="alert" className={errorBanner}>Couldn't load the forecast. <button type="button" className={btnLink} onClick={() => void refetchForecast()}>Retry forecast</button></div> : <Skeleton className="h-10 w-48" />}
         <Skeleton className="h-96 w-full" />
       </div>
     );
@@ -1855,7 +1860,9 @@ export default function ForecastPage({
       <PlaidReauthBanner />
       {(forecastError || projectionError) && (
         <div role="alert" className={errorBanner}>
-          <p>{data || cashProjection ? "Forecast refresh failed. Displayed figures may be out of date." : "Forecast could not load. Try again to see your projection."}</p>
+          {/* The bundle has loaded by here (a failed first load returns early
+              above), so "load" can only mean the projection never arrived. */}
+          <p>{projectionError && !cashProjection ? "Couldn't load the forecast." : "Couldn't refresh the forecast."}</p>
           <button type="button" className={btnLink} onClick={() => { void refetchForecast(); void refetchProjection(); }}>Retry forecast</button>
         </div>
       )}
@@ -2329,10 +2336,21 @@ export default function ForecastPage({
                   {data.bankSnapshot.name ?? "Checking"}
                   {data.bankSnapshot.mask ? ` ••${data.bankSnapshot.mask}` : ""} ·{" "}
                   {formatDate(householdDayOfAt(data.bankSnapshot.at))}
-                  <BankSnapshotFreshness
-                    source={data.bankSnapshot.source}
-                    at={data.bankSnapshot.at}
-                  />
+                  {/* The server's verdict when the spine describes this same
+                      snapshot. Until it answers, or if the two ever disagree on
+                      which snapshot is current, the plain timestamp label. */}
+                  {spineData?.bank?.source &&
+                  spineData.bank.asOfDate &&
+                  Date.parse(spineData.bank.asOfDate) === Date.parse(data.bankSnapshot.at) ? (
+                    <div>
+                      <FreshnessLine bank={spineData.bank} />
+                    </div>
+                  ) : (
+                    <BankSnapshotFreshness
+                      source={data.bankSnapshot.source}
+                      at={data.bankSnapshot.at}
+                    />
+                  )}
                 </>
               ) : (
                 <>No snapshot — using starting balance</>

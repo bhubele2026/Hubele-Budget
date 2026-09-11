@@ -5,7 +5,9 @@ import {
 } from "@workspace/api-client-react";
 import { useSpine } from "@/hooks/useSpine";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { RefreshBanner } from "@/components/data-state";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
+import { dataState } from "@/lib/queryState";
 import { card, cardHead, emptyNote, Foot, Help, Stat, td, tdNum } from "@/ui";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -25,9 +27,11 @@ const num = (v: string | number | null | undefined): number => {
  * is server-computed by `/bills/summary`; it carries figures the spine does not.
  */
 export default function BillsOverviewPage() {
-  const { data: summary } = useGetBillsSummary(undefined, {
+  const summaryQuery = useGetBillsSummary(undefined, {
     query: { queryKey: getGetBillsSummaryQueryKey(), staleTime: 5 * 60_000 },
   });
+  const summary = summaryQuery.data;
+  const summaryState = dataState(summaryQuery);
   const { data: spine } = useSpine();
   // ⚠️ `CssBars` sizes its label and value columns in pixels. At the desktop
   // widths those columns leave the bar ~900px; on a 390px phone they leave it
@@ -38,12 +42,16 @@ export default function BillsOverviewPage() {
   const nextBill = spine?.nextBill ?? null;
   const billsDueCount = spine?.billsDueCount;
 
+  // ⚠️ NO SUMMARY, NO MONTH. `num()` turns a missing figure into 0, so without
+  // this gate the card read five $0.00s, "Surplus", "Committed 0%" and "0¢ is
+  // already spoken for" while /bills/summary was still loading or had failed.
   const m = summary?.monthly;
   const income = num(m?.income);
   const bills = num(m?.bills);
   const debtMin = num(m?.debtMin);
   const outflow = num(m?.totalOutflow);
   const net = num(m?.net);
+  const show = (n: number) => (m ? formatCurrency(n) : "—");
 
   // Stable identity order (by id) — `CssBars` derives rank itself and slides
   // rows to it; re-sorting the array between renders would defeat the glide.
@@ -79,9 +87,12 @@ export default function BillsOverviewPage() {
           label="Next bill"
           value={nextBill ? formatCurrency(nextBill.amount) : "—"}
           hint={
+            // A hint is a claim too: "nothing scheduled" only once the spine has answered.
             nextBill
               ? `${nextBill.name} · ${formatDate(nextBill.dueDate)}`
-              : "nothing scheduled"
+              : spine
+                ? "nothing scheduled"
+                : undefined
           }
         />
         <Stat
@@ -93,6 +104,20 @@ export default function BillsOverviewPage() {
         />
       </div>
 
+      {/* Under the headline, not above it: that row is the spine's and has
+          likely loaded. This banner speaks for the month below. */}
+      <RefreshBanner
+        state={summaryState}
+        updatedAt={
+          summaryQuery.dataUpdatedAt
+            ? new Date(summaryQuery.dataUpdatedAt).toISOString()
+            : null
+        }
+        onRetry={() => void summaryQuery.refetch()}
+        refreshing={summaryQuery.isFetching ?? false}
+        data-testid="bills-refresh-banner"
+      />
+
       <div className="grid gap-4 lg:grid-cols-3">
         {/* ── This month ──────────────────────────────────────────────────── */}
         <div className={card} data-testid="bills-month-card">
@@ -103,12 +128,14 @@ export default function BillsOverviewPage() {
               minimums, computed server-side by /bills/summary. Net is income
               less everything that goes out.
             </Help>
-            <span
-              className={`chip ml-auto ${short ? "bad" : "ok"}`}
-              data-testid="chip-net-state"
-            >
-              {short ? "Short" : "Surplus"}
-            </span>
+            {m && (
+              <span
+                className={`chip ml-auto ${short ? "bad" : "ok"}`}
+                data-testid="chip-net-state"
+              >
+                {short ? "Short" : "Surplus"}
+              </span>
+            )}
           </div>
 
           <table className="w-full">
@@ -116,19 +143,19 @@ export default function BillsOverviewPage() {
               <tr>
                 <td className={td}>Income</td>
                 <td className={tdNum} data-testid="text-overview-income">
-                  {formatCurrency(income)}
+                  {show(income)}
                 </td>
               </tr>
               <tr>
                 <td className={td}>Recurring bills</td>
                 <td className={tdNum} data-testid="text-overview-bills">
-                  {formatCurrency(bills)}
+                  {show(bills)}
                 </td>
               </tr>
               <tr>
                 <td className={td}>Debt minimums</td>
                 <td className={tdNum} data-testid="text-overview-debt-min">
-                  {formatCurrency(debtMin)}
+                  {show(debtMin)}
                 </td>
               </tr>
               <tr>
@@ -137,7 +164,7 @@ export default function BillsOverviewPage() {
                   className={`${tdNum} text-neutral-500`}
                   data-testid="text-overview-outflow"
                 >
-                  {formatCurrency(outflow)}
+                  {show(outflow)}
                 </td>
               </tr>
               <tr>
@@ -146,39 +173,43 @@ export default function BillsOverviewPage() {
                 </td>
                 <td
                   className={`${tdNum} border-b-0 text-title font-semibold ${
-                    short ? "text-bad" : "text-brand-navy"
+                    m && short ? "text-bad" : "text-brand-navy"
                   }`}
                   data-testid="text-overview-net"
                 >
-                  {formatCurrency(net)}
+                  {show(net)}
                 </td>
               </tr>
             </tbody>
           </table>
 
-          {/* Where the outflow sits against income. A meter, not a ring — the
-              magnitude is the only thing being said. */}
-          <div className="px-4 pb-3">
-            <div className="flex items-baseline justify-between">
-              <span className="text-micro font-semibold uppercase tracking-wide text-neutral-500">
-                Committed
-              </span>
-              <span
-                className="font-mono text-label font-semibold tabular-nums text-brand-navy"
-                data-testid="text-overview-committed"
-              >
-                {committedPct}%
-              </span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-brand-line">
-              <div
-                className={`bar-sweep h-full rounded-full ${short ? "bg-bad" : "bg-brand-navy"}`}
-                style={{ width: `${Math.min(100, Math.max(0, committedPct))}%` }}
-              />
-            </div>
-          </div>
+          {m && (
+            <>
+              {/* Where the outflow sits against income. A meter, not a ring — the
+                  magnitude is the only thing being said. */}
+              <div className="px-4 pb-3">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-micro font-semibold uppercase tracking-wide text-neutral-500">
+                    Committed
+                  </span>
+                  <span
+                    className="font-mono text-label font-semibold tabular-nums text-brand-navy"
+                    data-testid="text-overview-committed"
+                  >
+                    {committedPct}%
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-brand-line">
+                  <div
+                    className={`bar-sweep h-full rounded-full ${short ? "bg-bad" : "bg-brand-navy"}`}
+                    style={{ width: `${Math.min(100, Math.max(0, committedPct))}%` }}
+                  />
+                </div>
+              </div>
 
-          <Foot>Of every income dollar, {committedPct}¢ is already spoken for.</Foot>
+              <Foot>Of every income dollar, {committedPct}¢ is already spoken for.</Foot>
+            </>
+          )}
         </div>
 
         {/* ── Biggest recurring bills ─────────────────────────────────────── */}
@@ -207,7 +238,14 @@ export default function BillsOverviewPage() {
               />
             </div>
           ) : (
-            <p className={emptyNote}>No recurring bills</p>
+            <p className={emptyNote}>
+              {/* "No recurring bills" is a claim: only once the summary has answered. */}
+              {summary
+                ? "No recurring bills"
+                : summaryState === "failed"
+                  ? "Couldn't load bills"
+                  : "Loading bills…"}
+            </p>
           )}
         </div>
       </div>
