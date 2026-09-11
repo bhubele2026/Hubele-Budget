@@ -18,6 +18,7 @@ import {
   type SpendTxn,
 } from "./spendingFilter";
 import { loadSupersededPendingIds } from "./supersededPending";
+import { addDaysISO, householdTodayISO } from "./householdClock";
 
 // The household only started tracking transactions on this date; ranges that
 // reach further back are clamped so day/total math is not diluted by empty
@@ -123,11 +124,13 @@ export async function buildSpendingFacts(
     replacedPendingIds?: ReadonlySet<string>;
   } = {},
 ): Promise<SpendingFacts> {
-  const today = new Date();
-  const defaultEnd = isoDate(today);
-  const back30 = new Date(today);
-  back30.setUTCDate(back30.getUTCDate() - 30);
-  const defaultStart = isoDate(back30);
+  // (PR2) The default window is the household's last 30 days, ending on the
+  // household's today (America/Chicago). It used to end on the UTC date, which
+  // between 7pm and midnight Central is already tomorrow: tomorrow's
+  // future-dated rows came in and the oldest day of the window fell out.
+  const todayISO = householdTodayISO();
+  const defaultEnd = todayISO;
+  const defaultStart = addDaysISO(todayISO, -30);
 
   let start = rangeStart || defaultStart;
   const end = rangeEnd || defaultEnd;

@@ -234,6 +234,20 @@ describe("Reports hub — one basis, no local money maths", () => {
     expect(tile).toContain("$1,200.00"); // spine.forecast.cashBuffer
   });
 
+  it("(PR3) shows a missing low point and buffer as —, never $0.00", () => {
+    // A spine whose forecast came back without its figures. The old tile fell
+    // back to 0 and read "Lowest $0.00 · buffer $0.00".
+    hub.spine = {
+      ...SPINE,
+      forecast: { ...SPINE.forecast, lowPoint: null, cashBuffer: undefined },
+    };
+    renderPage();
+    const tile = screen.getByTestId("reports-tile-cash-buffer").textContent ?? "";
+    expect(tile).toContain("Tight");
+    expect(tile).toContain("Lowest — · buffer —");
+    expect(tile).not.toContain("$0.00");
+  });
+
   it("quotes the server's real spend, not every outflow it can see", () => {
     renderPage();
     // realSpend.total, the same basis the Spending page one click away uses.
