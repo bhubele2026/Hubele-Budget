@@ -777,8 +777,16 @@ export async function buildForecastLedger(
       if (claimedTxnIds.has(row.id) || (o.replacedId && claimedTxnIds.has(o.replacedId))) return;
       // (PR6 second review) PR7's card-payment signals travel with the row, for
       // `plansPaidInFullByName`: only a real card payment pays a card's minimum.
-      // (Debt tag) So does the user's debt tag (PR7 rule 2).
+      // (Debt tag) So does the user's debt tag (PR7 rule 2) — ⚠️ (review M2) only on
+      // a Plaid row on the checking account. `POST /debts/:id/payments` writes a
+      // manual row tagged to the debt ("Payment — Chase Sapphire") for a payment the
+      // bank also shows as its own row; counting that tag let one payment pay two
+      // minimums (the log paid Sapphire by tag, the bank debit Freedom by name). A
+      // manual row's tag is ignored here, so the row is read exactly as before the tag
+      // rule. (`o.counts` already keeps out Plaid rows on other accounts.)
       const full = candidateRowsAll[i]!;
+      const bankTag =
+        full.debtId && row.plaidAccountId && row.plaidAccountId === configuredCheckingExternalId ? full.debtId : null;
       const candidate: MatchRow = {
         txnId: row.id,
         occurredOn: row.occurredOn,
@@ -786,17 +794,38 @@ export async function buildForecastLedger(
         description: row.description,
         isExternalCardPayment: full.isExternalCardPayment === true,
         pfcDetailed: full.pfcDetailed ?? null,
-        debtId: full.debtId ?? null,
+        debtId: bankTag,
       };
       if (row.occurredOn >= listRowFromISO) listingRows.push(candidate);
       if (row.occurredOn >= rowMatchFromISO) matchRows.push(candidate);
     });
     matches = matchPlansToRows(matchPlans, matchRows, notMatchPairs);
+    // ⭐ (Debt tag) A ROW THE USER TAGGED TO ONE DEBT IS NEVER A PAYMENT OF ANOTHER
+    // DEBT'S PLAN — a `debt:` minimum, or a recurring bill linked to a debt — even
+    // when the matcher paired them ("CHASE ONLINE PAYMENT" −45 tagged to Chase
+    // Freedom, a day after a $40 Chase Sapphire minimum). Such a pair (`tagConflict`):
+    //   - stays in `matches` as a suggestion, but (review M1) is never `offCurve`: a
+    //     row tagged to Freedom must not both pay Freedom's overdue minimum by tag
+    //     and take Sapphire's upcoming minimum off the curve;
+    //   - is not overdue evidence, and doesn't count as a named pair for the
+    //     earlier-unpaid rule below;
+    //   - doesn't use up its row, which stays free to pay its own debt by tag.
+    // Pairs whose row carries no tag, and plans with no debt, are untouched.
+    const planDebtId = (itemId: string): string | null =>
+      itemId.startsWith("debt:") ? itemId.slice("debt:".length) : (recurringById.get(itemId)?.debtId ?? null);
+    const rowDebtById = new Map([...matchRows, ...listingRows].map((r) => [r.txnId, r.debtId ?? null] as const));
+    const tagConflict = (m: PlanRowMatch): boolean => {
+      const rowDebt = rowDebtById.get(m.txnId) ?? null;
+      const planDebt = planDebtId(m.planItemId);
+      return !!rowDebt && !!planDebt && rowDebt !== planDebt;
+    };
     // (PR5 review) A later occurrence never leaves the curve on a row dated on or
     // after an earlier occurrence of the same item that no row paid.
     // (PR5 second review) Only a pair carrying the payee's name counts as paying an
     // occurrence: a coincidental nameless "low" pair never marks last month paid.
-    const pairedKeys = new Set(matches.filter((m) => m.confidence !== "low").map((m) => m.planKey));
+    const pairedKeys = new Set(
+      matches.filter((m) => m.confidence !== "low" && !tagConflict(m)).map((m) => m.planKey),
+    );
     const unpaidByItem = new Map<string, string[]>();
     for (const p of matchPlans) {
       if (pairedKeys.has(p.key)) continue;
@@ -807,30 +836,20 @@ export async function buildForecastLedger(
     const rowDateById = new Map(matchRows.map((r) => [r.txnId, r.occurredOn] as const));
     matches = matches.map((m) => {
       if (!m.offCurve) return m;
+      if (tagConflict(m)) return { ...m, offCurve: false };
       const rowDate = rowDateById.get(m.txnId) ?? "";
       const earlierUnpaid = (unpaidByItem.get(m.planItemId) ?? []).some(
         (d) => d < m.planDate && d <= rowDate,
       );
       return earlierUnpaid ? { ...m, offCurve: false } : m;
     });
-    // (Debt tag) A row the user tagged to one debt is never overdue evidence for
-    // ANOTHER debt's payment, even when the matcher paired them ("CHASE ONLINE
-    // PAYMENT" −45 tagged to Chase Freedom, a day after a $40 Chase Sapphire
-    // minimum). The pair stays in `matches` as a suggestion, untouched; only the
-    // evidence rule skips it, and the row stays free to pay its own debt below.
-    // A plan's debt: a minimum's own debt, or the debt a recurring bill is linked to.
-    const planDebtId = (itemId: string): string | null =>
-      itemId.startsWith("debt:") ? itemId.slice("debt:".length) : (recurringById.get(itemId)?.debtId ?? null);
-    const rowDebtById = new Map([...matchRows, ...listingRows].map((r) => [r.txnId, r.debtId ?? null] as const));
-    const isEvidence = (m: PlanRowMatch): boolean => {
-      if (m.ambiguous) return false;
-      const rowDebt = rowDebtById.get(m.txnId) ?? null;
-      const planDebt = planDebtId(m.planItemId);
-      return !(rowDebt && planDebt && rowDebt !== planDebt);
-    };
+    const isEvidence = (m: PlanRowMatch): boolean => !m.ambiguous && !tagConflict(m);
+    // (Debt tag, review M1) One row pays at most once: a row whose pair takes its
+    // plan off the curve (`offCurve`) or counts as overdue evidence is used up.
     // (PR6 review, M2) The older overdue occurrences pair with the rows the pass
-    // above left unpaired — for the lists only.
-    const usedRows = new Set(matches.filter(isEvidence).map((m) => m.txnId));
+    // above left unpaired — for the lists only (listing pairs never leave the curve,
+    // so only their evidence uses a row).
+    const usedRows = new Set(matches.filter((m) => m.offCurve || isEvidence(m)).map((m) => m.txnId));
     if (listingPlans.length > 0) {
       listingMatches = matchPlansToRows(
         listingPlans,
@@ -860,9 +879,9 @@ export async function buildForecastLedger(
   const probablyPaidKeys = new Set(matches.filter((m) => m.offCurve).map((m) => m.planKey));
   // ⭐ (PR6 review, H1) EVIDENCE THAT AN OVERDUE PLAN WAS PAID: a non-ambiguous pair
   // of any confidence (never a row tagged to another debt), or, for a debt
-  // minimum, a card payment naming the card or a row tagged to that debt. Read
-  // only for plans due on or before today (the plans loop); a plan due later
-  // still needs `offCurve`.
+  // minimum, a card payment naming the card or a checking row tagged to that debt.
+  // Read only for plans due on or before today (the plans loop); a plan due later
+  // still needs `offCurve` (never set on a pair whose row is tagged to another debt).
   const paidByKey = new Map<string, { txnId: string; txnAmount: number; confidence: string }>();
   for (const m of evidencePairs) {
     paidByKey.set(m.planKey, { txnId: m.txnId, txnAmount: m.txnAmount, confidence: m.confidence });
