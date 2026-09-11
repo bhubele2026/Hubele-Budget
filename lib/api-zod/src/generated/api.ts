@@ -1171,6 +1171,11 @@ export const GetTransactionsLedgerResponse = zod.object({
             .describe(
               "Dated after the household's today. Such a row has no running balance.",
             ),
+          stalePending: zod
+            .boolean()
+            .describe(
+              "Still pending and dated more than 14 days before the household's\ntoday. A label only: the row moves the balance as balanceReason\nsays. A leftover pending row its posted row could not replace\ncounts beside that posted row.\n",
+            ),
         }),
       ),
   ),

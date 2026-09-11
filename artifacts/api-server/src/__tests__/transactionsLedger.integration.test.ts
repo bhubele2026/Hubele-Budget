@@ -8,7 +8,9 @@
 // 2026-05-15 in Chicago. Smaller households cover the rest: the review's history
 // fixture (a replaced pending row, a logged payment beside its ACH, a held-ahead
 // charge, a future row), mask twins and manual rows, a PR4c pair, no snapshot,
-// 1,001 rows, and a row that moves while bulk review waits for its lock.
+// 1,001 rows, a row that moves while bulk review waits for its lock, and the
+// second review's fixture (stale pending rows, pending rows whose posted row is
+// dated after today, a held posted row whose pending half was not held).
 //
 // Two main-fixture rows sit where the snapshot rule and the old day rule
 // disagree, so today's balance proves which rule the ledger anchors on:
@@ -33,7 +35,8 @@ const NOSNAP_USER = `ledger-nosnap-${RUN}`;
 const BIG_USER = `ledger-big-${RUN}`;
 const REVIEW_USER = `ledger-review-${RUN}`;
 const CONC_USER = `ledger-conc-${RUN}`;
-const USERS = [MAIN_USER, EDGE_USER, NOSNAP_USER, BIG_USER, REVIEW_USER, CONC_USER];
+const STALE_USER = `ledger-stale-${RUN}`;
+const USERS = [MAIN_USER, EDGE_USER, NOSNAP_USER, BIG_USER, REVIEW_USER, CONC_USER, STALE_USER];
 const householdOf = new Map<string, string>();
 let actingUser = MAIN_USER;
 
@@ -69,6 +72,8 @@ import {
   GetTransactionsBalancesResponse,
   GetTransactionsLedgerResponse,
 } from "@workspace/api-zod";
+import { classifyCashRows, isInSnapshot } from "@workspace/avalanche-core";
+import { toCashRow } from "../lib/ledgerCashRows";
 import apiRouter from "../routes/index";
 import { createTestApp } from "./_helpers/createTestApp";
 import { createTestHousehold } from "./_helpers/testHousehold";
@@ -102,6 +107,8 @@ type Row = {
   replacedPendingId: string | null;
   heldAhead: boolean;
   afterToday: boolean;
+  stalePending: boolean;
+  pending: boolean;
   plaidAccountId?: string | null;
   source: string;
   reviewed: boolean;
@@ -197,6 +204,7 @@ const edgeIds = new Map<string, string>();
 
 const reviewIds = new Map<string, string>();
 let concIds: string[] = [];
+const staleIds = new Map<string, string>();
 
 async function cleanup(): Promise<void> {
   for (const u of USERS) {
@@ -521,6 +529,105 @@ async function seedReview(): Promise<void> {
   for (const r of inserted) reviewIds.set(keyByDescription.get(r.description)!, r.id);
 }
 
+/**
+ * The second review's fixture: a $1,000.00 snapshot read 05-15 10:00 in Chicago,
+ * today 05-20, bank balance 968.00 (1000 − the posted Target −20.00 − the
+ * pending coffee −12.00; every other row is held, replaced, or after today).
+ */
+async function seedStale(): Promise<void> {
+  const householdId = householdOf.get(STALE_USER)!;
+  const acct = await addAccount(STALE_USER, { institutionName: "Chase", mask: "1357", type: "depository", subtype: "checking" });
+  await setSnapshot(STALE_USER, acct.rowId, "1357", "1000.00");
+  const [fuel] = await db
+    .insert(budgetCategoriesTable)
+    .values({ userId: STALE_USER, householdId, name: "Fuel", kind: "expense", groupName: "Living" })
+    .returning();
+  const rows: Array<{
+    key: string;
+    day: string;
+    amount: string;
+    description: string;
+    pending?: boolean;
+    forecastFlag?: boolean;
+    categoryId?: string;
+    createdAt?: Date;
+    occurredAt?: string;
+  }> = [
+    // R1: a gas hold that posted lower. Pairing needs the posting at or above the
+    // hold, so both rows count; the hold was categorised, so no sweep deleted it.
+    { key: "gasHold", day: "2026-04-20", amount: "-100.00", pending: true, categoryId: fuel!.id, description: "SHELL OIL 57442" },
+    { key: "gasPosted", day: "2026-04-21", amount: "-45.00", description: "SHELL OIL 57442" },
+    // R1: pending rows dated 15 and 14 days before today.
+    { key: "pending15", day: "2026-05-05", amount: "-8.00", pending: true, description: "NEWSSTAND 0505" },
+    { key: "pending14", day: "2026-05-06", amount: "-7.00", pending: true, description: "CORNER STORE 0506" },
+    // R3: in the ledger before the read, dated the next day: held ahead.
+    { key: "heldPlain", day: "2026-05-16", amount: "-30.00", description: "SHELL OIL 0516", createdAt: new Date("2026-05-15T14:00:00Z") },
+    // R3: a posted row the snapshot rule holds on its own (its time is before the
+    // read) that replaced a pending row the rule does not hold: not held ahead.
+    { key: "targetPending", day: "2026-05-16", amount: "-20.00", pending: true, description: "TARGET STORE", createdAt: new Date("2026-05-16T16:00:00Z") },
+    {
+      key: "targetPosted",
+      day: "2026-05-16",
+      amount: "-20.00",
+      description: "TARGET STORE 0516",
+      createdAt: new Date("2026-05-16T18:00:00Z"),
+      occurredAt: "2026-05-15T14:59:31.000Z",
+    },
+    // R2: a pending row whose posted row is dated after today and flagged for the
+    // forecast. The bank balance reads that row, so the pending row counts 0 today.
+    { key: "wfPending", day: "2026-05-19", amount: "-9.00", pending: true, description: "WHOLE FOODS MARKET" },
+    { key: "wfPostedFlagged", day: "2026-05-22", amount: "-9.00", forecastFlag: true, description: "WHOLE FOODS MARKET 0522" },
+    // R2, the review's repro: a pending row dated today whose posted row is dated
+    // tomorrow and not flagged. The bank balance does not read that row, so the
+    // pending −12.00 counts today.
+    { key: "coffeePending", day: TODAY, amount: "-12.00", pending: true, description: "BLUE BOTTLE COFFEE" },
+    { key: "coffeePosted", day: "2026-05-21", amount: "-12.00", description: "BLUE BOTTLE COFFEE 0521" },
+  ];
+  const inserted = await db
+    .insert(transactionsTable)
+    .values(
+      rows.map((r) => ({
+        userId: STALE_USER,
+        householdId,
+        occurredOn: r.day,
+        occurredAt: r.occurredAt ?? null,
+        createdAt: r.createdAt ?? createdAtStartOfHouseholdDay(r.day),
+        description: r.description,
+        amount: r.amount,
+        pending: r.pending ?? false,
+        forecastFlag: r.forecastFlag ?? false,
+        categoryId: r.categoryId ?? null,
+        plaidAccountId: acct.externalId,
+        plaidTransactionId: `ptx-${RUN}-stale-${r.key}`,
+        source: "plaid",
+      })),
+    )
+    .returning({ id: transactionsTable.id, description: transactionsTable.description, occurredOn: transactionsTable.occurredOn });
+  const keyOf = new Map(rows.map((r) => [`${r.day}|${r.description}`, r.key]));
+  for (const r of inserted) staleIds.set(keyOf.get(`${r.occurredOn}|${r.description}`)!, r.id);
+}
+
+/**
+ * `heldAhead` the way dd8c1bb computed it: a second `classifyCashRows` run over
+ * the whole history, with the snapshot anchor, labelling a `held` row dated
+ * after the snapshot day.
+ */
+async function heldAheadTheOldWay(page: LedgerBody, rows: Row[]): Promise<Map<string, boolean>> {
+  const day = page.anchor.snapshotDay!;
+  const dbRows = await db
+    .select()
+    .from(transactionsTable)
+    .where(inArray(transactionsTable.id, rows.map((r) => r.id)));
+  const byId = new Map(dbRows.map((r) => [r.id, r]));
+  const oldestFirst = [...rows].reverse().map((r) => toCashRow(byId.get(r.id)!));
+  const result = classifyCashRows(oldestFirst, {
+    anchor: { at: new Date(page.anchor.snapshotAt!), day },
+    accountExternalId: page.account.plaidAccountIds[0] ?? null,
+    todayISO: page.anchor.today,
+  });
+  return new Map(result.rows.map((o) => [o.id, o.reason === "held" && o.occurredOn > day]));
+}
+
 async function waitForLockWait(): Promise<void> {
   for (let k = 0; k < 200; k++) {
     const res = await db.execute(
@@ -541,6 +648,7 @@ beforeAll(async () => {
   await seedMain();
   await seedEdge();
   await seedReview();
+  await seedStale();
   await db.insert(transactionsTable).values({
     userId: NOSNAP_USER,
     householdId: householdOf.get(NOSNAP_USER)!,
@@ -1140,6 +1248,119 @@ describe("scope edges", () => {
       const b = await get(`/transactions/balances?dates=${TODAY}`);
       expect(b.status).toBe(200);
       expect((b.json as { balances: unknown }).balances).toEqual([{ date: TODAY, balance: null }]);
+    } finally {
+      actingUser = MAIN_USER;
+    }
+  });
+});
+
+describe("second review (R1–R3)", () => {
+  it("R1: a pending row dated more than 14 days before today is labelled stalePending, and still moves the balance as before", async () => {
+    actingUser = STALE_USER;
+    try {
+      const rows = rowsOf(await walk("", 100));
+      expect(rows).toHaveLength(11);
+      const row = (key: string) => rows.find((r) => r.id === staleIds.get(key))!;
+      // The unmatched gas hold beside its lower posting: stale, and still counted
+      // at its full amount (the open decision; nothing moves in this PR).
+      expect(row("gasHold")).toMatchObject({ pending: true, stalePending: true, countsInBalance: true, balanceReason: "counted", balanceAmount: "-100.00" });
+      expect(row("gasPosted")).toMatchObject({ pending: false, stalePending: false, balanceAmount: "-45.00" });
+      // More than 14 days: 05-05 is stale, 05-06 (exactly 14) is not.
+      expect(row("pending15")).toMatchObject({ stalePending: true, balanceAmount: "-8.00" });
+      expect(row("pending14")).toMatchObject({ stalePending: false, balanceAmount: "-7.00" });
+      expect(rows.filter((r) => r.stalePending).map((r) => r.id).sort()).toEqual(
+        [staleIds.get("gasHold")!, staleIds.get("pending15")!].sort(),
+      );
+
+      // The label does not depend on why a row moves what it moves: the review
+      // fixture's replaced pending row (04-20) is stale too, at 0.00.
+      actingUser = REVIEW_USER;
+      const review = rowsOf(await walk("", 100));
+      expect(review.filter((r) => r.stalePending).map((r) => r.id)).toEqual([reviewIds.get("leftoverPending")]);
+      expect(review.find((r) => r.id === reviewIds.get("leftoverPending"))).toMatchObject({ balanceReason: "superseded", balanceAmount: "0.00" });
+    } finally {
+      actingUser = MAIN_USER;
+    }
+  });
+
+  it("R2: a pending row whose posted row is dated after today pairs only if the bank balance reads that row; today equals the spine and every earlier day is right", async () => {
+    actingUser = STALE_USER;
+    try {
+      const bank = await spineBalance();
+      expect(bank).toBe("968.00");
+      const pages = await walk("", 100);
+      const page = pages[0]!;
+      const rows = rowsOf(pages);
+      const row = (key: string) => rows.find((r) => r.id === staleIds.get(key))!;
+
+      expect(page.balanceToday).toBe(bank);
+      expect(page.balanceEnd).toBe(bank);
+      expect(row("coffeePending").runningBalance).toBe(bank);
+      expectChain(rows);
+
+      // The repro: the posted coffee is dated tomorrow and not flagged, so the
+      // bank balance never reads it and counts the pending −12.00 today. The
+      // register pairs only what the bank balance reads, so it counts it too.
+      expect(row("coffeePending")).toMatchObject({ countsInBalance: true, balanceReason: "counted", balanceAmount: "-12.00" });
+      expect(row("coffeePosted")).toMatchObject({ afterToday: true, runningBalance: null, balanceAmount: "-12.00", replacedPendingId: null });
+      // A flagged posted row after today IS read by the bank balance, which
+      // pairs it: the pending −9.00 counts 0, on the register as in the spine.
+      expect(row("wfPending")).toMatchObject({ countsInBalance: false, balanceReason: "superseded", balanceAmount: "0.00" });
+      expect(row("wfPostedFlagged")).toMatchObject({ afterToday: true, runningBalance: null, replacedPendingId: staleIds.get("wfPending") });
+
+      // Every row dated through today added back to 968.00, except the replaced
+      // pending rows: 968 + 100 + 45 + 8 + 7 + 30 + 20 + 12. Pairing across today
+      // gave 1,178.00 (the pending coffee at 0).
+      expect(page.balanceStart).toBe("1190.00");
+      const b = await get(`/transactions/balances?dates=2026-04-19,2026-05-15,2026-05-16,2026-05-18,2026-05-19,${TODAY},2026-05-21`);
+      expect(b.status, JSON.stringify(b.json)).toBe(200);
+      expect((b.json as { balances: unknown }).balances).toEqual([
+        { date: "2026-04-19", balance: "1190.00" },
+        // The snapshot's 1,000.00 plus the held-ahead −30.00, which sits on 05-16.
+        { date: "2026-05-15", balance: "1030.00" },
+        // 1,000.00 − the posted Target −20.00: what the bank held after 05-16.
+        // Pairing only rows through today (without the flagged row) would read
+        // 989.00 here: the pending −9.00 counted on 05-19.
+        { date: "2026-05-16", balance: "980.00" },
+        { date: "2026-05-18", balance: "980.00" },
+        // The day before today. Pairing across today read 968.00: 12.00 low.
+        { date: "2026-05-19", balance: "980.00" },
+        { date: TODAY, balance: bank },
+        { date: "2026-05-21", balance: null },
+      ]);
+
+      // Money out through today on balance amounts is the start less today.
+      const throughToday = (await get(`/transactions/ledger?to=${TODAY}&limit=1`)).json as LedgerBody;
+      expect(throughToday.totals).toEqual({ count: 9, moneyIn: "0.00", moneyOut: "222.00", net: "-222.00" });
+      expect(cents(throughToday.balanceStart) - cents(throughToday.balanceToday)).toBe(cents("222.00"));
+      // With no end date the rows after today are in the totals at their amounts,
+      // so the coffee's −12.00 is in twice until its posted row's day arrives and
+      // it pairs. Residual in the review note.
+      expect(page.totals).toEqual({ count: 11, moneyIn: "0.00", moneyOut: "243.00", net: "-243.00" });
+    } finally {
+      actingUser = MAIN_USER;
+    }
+  });
+
+  it("R3: heldAhead, now from isInSnapshot, is the anchored classifyCashRows run's label for every row of every fixture", async () => {
+    try {
+      for (const user of [MAIN_USER, REVIEW_USER, EDGE_USER, STALE_USER]) {
+        actingUser = user;
+        const pages = await walk("", 100);
+        const rows = rowsOf(pages);
+        const now = new Map(rows.map((r) => [r.id, r.heldAhead]));
+        expect(now, user).toEqual(await heldAheadTheOldWay(pages[0]!, rows));
+      }
+
+      actingUser = STALE_USER;
+      const rows = rowsOf(await walk("", 100));
+      const row = (key: string) => rows.find((r) => r.id === staleIds.get(key))!;
+      expect(row("heldPlain").heldAhead).toBe(true);
+      // Not vacuous: the snapshot rule holds the posted Target row on its own,
+      // but its pending half is not held, so it is not held ahead.
+      const [posted] = await db.select().from(transactionsTable).where(eq(transactionsTable.id, staleIds.get("targetPosted")!));
+      expect(isInSnapshot(toCashRow(posted!), SNAPSHOT_AT, "2026-05-15")).toBe(true);
+      expect(row("targetPosted")).toMatchObject({ heldAhead: false, replacedPendingId: staleIds.get("targetPending"), balanceAmount: "-20.00" });
     } finally {
       actingUser = MAIN_USER;
     }

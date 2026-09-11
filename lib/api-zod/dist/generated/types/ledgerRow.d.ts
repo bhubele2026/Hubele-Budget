@@ -39,5 +39,11 @@ export type LedgerRow = Transaction & {
     heldAhead: boolean;
     /** Dated after the household's today. Such a row has no running balance. */
     afterToday: boolean;
+    /** Still pending and dated more than 14 days before the household's
+  today. A label only: the row moves the balance as balanceReason
+  says. A leftover pending row its posted row could not replace
+  counts beside that posted row.
+   */
+    stalePending: boolean;
 };
 //# sourceMappingURL=ledgerRow.d.ts.map

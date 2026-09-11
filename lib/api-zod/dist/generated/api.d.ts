@@ -1592,6 +1592,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         replacedPendingId: zod.ZodNullable<zod.ZodString>;
         heldAhead: zod.ZodBoolean;
         afterToday: zod.ZodBoolean;
+        stalePending: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
         runningBalance: string | null;
         balanceAmount: string;
@@ -1600,6 +1601,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         replacedPendingId: string | null;
         heldAhead: boolean;
         afterToday: boolean;
+        stalePending: boolean;
     }, {
         runningBalance: string | null;
         balanceAmount: string;
@@ -1608,6 +1610,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         replacedPendingId: string | null;
         heldAhead: boolean;
         afterToday: boolean;
+        stalePending: boolean;
     }>>, "many">;
     nextCursor: zod.ZodNullable<zod.ZodString>;
     limit: zod.ZodNumber;
@@ -1716,6 +1719,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         replacedPendingId: string | null;
         heldAhead: boolean;
         afterToday: boolean;
+        stalePending: boolean;
     })[];
     nextCursor: string | null;
     matchingCount: number;
@@ -1785,6 +1789,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         replacedPendingId: string | null;
         heldAhead: boolean;
         afterToday: boolean;
+        stalePending: boolean;
     })[];
     nextCursor: string | null;
     matchingCount: number;

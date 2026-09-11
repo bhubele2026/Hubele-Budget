@@ -8,7 +8,13 @@ import {
   plaidItemsTable,
   transactionsTable,
 } from "@workspace/db";
-import { classifyCashRows, type CashRow, type CashRowOutcome } from "@workspace/avalanche-core";
+import {
+  classifyCashRows,
+  inForecast,
+  isInSnapshot,
+  type CashRow,
+  type CashRowOutcome,
+} from "@workspace/avalanche-core";
 import { computeCashSignal } from "./cashSignal";
 import { addDaysISO, householdDayOf, householdTodayISO } from "./householdClock";
 import {
@@ -38,6 +44,8 @@ import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
  *      counted row moves the register by its amount. A pending row its posted
  *      row replaced, a repeated Plaid transaction id, and a mask-twin row (not
  *      the snapshot's account) move it by 0. `totals` sum the same amounts.
+ *      Pairing reads the rows the bank balance reads: every row dated through
+ *      today and, after today, only rows flagged for the forecast.
  *
  *   3. ONE REGISTER, THROUGH TODAY. The balance after a row is the opening
  *      balance plus the running sum of those amounts in ledger order (oldest
@@ -49,11 +57,17 @@ import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
  *
  *   4. FILTERS IN SQL. Paging, counts and totals never see a partial list.
  *
- * ⚠️ OPEN, AND NOT A RULE HERE: a manual "Payment — <debt>" row that
- * `routes/debts.ts` writes beside the bank's own debit for the same payment
- * counts twice in history, as both count in the bank balance today. Whether one
- * of them should move the balance is Brad's decision (CLAUDE.md §1).
- * `registerAmount` below is where such a rule would go.
+ * ⚠️ OPEN, AND NOT RULES HERE: two double counts, both Brad's decisions
+ * (CLAUDE.md §1). `registerAmount` below is where a rule would go.
+ *   - A manual "Payment — <debt>" row that `routes/debts.ts` writes beside the
+ *     bank's own debit for the same payment counts twice in history, as both
+ *     count in the bank balance today.
+ *   - A pending row its posted row cannot replace (a hold that posts lower, a
+ *     posting above the pairing cap, a merchant name that changes) counts
+ *     beside it. Only a row categorised while pending survives the sync's
+ *     sweeps to do this. While the snapshot is fresh both rows are inside it, so
+ *     cash today does not move, but the register counts both. Such a row is
+ *     labelled `stalePending` once it is more than STALE_PENDING_DAYS old.
  *
  * ⚠️ WHAT THE REGISTER IS NOT: a replay of the bank's `available` balance. The
  * bank balance decides some rows by the instant the snapshot was read, and the
@@ -72,6 +86,17 @@ export const LEDGER_BALANCE_DATES_MAX = 120;
 export const BULK_REVIEW_MATCHING_MAX = 1000;
 /** The horizon `/spine` passes to `computeCashSignal`. `bankToday` does not depend on it; matching it keeps the call identical. */
 const SPINE_HORIZON_DAYS = 90;
+/**
+ * A pending row dated more than this many days before the household's today is
+ * labelled `stalePending` (PR13 second review, R1). A label only: it moves no
+ * number. PR14 flags these rows.
+ */
+export const STALE_PENDING_DAYS = 14;
+
+/** Still pending, and dated more than STALE_PENDING_DAYS days before `today`. */
+export function isStalePending(pending: boolean, occurredOn: string, today: string): boolean {
+  return pending && occurredOn < addDaysISO(today, -STALE_PENDING_DAYS);
+}
 
 export class LedgerRequestError extends Error {
   constructor(
@@ -407,10 +432,14 @@ export type Register = {
  * so no row is `held` and none is `adjusted`: every row the cash rule counts
  * moves the register by its full amount, and every other row by 0.
  *
- * ⚠️ OPEN — Brad's decision (CLAUDE.md §1): a manual "Payment — <debt>" row
- * logged beside the bank's own debit for that payment. Both count today, here
- * and in the bank balance. A rule for it belongs here, as one more reason that
- * moves a row by 0, and in the bank balance's rule at the same time.
+ * ⚠️ OPEN — Brad's decisions (CLAUDE.md §1), two of them:
+ *   - a manual "Payment — <debt>" row logged beside the bank's own debit for
+ *     that payment. Both count today, here and in the bank balance;
+ *   - a leftover pending row its posted row cannot replace (`stalePending`
+ *     after STALE_PENDING_DAYS). Both count here; the proposal is to count a
+ *     stale one as 0.
+ * A rule for either belongs here, as one more reason that moves a row by 0, and
+ * in the bank balance's rule at the same time.
  */
 function registerAmount(
   outcome: CashRowOutcome,
@@ -448,6 +477,7 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
       source: t.source,
       plaidAccountId: t.plaidAccountId,
       plaidTransactionId: t.plaidTransactionId,
+      forecastFlag: t.forecastFlag,
     })
     .from(t)
     .where(and(eq(t.householdId, scope.householdId), bankRowWhere(scope.plaidAccountIds)))
@@ -467,22 +497,51 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
     plaidTransactionId: r.plaidTransactionId ?? null,
   }));
   const today = scope.anchor.today;
-  const opts = { accountExternalId: scope.accountExternalId, todayISO: today };
-  const unanchored = classifyCashRows(cashRows, { ...opts, anchor: null });
-  const snapshotDay = scope.anchor.snapshotDay;
-  const anchored =
-    scope.anchor.snapshotAt && snapshotDay
-      ? classifyCashRows(cashRows, { ...opts, anchor: { at: new Date(scope.anchor.snapshotAt), day: snapshotDay } })
+
+  // ⭐ WHICH ROWS PAIR (second review, R2). `bankToday` reads every row dated
+  // through today and, after today, only rows flagged for the forecast
+  // (`inForecast`). A posted row it does not read cannot replace a pending row
+  // for it, so that pending row counts today. The register pairs the same rows:
+  // the rows the bank balance reads go through one `classifyCashRows` run, and
+  // the unflagged rows after today through a run of their own, so none of them
+  // replaces a row the bank balance counts. Each row is classified once, and
+  // each run keeps ledger order.
+  const readByBank: number[] = [];
+  const unreadAfterToday: number[] = [];
+  rows.forEach((r, i) => (inForecast(r, today) ? readByBank : unreadAfterToday).push(i));
+  const outcomes: CashRowOutcome[] = new Array(rows.length);
+  for (const part of [readByBank, unreadAfterToday]) {
+    if (part.length === 0) continue;
+    classifyCashRows(
+      part.map((i) => cashRows[i]!),
+      { anchor: null, accountExternalId: scope.accountExternalId, todayISO: today },
+    ).rows.forEach((outcome, k) => {
+      outcomes[part[k]!] = outcome;
+    });
+  }
+
+  // `heldAhead` (R3): the anchored cash rule's `held`, for a row dated after the
+  // snapshot day. That rule holds a row when `isInSnapshot` holds it and, for a
+  // posted row that replaced a pending row, holds that pending row too. Pairing
+  // does not depend on the anchor, so the pairs above serve; a second, anchored
+  // `classifyCashRows` run over the whole history is not needed.
+  const anchor =
+    scope.anchor.snapshotAt && scope.anchor.snapshotDay
+      ? { at: new Date(scope.anchor.snapshotAt), day: scope.anchor.snapshotDay }
       : null;
+  const indexById = new Map(rows.map((r, i) => [r.id, i] as const));
+  const held = (i: number): boolean => anchor !== null && isInSnapshot(cashRows[i]!, anchor.at, anchor.day);
 
   const ordered: RegisterRow[] = [];
   let cum = 0;
   let throughToday = 0;
-  unanchored.rows.forEach((outcome, i) => {
+  for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
+    const outcome = outcomes[i]!;
     const { cents, counts, reason } = registerAmount(outcome, toCents(row.amount));
     cum += cents;
     if (row.occurredOn <= today) throughToday += cents;
+    const replacedIndex = outcome.replacedId === null ? undefined : indexById.get(outcome.replacedId);
     ordered.push({
       id: row.id,
       occurredOn: row.occurredOn,
@@ -491,10 +550,13 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
       balanceReason: reason,
       replacedPendingId: outcome.replacedId,
       heldAhead:
-        !!anchored && !!snapshotDay && anchored.rows[i]!.reason === "held" && row.occurredOn > snapshotDay,
+        anchor !== null &&
+        row.occurredOn > anchor.day &&
+        held(i) &&
+        (replacedIndex === undefined || held(replacedIndex)),
       cumCents: cum,
     });
-  });
+  }
   const tb = scope.anchor.todayBalance;
   return {
     byId: new Map(ordered.map((r) => [r.id, r])),
@@ -601,6 +663,8 @@ export type LedgerPageRow = Record<string, unknown> & {
   replacedPendingId: string | null;
   heldAhead: boolean;
   afterToday: boolean;
+  /** Still pending and dated more than STALE_PENDING_DAYS before today. A label only. */
+  stalePending: boolean;
 };
 
 export type LedgerPage = {
@@ -700,6 +764,7 @@ export async function readLedgerPage(
       replacedPendingId: reg?.replacedPendingId ?? null,
       heldAhead: reg?.heldAhead ?? false,
       afterToday: r.occurred_on > today,
+      stalePending: isStalePending(row.pending === true, r.occurred_on, today),
     });
   }
 

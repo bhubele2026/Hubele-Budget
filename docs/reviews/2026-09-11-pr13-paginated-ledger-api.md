@@ -3,10 +3,12 @@
 Plan PR13: the server half of the Chase ledger. The branch `feat/paginated-ledger-api` holds:
 - the original commits `36211281` (code) and `46ae246` (note);
 - a merge of `main` at `9e9deb8`, which brings in PR4c and PR4e;
-- the review-fix commit and this note.
+- the review-fix commit and this note;
+- a merge of `main` at `56596f3` (PR7), and the second review's fix commit.
 
 The page switch is PR14, so nothing on screen changes here. The review of `46ae246` came back **REQUEST CHANGES**
-(table at the end); this note describes the branch after the fixes.
+(table under Review), and a second review of `dd8c1bb` followed (Second review). This note describes the branch after
+both.
 
 ## The problem
 
@@ -27,7 +29,7 @@ The page switch is PR14, so nothing on screen changes here. The review of `46ae2
 - **Three endpoints** on a new router, `routes/transactionsLedger.ts`, with all the logic in `lib/bankLedger.ts`.
 - **The spec** is in `lib/api-spec/openapi.yaml`; the generated `api-zod` and `api-client-react` are committed.
 - **`GET /transactions` is untouched**, as are `lib/forecastLedger.ts`, `lib/cashSignal.ts`, `routes/spine.ts` and
-  the web app (identical to `main`).
+  the web app (identical to `main` at `56596f3`).
 
 ### Scope: settled by the server
 
@@ -44,6 +46,10 @@ The page switch is PR14, so nothing on screen changes here. The review of `46ae2
 
 - **The rule is PR4e's `classifyCashRows`,** run over every row in scope, with no snapshot anchor. It runs in
   `loadRegister`, one read per request.
+- **Pairing reads the rows `bankToday` reads** (second review, R2): every row dated through today and, after today,
+  only rows flagged for the forecast (`inForecast`). Those go through one run; the unflagged rows after today go
+  through a run of their own, so none of them replaces a pending row the bank balance counts. Each row is classified
+  once.
 
 | `balanceReason` | Moves the balance by |
 |---|---|
@@ -55,8 +61,11 @@ The page switch is PR14, so nothing on screen changes here. The review of `46ae2
 - **Every row carries these:** `balanceAmount`, `countsInBalance`, `balanceReason`, and `replacedPendingId` on a posted
   row that replaced a pending one.
 - **`totals` sum `balanceAmount`.**
-- **A second, anchored run only labels `heldAhead`:** a row dated after the snapshot day that the snapshot already
-  holds.
+- **`heldAhead` labels a row dated after the snapshot day that the snapshot already holds.** It is the anchored rule's
+  `held`: `isInSnapshot` holds the row and, for a posted row that replaced a pending row, holds that pending row too.
+  Pairing does not depend on the anchor, so the pairs above serve (second review, R3; no second run).
+- **`stalePending` labels a row still pending and dated more than `STALE_PENDING_DAYS` (14) days before today**
+  (second review, R1). A label only; see the open residual.
 - **`registerAmount` is the single place a new per-row rule plugs in.** One is expected (the open residual below).
 
 ### One register, through today
@@ -93,7 +102,7 @@ The response is `LedgerPage`:
 ```
 rows           LedgerRow[]   Transaction (annotated as GET /transactions does) +
                              runningBalance, balanceAmount, countsInBalance, balanceReason,
-                             replacedPendingId, heldAhead, afterToday
+                             replacedPendingId, heldAhead, afterToday, stalePending
 nextCursor     string | null
 limit          integer
 matchingCount  integer       every filter, reviewed included
@@ -139,8 +148,10 @@ account        { via, plaidAccountIds }
 - **Past days are a register; only today uses the snapshot rule.** Today equals `bankToday` exactly. Earlier days
   are the running sum of balance amounts, which differs from replaying `available` in the ways listed under
   Residuals.
-- **A logged debt payment beside its bank debit counts twice.** This is not fixed, deliberately. How a payment logged
-  in the app and its ACH are treated is Brad's decision (CLAUDE.md §1), and a survey of it is running.
+- **Two double counts are not fixed, deliberately.** Both are Brad's decisions (CLAUDE.md §1):
+  - a logged debt payment beside its bank debit (a survey of it is running);
+  - a leftover pending row that pairing cannot match to its posted row. It is labelled `stalePending` after 14 days;
+    see Residuals.
 - **Future rows are labelled, not capped.** They stay listed, and no balance is given for them or for any day after
   today.
 - **The boolean query parameters are strings,** and `via` and `balanceReason` are plain strings. The generated
@@ -177,7 +188,7 @@ bank balance 990.00.
 ## Must not change
 
 - **`GET /transactions`,** `lib/forecastLedger.ts`, `lib/cashSignal.ts`, `routes/spine.ts` and every file under
-  `artifacts/h2budget/src`: identical to `main` (`9e9deb8`).
+  `artifacts/h2budget/src`: identical to `main` (`56596f3`).
 - **Cash today, the forecast and spending:** no code on those paths changed, and the full API suite passes.
 - **No new dependency, no DDL, no production access.**
 - **The landing bundle:** unchanged by this branch (Verification).
@@ -193,6 +204,31 @@ bank balance 990.00.
 - **Where a rule would go.** `registerAmount` in `lib/bankLedger.ts`, as one more reason that moves a row by 0, and in
   `classifyCashRows` at the same time, so the bank balance and the register stay one rule.
 
+### ⚠️ Open: a leftover pending row its posted row cannot replace (Brad's decision)
+
+This is the second open double count; the first note called the logged payment the only one.
+
+- **What happens.** PR4c's pairing (`canSupersede`) replaces a pending row only when the posted row is on the same
+  account, dated within 7 days, at or above the pending amount and at most 1.30 × it + $1.00, with fuzzy-equal
+  descriptions. A pair outside that stays two rows, and both count in full:
+  - a gas hold that posts lower (−100.00 pending, −45.00 posted);
+  - a hotel that posts above the cap (−200.00 pending, −380.00 posted);
+  - a merchant name that changes (`SQ *BLUE BOTTLE` pending, `BLUE BOTTLE COFFEE SAN FRANCISCO CA` posted).
+- **Why the row is still there.** The sync deletes a pending row when Plaid removes it or it vanishes from the feed,
+  but neither the `removed` delete nor the vanished-pending sweep deletes a row the user has touched. So only a pending
+  row categorised while pending survives beside its posting.
+- **The effect.** Every register balance before the pending row reads higher by its amount, and money out counts it
+  twice. The reviewer measured `balanceStart` and `totals.moneyOut` both 306.00 off on three such pairs.
+- **Cash today does not move while the snapshot is fresh.** A Sync reads the balance after both rows, so
+  `isInSnapshot` holds both and they add 0 to `bankToday`. Only the register, which puts every row on its own date,
+  counts both.
+- **What this PR does.** It labels the row and changes no number. `stalePending` is true on a row that is still
+  pending and dated more than `STALE_PENDING_DAYS` (14) days before the household's today, whatever its
+  `balanceReason`. PR14 will flag these rows.
+- **Pending Brad's decision:** count a stale pending row (more than 14 days) as 0 in the register. Not implemented:
+  CLAUDE.md §1 says stop and ask before changing a financial rule. If approved, it goes in `registerAmount` and
+  `classifyCashRows` together, like the logged payment.
+
 ### Past days on the register versus the bank balance
 
 Today is exact in every case. Earlier days differ in three ways:
@@ -205,6 +241,14 @@ Today is exact in every case. Earlier days differ in three ways:
   full and the pending row at 0: the right history, but not the bank balance's arithmetic for that pair.
 - **Pairing window.** Pairing over the whole history can match a posted row with a different pending row than the
   bank balance's shorter window does (the lower edge `classifyCashRows` documents). The spine's figure does not move.
+
+After today (second review, R2):
+- **A pending row dated through today whose posted row is dated after today and not flagged** counts today, as in the
+  bank balance. The posted row is listed at its amount with no balance. So a `totals` range that reaches past today
+  counts that charge twice, until the posted row's day arrives and it pairs. In the fixture, money out with no end
+  date is 243.00, the coffee's 12.00 twice; through today it is 222.00, the start less today.
+- **`heldAhead` on such a posted row** uses only its own `isInSnapshot`, since it is no longer paired. That needs a
+  posted row dated after today that the snapshot holds, which is rare. No fixture row differs from the old label.
 
 ### Cursor edge cases
 
@@ -226,8 +270,9 @@ Today is exact in every case. Earlier days differ in three ways:
 **Per ledger request:**
 - `computeCashSignal`: the spine's full call.
 - Account resolution.
-- **The register load:** every row in scope (ten columns), classified twice in memory, once without an anchor and once
-  with it.
+- **The register load:** every row in scope (eleven columns), classified once in memory without an anchor, then
+  `isInSnapshot` on the rows dated after the snapshot day for `heldAhead`. Before the second review it was classified
+  twice, once without an anchor and once with it.
 - **The page query:** a filtered keyset read with no window.
 - **The aggregate query:** one pass over the rows in scope, with the non-counting rows passed in as a small JSON list.
 - The page's full rows, rules and aliases.
@@ -252,19 +297,33 @@ mounted routes.
 - **The cost grows with the account's whole history,** because the register reads every row. That is the price of H1.
 - **No production measurement was made.**
 
+**Second review (R3), measured the same way on 5,000 rows with 500 pending**, through the mounted routes. The
+figures in the responses were identical on every request.
+
+| Request | `dd8c1bb` + merge (two runs) | One run |
+|---|---|---|
+| First page, four runs | 878, 910, 873, 886 ms | 457, 448, 445, 441 ms |
+| 120 balances | 836 ms | 431 ms |
+
+Both runs returned money out 243,834.00, start 246,053.00 and today 2,219.00.
+
+The cost left is mostly pairing (`pairPendingWithPosted`), which grows with the pending rows.
+
 ### Other
 
 - **The copy of a repeated Plaid id that counts** is the first in ledger order. `bankToday` counts the first it reads.
   The two differ only with a duplicate id, which `transactions_plaid_txn_uq` forbids (not confirmed in production).
 - **Row annotation** is a copy of `GET /transactions`'s block, which stays untouched.
-- **Without a snapshot balance, every balance is null.**
+- **Without a snapshot time, every balance is null.** `balanceToday` is null when the snapshot has no time, even
+  with a balance.
 - **The fallback without a resolvable account is `isBankRow`'s manual rule,** which is broader than the page's
   `isChaseFallbackSource`.
 - **Search does not reach display names or merchant aliases.**
 
 ## Tests
 
-`__tests__/transactionsLedger.integration.test.ts` (19 tests), mounted through `routes/index.ts`.
+`__tests__/transactionsLedger.integration.test.ts` (22 tests: the 19 below the second review, unchanged, and its 3),
+mounted through `routes/index.ts`.
 - **Clock:** pinned to 2026-05-20 at noon in Chicago.
 
 **Main fixture:**
@@ -296,6 +355,24 @@ mounted routes.
 | Scope edges | The twin row is `not_bank` at 0.00; the pending coffee is `superseded`. Spine 930.00 equals `balanceToday` and the newest balance. **`balanceStart` is 1,000.00, the snapshot balance itself**, because every row is dated after the snapshot and none was in it. The totals are 70.00 out. Another household's account is 400 on GET and bulk. |
 | No snapshot | Rows and totals come back; every balance is null. |
 
+**Second review fixture:**
+- a $1,000.00 snapshot read 05-15 at 10:00 CT; bank balance 968.00;
+- an unmatched gas hold (−100.00 pending, categorised; −45.00 posted);
+- pending rows 15 and 14 days old;
+- a held-ahead charge, and a posted Target row the snapshot rule holds on its own but whose pending half it does not;
+- a pending −9.00 whose posted row is dated after today and flagged for the forecast;
+- the review's repro: a pending −12.00 today, its posted row tomorrow, not flagged.
+
+| Test | What it asserts |
+|---|---|
+| **R1: `stalePending`** | The gas hold and the 05-05 row are stale; 05-06 (exactly 14 days) is not; posted rows are not. The gas hold is still `counted` at −100.00. The review fixture's replaced pending row (04-20) is the only stale row there, at 0.00. |
+| **R2: pairing after today** | Spine 968.00 = `balanceToday` = end balance = the pending coffee's running balance. The coffee is `counted` at −12.00; its posted row is `afterToday` with no pair. The flagged row's pending half is `superseded`. Start 1,190.00. Balances: 04-19 1,190.00; 05-15 1,030.00; 05-16, 05-18 and 05-19 980.00; today 968.00; 05-21 null. Through today: money out 222.00 = start − today. No end date: 243.00. |
+| **R3: `heldAhead`** | For every row of the main, review, edge and second-review households, `heldAhead` equals the anchored `classifyCashRows` run's label. The held-ahead charge is labelled. The Target posted row, which `isInSnapshot` holds, is not. |
+
+**On `dd8c1bb` + the merge**, the three new tests gave: R1 fails (no `stalePending`); R2 fails (the coffee
+`superseded`; start 1,178.00; 05-15 1,018.00; 05-16 through today 968.00; money out 210.00 through today, 231.00 with
+no end date); R3 passes, which confirms the helper reproduces the old label.
+
 **On `46ae246`** (the new test file run against that commit's `lib/bankLedger.ts` and route, with this branch's
 generated schemas):
 
@@ -317,19 +394,20 @@ generated schemas):
 
 ## Verification
 
-All on the review-fix commit, which merged `main` at `9e9deb8`:
+**After the second review**, on the fix commit, which sits on the merge of `main` at `56596f3`:
 
-- **Full API suite** (local test database): **123 files, 974 pass, 8 todo**. That is `main`'s 122 files and 955
-  (PR4e's note) plus this file's 19.
-- **Web suite:** 118 files, 917 pass.
+- **Full API suite** (local test database): **126 files, 1,058 pass, 7 todo.**
+- **Ledger file plus spine parity, targeted:** 2 files, 34 pass. The 19 earlier ledger tests are unchanged.
+- **Web suite:** 119 files, 933 pass.
 - **Typecheck:** clean. **Build:** exit 0. **Entry-graph guard:** OK.
-- **Codegen:** re-run on the committed tree; the working tree stayed clean.
-- **Landing bundle:** **572,459 bytes (572.5 KB) of 580 KB**, the same byte count as `46ae246`. The PR4c and PR4e
-  files the merge brought in do not reach the landing path.
+- **Codegen:** re-run after the changes; the generated files did not change.
+- **Landing bundle:** **572.5 KB of 580 KB**, as before.
 - **Protected paths:** `routes/transactions.ts`, `lib/forecastLedger.ts`, `lib/cashSignal.ts`,
   `lib/ledgerCashRows.ts`, `routes/spine.ts`, `lib/avalanche-core` and `artifacts/h2budget/src` are identical to
-  `9e9deb8`.
-- **`main` has moved on** to `56596f3` (PR7) since the merge; it is not merged here.
+  `56596f3`.
+
+**On the first review-fix commit** (`main` at `9e9deb8`): full API suite 123 files, 974 pass, 8 todo; web 118 files,
+917 pass; typecheck, build, entry-graph and codegen clean; landing 572,459 bytes.
 
 ## Review
 
@@ -351,14 +429,37 @@ household isolation and the bulk guards were verified sound.
 | **NIT:** `moneyIn` counts zero-amount rows | `balance_amount > 0`. |
 | **NIT:** held-ahead charge on a stale snapshot | Labelled `heldAhead`, and explained under Residuals. |
 
+## Second review
+
+**`dd8c1bb`, a second independent review.** `main` at `56596f3` (PR7) is merged first; the fixes are one commit on top.
+
+**The merge.** Only the three generated `.d.ts.map` files conflicted; codegen and typecheck rebuilt them. PR7 added
+`pfcDetailed` to `Transaction`, which the ledger row copies, so the merge commit carries the regenerated
+`api-zod/src/generated/api.ts` (+6) and `dist/generated/api.d.ts` (+5) with the maps.
+
+| Finding | Before | After |
+|---|---|---|
+| **HIGH R1:** a leftover pending row its posted row cannot replace counts beside it; the note called the logged payment the only open double count | One open double count named. Nothing marks such a row. The reviewer measured `balanceStart` and money out both 306.00 off. | **(a)** The note names the second (Residuals): which pairs, why only a row categorised while pending survives, and why cash today does not move while the snapshot is fresh. **(b)** `stalePending` on every row (spec: required boolean): pending and dated more than `STALE_PENDING_DAYS` (14) days before today. No number moves. **(c)** Tested. **(d) Pending Brad's decision:** count a stale pending row as 0 in the register. Not implemented (CLAUDE.md §1). |
+| **LOW R2:** the register paired across today; `bankToday` reads only forecast-flagged rows after today | Fixture: a pending −12.00 today, its posted row tomorrow. The pending row `superseded`; start 1,178.00; the end of 05-19 968.00, 12.00 low; money out through today 210.00. | Pairing reads the rows `bankToday` reads. The pending row `counted`; start 1,190.00; 05-19 980.00; through today 222.00. Today 968.00, the spine's, in both. |
+| **LOW R3:** two classification runs per request | 878–910 ms per page, 836 ms for 120 balances (5,000 rows, 500 pending) | One run; `heldAhead` from `isInSnapshot`. 441–457 ms per page, 431 ms for 120 balances, with identical figures. The 19 earlier tests pass unchanged; `heldAhead` equals the old run's label on every fixture row. |
+| **NIT:** "without a snapshot balance" | | "without a snapshot time" (Other). |
+
+**⚠️ Deviation on R2.** The brief said to pair only rows dated through today. The bank balance also reads future rows
+flagged for the forecast, and pairs them. Pairing only rows through today would count a pending row whose flagged
+posted row is dated after today, which the bank balance does not count. The start and every day before that pending
+row would then read high by its amount: 9.00 on 05-15 through 05-18 in the fixture, where the test asserts 980.00.
+So the register pairs through today plus the flagged rows after today: the same set `bankToday` classifies, above its
+lower bound. The residual it leaves is under Residuals, "After today".
+
 ## Left for PR14 and after
 
 - **PR14 — move the Chase page onto these endpoints:**
   - paged rows and totals, running balances, `balances` for the trend chart, and bulk review;
   - retire the 1,000-row pull;
-  - show `heldAhead`, `afterToday` and rows that do not count;
+  - show `heldAhead`, `afterToday`, `stalePending` and rows that do not count;
   - do not hide rows the server lists.
 - **Brad:** how a logged debt payment and its bank debit count. Any rule changes `classifyCashRows` and
   `registerAmount` together.
+- **Brad:** whether a stale pending row (more than 14 days) counts 0 in the register.
 - **A ledger for the other checking accounts.**
 - **After PR14:** point `GET /transactions` at the shared annotation block.
