@@ -25,8 +25,11 @@ send `occurrenceDate`.
 unresolved and not confidently paid by a bank row, so it
 lands on the next business day. `due_today_not_posted`:
 due today, lands on the next business day (day 0 equals
-the bank). `dragged_past_due`: the pre-PR6 rule, kept for
-weekly-cadence expenses until PR8.
+the bank). `overdue_remainder_assumed_unpaid` (PR6 review):
+overdue, a bank row paid part of it, and the unpaid
+remainder lands on the next business day.
+`dragged_past_due`: the pre-PR6 rule, kept for
+weekly-cadence expenses due before today until PR8.
 `pre_window_on_first_day`: no snapshot, due before the
 window, placed on its first day.
 

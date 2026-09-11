@@ -571,6 +571,9 @@ describe("computeCashSignal — snapshot anchoring", () => {
     await db.insert(avalancheSettingsTable).values({
       userId: TEST_USER,
       manualExtra: "200",
+      // (PR6 review) The extra was set long before 04-30; an extra saved after a
+      // month end never drags that month's payment.
+      updatedAt: new Date("2026-01-05T18:00:00Z"),
     });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {

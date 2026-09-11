@@ -17,8 +17,11 @@ import {
   addDaysISO,
   classifyCashRows,
   isBankRow,
+  MATCH_EARLY_DAYS,
   matchPlansToRows,
+  plansPaidInFullByName,
   SUPERSEDE_MAX_DAYS,
+  type PaidInFull,
   type MatchPlan,
   type MatchRow,
   type PlanRowMatch,
@@ -69,12 +72,17 @@ export type LedgerPlan = {
    * - `due_today_not_posted` (PR6): due today (or, with a snapshot dated after
    *   today, up to the snapshot day) and unresolved, so it lands on the next
    *   business day and day 0 still equals the bank;
-   * - `dragged_past_due`: the pre-PR6 drag, kept only for weekly-cadence expenses
-   *   (`keepsPreSnapshotRule`) until PR8;
+   * - `overdue_remainder_assumed_unpaid` (PR6 review): overdue, a bank row paid
+   *   part of it (see `overdueAssumedPaid`), and only the unpaid remainder (over
+   *   $1) lands on the next business day;
+   * - `dragged_past_due`: the pre-PR6 drag of a weekly-cadence expense due BEFORE
+   *   today (`keepsPreSnapshotRule`, until PR8); due today it is
+   *   `due_today_not_posted` like any other plan;
    * - `pre_window_on_first_day`: no snapshot, and due before the window, so it lands on the window's first day.
    */
   assumption?:
     | "overdue_assumed_unpaid"
+    | "overdue_remainder_assumed_unpaid"
     | "due_today_not_posted"
     | "dragged_past_due"
     | "pre_window_on_first_day";
@@ -97,6 +105,33 @@ export type LedgerListedPlan = {
   label: string;
   /** Whole days from `dueDate` to today. */
   daysOverdue: number;
+};
+
+/**
+ * (PR6 review) An overdue plan the forecast treats as PAID because of a bank row:
+ * a non-ambiguous pair of any confidence, or (`card_payment`) a payment naming
+ * the card for at least a debt's minimum. Listed so it is never silent, and so
+ * the user can confirm or reject the pair.
+ */
+export type LedgerAssumedPaidPlan = {
+  planKey: string;
+  itemId: string;
+  occurrenceDate: string;
+  dueDate: string;
+  label: string;
+  daysOverdue: number;
+  /** Signed, like the plan. */
+  planAmount: number;
+  txnId: string;
+  /** Signed, like the row. */
+  txnAmount: number;
+  /** "high" | "medium" | "low" (the pair's), or "card_payment". */
+  confidence: string;
+  /**
+   * Signed; 0 when the row paid it all (or within $1). On the curve only while
+   * the plan is at most 14 days overdue (`overdue_remainder_assumed_unpaid`).
+   */
+  unpaidRemainder: number;
 };
 
 export type LedgerItem = LedgerActual | LedgerPlan;
@@ -136,6 +171,8 @@ export type ForecastLedger = {
   overdueOutsideForecast: LedgerListedPlan[];
   /** (PR6) Income due before today that has not arrived: not on the curve, listed. Sorted by due date. */
   incomeNotArrived: LedgerListedPlan[];
+  /** (PR6 review) Overdue expenses a bank row is taken to have paid. Sorted by due date. */
+  overdueAssumedPaid: LedgerAssumedPaidPlan[];
 };
 
 /** (PR6) How far back an overdue expense still drags onto the curve (#803's floor). */
@@ -183,10 +220,16 @@ export function keepsPreSnapshotRule(
  *     before the last Sync. In order, a plan occurrence is:
  *       1. resolved (matched / skipped / missed / dismissed; a `partial` keeps
  *          its remainder) → as the resolution says;
- *       2. paid by a bank row with an `offCurve` pair (PR5) → off the curve;
- *       3. an expense due in [today−14, today) → the next business day,
- *          `overdue_assumed_unpaid` (a suggestion that is not `offCurve` does
- *          not count as paid);
+ *       2. ⭐ (PR6 review) PAID ON EVIDENCE, once due: a non-ambiguous pair of
+ *          ANY confidence (PR5) to a checking row dated on or before today, or,
+ *          for a debt minimum, a payment naming the card for at least the
+ *          minimum → off the curve and listed in `overdueAssumedPaid`; an unpaid
+ *          remainder over $1 still drags (`overdue_remainder_assumed_unpaid`).
+ *          ⚠️ Accepted risk: an unrelated row of the same amount within 3 days
+ *          hides an unpaid bill — one plan per row, and always listed.
+ *          A plan due AFTER today still leaves the curve only on an `offCurve` pair;
+ *       3. an expense due in [today−14, today) with no such evidence → the next
+ *          business day, `overdue_assumed_unpaid`;
  *          due today → the next business day, `due_today_not_posted`, so day 0
  *          still equals the bank;
  *          older than 14 days → `overdueOutsideForecast`, off the curve;
@@ -287,6 +330,10 @@ export async function buildForecastLedger(
   );
   const expandStart = priorMonthStart < earliestAnchorOrFrom ? priorMonthStart : earliestAnchorOrFrom;
   const expandStartISO = fmtISO(expandStart);
+  // (PR6 review, M2) The off-curve lists reach back to the first of last month and
+  // no further, whatever the snapshot day or the window (a January snapshot used
+  // to list back to January).
+  const listFromISO = fmtISO(priorMonthStart);
 
   const recurring = await db
     .select()
@@ -327,7 +374,8 @@ export async function buildForecastLedger(
   // recurring item — same series the Bills page renders for "Debt
   // minimums", so the projection never double-counts and never misses an
   // obligation that was synced via Plaid liabilities.
-  const { expandDebtMin, expandAvalancheExtra, resolutionScheduleLookup } = await import("./debtMinSchedule");
+  const { expandDebtMin, expandAvalancheExtra, resolutionScheduleLookup, AVALANCHE_EXTRA_EVENT_ITEM_ID } =
+    await import("./debtMinSchedule");
   for (const d of debtsList) {
     events.push(
       ...expandDebtMin(
@@ -358,13 +406,19 @@ export async function buildForecastLedger(
   const scheduleOf: (itemId: string) => ResolutionSchedule | null =
     resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt);
   // The anchor date, else the day the item was created; a debt minimum starts
-  // on the debt's created day. The avalanche extra has no start.
+  // on the debt's created day. (PR6 review, M1) The Avalanche extra starts on the
+  // day its settings were last saved: setting a $500 extra on 05-05 must not drag
+  // a 04-30 payment nobody scheduled. ⚠️ Saving the settings again (raising the
+  // extra) moves that start to the save day.
   const itemStartISO = (itemId: string): string | null => {
     const r = recurringById.get(itemId);
     if (r) return r.anchorDate ?? householdDayOf(r.createdAt);
     if (itemId.startsWith("debt:")) {
       const d = debtById.get(itemId.slice("debt:".length));
       return d ? householdDayOf(d.createdAt) : null;
+    }
+    if (itemId === AVALANCHE_EXTRA_EVENT_ITEM_ID) {
+      return avaSettingsRow?.updatedAt ? householdDayOf(avaSettingsRow.updatedAt) : null;
     }
     return null;
   };
@@ -659,6 +713,12 @@ export async function buildForecastLedger(
   const planMatchToISO = addDaysISO(todayISO, 10);
   const rowMatchFromISO = addDaysISO(todayISO, -59);
   const matchPlans: MatchPlan[] = [];
+  // (PR6 review, M2) Overdue occurrences older than the matching window above
+  // (before today−45, back to the first of last month) pair for LISTING only, so a
+  // paid bill is never listed as overdue. Those pairs never reach `matches`.
+  const listingPlans: MatchPlan[] = [];
+  const listRowFromISO = addDaysISO(listFromISO, -MATCH_EARLY_DAYS);
+  const rowReadFromISO = listRowFromISO < rowMatchFromISO ? listRowFromISO : rowMatchFromISO;
   for (const ev of events) {
     const key = `${ev.itemId}|${ev.date}`;
     if (
@@ -670,15 +730,22 @@ export async function buildForecastLedger(
       continue;
     }
     const planDate = rescheduledByKey.get(key) ?? ev.date;
-    if (planDate < planMatchFromISO || planDate > planMatchToISO) continue;
+    if (planDate > planMatchToISO) continue;
+    const inMatchWindow = planDate >= planMatchFromISO;
+    const forListing = !inMatchWindow && planDate >= listFromISO && planDate <= dragCutoffISO && !keepsOldRule(ev);
+    if (!inMatchWindow && !forListing) continue;
     if (closedAtMovedDate(ev, planDate)) continue;
     // (PR6) An occurrence from before its item existed is never due, so it never
     // competes for a row (nor holds back a later occurrence's pair).
     if (planDate <= dragCutoffISO && !keepsOldRule(ev) && beforeItemExisted(ev)) continue;
-    matchPlans.push({ key, itemId: ev.itemId, occurrenceDate: ev.date, date: planDate, amount: ev.amount, label: ev.label });
+    const plan: MatchPlan = { key, itemId: ev.itemId, occurrenceDate: ev.date, date: planDate, amount: ev.amount, label: ev.label };
+    if (inMatchWindow) matchPlans.push(plan);
+    else listingPlans.push(plan);
   }
   let matches: PlanRowMatch[] = [];
-  if (matchPlans.length > 0) {
+  let listingMatches: PlanRowMatch[] = [];
+  let cardPayments: PaidInFull[] = [];
+  if (matchPlans.length > 0 || listingPlans.length > 0) {
     const candidateRowsAll = await db
       .select()
       .from(transactionsTable)
@@ -686,7 +753,7 @@ export async function buildForecastLedger(
         and(
           eq(transactionsTable.householdId, householdId),
           inForecastWhere(todayISO),
-          gte(transactionsTable.occurredOn, addDaysISO(rowMatchFromISO, -SUPERSEDE_MAX_DAYS)),
+          gte(transactionsTable.occurredOn, addDaysISO(rowReadFromISO, -SUPERSEDE_MAX_DAYS)),
           lte(transactionsTable.occurredOn, addDaysISO(todayISO, SUPERSEDE_MAX_DAYS)),
         ),
       );
@@ -697,12 +764,15 @@ export async function buildForecastLedger(
       todayISO,
     });
     const matchRows: MatchRow[] = [];
+    const listingRows: MatchRow[] = [];
     classified.rows.forEach((o, i) => {
       const row = candidateCashRows[i]!;
       if (!o.counts) return;
-      if (row.occurredOn < rowMatchFromISO || row.occurredOn > todayISO) return;
+      if (row.occurredOn < rowReadFromISO || row.occurredOn > todayISO) return;
       if (claimedTxnIds.has(row.id) || (o.replacedId && claimedTxnIds.has(o.replacedId))) return;
-      matchRows.push({ txnId: row.id, occurredOn: row.occurredOn, amount: row.amount, description: row.description });
+      const candidate: MatchRow = { txnId: row.id, occurredOn: row.occurredOn, amount: row.amount, description: row.description };
+      if (row.occurredOn >= listRowFromISO) listingRows.push(candidate);
+      if (row.occurredOn >= rowMatchFromISO) matchRows.push(candidate);
     });
     matches = matchPlansToRows(matchPlans, matchRows, notMatchPairs);
     // (PR5 review) A later occurrence never leaves the curve on a row dated on or
@@ -726,13 +796,53 @@ export async function buildForecastLedger(
       );
       return earlierUnpaid ? { ...m, offCurve: false } : m;
     });
+    // (PR6 review, M2) The older overdue occurrences pair with the rows the pass
+    // above left unpaired — for the lists only.
+    const usedRows = new Set(matches.filter((m) => !m.ambiguous).map((m) => m.txnId));
+    if (listingPlans.length > 0) {
+      listingMatches = matchPlansToRows(
+        listingPlans,
+        listingRows.filter((r) => !usedRows.has(r.txnId)),
+        notMatchPairs,
+      );
+      for (const m of listingMatches) if (!m.ambiguous) usedRows.add(m.txnId);
+    }
+    // (PR6 review, H1-R4) A debt minimum already due is paid by a payment that
+    // names the card and pays at least the minimum, even when no pair was found
+    // ($40 due, $812.40 paid). Overdue evidence only.
+    const pairedKeys2 = new Set(
+      [...matches, ...listingMatches].filter((m) => !m.ambiguous).map((m) => m.planKey),
+    );
+    const dueMinimums = [...matchPlans, ...listingPlans].filter(
+      (p) => p.itemId.startsWith("debt:") && p.date <= dragCutoffISO && !pairedKeys2.has(p.key),
+    );
+    if (dueMinimums.length > 0) {
+      cardPayments = plansPaidInFullByName(
+        dueMinimums,
+        listingRows.filter((r) => !usedRows.has(r.txnId)),
+        notMatchPairs,
+      );
+    }
   }
   // Only confident pairs take a plan off the curve; the rest are suggestions.
   const probablyPaidKeys = new Set(matches.filter((m) => m.offCurve).map((m) => m.planKey));
+  // ⭐ (PR6 review, H1) EVIDENCE THAT AN OVERDUE PLAN WAS PAID: a non-ambiguous pair
+  // of any confidence, or a card payment for a debt minimum. Read only for plans
+  // due on or before today (the plans loop); a plan due later still needs `offCurve`.
+  const paidByKey = new Map<string, { txnId: string; txnAmount: number; confidence: string }>();
+  for (const m of [...matches, ...listingMatches]) {
+    if (!m.ambiguous) paidByKey.set(m.planKey, { txnId: m.txnId, txnAmount: m.txnAmount, confidence: m.confidence });
+  }
+  for (const c of cardPayments) {
+    if (!paidByKey.has(c.planKey)) {
+      paidByKey.set(c.planKey, { txnId: c.txnId, txnAmount: c.txnAmount, confidence: "card_payment" });
+    }
+  }
 
   const plans: LedgerPlan[] = [];
   const overdueOutsideForecast: LedgerListedPlan[] = [];
   const incomeNotArrived: LedgerListedPlan[] = [];
+  const overdueAssumedPaid: LedgerAssumedPaidPlan[] = [];
   for (const ev of events) {
     const origKey = `${ev.itemId}|${ev.date}`;
     const rawEffectiveDate = rescheduledByKey.get(origKey) ?? ev.date;
@@ -744,9 +854,6 @@ export async function buildForecastLedger(
     // Plans the user explicitly marked missed/dismissed are likewise
     // dropped — the user has acknowledged they won't post.
     if (missedPlanKeys.has(origKey)) continue;
-    // (PR5) A plan a bank row probably paid is off the curve until the user
-    // confirms or rejects the suggestion; the row already counts.
-    if (probablyPaidKeys.has(origKey)) continue;
     // (PR6) A pre-PR6 Mark missed / Skip / match sent on the moved-to date.
     if (closedAtMovedDate(ev, rawEffectiveDate)) continue;
     // (PR5) A partial confirmation leaves only the unpaid remainder scheduled.
@@ -764,6 +871,11 @@ export async function buildForecastLedger(
     // (`keepsPreSnapshotRule`): (#666) a plan dated before the snapshot is
     // dropped, except (#688) an expense dated the day before it.
     const oldRule = keepsOldRule(ev);
+    // (PR5) A plan a bank row probably paid (`offCurve`) is off the curve until the
+    // user confirms or rejects the suggestion; the row already counts. This holds
+    // for a plan due after today, and for weekly-cadence expenses at any date.
+    // (PR6 review) A plan already due uses the evidence rule below instead.
+    if ((rawEffectiveDate > dragCutoffISO || oldRule) && probablyPaidKeys.has(origKey)) continue;
     if (oldRule && snapshotISO && rawEffectiveDate < snapshotISO) {
       const oneDayBeforeSnap = fmtISO(addDays(parseISO(snapshotISO), -1));
       const stillEligibleForDrag =
@@ -772,12 +884,12 @@ export async function buildForecastLedger(
         rawEffectiveDate <= dragCutoffISO;
       if (!stillEligibleForDrag) continue;
     }
-    // ⭐ (PR6) DUE ON OR BEFORE TODAY (or the snapshot day, when that is later),
-    // UNRESOLVED, AND NO BANK ROW CONFIDENTLY PAID IT (both handled above).
-    // Nothing lands on today, so day 0 equals the bank:
-    //   - expense due in [today−14, today) → next business day, `overdue_assumed_unpaid`.
-    //     A suggestion that is not `offCurve` never counts as paid, so an
-    //     unconfirmed guess cannot overstate cash;
+    // ⭐ (PR6) DUE ON OR BEFORE TODAY (or the snapshot day, when that is later) AND
+    // UNRESOLVED (handled above). Nothing lands on today, so day 0 equals the bank:
+    //   - (PR6 review) PAID ON EVIDENCE — a non-ambiguous pair of any confidence,
+    //     or a card payment for a debt minimum → off the curve, `overdueAssumedPaid`;
+    //     a remainder over $1 drags, `overdue_remainder_assumed_unpaid`;
+    //   - otherwise, expense due in [today−14, today) → next business day, `overdue_assumed_unpaid`;
     //   - expense due today → next business day, `due_today_not_posted`;
     //   - expense older than 14 days (#803's floor) → `overdueOutsideForecast`;
     //   - income due before today → `incomeNotArrived`; due today → off the curve,
@@ -801,8 +913,13 @@ export async function buildForecastLedger(
       }
       // Never due: an occurrence from before its item existed (weekly/biweekly
       // expansion walks back past the anchor, semimonthly ignores it, a debt
-      // minimum has no start), or a moved plan due before the expansion reaches.
-      if (beforeItemExisted(ev) || rawEffectiveDate < expandStartISO) continue;
+      // minimum starts on the debt's created day, the Avalanche extra on the day
+      // its settings were saved). (PR6 review, M2) Nothing due before the first
+      // of last month is dragged or listed.
+      if (beforeItemExisted(ev) || rawEffectiveDate < listFromISO) continue;
+      const daysOverdue = Math.round(
+        (todayDateOnly.getTime() - parseISO(rawEffectiveDate).getTime()) / 86_400_000,
+      );
       const listed: LedgerListedPlan = {
         planKey: origKey,
         itemId: ev.itemId,
@@ -810,12 +927,46 @@ export async function buildForecastLedger(
         dueDate: rawEffectiveDate,
         amount: planAmount,
         label: ev.label,
-        daysOverdue: Math.round(
-          (todayDateOnly.getTime() - parseISO(rawEffectiveDate).getTime()) / 86_400_000,
-        ),
+        daysOverdue,
       };
+      const paid = paidByKey.get(origKey);
       if (ev.amount >= 0) {
-        if (ev.amount > 0 && dueBeforeToday) incomeNotArrived.push(listed);
+        // (PR6 review, M2) A deposit that paired with the paycheck arrived, name or not.
+        if (ev.amount > 0 && dueBeforeToday && !paid) incomeNotArrived.push(listed);
+        continue;
+      }
+      if (paid) {
+        // ⭐ (PR6 review, H1) Paid for the curve. Only what the row did not cover drags.
+        const remainder = Math.max(
+          0,
+          Math.round((Math.abs(planAmount) - Math.abs(paid.txnAmount)) * 100) / 100,
+        );
+        overdueAssumedPaid.push({
+          planKey: origKey,
+          itemId: ev.itemId,
+          occurrenceDate: ev.date,
+          dueDate: rawEffectiveDate,
+          label: ev.label,
+          daysOverdue,
+          planAmount,
+          txnId: paid.txnId,
+          txnAmount: paid.txnAmount,
+          confidence: paid.confidence,
+          unpaidRemainder: remainder > 1 ? -remainder : 0,
+        });
+        if (remainder > 1 && rawEffectiveDate >= dragFloorISO) {
+          plans.push({
+            kind: "plan",
+            eventKind: ev.kind,
+            date: dragTargetISO,
+            originalDate: rawEffectiveDate,
+            occurrenceDate: ev.date,
+            amount: -remainder,
+            itemId: ev.itemId,
+            label: ev.label,
+            assumption: "overdue_remainder_assumed_unpaid",
+          });
+        }
         continue;
       }
       if (rawEffectiveDate < dragFloorISO) {
@@ -857,10 +1008,17 @@ export async function buildForecastLedger(
     });
   }
 
-  const byDueDate = (a: LedgerListedPlan, b: LedgerListedPlan): number =>
-    a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : a.planKey < b.planKey ? -1 : a.planKey > b.planKey ? 1 : 0;
+  // Due date, then label, then key. ⚠️ The key embeds a random item id, so two
+  // plans due the same day must be told apart by label first, or their order
+  // changes from one read to the next (the golden "ties" entry caught it).
+  type Sortable = { dueDate: string; label: string; planKey: string };
+  const byDueDate = (a: Sortable, b: Sortable): number =>
+    a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1
+      : a.label < b.label ? -1 : a.label > b.label ? 1
+        : a.planKey < b.planKey ? -1 : a.planKey > b.planKey ? 1 : 0;
   overdueOutsideForecast.sort(byDueDate);
   incomeNotArrived.sort(byDueDate);
+  overdueAssumedPaid.sort(byDueDate);
 
   for (const a of actuals) a.matched = matchedTxnIds.has(a.txnId);
   const items: LedgerItem[] = [...plans, ...actuals];
@@ -885,5 +1043,6 @@ export async function buildForecastLedger(
     matches,
     overdueOutsideForecast,
     incomeNotArrived,
+    overdueAssumedPaid,
   };
 }

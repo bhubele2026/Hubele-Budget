@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { CashSignalAssumedPaidPlan } from "./cashSignalAssumedPaidPlan";
 import type { CashSignalDailyItem } from "./cashSignalDailyItem";
 import type { CashSignalEventsItem } from "./cashSignalEventsItem";
 import type { CashSignalListedPlan } from "./cashSignalListedPlan";
@@ -40,11 +41,21 @@ export interface CashSignal {
   month) and by the item's start. Sorted by due date.
    */
     overdueOutsideForecast?: CashSignalListedPlan[];
-    /** (PR6, `income_not_arrived`) Unresolved income due before today that
-  no bank row confidently paid. Not on the curve: a paycheck that
-  has not landed never raises it. Sorted by due date.
+    /** (PR6, `income_not_arrived`) Unresolved income due before today with
+  no deposit paired to it (any confidence, not ambiguous). Not on the
+  curve: a paycheck that has not landed never raises it. Bounded by
+  the first of last month. Sorted by due date.
    */
     incomeNotArrived?: CashSignalListedPlan[];
+    /** (PR6 review) Overdue expenses the forecast treats as PAID because
+  of a bank row: a non-ambiguous pair of any confidence
+  (`matches`-style; older occurrences pair for this list only), or
+  `card_payment` — a payment naming the card for at least a debt's
+  minimum. Off the curve except `unpaidRemainder`, which drags while
+  the plan is at most 14 days overdue. Listed so an unrelated row
+  that hid an unpaid bill is never silent. Sorted by due date.
+   */
+    overdueAssumedPaid?: CashSignalAssumedPaidPlan[];
     /** (PR5) Plans a bank row probably paid, as suggestions for the user
   to confirm ("matched"/"partial") or reject ("not_match"). Only a
   match with `offCurve` true is off the forecast curve (the payee's

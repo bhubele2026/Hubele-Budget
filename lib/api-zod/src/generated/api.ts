@@ -3062,7 +3062,7 @@ export const GetForecastResponse = zod.object({
                 .string()
                 .nullish()
                 .describe(
-                  "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n",
+                  "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n",
                 ),
               occurrenceKey: zod
                 .string()
@@ -3149,7 +3149,45 @@ export const GetForecastResponse = zod.object({
           )
           .optional()
           .describe(
-            "(PR6, `income_not_arrived`) Unresolved income due before today that\nno bank row confidently paid. Not on the curve: a paycheck that\nhas not landed never raises it. Sorted by due date.\n",
+            "(PR6, `income_not_arrived`) Unresolved income due before today with\nno deposit paired to it (any confidence, not ambiguous). Not on the\ncurve: a paycheck that has not landed never raises it. Bounded by\nthe first of last month. Sorted by due date.\n",
+          ),
+        overdueAssumedPaid: zod
+          .array(
+            zod
+              .object({
+                planKey: zod
+                  .string()
+                  .describe(
+                    "`<itemId>|<occurrenceDate>` — the resolution key.",
+                  ),
+                itemId: zod.string(),
+                occurrenceDate: zod.string(),
+                dueDate: zod
+                  .string()
+                  .describe("The date it was due (after any reschedule)."),
+                label: zod.string(),
+                daysOverdue: zod.number(),
+                planAmount: zod.string().describe("Signed like the plan."),
+                txnId: zod.string(),
+                txnAmount: zod.string().describe("Signed like the row."),
+                confidence: zod
+                  .string()
+                  .describe(
+                    '\"high\", \"medium\" or \"low\" (the pair\'s), or \"card_payment\".',
+                  ),
+                unpaidRemainder: zod
+                  .string()
+                  .describe(
+                    'Signed; \"0.00\" when the row covered it (within $1). On the curve only while at most 14 days overdue.',
+                  ),
+              })
+              .describe(
+                "(PR6 review) An overdue plan occurrence the forecast treats as paid by a bank row.",
+              ),
+          )
+          .optional()
+          .describe(
+            "(PR6 review) Overdue expenses the forecast treats as PAID because\nof a bank row: a non-ambiguous pair of any confidence\n(`matches`-style; older occurrences pair for this list only), or\n`card_payment` — a payment naming the card for at least a debt's\nminimum. Off the curve except `unpaidRemainder`, which drags while\nthe plan is at most 14 days overdue. Listed so an unrelated row\nthat hid an unpaid bill is never silent. Sorted by due date.\n",
           ),
         matches: zod
           .array(
@@ -3362,7 +3400,7 @@ export const GetForecastCashSignalResponse = zod.object({
           .string()
           .nullish()
           .describe(
-            "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n",
+            "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n",
           ),
         occurrenceKey: zod
           .string()
@@ -3449,7 +3487,43 @@ export const GetForecastCashSignalResponse = zod.object({
     )
     .optional()
     .describe(
-      "(PR6, `income_not_arrived`) Unresolved income due before today that\nno bank row confidently paid. Not on the curve: a paycheck that\nhas not landed never raises it. Sorted by due date.\n",
+      "(PR6, `income_not_arrived`) Unresolved income due before today with\nno deposit paired to it (any confidence, not ambiguous). Not on the\ncurve: a paycheck that has not landed never raises it. Bounded by\nthe first of last month. Sorted by due date.\n",
+    ),
+  overdueAssumedPaid: zod
+    .array(
+      zod
+        .object({
+          planKey: zod
+            .string()
+            .describe("`<itemId>|<occurrenceDate>` — the resolution key."),
+          itemId: zod.string(),
+          occurrenceDate: zod.string(),
+          dueDate: zod
+            .string()
+            .describe("The date it was due (after any reschedule)."),
+          label: zod.string(),
+          daysOverdue: zod.number(),
+          planAmount: zod.string().describe("Signed like the plan."),
+          txnId: zod.string(),
+          txnAmount: zod.string().describe("Signed like the row."),
+          confidence: zod
+            .string()
+            .describe(
+              '\"high\", \"medium\" or \"low\" (the pair\'s), or \"card_payment\".',
+            ),
+          unpaidRemainder: zod
+            .string()
+            .describe(
+              'Signed; \"0.00\" when the row covered it (within $1). On the curve only while at most 14 days overdue.',
+            ),
+        })
+        .describe(
+          "(PR6 review) An overdue plan occurrence the forecast treats as paid by a bank row.",
+        ),
+    )
+    .optional()
+    .describe(
+      "(PR6 review) Overdue expenses the forecast treats as PAID because\nof a bank row: a non-ambiguous pair of any confidence\n(`matches`-style; older occurrences pair for this list only), or\n`card_payment` — a payment naming the card for at least a debt's\nminimum. Off the curve except `unpaidRemainder`, which drags while\nthe plan is at most 14 days overdue. Listed so an unrelated row\nthat hid an unpaid bill is never silent. Sorted by due date.\n",
     ),
   matches: zod
     .array(

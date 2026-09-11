@@ -116,6 +116,7 @@ export * from "./bulkUpdateTransactionResult";
 export * from "./bulkUpdateTransactionsInput";
 export * from "./bulkUpdateTransactionsResult";
 export * from "./cashSignal";
+export * from "./cashSignalAssumedPaidPlan";
 export * from "./cashSignalDailyItem";
 export * from "./cashSignalEventsItem";
 export * from "./cashSignalListedPlan";

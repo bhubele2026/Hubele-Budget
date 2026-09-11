@@ -121,6 +121,19 @@ describe("remapOrphanResolutions (PR6)", () => {
     expect(out).toBe(rows);
   });
 
+  it("(review H2) a date the bill was MOVED to is never an orphan: an old-card answer there stays put", () => {
+    // Storage is due the 28th; April 28 was moved to 05-02, and the pre-PR6 card
+    // wrote its Mark missed, match and Move on 05-02. None may land on May 28.
+    const storage = rec({ id: "storage", dayOfMonth: 28, anchorDate: "2026-01-28" });
+    const rows = [
+      { ...res("move", "storage", "2026-04-28", "rescheduled"), rescheduledTo: "2026-05-02" },
+      res("missed", "storage", "2026-05-02", "missed"),
+      res("matched", "storage", "2026-05-02", "matched"),
+      { ...res("move-again", "storage", "2026-05-02", "rescheduled"), rescheduledTo: "2026-05-10" },
+    ];
+    expect(remapOrphanResolutions(rows, lookup(storage))).toBe(rows);
+  });
+
   it("does not mutate its input", () => {
     const rows = [res("may", "gym", "2026-05-14")];
     const out = remapOrphanResolutions(rows, lookup(gym));

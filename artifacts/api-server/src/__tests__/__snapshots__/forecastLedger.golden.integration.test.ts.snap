@@ -93,6 +93,7 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot ti
     "lowestProjected": "860.00",
     "matches": [],
     "maxSafeExtra": "760.00",
+    "overdueAssumedPaid": [],
     "overdueOutsideForecast": [
       {
         "amount": "-40.00",
@@ -203,6 +204,7 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot ti
     "lowestProjected": "650.00",
     "matches": [],
     "maxSafeExtra": "550.00",
+    "overdueAssumedPaid": [],
     "overdueOutsideForecast": [
       {
         "amount": "-40.00",
@@ -461,6 +463,21 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
     },
   ],
   "maxSafeExtra": "540.00",
+  "overdueAssumedPaid": [
+    {
+      "confidence": "medium",
+      "daysOverdue": 19,
+      "dueDate": "2026-04-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "occurrenceDate": "2026-04-25",
+      "planAmount": "-38.00",
+      "planKey": "debt:<uuid>|2026-04-25",
+      "txnAmount": "-20.00",
+      "txnId": "<uuid>",
+      "unpaidRemainder": "-18.00",
+    },
+  ],
   "overdueOutsideForecast": [
     {
       "amount": "-1500.00",
@@ -515,15 +532,6 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
       "label": "Utility",
       "occurrenceDate": "2026-04-20",
       "planKey": "<uuid>|2026-04-20",
-    },
-    {
-      "amount": "-38.00",
-      "daysOverdue": 19,
-      "dueDate": "2026-04-25",
-      "itemId": "debt:<uuid>",
-      "label": "Golden Card minimum",
-      "occurrenceDate": "2026-04-25",
-      "planKey": "debt:<uuid>|2026-04-25",
     },
   ],
   "projectedExpenses": "3918.00",
@@ -621,6 +629,21 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
     },
   ],
   "maxSafeExtra": "2280.00",
+  "overdueAssumedPaid": [
+    {
+      "confidence": "medium",
+      "daysOverdue": 19,
+      "dueDate": "2026-04-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "occurrenceDate": "2026-04-25",
+      "planAmount": "-38.00",
+      "planKey": "debt:<uuid>|2026-04-25",
+      "txnAmount": "-20.00",
+      "txnId": "<uuid>",
+      "unpaidRemainder": "-18.00",
+    },
+  ],
   "overdueOutsideForecast": [
     {
       "amount": "-1500.00",
@@ -675,15 +698,6 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
       "label": "Utility",
       "occurrenceDate": "2026-04-20",
       "planKey": "<uuid>|2026-04-20",
-    },
-    {
-      "amount": "-38.00",
-      "daysOverdue": 19,
-      "dueDate": "2026-04-25",
-      "itemId": "debt:<uuid>",
-      "label": "Golden Card minimum",
-      "occurrenceDate": "2026-04-25",
-      "planKey": "debt:<uuid>|2026-04-25",
     },
   ],
   "projectedExpenses": "220.00",
@@ -862,6 +876,21 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
     },
   ],
   "maxSafeExtra": "540.00",
+  "overdueAssumedPaid": [
+    {
+      "confidence": "medium",
+      "daysOverdue": 19,
+      "dueDate": "2026-04-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "occurrenceDate": "2026-04-25",
+      "planAmount": "-38.00",
+      "planKey": "debt:<uuid>|2026-04-25",
+      "txnAmount": "-20.00",
+      "txnId": "<uuid>",
+      "unpaidRemainder": "-18.00",
+    },
+  ],
   "overdueOutsideForecast": [
     {
       "amount": "-1500.00",
@@ -916,15 +945,6 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
       "label": "Utility",
       "occurrenceDate": "2026-04-20",
       "planKey": "<uuid>|2026-04-20",
-    },
-    {
-      "amount": "-38.00",
-      "daysOverdue": 19,
-      "dueDate": "2026-04-25",
-      "itemId": "debt:<uuid>",
-      "label": "Golden Card minimum",
-      "occurrenceDate": "2026-04-25",
-      "planKey": "debt:<uuid>|2026-04-25",
     },
   ],
   "projectedExpenses": "1928.00",
@@ -1293,6 +1313,21 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
     },
   ],
   "maxSafeExtra": "540.00",
+  "overdueAssumedPaid": [
+    {
+      "confidence": "medium",
+      "daysOverdue": 19,
+      "dueDate": "2026-04-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "occurrenceDate": "2026-04-25",
+      "planAmount": "-38.00",
+      "planKey": "debt:<uuid>|2026-04-25",
+      "txnAmount": "-20.00",
+      "txnId": "<uuid>",
+      "unpaidRemainder": "-18.00",
+    },
+  ],
   "overdueOutsideForecast": [
     {
       "amount": "-1500.00",
@@ -1347,15 +1382,6 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
       "label": "Utility",
       "occurrenceDate": "2026-04-20",
       "planKey": "<uuid>|2026-04-20",
-    },
-    {
-      "amount": "-38.00",
-      "daysOverdue": 19,
-      "dueDate": "2026-04-25",
-      "itemId": "debt:<uuid>",
-      "label": "Golden Card minimum",
-      "occurrenceDate": "2026-04-25",
-      "planKey": "debt:<uuid>|2026-04-25",
     },
   ],
   "projectedExpenses": "4121.00",
@@ -1724,6 +1750,21 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
     },
   ],
   "maxSafeExtra": "755.00",
+  "overdueAssumedPaid": [
+    {
+      "confidence": "medium",
+      "daysOverdue": 19,
+      "dueDate": "2026-04-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "occurrenceDate": "2026-04-25",
+      "planAmount": "-38.00",
+      "planKey": "debt:<uuid>|2026-04-25",
+      "txnAmount": "-20.00",
+      "txnId": "<uuid>",
+      "unpaidRemainder": "-18.00",
+    },
+  ],
   "overdueOutsideForecast": [
     {
       "amount": "-1500.00",
@@ -1778,15 +1819,6 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
       "label": "Utility",
       "occurrenceDate": "2026-04-20",
       "planKey": "<uuid>|2026-04-20",
-    },
-    {
-      "amount": "-38.00",
-      "daysOverdue": 19,
-      "dueDate": "2026-04-25",
-      "itemId": "debt:<uuid>",
-      "label": "Golden Card minimum",
-      "occurrenceDate": "2026-04-25",
-      "planKey": "debt:<uuid>|2026-04-25",
     },
   ],
   "projectedExpenses": "4121.00",
@@ -1911,6 +1943,7 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot, 
   "lowestProjected": "1735.00",
   "matches": [],
   "maxSafeExtra": "1535.00",
+  "overdueAssumedPaid": [],
   "overdueOutsideForecast": [
     {
       "amount": "-65.00",
@@ -2144,6 +2177,7 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot: 
   "lowestProjected": "920.00",
   "matches": [],
   "maxSafeExtra": "620.00",
+  "overdueAssumedPaid": [],
   "overdueOutsideForecast": [
     {
       "amount": "-1500.00",
@@ -2277,6 +2311,7 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > snapshot with
   "lowestProjected": "1175.00",
   "matches": [],
   "maxSafeExtra": "1175.00",
+  "overdueAssumedPaid": [],
   "overdueOutsideForecast": [
     {
       "amount": "-60.00",
@@ -2510,6 +2545,7 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > ties and edge
   "lowestProjected": "1404.63",
   "matches": [],
   "maxSafeExtra": "1204.63",
+  "overdueAssumedPaid": [],
   "overdueOutsideForecast": [
     {
       "amount": "-70.00",
@@ -2914,6 +2950,21 @@ exports[`PR4b golden — the snapshot rule > counts rows shown to happen after t
     },
   ],
   "maxSafeExtra": "885.00",
+  "overdueAssumedPaid": [
+    {
+      "confidence": "medium",
+      "daysOverdue": 19,
+      "dueDate": "2026-04-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "occurrenceDate": "2026-04-25",
+      "planAmount": "-38.00",
+      "planKey": "debt:<uuid>|2026-04-25",
+      "txnAmount": "-35.00",
+      "txnId": "<uuid>",
+      "unpaidRemainder": "-3.00",
+    },
+  ],
   "overdueOutsideForecast": [
     {
       "amount": "-1500.00",
@@ -2968,15 +3019,6 @@ exports[`PR4b golden — the snapshot rule > counts rows shown to happen after t
       "label": "Utility",
       "occurrenceDate": "2026-04-20",
       "planKey": "<uuid>|2026-04-20",
-    },
-    {
-      "amount": "-38.00",
-      "daysOverdue": 19,
-      "dueDate": "2026-04-25",
-      "itemId": "debt:<uuid>",
-      "label": "Golden Card minimum",
-      "occurrenceDate": "2026-04-25",
-      "planKey": "debt:<uuid>|2026-04-25",
     },
   ],
   "projectedExpenses": "4211.00",

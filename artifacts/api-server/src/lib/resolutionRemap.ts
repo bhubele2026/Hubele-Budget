@@ -28,7 +28,12 @@ export type ResolutionSchedule = {
   occurrences: (from: Date, to: Date) => string[];
 };
 
-type Keyed = { recurringItemId: string | null; occurrenceDate: string | null };
+type Keyed = {
+  recurringItemId: string | null;
+  occurrenceDate: string | null;
+  status?: string;
+  rescheduledTo?: string | null;
+};
 
 const SAME_MONTH_CADENCES: ReadonlySet<string> = new Set(["monthly", "quarterly", "annual"]);
 /** Half a period, in whole days: the furthest an orphan may sit from the occurrence it maps to. */
@@ -89,8 +94,17 @@ export function remapOrphanResolutions<R extends Keyed>(
   scheduleOf: (itemId: string) => ResolutionSchedule | null,
 ): R[] {
   const ownKeys = new Set<string>();
+  // (PR6 review, H2) A date the item was MOVED to is not an orphan. Before PR6
+  // the Past-due card and the tooltip wrote a moved bill's Mark missed / match /
+  // Move on its moved-to date; treating that date as an orphan would carry the
+  // answer onto next month's bill (April 28 moved to 05-02, a 05-02 "matched"
+  // landing on May 28). The ledger's `closedAtMovedDate` reads it instead.
+  const movedToKeys = new Set<string>();
   for (const r of resolutions) {
     if (r.recurringItemId && r.occurrenceDate) ownKeys.add(`${r.recurringItemId}|${r.occurrenceDate}`);
+    if (r.status === "rescheduled" && r.recurringItemId && r.rescheduledTo) {
+      movedToKeys.add(`${r.recurringItemId}|${r.rescheduledTo}`);
+    }
   }
   // Earliest orphan first, so the result never depends on read order.
   const sources = [...ownKeys].sort((a, b) => {
@@ -104,6 +118,7 @@ export function remapOrphanResolutions<R extends Keyed>(
     const cut = key.lastIndexOf("|");
     const itemId = key.slice(0, cut);
     const date = key.slice(cut + 1);
+    if (movedToKeys.has(key)) continue;
     const schedule = scheduleOf(itemId);
     if (!schedule) continue;
     const day = dayOf(date);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   labelEvidence,
   matchPlansToRows,
+  plansPaidInFullByName,
   type MatchPlan,
   type MatchRow,
 } from "@workspace/avalanche-core";
@@ -167,5 +168,61 @@ describe("matchPlansToRows", () => {
       row("t", "2026-10-09", 2000, "ACME PAYROLL DIRECT DEP"),
     ]);
     expect(m).toMatchObject({ txnId: "t", confidence: "low", offCurve: false });
+  });
+});
+
+// ⭐ PR6 review (HIGH 1, R4) — a card's overdue minimum is paid by a payment that
+// names the card and pays at least the minimum. Overdue evidence only.
+describe("plansPaidInFullByName", () => {
+  const capOne = plan("debt:cap1", "2026-05-01", -40, "Capital One Platinum minimum");
+  const discover = plan("debt:disc", "2026-05-03", -38, "Discover It minimum");
+
+  it("pays each minimum with the payment naming its card, at least the minimum", () => {
+    const out = plansPaidInFullByName(
+      [capOne, discover],
+      [
+        row("t-cap", "2026-05-01", -812.4, "CAPITAL ONE MOBILE PMT"),
+        row("t-disc", "2026-05-02", -400, "DISCOVER E-PAYMENT 4411"),
+      ],
+    );
+    expect(out).toEqual([
+      { planKey: "debt:cap1|2026-05-01", txnId: "t-cap", txnAmount: -812.4 },
+      { planKey: "debt:disc|2026-05-03", txnId: "t-disc", txnAmount: -400 },
+    ]);
+  });
+
+  it("the matcher itself finds no pair for these (a named row is capped at max($25, 25%) off)", () => {
+    expect(
+      matchPlansToRows([capOne], [row("t-cap", "2026-05-01", -812.4, "CAPITAL ONE MOBILE PMT")]),
+    ).toEqual([]);
+  });
+
+  it("never pays with less than the minimum, another card's name, no name, or the wrong sign", () => {
+    const rows = [
+      row("under", "2026-05-01", -39.99, "CAPITAL ONE MOBILE PMT"),
+      row("other", "2026-05-01", -812.4, "DISCOVER E-PAYMENT"),
+      row("noname", "2026-05-01", -812.4, "ONLINE PAYMENT THANK YOU"),
+      row("refund", "2026-05-01", 812.4, "CAPITAL ONE MOBILE PMT"),
+    ];
+    expect(plansPaidInFullByName([capOne], rows)).toEqual([]);
+  });
+
+  it("only inside the matching window: 10 days before to 14 days after", () => {
+    const at = (d: string) => plansPaidInFullByName([capOne], [row("t", d, -100, "CAPITAL ONE PMT")]);
+    expect(at("2026-04-21")).toHaveLength(1);
+    expect(at("2026-05-15")).toHaveLength(1);
+    expect(at("2026-04-20")).toEqual([]);
+    expect(at("2026-05-16")).toEqual([]);
+  });
+
+  it("one row pays one minimum (nearest date first), and a rejected pair never counts", () => {
+    // Both minimums are inside the row's window (8 and 2 days away); the nearer one takes it.
+    const earlier = plan("debt:cap1", "2026-04-10", -40, "Capital One Platinum minimum");
+    const may = plan("debt:cap1", "2026-04-20", -40, "Capital One Platinum minimum");
+    const pay = row("t", "2026-04-18", -500, "CAPITAL ONE MOBILE PMT");
+    expect(plansPaidInFullByName([earlier, may], [pay])).toEqual([
+      { planKey: "debt:cap1|2026-04-20", txnId: "t", txnAmount: -500 },
+    ]);
+    expect(plansPaidInFullByName([may], [pay], new Set(["debt:cap1|2026-04-20#t"]))).toEqual([]);
   });
 });

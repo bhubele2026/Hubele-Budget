@@ -233,8 +233,9 @@ export type CashSignal = {
     originalDate: string;
     /**
      * (PR6) Why the plan is not on its due date: `overdue_assumed_unpaid`,
-     * `due_today_not_posted`, `dragged_past_due` (weekly-cadence expenses, until
-     * PR8) or `pre_window_on_first_day`; null on its own date.
+     * `overdue_remainder_assumed_unpaid` (PR6 review: a bank row paid part of it),
+     * `due_today_not_posted`, `dragged_past_due` (weekly-cadence expenses due
+     * before today, until PR8) or `pre_window_on_first_day`; null on its own date.
      */
     assumption: string | null;
     /** (PR6) `<itemId>|<occurrenceDate>` — the resolution key. */
@@ -246,6 +247,8 @@ export type CashSignal = {
   overdueOutsideForecast?: CashSignalListedPlan[];
   /** (PR6) Income due before today that has not arrived (`income_not_arrived`): off the curve. */
   incomeNotArrived?: CashSignalListedPlan[];
+  /** (PR6 review) Overdue expenses the forecast treats as paid by a bank row (never silent). */
+  overdueAssumedPaid?: CashSignalAssumedPaidPlan[];
   /**
    * (PR5) Plans a bank row probably paid: each one is off the curve until the
    * user confirms ("matched"/"partial") or rejects ("not_match") it. Amounts are
@@ -275,6 +278,20 @@ export type CashSignalListedPlan = {
   amount: string;
   label: string;
   daysOverdue: number;
+};
+
+export type CashSignalAssumedPaidPlan = {
+  planKey: string;
+  itemId: string;
+  occurrenceDate: string;
+  dueDate: string;
+  label: string;
+  daysOverdue: number;
+  planAmount: string;
+  txnId: string;
+  txnAmount: string;
+  confidence: string;
+  unpaidRemainder: string;
 };
 
 function r2(n: number): string {
@@ -446,6 +463,19 @@ export async function computeCashSignal(
     })),
     overdueOutsideForecast: ledger.overdueOutsideForecast.map(listedPlan),
     incomeNotArrived: ledger.incomeNotArrived.map(listedPlan),
+    overdueAssumedPaid: ledger.overdueAssumedPaid.map((p) => ({
+      planKey: p.planKey,
+      itemId: p.itemId,
+      occurrenceDate: p.occurrenceDate,
+      dueDate: p.dueDate,
+      label: p.label,
+      daysOverdue: p.daysOverdue,
+      planAmount: r2(p.planAmount),
+      txnId: p.txnId,
+      txnAmount: r2(p.txnAmount),
+      confidence: p.confidence,
+      unpaidRemainder: r2(p.unpaidRemainder),
+    })),
   };
 }
 
