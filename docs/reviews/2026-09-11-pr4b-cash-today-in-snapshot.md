@@ -75,6 +75,9 @@ reading the balance carry no evidence of being new, so rule 2 holds them.
 **So a snapshot-day row counts only on positive evidence: a real time after the read, on a row the ledger did not
 have at the read.**
 
+**The plan's headline case is not delivered for most Chase rows**: a purchase with no transaction time after the read
+still waits for the next Sync. The work-order owner (Codex) should accept this explicitly.
+
 **The plan's spec test changes accordingly.**
 - "A −$40 row created at 14:00 → $960" becomes "−$40 that **happened** at 14:07 and arrived at 14:10 → $960".
 - "Created at 14:00 with no transaction time" is now **$1,000**, and has its own test.
@@ -88,15 +91,41 @@ Outcomes change in only two cases, each decided on evidence:
 | Snapshot-day row with a real time after the read that arrived after the read | held | counts | moves by the row, on the day it happens |
 | Plaid charge dated 1–5 days after the snapshot day, in the ledger at the read (or with a real time before it) | counts | held | a double count removed |
 
-Every other row is decided exactly as PR4a decided it.
+Every other row is decided exactly as PR4a decided it. That is true of the rule. It is **not** true of every outcome:
+some Plaid sync writes put a newer charge on an older row, which moves it into case 2 (residuals below).
 
-**Residuals in those two cases:**
-- **Counts, but the bank may already have it.** An authorisation from before the read that the ledger never saw
-  pending, posted the same household day with a posting time after the read. The row is new to us, so no stored field
-  can show it.
-- **Held, but the anchor may not include it.** When Plaid returns no `available` balance, the snapshot is `current`,
-  which leaves pending charges out. A charge pending at the read and dated ahead is then held although the balance did
-  not include it.
+**Residuals in case 1: counts, but the bank may already have it.**
+- **Pending never delivered.** An authorisation from before the read that the ledger never saw pending posts the same
+  household day, with a posting time after the read. The row is new to us, so no stored field can show it.
+- **Pending delivered late.**
+  - A pending row arrives after the read carrying its authorisation time, which is before the read, so it is held.
+  - It posts the same day. The cursor re-key (`plaidSync.ts:1544`) overwrites `occurred_at` with the posting time,
+    which is after the read.
+  - The row now counts, although its authorisation was inside `available`. PR4a held it.
+- **Non-hour default times.** The placeholder filter only catches whole-hour times. A default time such as 23:59:59
+  would pass as real; with a late arrival it would count a purchase made before the read. Plaid documents only 00:00:00
+  placeholders.
+
+**Residuals in case 2: held, but the balance may not include it.** Each comes from a sync write that keeps an old
+`created_at` on a row that now stands for a newer charge.
+- **⚠️ Re-mint (MEDIUM, reproduced by the reviewer). Cash is overstated.**
+  - The Plaid re-mint check matches rows on the same account and amount within ±2 days (`plaidSync.ts:3645-3693`;
+    cursor twin `:1571-1621`). It moves an existing row onto a *different* real charge's id and date, keeping
+    `created_at`.
+  - Example: a balance of 1000.00 is read at 16:33Z on 09-10, and a real −$25 dated 09-10 is in the ledger an hour
+    earlier. A second, separate −$25 dated 09-11 arrives through the backfill, and the first row is re-minted onto it.
+  - `bankToday` shows **1000.00** on this branch. PR4a gives **975.00**, the true figure, but only by accident.
+  - It lasts until a newer snapshot moves past the row's date, up to five days. Same-amount charges within two days
+    are ordinary (parking, coffee, ATM withdrawals).
+  - **The re-mint tightening in PR4d ships next, before any other work reaches production.**
+- **Amount change on posting (LOW).** A −$48.20 pending row re-keyed to a −$55.00 posting dated ahead is held in full,
+  so the $6.80 difference never counts. PR4a double counted the whole −$55.00; PR4b overstates cash by $6.80
+  instead. This is not PR4c's "superseded pending" case.
+- **Backfill manual merge (LOW, reasoned, not run).** The backfill merges a Plaid row onto a manual row with the same
+  date and amount (`plaidSync.ts:3524-3548`). A checking row typed before the read and dated ahead takes Plaid's ids
+  and keeps its old `created_at`, so it is held. PR4a counted it.
+- **`current` fallback.** When Plaid returns no `available` balance, the snapshot is `current`, which leaves pending
+  charges out. A charge pending at the read and dated ahead is then held although the balance did not include it.
 - **Clock skew.** `created_at` is the database clock and `snapAt` the app clock.
   - Rule 3 compares them across the days between a pending row and its posting.
   - In rule 2 the comparison can only stop a row counting.
@@ -116,9 +145,12 @@ These are PR4a's behaviours, and PR4b does not change them. Some are common.
   - manual rows dated on the snapshot day are held whenever they were typed;
   - rows dated after it count whenever typed, including debt-payment rows written by `routes/debts.ts`.
 - **Webhook and cron heal backfills** do not move the snapshot. Their rows fall under the same rules.
-- **A backfilled or re-keyed row loses `occurred_at`.** Backfill inserts write null, and the re-key overwrites it with
-  the incoming value. Under this rule a missing time only ever means "held" on the snapshot day, and "decide by
-  arrival" ahead of it. It cannot create a double count. Preserving the value is sync write-path work for PR4d.
+- **Backfill and re-key rewrite `occurred_at`.**
+  - Backfill inserts write null. A missing time only ever means "held" on the snapshot day, and "decide by arrival"
+    ahead of it.
+  - The cursor re-key overwrites the stored time with the incoming one, which can be a posting time after the read.
+    That *can* count a row PR4a held ("pending delivered late", above).
+  - Preserving the authorisation time is sync write-path work for PR4d.
 - **How often each case occurs is not measured.** That needs a read-only production query Brad approves. The
   production database stays locked.
 
@@ -155,6 +187,7 @@ changed cases above:
 | LOW: `datetime` preferred over `authorized_datetime` | The rule no longer depends on which it is. An earlier time proves existence either way; a later time counts only together with a later arrival. The order is unchanged because it would change stored values. |
 | LOW: remaining risk broader than stated | Rewritten above. |
 | NIT: no tests for the WHERE guard or midnight | The WHERE guard is gone. The 21:30 Chicago read and the month-end window are unit-tested. |
+| Second look, `6494d57`: **APPROVE**, on condition the note discloses the re-mint overstatement (MEDIUM, reproduced), the re-key overwriting `occurred_at`, the amount-change and backfill-merge holds, and non-hour default times | All disclosed in the residuals above. PR4d's re-mint tightening is moved ahead of PR4c. |
 | Note overstatements | Corrected. Pending rows are dated by the day they occurred; there is no "seconds" claim; the web and avalanche-core are addressed above; reconciliation is described as a log only; measurement needs an approved production read. |
 
 ## Figures that should move
@@ -266,8 +299,9 @@ browser was used.
 ## Left for later PRs
 
 - **PR4c** — a pending row superseded by its posted row leaves cash.
-- **PR4d** — Plaid sync write path:
-  - re-mint (two real same-amount charges both survive);
+- **PR4d, next, before PR4c** — Plaid sync write path:
+  - re-mint (two real same-amount charges both survive), which closes the overstatement above;
+  - keep the authorisation time on a re-key rather than overwriting it with a posting time;
   - `occurredOnUserOverridden` honoured on re-mint;
   - backfill order around the balance read;
   - preserve `occurred_at` on backfill insert and re-key.
