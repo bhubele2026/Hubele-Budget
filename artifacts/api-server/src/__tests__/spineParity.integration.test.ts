@@ -69,6 +69,7 @@ import dashboardRouter from "../routes/dashboard";
 // `/forecast/bank-balance-explain` owns the bank freshness fields the spine carries.
 import bankBalanceExplainRouter from "../routes/bankBalanceExplain";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 import { householdTodayDate } from "../lib/householdClock";
 
 const app = express();
@@ -199,6 +200,7 @@ beforeAll(async () => {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       occurredOn: dayThisMonth(2),
+      createdAt: createdAtStartOfHouseholdDay(dayThisMonth(2)),
       description: "Market run",
       amount: "-120.55",
       categoryId: cat!.id,
@@ -210,6 +212,7 @@ beforeAll(async () => {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       occurredOn: dayThisMonth(3),
+      createdAt: createdAtStartOfHouseholdDay(dayThisMonth(3)),
       description: "Hardware store",
       amount: "-64.10",
       categoryId: cat!.id,
@@ -221,6 +224,7 @@ beforeAll(async () => {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       occurredOn: TODAY_ISO,
+      createdAt: createdAtStartOfHouseholdDay(TODAY_ISO),
       description: "Groceries today",
       amount: "-88.25",
       categoryId: cat!.id,
@@ -233,6 +237,7 @@ beforeAll(async () => {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       occurredOn: dayThisMonth(4),
+      createdAt: createdAtStartOfHouseholdDay(dayThisMonth(4)),
       description: "Electric bill posted",
       amount: "-210.00",
       categoryId: cat!.id,
@@ -245,6 +250,7 @@ beforeAll(async () => {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       occurredOn: dayThisMonth(5),
+      createdAt: createdAtStartOfHouseholdDay(dayThisMonth(5)),
       description: "Water bill posted",
       amount: "-75.00",
       categoryId: cat!.id,
@@ -362,6 +368,7 @@ beforeAll(async () => {
     userId: TEST_USER,
     householdId: TEST_HOUSEHOLD_ID,
     occurredOn: dayThisMonth(6),
+    createdAt: createdAtStartOfHouseholdDay(dayThisMonth(6)),
     description: "Payment — Visa",
     amount: "300.00",
     debtId: VISA_DEBT_ID,

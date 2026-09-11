@@ -31,6 +31,7 @@ import {
 } from "@workspace/db";
 import { computeCashSignal } from "../lib/cashSignal";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 
 const TEST_USER = `cash-signal-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 let TEST_HOUSEHOLD_ID: string;
@@ -1276,6 +1277,7 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
         amount: opts.amount,
         plaidAccountId: opts.plaidAccountId ?? null,
         source: opts.source ?? "manual",
+        createdAt: createdAtStartOfHouseholdDay(opts.occurredOn),
       })
       .returning({ id: transactionsTable.id });
     return t.id;
@@ -1620,6 +1622,7 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       source: opts.source ?? "manual",
       pending: opts.pending ?? false,
       forecastFlag: opts.forecastFlag ?? false,
+      createdAt: createdAtStartOfHouseholdDay(opts.occurredOn),
     });
   }
 

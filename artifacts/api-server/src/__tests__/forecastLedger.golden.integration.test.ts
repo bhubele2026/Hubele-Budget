@@ -42,6 +42,7 @@ import {
 } from "@workspace/db";
 import { computeCashSignal } from "../lib/cashSignal";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 
 const TEST_USER = `ledger-golden-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 let HOUSEHOLD: string;
@@ -165,6 +166,7 @@ async function txn(opts: {
       pending: opts.pending ?? false,
       forecastFlag: opts.forecastFlag ?? false,
       plaidTransactionId: opts.plaidTransactionId ?? null,
+      createdAt: createdAtStartOfHouseholdDay(opts.occurredOn),
     })
     .returning();
   return t;

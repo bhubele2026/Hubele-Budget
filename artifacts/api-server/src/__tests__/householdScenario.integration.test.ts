@@ -64,6 +64,7 @@ import {
 import spineRouter from "../routes/spine";
 import forecastRouter from "../routes/forecast";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 import {
   ACCOUNTS,
   CONTRACT_COLUMNS,
@@ -163,6 +164,7 @@ async function addTxn(row: {
       isTransfer: row.isTransfer ?? false,
       weeklyAllowance: row.weeklyAllowance ?? false,
       unplannedAllowance: row.unplannedAllowance ?? false,
+      createdAt: createdAtStartOfHouseholdDay(row.occurredOn),
     })
     .returning({ id: transactionsTable.id });
   txn[row.key] = t!.id;

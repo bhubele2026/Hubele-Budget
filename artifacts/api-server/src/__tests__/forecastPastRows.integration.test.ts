@@ -57,6 +57,7 @@ import {
 import forecastRouter from "../routes/forecast";
 import transactionsRouter from "../routes/transactions";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 
 const app = express();
 app.use(express.json());
@@ -178,6 +179,7 @@ async function addTxn(opts: {
       forecastFlag: opts.forecastFlag,
       plaidAccountId: opts.plaidAccountId ?? null,
       source: opts.source ?? "manual",
+      createdAt: createdAtStartOfHouseholdDay(opts.occurredOn),
     })
     .returning({ id: transactionsTable.id });
   return t!.id;
