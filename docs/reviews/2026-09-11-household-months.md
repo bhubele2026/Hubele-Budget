@@ -4,6 +4,30 @@ Branch `fix/household-months`, on `main` `11a6f757` (after
 `fix/household-clock-leftovers`). Review follow-up L1–L3. No DDL, no new
 dependency, no spec change, no codegen, no CI change.
 
+## Merged with PR6 (`main` `500473e`)
+
+- **How:** `origin/main` was merged in with a merge commit.
+- **Conflicts:** none.
+- **Overlap:** `pages/reports/CashFlowPage.tsx` is the only file both branches
+  touch, and the two changes stay separate:
+  - PR6 skips past one-time items in the recurring monthly burn;
+  - this branch changes the forecast card.
+- **Not touched here:** this branch never edits `routes/dashboard.ts`.
+- **Lockfile and generated files:** unchanged, so no codegen.
+
+**Gates after the merge**
+
+| Gate | Result |
+|---|---|
+| `pnpm run typecheck` | green |
+| Web suite, TZ=UTC | 130 files, 1046 tests passed |
+| Web suite, TZ=America/Chicago | 130 files, 1046 tests passed |
+| Web suite, TZ=America/Los_Angeles | 130 files, 1046 tests passed |
+| Build + `check-entry-graph` | 572,627 bytes, 572.6 KB of 580 KB, pass |
+
+The API suite result further down (133 files, 1211 + 7 todo) is from before the
+merge.
+
 ## L1 — week and month on one calendar
 
 The last PR put the browser's WEEK on the household calendar (America/Chicago)
