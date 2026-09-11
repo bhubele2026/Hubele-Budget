@@ -13,7 +13,8 @@
 //   - anchor-day, posted, pending, future forecast-flagged, future unflagged rows
 //   - matched (with a matched Chase txn), rescheduled, skipped, missed, dragged
 //     past-due plans; debt minimum and avalanche extra synthetic events
-//   - a fromDate window after the anchor, and the no-snapshot fallback
+//   - a fromDate window after the anchor, a window that ends before today, and
+//     the no-snapshot fallback
 //
 // The snapshot file is written once, on the pre-refactor code, and committed.
 // ⚠️ Vitest never writes snapshots under CI=true, so CI can only compare.
@@ -235,6 +236,15 @@ describe("PR4a golden — computeCashSignal output, byte for byte", () => {
   it("full household, a fromDate window after the anchor", async () => {
     await fullHousehold();
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { fromDate: "2026-05-10", horizonDays: 30 });
+    expect(normalised(sig)).toMatchSnapshot();
+  });
+
+  it("full household, a window that ends before today", async () => {
+    // toDate 05-11 < today 05-14. `bankToday` still rolls through today while the
+    // curve stops at its window's end: a merged roll-forward bounded by the
+    // window alone would drop 05-12 and 05-13 from bankToday.
+    await fullHousehold();
+    const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { fromDate: "2026-05-01", horizonDays: 10 });
     expect(normalised(sig)).toMatchSnapshot();
   });
 

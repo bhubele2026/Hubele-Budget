@@ -185,6 +185,75 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 }
 `;
 
+exports[`PR4a golden — computeCashSignal output, byte for byte > full household, a window that ends before today 1`] = `
+{
+  "acceptedImpact": "0.00",
+  "bankToday": "2785.00",
+  "cashBuffer": "500.00",
+  "daily": [
+    {
+      "balance": "3000.00",
+      "date": "2026-05-01",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-02",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-03",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-04",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-05",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-06",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-07",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-08",
+    },
+    {
+      "balance": "2980.00",
+      "date": "2026-05-09",
+    },
+    {
+      "balance": "2780.00",
+      "date": "2026-05-10",
+    },
+    {
+      "balance": "2830.00",
+      "date": "2026-05-11",
+    },
+  ],
+  "endingBalance": "2830.00",
+  "endingDate": "2026-05-11",
+  "events": [],
+  "fromDate": "2026-05-01",
+  "horizonDays": 10,
+  "lowestDate": "2026-05-10",
+  "lowestProjected": "2780.00",
+  "maxSafeExtra": "2280.00",
+  "projectedExpenses": "220.00",
+  "projectedIncome": "50.00",
+  "snapshotAt": "2026-05-08T15:00:00.000Z",
+  "snapshotSource": "plaid",
+  "startingBalance": "3000.00",
+  "status": "ready",
+  "toDate": "2026-05-11",
+}
+`;
+
 exports[`PR4a golden — computeCashSignal output, byte for byte > full household, default window from today 1`] = `
 {
   "acceptedImpact": "0.00",
