@@ -394,6 +394,92 @@ On `efc3fef` with this note on top (branch head after the merge of `d73f3bf` and
 - **Local only:** the darwin binaries for rollup, lightningcss and `@tailwindcss/oxide` were copied from the main
   checkout into the worktree's `node_modules`. Nothing about that is committed.
 
+### Third review
+
+The third look at `f4b7ed5` came back **REQUEST CHANGES** on one blocker that appears only after merging `main`, plus
+a LOW and a NIT. The branch alone was sound; `pending_not_excluded` breaks no caller, "Select all N posted" matches the
+server count, and both second-round e2e fixes are correct.
+
+- **Merge:** `origin/main` `9b72830` (household months) merged cleanly (`13dbe97`); typecheck passes on the merged tree.
+
+#### Blocker — Month mode read the previous month after main's household-months change
+
+- **Cause.** Main's `currentMonthRange(ref)` now reads `ref` as an instant and takes its Chicago day. The Chase page
+  passed a browser-local midnight on the 1st, which in a UTC or Eastern browser is still the last day of the previous
+  month in Chicago. Month mode, including the Budget page's `?month=` links, loaded last month's rows, totals and
+  select-all count. The reviewer measured `chaseForecastInclusion` at 9 of 9 failing under UTC and New York on the
+  merged tree (reproduced here: 9 of 9 under UTC).
+- **Fix.** The range is built from the navigator month's day: `currentMonthRange` gets noon UTC on the 1st, an instant
+  inside that day in Chicago from any browser. No new helper; main's `currentMonthRange` supplies the bounds and
+  label.
+- **LOW, same class.** The navigator's first month was `monthKeyOf(new Date())`, the browser's month. It is now the
+  household's: `monthKeyFromISO(householdMonthStartOf())`, both existing helpers.
+- **Test, `chaseMonthEdge.test.tsx`** (2), clock pinned to `2026-10-01T02:00Z` (September 30, 21:00 in Chicago):
+  - a `?month=2026-09-01` link asks the register for 09-01..09-30, lists September's first and last day and not
+    August 31, and reads "September 2026" and "Sep '26";
+  - with no link, Week mode is the household week (from 09-27), and Month mode opens September ("Sep '26",
+    "September 2026", from 09-01), never August or October.
+
+#### LOW — bulk review could still shield pending rows by id
+
+- "Select this page" and the Pending group's checkbox select pending rows, and the bulk bar's Mark reviewed sent them
+  through `/transactions/bulk-update`, so every loaded pending row could be shielded from the sweep at once.
+- **Fix.** The bulk bar's Mark reviewed sends only the selected posted rows; the toast adds "N pending left
+  unreviewed", and a selection of pending rows only sends nothing and says so. The pending rows stay selected. A pending
+  row's own button still reviews it. Mark unreviewed is unchanged (it shields nothing).
+- **Test:** four selected (three posted, one pending) send exactly the three posted ids, toast "3 marked reviewed · 1
+  pending left unreviewed", the pending row stays unreviewed and selected; the pending row alone sends nothing
+  ("1 pending left unreviewed"); its own button reviews it.
+
+#### NIT — the posted count ran without the banner
+
+- The count request was enabled whenever the whole page was selected. It now shares the banner's own condition
+  (`selectAllBannerShown`). **Test:** three rows, all loaded and selected, no banner, no `pending=false` request.
+
+#### Fails before (third review)
+
+All on the merge `13dbe97` (main's household months in, before this round's fix):
+
+| Test | UTC | America/New_York | America/Chicago | America/Los_Angeles |
+|---|---|---|---|---|
+| `chaseMonthEdge`: `?month=` link opens September | fails | fails | passes | passes |
+| `chaseMonthEdge`: navigator's own month is September | fails | fails | passes | passes |
+| `chaseForecastInclusion` (existing, 9 tests) | 9 of 9 fail | (reviewer: 9 of 9 fail) | (reviewer: passes) | not run |
+
+- **Why Chicago and Los Angeles pass before the fix.** There a browser-local midnight on the 1st is already inside
+  that day in Chicago, and the browser's month at 21:00 Chicago time is still September. The bug needs a browser east
+  of Chicago, which is why the suite now runs in all four zones.
+- **The two new inbox tests** ("the bulk bar leaves selected pending rows unreviewed", "the posted count is asked for
+  only while the select-all banner is shown") both fail on `13dbe97`, run on their own in a temporary worktree.
+- **While writing `chaseMonthEdge`, two bugs in the test itself** were fixed before the numbers above were taken:
+  it clicked Month before the page had rendered, and it counted the week's after-today list (10-01..10-03) as a
+  register request.
+
+#### Verification (third review)
+
+On `88f1e51` (the fix on top of the merge `13dbe97` of `origin/main` `9b72830`):
+
+- **Typecheck:** `pnpm run typecheck` exit 0, which includes `typecheck:e2e`.
+- **Web suite, four browser time zones** (`TZ=<zone> CI=true pnpm --filter h2budget exec vitest run`):
+
+  | TZ | Result |
+  |---|---|
+  | UTC | 133 files, 1,103 passed |
+  | America/New_York | 133 files, 1,103 passed |
+  | America/Chicago | 133 files, 1,103 passed |
+  | America/Los_Angeles | 133 files, 1,103 passed |
+
+- **Full API suite** (local test database `h2budget_test_pr14t`, since dropped): **138 files, 1,287 passed, 7 todo.**
+  No server code changed in this round; the run covers the merge of `main`.
+- **Build:** `pnpm run build` exit 0. **Entry-graph guard:** OK. **Landing JS 574.4 KB of 580.0 KB** (173.1 KB
+  gzipped; `index` 240.6 KB, `vendor-query` 52.5 KB), unchanged from the second review.
+- **Codegen:** re-run for both react targets and zod on the committed tree; no file changed.
+- **Unchanged from `main` `9b72830`:** `routes/transactions.ts`, `routes/spine.ts`, `lib/cashSignal.ts`,
+  `lib/forecastLedger.ts`, `lib/ledgerCashRows.ts`, `lib/plaidSync.ts`, web `lib/routePrefetch.ts`, `lib/timeRange.ts`,
+  `lib/householdDay.ts`, `lib/avalanche-core`, `lib/db`.
+- **Not verified here:** any e2e run (Clerk and a running app), a browser pass at 1280 and 390 wide, Brad's live data,
+  production (untouched).
+
 ### Pending Brad's decision
 
 - **Should `reviewed` protect a pending row from the sync's sweep at all?** Today a reviewed (or categorised) pending
@@ -431,7 +517,9 @@ The second review of `a508b1b` came back **REQUEST CHANGES, limited to tests and
 - **Server.** `POST /transactions/bulk-review-matching` with `reviewed: true` requires `filter.pending: false`, else
   400 `pending_not_excluded`. It is checked after the account, so a refused account keeps its code. Un-reviewing by
   filter is not restricted (it shields nothing). One pending row by id (`/transactions/bulk-update`) is still allowed,
-  as the old page's per-row button. Spec: the operation's summary and its 400 text; no schema change (`LedgerFilter`
+  as the old page's per-row button. *(third review)* That understated the by-id path: "Select this page" and the
+  Pending group's checkbox select pending rows, and the bulk bar sent them all by id. The bulk bar now leaves them out
+  (Third review). Spec: the operation's summary and its 400 text; no schema change (`LedgerFilter`
   already had `pending`).
 - **Web.** "Select all N posted": the count is the server's `matchingCount` for the register's filter with
   `pending=false` (`limit=1`, asked only while the banner is up, generated `useGetTransactionsLedger`). The bulk filter
