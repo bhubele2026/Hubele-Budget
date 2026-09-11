@@ -29,10 +29,11 @@ import { dataState, type DataState } from "@/lib/queryState";
  * fetched, and `isFetching` says a request (a Retry, say) is in flight.
  *
  * `staleTime` is 60s. Moving between pages within a minute never refetches;
- * after that, a page that mounts a new reader refetches once. It is short
- * enough that the numbers can't visibly age during a session. Every
- * successful mutation invalidates it centrally (see the `mutationCache` in
- * App.tsx), so the staleTime never hides a write.
+ * after that, a page that mounts a new reader refetches once. A page left open
+ * does NOT refresh on its own (no focus refetch, no polling), so its numbers
+ * can age on screen; that is why the refresh banner and the freshness line
+ * state their age. Every successful mutation invalidates it centrally (see the
+ * `mutationCache` in App.tsx), so the staleTime never hides a write.
  */
 export const SPINE_QUERY_KEY = getGetSpineQueryKey();
 

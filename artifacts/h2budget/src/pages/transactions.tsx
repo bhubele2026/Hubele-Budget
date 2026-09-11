@@ -196,7 +196,7 @@ export default function TransactionsPage() {
   // ambient forecast bundle is fetched once and reused, not twice under two
   // keys (no-params vs days:90). The Forecast page keeps its own interactive
   // horizon query.
-  const { data: forecastData } = useGetForecast({ days: 90 });
+  const { data: forecastData, isError: forecastDataError } = useGetForecast({ days: 90 });
   // Stable "today" (YYYY-MM-DD) used as the actual/forecast split anchor
   // and as the projection's `fromDate` so the dashed forecast line starts
   // at today and the cash-signal series aligns with the chart window.
@@ -2233,6 +2233,10 @@ export default function TransactionsPage() {
   // Plaid checking account so the user can populate / advance that
   // account's snapshot directly from this page.
   const hasLinkedChecking = !!effectiveSnapshot;
+  // The page returns early until its rows are here (`if (!transactions)` above),
+  // so the range stats only ever render over loaded rows. A missing balance
+  // shows "—", never a `?? 0` dressed as $0.00.
+  const checkingEnd = rangeBalances.endBal ?? endingBalance;
   const isPlaidLinked =
     !isManualAccount && !!effectiveAccountInternalId;
 
@@ -2292,7 +2296,7 @@ export default function TransactionsPage() {
         {hasLinkedChecking ? (
           <div className="stagger-children grid items-start gap-3 lg:grid-cols-2">
             {/* Money in vs out + net */}
-            <div className={card}>
+            <div className={card} data-testid="chase-stats-in-out">
               <div className={cardHead}>
                 <span className="text-title font-semibold text-brand-navy">
                   Money in vs out
@@ -2305,13 +2309,15 @@ export default function TransactionsPage() {
               <div className="p-4">
                 <div className="mb-3 flex items-baseline justify-between gap-2">
                   <span className={fieldLabel}>Change</span>
-                  <DeltaPill
-                    value={
-                      rangeBalances.startBal && rangeBalances.startBal !== 0
-                        ? (rangeTotals.net / Math.abs(rangeBalances.startBal)) * 100
-                        : 0
-                    }
-                  />
+                  {/* No start balance, or a start of $0: there is no percentage to
+                      state, so no pill. A "0%" must never stand in for it. */}
+                  {rangeBalances.startBal ? (
+                    <DeltaPill
+                      value={(rangeTotals.net / Math.abs(rangeBalances.startBal)) * 100}
+                    />
+                  ) : (
+                    <span className="font-mono text-label tabular-nums text-neutral-400">—</span>
+                  )}
                 </div>
                 <StackBar
                   segments={[
@@ -2333,15 +2339,21 @@ export default function TransactionsPage() {
             </div>
 
             {/* Checking balance trend across the range */}
-            <div className={card}>
+            <div className={card} data-testid="chase-stats-balance">
               <div className={cardHead}>
                 <span className="text-title font-semibold text-brand-navy">
                   Checking balance
                 </span>
-                <MoneyText
-                  amount={rangeBalances.endBal ?? endingBalance ?? 0}
-                  className="ml-auto font-mono text-title font-semibold tabular-nums text-brand-navy"
-                />
+                {checkingEnd != null ? (
+                  <MoneyText
+                    amount={checkingEnd}
+                    className="ml-auto font-mono text-title font-semibold tabular-nums text-brand-navy"
+                  />
+                ) : (
+                  <span className="ml-auto font-mono text-title font-semibold tabular-nums text-neutral-400">
+                    —
+                  </span>
+                )}
               </div>
               <div className="p-4">
                 {rangeBalances.series.length > 1 ? (
@@ -2363,25 +2375,41 @@ export default function TransactionsPage() {
                 <div className="mt-2 flex justify-between text-micro text-neutral-500">
                   <span className={fieldLabel}>
                     Start{" "}
-                    <MoneyText
-                      amount={rangeBalances.startBal ?? 0}
-                      className="font-mono tabular-nums text-brand-navy"
-                    />
+                    {rangeBalances.startBal != null ? (
+                      <MoneyText
+                        amount={rangeBalances.startBal}
+                        className="font-mono tabular-nums text-brand-navy"
+                      />
+                    ) : (
+                      <span className="font-mono tabular-nums text-neutral-400">—</span>
+                    )}
                   </span>
                   <span className={fieldLabel}>
                     End{" "}
-                    <MoneyText
-                      amount={rangeBalances.endBal ?? 0}
-                      className="font-mono tabular-nums text-brand-navy"
-                    />
+                    {rangeBalances.endBal != null ? (
+                      <MoneyText
+                        amount={rangeBalances.endBal}
+                        className="font-mono tabular-nums text-brand-navy"
+                      />
+                    ) : (
+                      <span className="font-mono tabular-nums text-neutral-400">—</span>
+                    )}
                   </span>
                 </div>
               </div>
             </div>
           </div>
         ) : (
-          <div className={card}>
-            <div className={emptyNote}>No checking account linked.</div>
+          <div className={card} data-testid="chase-stats-no-account">
+            {/* "No checking account linked" is a claim: only once the forecast
+                bundle, which names the linked accounts, has answered. */}
+            <div className={emptyNote}>
+              {forecastData === undefined
+                ? forecastDataError
+                  ? "Couldn't load checking account."
+                  : "Loading checking account…"
+                : "No checking account linked."}
+            </div>
           </div>
         )}
       </div>

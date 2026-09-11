@@ -234,7 +234,7 @@ export function ReportsBalanceTiles({
   forecast: ForecastBundle | null | undefined;
 }) {
   const { data: dashboard } = useGetDashboard();
-  const { data: spine } = useSpine();
+  const { data: spine, state: spineState } = useSpine();
 
   const bankSnapshot = forecast?.bankSnapshot ?? null;
   const accountSnapshots = forecast?.accountSnapshots ?? {};
@@ -256,7 +256,9 @@ export function ReportsBalanceTiles({
     spine?.bank?.balance != null ? formatCurrency(spine.bank.balance) : "—";
   const bankSub = effective
     ? `${effective.source === "plaid" ? "Plaid" : "Manual"} · ${effective.name ?? "Bank"}${effective.mask ? ` ··${effective.mask}` : ""}`
-    : "No checking snapshot yet";
+    : forecast === undefined
+      ? undefined // the bundle has not answered: no claim about a snapshot yet
+      : "No checking snapshot yet";
 
   const { data: amexCardAccounts } = useListPlaidLiabilityAccounts();
   const amex = useMemo(
@@ -265,9 +267,13 @@ export function ReportsBalanceTiles({
   );
   const amexValue = amex.found ? formatCurrency(amex.total) : "—";
   const amexNoCardLinked = !amex.blueCash.present && !amex.platinum.present;
-  const amexSub = amexNoCardLinked
-    ? "Link an Amex card to track your revolving balance"
-    : describeReportsAmexTileSub(amex);
+  // Before the card accounts answer, no card is "linked" or "not linked" yet.
+  const amexSub =
+    amexCardAccounts === undefined
+      ? undefined
+      : amexNoCardLinked
+        ? "Link an Amex card to track your revolving balance"
+        : describeReportsAmexTileSub(amex);
 
   // (C10) `dashboard.totalDebt` is now NETTED server-side — it used to be a
   // raw `sum(debts.balance)` in SQL, which is why this tile could sit on the
@@ -297,8 +303,14 @@ export function ReportsBalanceTiles({
   const statusMeta = cashBufferStatusMeta(status);
   const buffer = Number(spine?.forecast?.cashBuffer ?? 0) || 0;
   const lowest = Number(spine?.forecast?.lowPoint ?? 0) || 0;
-  const cashSub =
-    status === "no_data"
+  // ⚠️ A MISSING SPINE IS NOT "NO SNAPSHOT". Without it the tile says it is
+  // loading or failed; the setup hint is only true once the spine says so.
+  const cashValue = spine ? statusMeta.label : "—";
+  const cashSub = !spine
+    ? spineState === "failed"
+      ? "Couldn't load"
+      : "Loading…"
+    : status === "no_data"
       ? "Set a checking balance on Forecast"
       : `Lowest ${formatCurrency(lowest)} · buffer ${formatCurrency(buffer)}`;
 
@@ -348,7 +360,7 @@ export function ReportsBalanceTiles({
       <Stat
         index={3}
         label="Cash buffer"
-        value={statusMeta.label}
+        value={cashValue}
         hint={cashSub}
         data-testid="reports-tile-cash-buffer"
       />
