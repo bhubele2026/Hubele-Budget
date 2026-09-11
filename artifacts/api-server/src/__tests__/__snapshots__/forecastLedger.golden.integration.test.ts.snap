@@ -1,0 +1,863 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`PR4a golden — computeCashSignal output, byte for byte > full household, a fromDate window after the anchor 1`] = `
+{
+  "acceptedImpact": "-15.00",
+  "bankToday": "2785.00",
+  "cashBuffer": "500.00",
+  "daily": [
+    {
+      "balance": "2780.00",
+      "date": "2026-05-10",
+    },
+    {
+      "balance": "2830.00",
+      "date": "2026-05-11",
+    },
+    {
+      "balance": "2800.00",
+      "date": "2026-05-12",
+    },
+    {
+      "balance": "2785.00",
+      "date": "2026-05-13",
+    },
+    {
+      "balance": "2785.00",
+      "date": "2026-05-14",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-15",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-16",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-17",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-18",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-19",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-20",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-21",
+    },
+    {
+      "balance": "4550.00",
+      "date": "2026-05-22",
+    },
+    {
+      "balance": "4550.00",
+      "date": "2026-05-23",
+    },
+    {
+      "balance": "4550.00",
+      "date": "2026-05-24",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-25",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-26",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-27",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-28",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-29",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-30",
+    },
+    {
+      "balance": "4262.00",
+      "date": "2026-05-31",
+    },
+    {
+      "balance": "2762.00",
+      "date": "2026-06-01",
+    },
+    {
+      "balance": "2762.00",
+      "date": "2026-06-02",
+    },
+    {
+      "balance": "2762.00",
+      "date": "2026-06-03",
+    },
+    {
+      "balance": "2762.00",
+      "date": "2026-06-04",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-05",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-06",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-07",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-08",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-09",
+    },
+  ],
+  "endingBalance": "4762.00",
+  "endingDate": "2026-06-09",
+  "events": [
+    {
+      "amount": "-95.00",
+      "date": "2026-05-15",
+      "itemId": "<uuid>",
+      "label": "Phone",
+      "originalDate": "2026-05-12",
+    },
+    {
+      "amount": "-140.00",
+      "date": "2026-05-22",
+      "itemId": "<uuid>",
+      "label": "Utility",
+      "originalDate": "2026-05-22",
+    },
+    {
+      "amount": "-38.00",
+      "date": "2026-05-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "originalDate": "2026-05-25",
+    },
+    {
+      "amount": "-150.00",
+      "date": "2026-05-31",
+      "itemId": "avalanche:extra",
+      "label": "Avalanche extra payment",
+      "originalDate": "2026-05-31",
+    },
+    {
+      "amount": "-1500.00",
+      "date": "2026-06-01",
+      "itemId": "<uuid>",
+      "label": "Rent",
+      "originalDate": "2026-06-01",
+    },
+  ],
+  "fromDate": "2026-05-10",
+  "horizonDays": 30,
+  "lowestDate": "2026-05-15",
+  "lowestProjected": "2690.00",
+  "maxSafeExtra": "2190.00",
+  "projectedExpenses": "2268.00",
+  "projectedIncome": "4050.00",
+  "snapshotAt": "2026-05-08T15:00:00.000Z",
+  "snapshotSource": "plaid",
+  "startingBalance": "2980.00",
+  "status": "ready",
+  "toDate": "2026-06-09",
+}
+`;
+
+exports[`PR4a golden — computeCashSignal output, byte for byte > full household, a window that ends before today 1`] = `
+{
+  "acceptedImpact": "0.00",
+  "bankToday": "2785.00",
+  "cashBuffer": "500.00",
+  "daily": [
+    {
+      "balance": "3000.00",
+      "date": "2026-05-01",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-02",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-03",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-04",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-05",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-06",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-07",
+    },
+    {
+      "balance": "3000.00",
+      "date": "2026-05-08",
+    },
+    {
+      "balance": "2980.00",
+      "date": "2026-05-09",
+    },
+    {
+      "balance": "2780.00",
+      "date": "2026-05-10",
+    },
+    {
+      "balance": "2830.00",
+      "date": "2026-05-11",
+    },
+  ],
+  "endingBalance": "2830.00",
+  "endingDate": "2026-05-11",
+  "events": [],
+  "fromDate": "2026-05-01",
+  "horizonDays": 10,
+  "lowestDate": "2026-05-10",
+  "lowestProjected": "2780.00",
+  "maxSafeExtra": "2280.00",
+  "projectedExpenses": "220.00",
+  "projectedIncome": "50.00",
+  "snapshotAt": "2026-05-08T15:00:00.000Z",
+  "snapshotSource": "plaid",
+  "startingBalance": "3000.00",
+  "status": "ready",
+  "toDate": "2026-05-11",
+}
+`;
+
+exports[`PR4a golden — computeCashSignal output, byte for byte > full household, default window from today 1`] = `
+{
+  "acceptedImpact": "0.00",
+  "bankToday": "2785.00",
+  "cashBuffer": "500.00",
+  "daily": [
+    {
+      "balance": "2785.00",
+      "date": "2026-05-14",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-15",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-16",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-17",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-18",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-19",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-20",
+    },
+    {
+      "balance": "2690.00",
+      "date": "2026-05-21",
+    },
+    {
+      "balance": "4550.00",
+      "date": "2026-05-22",
+    },
+    {
+      "balance": "4550.00",
+      "date": "2026-05-23",
+    },
+    {
+      "balance": "4550.00",
+      "date": "2026-05-24",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-25",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-26",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-27",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-28",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-29",
+    },
+    {
+      "balance": "4412.00",
+      "date": "2026-05-30",
+    },
+    {
+      "balance": "4262.00",
+      "date": "2026-05-31",
+    },
+    {
+      "balance": "2762.00",
+      "date": "2026-06-01",
+    },
+    {
+      "balance": "2762.00",
+      "date": "2026-06-02",
+    },
+    {
+      "balance": "2762.00",
+      "date": "2026-06-03",
+    },
+    {
+      "balance": "2762.00",
+      "date": "2026-06-04",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-05",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-06",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-07",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-08",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-09",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-10",
+    },
+    {
+      "balance": "4762.00",
+      "date": "2026-06-11",
+    },
+    {
+      "balance": "4667.00",
+      "date": "2026-06-12",
+    },
+    {
+      "balance": "4547.00",
+      "date": "2026-06-13",
+    },
+    {
+      "balance": "4547.00",
+      "date": "2026-06-14",
+    },
+    {
+      "balance": "4547.00",
+      "date": "2026-06-15",
+    },
+    {
+      "balance": "4507.00",
+      "date": "2026-06-16",
+    },
+    {
+      "balance": "4507.00",
+      "date": "2026-06-17",
+    },
+    {
+      "balance": "4492.00",
+      "date": "2026-06-18",
+    },
+    {
+      "balance": "6492.00",
+      "date": "2026-06-19",
+    },
+    {
+      "balance": "6352.00",
+      "date": "2026-06-20",
+    },
+    {
+      "balance": "6352.00",
+      "date": "2026-06-21",
+    },
+    {
+      "balance": "6352.00",
+      "date": "2026-06-22",
+    },
+    {
+      "balance": "6352.00",
+      "date": "2026-06-23",
+    },
+    {
+      "balance": "6352.00",
+      "date": "2026-06-24",
+    },
+    {
+      "balance": "6314.00",
+      "date": "2026-06-25",
+    },
+    {
+      "balance": "6314.00",
+      "date": "2026-06-26",
+    },
+    {
+      "balance": "6314.00",
+      "date": "2026-06-27",
+    },
+    {
+      "balance": "6314.00",
+      "date": "2026-06-28",
+    },
+  ],
+  "endingBalance": "6314.00",
+  "endingDate": "2026-06-28",
+  "events": [
+    {
+      "amount": "-95.00",
+      "date": "2026-05-15",
+      "itemId": "<uuid>",
+      "label": "Phone",
+      "originalDate": "2026-05-12",
+    },
+    {
+      "amount": "-140.00",
+      "date": "2026-05-22",
+      "itemId": "<uuid>",
+      "label": "Utility",
+      "originalDate": "2026-05-22",
+    },
+    {
+      "amount": "-38.00",
+      "date": "2026-05-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "originalDate": "2026-05-25",
+    },
+    {
+      "amount": "-150.00",
+      "date": "2026-05-31",
+      "itemId": "avalanche:extra",
+      "label": "Avalanche extra payment",
+      "originalDate": "2026-05-31",
+    },
+    {
+      "amount": "-1500.00",
+      "date": "2026-06-01",
+      "itemId": "<uuid>",
+      "label": "Rent",
+      "originalDate": "2026-06-01",
+    },
+    {
+      "amount": "-95.00",
+      "date": "2026-06-12",
+      "itemId": "<uuid>",
+      "label": "Phone",
+      "originalDate": "2026-06-12",
+    },
+    {
+      "amount": "-120.00",
+      "date": "2026-06-13",
+      "itemId": "<uuid>",
+      "label": "Insurance",
+      "originalDate": "2026-06-13",
+    },
+    {
+      "amount": "-40.00",
+      "date": "2026-06-16",
+      "itemId": "<uuid>",
+      "label": "Gym",
+      "originalDate": "2026-06-16",
+    },
+    {
+      "amount": "-15.00",
+      "date": "2026-06-18",
+      "itemId": "<uuid>",
+      "label": "Streaming",
+      "originalDate": "2026-06-18",
+    },
+    {
+      "amount": "-140.00",
+      "date": "2026-06-20",
+      "itemId": "<uuid>",
+      "label": "Utility",
+      "originalDate": "2026-06-20",
+    },
+    {
+      "amount": "-38.00",
+      "date": "2026-06-25",
+      "itemId": "debt:<uuid>",
+      "label": "Golden Card minimum",
+      "originalDate": "2026-06-25",
+    },
+  ],
+  "fromDate": "2026-05-14",
+  "horizonDays": 45,
+  "lowestDate": "2026-05-15",
+  "lowestProjected": "2690.00",
+  "maxSafeExtra": "2190.00",
+  "projectedExpenses": "2471.00",
+  "projectedIncome": "6000.00",
+  "snapshotAt": "2026-05-08T15:00:00.000Z",
+  "snapshotSource": "plaid",
+  "startingBalance": "2785.00",
+  "status": "ready",
+  "toDate": "2026-06-28",
+}
+`;
+
+exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot: the starting-balance fallback with flagged and unflagged rows 1`] = `
+{
+  "acceptedImpact": "0.00",
+  "bankToday": "2500.00",
+  "cashBuffer": "300.00",
+  "daily": [
+    {
+      "balance": "2500.00",
+      "date": "2026-05-14",
+    },
+    {
+      "balance": "1000.00",
+      "date": "2026-05-15",
+    },
+    {
+      "balance": "1000.00",
+      "date": "2026-05-16",
+    },
+    {
+      "balance": "1000.00",
+      "date": "2026-05-17",
+    },
+    {
+      "balance": "1000.00",
+      "date": "2026-05-18",
+    },
+    {
+      "balance": "1000.00",
+      "date": "2026-05-19",
+    },
+    {
+      "balance": "920.00",
+      "date": "2026-05-20",
+    },
+    {
+      "balance": "920.00",
+      "date": "2026-05-21",
+    },
+    {
+      "balance": "2720.00",
+      "date": "2026-05-22",
+    },
+    {
+      "balance": "2720.00",
+      "date": "2026-05-23",
+    },
+    {
+      "balance": "2720.00",
+      "date": "2026-05-24",
+    },
+    {
+      "balance": "2720.00",
+      "date": "2026-05-25",
+    },
+    {
+      "balance": "2720.00",
+      "date": "2026-05-26",
+    },
+    {
+      "balance": "2720.00",
+      "date": "2026-05-27",
+    },
+    {
+      "balance": "2720.00",
+      "date": "2026-05-28",
+    },
+    {
+      "balance": "2720.00",
+      "date": "2026-05-29",
+    },
+    {
+      "balance": "2720.00",
+      "date": "2026-05-30",
+    },
+    {
+      "balance": "2720.00",
+      "date": "2026-05-31",
+    },
+    {
+      "balance": "1220.00",
+      "date": "2026-06-01",
+    },
+    {
+      "balance": "1220.00",
+      "date": "2026-06-02",
+    },
+    {
+      "balance": "1220.00",
+      "date": "2026-06-03",
+    },
+    {
+      "balance": "1220.00",
+      "date": "2026-06-04",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-05",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-06",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-07",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-08",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-09",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-10",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-11",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-12",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-13",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-14",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-15",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-16",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-17",
+    },
+    {
+      "balance": "3020.00",
+      "date": "2026-06-18",
+    },
+    {
+      "balance": "4820.00",
+      "date": "2026-06-19",
+    },
+    {
+      "balance": "4820.00",
+      "date": "2026-06-20",
+    },
+    {
+      "balance": "4820.00",
+      "date": "2026-06-21",
+    },
+    {
+      "balance": "4820.00",
+      "date": "2026-06-22",
+    },
+    {
+      "balance": "4820.00",
+      "date": "2026-06-23",
+    },
+  ],
+  "endingBalance": "4820.00",
+  "endingDate": "2026-06-23",
+  "events": [
+    {
+      "amount": "-1500.00",
+      "date": "2026-05-15",
+      "itemId": "<uuid>",
+      "label": "Rent",
+      "originalDate": "2026-05-01",
+    },
+    {
+      "amount": "-1500.00",
+      "date": "2026-06-01",
+      "itemId": "<uuid>",
+      "label": "Rent",
+      "originalDate": "2026-06-01",
+    },
+  ],
+  "fromDate": "2026-05-14",
+  "horizonDays": 40,
+  "lowestDate": "2026-05-20",
+  "lowestProjected": "920.00",
+  "maxSafeExtra": "620.00",
+  "projectedExpenses": "3080.00",
+  "projectedIncome": "5400.00",
+  "snapshotAt": null,
+  "snapshotSource": null,
+  "startingBalance": "2500.00",
+  "status": "no_data",
+  "toDate": "2026-06-23",
+}
+`;
+
+exports[`PR4a golden — computeCashSignal output, byte for byte > snapshot with no account pointer: manual rows count, Plaid rows do not 1`] = `
+{
+  "acceptedImpact": "0.00",
+  "bankToday": "1475.00",
+  "cashBuffer": "0.00",
+  "daily": [
+    {
+      "balance": "1475.00",
+      "date": "2026-05-14",
+    },
+    {
+      "balance": "1475.00",
+      "date": "2026-05-15",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-16",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-17",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-18",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-19",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-20",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-21",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-22",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-23",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-24",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-25",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-26",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-27",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-28",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-29",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-30",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-05-31",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-06-01",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-06-02",
+    },
+    {
+      "balance": "1415.00",
+      "date": "2026-06-03",
+    },
+  ],
+  "endingBalance": "1415.00",
+  "endingDate": "2026-06-03",
+  "events": [
+    {
+      "amount": "-60.00",
+      "date": "2026-05-16",
+      "itemId": "<uuid>",
+      "label": "Water",
+      "originalDate": "2026-05-16",
+    },
+  ],
+  "fromDate": "2026-05-14",
+  "horizonDays": 20,
+  "lowestDate": null,
+  "lowestProjected": "1175.00",
+  "maxSafeExtra": "1175.00",
+  "projectedExpenses": "60.00",
+  "projectedIncome": "300.00",
+  "snapshotAt": "2026-05-12T16:00:00.000Z",
+  "snapshotSource": "manual",
+  "startingBalance": "1175.00",
+  "status": "ready",
+  "toDate": "2026-06-03",
+}
+`;
