@@ -1,4 +1,5 @@
 import { tokenizeDescription } from "./descriptionMatch";
+import { matchesCardPaymentPattern, PFC_CARD_PAYMENT } from "./spendingRule";
 
 /**
  * ⭐ "PROBABLY PAID" — WHICH PLANNED PAYMENT DID THIS BANK ROW PAY? (PR5)
@@ -47,7 +48,24 @@ export type MatchRow = {
   /** Signed: negative is money out. */
   amount: number;
   description: string | null;
+  /** (PR6 second review) The user's "this is a card payment" flag (PR7 rule 3). */
+  isExternalCardPayment?: boolean;
+  /** (PR6 second review) Plaid's detailed category (PR7 rule 8). */
+  pfcDetailed?: string | null;
 };
+
+/**
+ * (PR6 second review) Is this row a payment TO A CREDIT CARD, by PR7's rule
+ * (`classifyOutflow` rules 3, 8 and 9): the user flagged it, Plaid calls it
+ * `LOAN_PAYMENTS_CREDIT_CARD_PAYMENT`, or its description names an issuer's
+ * payment ("CAPITAL ONE MOBILE PYMT", "DISCOVER E-PAYMENT"). A store purchase
+ * ("TARGET T-2331", "APPLE STORE") or a car loan ("CAPITAL ONE AUTO CARPAY") is not.
+ */
+export function isCardPaymentRow(row: MatchRow): boolean {
+  if (row.isExternalCardPayment === true) return true;
+  if ((row.pfcDetailed ?? "").toUpperCase() === PFC_CARD_PAYMENT) return true;
+  return matchesCardPaymentPattern(row.description ?? "");
+}
 
 export type MatchConfidence = "high" | "medium" | "low";
 
@@ -122,6 +140,68 @@ function nameMatch(label: ReadonlySet<string>, desc: ReadonlySet<string>): 0 | 1
 /** Does a distinctive word of the plan's label appear as a word in the row's description? */
 export function labelEvidence(label: string, description: string | null): boolean {
   return nameMatch(tokenizeDescription(label), tokenizeDescription(description)) > 0;
+}
+
+export type PaidInFull = { planKey: string; txnId: string; txnAmount: number };
+
+/**
+ * ⭐ (PR6 review) A PAYMENT THAT NAMES THE PAYEE AND PAYS AT LEAST THE PLAN.
+ *
+ * Overdue evidence only: the ledger asks this about debt minimums already due,
+ * never about a plan due after today, and it never changes `matchPlansToRows`.
+ * A card's minimum is rarely paid at the minimum ($40 due, $812.40 paid), and the
+ * matcher caps a named row at max($25, 25%) off the plan, so an overdue minimum
+ * would drag although the card was paid. A plan is paid by a row when:
+ *   - (second review) the row is a CARD PAYMENT by PR7's rule (`isCardPaymentRow`):
+ *     a name word alone let "TARGET T-2331" (a purchase) pay the Target RedCard
+ *     minimum, "APPLE STORE" the Apple Card, and "CAPITAL ONE AUTO CARPAY" (a car
+ *     loan) a Capital One card;
+ *   - same sign;
+ *   - the row is dated 10 days before to 14 days after the plan;
+ *   - a distinctive word of the plan's label is a word of the description (the
+ *     matcher's name rule: "Capital One Platinum minimum" ↔ "CAPITAL ONE MOBILE PMT");
+ *   - the row pays at least the plan;
+ *   - the pair was not rejected ("Not this").
+ * One row pays one plan, nearest date first.
+ */
+export function plansPaidInFullByName(
+  plans: readonly MatchPlan[],
+  rows: readonly MatchRow[],
+  notMatch: ReadonlySet<string> = new Set(),
+): PaidInFull[] {
+  const candidates: Array<{ plan: MatchPlan; row: MatchRow; days: number }> = [];
+  const rowWords = rows.map((r) => tokenizeDescription(r.description));
+  for (const plan of plans) {
+    if (plan.amount === 0) continue;
+    const planDay = dayNumber(plan.date);
+    const planWords = tokenizeDescription(plan.label);
+    rows.forEach((row, j) => {
+      if (Math.sign(plan.amount) !== Math.sign(row.amount)) return;
+      const days = dayNumber(row.occurredOn) - planDay;
+      if (days < -MATCH_EARLY_DAYS || days > MATCH_LATE_DAYS) return;
+      if (cents(row.amount) < cents(plan.amount)) return;
+      if (notMatch.has(`${plan.key}#${row.txnId}`)) return;
+      if (nameMatch(planWords, rowWords[j]!) === 0) return;
+      if (!isCardPaymentRow(row)) return;
+      candidates.push({ plan, row, days });
+    });
+  }
+  candidates.sort(
+    (a, b) =>
+      Math.abs(a.days) - Math.abs(b.days) ||
+      a.plan.key.localeCompare(b.plan.key) ||
+      a.row.txnId.localeCompare(b.row.txnId),
+  );
+  const usedPlans = new Set<string>();
+  const usedRows = new Set<string>();
+  const out: PaidInFull[] = [];
+  for (const c of candidates) {
+    if (usedPlans.has(c.plan.key) || usedRows.has(c.row.txnId)) continue;
+    usedPlans.add(c.plan.key);
+    usedRows.add(c.row.txnId);
+    out.push({ planKey: c.plan.key, txnId: c.row.txnId, txnAmount: c.row.amount });
+  }
+  return out;
 }
 
 type Candidate = {

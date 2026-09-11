@@ -2283,13 +2283,35 @@ export type CashSignalEventsItem = {
     label: string;
     amount: string;
     itemId?: string;
-    /** Original (pre-drag) date the plan was scheduled for.
-  When `originalDate !== date`, this event was dragged
-  forward by the pre-snapshot drag-to-today rule. Used
-  by the chart tooltip to distinguish dragged plans
-  from bills naturally due that day.
+    /** The date the plan was due (after any reschedule), before
+  any drag. When `originalDate !== date`, the curve moved
+  the event (see `assumption`). Used by the chart tooltip to
+  distinguish dragged plans from bills naturally due that
+  day. ⚠️ Not the resolution key for a moved bill: actions
+  send `occurrenceDate`.
    */
     originalDate?: string;
+    /**
+     * (PR6) Why the plan is not on its due date, or null.
+  `overdue_assumed_unpaid`: due in the last 14 days,
+  unresolved and not confidently paid by a bank row, so it
+  lands on the next business day. `due_today_not_posted`:
+  due today, lands on the next business day (day 0 equals
+  the bank). `overdue_remainder_assumed_unpaid` (PR6 review):
+  overdue, a bank row paid part of it, and the unpaid
+  remainder lands on the next business day.
+  `dragged_past_due`: the pre-PR6 rule, kept for
+  weekly-cadence expenses due before today until PR8.
+  `pre_window_on_first_day`: no snapshot, due before the
+  window, placed on its first day.
+  
+     * @nullable
+     */
+    assumption?: string | null;
+    /** (PR6) `<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`. */
+    occurrenceKey?: string;
+    /** (PR6) The occurrence's own date (before any reschedule), which resolutions are keyed on. */
+    occurrenceDate?: string;
 };
 export type CashSignalMatchesItem = {
     planKey: string;
@@ -2304,6 +2326,45 @@ export type CashSignalMatchesItem = {
     ambiguous: boolean;
     offCurve: boolean;
 };
+/**
+ * (PR6) An unresolved plan occurrence kept off the forecast curve.
+ */
+export interface CashSignalListedPlan {
+    /** `<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`. */
+    planKey: string;
+    itemId: string;
+    /** The date resolutions are keyed on (before any reschedule). */
+    occurrenceDate: string;
+    /** The date it was due (after any reschedule). */
+    dueDate: string;
+    /** Signed; negative is money out. A partial lists its remainder. */
+    amount: string;
+    label: string;
+    /** Whole days from dueDate to today. */
+    daysOverdue: number;
+}
+/**
+ * (PR6 review) An overdue plan occurrence the forecast treats as paid by a bank row.
+ */
+export interface CashSignalAssumedPaidPlan {
+    /** `<itemId>|<occurrenceDate>` — the resolution key. */
+    planKey: string;
+    itemId: string;
+    occurrenceDate: string;
+    /** The date it was due (after any reschedule). */
+    dueDate: string;
+    label: string;
+    daysOverdue: number;
+    /** Signed like the plan. */
+    planAmount: string;
+    txnId: string;
+    /** Signed like the row. */
+    txnAmount: string;
+    /** "high", "medium" or "low" (the pair's), or "card_payment". */
+    confidence: string;
+    /** Signed; "0.00" when the row covered it (within $1). On the curve only while at most 14 days overdue. */
+    unpaidRemainder: string;
+}
 export interface CashSignal {
     bankToday: string;
     lowestProjected: string;
@@ -2328,6 +2389,27 @@ export interface CashSignal {
     acceptedImpact?: string;
     daily?: CashSignalDailyItem[];
     events?: CashSignalEventsItem[];
+    /** (PR6) Unresolved expenses due more than 14 days ago that no bank
+  row confidently paid. Not on the curve, and never dropped
+  silently. Bounded by the forecast's expansion (the first of last
+  month) and by the item's start. Sorted by due date.
+   */
+    overdueOutsideForecast?: CashSignalListedPlan[];
+    /** (PR6, `income_not_arrived`) Unresolved income due before today with
+  no deposit paired to it (any confidence, not ambiguous). Not on the
+  curve: a paycheck that has not landed never raises it. Bounded by
+  the first of last month. Sorted by due date.
+   */
+    incomeNotArrived?: CashSignalListedPlan[];
+    /** (PR6 review) Overdue expenses the forecast treats as PAID because
+  of a bank row: a non-ambiguous pair of any confidence
+  (`matches`-style; older occurrences pair for this list only), or
+  `card_payment` — a payment naming the card for at least a debt's
+  minimum. Off the curve except `unpaidRemainder`, which drags while
+  the plan is at most 14 days overdue. Listed so an unrelated row
+  that hid an unpaid bill is never silent. Sorted by due date.
+   */
+    overdueAssumedPaid?: CashSignalAssumedPaidPlan[];
     /** (PR5) Plans a bank row probably paid, as suggestions for the user
   to confirm ("matched"/"partial") or reject ("not_match"). Only a
   match with `offCurve` true is off the forecast curve (the payee's
