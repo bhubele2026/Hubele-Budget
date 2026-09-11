@@ -69,11 +69,19 @@ export async function computeReviewCount(
     );
 
   const resolutions = await db
-    .select({ matchedTxnId: forecastResolutionsTable.matchedTxnId })
+    .select({
+      matchedTxnId: forecastResolutionsTable.matchedTxnId,
+      status: forecastResolutionsTable.status,
+    })
     .from(forecastResolutionsTable)
     .where(eq(forecastResolutionsTable.householdId, householdId));
+  // (PR5) A "Not this" (`not_match`) answer rejects one suggested plan for the
+  // row; the row itself is still unreviewed.
   const resolvedTxnIds = new Set(
-    resolutions.map((r) => r.matchedTxnId).filter(Boolean),
+    resolutions
+      .filter((r) => r.status !== "not_match")
+      .map((r) => r.matchedTxnId)
+      .filter(Boolean),
   );
 
   // isBankTxn semantics: account metadata wins; amex/plaid:* without a

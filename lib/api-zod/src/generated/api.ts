@@ -3061,6 +3061,26 @@ export const GetForecastResponse = zod.object({
             }),
           )
           .optional(),
+        matches: zod
+          .array(
+            zod.object({
+              planKey: zod.string(),
+              planItemId: zod.string(),
+              planDate: zod.string(),
+              txnId: zod.string(),
+              planAmount: zod.string(),
+              txnAmount: zod.string(),
+              difference: zod.string(),
+              dayDelta: zod.number(),
+              confidence: zod.string(),
+              ambiguous: zod.boolean(),
+              offCurve: zod.boolean(),
+            }),
+          )
+          .optional()
+          .describe(
+            '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, and either an exact prompt payment or the\nplan\'s full name paying at most max($25, 10%) more); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+          ),
       }),
       zod.null(),
     ])
@@ -3251,6 +3271,26 @@ export const GetForecastCashSignalResponse = zod.object({
       }),
     )
     .optional(),
+  matches: zod
+    .array(
+      zod.object({
+        planKey: zod.string(),
+        planItemId: zod.string(),
+        planDate: zod.string(),
+        txnId: zod.string(),
+        planAmount: zod.string(),
+        txnAmount: zod.string(),
+        difference: zod.string(),
+        dayDelta: zod.number(),
+        confidence: zod.string(),
+        ambiguous: zod.boolean(),
+        offCurve: zod.boolean(),
+      }),
+    )
+    .optional()
+    .describe(
+      '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, and either an exact prompt payment or the\nplan\'s full name paying at most max($25, 10%) more); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+    ),
 });
 
 /**

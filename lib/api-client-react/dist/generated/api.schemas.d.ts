@@ -2291,6 +2291,19 @@ export type CashSignalEventsItem = {
    */
     originalDate?: string;
 };
+export type CashSignalMatchesItem = {
+    planKey: string;
+    planItemId: string;
+    planDate: string;
+    txnId: string;
+    planAmount: string;
+    txnAmount: string;
+    difference: string;
+    dayDelta: number;
+    confidence: string;
+    ambiguous: boolean;
+    offCurve: boolean;
+};
 export interface CashSignal {
     bankToday: string;
     lowestProjected: string;
@@ -2315,6 +2328,16 @@ export interface CashSignal {
     acceptedImpact?: string;
     daily?: CashSignalDailyItem[];
     events?: CashSignalEventsItem[];
+    /** (PR5) Plans a bank row probably paid, as suggestions for the user
+  to confirm ("matched"/"partial") or reject ("not_match"). Only a
+  match with `offCurve` true is off the forecast curve (the payee's
+  name, not ambiguous, and either an exact prompt payment or the
+  plan's full name paying at most max($25, 10%) more); every other plan still
+  counts. The bank row always counts. Amounts are signed;
+  `difference` is |txn| − |plan| (positive = paid more than planned).
+  `confidence` is "high", "medium" or "low".
+   */
+    matches?: CashSignalMatchesItem[];
 }
 export type SpendingFactsRange = {
     start: string;
