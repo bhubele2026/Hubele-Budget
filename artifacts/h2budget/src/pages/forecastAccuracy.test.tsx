@@ -367,6 +367,20 @@ describe("Forecast accuracy — 90-day projection reflects bills + income (a)", 
     const ending = screen.getByTestId("kpi-ending-balance");
     expect(within(ending).getByText("$6,300.00")).toBeTruthy();
   });
+
+  it("with no bank balance, the hero and its footnotes show a dash, not balances rolled forward from $0", () => {
+    // `no_data` still carries balances: the server rolls forward from a $0 start
+    // (here, the fixture's figures). None of them is a projection.
+    cashSignal = { ...CASH_SIGNAL, status: "no_data" };
+    renderPage();
+
+    const hero = screen.getByTestId("hero-forecast-balance");
+    expect(hero.textContent?.trim()).toBe("—");
+    const card = hero.closest("section") as HTMLElement;
+    for (const figure of ["$6,300.00", "$5,000.00", "$1,300.00", "$0.00"]) {
+      expect(card.textContent).not.toContain(figure);
+    }
+  });
 });
 
 describe("Forecast accuracy — a bill is event-based, full amount in its due week (b)", () => {

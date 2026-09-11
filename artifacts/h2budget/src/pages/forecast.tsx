@@ -77,6 +77,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
+import { moneyFace } from "@/components/data-state";
+import { dataState } from "@/lib/queryState";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { householdDayOfAt } from "@/lib/householdDay";
 import {
@@ -301,11 +303,12 @@ export default function ForecastPage({
   }, []);
 
   const { data, isLoading, isError: forecastError, refetch: refetchForecast } = useGetForecast({ days: deferredHorizonDays });
+  const cashProjectionQuery = useGetForecastCashSignal({
+    horizonDays: deferredHorizonDays,
+    fromDate: deferredForecastFromDate,
+  });
   const { data: cashProjection, isLoading: cashProjectionLoading, isError: projectionError, refetch: refetchProjection } =
-    useGetForecastCashSignal({
-      horizonDays: deferredHorizonDays,
-      fromDate: deferredForecastFromDate,
-    });
+    cashProjectionQuery;
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
   const { data: recurringItems } = useListRecurringItems();
@@ -1702,6 +1705,10 @@ export default function ForecastPage({
 
   const proj = cashProjection;
   const endingNum = proj?.endingBalance ? Number(proj.endingBalance) : NaN;
+  // ⚠️ `no_data` STILL CARRIES BALANCES. With no bank balance the server rolls
+  // forward from a $0 start, so those figures are not a projection. The hero and
+  // its footnotes show "—" then, as the tiles below already do.
+  const projReady = !!proj && proj.status !== "no_data";
   const lowestNum = proj?.lowestProjected ? Number(proj.lowestProjected) : NaN;
   const dailySeries = (proj?.daily ?? [])
     .map((d: { date: string; balance: string | number }) => {
@@ -1993,35 +2000,35 @@ export default function ForecastPage({
         </div>
         <div
           className={`px-4 py-3 font-mono text-display font-semibold tabular-nums ${
-            Number.isFinite(endingNum) && endingNum < 0
+            projReady && Number.isFinite(endingNum) && endingNum < 0
               ? "text-bad"
               : "text-brand-navy"
           }`}
           data-testid="hero-forecast-balance"
         >
-          {Number.isFinite(endingNum)
-            ? formatCurrency(endingNum)
-            : formatCurrency(0)}
+          {/* No projection yet, or no bank balance to project from: a dash, never
+              $0.00 dressed as a real ending balance. */}
+          {moneyFace(projReady ? proj?.endingBalance : null)}
         </div>
         <Foot>
           <span className="flex flex-wrap items-center gap-x-5 gap-y-1">
             <span>
               Bank before {formatDate(forecastFromDate)}{" "}
               <span className="font-mono tabular-nums text-neutral-600">
-                {formatCurrency(proj?.startingBalance ?? "0")}
+                {moneyFace(projReady ? proj?.startingBalance : null)}
               </span>
             </span>
             <span>
               Matched impact{" "}
               <span className="font-mono tabular-nums text-neutral-600">
-                {formatCurrency(proj?.acceptedImpact ?? "0")}
+                {moneyFace(projReady ? proj?.acceptedImpact : null)}
               </span>
             </span>
             <span>
               Through{" "}
               {formatDate(proj?.endingDate ?? proj?.toDate ?? forecastFromDate)}{" "}
               <span className="font-mono tabular-nums text-neutral-600">
-                {formatCurrency(proj?.endingBalance ?? "0")}
+                {moneyFace(projReady ? proj?.endingBalance : null)}
               </span>
             </span>
           </span>
@@ -2085,7 +2092,7 @@ export default function ForecastPage({
         );
       })()}
 
-      <ForecastDateBalance signal={cashProjection} />
+      <ForecastDateBalance signal={cashProjection} state={dataState(cashProjectionQuery)} />
 
       {/* (#683) Past-due plans dragging tomorrow — discoverable summary */}
       {draggingPlans.length > 0 && draggingTargetDate && (

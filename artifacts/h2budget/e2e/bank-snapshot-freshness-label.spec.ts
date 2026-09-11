@@ -50,9 +50,25 @@ test.describe("Bank balance freshness label — Banking + Forecast", () => {
     await expect(freshness).not.toContainText("Last auto-updated");
     await expect(page.getByTestId("text-bank-freshness-stale")).toHaveCount(0);
 
-    // The label used to be hidden below the `sm` breakpoint.
+    // The label used to be hidden below the `sm` breakpoint. At 390px it must
+    // be on screen and whole: visible alone would pass for a label squeezed or
+    // clipped by the card head.
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(freshness).toBeVisible();
+    const box = await freshness.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    const textWidth = await freshness.evaluate((el) => el.scrollWidth);
+    expect(box!.width).toBeGreaterThanOrEqual(textWidth - 1);
+    // …and on ONE line. A squeezed label wraps instead of overflowing, and the
+    // width check alone passes for a wrapped one.
+    const lineHeight = await freshness.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const lh = parseFloat(style.lineHeight);
+      return Number.isFinite(lh) ? lh : parseFloat(style.fontSize) * 1.5;
+    });
+    expect(box!.height).toBeLessThan(lineHeight * 1.5);
   });
 
   test("renders 'Set manually …' in the Forecast bank card's meta line", async ({

@@ -24,6 +24,7 @@ import { VersionUpdatePrompt } from "@/components/version-update-prompt";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { PageErrorBoundary } from "@/components/page-error-boundary";
+import { askForSpineAgainIfFailed } from "@/lib/spineRecovery";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -272,9 +273,10 @@ function writeAuthHint(on: boolean): void {
 // for no reason.
 //
 // `retry: false` on purpose: if the session JWT has expired the server answers
-// 401, and the right response is to drop it silently — the normal `useQuery`
-// refetches once Clerk has refreshed the cookie. Retrying would just spend the
-// open on doomed requests.
+// 401, and the right response is to drop it silently. Retrying would just spend
+// the open on doomed requests. ⚠️ A page that mounts meanwhile shares this
+// request instead of starting its own, so it is `ProtectedShell` that asks
+// again once Clerk has signed in (`askForSpineAgainIfFailed`).
 if (typeof window !== "undefined" && readAuthHint()) {
   void queryClient
     .prefetchQuery({
@@ -284,7 +286,7 @@ if (typeof window !== "undefined" && readAuthHint()) {
       retry: false,
     })
     .catch(() => {
-      /* 401 before Clerk refreshes the cookie — the mounted query refetches */
+      /* 401 before Clerk refreshes the cookie — ProtectedShell asks again */
     });
 }
 
@@ -399,6 +401,15 @@ function ProtectedShell() {
   useEffect(() => {
     if (!isLoaded) return;
     writeAuthHint(Boolean(isSignedIn));
+  }, [isLoaded, isSignedIn]);
+
+  // ⚠️ A PAGE CAN JOIN THE PREFETCH'S FAILURE, and would then sit on "Couldn't
+  // load" for a valid session. Once Clerk has signed in, a first spine request
+  // that failed, or fails after this point, is asked for again: one ask, never
+  // a loop (the helper spells out what that costs).
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    return askForSpineAgainIfFailed(queryClient);
   }, [isLoaded, isSignedIn]);
 
   // ⭐ THE OPTIMISTIC SHELL. Clerk hasn't answered yet, but this browser has

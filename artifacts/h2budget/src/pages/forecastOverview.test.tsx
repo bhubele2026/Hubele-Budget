@@ -25,6 +25,9 @@ const state = vi.hoisted(() => ({
   spineUpdatedAt: null as string | null,
   refetchSpine: vi.fn(),
   cashSignal: undefined as unknown,
+  // The forecast query's own error flag: true after a failed load or refresh.
+  cashSignalError: false,
+  refetchSignal: vi.fn(),
 }));
 
 vi.mock("@/hooks/useSpine", () => ({
@@ -38,7 +41,11 @@ vi.mock("@/hooks/useSpine", () => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
-  useGetForecastCashSignal: () => ({ data: state.cashSignal }),
+  useGetForecastCashSignal: () => ({
+    data: state.cashSignal,
+    isError: state.cashSignalError,
+    refetch: state.refetchSignal,
+  }),
   getGetForecastCashSignalQueryKey: () => ["/api/forecast/cash-signal"],
 }));
 
@@ -112,6 +119,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.spine = SPINE;
   state.cashSignal = CASH_SIGNAL;
+  state.cashSignalError = false;
 });
 
 /** The full rendered text of one Stat tile — label, value and hint. */
@@ -240,5 +248,54 @@ describe("Forecast Overview — a failed spine refresh keeps the numbers and say
   it("shows no spine banner when the spine loaded", () => {
     render(<ForecastOverviewPage />);
     expect(screen.queryByTestId("fo-refresh-banner")).toBeNull();
+  });
+});
+
+describe("Forecast Overview — the forecast's own banner says refresh or load, truthfully", () => {
+  it("after a failed refresh, says it couldn't refresh and keeps the figures", () => {
+    state.cashSignalError = true;
+    render(<ForecastOverviewPage />);
+    const banner = screen.getByTestId("fo-forecast-error");
+    expect(banner.textContent).toContain("Couldn't refresh the forecast.");
+    expect(statOf("fo-stat-ending")).toContain(usd(CASH_SIGNAL.endingBalance));
+  });
+
+  it("after a failed first load, says it couldn't load, not refresh", () => {
+    state.cashSignal = undefined;
+    state.cashSignalError = true;
+    render(<ForecastOverviewPage />);
+    const banner = screen.getByTestId("fo-forecast-error");
+    expect(banner.textContent).toContain("Couldn't load the forecast.");
+    expect(banner.textContent).not.toContain("refresh");
+  });
+
+  it("names its Retry apart from the spine banner's, and retries the forecast", () => {
+    state.spine = undefined;
+    state.spineState = "failed";
+    state.cashSignal = undefined;
+    state.cashSignalError = true;
+    render(<ForecastOverviewPage />);
+    const retryForecast = screen.getByRole("button", { name: "Retry forecast" });
+    retryForecast.click();
+    expect(state.refetchSignal).toHaveBeenCalledTimes(1);
+    expect(state.refetchSpine).not.toHaveBeenCalled();
+    state.spineState = "loaded";
+  });
+});
+
+describe("Forecast Overview — no bar drawn from zeros", () => {
+  it("shows a dash, not an In/Out bar, until there is a projection", () => {
+    state.cashSignal = undefined;
+    render(<ForecastOverviewPage />);
+    const inOut = screen.getByTestId("fo-in-out");
+    expect(screen.getByTestId("fo-in-out-empty").textContent).toBe("—");
+    expect(within(inOut).queryByRole("img")).toBeNull();
+  });
+
+  it("draws the In/Out bar once the projection is ready", () => {
+    render(<ForecastOverviewPage />);
+    const inOut = screen.getByTestId("fo-in-out");
+    expect(screen.queryByTestId("fo-in-out-empty")).toBeNull();
+    expect(within(inOut).getByRole("img")).toBeTruthy();
   });
 });

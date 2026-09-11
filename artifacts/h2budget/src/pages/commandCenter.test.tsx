@@ -44,7 +44,6 @@ const state = vi.hoisted(() => ({
   txns: [] as Array<Record<string, unknown>>,
   recurring: [] as Array<Record<string, unknown>>,
   settings: undefined as unknown,
-  cashSignal: undefined as unknown,
   spendingFacts: undefined as unknown,
 }));
 
@@ -139,7 +138,6 @@ beforeEach(() => {
     unplannedAllowanceAmount: "150",
     preferences: {},
   };
-  state.cashSignal = { snapshotAt: `${ym}-14T09:30:00.000Z`, snapshotSource: "plaid" };
   state.spendingFacts = { realSpend: { total: 0 }, byCategory: [] };
   state.recurring = [];
   state.txns = [];
@@ -476,6 +474,37 @@ describe("Banking — a failed spine refresh keeps the numbers and says so", () 
   it("shows no banner when the spine loaded", () => {
     render(<CommandCenterPage />);
     expect(screen.queryByTestId("cc-refresh-banner")).toBeNull();
+  });
+});
+
+describe("Banking — a hint is a claim, so it waits for the spine", () => {
+  it("does not say 'none scheduled' or 'next 90 days' before the spine answers", () => {
+    state.spine = undefined;
+    render(<CommandCenterPage />);
+    expect(screen.getByTestId("cc-stat-next-bill").textContent).not.toContain("none scheduled");
+    expect(screen.getByTestId("cc-stat-low-point").textContent).not.toContain("next 90 days");
+  });
+
+  it("says 'none scheduled' once the spine answers with no bill", () => {
+    state.spine = { ...SPINE, nextBill: null };
+    render(<CommandCenterPage />);
+    expect(screen.getByTestId("cc-stat-next-bill").textContent).toContain("none scheduled");
+  });
+
+  it("says 'next 90 days' once the spine answers with a forecast that never goes negative", () => {
+    state.spine = { ...SPINE, forecast: { ...SPINE.forecast, runwayDays: null } };
+    render(<CommandCenterPage />);
+    expect(screen.getByTestId("cc-stat-low-point").textContent).toContain("next 90 days");
+  });
+
+  it("leaves no empty freshness slot beside Sync without a bank snapshot", () => {
+    state.spine = undefined;
+    render(<CommandCenterPage />);
+    expect(screen.queryByTestId("cc-freshness")).toBeNull();
+    state.spine = SPINE;
+    cleanup();
+    render(<CommandCenterPage />);
+    expect(screen.getByTestId("cc-freshness")).toBeTruthy();
   });
 });
 

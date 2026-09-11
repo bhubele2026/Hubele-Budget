@@ -30,3 +30,27 @@ describe("future date cash lookup", () => {
     expect(screen.queryByText("$275.55")).toBeNull();
   });
 });
+
+describe("future date cash lookup — says why there is no answer", () => {
+  it("while the forecast loads, says so rather than asking for a bank balance", () => {
+    render(<ForecastDateBalance signal={undefined} state="cold" />);
+    const tile = screen.getByTestId("forecast-date-balance");
+    expect(tile.textContent).toContain("Loading the forecast…");
+    expect(tile.textContent).not.toContain("Set a bank balance");
+    expect(tile.textContent).not.toContain("$0.00");
+  });
+
+  it("when the forecast failed to load, says it could not load", () => {
+    render(<ForecastDateBalance signal={undefined} state="failed" />);
+    const tile = screen.getByTestId("forecast-date-balance");
+    expect(tile.textContent).toContain("Couldn't load the forecast");
+    expect(tile.textContent).not.toContain("Set a bank balance");
+  });
+
+  it("with no bank balance yet, keeps the setup hint", () => {
+    render(<ForecastDateBalance signal={{ ...signal, status: "no_data" }} state="loaded" />);
+    expect(screen.getByTestId("forecast-date-balance").textContent).toContain(
+      "Set a bank balance and load the forecast",
+    );
+  });
+});

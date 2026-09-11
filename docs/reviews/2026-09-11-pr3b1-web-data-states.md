@@ -11,9 +11,10 @@ PR3b2 follows with the $0 sweep and "Why this number?". Plan: `~/.claude/plans/h
   - A failed first load looked exactly like "still loading", forever.
 - **`useReviewInboxCount` returned 0 for loading, failed and empty alike.** So the Chase page said "All
   reconciled" while the spine was still loading or had failed.
-- **Banking judged bank freshness in the browser.**
-  - It read the timestamp from the cash-signal query, a whole extra request for two fields.
-  - It hid the label below the `sm` breakpoint, so a phone never saw it.
+- **Banking's freshness label was only a timestamp.**
+  - It showed how long ago the snapshot was taken, read from the cash-signal query — a whole extra request for
+    two fields — with no notion of a failed refresh or a quiet feed.
+  - It was hidden below the `sm` breakpoint, so a phone never saw it.
 - **The freshness-label end-to-end spec could not pass.** It targeted a Dashboard tile and a Transactions meta
   line that no longer exist. CI runs Playwright only when `E2E_ENABLED` is set, so nobody noticed.
 
@@ -65,8 +66,9 @@ PR3b2 follows with the $0 sweep and "Why this number?". Plan: `~/.claude/plans/h
 - **Every figure on Banking and Forecast Overview is still the spine's.** The parity tests are unchanged.
 - **The landing page.** Untouched, still no dollar figures; its bell already hides an unknown count.
 - **The fresh-state wording** and the `text-bank-snapshot-freshness` test id.
-- **The Forecast page's own snapshot meta line.** It moves to `FreshnessLine` in PR3b2, with the rest of that
-  page.
+- **The Forecast page's own snapshot meta line.** It keeps its timestamp label for now. Moving it onto the
+  server's verdict means the Forecast page reading the spine, and a later PR does that together with the page's
+  test mocks.
 
 ## Tests
 
@@ -94,7 +96,8 @@ PR3b2 follows with the $0 sweep and "Why this number?". Plan: `~/.claude/plans/h
   - A failed refresh shows the banner and keeps the figures.
   - A failed first load shows the banner and em dashes, never $0.
   - There is no banner when the spine loaded.
-- **`components/appShell.test.tsx`:** no badge anywhere while the count is unknown.
+- **`components/appShell.test.tsx`:** no header pill, and no count on the Review tab, while the count is unknown.
+  (The rail badge shares `railBadge`, but no test mounts it in that state.)
 
 ## Verification
 
@@ -108,11 +111,22 @@ PR3b2 follows with the $0 sweep and "Why this number?". Plan: `~/.claude/plans/h
   landing path now imports the few lines of `queryState`. No recharts on open.
 - **End-to-end:** the rewritten spec typechecks. Playwright is opt-in on CI and was not run locally.
 
-## Left for PR3b2
+## Independent review
 
-- **The $0 sweep** (the PR3 inventory, section 3):
-  - the Forecast hero and footnotes, and the Overview In/Out bar;
-  - the Chase stats and `chase-insight-strip`;
-  - `forecast-date-balance`, the Banking hints, Bills overview, and Reports.
-- **The Forecast page's snapshot meta line** onto `FreshnessLine`.
-- **"Why this number?"** on the Banking bank stat, from the typed explain response.
+A separate reviewer read `534a817` and **approved**, with nothing HIGH or MEDIUM. Its LOW and NIT findings are
+fixed in PR3b2, and listed in that PR's note:
+- a rare race where a page mounting during the failed spine prefetch keeps "Couldn't load";
+- the app-shell "unknown count" test also passing on the old code, and no Chase test for the chip itself;
+- "last updated" after a failed refresh ignoring the latest sync;
+- the 390px end-to-end check not proving the label fits;
+- copy that repeats itself or contradicts itself, and two differently worded banners;
+- an empty wrapper span, a dead test fixture, and a banner age that never ticks;
+- two overstatements in this note, corrected above.
+
+## Left for later PRs
+
+- **PR3b2:** the $0 sweep on the Forecast hero and footnotes, the Overview In/Out bar, `forecast-date-balance`,
+  the Banking hints and `chase-insight-strip`, plus this PR's review follow-ups.
+- **PR3b3:** the Chase stats, Bills overview and Reports, and the Forecast page's snapshot meta line onto
+  `FreshnessLine`.
+- **PR3b4:** "Why this number?" on the Banking bank stat, from the typed explain response.

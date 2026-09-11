@@ -222,6 +222,7 @@ export default function CommandCenterPage() {
     data: spine,
     state: spineState,
     updatedAt: spineUpdatedAt,
+    isFetching: spineFetching,
     refetch: refetchSpine,
   } = useSpine();
   const narrow = useNarrow();
@@ -378,6 +379,7 @@ export default function CommandCenterPage() {
         state={spineState}
         updatedAt={spineUpdatedAt}
         onRetry={refetchSpine}
+        refreshing={spineFetching}
         data-testid="cc-refresh-banner"
       />
       {/* ── The spine row. Five figures, one request, one instant. ────────── */}
@@ -412,9 +414,12 @@ export default function CommandCenterPage() {
           label="Next bill"
           value={money(nextBill?.amount)}
           hint={
+            // A hint is a claim too: "none scheduled" only once the spine has answered.
             nextBill
               ? `${nextBill.name} · ${shortDate(nextBill.dueDate) ?? nextBill.dueDate}`
-              : "none scheduled"
+              : spine
+                ? "none scheduled"
+                : undefined
           }
         />
         <Stat
@@ -424,7 +429,11 @@ export default function CommandCenterPage() {
           value={money(lowPoint)}
           tone={lowPoint != null && Number(lowPoint) < 0 ? "bad" : "navy"}
           hint={
-            runwayDays != null ? `negative in ${runwayDays} days` : "next 90 days"
+            runwayDays != null
+              ? `negative in ${runwayDays} days`
+              : spine?.forecast
+                ? "next 90 days"
+                : undefined
           }
         />
       </div>
@@ -437,10 +446,13 @@ export default function CommandCenterPage() {
         range={weekRange}
         actions={
           <>
-            {/* The server's verdict on the bank balance (PR3a), at every width. */}
-            <span className="text-micro text-neutral-400">
-              <FreshnessLine bank={spine?.bank} />
-            </span>
+            {/* The server's verdict on the bank balance (PR3a), at every width.
+                No slot at all without a snapshot, so Sync keeps its place. */}
+            {spine?.bank?.source && spine.bank.asOfDate && (
+              <span className="text-micro text-neutral-400" data-testid="cc-freshness">
+                <FreshnessLine bank={spine.bank} />
+              </span>
+            )}
             {/* `compact` because the head already carries a timestamp — the
                 button's own "Last synced" line would stack a second one under
                 it and read as a duplicate. It stays in the tooltip. */}
