@@ -30,7 +30,7 @@ import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "./householdClock";
-import { pickRemintCandidate } from "./remintMatch";
+import { laterRowIsNearer, pickRemintCandidate, type RemintBatchEntry } from "./remintMatch";
 import {
   anchorIsReconcilable,
   reconcileBankBalance,
@@ -396,6 +396,32 @@ function plaidAmountToSigned(t: PlaidTxn): string {
   // Plaid: positive = money out (debit). We use negative = spend.
   const n = Number(t.amount ?? 0);
   return (-n).toFixed(2);
+}
+
+/** (PR4d review) One incoming batch, in order, as the re-mint tie-break sees it. */
+function remintBatchEntries(rows: readonly PlaidTxn[], onFile: ReadonlySet<string>): RemintBatchEntry[] {
+  return rows.map((r) => ({
+    id: r.transaction_id,
+    accountId: r.account_id,
+    date: r.date,
+    signedAmount: plaidAmountToSigned(r),
+    namesPendingRow: !!r.pending_transaction_id,
+    onFileAtStart: onFile.has(r.transaction_id),
+  }));
+}
+
+/** (PR4d review) Which of these Plaid ids a ledger row already holds. */
+async function plaidIdsOnFile(ids: readonly string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  const unique = [...new Set(ids)];
+  for (let i = 0; i < unique.length; i += 1000) {
+    const rows = await db
+      .select({ ptid: transactionsTable.plaidTransactionId })
+      .from(transactionsTable)
+      .where(inArray(transactionsTable.plaidTransactionId, unique.slice(i, i + 1000)));
+    for (const r of rows) if (r.ptid) found.add(r.ptid);
+  }
+  return found;
 }
 
 /**
@@ -1302,7 +1328,14 @@ export async function syncPlaidItem(
         .map((r) => r.pending_transaction_id)
         .filter((id): id is string => !!id),
     );
-    for (const t of [...added, ...modified]) {
+    // (PR4d review) The batch in order, for the re-mint tie-break: a gone row goes
+    // to the incoming row nearest its date, not to the first in the list.
+    const batchRows = [...added, ...modified];
+    const batchEntries = remintBatchEntries(
+      batchRows,
+      await plaidIdsOnFile(batchRows.map((r) => r.transaction_id)),
+    );
+    for (const [batchIndex, t] of batchRows.entries()) {
       const description = t.merchant_name || t.name || "(no description)";
       // `personal_finance_category` is the modern Plaid taxonomy used to
       // detect transfers (TRANSFER_IN/OUT) and as a fallback signal when no
@@ -1367,6 +1400,15 @@ export async function syncPlaidItem(
       const occurredAt =
         pickRealTime(t.datetime) ?? pickRealTime(t.authorized_datetime);
       const signedAmount = plaidAmountToSigned(t);
+      // (PR4d review) A row already holding this id makes this an update of that
+      // row. Nothing below may move another row onto the id — the first-sync
+      // merge, the pending→posted re-key, the re-mint — or it collides on the
+      // unique index (23505), fails the sync and pins the cursor.
+      const [sameIdRow] = await db
+        .select({ id: transactionsTable.id })
+        .from(transactionsTable)
+        .where(eq(transactionsTable.plaidTransactionId, t.transaction_id))
+        .limit(1);
       // Only attribute a transaction to a debt when it is actually a
       // balance-reducing PAYMENT on the linked liability account, never a
       // purchase. Plaid uses positive=debit/charge on liability accounts; our
@@ -1466,7 +1508,7 @@ export async function syncPlaidItem(
               )
             : null;
         let mergedTo: string | null = null;
-        if (baseScope) {
+        if (baseScope && !sameIdRow) {
           // Attempt 1: exact (date, amount), occurredOn <= cutoff.
           const [exactMatch] = await db
             .select({ id: transactionsTable.id })
@@ -1534,7 +1576,7 @@ export async function syncPlaidItem(
       // no-op (the id no longer exists on any row).
       {
         const ptid = t.pending_transaction_id;
-        if (ptid) {
+        if (ptid && !sameIdRow) {
           const [pendingMatch] = await db
             .select({ id: transactionsTable.id })
             .from(transactionsTable)
@@ -1597,14 +1639,7 @@ export async function syncPlaidItem(
       {
         const remintLow = fmtISO(addDays(parseISO(t.date), -2));
         const remintHigh = fmtISO(addDays(parseISO(t.date), 2));
-        // (PR4d review) A row already holding this id makes this an update of that
-        // row, never a re-mint: adopting would collide on the unique index (23505),
-        // abort the sync or the account's backfill, and leave the cursor pinned.
-        const [sameIdRow] = await db
-          .select({ id: transactionsTable.id })
-          .from(transactionsTable)
-          .where(eq(transactionsTable.plaidTransactionId, t.transaction_id))
-          .limit(1);
+        // (PR4d review) `sameIdRow` (looked up above): an update, never a re-mint.
         const remintCandidates = sameIdRow
           ? []
           : await db
@@ -1635,6 +1670,7 @@ export async function syncPlaidItem(
           t.date,
           (c) =>
             !successorIds.has(c.oldPtid) &&
+            !laterRowIsNearer(batchEntries, batchIndex, c.occurredOn) &&
             (removedIds.has(c.oldPtid) || (startedFromNullCursor && !liveIds.has(c.oldPtid))),
         );
         if (remintMatch) {
@@ -3516,7 +3552,12 @@ export async function runGapBackfillForItem(
         );
       }
       const windowStart: string = startStr;
-      for (const t of all) {
+      // (PR4d review) The list in order, for the re-mint tie-break (see the cursor path).
+      const batchEntries = remintBatchEntries(
+        all,
+        await plaidIdsOnFile(all.map((x) => x.transaction_id)),
+      );
+      for (const [batchIndex, t] of all.entries()) {
         const description = t.merchant_name || t.name || "(no description)";
         const pfc = (t as unknown as {
           personal_finance_category?: { primary?: string; detailed?: string } | null;
@@ -3530,6 +3571,14 @@ export async function runGapBackfillForItem(
           rules,
         );
         const signedAmount = plaidAmountToSigned(t);
+        // (PR4d review) A row already holding this id makes this an update of that
+        // row: the manual merge, the pending→posted re-key and the re-mint below
+        // must not move another row onto it (23505 would abandon the account).
+        const [sameIdRow] = await db
+          .select({ id: transactionsTable.id })
+          .from(transactionsTable)
+          .where(eq(transactionsTable.plaidTransactionId, t.transaction_id))
+          .limit(1);
         const linkedDebtId = debtIdByExternal.get(t.account_id) ?? null;
         const debtId =
           linkedDebtId && Number(signedAmount) > 0 ? linkedDebtId : null;
@@ -3563,7 +3612,7 @@ export async function runGapBackfillForItem(
             inArray(transactionsTable.source, ["manual", "bank"]),
           );
         }
-        if (mergeWhere) {
+        if (mergeWhere && !sameIdRow) {
           const [match] = await db
             .select({ id: transactionsTable.id })
             .from(transactionsTable)
@@ -3617,7 +3666,7 @@ export async function runGapBackfillForItem(
         // `removed` delete for the old id.
         {
           const ptid = t.pending_transaction_id;
-          if (ptid) {
+          if (ptid && !sameIdRow) {
             const [pendingMatch] = await db
               .select({ id: transactionsTable.id })
               .from(transactionsTable)
@@ -3677,14 +3726,7 @@ export async function runGapBackfillForItem(
         // both ids for support diffing.
         const remintLow = fmtISO(addDays(parseISO(t.date), -2));
         const remintHigh = fmtISO(addDays(parseISO(t.date), 2));
-        // (PR4d review) A row already holding this id makes this an update of that
-        // row, never a re-mint: adopting would collide on the unique index (23505),
-        // abort the sync or the account's backfill, and leave the cursor pinned.
-        const [sameIdRow] = await db
-          .select({ id: transactionsTable.id })
-          .from(transactionsTable)
-          .where(eq(transactionsTable.plaidTransactionId, t.transaction_id))
-          .limit(1);
+        // (PR4d review) `sameIdRow` (looked up above): an update, never a re-mint.
         const remintCandidates = sameIdRow
           ? []
           : await db
@@ -3717,6 +3759,7 @@ export async function runGapBackfillForItem(
           (c) =>
             fetchedComplete &&
             !successorIds.has(c.oldPtid) &&
+            !laterRowIsNearer(batchEntries, batchIndex, c.occurredOn) &&
             !c.occurredOnUserOverridden &&
             !fetchedIds.has(c.oldPtid) &&
             c.occurredOn >= windowStart &&

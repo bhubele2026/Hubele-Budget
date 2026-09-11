@@ -450,3 +450,89 @@ describe("(PR4d review) an incoming id already on file is an update, never a re-
     expect((await rowsFor()).map((r) => r.plaidTransactionId).sort()).toEqual(["A", "B"]);
   });
 });
+
+describe("(PR4d second look) a genuine re-mint and a separate same-amount charge in one batch", () => {
+  // Balance 1,000.00 read yesterday, already holding a posted −25 (OLD). Plaid
+  // re-mints OLD as NEW (dated yesterday) and a separate −25 (B) happens today.
+  // B is listed first. NEW must take OLD's row; B is new: true cash is 975.00.
+  async function seed(cursor: string | null) {
+    const { itemRowId, ext, acctRowId } = await seedChase(cursor);
+    const { today, yesterday, readAt } = await snapshotReadYesterday(acctRowId);
+    const oldRowId = await ledgerRow({
+      ext,
+      ptid: "OLD",
+      date: yesterday,
+      createdAt: new Date(readAt.getTime() - 3_600_000),
+    });
+    return { itemRowId, ext, today, yesterday, oldRowId };
+  }
+  async function expectResult(oldRowId: string) {
+    const rows = await rowsFor();
+    expect(rows.map((r) => r.plaidTransactionId).sort()).toEqual(["B", "NEW"]);
+    expect(rows.find((r) => r.id === oldRowId)?.plaidTransactionId).toBe("NEW");
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.bankToday).toBe("975.00");
+  }
+
+  it("gap backfill (newest first): the re-mint takes the old row, the separate charge is new — cash 975.00", async () => {
+    const { itemRowId, ext, today, yesterday, oldRowId } = await seed("cursor-prev");
+    nextGet = [plaidTxn(ext, "B", today), plaidTxn(ext, "NEW", yesterday)];
+    await runGapBackfillForItem(TEST_USER, itemRowId, { overlapDays: 1 });
+    await expectResult(oldRowId);
+  });
+
+  it("cursor sync with OLD removed: the same", async () => {
+    const { itemRowId, ext, today, yesterday, oldRowId } = await seed("cursor-prev");
+    nextSync = {
+      added: [plaidTxn(ext, "B", today), plaidTxn(ext, "NEW", yesterday)],
+      modified: [],
+      removed: [{ transaction_id: "OLD" }],
+    };
+    await syncPlaidItem(TEST_USER, itemRowId);
+    await expectResult(oldRowId);
+  });
+
+  it("null-cursor replay without OLD: the same", async () => {
+    const { itemRowId, ext, today, yesterday, oldRowId } = await seed(null);
+    nextSync = { added: [plaidTxn(ext, "B", today), plaidTxn(ext, "NEW", yesterday)], modified: [], removed: [] };
+    await syncPlaidItem(TEST_USER, itemRowId);
+    await expectResult(oldRowId);
+  });
+});
+
+describe("(PR4d second look) the pending→posted re-key never moves a row onto an id already on file", () => {
+  const TODAY = new Date("2026-09-12T15:00:00Z");
+
+  it("gap backfill: pending P and posted S (naming P) both on file — the account's later rows still land", async () => {
+    const { itemRowId, ext } = await seedChase("cursor-prev");
+    await ledgerRow({ ext, ptid: "P", date: "2026-09-10", pending: true });
+    await ledgerRow({ ext, ptid: "S", date: "2026-09-11" });
+    nextGet = [
+      plaidTxn(ext, "S", "2026-09-11", { pending_transaction_id: "P" }),
+      plaidTxn(ext, "COFFEE1", "2026-09-12", { amount: 12, name: "CORNER COFFEE" }),
+    ];
+
+    const result = await runGapBackfillForItem(TEST_USER, itemRowId, { today: TODAY, overlapDays: 1 });
+
+    expect(result.added).toBe(1);
+    // P is no longer listed, so the vanished-pending sweep removes it.
+    expect((await rowsFor()).map((r) => r.plaidTransactionId).sort()).toEqual(["COFFEE1", "S"]);
+  });
+
+  it("cursor sync: S (naming P) modified with P removed — no failure, the cursor advances", async () => {
+    const { itemRowId, ext } = await seedChase("cursor-prev");
+    await ledgerRow({ ext, ptid: "P", date: "2026-09-10", pending: true });
+    await ledgerRow({ ext, ptid: "S", date: "2026-09-11" });
+    nextSync = {
+      added: [],
+      modified: [plaidTxn(ext, "S", "2026-09-11", { pending_transaction_id: "P" })],
+      removed: [{ transaction_id: "P" }],
+    };
+
+    await syncPlaidItem(TEST_USER, itemRowId);
+
+    const [item] = await db.select().from(plaidItemsTable).where(eq(plaidItemsTable.id, itemRowId));
+    expect(item!.cursor).toBe("cursor-next");
+    expect((await rowsFor()).map((r) => r.plaidTransactionId)).toEqual(["S"]);
+  });
+});

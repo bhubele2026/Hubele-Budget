@@ -33,8 +33,13 @@ row is a separate transaction and is inserted.
 | Cursor sync (`syncPlaidItem`) | Plaid **removed** it in this sync, **or** the sync started from a null cursor (Plaid replays the whole history in `added`) and did not send it — **and** no posted row in the batch names it as its `pending_transaction_id` |
 | Gap backfill (`runGapBackfillForItem`) | the list is complete (the walk did not stop at the 20-page cap), the row's date is inside `[startStr, today]`, its id is not in the list, no posted row in the list names it as its pending row, **and** the user has not moved its date |
 
-**In both paths, no re-mint at all when a row already holds the incoming id.** That is an update of that row. Adopting
-another row onto the id would collide on the unique index (`23505`).
+**In both paths, nothing moves another row onto an incoming id a row already holds.** That is an update of that row.
+The guard covers the re-mint, the pending→posted re-key, the first-sync merge and the backfill's manual merge; each of
+them would collide on the unique index (`23505`).
+
+**A gone row goes to the incoming row nearest its date, not the first in the list.** A candidate is not adopted while a
+later, unprocessed row in the same batch is strictly nearer its date. That row must be on the same account with the
+same amount, not on file when the batch started, and not naming a pending row. Equal distances keep list order.
 
 - **Why the backfill needs the window test.** Heal, reconcile and `routes/plaid.ts:820` backfills start the day after
   the newest stored row (`overlapDays` 0), so older rows are outside the list and their absence proves nothing. The
@@ -59,7 +64,8 @@ another row onto the id would collide on the unique index (`23505`).
 - **Cash today:** the PR4b overstatement is gone in the cases reviewed: a separate charge dated ahead (1000.00 →
   **975.00**), and a pending charge that posts in the same batch as a separate same-amount charge, in either order
   (1000.00 → **975.00**).
-- **Sync reliability:** an update to an id already on file next to a same-amount row no longer throws `23505`.
+- **Sync reliability:** an incoming id already on file no longer throws `23505` in the re-mint, the pending→posted
+  re-key, the first-sync merge or the backfill's manual merge.
   - Cursor: the sync failed ("Couldn't reach Plaid") and the cursor never advanced, so the item was stuck.
   - Backfill: the rest of the account and its vanished-pending sweep were skipped. That was partly older behaviour,
     and partly a new risk from this PR's first commit.
@@ -77,7 +83,8 @@ another row onto the id would collide on the unique index (`23505`).
 
   Cash is then **understated** by the charge, the safe direction, until the dedupe pass collapses the pair. The pass
   only collapses rows with the same date, amount and fuzzy description; a re-mint that also moved the date stays
-  doubled.
+  doubled, **and no path cleans it up.** Once both ids are on file, the old row is never adopted or removed. Cash stays
+  understated by that charge until the user deletes the row.
   - **When the pass runs:**
     - after each cursor sync's upsert, only for accounts that sync touched (`plaidSync.ts` ~1779). This is *before*
       that sync's own backfills, so a duplicate a backfill inserts is not collapsed in the same sync;
@@ -103,6 +110,11 @@ another row onto the id would collide on the unique index (`23505`).
   `modified` for the new id re-inserts it, and the next pass deletes it again.
 - **Same-day, same-amount separate charges.** "Both stay" is proven only for different days. On the same day, the
   dedupe pass collapses them right after the cursor upsert (above).
+- **Batch tie-break limits.**
+  - When a genuine re-mint and a separate same-amount charge are the same number of days from the old row, the first
+    in list order takes it, as before.
+  - A row can defer to a later, nearer row that then adopts a different gone row, leaving a duplicate. Cash is then
+    understated.
 
 ## Review
 
@@ -118,6 +130,15 @@ another row onto the id would collide on the unique index (`23505`).
 | LOW: the note was wrong about placeholders; `COALESCE` kept a whole-hour placeholder | `keepFirstRealTime` treats a whole-hour value on file as a placeholder. Note corrected. Test. |
 | NIT: missing tests; dedupe churn; import order | Tests added; churn and same-day collapse disclosed; import moved below the local imports. |
 
+**Second look, `16b7720`: REQUEST CHANGES.** The round-1 fixes were verified. Two older bugs remain in the rewritten
+code; both were reproduced.
+
+| Finding | Done |
+|---|---|
+| MEDIUM: a genuine re-mint plus a separate same-amount charge in one batch — the first in list order takes the gone row (cash 1000.00 vs 975.00; certain on the backfill, also cursor and null cursor) | The batch tie-break above (`laterRowIsNearer`). Three tests, one per path. |
+| MEDIUM-LOW: the pending→posted re-key had no same-id guard (`23505`: the backfill abandons the account; the cursor stays stuck) | One same-id lookup per incoming row guards the re-key, the re-mint, the first-sync merge and the backfill's manual merge. Cursor and backfill tests; the first-sync merge guard is untested. |
+| Side effect: OLD and NEW both on file with different dates stay doubled, and no path cleans them up | Disclosed in Residuals; no automatic delete. |
+
 ## Must not change
 
 - PR4b's snapshot rule and the forecast ledger (no change to `snapshotInclusion.ts` or `forecastLedger.ts`).
@@ -128,10 +149,11 @@ another row onto the id would collide on the unique index (`23505`).
 
 ## Tests
 
-- **`lib/remintMatch.test.ts`** (5): no adoption while the old id exists; adoption when it is gone; a live candidate
+- **`lib/remintMatch.test.ts`** (8). `laterRowIsNearer`: a later, nearer row wins; never an earlier row, an equal
+  distance or itself; rows that cannot claim are ignored. `pickRemintCandidate` (5): no adoption while the old id exists; adoption when it is gone; a live candidate
   skipped for a gone one; nearest date, then id; the evidence check receives the whole candidate, and rows with no
   Plaid id are never offered.
-- **`__tests__/plaidSyncRemintDistinctCharges.integration.test.ts`** (17):
+- **`__tests__/plaidSyncRemintDistinctCharges.integration.test.ts`** (22):
   - cursor, incremental: two real −$25 charges a day apart both stay;
   - cursor, genuine re-mint (old id in `removed`): adopted in place;
   - cursor, null cursor: a replayed id is kept; an id not replayed is adopted;
@@ -148,19 +170,23 @@ another row onto the id would collide on the unique index (`23505`).
     the separate charge is new, and `bankToday` is **975.00**;
   - cursor: an id already on file next to a removed same-amount pending — no failure, the cursor advances;
   - backfill: an id already on file — the account's later rows still land;
-  - backfill: a row whose date the user moved is never treated as gone.
+  - backfill: a row whose date the user moved is never treated as gone;
+  - a genuine re-mint plus a separate same-amount charge listed first, on the backfill, the cursor (`removed`) and a
+    null-cursor replay: the re-mint takes the old row, the separate charge is new, and `bankToday` is **975.00**;
+  - pending P and posted S (naming P) both on file: the backfill's later rows still land; the cursor advances.
 - **Failing before.**
   - Against `main` (`cdc5ecc`), **8 of the first 10 integration tests fail**. The two that pass are the guards that must
     keep adopting: a genuine re-mint with the old id in `removed`, and a backfill whose full window no longer lists
     the old id.
+  - Against the second commit (`16b7720`): **all 5 tests added for the second look fail.**
   - Against this PR's first commit (`6e33497`): **6 of the 7 tests added for the review fail.** The one that passes is the cursor case with the posted row
     first: the posted row re-keys the pending row before the separate charge is handled, so that commit was already
     right in that order. It is kept to pin both orders.
 
 ## Verification
 
-- **Plaid sync tests plus the helper's unit file** (16 files): **93 pass**.
-- **Full API suite:** **120 files, 889 pass, 8 todo** (882 at `6e33497`, plus the 7 review tests).
+- **Plaid sync tests plus the helper's unit file** (16 files): **101 pass**.
+- **Full API suite:** **120 files, 897 pass, 8 todo** (889 at `16b7720`, plus 3 unit and 5 integration tests).
 - **Typecheck and build:** API typecheck clean; workspace build exit 0.
 - **Landing bundle guard:** 572.5 KB of 580, unchanged.
 - **Web suite:** not run; no web or shared-library change.

@@ -37,3 +37,44 @@ export function pickRemintCandidate<T extends RemintCandidate>(
   );
   return gone[0] ?? null;
 }
+
+/** One row of the incoming Plaid batch, as the re-mint tie-break sees it. */
+export type RemintBatchEntry = {
+  id: string;
+  accountId: string;
+  date: string;
+  signedAmount: string;
+  /** Names a pending row (`pending_transaction_id`): the pending→posted re-key claims that row instead. */
+  namesPendingRow: boolean;
+  /** A ledger row already held this id when the batch started: it is an update, never a claimant. */
+  onFileAtStart: boolean;
+};
+
+/**
+ * (PR4d review) Should the row at `index` leave a gone candidate to a later row?
+ *
+ * The batch is handled in list order. Without this, the first same-amount row
+ * takes a gone row even when a later one is its re-mint: a separate charge dated
+ * today took yesterday's re-minted row (keeping its pre-read `created_at`, so the
+ * snapshot rule held it) and the re-mint was inserted as a second held row — cash
+ * overstated. True when a later row on the same account with the same amount,
+ * not on file at the start and not naming a pending row, is strictly nearer the
+ * candidate's date. Equal distances keep list order.
+ */
+export function laterRowIsNearer(
+  batch: readonly RemintBatchEntry[],
+  index: number,
+  candidateDate: string,
+): boolean {
+  const me = batch[index];
+  if (!me) return false;
+  const target = dayNumber(candidateDate);
+  const myGap = Math.abs(dayNumber(me.date) - target);
+  for (let j = index + 1; j < batch.length; j++) {
+    const other = batch[j]!;
+    if (other.id === me.id || other.accountId !== me.accountId || other.signedAmount !== me.signedAmount) continue;
+    if (other.namesPendingRow || other.onFileAtStart) continue;
+    if (Math.abs(dayNumber(other.date) - target) < myGap) return true;
+  }
+  return false;
+}

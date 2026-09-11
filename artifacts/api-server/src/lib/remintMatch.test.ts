@@ -1,5 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { pickRemintCandidate } from "./remintMatch";
+import { laterRowIsNearer, pickRemintCandidate, type RemintBatchEntry } from "./remintMatch";
+
+const entry = (id: string, date: string, extra: Partial<RemintBatchEntry> = {}): RemintBatchEntry => ({
+  id,
+  accountId: "chase",
+  date,
+  signedAmount: "-25.00",
+  namesPendingRow: false,
+  onFileAtStart: false,
+  ...extra,
+});
+
+describe("laterRowIsNearer", () => {
+  it("defers to a later row strictly nearer the candidate's date — the re-mint, not the separate charge", () => {
+    const batch = [entry("B", "2026-09-11"), entry("NEW", "2026-09-10")];
+    expect(laterRowIsNearer(batch, 0, "2026-09-10")).toBe(true);
+    expect(laterRowIsNearer(batch, 1, "2026-09-10")).toBe(false);
+  });
+
+  it("never defers to an earlier row, to an equal distance, or to itself", () => {
+    expect(laterRowIsNearer([entry("NEW", "2026-09-10"), entry("B", "2026-09-11")], 1, "2026-09-10")).toBe(false);
+    expect(laterRowIsNearer([entry("B", "2026-09-11"), entry("C", "2026-09-09")], 0, "2026-09-10")).toBe(false);
+    expect(laterRowIsNearer([entry("B", "2026-09-11"), entry("B", "2026-09-10")], 0, "2026-09-10")).toBe(false);
+  });
+
+  it("ignores later rows that cannot claim it: another account or amount, on file, or naming a pending row", () => {
+    const at = (extra: Partial<RemintBatchEntry>) =>
+      laterRowIsNearer([entry("B", "2026-09-11"), entry("X", "2026-09-10", extra)], 0, "2026-09-10");
+    expect(at({ accountId: "savings" })).toBe(false);
+    expect(at({ signedAmount: "-26.00" })).toBe(false);
+    expect(at({ onFileAtStart: true })).toBe(false);
+    expect(at({ namesPendingRow: true })).toBe(false);
+    expect(at({})).toBe(true);
+  });
+});
 
 const row = (id: string, oldPtid: string | null, occurredOn: string) => ({ id, oldPtid, occurredOn });
 
