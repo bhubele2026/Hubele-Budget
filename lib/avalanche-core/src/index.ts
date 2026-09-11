@@ -23,6 +23,18 @@ export {
 } from "./snapshotInclusion";
 export { descriptionsFuzzyEqual, tokenizeDescription } from "./descriptionMatch";
 export {
+  labelEvidence,
+  matchPlansToRows,
+  MATCH_EARLY_DAYS,
+  MATCH_LATE_DAYS,
+  MATCH_STOP_WORDS,
+  MATCH_STRICT_DAYS,
+  type MatchConfidence,
+  type MatchPlan,
+  type MatchRow,
+  type PlanRowMatch,
+} from "./planMatch";
+export {
   canSupersede,
   pairPendingWithPosted,
   SUPERSEDE_MAX_DAYS,
