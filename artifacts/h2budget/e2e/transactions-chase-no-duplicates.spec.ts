@@ -1,5 +1,6 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator, type Response } from "@playwright/test";
 import { eq } from "drizzle-orm";
+import type { LedgerPage } from "@workspace/api-client-react";
 import {
   db,
   forecastSettingsTable,
@@ -15,38 +16,34 @@ import {
 } from "./helpers/clerk";
 
 /**
- * End-to-end coverage for task #459 (browser-level guarantee for #452).
+ * End-to-end coverage for task #459 (browser-level guarantee for #452),
+ * rewritten for PR14: the Chase page (`/transactions`) reads the server's
+ * paginated ledger (GET /api/transactions/ledger). The browser no longer
+ * dedupes rows (`dedupeTransactionsByIdentity` is gone from the page); the
+ * server settles what each row moves the balance by.
  *
- * Task #452 added thorough server-side dedupe coverage
- * (`dedupeTransactions.integration.test.ts`,
- * `plaidFirstSyncCutoff.integration.test.ts`,
- * `plaidAmexResyncNoDuplicates.integration.test.ts`) but none of those
- * specs drive the actual rendered Transactions page. The Chase page's
- * client-side dedupe (`dedupeTransactionsByIdentity` in
- * `src/lib/chaseScope.ts`, applied inside the `chaseTransactions` memo
- * on `src/pages/transactions.tsx`) is the last line of defense when a
- * Plaid sync briefly leaves a twin row in the React Query cache — for
- * example, when the dedupe report repointed forecast resolutions and
- * deleted the loser server-side but the client list hasn't yet been
- * invalidated, or when a re-sync delivers the survivor's row a second
- * time before the loser is GC'd.
+ * The guarantee is unchanged: a purchase a relink leaves on two accounts is
+ * never counted twice. What changed is how: the server lists both copies, each
+ * once, and the copy on the mask twin (same institution + mask + type +
+ * subtype, a second `plaid_accounts` row) counts 0 (`balanceReason`
+ * `not_bank`), shown with a "Not counted" chip. The day total, Money out and
+ * the balances sum counted rows only.
  *
- * What we want to lock in here: when GET /api/transactions returns two
- * rows that share a `plaidTransactionId` (the historical Chase
- * duplicate shape), the rendered Transactions page MUST show that
- * Chase row exactly once. No duplicate `row-tx-*` for the survivor's
- * description, no doubled day-net, and the "{filtered} of
- * {monthScoped}" counter must read "1 of 1".
- *
- * Seeding strategy mirrors `transactions-chase-month-tiles.spec.ts`
- * (#447): a single linked Chase checking account anchors the bank
- * snapshot (so the chase-account-picker is hidden and the page surfaces
- * the snapshot account by default), and GET /api/transactions is mocked
- * to return the duplicate-bearing payload. The DB's
- * `transactions_plaid_txn_uq` unique index would block inserting the
- * duplicate via the real insert path, but the regression #452 was about
- * a duplicate sitting in the cached list at render time, so a
- * network-level mock is the faithful reproduction.
+ * Strategy (no network mocks: the rows go through the real ledger code):
+ *   1. Seed one Chase checking account that owns the bank snapshot, and its
+ *      mask twin under a second Chase item (a relink). The twin carries a
+ *      different account name and `autoDedupeRanAt` is stamped, so no dedupe
+ *      hook collapses the pair before the ledger reads it; the server's twin
+ *      rule ignores the name.
+ *   2. Last month: the same purchase (-$12.34, same day, time and
+ *      description) on both accounts, and a solo -$4.50 on another day.
+ *      The relinked copy has its own Plaid id: `transactions_plaid_txn_uq`
+ *      forbids two rows with one `plaidTransactionId`, so the `duplicate`
+ *      reason cannot be seeded here (the API integration tests cover it).
+ *   3. Assert: each row renders once (no id twice), the twin copy carries
+ *      "Not counted" and the original does not, the day total is -$12.34 (not
+ *      -$24.68), Money out is $16.84 (not the listed $29.18), and the balance
+ *      card's Start is End plus $16.84 (not $29.18).
  */
 
 const provisionedUserIds: string[] = [];
@@ -74,10 +71,78 @@ test.afterAll(async () => {
   await cleanupTestUsers(provisionedUserIds);
 });
 
-test.describe("Chase Transactions page — no duplicate rows after sync (#459, covers #452)", () => {
-  test("a Chase row that previously twinned now renders exactly once on /transactions", async ({
+const HOUSEHOLD_TZ = "America/Chicago";
+
+/** The calendar day of an instant in the household's zone, YYYY-MM-DD. */
+function householdDateOf(d: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: HOUSEHOLD_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (type: string) => {
+    const v = parts.find((p) => p.type === type)?.value;
+    if (!v) throw new Error(`Intl gave no ${type} for ${d.toISOString()}`);
+    return v;
+  };
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** The first day of the month before the household's current month. */
+function previousMonthStart(today: string): string {
+  const y = Number(today.slice(0, 4));
+  const m0 = Number(today.slice(5, 7)) - 1;
+  return new Date(Date.UTC(y, m0 - 1, 1)).toISOString().slice(0, 10);
+}
+
+/** Integer cents from a server money string ("5000.00", "-12.34"). */
+function parseCents(raw: string | null | undefined): number {
+  if (raw == null) throw new Error("expected a money string, got null");
+  const m = raw.trim().match(/^(-?)(\d+)(?:\.(\d{1,2}))?$/);
+  if (!m) throw new Error(`could not parse money: "${raw}"`);
+  const cents = Number(m[2]) * 100 + Number((m[3] ?? "0").padEnd(2, "0"));
+  return m[1] === "-" ? -cents : cents;
+}
+
+/** Cents as the page renders money (`formatCurrency`): "$1,234.56", "-$12.34". */
+function usd(cents: number): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+    cents / 100,
+  );
+}
+
+/** A day total / signed figure: "+$x.xx" when positive, else `formatCurrency`. */
+function signedUsd(cents: number): string {
+  return cents > 0 ? `+${usd(cents)}` : usd(cents);
+}
+
+function isRegisterLedger(from: string) {
+  return (res: Response): boolean => {
+    if (res.request().method() !== "GET") return false;
+    const u = new URL(res.url());
+    if (!u.pathname.endsWith("/api/transactions/ledger")) return false;
+    if (u.searchParams.get("from") !== from) return false;
+    if (u.searchParams.has("pending")) return false;
+    if (u.searchParams.has("account")) return false;
+    return !u.searchParams.has("cursor");
+  };
+}
+
+async function readLedger(res: Response): Promise<LedgerPage> {
+  expect(res.status(), `ledger request failed: ${res.url()}`).toBe(200);
+  return (await res.json()) as LedgerPage;
+}
+
+function legendRow(card: Locator, label: "In" | "Out" | "Net"): Locator {
+  return card.getByText(label, { exact: true }).locator("xpath=..");
+}
+
+test.describe("Chase Transactions page — a relinked twin is listed once and never counted twice (#459, covers #452, PR14 ledger)", () => {
+  test("the same purchase on a Chase account and its mask twin renders once each, the twin copy is Not counted, and the day total, Money out and balances count it once", async ({
     browser,
   }) => {
+    test.setTimeout(120_000);
     const { userId, email, password } = await createTestUser(
       "txn-chase-no-dup",
       provisionedUserIds,
@@ -85,10 +150,6 @@ test.describe("Chase Transactions page — no duplicate rows after sync (#459, c
     const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
-    // --- Direct DB seed: one Chase checking account that owns the
-    // bank snapshot anchor. Keeping it to a single linked account
-    // means the chase-account-picker isn't rendered and the duplicate
-    // assertion below is the only thing under test.
     const suffix = Math.random().toString(36).slice(2, 8);
     const [item] = await db
       .insert(plaidItemsTable)
@@ -106,7 +167,7 @@ test.describe("Chase Transactions page — no duplicate rows after sync (#459, c
       .values({
         userId,
         householdId,
-        itemId: item.id,
+        itemId: item!.id,
         accountId: `e2e-acct-${suffix}`,
         name: "Total Checking",
         mask: "5526",
@@ -114,171 +175,174 @@ test.describe("Chase Transactions page — no duplicate rows after sync (#459, c
         subtype: "checking",
       })
       .returning();
+    // The relink: a second Chase item and a second `plaid_accounts` row for the
+    // same physical account (institution + mask + type + subtype).
+    const [relinkItem] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId,
+        householdId,
+        itemId: `e2e-item-relink-${suffix}`,
+        accessToken: "e2e-no-access",
+        institutionName: "Chase",
+        institutionSlug: "chase",
+      })
+      .returning();
+    const [twin] = await db
+      .insert(plaidAccountsTable)
+      .values({
+        userId,
+        householdId,
+        itemId: relinkItem!.id,
+        accountId: `e2e-acct-relink-${suffix}`,
+        name: "Total Checking (relinked)",
+        mask: "5526",
+        type: "depository",
+        subtype: "checking",
+      })
+      .returning();
 
-    // Pre-populate the bank snapshot so the snapshot-anchored balance
-    // tiles render (otherwise the page falls back to the "Unavailable"
-    // placeholder). The canonical April-end value is deliberately the
-    // already-correct one, not a stale legacy balance.
+    const today = householdDateOf(new Date());
+    const monthStart = previousMonthStart(today);
+    const twinDay = `${monthStart.slice(0, 8)}08`;
+    const soloDay = `${monthStart.slice(0, 8)}09`;
+    const TWIN_DESCRIPTION = `E2E-${suffix} EXACT SCIENCES`;
+    const SOLO_DESCRIPTION = `E2E-${suffix} STARBUCKS`;
+
+    const [original] = await db
+      .insert(transactionsTable)
+      .values({
+        userId,
+        householdId,
+        occurredOn: twinDay,
+        occurredAt: `${twinDay}T15:00:00.000Z`,
+        description: TWIN_DESCRIPTION,
+        amount: "-12.34",
+        account: acct!.name,
+        source: "plaid:chase",
+        plaidTransactionId: `e2e-${suffix}-ptx-exact`,
+        plaidAccountId: acct!.accountId,
+      })
+      .returning({ id: transactionsTable.id });
+    const [relinked] = await db
+      .insert(transactionsTable)
+      .values({
+        userId,
+        householdId,
+        occurredOn: twinDay,
+        occurredAt: `${twinDay}T15:00:00.000Z`,
+        description: TWIN_DESCRIPTION,
+        amount: "-12.34",
+        account: twin!.name,
+        source: "plaid:chase",
+        // A relink mints a fresh Plaid id; the unique index forbids reusing one.
+        plaidTransactionId: `e2e-${suffix}-ptx-exact-relink`,
+        plaidAccountId: twin!.accountId,
+      })
+      .returning({ id: transactionsTable.id });
+    const [solo] = await db
+      .insert(transactionsTable)
+      .values({
+        userId,
+        householdId,
+        occurredOn: soloDay,
+        occurredAt: `${soloDay}T15:00:00.000Z`,
+        description: SOLO_DESCRIPTION,
+        amount: "-4.50",
+        account: acct!.name,
+        source: "plaid:chase",
+        plaidTransactionId: `e2e-${suffix}-ptx-coffee`,
+        plaidAccountId: acct!.accountId,
+      })
+      .returning({ id: transactionsTable.id });
+
+    // The bank snapshot, read now (after every seeded row). The dedupe gate is
+    // stamped so the page load does not collapse the twin before the ledger reads it.
     await db.insert(forecastSettingsTable).values({
       userId,
       householdId,
       bankSnapshotBalance: "3565.09",
-      bankSnapshotAt: new Date("2026-04-30T23:59:59Z"),
+      bankSnapshotAt: new Date(),
       bankSnapshotSource: "manual",
-      bankSnapshotAccountId: acct.id,
-      bankSnapshotName: acct.name,
-      bankSnapshotMask: acct.mask,
+      bankSnapshotAccountId: acct!.id,
+      bankSnapshotName: acct!.name,
+      bankSnapshotMask: acct!.mask,
+      autoDedupeRanAt: new Date(),
     });
-
-    // The "twin" — two rows with different DB ids but the same
-    // `plaidTransactionId`. This is the cache shape that pre-#452
-    // would have rendered as TWO rows on the Chase page (one per
-    // distinct id). After #452's `dedupeTransactionsByIdentity` runs
-    // inside the `chaseTransactions` memo, only the first one survives.
-    const SHARED_PTX = `e2e-${suffix}-may-ptx-exact`;
-    const TWIN_DESCRIPTION = `E2E-${suffix} EXACT SCIENCES`;
-    const SOLO_DESCRIPTION = `E2E-${suffix} STARBUCKS`;
-
-    type FixtureRow = {
-      id: string;
-      occurredOn: string;
-      amount: string;
-      plaidTransactionId: string;
-      description: string;
-    };
-    const fixture: FixtureRow[] = [
-      // Survivor (older row, hand-categorized in real life — here we
-      // just need it to win the dedupe by virtue of insertion order).
-      {
-        id: `00000000-0000-4000-8000-${suffix}0000d001`,
-        occurredOn: "2026-05-08",
-        amount: "-12.34",
-        plaidTransactionId: SHARED_PTX,
-        description: TWIN_DESCRIPTION,
-      },
-      // Loser — same plaid_transaction_id, different DB id. Pre-#452
-      // this would render as a second `row-tx-*` and double the
-      // day-net for 2026-05-08.
-      {
-        id: `00000000-0000-4000-8000-${suffix}0000d002`,
-        occurredOn: "2026-05-08",
-        amount: "-12.34",
-        plaidTransactionId: SHARED_PTX,
-        description: TWIN_DESCRIPTION,
-      },
-      // An unrelated solo row on a different day, so we can prove the
-      // page is rendering rows at all and that the dedupe didn't
-      // accidentally collapse non-twins together.
-      {
-        id: `00000000-0000-4000-8000-${suffix}0000d003`,
-        occurredOn: "2026-05-09",
-        amount: "-4.50",
-        plaidTransactionId: `e2e-${suffix}-may-ptx-coffee`,
-        description: SOLO_DESCRIPTION,
-      },
-    ];
 
     const context = await browser.newContext();
     const page = await context.newPage();
-
-    // Mock GET /api/transactions to return the twin-bearing payload.
-    // The real insert path's unique index on plaid_transaction_id makes
-    // it impossible to seed this shape via the DB, but the regression
-    // #452 was about dedupe-at-render-time when the cached list
-    // contains a twin, so a network-level mock is the faithful
-    // reproduction.
-    await page.route("**/api/transactions**", async (route) => {
-      const req = route.request();
-      if (req.method() !== "GET") {
-        await route.continue();
-        return;
-      }
-      const rows = fixture.map((r) => ({
-        id: r.id,
-        occurredOn: r.occurredOn,
-        occurredAt: `${r.occurredOn}T15:00:00.000Z`,
-        description: r.description,
-        amount: r.amount,
-        account: acct.name,
-        categoryId: null,
-        forecastFlag: false,
-        weeklyAllowance: false,
-        weeklyBucket: null,
-        monthlyAllowance: false,
-        unplannedAllowance: false,
-        reimbursable: false,
-        reimbursed: false,
-        isTransfer: false,
-        notes: null,
-        source: "plaid:chase",
-        member: null,
-        owedBy: null,
-        plaidTransactionId: r.plaidTransactionId,
-        plaidAccountId: acct.accountId,
-        debtId: null,
-        matchedRuleId: null,
-      }));
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(rows),
-      });
+    const firstPagePromise = page.waitForResponse(isRegisterLedger(monthStart), {
+      timeout: 90_000,
     });
-
-    await signInAndOpen(
-      page,
-      email,
-      password,
-      "/transactions?month=2026-05-01",
-    );
-    await expect(
-      page.getByRole("heading", { name: /^chase$/i }),
-    ).toBeVisible({ timeout: 15_000 });
-
-    // Wait for the page to settle on May 2026 with the solo row
-    // visible — that's the most distinctive marker that the
-    // chaseTransactions memo has run against our mocked payload.
-    await expect(page.getByTestId("text-selected-month")).toHaveText(
-      "May '26",
-      { timeout: 15_000 },
-    );
-    await expect(page.getByText(SOLO_DESCRIPTION).first()).toBeVisible({
+    await signInAndOpen(page, email, password, `/transactions?month=${monthStart}`);
+    await expect(page.getByRole("heading", { name: /^chase$/i })).toBeVisible({
       timeout: 15_000,
     });
+    const ledger = await readLedger(await firstPagePromise);
 
-    // --- The core guarantee: the twinned row appears EXACTLY ONCE. ---
-    //
-    // (1) The survivor's `row-tx-*` is rendered. The loser's id is
-    //     present in the cache but `dedupeTransactionsByIdentity`
-    //     dropped it before the memo emitted, so the loser's
-    //     `row-tx-*` testid must NOT exist in the DOM at all.
-    await expect(
-      page.getByTestId(`row-tx-${fixture[0].id}`),
-    ).toBeVisible();
-    await expect(
-      page.getByTestId(`row-tx-${fixture[1].id}`),
-    ).toHaveCount(0);
+    // --- The server: both copies listed, the twin copy counts 0.
+    const ids = [original!.id, relinked!.id, solo!.id];
+    expect(ledger.rows.map((r) => r.id).sort()).toEqual([...ids].sort());
+    expect(ledger.matchingCount).toBe(3);
+    expect(ledger.nextCursor).toBeNull();
+    expect(ledger.account.plaidAccountIds).toEqual(
+      expect.arrayContaining([acct!.accountId, twin!.accountId]),
+    );
+    const byId = new Map(ledger.rows.map((r) => [r.id, r]));
+    expect(byId.get(original!.id)).toMatchObject({ countsInBalance: true, balanceReason: "counted" });
+    expect(byId.get(solo!.id)).toMatchObject({ countsInBalance: true, balanceReason: "counted" });
+    expect(byId.get(relinked!.id)).toMatchObject({ countsInBalance: false, balanceReason: "not_bank" });
+    expect(parseCents(byId.get(relinked!.id)!.balanceAmount)).toBe(0);
+    const COUNTED_OUT = 1_234 + 450; // $16.84
+    const LISTED_OUT = COUNTED_OUT + 1_234; // $29.18
+    expect(parseCents(ledger.totals.moneyOut)).toBe(COUNTED_OUT);
+    expect(parseCents(ledger.totals.moneyIn)).toBe(0);
+    expect(parseCents(ledger.totals.net)).toBe(-COUNTED_OUT);
 
-    // (2) The visible description text appears exactly once across the
-    //     rendered table. Belt-and-braces against a future refactor
-    //     that swaps the row testid format — if the user ever sees
-    //     "EXACT SCIENCES" twice on the page, this assertion trips.
-    await expect(page.getByText(TWIN_DESCRIPTION)).toHaveCount(1);
-
-    // (3) The "{filtered} of {monthScoped}" counter must reflect a
-    //     single Chase row for the twinned date plus the solo row.
-    //     If the dedupe ever regresses, this would read "3 of 3".
-    await expect(page.getByTestId("text-row-count")).toHaveText(
-      /2 of 2 txns/,
-      { timeout: 15_000 },
+    await expect(page.getByTestId("chase-showing")).toHaveText(
+      `Showing 3 of 3 · 3 to review`,
+      { timeout: 20_000 },
     );
 
-    // (4) The day-net for 2026-05-08 must be the single-row total
-    //     (-$12.34), not the doubled (-$24.68) sum a regression would
-    //     produce. This is the user-visible math symptom of the bug.
-    await expect(page.getByTestId("day-net-2026-05-08")).toHaveText(
-      /^-\$12\.34$/,
+    // --- (1) Every row once: no id twice, and exactly the three seeded rows.
+    const rowLocator = page.locator('[data-testid^="row-tx-"]');
+    await expect(rowLocator).toHaveCount(3, { timeout: 15_000 });
+    const renderedIds = await rowLocator.evaluateAll((els) =>
+      els.map((el) => (el.getAttribute("data-testid") ?? "").slice("row-tx-".length)),
     );
+    expect(new Set(renderedIds).size, "a row rendered twice").toBe(renderedIds.length);
+    expect([...renderedIds].sort()).toEqual([...ids].sort());
+    await expect(page.getByText(SOLO_DESCRIPTION)).toHaveCount(1);
+
+    // --- (2) The twin copy says it does not count; the original does not.
+    await expect(page.getByTestId(`label-not-counted-${relinked!.id}`)).toHaveText(
+      "Not counted",
+    );
+    await expect(page.getByTestId(`label-not-counted-${original!.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`label-not-counted-${solo!.id}`)).toHaveCount(0);
+
+    // --- (3) The day total counts the purchase once: -$12.34, never -$24.68.
+    await expect(page.getByTestId(`day-net-${twinDay}`)).toHaveText(signedUsd(-1_234));
+    await expect(page.getByTestId(`day-net-${soloDay}`)).toHaveText(signedUsd(-450));
+
+    // --- (4) Money out is the counted rows ($16.84), not the listed sum ($29.18).
+    const inOut = page.getByTestId("chase-stats-in-out");
+    await expect(legendRow(inOut, "Out")).toContainText(usd(COUNTED_OUT), {
+      timeout: 15_000,
+    });
+    await expect(inOut).not.toContainText(usd(LISTED_OUT));
+    await expect(legendRow(inOut, "Net")).toContainText(signedUsd(-COUNTED_OUT));
+
+    // --- (5) The balances count it once: Start = End + $16.84.
+    expect(ledger.balanceEnd, "no balanceEnd: the snapshot did not resolve").not.toBeNull();
+    const endCents = parseCents(ledger.balanceEnd);
+    expect(endCents, "End of last month is today's balance (nothing after it)").toBe(356_509);
+    expect(parseCents(ledger.balanceStart)).toBe(endCents + COUNTED_OUT);
+    const balanceCard = page.getByTestId("chase-stats-balance");
+    await expect(balanceCard).toContainText(usd(endCents), { timeout: 15_000 });
+    await expect(balanceCard).toContainText(usd(endCents + COUNTED_OUT));
+    await expect(balanceCard).not.toContainText(usd(endCents + LISTED_OUT));
 
     await context.close();
   });

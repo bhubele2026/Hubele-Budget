@@ -208,7 +208,9 @@ async function assertRegisterMatches(
       );
     } else {
       const prevCents = parseCents(chips[k - 1]!.text);
-      const prevMove = parseCents(serverRows[k - 1]!.balanceAmount);
+      // The snapshot account always has a register: a null here is a failure, not a 0.
+      expect(serverRows[k - 1]!.balanceAmount, `row ${k} has no balanceAmount`).not.toBeNull();
+      const prevMove = parseCents(serverRows[k - 1]!.balanceAmount!);
       expect(
         chipCents,
         `chain breaks between rows ${k} and ${k + 1}: ${centsString(prevCents)} − ${centsString(prevMove)}`,
@@ -450,7 +452,9 @@ test.describe("Chase Transactions page — per-row running balance on the paged 
     for (const r of allRows) {
       expect(r.countsInBalance, `row ${r.id} does not count`).toBe(true);
       expect(r.balanceReason).toBe("counted");
-      expect(parseCents(r.balanceAmount)).toBe(seededCentsById.get(r.id));
+      // (PR14 review H1) balanceAmount is null only on another account; this is the snapshot's.
+      expect(r.balanceAmount, `row ${r.id} has no balanceAmount`).not.toBeNull();
+      expect(parseCents(r.balanceAmount!)).toBe(seededCentsById.get(r.id));
     }
 
     // --- Desktop (1280×800): every row, the chain across both page boundaries.
