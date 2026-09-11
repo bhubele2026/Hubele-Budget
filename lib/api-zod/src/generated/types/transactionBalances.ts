@@ -11,6 +11,11 @@ import type { TransactionBalancesBalancesItem } from "./transactionBalancesBalan
 
 export interface TransactionBalances {
   balances: TransactionBalancesBalancesItem[];
+  /**
+   * As on LedgerPage.
+   * @nullable
+   */
+  balanceUnavailableReason: string | null;
   anchor: LedgerAnchor;
   account: LedgerAccountScope;
 }

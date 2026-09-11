@@ -146,4 +146,29 @@ describe("(#860) per-user UI preferences (sidebar collapse)", () => {
     expect(merged.sidebarCollapsed).toBe(true);
     expect(merged.theme).toBe("dark");
   });
+
+  it("(PR14) saves chaseHideReviewed per user and keeps it through partial updates", async () => {
+    // Before PR14 the PUT body schema stripped this key, so it never saved.
+    await cleanup();
+    currentUser = USER_A;
+
+    const saved = await putPrefs({ chaseHideReviewed: true });
+    expect(saved.chaseHideReviewed).toBe(true);
+    expect((await getPrefs()).chaseHideReviewed).toBe(true);
+
+    // A partial update of another key keeps it.
+    const collapsed = await putPrefs({ sidebarCollapsed: true });
+    expect(collapsed).toEqual({ chaseHideReviewed: true, sidebarCollapsed: true });
+    expect(await getPrefs()).toEqual({ chaseHideReviewed: true, sidebarCollapsed: true });
+
+    // Turning it off keeps the other key.
+    const off = await putPrefs({ chaseHideReviewed: false });
+    expect(off).toEqual({ chaseHideReviewed: false, sidebarCollapsed: true });
+    expect(await getPrefs()).toEqual({ chaseHideReviewed: false, sidebarCollapsed: true });
+
+    // Another member of the same household never set it.
+    currentUser = USER_B;
+    expect("chaseHideReviewed" in (await getPrefs())).toBe(false);
+    currentUser = USER_A;
+  });
 });

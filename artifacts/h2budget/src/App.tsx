@@ -25,7 +25,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { PageErrorBoundary } from "@/components/page-error-boundary";
 import { askForSpineAgainIfFailed } from "@/lib/spineRecovery";
-import { invalidateAfterWrite } from "@/lib/mutationInvalidation";
+import { onWriteSuccess } from "@/lib/mutationInvalidation";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -115,8 +115,10 @@ const mutationCache = new MutationCache({
   // A block body, not `() => invalidateAfterWrite(queryClient)`: an expression
   // body makes TypeScript infer the return through `queryClient`, which is built
   // from this very cache, and the types go circular (TS7022).
-  onSuccess: () => {
-    invalidateAfterWrite(queryClient);
+  // (PR14 review M3) A write whose `meta` opts out (OWN_INVALIDATION) invalidates
+  // exactly what it moves itself, once.
+  onSuccess: (_data, _variables, _context, mutation) => {
+    onWriteSuccess(queryClient, mutation);
   },
 });
 

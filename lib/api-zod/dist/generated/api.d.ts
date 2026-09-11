@@ -1586,7 +1586,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
     }>, zod.ZodObject<{
         runningBalance: zod.ZodNullable<zod.ZodString>;
-        balanceAmount: zod.ZodString;
+        balanceAmount: zod.ZodNullable<zod.ZodString>;
         countsInBalance: zod.ZodBoolean;
         balanceReason: zod.ZodString;
         replacedPendingId: zod.ZodNullable<zod.ZodString>;
@@ -1595,7 +1595,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         stalePending: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
         runningBalance: string | null;
-        balanceAmount: string;
+        balanceAmount: string | null;
         countsInBalance: boolean;
         balanceReason: string;
         replacedPendingId: string | null;
@@ -1604,7 +1604,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         stalePending: boolean;
     }, {
         runningBalance: string | null;
-        balanceAmount: string;
+        balanceAmount: string | null;
         countsInBalance: boolean;
         balanceReason: string;
         replacedPendingId: string | null;
@@ -1644,6 +1644,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     balanceStart: zod.ZodNullable<zod.ZodString>;
     balanceEnd: zod.ZodNullable<zod.ZodString>;
     balanceToday: zod.ZodNullable<zod.ZodString>;
+    balanceUnavailableReason: zod.ZodNullable<zod.ZodString>;
     anchor: zod.ZodObject<{
         today: zod.ZodString;
         todayBalance: zod.ZodNullable<zod.ZodString>;
@@ -1713,7 +1714,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
     } & {
         runningBalance: string | null;
-        balanceAmount: string;
+        balanceAmount: string | null;
         countsInBalance: boolean;
         balanceReason: string;
         replacedPendingId: string | null;
@@ -1736,6 +1737,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     balanceStart: string | null;
     balanceEnd: string | null;
     balanceToday: string | null;
+    balanceUnavailableReason: string | null;
     anchor: {
         today: string;
         todayBalance: string | null;
@@ -1783,7 +1785,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
     } & {
         runningBalance: string | null;
-        balanceAmount: string;
+        balanceAmount: string | null;
         countsInBalance: boolean;
         balanceReason: string;
         replacedPendingId: string | null;
@@ -1806,6 +1808,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     balanceStart: string | null;
     balanceEnd: string | null;
     balanceToday: string | null;
+    balanceUnavailableReason: string | null;
     anchor: {
         today: string;
         todayBalance: string | null;
@@ -1846,6 +1849,7 @@ export declare const GetTransactionsBalancesResponse: zod.ZodObject<{
         date: string;
         balance: string | null;
     }>, "many">;
+    balanceUnavailableReason: zod.ZodNullable<zod.ZodString>;
     anchor: zod.ZodObject<{
         today: zod.ZodString;
         todayBalance: zod.ZodNullable<zod.ZodString>;
@@ -1880,6 +1884,7 @@ export declare const GetTransactionsBalancesResponse: zod.ZodObject<{
         via: string;
         plaidAccountIds: string[];
     };
+    balanceUnavailableReason: string | null;
     anchor: {
         today: string;
         todayBalance: string | null;
@@ -1896,6 +1901,7 @@ export declare const GetTransactionsBalancesResponse: zod.ZodObject<{
         via: string;
         plaidAccountIds: string[];
     };
+    balanceUnavailableReason: string | null;
     anchor: {
         today: string;
         todayBalance: string | null;
@@ -1915,7 +1921,10 @@ ledger's, `reviewed` included. `expectedCount` is the `matchingCount`
 the client showed: when a different number of rows matches now, the
 request is refused with 409 and nothing changes. More than 1,000
 matching rows is a 400. Rows already in the target state count in
-`matched` but not in `updated`.
+`matched` but not in `updated`. (PR14) Marking rows reviewed
+(`reviewed: true`) requires `filter.pending: false`, otherwise 400
+`pending_not_excluded`: the sync keeps a reviewed pending row when the
+bank drops it, so a bulk review must not shield pending rows.
 
  */
 export declare const bulkReviewMatchingTransactionsBodyFilterAccountMax = 64;
@@ -11257,27 +11266,36 @@ export declare const GetMeResponse: zod.ZodObject<{
  */
 export declare const GetUiPreferencesResponse: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+    chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }>;
 /**
  * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
  */
 export declare const UpdateUiPreferencesBody: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+    chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }>;
 export declare const UpdateUiPreferencesResponse: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+    chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }>;
 /**
  * @summary List all invitations (owner only).

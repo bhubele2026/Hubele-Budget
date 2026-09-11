@@ -42,6 +42,15 @@ without a bank snapshot.
    * @nullable
    */
   balanceToday: string | null;
+  /**
+   * (PR14) Why every balance in this response is null, or null when they
+are given: "no_snapshot" (no bank snapshot time) or
+"not_snapshot_account" (an account other than the snapshot's; no
+balance is computed for it).
+
+   * @nullable
+   */
+  balanceUnavailableReason: string | null;
   anchor: LedgerAnchor;
   account: LedgerAccountScope;
 }

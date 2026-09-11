@@ -15,10 +15,15 @@ export type LedgerRow = Transaction & {
      * @nullable
      */
     runningBalance: string | null;
-    /** What this row moves the register by: its amount, or 0.00 when it
-  does not count. `totals` sum these.
-   */
-    balanceAmount: string;
+    /**
+     * What this row moves the register by: its amount, or 0.00 when it
+  does not count. `totals` sum these. (PR14) Null on an account
+  other than the snapshot's, which has no register; there
+  `countsInBalance` still says whether the row counts in the totals.
+  
+     * @nullable
+     */
+    balanceAmount: string | null;
     /** Whether this row moves the balance at all. */
     countsInBalance: boolean;
     /** counted (moves the balance by its amount); superseded (a pending
