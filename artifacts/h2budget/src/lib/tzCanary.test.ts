@@ -11,6 +11,11 @@ import { describe, expect, it } from "vitest";
  *
  * With TZ unset (a plain local run) the process uses the machine's zone, which
  * is neither known nor wrong, so there is nothing to check and the tests skip.
+ * On GitHub Actions, though, an unset or empty TZ means a step lost its `TZ:`
+ * line, so that case fails.
+ *
+ * CI zones must be canonical IANA names: aliases resolve to a different name
+ * (`Etc/UTC` → "UTC", `US/Central` → "America/Chicago") and fail the name check.
  */
 const tz = process.env.TZ || undefined;
 
@@ -25,6 +30,13 @@ const CI_ZONE_WINTER_OFFSET: Record<string, number> = {
 };
 
 describe("timezone canary: the suite runs in the zone CI asked for", () => {
+  it.runIf(process.env.GITHUB_ACTIONS === "true" && tz === undefined)(
+    "CI must set TZ (a step without it would run in the runner's default zone)",
+    () => {
+      expect.fail("CI must set TZ for every web-test step");
+    },
+  );
+
   it.runIf(tz === "UTC")("TZ=UTC resolves to UTC, zero offset", () => {
     expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe("UTC");
     expect(WINTER_INSTANT.getTimezoneOffset()).toBe(0);

@@ -162,7 +162,7 @@ Two pinned instants, both still Wednesday September 30 in Chicago:
 ## Added CI time (measured)
 
 **Corrected after the merge.** The first version of this note estimated GitHub's `ubuntu-latest` at 2–3× this
-machine. The real run (GitHub run `34654376853`) was slower, so the estimate was low. The measured figures replace it.
+machine. The real run (one GitHub run, `34654376853`; a later run's UTC zone took 88 s, so treat these as a single sample) was slower, so the estimate was low. The measured figures replace it.
 
 | Figure | Estimated | Measured |
 |---|---|---|
