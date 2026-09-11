@@ -11,4 +11,9 @@
  */
 export interface UiPreferences {
   sidebarCollapsed?: boolean;
+  /** (PR14) The Chase list leaves out reviewed rows (the ledger's
+reviewed=false filter). A view setting only: no total or balance
+depends on it.
+ */
+  chaseHideReviewed?: boolean;
 }

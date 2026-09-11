@@ -453,10 +453,15 @@ snapshot, and for a row dated after today.
    * @nullable
    */
   runningBalance: string | null;
-  /** What this row moves the register by: its amount, or 0.00 when it
-does not count. `totals` sum these.
- */
-  balanceAmount: string;
+  /**
+   * What this row moves the register by: its amount, or 0.00 when it
+does not count. `totals` sum these. (PR14) Null on an account
+other than the snapshot's, which has no register; there
+`countsInBalance` still says whether the row counts in the totals.
+
+   * @nullable
+   */
+  balanceAmount: string | null;
   /** Whether this row moves the balance at all. */
   countsInBalance: boolean;
   /** counted (moves the balance by its amount); superseded (a pending
@@ -564,6 +569,15 @@ without a bank snapshot.
    * @nullable
    */
   balanceToday: string | null;
+  /**
+   * (PR14) Why every balance in this response is null, or null when they
+are given: "no_snapshot" (no bank snapshot time) or
+"not_snapshot_account" (an account other than the snapshot's; no
+balance is computed for it).
+
+   * @nullable
+   */
+  balanceUnavailableReason: string | null;
   anchor: LedgerAnchor;
   account: LedgerAccountScope;
 }
@@ -576,6 +590,11 @@ export type TransactionBalancesBalancesItem = {
 
 export interface TransactionBalances {
   balances: TransactionBalancesBalancesItem[];
+  /**
+   * As on LedgerPage.
+   * @nullable
+   */
+  balanceUnavailableReason: string | null;
   anchor: LedgerAnchor;
   account: LedgerAccountScope;
 }
@@ -2341,6 +2360,11 @@ export interface SettingsPreferences {
  */
 export interface UiPreferences {
   sidebarCollapsed?: boolean;
+  /** (PR14) The Chase list leaves out reviewed rows (the ledger's
+reviewed=false filter). A view setting only: no total or balance
+depends on it.
+ */
+  chaseHideReviewed?: boolean;
 }
 
 export interface Settings {
@@ -3729,88 +3753,6 @@ export type DeleteMerchantAliasParams = {
    * The merchant signature whose alias should be cleared.
    */
   signature: string;
-};
-
-export type GetTransactionsLedgerParams = {
-  /**
- * `plaid_accounts.id` of the ledger account. Optional; defaults to
-the snapshot's account. Any account outside the ledger scope is a 400.
-
- * @maxLength 64
- */
-  account?: string;
-  /**
-   * First day, YYYY-MM-DD, inclusive.
-   * @maxLength 10
-   */
-  from?: string;
-  /**
-   * Last day, YYYY-MM-DD, inclusive.
-   * @maxLength 10
-   */
-  to?: string;
-  /**
-   * Case-insensitive match on the description or the category name.
-   * @maxLength 200
-   */
-  search?: string;
-  /**
-   * "true" or "false".
-   * @maxLength 5
-   */
-  reviewed?: string;
-  /**
-   * "true" or "false".
-   * @maxLength 5
-   */
-  pending?: string;
-  /**
-   * "true" keeps only rows with no category; "false" is no filter.
-   * @maxLength 5
-   */
-  uncategorized?: string;
-  /**
-   * @maxLength 64
-   */
-  categoryId?: string;
-  /**
-   * @maxLength 100
-   */
-  source?: string;
-  /**
-   * @maxLength 100
-   */
-  member?: string;
-  /**
-   * Plain digits, 1 to 100.
-   * @minimum 1
-   * @maximum 100
-   */
-  limit?: number;
-  /**
-   * The `nextCursor` of the previous page.
-   * @maxLength 512
-   */
-  cursor?: string;
-};
-
-export type GetTransactionsBalancesParams = {
-  /**
-   * As on GET /transactions/ledger.
-   * @maxLength 64
-   */
-  account?: string;
-  /**
-   * Comma-separated YYYY-MM-DD dates, 1 to 120 of them.
-   * @maxLength 1400
-   */
-  dates: string;
-};
-
-export type BulkReviewMatchingTransactions409 = {
-  error: string;
-  code: string;
-  matchingCount: number;
 };
 
 export type ListPlaidLiabilityAccountsParams = {

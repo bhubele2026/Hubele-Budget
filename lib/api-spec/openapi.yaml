@@ -10,6 +10,8 @@ tags:
   - name: health
   - name: dashboard
   - name: transactions
+  - name: chase-ledger
+    description: (PR14) Operations only the Chase page calls; generated into @workspace/api-client-react/ledger so they stay off the landing chunk.
   - name: debts
   - name: recurring
   - name: budget
@@ -372,7 +374,7 @@ paths:
   /transactions/ledger:
     get:
       operationId: getTransactionsLedger
-      tags: [transactions]
+      tags: [transactions, chase-ledger]
       summary: |
         (PR13) One page of the bank ledger, newest first. The server settles
         the scope: the Plaid account the snapshot resolves to, its
@@ -394,7 +396,12 @@ paths:
           name: account
           description: |
             `plaid_accounts.id` of the ledger account. Optional; defaults to
-            the snapshot's account. Any account outside the ledger scope is a 400.
+            the snapshot's account. (PR14) Any Chase depository account of the
+            household is accepted with its mask twins. An account that is not
+            the snapshot's account (or its twin) lists its own rows, totals and
+            review counts with every balance null (`balanceUnavailableReason`
+            "not_snapshot_account"): no balance is computed for it, and manual
+            rows are not on it. Any other account is a 400 `account_not_ledger`.
           schema: { type: string, maxLength: 64 }
         - in: query
           name: from
@@ -449,7 +456,7 @@ paths:
   /transactions/balances:
     get:
       operationId: getTransactionsBalances
-      tags: [transactions]
+      tags: [transactions, chase-ledger]
       summary: |
         (PR13) End-of-day balances of the ledger account for up to 120 dates,
         on the same register as GET /transactions/ledger: a date's balance is
@@ -479,7 +486,7 @@ paths:
   /transactions/bulk-review-matching:
     post:
       operationId: bulkReviewMatchingTransactions
-      tags: [transactions]
+      tags: [transactions, chase-ledger]
       summary: |
         (PR13) Mark every ledger row matching a filter reviewed (or not) in
         one request, without the client holding the ids. The filter is the
@@ -487,7 +494,10 @@ paths:
         the client showed: when a different number of rows matches now, the
         request is refused with 409 and nothing changes. More than 1,000
         matching rows is a 400. Rows already in the target state count in
-        `matched` but not in `updated`.
+        `matched` but not in `updated`. (PR14) Marking rows reviewed
+        (`reviewed: true`) requires `filter.pending: false`, otherwise 400
+        `pending_not_excluded`: the sync keeps a reviewed pending row when the
+        bank drops it, so a bulk review must not shield pending rows.
       requestBody:
         required: true
         content:
@@ -500,7 +510,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BulkReviewMatchingResult" }
         "400":
-          description: Invalid filter, or more than 1,000 matching rows
+          description: Invalid filter, more than 1,000 matching rows, or `reviewed` true without `filter.pending` false
         "409":
           description: The number of matching rows is not `expectedCount`
           content:
@@ -1916,7 +1926,7 @@ paths:
   /me/ui-preferences:
     get:
       operationId: getUiPreferences
-      tags: [auth]
+      tags: [auth, chase-ledger]
       summary: Returns the signed-in user's per-user UI preferences.
       responses:
         "200":
@@ -1926,7 +1936,7 @@ paths:
               schema: { $ref: "#/components/schemas/UiPreferences" }
     put:
       operationId: updateUiPreferences
-      tags: [auth]
+      tags: [auth, chase-ledger]
       summary: Updates the signed-in user's per-user UI preferences (merged into the existing record).
       requestBody:
         required: true
@@ -2416,10 +2426,12 @@ components:
                 register of all the account's rows. Null without a bank
                 snapshot, and for a row dated after today.
             balanceAmount:
-              type: string
+              type: ["string", "null"]
               description: |
                 What this row moves the register by: its amount, or 0.00 when it
-                does not count. `totals` sum these.
+                does not count. `totals` sum these. (PR14) Null on an account
+                other than the snapshot's, which has no register; there
+                `countsInBalance` still says whether the row counts in the totals.
             countsInBalance:
               type: boolean
               description: Whether this row moves the balance at all.
@@ -2501,7 +2513,7 @@ components:
         unreviewed: { type: integer }
     LedgerPage:
       type: object
-      required: [rows, nextCursor, limit, matchingCount, totals, review, balanceStart, balanceEnd, balanceToday, anchor, account]
+      required: [rows, nextCursor, limit, matchingCount, totals, review, balanceStart, balanceEnd, balanceToday, balanceUnavailableReason, anchor, account]
       properties:
         rows:
           type: array
@@ -2531,13 +2543,20 @@ components:
           description: |
             The balance at the end of today: the spine's `bank.balance`. Null
             without a bank snapshot.
+        balanceUnavailableReason:
+          type: ["string", "null"]
+          description: |
+            (PR14) Why every balance in this response is null, or null when they
+            are given: "no_snapshot" (no bank snapshot time) or
+            "not_snapshot_account" (an account other than the snapshot's; no
+            balance is computed for it).
         anchor:
           $ref: "#/components/schemas/LedgerAnchor"
         account:
           $ref: "#/components/schemas/LedgerAccountScope"
     TransactionBalances:
       type: object
-      required: [balances, anchor, account]
+      required: [balances, balanceUnavailableReason, anchor, account]
       properties:
         balances:
           type: array
@@ -2547,6 +2566,9 @@ components:
             properties:
               date: { type: string }
               balance: { type: ["string", "null"] }
+        balanceUnavailableReason:
+          type: ["string", "null"]
+          description: As on LedgerPage.
         anchor:
           $ref: "#/components/schemas/LedgerAnchor"
         account:
@@ -4055,6 +4077,12 @@ components:
       description: Per-user (not per-household) UI preferences for the signed-in user.
       properties:
         sidebarCollapsed: { type: boolean }
+        chaseHideReviewed:
+          type: boolean
+          description: |
+            (PR14) The Chase list leaves out reviewed rows (the ledger's
+            reviewed=false filter). A view setting only: no total or balance
+            depends on it.
     Settings:
       type: object
       required: [weeklyAllowanceAmount, monthlyAllowanceAmount, unplannedAllowanceAmount]

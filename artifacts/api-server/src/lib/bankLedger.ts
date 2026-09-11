@@ -38,6 +38,9 @@ import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
  *      which the Chase page has always shown as one account (#462). Manual rows
  *      are in because the bank balance counts them; a client that hides rows the
  *      register counts breaks the running-balance chain, so it must not.
+ *      (PR14, review H1) Another Chase depository account of the household may
+ *      be asked for: its rows and its twins' rows only, no manual rows, with
+ *      totals and review counts but no balance (`snapshotAccount: false`).
  *
  *   2. WHAT EACH ROW MOVES — `classifyCashRows` (PR4e), the cash rule the bank
  *      balance uses, run over the account's WHOLE history with no anchor. A
@@ -271,7 +274,17 @@ export type LedgerAccounts = {
   /** The Plaid account ids on the ledger: that account and its mask twins. */
   plaidAccountIds: string[];
   via: SnapshotAccountResolution["via"];
+  /**
+   * (PR14, review H1) True for the snapshot's account and its twins, the only
+   * account with a register. False for another Chase depository account of the
+   * household: `accountExternalId` and `plaidAccountIds` are then that account
+   * and its twins, no manual row is on it, and no balance is computed for it.
+   */
+  snapshotAccount: boolean;
 };
+
+/** Why every balance in a response is null; null when they are given. */
+export type BalanceUnavailableReason = "no_snapshot" | "not_snapshot_account";
 
 export type LedgerAnchor = {
   /** The household's today (America/Chicago): the day `todayBalance` closes. */
@@ -304,9 +317,23 @@ function isMaskTwin(a: AccountRow, b: AccountRow): boolean {
 }
 
 /**
- * Which rows are on the ledger. `account` (a `plaid_accounts.id`) is optional;
- * when given it must be the resolved account or one of its twins, so a page
- * that asks for one account is never silently answered for another.
+ * An account the Chase page's picker can offer: the kinds `listCheckingAccounts`
+ * (routes/forecast.ts) lists, at an institution whose name contains "chase".
+ */
+function isChaseDepository(a: AccountRow): boolean {
+  return (
+    (a.institutionName ?? "").toLowerCase().includes("chase") &&
+    (a.subtype === "checking" || a.type === "depository" || a.subtype === "savings")
+  );
+}
+
+/**
+ * Which rows are on the ledger. `account` (a `plaid_accounts.id`) is optional.
+ * The resolved account or one of its twins is the snapshot's ledger. (PR14,
+ * review H1) Any other Chase depository account of the household is accepted
+ * with its own twins, as a list with no register (`snapshotAccount: false`).
+ * Anything else is refused, so a page that asks for one account is never
+ * silently answered for another.
  */
 export async function resolveLedgerAccounts(
   householdId: string,
@@ -329,35 +356,58 @@ export async function resolveLedgerAccounts(
     bankSnapshotMask: settings?.bankSnapshotMask ?? null,
   });
 
-  const accounts: AccountRow[] = resolved.rowId
-    ? await db
-        .select({
-          id: plaidAccountsTable.id,
-          accountId: plaidAccountsTable.accountId,
-          mask: plaidAccountsTable.mask,
-          type: plaidAccountsTable.type,
-          subtype: plaidAccountsTable.subtype,
-          institutionName: plaidItemsTable.institutionName,
-        })
-        .from(plaidAccountsTable)
-        .leftJoin(plaidItemsTable, eq(plaidItemsTable.id, plaidAccountsTable.itemId))
-        .where(eq(plaidAccountsTable.householdId, householdId))
-    : [];
+  const accounts: AccountRow[] =
+    resolved.rowId || account !== undefined
+      ? await db
+          .select({
+            id: plaidAccountsTable.id,
+            accountId: plaidAccountsTable.accountId,
+            mask: plaidAccountsTable.mask,
+            type: plaidAccountsTable.type,
+            subtype: plaidAccountsTable.subtype,
+            institutionName: plaidItemsTable.institutionName,
+          })
+          .from(plaidAccountsTable)
+          .leftJoin(plaidItemsTable, eq(plaidItemsTable.id, plaidAccountsTable.itemId))
+          .where(eq(plaidAccountsTable.householdId, householdId))
+      : [];
   const anchorRow = accounts.find((a) => a.id === resolved.rowId) ?? null;
   const members = anchorRow
     ? accounts.filter((a) => a.id === anchorRow.id || isMaskTwin(anchorRow, a))
     : [];
-  if (account !== undefined && !members.some((m) => m.id === account)) {
-    throw bad("account_not_ledger", "account is not the bank snapshot's account; only that account has a ledger");
+  if (account === undefined || members.some((m) => m.id === account)) {
+    return {
+      householdId,
+      accountExternalId: resolved.externalId,
+      plaidAccountIds: resolved.externalId
+        ? Array.from(new Set([resolved.externalId, ...members.map((m) => m.accountId)]))
+        : [],
+      via: resolved.via,
+      snapshotAccount: true,
+    };
   }
+  const picked = accounts.find((a) => a.id === account);
+  if (!picked || !isChaseDepository(picked)) {
+    throw bad("account_not_ledger", "account is not a Chase checking or savings account of this household");
+  }
+  const scope = accounts.filter((a) => a.id === picked.id || isMaskTwin(picked, a));
   return {
     householdId,
-    accountExternalId: resolved.externalId,
-    plaidAccountIds: resolved.externalId
-      ? Array.from(new Set([resolved.externalId, ...members.map((m) => m.accountId)]))
-      : [],
+    accountExternalId: picked.accountId || null,
+    plaidAccountIds: Array.from(new Set(scope.map((a) => a.accountId).filter((id) => id !== ""))),
     via: resolved.via,
+    snapshotAccount: false,
   };
+}
+
+/** The anchor of an account with no register: today, and no balance. */
+function noBalanceAnchor(): LedgerAnchor {
+  return { today: householdTodayISO(), todayBalance: null, snapshotBalance: null, snapshotAt: null, snapshotDay: null };
+}
+
+export function balanceUnavailableReason(scope: LedgerScope): BalanceUnavailableReason | null {
+  if (!scope.snapshotAccount) return "not_snapshot_account";
+  return scope.anchor.todayBalance === null ? "no_snapshot" : null;
 }
 
 /** Today's bank balance and the snapshot it rolls from, exactly as the spine reads them. */
@@ -389,7 +439,9 @@ export async function resolveLedgerScope(
   account: string | undefined,
 ): Promise<LedgerScope> {
   const accounts = await resolveLedgerAccounts(householdId, ownerUserId, account);
-  const anchor = await readLedgerAnchor(householdId, ownerUserId);
+  // Another account's anchor never reads the cash signal: its todayBalance is
+  // null, so the register below has no opening balance and every balance is null.
+  const anchor = accounts.snapshotAccount ? await readLedgerAnchor(householdId, ownerUserId) : noBalanceAnchor();
   return { ...accounts, anchor };
 }
 
@@ -480,7 +532,7 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
       forecastFlag: t.forecastFlag,
     })
     .from(t)
-    .where(and(eq(t.householdId, scope.householdId), bankRowWhere(scope.plaidAccountIds)))
+    .where(and(eq(t.householdId, scope.householdId), bankRowWhere(scope.plaidAccountIds, scope.snapshotAccount)))
     .orderBy(asc(t.occurredOn), sql`${t.occurredAt} asc nulls first`, asc(t.id));
 
   // The fields `toCashRow` (lib/ledgerCashRows.ts) maps, read from the columns selected above.
@@ -586,10 +638,15 @@ function runningBalanceOf(reg: Register, row: RegisterRow): string | null {
 
 // ── SQL ─────────────────────────────────────────────────────────────────────
 
-/** SQL twin of `isBankRow`, widened to the mask twins. An empty plaid_account_id is "no Plaid account", as in JavaScript. */
-function bankRowWhere(plaidAccountIds: string[]): SQL {
+/**
+ * SQL twin of `isBankRow`, widened to the mask twins. An empty plaid_account_id
+ * is "no Plaid account", as in JavaScript. Without `includeManual` (an account
+ * other than the snapshot's), only the rows on `plaidAccountIds`.
+ */
+function bankRowWhere(plaidAccountIds: string[], includeManual: boolean): SQL {
   const t = transactionsTable;
   const onAccount = plaidAccountIds.length > 0 ? inArray(t.plaidAccountId, plaidAccountIds) : sql`false`;
+  if (!includeManual) return sql`(${onAccount})`;
   return sql`(${onAccount} or (nullif(${t.plaidAccountId}, '') is null and lower(${t.source}) <> 'amex' and lower(${t.source}) not like 'plaid:%'))`;
 }
 
@@ -615,7 +672,7 @@ function ledgerCtes(accounts: LedgerAccounts, overrides: Array<{ id: string; amo
         ${t.description} as description
       from ${t}
       where ${t.householdId} = ${accounts.householdId}::uuid
-        and ${bankRowWhere(accounts.plaidAccountIds)}
+        and ${bankRowWhere(accounts.plaidAccountIds, accounts.snapshotAccount)}
     ),
     overrides as (
       select (e->>'id')::uuid as id, (e->>'amount')::numeric as amount
@@ -633,12 +690,18 @@ function likePattern(search: string): string {
 }
 
 /** The filter over alias `r` (acct or bal), with categories joined as `c`. */
-function filterWhere(f: LedgerFilter, withReviewed: boolean): SQL {
+function filterWhere(f: LedgerFilter, withReviewed: boolean, householdId: string): SQL {
   const parts: SQL[] = [sql`true`];
   if (f.from) parts.push(sql`r.occurred_on >= ${f.from}::date`);
   if (f.to) parts.push(sql`r.occurred_on <= ${f.to}::date`);
   if (f.pending !== undefined) parts.push(sql`r.pending = ${f.pending}`);
-  if (f.uncategorized) parts.push(sql`r.category_id is null`);
+  if (f.uncategorized) {
+    // (PR7) No category, or one that no longer exists in this household: the
+    // rule of GET /transactions?uncategorized and `classifyOutflow`.
+    parts.push(
+      sql`(r.category_id is null or not exists (select 1 from ${budgetCategoriesTable} uc where uc.id = r.category_id and uc.household_id = ${householdId}::uuid))`,
+    );
+  }
   if (f.categoryId) parts.push(sql`r.category_id = ${f.categoryId}::uuid`);
   if (f.source !== undefined) parts.push(sql`r.source = ${f.source}`);
   if (f.member !== undefined) parts.push(sql`coalesce(r.member, '') = ${f.member}`);
@@ -657,7 +720,8 @@ function rowsOf<T>(result: unknown): T[] {
 
 export type LedgerPageRow = Record<string, unknown> & {
   runningBalance: string | null;
-  balanceAmount: string;
+  /** Null on an account other than the snapshot's, which has no register. */
+  balanceAmount: string | null;
   countsInBalance: boolean;
   balanceReason: BalanceReason;
   replacedPendingId: string | null;
@@ -677,6 +741,7 @@ export type LedgerPage = {
   balanceStart: string | null;
   balanceEnd: string | null;
   balanceToday: string | null;
+  balanceUnavailableReason: BalanceUnavailableReason | null;
   anchor: LedgerAnchor;
   account: { via: string; plaidAccountIds: string[] };
 };
@@ -689,6 +754,7 @@ export async function readLedgerPage(
 ): Promise<LedgerPage> {
   const cats = budgetCategoriesTable;
   const today = scope.anchor.today;
+  const householdId = scope.householdId;
 
   const pageQuery = db.execute(sql`
     with ${ledgerCtes(scope, [])}
@@ -700,7 +766,7 @@ export async function readLedgerPage(
         else to_char(r.occurred_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') end as occurred_at_key
     from acct r
     left join ${cats} c on c.id = r.category_id
-    where ${filterWhere(filter, true)}
+    where ${filterWhere(filter, true, householdId)}
       and ${cursor ? afterCursor(cursor) : sql`true`}
     order by r.occurred_on desc, r.occurred_at desc nulls last, r.id desc
     limit ${limit + 1}
@@ -710,11 +776,11 @@ export async function readLedgerPage(
   const overrides = register.ordered
     .filter((r) => !r.countsInBalance)
     .map((r) => ({ id: r.id, amount: money(r.balanceCents) }));
-  const withoutReviewed = filterWhere(filter, false);
+  const withoutReviewed = filterWhere(filter, false, householdId);
   const aggregateQuery = db.execute(sql`
     with ${ledgerCtes(scope, overrides)}
     select
-      count(*) filter (where ${filterWhere(filter, true)})::int as matching_count,
+      count(*) filter (where ${filterWhere(filter, true, householdId)})::int as matching_count,
       count(*) filter (where ${withoutReviewed})::int as total_count,
       round(coalesce(sum(r.balance_amount) filter (where ${withoutReviewed} and r.balance_amount > 0), 0), 2)::text as money_in,
       round(coalesce(-sum(r.balance_amount) filter (where ${withoutReviewed} and r.balance_amount < 0), 0), 2)::text as money_out,
@@ -758,7 +824,7 @@ export async function readLedgerPage(
       ...row,
       // A row written after the register was read has no balance in this response.
       runningBalance: reg ? runningBalanceOf(register, reg) : null,
-      balanceAmount: reg ? money(reg.balanceCents) : money(toCents(r.amount)),
+      balanceAmount: !scope.snapshotAccount ? null : reg ? money(reg.balanceCents) : money(toCents(r.amount)),
       countsInBalance: reg ? reg.countsInBalance : true,
       balanceReason: reg ? reg.balanceReason : "counted",
       replacedPendingId: reg?.replacedPendingId ?? null,
@@ -793,6 +859,7 @@ export async function readLedgerPage(
     balanceStart,
     balanceEnd: balanceAtEndOf(register, filter.to ?? today),
     balanceToday: scope.anchor.todayBalance,
+    balanceUnavailableReason: balanceUnavailableReason(scope),
     anchor: scope.anchor,
     account: { via: scope.via, plaidAccountIds: scope.plaidAccountIds },
   };
@@ -854,7 +921,9 @@ export async function readLedgerBalances(
   scope: LedgerScope,
   dates: string[],
 ): Promise<Array<{ date: string; balance: string | null }>> {
-  if (scope.anchor.todayBalance === null) return dates.map((date) => ({ date, balance: null }));
+  if (!scope.snapshotAccount || scope.anchor.todayBalance === null) {
+    return dates.map((date) => ({ date, balance: null }));
+  }
   const register = await loadRegister(scope);
   return dates.map((date) => ({ date, balance: balanceAtEndOf(register, date) }));
 }
@@ -878,12 +947,13 @@ export async function bulkReviewMatching(
   expectedCount: number,
 ): Promise<{ matched: number; updated: number; updatedIds: string[] }> {
   const t = transactionsTable;
+  const householdId = accounts.householdId;
   const matching = sql`
     with ${ledgerCtes(accounts, [])}
     select r.id
     from acct r
     left join ${budgetCategoriesTable} c on c.id = r.category_id
-    where ${filterWhere(filter, true)}`;
+    where ${filterWhere(filter, true, householdId)}`;
   return db.transaction(async (tx) => {
     const locked = await tx.execute(sql`
       select ${t.id}::text as id

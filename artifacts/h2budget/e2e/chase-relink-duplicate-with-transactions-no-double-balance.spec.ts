@@ -1,423 +1,484 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator, type Page, type Response } from "@playwright/test";
+import { eq } from "drizzle-orm";
+import type { LedgerPage, LedgerRow } from "@workspace/api-client-react";
+import {
+  db,
+  forecastSettingsTable,
+  plaidAccountsTable,
+  plaidItemsTable,
+  transactionsTable,
+} from "@workspace/db";
 import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
  * End-to-end coverage for the harder mid-re-link variant on the Chase
- * Transactions page (task #462, Chase analogue of Amex #449 / amex-
- * relink-duplicate-with-transactions-no-double-balance.spec.ts).
+ * Transactions page (task #462, Chase analogue of Amex #449), rewritten for
+ * PR14: the page reads the server's paginated ledger
+ * (GET /api/transactions/ledger), so the scenario is seeded in the database and
+ * read through the real ledger code (no network mocks).
  *
- * #450 locks in the typical mid-re-link window on Chase: a duplicate
- * `plaid_accounts` row arrives with a per-account snapshot entry but
- * no transactions yet — the existing per-account snapshot resolution
- * never sums entries, so the user's selected real account still shows
- * its own anchored balance.
+ * #450 (chase-relink-duplicate-no-double-balance) covers a mask twin with no
+ * rows. Here a sync fires before `dedupePlaidAccountsForUser` collapses the
+ * re-link, so A's postings are re-imported onto the twin `plaid_accounts` row
+ * (same institution, mask, type and subtype; a fresh external account id and
+ * fresh Plaid transaction ids).
  *
- * The harder variant tested here: a sync briefly fires before
- * `dedupePlaidAccountsForUser` collapses the new (institution, mask)
- * groups, so transactions land referencing the duplicate
- * `plaid_accounts` row's external account_id. Without the (#462)
- * fix, the Chase page's per-account scoping (`scopeChaseTransactions`)
- * filters those rows out — and the Ending Balance tile would lose any
- * net change those rows represent until dedupe collapses the pair and
- * repoints the rows. With the fix, the page collapses duplicate
- * `plaid_accounts` rows by (institutionName, mask) when computing the
- * scope set, so transactions on either id contribute to the real
- * account's rolling balance immediately.
+ * #462 once folded the twin's rows into A in the browser (by institution +
+ * mask) so they were not lost from A's view. PR13/PR14 move that to the
+ * server's twin rule: the twin's rows are LISTED on A's ledger (never dropped
+ * from view) but count 0 (`balanceReason` `not_bank`: the bank balance reads
+ * only the snapshot's account), with a "Not counted" chip. So the guard is now:
+ * the re-imported copies are visible once each and never double a figure.
  *
- * Seeding strategy: same mock-the-payload approach as the Amex spec.
- * We add a fourth Chase transaction whose external account_id points
- * at the duplicate row's external id (DUP_ACCT_EXTERNAL_ID), and
- * assert the Ending Balance tile reflects the snapshot + ALL four
- * post-anchor rows in phase 1 (duplicate active) and remains
- * unchanged once dedupe lands (phase 2).
+ *   Phase 1 (twin present): A's ledger lists 4 rows (A's -$25.00 and -$10.00
+ *   and their two copies), each once; the copies say "Not counted"; the day
+ *   totals are -$25.00 and -$10.00 (not -$50.00 / -$20.00); Money out is
+ *   $35.00 (not $70.00); the balance card reads End $1,000.00 = the ledger's
+ *   `balanceToday` / `balanceEnd` and Start $1,035.00 (not $1,070.00); every
+ *   running balance is the server's. B and C (H1: not the snapshot's account)
+ *   list only their own rows with "Balance unavailable".
+ *   Phase 2 (dedupe lands: the copies and the twin row are gone): after a
+ *   reload the persisted pick (C) is kept, the twin is not an option, and A's
+ *   rows, day totals, Money out and balances are exactly Phase 1's figures.
+ *
+ * The twin carries a different account name and `autoDedupeRanAt` is stamped,
+ * so no dedupe hook collapses it during the page load; the server's twin rule
+ * ignores the name.
  */
 
 const provisionedUserIds: string[] = [];
+const seededUserIds: string[] = [];
 
 test.afterAll(async () => {
+  for (const userId of seededUserIds) {
+    try {
+      await db
+        .delete(transactionsTable)
+        .where(eq(transactionsTable.userId, userId));
+      await db
+        .delete(forecastSettingsTable)
+        .where(eq(forecastSettingsTable.userId, userId));
+      await db
+        .delete(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.userId, userId));
+      await db
+        .delete(plaidItemsTable)
+        .where(eq(plaidItemsTable.userId, userId));
+    } catch {
+      // best-effort
+    }
+  }
   await cleanupTestUsers(provisionedUserIds);
 });
 
-const CHASE_ITEM_ROW_ID = "chase-item-row-relink-txn";
-const CHASE_ITEM_EXTERNAL_ID = "item-chase-relink-txn";
+const HOUSEHOLD_TZ = "America/Chicago";
 
-const ACCT_ROW_IDS = [
-  "chase-acct-row-A-txn",
-  "chase-acct-row-B-txn",
-  "chase-acct-row-C-txn",
-] as const;
+/** A ledger page, with PR14's `balanceUnavailableReason` (optional until the client is regenerated). */
+type H1LedgerPage = LedgerPage & { balanceUnavailableReason?: string | null };
 
-const ACCT_NAMES = ["Total Checking", "Joint Checking", "Savings"] as const;
-const ACCT_MASKS = ["1111", "2222", "3333"] as const;
-const ACCT_BALANCES = [1000, 500, 300] as const;
-
-// External Plaid account_id for each row. Chase transactions store
-// the external account_id (not the internal row uuid) in
-// `plaidAccountId`, which is what `scopeChaseTransactions` filters on.
-// Written out as a literal tuple rather than `ACCT_MASKS.map(...)`: mapping a
-// readonly tuple widens to `string[]`, and the cast back to a 3-tuple is one
-// TypeScript rejects outright. Same three strings, same order.
-const ACCT_EXTERNAL_IDS: readonly [string, string, string] = [
-  `${CHASE_ITEM_EXTERNAL_ID}-acct-${ACCT_MASKS[0]}`,
-  `${CHASE_ITEM_EXTERNAL_ID}-acct-${ACCT_MASKS[1]}`,
-  `${CHASE_ITEM_EXTERNAL_ID}-acct-${ACCT_MASKS[2]}`,
-];
-
-// The duplicate's plaid_accounts row id — a different uuid for the
-// same physical account A (mask 1111). Distinguishing feature of
-// this spec: a transaction also references the duplicate's EXTERNAL
-// account id, so without #462's collapse those rows would be filtered
-// out of the real account's scope.
-const DUP_ACCT_ROW_ID = "chase-acct-row-A-DUP-txn";
-const DUP_ACCT_EXTERNAL_ID = `${CHASE_ITEM_EXTERNAL_ID}-acct-${ACCT_MASKS[0]}-DUP`;
-
-// Post-anchor activity. Three rows referencing the three real
-// accounts plus a fourth row whose external account_id points at
-// the duplicate row. All occur on the same day, after the snapshot
-// time, so the rolling balance just sums them on top of the
-// snapshot value for account A.
-const TXN_AMOUNTS_REAL = ["-25.00", "-50.00", "-75.00"] as const;
-const DUP_TXN_AMOUNT = "-10.00";
-
-function todayIso(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function householdDateOf(d: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: HOUSEHOLD_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (type: string) => {
+    const v = parts.find((p) => p.type === type)?.value;
+    if (!v) throw new Error(`Intl gave no ${type} for ${d.toISOString()}`);
+    return v;
+  };
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-// One calendar day before today, in the same UTC month wherever possible.
-// `computeBalanceAtEndOf` skips post-anchor txns whose date string is not
-// strictly greater than the snapshot's `anchorAt.slice(0,10)`, so the
-// snapshot must sit on an earlier day than the activity rows for the
-// rolling-balance assertion to hold. Falling back to "today" on the 1st
-// of the month keeps the test in a single anchor-month even though
-// same-day rows would then be treated as pre-snapshot — flaky on the
-// 1st only, which is acceptable as a known caveat documented inline.
-function snapshotDayIso(): string {
-  const d = new Date();
-  if (d.getDate() === 1) return todayIso();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate() - 1).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function previousMonthStart(today: string): string {
+  const y = Number(today.slice(0, 4));
+  const m0 = Number(today.slice(5, 7)) - 1;
+  return new Date(Date.UTC(y, m0 - 1, 1)).toISOString().slice(0, 10);
 }
 
-function thisMonthStart(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}-01`;
+function parseCents(raw: string | null | undefined): number {
+  if (raw == null) throw new Error("expected a money string, got null");
+  const m = raw.trim().match(/^(-?)(\d+)(?:\.(\d{1,2}))?$/);
+  if (!m) throw new Error(`could not parse money: "${raw}"`);
+  const cents = Number(m[2]) * 100 + Number((m[3] ?? "0").padEnd(2, "0"));
+  return m[1] === "-" ? -cents : cents;
 }
 
-function fmtCurrency(n: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(n);
+function usd(cents: number): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+    cents / 100,
+  );
 }
 
-test.describe("Chase page — re-link duplicate window with transactions doesn't drop activity from the Ending Balance (#462)", () => {
-  test("when a duplicate Chase plaid_accounts row briefly carries a transaction, the Ending Balance tile still includes that activity (collapsed by institution + mask), and remains unchanged once dedupe collapses to three", async ({
-    page,
+function signedUsd(cents: number): string {
+  return cents > 0 ? `+${usd(cents)}` : usd(cents);
+}
+
+function isRegisterLedger(from: string, account: string | null) {
+  return (res: Response): boolean => {
+    if (res.request().method() !== "GET") return false;
+    const u = new URL(res.url());
+    if (!u.pathname.endsWith("/api/transactions/ledger")) return false;
+    if (u.searchParams.get("from") !== from) return false;
+    if (u.searchParams.has("pending") || u.searchParams.has("cursor")) return false;
+    return (u.searchParams.get("account") ?? null) === account;
+  };
+}
+
+async function readLedger(res: Response): Promise<H1LedgerPage> {
+  expect(res.status(), `ledger request failed: ${res.url()}`).toBe(200);
+  return (await res.json()) as H1LedgerPage;
+}
+
+function legendRow(card: Locator, label: "In" | "Out" | "Net"): Locator {
+  return card.getByText(label, { exact: true }).locator("xpath=..");
+}
+
+async function pickAccount(page: Page, id: string): Promise<void> {
+  await page.getByTestId("select-chase-account").click();
+  const option = page.getByTestId(`option-chase-account-${id}`);
+  await expect(option).toBeVisible({ timeout: 10_000 });
+  await option.click();
+}
+
+const SNAPSHOT_CENTS = 100_000; // $1,000.00
+const A_OUT_CENTS = 2_500 + 1_000; // $35.00, counted once
+const DOUBLED_OUT_CENTS = 2 * A_OUT_CENTS; // $70.00
+
+/** Every running-balance chip on screen is the server row's `runningBalance`. */
+async function expectRunningBalances(page: Page, rows: ReadonlyArray<LedgerRow>) {
+  await expect(page.locator('[data-testid^="text-running-balance-"]')).toHaveCount(
+    rows.length,
+    { timeout: 15_000 },
+  );
+  for (const r of rows) {
+    expect(r.runningBalance, `no runningBalance for ${r.id}`).not.toBeNull();
+    await expect(page.getByTestId(`text-running-balance-${r.id}`)).toHaveText(
+      `bal ${usd(parseCents(r.runningBalance))}`,
+    );
+  }
+}
+
+/** A's figures, identical with or without the twin: counted once, never doubled. */
+async function expectSnapshotFigures(
+  page: Page,
+  ledger: H1LedgerPage,
+  days: { grocerDay: string; pharmacyDay: string },
+): Promise<void> {
+  expect(ledger.balanceUnavailableReason ?? null).toBeNull();
+  expect(parseCents(ledger.balanceToday)).toBe(SNAPSHOT_CENTS);
+  expect(parseCents(ledger.balanceEnd)).toBe(SNAPSHOT_CENTS);
+  expect(parseCents(ledger.balanceStart)).toBe(SNAPSHOT_CENTS + A_OUT_CENTS);
+  expect(parseCents(ledger.totals.moneyOut)).toBe(A_OUT_CENTS);
+  expect(parseCents(ledger.totals.moneyIn)).toBe(0);
+
+  await expect(page.getByTestId(`day-net-${days.grocerDay}`)).toHaveText(signedUsd(-2_500), {
+    timeout: 15_000,
+  });
+  await expect(page.getByTestId(`day-net-${days.pharmacyDay}`)).toHaveText(signedUsd(-1_000));
+
+  const inOut = page.getByTestId("chase-stats-in-out");
+  await expect(legendRow(inOut, "Out")).toContainText(usd(A_OUT_CENTS), { timeout: 15_000 });
+  await expect(inOut).not.toContainText(usd(DOUBLED_OUT_CENTS));
+
+  const balanceCard = page.getByTestId("chase-stats-balance");
+  await expect(balanceCard).toContainText(usd(SNAPSHOT_CENTS), { timeout: 15_000 });
+  await expect(balanceCard).toContainText(usd(SNAPSHOT_CENTS + A_OUT_CENTS));
+  await expect(balanceCard).not.toContainText(usd(SNAPSHOT_CENTS + DOUBLED_OUT_CENTS));
+  await expect(balanceCard).not.toContainText(usd(2 * SNAPSHOT_CENTS));
+  await expect(page.getByTestId("chase-balance-unavailable")).toHaveCount(0);
+
+  await expectRunningBalances(page, ledger.rows);
+}
+
+/** B's or C's view (H1): its own rows and money, no balance of any kind. */
+async function expectNonSnapshotAccount(
+  page: Page,
+  ledger: H1LedgerPage,
+  own: { rowId: string; outCents: number },
+  absentRowIds: string[],
+): Promise<void> {
+  expect(ledger.balanceUnavailableReason).toBe("not_snapshot_account");
+  expect(ledger.balanceStart).toBeNull();
+  expect(ledger.balanceEnd).toBeNull();
+  expect(ledger.balanceToday).toBeNull();
+  expect(ledger.rows.map((r) => r.id)).toEqual([own.rowId]);
+  for (const r of ledger.rows) {
+    expect(r.runningBalance).toBeNull();
+    expect(r.balanceAmount as string | null).toBeNull();
+  }
+  expect(parseCents(ledger.totals.moneyOut)).toBe(own.outCents);
+
+  await expect(page.getByTestId(`row-tx-${own.rowId}`)).toBeVisible({ timeout: 15_000 });
+  for (const id of absentRowIds) {
+    await expect(page.getByTestId(`row-tx-${id}`)).toHaveCount(0);
+  }
+  await expect(page.getByTestId("chase-balance-unavailable")).toHaveText(
+    "Balance unavailable",
+    { timeout: 15_000 },
+  );
+  await expect(page.locator('[data-testid^="text-running-balance-"]')).toHaveCount(0);
+  await expect(legendRow(page.getByTestId("chase-stats-in-out"), "Out")).toContainText(
+    usd(own.outCents),
+  );
+}
+
+test.describe("Chase page — re-link duplicate window with transactions never doubles a figure (#462, PR14 ledger)", () => {
+  test("rows re-imported onto a mask twin are listed once each and Not counted; day totals, Money out and balances count A's activity once, and are unchanged once dedupe removes the twin", async ({
+    browser,
   }) => {
-    const { email, password } = await createTestUser(
+    test.setTimeout(180_000);
+    const { userId, email, password } = await createTestUser(
       "chase-relink-dup-txn",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
+    seededUserIds.push(userId);
 
-    const today = todayIso();
-    const snapshotDay = snapshotDayIso();
-    const monthStart = thisMonthStart();
-    // Anchor the snapshot at noon on the day BEFORE the activity rows
-    // so `computeBalanceAtEndOf` actually folds the post-anchor txns
-    // into the rolling end-of-anchor-month balance — same-day rows
-    // are deliberately treated as already reflected in the snapshot
-    // (see accountBalance.ts), which would otherwise mask this fix.
-    const snapshotAt = `${snapshotDay}T12:00:00.000Z`;
-    const txnAt = (i: number) =>
-      `${today}T${String(9 + i).padStart(2, "0")}:00:00.000Z`;
-
-    let duplicatePhase = true;
-    let forecastRequestCount = 0;
-
-    // --- /api/plaid/items: one Chase item, three or four checking
-    //     accounts depending on the phase. Both phases expose the
-    //     real survivors; phase 1 also exposes the duplicate row
-    //     for mask 1111 with its own external id.
-    await page.route("**/api/plaid/items", async (route) => {
-      if (route.request().method() !== "GET") return route.fallback();
-      const realAccounts = ACCT_ROW_IDS.map((id, i) => ({
-        id,
-        accountId: ACCT_EXTERNAL_IDS[i],
-        name: `${ACCT_NAMES[i]} ··${ACCT_MASKS[i]}`,
-        mask: ACCT_MASKS[i],
-        type: "depository",
-        subtype: i === 2 ? "savings" : "checking",
-      }));
-      const duplicateAccount = {
-        id: DUP_ACCT_ROW_ID,
-        accountId: DUP_ACCT_EXTERNAL_ID,
-        name: `${ACCT_NAMES[0]} ··${ACCT_MASKS[0]}`,
-        mask: ACCT_MASKS[0],
-        type: "depository",
-        subtype: "checking",
-      };
-      const accounts = duplicatePhase
-        ? [...realAccounts, duplicateAccount]
-        : realAccounts;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: CHASE_ITEM_ROW_ID,
-            itemId: CHASE_ITEM_EXTERNAL_ID,
-            institutionId: "ins_chase",
-            institutionName: "Chase",
-            institutionSlug: "chase",
-            lastSyncedAt: snapshotAt,
-            lastSyncError: null,
-            lastSyncErrorCode: null,
-            stillPreparing: false,
-            accounts,
-          },
-        ]),
-      });
-    });
-
-    // --- /api/forecast: bank snapshot anchored at A, plaidCheckingAccounts
-    //     (3 or 4), accountSnapshots map (3 entries always — the
-    //     duplicate row never has its own snapshot in this scenario,
-    //     this is the transactions-only variant).
-    await page.route("**/api/forecast**", async (route) => {
-      const url = new URL(route.request().url());
-      if (route.request().method() !== "GET") return route.fallback();
-      if (!/\/api\/forecast(?:\?|$)/.test(url.pathname + url.search)) {
-        return route.fallback();
-      }
-      forecastRequestCount += 1;
-
-      const realCheckingAccounts = ACCT_ROW_IDS.map((id, i) => ({
-        id,
-        accountId: ACCT_EXTERNAL_IDS[i],
-        name: `${ACCT_NAMES[i]} ··${ACCT_MASKS[i]}`,
-        mask: ACCT_MASKS[i],
-        subtype: i === 2 ? "savings" : "checking",
+    const suffix = Math.random().toString(36).slice(2, 8);
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId,
+        householdId,
+        itemId: `e2e-item-${suffix}`,
+        accessToken: "e2e-no-access",
         institutionName: "Chase",
-      }));
-      const duplicateChecking = {
-        id: DUP_ACCT_ROW_ID,
-        accountId: DUP_ACCT_EXTERNAL_ID,
-        name: `${ACCT_NAMES[0]} ··${ACCT_MASKS[0]}`,
-        mask: ACCT_MASKS[0],
-        subtype: "checking",
+        institutionSlug: "chase",
+      })
+      .returning();
+    const addAccount = async (
+      itemId: string,
+      tag: string,
+      name: string,
+      mask: string,
+      subtype: "checking" | "savings",
+    ) => {
+      const [row] = await db
+        .insert(plaidAccountsTable)
+        .values({
+          userId,
+          householdId,
+          itemId,
+          accountId: `e2e-acct-${tag}-${suffix}`,
+          name,
+          mask,
+          type: "depository",
+          subtype,
+        })
+        .returning();
+      return row!;
+    };
+    const acctA = await addAccount(item!.id, "A", "Total Checking", "1111", "checking");
+    const acctB = await addAccount(item!.id, "B", "Joint Checking", "2222", "checking");
+    const acctC = await addAccount(item!.id, "C", "Savings", "3333", "savings");
+    const [relinkItem] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId,
+        householdId,
+        itemId: `e2e-item-relink-${suffix}`,
+        accessToken: "e2e-no-access",
         institutionName: "Chase",
-      };
-      const plaidCheckingAccounts = duplicatePhase
-        ? [...realCheckingAccounts, duplicateChecking]
-        : realCheckingAccounts;
-
-      const accountSnapshots: Record<
-        string,
-        {
-          balance: string;
-          at: string;
-          source: "plaid" | "manual";
-          name: string | null;
-          mask: string | null;
-        }
-      > = {};
-      ACCT_ROW_IDS.forEach((id, i) => {
-        accountSnapshots[id] = {
-          balance: ACCT_BALANCES[i].toFixed(2),
-          at: snapshotAt,
-          source: "plaid",
-          name: `${ACCT_NAMES[i]} ··${ACCT_MASKS[i]}`,
-          mask: ACCT_MASKS[i],
-        };
-      });
-
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          fromDate: today,
-          toDate: today,
-          events: [],
-          transactions: [],
-          resolutions: [],
-          closedMonths: [],
-          settings: {},
-          bankSnapshot: {
-            balance: ACCT_BALANCES[0].toFixed(2),
-            at: snapshotAt,
-            source: "plaid",
-            accountId: ACCT_ROW_IDS[0],
-            name: `${ACCT_NAMES[0]} ··${ACCT_MASKS[0]}`,
-            mask: ACCT_MASKS[0],
-          },
-          cashSignal: null,
-          plaidCheckingAccounts,
-          monthSnapshots: {},
-          accountSnapshots,
-        }),
-      });
-    });
-
-    // --- /api/transactions: three real-account rows plus a fourth row
-    //     pinned to the DUPLICATE's external account_id. Phase 2
-    //     drops the duplicate row (dedupe repoints it onto the real
-    //     id; we just remove it for the test since the assertion is
-    //     about the real account's rolling total either way).
-    await page.route("**/api/transactions**", async (route) => {
-      if (route.request().method() !== "GET") return route.fallback();
-      const baseTxn = {
-        occurredOn: today,
-        categoryId: null,
-        forecastFlag: false,
-        weeklyAllowance: false,
-        weeklyBucket: null,
-        monthlyAllowance: false,
-        unplannedAllowance: false,
-        reimbursable: false,
-        reimbursed: false,
-        // (#462 spec) `reviewed` + `isTransferUserOverridden` are
-        // required booleans on `ListTransactionsResponseItem`; missing
-        // either drops the whole array on schema parse, leaving the
-        // page with no chase transactions and an anchor-only ending
-        // balance — which silently masked the fix this spec is meant
-        // to verify.
-        reviewed: false,
-        isTransfer: false,
-        isTransferUserOverridden: false,
-        notes: null,
-        member: null,
-        owedBy: null,
-        debtId: null,
-        matchedRuleId: null,
-        source: "plaid:chase" as const,
-      };
-      const realTxns = ACCT_ROW_IDS.map((id, i) => ({
-        ...baseTxn,
-        id: `txn-chase-${ACCT_MASKS[i]}-txn`,
-        occurredAt: txnAt(i),
-        description: `CHASE RELINK TEST — ${ACCT_NAMES[i]} ${ACCT_MASKS[i]} ACTIVITY`,
-        amount: TXN_AMOUNTS_REAL[i],
-        account: `${ACCT_NAMES[i]} ··${ACCT_MASKS[i]}`,
-        plaidTransactionId: `txn-chase-${ACCT_MASKS[i]}-txn-ext`,
-        plaidAccountId: ACCT_EXTERNAL_IDS[i],
-      }));
-      const duplicateTxn = {
-        ...baseTxn,
-        id: "txn-chase-1111-DUP-txn",
-        occurredAt: txnAt(3),
-        description: `CHASE RELINK TEST — DUP ${ACCT_MASKS[0]} ACTIVITY`,
-        amount: DUP_TXN_AMOUNT,
-        account: `${ACCT_NAMES[0]} ··${ACCT_MASKS[0]}`,
-        plaidTransactionId: "txn-chase-1111-DUP-txn-ext",
-        plaidAccountId: DUP_ACCT_EXTERNAL_ID,
-      };
-      const body = duplicatePhase
-        ? [...realTxns, duplicateTxn]
-        : realTxns;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(body),
-      });
-    });
-
-    await signInAndOpen(
-      page,
-      email,
-      password,
-      `/transactions?month=${monthStart}`,
+        institutionSlug: "chase",
+      })
+      .returning();
+    const acctADup = await addAccount(
+      relinkItem!.id,
+      "A-dup",
+      "Total Checking (relinked)",
+      "1111",
+      "checking",
     );
-    await expect(
-      page.getByRole("heading", { name: /^chase$/i }),
-    ).toBeVisible({ timeout: 15_000 });
 
-    const trigger = page.getByTestId("select-chase-account");
-    await expect(trigger).toBeVisible({ timeout: 15_000 });
+    const today = householdDateOf(new Date());
+    const monthStart = previousMonthStart(today);
+    const grocerDay = `${monthStart.slice(0, 8)}12`;
+    const pharmacyDay = `${monthStart.slice(0, 8)}14`;
 
-    const endingBal = page.getByTestId("stat-ending-balance");
+    const seedRow = async (
+      acct: typeof acctA,
+      key: string,
+      day: string,
+      hour: number,
+      description: string,
+      amount: string,
+    ) => {
+      const [row] = await db
+        .insert(transactionsTable)
+        .values({
+          userId,
+          householdId,
+          occurredOn: day,
+          occurredAt: `${day}T${hour}:00:00.000Z`,
+          description,
+          amount,
+          account: acct.name,
+          source: "plaid:chase",
+          plaidTransactionId: `e2e-${suffix}-${key}`,
+          plaidAccountId: acct.accountId,
+        })
+        .returning({ id: transactionsTable.id });
+      return row!.id;
+    };
+    const GROCER = `E2E-${suffix} CHASE RELINK GROCER`;
+    const PHARMACY = `E2E-${suffix} CHASE RELINK PHARMACY`;
+    const a1 = await seedRow(acctA, "a1", grocerDay, 15, GROCER, "-25.00");
+    const a2 = await seedRow(acctA, "a2", pharmacyDay, 15, PHARMACY, "-10.00");
+    // The re-imports on the twin: same postings, fresh Plaid ids.
+    const d1 = await seedRow(acctADup, "a1-relink", grocerDay, 15, GROCER, "-25.00");
+    const d2 = await seedRow(acctADup, "a2-relink", pharmacyDay, 15, PHARMACY, "-10.00");
+    // (PR14 second review N3) A posting that reached only the twin during the re-link.
+    // The old page counted it; PR13's server counts every twin row 0 (not_bank), as
+    // the bank balance and spine have since PR4e, until account dedupe re-points it
+    // onto A. Listed, labelled Not counted, and left out of every total: it sits on
+    // the grocer day, whose total stays -$25.00, and Money out stays A's own.
+    const TWIN_ONLY = `E2E-${suffix} CHASE RELINK TWIN ONLY`;
+    const d3 = await seedRow(acctADup, "twin-only", grocerDay, 18, TWIN_ONLY, "-7.77");
+    const bRow = await seedRow(acctB, "b1", grocerDay, 16, `E2E-${suffix} JOINT`, "-50.00");
+    const cRow = await seedRow(acctC, "c1", grocerDay, 17, `E2E-${suffix} SAVINGS`, "-75.00");
 
-    // --- Phase 1: duplicate window. The default-selected account is
-    //     the snapshot account (A) since `selectedAccountKey` starts
-    //     unset and falls back to bankSnapshot.accountId. With the
-    //     #462 collapse, the duplicate row's transaction (-$10.00)
-    //     is included in A's rolling total: $1,000 (snapshot) + the
-    //     real A transaction (-$25.00) + the duplicate-row
-    //     transaction (-$10.00) = $965.00.
-    const expectedA =
-      ACCT_BALANCES[0] +
-      Number(TXN_AMOUNTS_REAL[0]) +
-      Number(DUP_TXN_AMOUNT);
-    // Without the collapse, the duplicate row's transaction would be
-    // dropped from A's scope and the tile would read $975.00.
-    const droppedTotal = ACCT_BALANCES[0] + Number(TXN_AMOUNTS_REAL[0]);
-    await expect(endingBal).toContainText(fmtCurrency(expectedA), {
+    const snapAt = new Date().toISOString();
+    const snap = (acct: typeof acctA, balance: string) => ({
+      balance,
+      at: snapAt,
+      source: "plaid" as const,
+      name: acct.name,
+      mask: acct.mask,
+    });
+    // The twin has no per-account snapshot in this variant: transactions only.
+    await db.insert(forecastSettingsTable).values({
+      userId,
+      householdId,
+      bankSnapshotBalance: "1000.00",
+      bankSnapshotAt: new Date(),
+      bankSnapshotSource: "plaid",
+      bankSnapshotAccountId: acctA.id,
+      bankSnapshotName: acctA.name,
+      bankSnapshotMask: acctA.mask,
+      accountSnapshots: {
+        [acctA.id]: snap(acctA, "1000.00"),
+        [acctB.id]: snap(acctB, "500.00"),
+        [acctC.id]: snap(acctC, "300.00"),
+      },
+      autoDedupeRanAt: new Date(),
+    });
+
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    // --- Phase 1: the twin and its copies are present.
+    const firstA = page.waitForResponse(isRegisterLedger(monthStart, null), {
+      timeout: 90_000,
+    });
+    await signInAndOpen(page, email, password, `/transactions?month=${monthStart}`);
+    await expect(page.getByRole("heading", { name: /^chase$/i })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(endingBal).not.toContainText(fmtCurrency(droppedTotal));
+    const pageA = await readLedger(await firstA);
 
-    // Switch to B → tile shows snapshot + B's row only ($500 - $50 = $450).
-    // Confirms the collapse only folds in same-(institution, mask) siblings.
-    await trigger.click();
-    const optionB = page.getByTestId(`option-chase-account-${ACCT_ROW_IDS[1]}`);
-    await expect(optionB).toBeVisible({ timeout: 10_000 });
-    await optionB.click();
-    const expectedB = ACCT_BALANCES[1] + Number(TXN_AMOUNTS_REAL[1]);
-    await expect(endingBal).toContainText(fmtCurrency(expectedB), {
-      timeout: 10_000,
+    // The server lists the copies (not dropped from A's view) and counts them 0.
+    expect(pageA.rows.map((r) => r.id).sort()).toEqual([a1, a2, d1, d2, d3].sort());
+    const byId = new Map(pageA.rows.map((r) => [r.id, r]));
+    for (const id of [a1, a2]) {
+      expect(byId.get(id)).toMatchObject({ countsInBalance: true, balanceReason: "counted" });
+    }
+    for (const id of [d1, d2, d3]) {
+      expect(byId.get(id)).toMatchObject({ countsInBalance: false, balanceReason: "not_bank" });
+      expect(parseCents(byId.get(id)!.balanceAmount)).toBe(0);
+    }
+
+    await expect(page.getByTestId("chase-showing")).toHaveText(
+      `Showing 5 of 5 · 5 to review`,
+      { timeout: 20_000 },
+    );
+    const rowLocator = page.locator('[data-testid^="row-tx-"]');
+    await expect(rowLocator).toHaveCount(5, { timeout: 15_000 });
+    const renderedIds = await rowLocator.evaluateAll((els) =>
+      els.map((el) => (el.getAttribute("data-testid") ?? "").slice("row-tx-".length)),
+    );
+    expect(new Set(renderedIds).size, "a row rendered twice").toBe(renderedIds.length);
+    expect([...renderedIds].sort()).toEqual([a1, a2, d1, d2, d3].sort());
+    for (const id of [d1, d2, d3]) {
+      await expect(page.getByTestId(`label-not-counted-${id}`)).toHaveText("Not counted");
+    }
+    for (const id of [a1, a2]) {
+      await expect(page.getByTestId(`label-not-counted-${id}`)).toHaveCount(0);
+    }
+    await expectSnapshotFigures(page, pageA, { grocerDay, pharmacyDay });
+
+    // B and C: their own rows, no balance, none of A's rows or copies.
+    await expect(page.getByTestId("select-chase-account")).toBeVisible({ timeout: 15_000 });
+    const pageBPromise = page.waitForResponse(isRegisterLedger(monthStart, acctB.id), {
+      timeout: 30_000,
     });
-
-    // Switch to C → tile shows snapshot + C's row only ($300 - $75 = $225).
-    await trigger.click();
-    const optionC = page.getByTestId(`option-chase-account-${ACCT_ROW_IDS[2]}`);
-    await expect(optionC).toBeVisible({ timeout: 10_000 });
-    await optionC.click();
-    const expectedC = ACCT_BALANCES[2] + Number(TXN_AMOUNTS_REAL[2]);
-    await expect(endingBal).toContainText(fmtCurrency(expectedC), {
-      timeout: 10_000,
+    await pickAccount(page, acctB.id);
+    await expectNonSnapshotAccount(
+      page,
+      await readLedger(await pageBPromise),
+      { rowId: bRow, outCents: 5_000 },
+      [a1, a2, d1, d2, cRow],
+    );
+    const pageCPromise = page.waitForResponse(isRegisterLedger(monthStart, acctC.id), {
+      timeout: 30_000,
     });
+    await pickAccount(page, acctC.id);
+    await expectNonSnapshotAccount(
+      page,
+      await readLedger(await pageCPromise),
+      { rowId: cRow, outCents: 7_500 },
+      [a1, a2, d1, d2, bRow],
+    );
 
-    // --- Phase 2: dedupe lands. Both `/api/forecast` and
-    //     `/api/transactions` return the three-real-only shape
-    //     (the previously duplicate-pinned transaction is gone —
-    //     in production it would be repointed onto the real id).
-    duplicatePhase = false;
-    const requestsBeforeReload = forecastRequestCount;
+    // --- Phase 2: dedupe lands. The copies are folded away and the twin row goes.
+    await db
+      .delete(transactionsTable)
+      .where(eq(transactionsTable.plaidAccountId, acctADup.accountId));
+    await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.id, acctADup.id));
+
+    const reloadC = page.waitForResponse(isRegisterLedger(monthStart, acctC.id), {
+      timeout: 60_000,
+    });
     await page.reload();
-    await expect(
-      page.getByRole("heading", { name: /^chase$/i }),
-    ).toBeVisible({ timeout: 15_000 });
-    await expect
-      .poll(() => forecastRequestCount, { timeout: 15_000 })
-      .toBeGreaterThan(requestsBeforeReload);
+    await expect(page.getByRole("heading", { name: /^chase$/i })).toBeVisible({
+      timeout: 15_000,
+    });
+    // The pick (C) persisted across the reload.
+    await expectNonSnapshotAccount(
+      page,
+      await readLedger(await reloadC),
+      { rowId: cRow, outCents: 7_500 },
+      [a1, a2, bRow],
+    );
 
-    // The picker selection (last set to C in Phase 1) persists via
-    // `?account=` URL + localStorage across the reload. Switch back
-    // to A and assert its tile has dropped the duplicate row's
-    // contribution and now reads snapshot + the real A row only —
-    // i.e. the user sees $975.00 once dedupe has collapsed the
-    // accounts, because the duplicate's transaction has been
-    // repointed away.
-    await trigger.click();
-    await expect(
-      page.getByTestId(`option-chase-account-${DUP_ACCT_ROW_ID}`),
-    ).toHaveCount(0);
-    await page
-      .getByTestId(`option-chase-account-${ACCT_ROW_IDS[0]}`)
-      .click();
-    await expect(endingBal).toContainText(fmtCurrency(droppedTotal), {
+    await page.getByTestId("select-chase-account").click();
+    await expect(page.getByTestId(`option-chase-account-${acctA.id}`)).toBeVisible({
       timeout: 10_000,
     });
+    // (PR14 second review N2) No "the twin is not an option" check: twins are
+    // merged in the picker's list in every phase, so it could not fail.
+    const pageA2Promise = page.waitForResponse(isRegisterLedger(monthStart, acctA.id), {
+      timeout: 30_000,
+    });
+    await page.getByTestId(`option-chase-account-${acctA.id}`).click();
+    const pageA2 = await readLedger(await pageA2Promise);
+
+    expect(pageA2.rows.map((r) => r.id).sort()).toEqual([a1, a2].sort());
+    for (const r of pageA2.rows) expect(r.countsInBalance).toBe(true);
+    // Exactly Phase 1's figures: the copies never counted.
+    expect(pageA2.totals.moneyOut).toBe(pageA.totals.moneyOut);
+    expect(pageA2.balanceStart).toBe(pageA.balanceStart);
+    expect(pageA2.balanceEnd).toBe(pageA.balanceEnd);
+    await expect(page.locator('[data-testid^="row-tx-"]')).toHaveCount(2, { timeout: 15_000 });
+    await expect(page.locator('[data-testid^="label-not-counted-"]')).toHaveCount(0);
+    await expectSnapshotFigures(page, pageA2, { grocerDay, pharmacyDay });
+
+    await context.close();
   });
 });

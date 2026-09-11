@@ -8,7 +8,9 @@ import type {
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
 
-type ToasterToast = ToastProps & {
+// `title` is dropped from ToastProps: its HTML `title` attribute is a string, and
+// the intersection made every title a string (PR14: counts in titles are mono spans).
+type ToasterToast = Omit<ToastProps, "title"> & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
