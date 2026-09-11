@@ -327,6 +327,11 @@ so the max safe extra reflects the overdue plans only.
     drags (errs low).
   - A Capital One payment without PR7's phrase ("CAPITAL ONE MOBILE PMT") still drags, unless Plaid's category or the
     user's flag marks it.
+  - More generally, any card-payment description PR7's phrases miss leaves that minimum dragging unless Plaid's
+    card-payment category or the user's flag marks the row (third look): e.g. "CHASE CREDIT CRD AUTOPAY PPD ID" (drags
+    $40) and "CITI AUTOPAY PAYMENT" (drags $30). Synced rows usually carry Plaid's category. Errs low, by the minimum.
+  - A row the user tagged to the debt (`debtId`, PR7's rule 2) does not pay its minimum: "CHASE ONLINE PAYMENT" −600
+    tagged to Chase Sapphire still drags $40. Errs low; see Left for later.
 - **X1:** a same-amount savings transfer can keep a missing paycheck out of `incomeNotArrived` (list only).
 - **A named underpayment** counts as paid except for its remainder. If the row was actually a different bill from the
   same payee, the curve is high by the row until the user answers "Not this".
@@ -458,6 +463,7 @@ new or changed tests fail.**
 
 ## Left for later
 
+- **Debt tag pays the minimum:** treat a row whose `debtId` equals the plan's debt as paying that minimum (third look, LOW 2).
 - **PR8:** delete `keepsPreSnapshotRule` when Weekly/Monthly Spend become Amex payoff events.
 - **PR12:**
   - show `assumption` badges and the three lists;
