@@ -348,7 +348,13 @@ export async function buildForecastLedger(
       snapshotISO &&
       snapshotAt &&
       isInSnapshot(
-        { occurredOn: t.occurredOn, createdAt: t.createdAt, plaidAccountId: t.plaidAccountId ?? null },
+        {
+          occurredOn: t.occurredOn,
+          createdAt: t.createdAt,
+          // Stored as a string; an unparsable value is NaN and simply falls back to created_at.
+          occurredAt: t.occurredAt ? new Date(t.occurredAt) : null,
+          plaidAccountId: t.plaidAccountId ?? null,
+        },
         snapshotAt,
         snapshotISO,
       )

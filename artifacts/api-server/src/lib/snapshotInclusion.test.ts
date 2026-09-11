@@ -58,3 +58,46 @@ describe("isInSnapshot", () => {
     expect(isInSnapshot(plaid("2026-06-04", created), snapAt, "2026-05-29")).toBe(false); // +6
   });
 });
+
+/**
+ * Feed latency: Chase rows can reach the ledger long after they happen. When
+ * the institution supplied a real transaction time (`occurredAt`), a time at or
+ * before the read proves the balance holds the row, whenever it arrived.
+ */
+describe("isInSnapshot — the institution's own transaction time", () => {
+  const withTime = (occurredOn: string, createdAt: Date, occurredAt: Date | null, plaidAccountId: string | null = "chase-1") => ({
+    occurredOn,
+    createdAt,
+    occurredAt,
+    plaidAccountId,
+  });
+  const MORNING = new Date("2026-05-01T13:00:00Z"); // 08:00 CT, before the 10:00 read
+  const AFTERNOON = new Date("2026-05-01T20:00:00Z"); // 15:00 CT, after the read
+
+  it("holds a snapshot-day charge that happened before the read but arrived after it", () => {
+    expect(isInSnapshot(withTime(SNAP_DAY, AFTER, MORNING), SNAP_AT, SNAP_DAY)).toBe(true);
+  });
+
+  it("counts a snapshot-day charge that happened and arrived after the read", () => {
+    expect(isInSnapshot(withTime(SNAP_DAY, AFTER, AFTERNOON), SNAP_AT, SNAP_DAY)).toBe(false);
+  });
+
+  it("does not let a later transaction time override an arrival before the read", () => {
+    // Authorised before the read (so it reached the ledger then), posting time later.
+    expect(isInSnapshot(withTime(SNAP_DAY, BEFORE, AFTERNOON), SNAP_AT, SNAP_DAY)).toBe(true);
+  });
+
+  it("holds a Plaid row dated two days ahead whose transaction time is before the read", () => {
+    expect(isInSnapshot(withTime("2026-05-03", AFTER, MORNING), SNAP_AT, SNAP_DAY)).toBe(true);
+  });
+
+  it("keeps the windows: a Plaid row six days ahead, and a manual row the next day, still count", () => {
+    expect(isInSnapshot(withTime("2026-05-07", AFTER, MORNING), SNAP_AT, SNAP_DAY)).toBe(false);
+    expect(isInSnapshot(withTime("2026-05-02", AFTER, MORNING, null), SNAP_AT, SNAP_DAY)).toBe(false);
+  });
+
+  it("treats a missing or unparsable transaction time as no evidence", () => {
+    expect(isInSnapshot(withTime(SNAP_DAY, AFTER, null), SNAP_AT, SNAP_DAY)).toBe(false);
+    expect(isInSnapshot(withTime(SNAP_DAY, AFTER, new Date("not a date")), SNAP_AT, SNAP_DAY)).toBe(false);
+  });
+});

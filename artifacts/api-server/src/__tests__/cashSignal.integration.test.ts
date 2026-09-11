@@ -1613,6 +1613,8 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
     forecastFlag?: boolean;
     /** When the row reached the ledger. Defaults to 00:00 Chicago on its own date. */
     createdAt?: Date;
+    /** The institution's own transaction time (`occurred_at`), when it supplied one. */
+    occurredAt?: string;
   }): Promise<void> {
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
@@ -1625,6 +1627,7 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       pending: opts.pending ?? false,
       forecastFlag: opts.forecastFlag ?? false,
       createdAt: opts.createdAt ?? createdAtStartOfHouseholdDay(opts.occurredOn),
+      occurredAt: opts.occurredAt ?? null,
     });
   }
 
@@ -1742,6 +1745,22 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
       source: "plaid:chase",
       pending: true,
       createdAt: new Date("2026-05-01T14:00:00Z"), // pending at 09:00 CT, before the read
+    });
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.bankToday).toBe("1000.00");
+    expect(sig.daily?.[0].balance).toBe("1000.00");
+  });
+
+  it("(PR4b) a snapshot-day charge that happened before the read but reached the ledger late is not added again", async () => {
+    // Feed latency: the bank had it at 08:00 CT; Plaid delivered it at 14:00 CT.
+    const chase = await snapshotReadAt10am();
+    await addLedgerTxn({
+      occurredOn: "2026-05-01",
+      amount: "-40",
+      plaidAccountId: chase.externalId,
+      source: "plaid:chase",
+      createdAt: new Date("2026-05-01T19:00:00Z"), // arrived 14:00 CT, after the read
+      occurredAt: "2026-05-01T13:00:00.000Z", // happened 08:00 CT, before the read
     });
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
     expect(sig.bankToday).toBe("1000.00");
