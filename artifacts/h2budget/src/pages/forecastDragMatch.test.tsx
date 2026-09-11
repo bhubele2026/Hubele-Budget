@@ -407,6 +407,32 @@ describe("Forecast — drag inbox expense onto planned to match (#456)", () => {
     expect(String(call.title)).toMatch(/Can't match here/i);
   });
 
+  it("(PR5) dropping onto a partly-paid plan row is rejected — a match would replace its partial", () => {
+    renderPage();
+    const planRow = {
+      kind: "plan",
+      itemId: "rent",
+      date: "2026-05-01",
+      label: "Rent",
+      amount: -500,
+      plannedAmount: -1500,
+      paidAmount: -1000,
+      status: "partial",
+    };
+    startDrag("inbox-txn-mystery", "txn-mystery");
+    endDrag({
+      cardId: "inbox-txn-mystery",
+      txnId: "txn-mystery",
+      overId: "plan:rent|2026-05-01",
+      planRow,
+    });
+    expect(upsertMutate).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledTimes(1);
+    const call = toastMock.mock.calls[0][0];
+    expect(call.variant).toBe("destructive");
+    expect(String(call.description)).toMatch(/partly paid/i);
+  });
+
   it("dropping onto an already-matched plan row leaves state unchanged and shows a rejection toast", () => {
     renderPage();
     const planRow = {

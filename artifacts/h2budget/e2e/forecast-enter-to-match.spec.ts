@@ -75,19 +75,18 @@ async function apiCall<T>(
 }
 
 /**
- * Mirrors the helper in forecast-one-click-match.spec.ts: a current-month
- * day a few days out (capped at 28) so the same day powers a 0-day delta
- * inside the picker's high-confidence ≤5-day window.
+ * (PR5b review) Mirrors forecast-one-click-match.spec.ts: the bill is due on
+ * the 20th of the current month and the row, for the exact amount, is dated
+ * the 16th — a high-confidence CLIENT suggestion (exact amount within 5 days)
+ * that the server's "probably paid" matcher can never pair (no word of the
+ * bill's name in the row, and more than 3 days apart). The Enter shortcut is
+ * therefore available on every calendar day; no date branch, no skip.
  */
-function pickAnchorDay(): { iso: string; day: number } {
+const PLAN_DAY = 20;
+const ROW_DAY = 16;
+function currentMonthDay(day: number): string {
   const d = new Date();
-  const target = Math.min(Math.max(d.getDate() + 3, 5), 28);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  return {
-    iso: `${year}-${month}-${String(target).padStart(2, "0")}`,
-    day: target,
-  };
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 test.describe("Forecast inbox Enter-to-match keyboard shortcut (#386)", () => {
@@ -104,11 +103,14 @@ test.describe("Forecast inbox Enter-to-match keyboard shortcut (#386)", () => {
       timeout: 15_000,
     });
 
-    const { iso: anchorIso, day: anchorDay } = pickAnchorDay();
+    const anchorDay = PLAN_DAY;
+    const anchorIso = currentMonthDay(ROW_DAY);
     const suffix = Math.random().toString(36).slice(2, 8);
     const billName = `EnterMatchBill-${suffix}`;
+    // A separate tag for the row description: no word of the bill's name.
+    const rowTag = `r${Math.random().toString(36).slice(2, 8)}`;
 
-    // One planned bill + one bank card with the same amount and day —
+    // One planned bill + one bank card with the same amount, 4 days apart —
     // identical setup to the one-click obvious-match test, which is the
     // exact precondition the keyboard handler requires (canOneClick).
     await apiCall<{ id: string }>(page, "POST", "/api/recurring-items", {
@@ -126,7 +128,7 @@ test.describe("Forecast inbox Enter-to-match keyboard shortcut (#386)", () => {
       "/api/transactions",
       {
         occurredOn: anchorIso,
-        description: `INBOX-${suffix} ENTER`,
+        description: `INBOX-${rowTag} ENTER`,
         amount: "-120.00",
         forecastFlag: true,
       },
@@ -190,7 +192,7 @@ test.describe("Forecast inbox Enter-to-match keyboard shortcut (#386)", () => {
     // … and shows up under "Resolved this month".
     const resolvedList = page.getByTestId("bank-resolved-list");
     await expect(resolvedList).toBeVisible();
-    await expect(resolvedList).toContainText(`INBOX-${suffix} ENTER`);
+    await expect(resolvedList).toContainText(`INBOX-${rowTag} ENTER`);
     await expect(resolvedList).toContainText(/matched/i);
 
     const matched = matchedPosts.find(
@@ -231,7 +233,7 @@ test.describe("Forecast inbox Enter-to-match keyboard shortcut (#386)", () => {
       timeout: 15_000,
     });
 
-    const { iso: anchorIso } = pickAnchorDay();
+    const anchorIso = currentMonthDay(ROW_DAY);
     const suffix = Math.random().toString(36).slice(2, 8);
 
     // No recurring bill seeded → the bank card has nothing to match

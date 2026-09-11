@@ -161,6 +161,11 @@ const FORECAST_BASE = {
   settings: { startingBalance: "5000", cashBuffer: "500" },
 };
 
+// (PR5b) Per-test overrides: a partial resolution in the bundle, or server
+// matches in the cash signal. Reset in `beforeEach`.
+let forecastData: unknown = FORECAST_BASE;
+let cashSignalData: unknown = undefined;
+
 vi.mock("@workspace/api-client-react", () => {
   const noopMutation = () => ({
     mutate: () => {},
@@ -168,8 +173,8 @@ vi.mock("@workspace/api-client-react", () => {
     isPending: false,
   });
   return {
-    useGetForecast: () => ({ data: FORECAST_BASE, isLoading: false }),
-    useGetForecastCashSignal: () => ({ data: undefined, isLoading: false }),
+    useGetForecast: () => ({ data: forecastData, isLoading: false }),
+    useGetForecastCashSignal: () => ({ data: cashSignalData, isLoading: false }),
     useUpsertForecastResolution: () => ({
       mutate: upsertMutate,
       mutateAsync: async () => undefined,
@@ -233,6 +238,8 @@ function renderPage() {
 
 beforeEach(() => {
   cleanup();
+  forecastData = FORECAST_BASE;
+  cashSignalData = undefined;
   toastMock.mockClear();
   upsertMutate.mockClear();
   deleteMutate.mockClear();
@@ -260,6 +267,103 @@ describe("Forecast — Missed bucket actions (#480)", () => {
     renderPage();
     const btn = screen.getByTestId("mark-missed-rent-2026-05-30");
     expect(btn.textContent ?? "").toMatch(/Mark missed/i);
+  });
+
+  it("(PR5) a Suggested row answers with Confirm / Not this — no Mark missed or Move, and a row click marks nothing", () => {
+    cashSignalData = {
+      matches: [
+        {
+          planKey: "heloc|2026-05-31",
+          planItemId: "heloc",
+          planDate: "2026-05-31",
+          txnId: "t-heloc",
+          planAmount: "-800.00",
+          txnAmount: "-800.00",
+          difference: "0.00",
+          dayDelta: -2,
+          confidence: "high",
+          ambiguous: false,
+          offCurve: true,
+        },
+      ],
+    };
+    renderPage();
+    expect(screen.queryByTestId("mark-missed-heloc-2026-05-31")).toBeNull();
+    expect(screen.queryByTestId("move-plan-heloc-2026-05-31")).toBeNull();
+    expect(screen.getByTestId("plan-confirm-heloc-2026-05-31")).toBeTruthy();
+    expect(screen.getByTestId("plan-not-this-heloc-2026-05-31")).toBeTruthy();
+    // Paid exactly: nothing partial to record.
+    expect(screen.queryByTestId("plan-partial-heloc-2026-05-31")).toBeNull();
+    // Rent has no pair and keeps its buttons.
+    expect(screen.getByTestId("mark-missed-rent-2026-05-30")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("plan-row-heloc-2026-05-31"));
+    expect(upsertMutate).not.toHaveBeenCalled();
+  });
+
+  it("(PR5) a partly-paid row shows what was paid, has no Mark missed, and a row click marks nothing", () => {
+    forecastData = {
+      ...FORECAST_BASE,
+      resolutions: [
+        ...FORECAST_BASE.resolutions,
+        {
+          id: "res-rent-partial",
+          recurringItemId: "rent",
+          occurrenceDate: "2026-05-30",
+          status: "partial",
+          matchedTxnId: "t-rent",
+          txnAmount: "-1000.00",
+        },
+      ],
+    };
+    renderPage();
+    const row = screen.getByTestId("plan-row-rent-2026-05-30");
+    expect(row.textContent).toContain("Partly paid");
+    // The row carries the $500 remainder still planned.
+    expect(row.textContent).toContain("$500.00");
+    const paid = screen.getByTestId("plan-partial-paid-rent-2026-05-30");
+    expect(paid.textContent).toContain("$1,000.00");
+    expect(paid.textContent).toContain("$1,500.00");
+    expect(screen.queryByTestId("mark-missed-rent-2026-05-30")).toBeNull();
+    fireEvent.click(row);
+    expect(upsertMutate).not.toHaveBeenCalled();
+  });
+
+  it("(PR5) Move on a partly-paid row reschedules the occurrence; the partial stays (the server keeps both)", () => {
+    forecastData = {
+      ...FORECAST_BASE,
+      resolutions: [
+        ...FORECAST_BASE.resolutions,
+        {
+          id: "res-rent-partial",
+          recurringItemId: "rent",
+          occurrenceDate: "2026-05-30",
+          status: "partial",
+          matchedTxnId: "t-rent",
+          txnAmount: "-1000.00",
+        },
+      ],
+    };
+    renderPage();
+    // Only the PR5 register reads the partial: the row is "Partly paid" and
+    // moves its $500 remainder, not the $1,500 plan.
+    expect(screen.getByTestId("plan-row-rent-2026-05-30").textContent).toContain("Partly paid");
+    fireEvent.click(screen.getByTestId("move-plan-rent-2026-05-30"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain("$500.00");
+    expect(dialog.textContent).not.toContain("$1,500.00");
+    fireEvent.change(screen.getByTestId("input-move-date") as HTMLInputElement, {
+      target: { value: "2026-06-10" },
+    });
+    fireEvent.click(screen.getByTestId("button-save-move"));
+    expect(upsertMutate).toHaveBeenCalledTimes(1);
+    expect(upsertMutate.mock.calls[0][0]).toEqual({
+      data: {
+        status: "rescheduled",
+        recurringItemId: "rent",
+        occurrenceDate: "2026-05-30",
+        rescheduledTo: "2026-06-10",
+      },
+    });
   });
 
   it("clicking Mark missed upserts a missed resolution (no browser confirm) and surfaces an Undo toast", () => {
