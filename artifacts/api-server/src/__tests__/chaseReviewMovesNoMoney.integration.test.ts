@@ -523,7 +523,7 @@ describe("(PR14) reviewing Chase rows moves no money", () => {
   });
 
   it("a stale expectedCount is a 409 and reviews nothing", async () => {
-    const filter = { from: FROM, to: TODAY, reviewed: false };
+    const filter = { from: FROM, to: TODAY, reviewed: false, pending: false };
     for (const expectedCount of [CHECKING_ROWS - PICKED - 1, CHECKING_ROWS - PICKED + 1]) {
       const r = await request("POST", "/transactions/bulk-review-matching", { filter, reviewed: true, expectedCount });
       expect(r.status, JSON.stringify(r.json)).toBe(409);
@@ -535,7 +535,7 @@ describe("(PR14) reviewing Chase rows moves no money", () => {
 
   it("reviewing the rest by filter reviews exactly the other 40, and nothing moves", async () => {
     const r = await request("POST", "/transactions/bulk-review-matching", {
-      filter: { from: FROM, to: TODAY, reviewed: false },
+      filter: { from: FROM, to: TODAY, reviewed: false, pending: false },
       reviewed: true,
       expectedCount: CHECKING_ROWS - PICKED,
     });

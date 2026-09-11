@@ -1921,7 +1921,10 @@ ledger's, `reviewed` included. `expectedCount` is the `matchingCount`
 the client showed: when a different number of rows matches now, the
 request is refused with 409 and nothing changes. More than 1,000
 matching rows is a 400. Rows already in the target state count in
-`matched` but not in `updated`.
+`matched` but not in `updated`. (PR14) Marking rows reviewed
+(`reviewed: true`) requires `filter.pending: false`, otherwise 400
+`pending_not_excluded`: the sync keeps a reviewed pending row when the
+bank drops it, so a bulk review must not shield pending rows.
 
  */
 export declare const bulkReviewMatchingTransactionsBodyFilterAccountMax = 64;

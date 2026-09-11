@@ -1060,8 +1060,9 @@ describe("reviewing", () => {
     expect((reviewedOnly.json as LedgerBody).matchingCount).toBe(20);
   });
 
-  it("bulk review by filter: a stale count is a 409 that changes nothing, a misspelt filter is a 400, and the right count reviews all 240", async () => {
-    const filter = { from: "2026-04-01", to: TODAY, reviewed: false };
+  it("bulk review by filter: a stale count is a 409 that changes nothing, a misspelt filter is a 400, and the right count reviews the 239 posted rows (the pending row stays unreviewed)", async () => {
+    // (PR14 second review N1) Reviewing by filter must exclude pending rows.
+    const filter = { from: "2026-04-01", to: TODAY, reviewed: false, pending: false };
     const reviewedInDb = async () =>
       (
         await db
@@ -1071,9 +1072,11 @@ describe("reviewing", () => {
       ).length;
     expect(await reviewedInDb()).toBe(20);
 
-    const stale = await request("POST", "/transactions/bulk-review-matching", { filter, reviewed: true, expectedCount: 239 });
+    // (PR14 second review N1) Of the 240 unreviewed rows one is the pending row dated
+    // today, which a review by filter leaves out: 239 match.
+    const stale = await request("POST", "/transactions/bulk-review-matching", { filter, reviewed: true, expectedCount: 238 });
     expect(stale.status).toBe(409);
-    expect(stale.json).toMatchObject({ code: "matching_count_changed", matchingCount: 240 });
+    expect(stale.json).toMatchObject({ code: "matching_count_changed", matchingCount: 239 });
     expect(await reviewedInDb()).toBe(20);
 
     const misspelt = await request("POST", "/transactions/bulk-review-matching", {
@@ -1086,13 +1089,20 @@ describe("reviewing", () => {
     expect(fractional.status).toBe(400);
     expect(await reviewedInDb()).toBe(20);
 
-    const ok = await request("POST", "/transactions/bulk-review-matching", { filter, reviewed: true, expectedCount: 240 });
+    const ok = await request("POST", "/transactions/bulk-review-matching", { filter, reviewed: true, expectedCount: 239 });
     expect(ok.status, JSON.stringify(ok.json)).toBe(200);
     const result = BulkReviewMatchingTransactionsResponse.parse(ok.json);
-    expect(result.matched).toBe(240);
-    expect(result.updated).toBe(240);
-    expect(new Set(result.updatedIds).size).toBe(240);
-    expect(await reviewedInDb()).toBe(260);
+    expect(result.matched).toBe(239);
+    expect(result.updated).toBe(239);
+    expect(new Set(result.updatedIds).size).toBe(239);
+    expect(await reviewedInDb()).toBe(259);
+    const pendingRows = await db
+      .select({ id: transactionsTable.id, reviewed: transactionsTable.reviewed })
+      .from(transactionsTable)
+      .where(and(eq(transactionsTable.userId, MAIN_USER), eq(transactionsTable.pending, true)));
+    expect(pendingRows).toHaveLength(1);
+    expect(pendingRows[0]!.reviewed).toBe(false);
+    expect(result.updatedIds).not.toContain(pendingRows[0]!.id);
 
     // Amex rows are outside the ledger, so the filter never reached them.
     const amexReviewed = await db
@@ -1108,23 +1118,23 @@ describe("reviewing", () => {
     expect(amexReviewed).toHaveLength(0);
 
     const after = await get(`/transactions/ledger?${RANGE}&limit=1`);
-    expect((after.json as LedgerBody).review).toEqual({ reviewed: 260, unreviewed: 0 });
+    expect((after.json as LedgerBody).review).toEqual({ reviewed: 259, unreviewed: 1 });
     expect((after.json as LedgerBody).totals.net).toBe("750.00");
 
     // Rows already in the target state are matched but not updated.
     const again = await request("POST", "/transactions/bulk-review-matching", {
-      filter: { from: "2026-04-01", to: TODAY },
+      filter: { from: "2026-04-01", to: TODAY, pending: false },
       reviewed: true,
-      expectedCount: 260,
+      expectedCount: 259,
     });
     expect(again.status).toBe(200);
-    expect(again.json).toEqual({ matched: 260, updated: 0, updatedIds: [] });
+    expect(again.json).toEqual({ matched: 259, updated: 0, updatedIds: [] });
   });
 
   it("refuses more than 1,000 matching rows and changes none of them", async () => {
     actingUser = BIG_USER;
     try {
-      const r = await request("POST", "/transactions/bulk-review-matching", { filter: {}, reviewed: true, expectedCount: 1001 });
+      const r = await request("POST", "/transactions/bulk-review-matching", { filter: { pending: false }, reviewed: true, expectedCount: 1001 });
       expect(r.status).toBe(400);
       expect(r.json).toMatchObject({ code: "too_many_rows" });
       const reviewed = await db
@@ -1158,7 +1168,7 @@ describe("reviewing", () => {
       await movedDone;
       // Counted before that change committed, five rows match.
       const bulk = request("POST", "/transactions/bulk-review-matching", {
-        filter: { from: "2026-05-01" },
+        filter: { from: "2026-05-01", pending: false },
         reviewed: true,
         expectedCount: 5,
       });
@@ -1361,6 +1371,78 @@ describe("second review (R1–R3)", () => {
       const [posted] = await db.select().from(transactionsTable).where(eq(transactionsTable.id, staleIds.get("targetPosted")!));
       expect(isInSnapshot(toCashRow(posted!), SNAPSHOT_AT, "2026-05-15")).toBe(true);
       expect(row("targetPosted")).toMatchObject({ heldAhead: false, replacedPendingId: staleIds.get("targetPending"), balanceAmount: "-20.00" });
+    } finally {
+      actingUser = MAIN_USER;
+    }
+  });
+});
+
+describe("(PR14 second review N1) review by filter never covers pending rows", () => {
+  it("reviewed=true by filter needs pending=false: without it 400 pending_not_excluded and nothing written; with it the count leaves pending rows out and every pending row stays unreviewed; one pending row by id is still allowed", async () => {
+    actingUser = STALE_USER;
+    try {
+      const t = transactionsTable;
+      const reviewedIds = async () =>
+        (
+          await db
+            .select({ id: t.id })
+            .from(t)
+            .where(and(eq(t.userId, STALE_USER), eq(t.reviewed, true)))
+        )
+          .map((r) => r.id)
+          .sort();
+      const pendingInRange = await db
+        .select({ id: t.id, reviewed: t.reviewed })
+        .from(t)
+        .where(and(eq(t.userId, STALE_USER), eq(t.pending, true), sql`${t.occurredOn} >= '2026-04-01'`, sql`${t.occurredOn} <= ${TODAY}`));
+      expect(pendingInRange.length).toBeGreaterThan(0);
+      expect(pendingInRange.every((r) => !r.reviewed)).toBe(true);
+
+      const range = `from=2026-04-01&to=${TODAY}&reviewed=false`;
+      const allCount = ((await get(`/transactions/ledger?${range}&limit=1`)).json as LedgerBody).matchingCount;
+      const postedCount = ((await get(`/transactions/ledger?${range}&pending=false&limit=1`)).json as LedgerBody).matchingCount;
+      expect(allCount - postedCount).toBe(pendingInRange.length);
+      const before = await reviewedIds();
+
+      const base = { from: "2026-04-01", to: TODAY, reviewed: false };
+      for (const filter of [base, { ...base, pending: true }]) {
+        const refused = await request("POST", "/transactions/bulk-review-matching", { filter, reviewed: true, expectedCount: allCount });
+        expect(refused.status, JSON.stringify(filter)).toBe(400);
+        expect(refused.json).toMatchObject({ code: "pending_not_excluded" });
+      }
+      expect(await reviewedIds()).toEqual(before);
+
+      // The count the client must hold is the posted count, not the list's.
+      const wrong = await request("POST", "/transactions/bulk-review-matching", { filter: { ...base, pending: false }, reviewed: true, expectedCount: allCount });
+      expect(wrong.status).toBe(409);
+      expect(wrong.json).toMatchObject({ code: "matching_count_changed", matchingCount: postedCount });
+      expect(await reviewedIds()).toEqual(before);
+
+      const ok = await request("POST", "/transactions/bulk-review-matching", { filter: { ...base, pending: false }, reviewed: true, expectedCount: postedCount });
+      expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+      const result = BulkReviewMatchingTransactionsResponse.parse(ok.json);
+      expect(result.matched).toBe(postedCount);
+      const pendingAfter = await db
+        .select({ reviewed: t.reviewed })
+        .from(t)
+        .where(inArray(t.id, pendingInRange.map((r) => r.id)));
+      expect(pendingAfter.every((r) => !r.reviewed)).toBe(true);
+
+      // One pending row, by id, as the page's per-row button does: allowed.
+      const one = await request("POST", "/transactions/bulk-update", { ids: [pendingInRange[0]!.id], patch: { reviewed: true } });
+      expect(one.status).toBe(200);
+      const [onePending] = await db.select({ reviewed: t.reviewed }).from(t).where(eq(t.id, pendingInRange[0]!.id));
+      expect(onePending!.reviewed).toBe(true);
+
+      // Un-reviewing by filter is not restricted (it shields nothing); put the household back.
+      const back = await request("POST", "/transactions/bulk-review-matching", {
+        filter: { from: "2026-04-01", to: TODAY, reviewed: true },
+        reviewed: false,
+        expectedCount: result.updated + 1 + before.length,
+      });
+      expect(back.status, JSON.stringify(back.json)).toBe(200);
+      await request("POST", "/transactions/bulk-update", { ids: before, patch: { reviewed: true } });
+      expect(await reviewedIds()).toEqual(before);
     } finally {
       actingUser = MAIN_USER;
     }

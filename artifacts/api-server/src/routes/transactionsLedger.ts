@@ -158,6 +158,19 @@ router.post(
         req.householdOwnerId!,
         orUndefined(account),
       );
+      // (PR14 second review N1) Marking rows reviewed by filter must leave pending
+      // rows out. The sync's removed-row delete and vanished-pending sweep skip a
+      // reviewed row (plaidSync.ts), so a reviewed pending hold survives when the
+      // bank drops it and stays counted. One row at a time is still allowed; a
+      // filter that could shield up to 1,000 rows is not. Checked after the
+      // account so a refused account still answers with its own code.
+      if (reviewed && filter.pending !== false) {
+        throw new LedgerRequestError(
+          400,
+          "pending_not_excluded",
+          "reviewing by filter must exclude pending rows: send filter.pending = false",
+        );
+      }
       res.json(await bulkReviewMatching(accounts, filter, reviewed, expectedCount));
     } catch (err) {
       if (!sendLedgerError(res, err)) throw err;

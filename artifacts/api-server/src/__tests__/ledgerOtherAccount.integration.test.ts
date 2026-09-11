@@ -632,9 +632,11 @@ describe("bulk review for B", () => {
     const B = accountRow.get("B")!;
     const aBefore = await ledger("limit=100");
     const before = await reviewedByKey();
-    const filter = { account: B.rowId, from: "2026-04-01", to: TODAY, reviewed: false };
-    const matching = H_ROWS.filter((s) => B_SCOPE(s) && s.day >= "2026-04-01" && s.day <= TODAY && !s.reviewed);
-    expect(matching).toHaveLength(7);
+    const filter = { account: B.rowId, from: "2026-04-01", to: TODAY, reviewed: false, pending: false };
+    // (PR14 second review N1) Pending rows are never reviewed by filter.
+    const matching = H_ROWS.filter((s) => B_SCOPE(s) && s.day >= "2026-04-01" && s.day <= TODAY && !s.reviewed && !s.pending);
+    // B's seven unreviewed rows in range less its two pending rows (b8, b4).
+    expect(matching).toHaveLength(5);
 
     const stale = await request("POST", "/transactions/bulk-review-matching", { filter, reviewed: true, expectedCount: matching.length - 1 });
     expect(stale.status).toBe(409);
@@ -644,8 +646,8 @@ describe("bulk review for B", () => {
     const ok = await request("POST", "/transactions/bulk-review-matching", { filter, reviewed: true, expectedCount: matching.length });
     expect(ok.status, JSON.stringify(ok.json)).toBe(200);
     const result = BulkReviewMatchingTransactionsResponse.parse(ok.json);
-    expect(result.matched).toBe(7);
-    expect(result.updated).toBe(7);
+    expect(result.matched).toBe(matching.length);
+    expect(result.updated).toBe(matching.length);
     expect(new Set(result.updatedIds)).toEqual(new Set(matching.map((s) => rowOf.get(s.key)!.id)));
 
     // Row by row: only those seven changed. A, its twin, the manual, Amex,
@@ -653,12 +655,13 @@ describe("bulk review for B", () => {
     const after = await reviewedByKey();
     const expected = new Map(H_ROWS.map((s) => [s.key, !!s.reviewed || matching.some((m) => m.key === s.key)]));
     expect(after).toEqual(expected);
-    for (const key of ["a1", "a2", "a3", "at1", "m1", "m2", "x1", "x2", "p1", "cc1", "b7"]) {
+    for (const key of ["a1", "a2", "a3", "at1", "m1", "m2", "x1", "x2", "p1", "cc1", "b7", "b4", "b8"]) {
       expect(after.get(key), key).toBe(false);
     }
 
     const bAfter = await ledger(`account=${B.rowId}&limit=1`);
-    expect(bAfter.review).toEqual({ reviewed: 8, unreviewed: 1 });
+    // (PR14 second review N1) B's two pending rows (b4, b8) are left unreviewed by the filter.
+    expect(bAfter.review).toEqual({ reviewed: 6, unreviewed: 3 });
     expect(bAfter.totals).toEqual(totalsOf(H_ROWS.filter(B_SCOPE), B_NOT_COUNTED));
     expect(await ledger("limit=100")).toEqual(aBefore);
   });
@@ -739,7 +742,7 @@ describe("uncategorized rule (PR7)", () => {
           ).map((r) => [r.id, r.reviewed]),
         );
       const before = await reviewed();
-      const filter = { uncategorized: true, reviewed: false };
+      const filter = { uncategorized: true, reviewed: false, pending: false };
       const stale = await request("POST", "/transactions/bulk-review-matching", { filter, reviewed: true, expectedCount: 2 });
       expect(stale.status).toBe(409);
       expect(stale.json).toMatchObject({ code: "matching_count_changed", matchingCount: 3 });
