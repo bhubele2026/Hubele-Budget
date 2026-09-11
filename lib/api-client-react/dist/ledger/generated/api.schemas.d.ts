@@ -3236,130 +3236,88 @@ export interface DeleteMerchantAliasResult {
     signature: string;
     deleted: boolean;
 }
-export type ListTransactionsParams = {
-    from?: string;
-    to?: string;
-    limit?: number;
-    source?: string;
-    uncategorized?: boolean;
-    excludeTransfers?: boolean;
-    reimbursable?: boolean;
-    search?: string;
-    minAmount?: string;
-    maxAmount?: string;
-    categoryId?: string;
-};
-export type DeleteMerchantAliasParams = {
+export type GetTransactionsLedgerParams = {
     /**
-     * The merchant signature whose alias should be cleared.
-     */
-    signature: string;
-};
-export type ListPlaidLiabilityAccountsParams = {
-    refresh?: boolean;
-};
-export type CreateDebtFromPlaidAccount409 = {
-    error: string;
-    debtId?: string;
-    debtName?: string;
-};
-export type GetForecastParams = {
-    days?: number;
-};
-export type GetForecastCashSignalParams = {
-    horizonDays?: number;
-    fromDate?: string;
-};
-export type GetReportsSpendingFactsParams = {
-    /**
-     * Range start (YYYY-MM-DD). Defaults to 30 days ago.
-     */
-    from?: string;
-    /**
-     * Range end (YYYY-MM-DD). Defaults to today.
-     */
-    to?: string;
-};
-export type GetReportsBehaviorFactsParams = {
-    /**
-     * Range start (YYYY-MM-DD). Defaults to 30 days ago.
-     */
-    from?: string;
-    /**
-     * Range end (YYYY-MM-DD). Defaults to today.
-     */
-    to?: string;
-};
-export type GetReportsBudgetFactsParams = {
-    /**
-     * First day of the budget month (YYYY-MM-DD). Defaults to the current month.
-     */
-    monthStart?: string;
-    /**
-     * Streak-board window in months (default 6, clamped 1..12).
-     */
-    monthsBack?: number;
-};
-export type CloseForecastMonthBody = {
-    monthKey: string;
-    /** @nullable */
-    gap?: string | null;
-    /** @nullable */
-    forecastEnd?: string | null;
-    /** @nullable */
-    bankEnd?: string | null;
-    /** @nullable */
-    pending?: number | null;
-    /** @nullable */
-    reconciled?: boolean | null;
-};
-export type DeleteAmexAnchor200 = {
-    ok: boolean;
-};
-export type GetAmexWeeklyPayoffParams = {
-    /**
-     * Sunday of the target week (YYYY-MM-DD). Defaults to the last fully-completed Sun–Sat week when omitted.
-     */
-    weekStart?: string;
-};
-export type ListDashboardBudgetsParams = {
-    bucket?: string;
-    periodKey?: string;
-};
-export type DeleteDashboardBudgetParams = {
-    bucket: string;
-    periodKey: string;
-};
-export type ListWeeklySettlementsParams = {
-    weekStart?: string;
-};
-export type ReopenWeekParams = {
-    weekStart: string;
-};
-export type UpdatePlaidImportCutoffDateBody = {
-    /** @nullable */
-    importCutoffDate: string | null;
-};
-export type UpdatePlaidImportCutoffDate200 = {
-    id: string;
-    /** @nullable */
-    importCutoffDate: string | null;
-    /** @nullable */
-    firstSyncCompletedAt: string | null;
-};
-export type CleanupNonProdPlaidItems200 = {
-    removed: number;
-};
-export type GetBillsSummaryParams = {
-    /**
-   * Optional YYYY-MM-01 month-start. Defaults to the current calendar
-  month. Used to scope calendar expansion of recurring items and
-  matched-resolution windowing.
+   * `plaid_accounts.id` of the ledger account. Optional; defaults to
+  the snapshot's account. (PR14) Any Chase depository account of the
+  household is accepted with its mask twins. An account that is not
+  the snapshot's account (or its twin) lists its own rows, totals and
+  review counts with every balance null (`balanceUnavailableReason`
+  "not_snapshot_account"): no balance is computed for it, and manual
+  rows are not on it. Any other account is a 400 `account_not_ledger`.
   
+   * @maxLength 64
    */
-    month?: string;
+    account?: string;
+    /**
+     * First day, YYYY-MM-DD, inclusive.
+     * @maxLength 10
+     */
+    from?: string;
+    /**
+     * Last day, YYYY-MM-DD, inclusive.
+     * @maxLength 10
+     */
+    to?: string;
+    /**
+     * Case-insensitive match on the description or the category name.
+     * @maxLength 200
+     */
+    search?: string;
+    /**
+     * "true" or "false".
+     * @maxLength 5
+     */
+    reviewed?: string;
+    /**
+     * "true" or "false".
+     * @maxLength 5
+     */
+    pending?: string;
+    /**
+     * "true" keeps only rows with no category; "false" is no filter.
+     * @maxLength 5
+     */
+    uncategorized?: string;
+    /**
+     * @maxLength 64
+     */
+    categoryId?: string;
+    /**
+     * @maxLength 100
+     */
+    source?: string;
+    /**
+     * @maxLength 100
+     */
+    member?: string;
+    /**
+     * Plain digits, 1 to 100.
+     * @minimum 1
+     * @maximum 100
+     */
+    limit?: number;
+    /**
+     * The `nextCursor` of the previous page.
+     * @maxLength 512
+     */
+    cursor?: string;
 };
-export type ImportWorkbookBody = {
-    file: Blob;
+export type GetTransactionsBalancesParams = {
+    /**
+     * As on GET /transactions/ledger.
+     * @maxLength 64
+     */
+    account?: string;
+    /**
+     * Comma-separated YYYY-MM-DD dates, 1 to 120 of them.
+     * @maxLength 1400
+     */
+    dates: string;
+};
+export type BulkReviewMatchingTransactions409 = {
+    error: string;
+    code: string;
+    matchingCount: number;
 };
 //# sourceMappingURL=api.schemas.d.ts.map

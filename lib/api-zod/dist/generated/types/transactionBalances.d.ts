@@ -10,6 +10,11 @@ import type { LedgerAnchor } from "./ledgerAnchor";
 import type { TransactionBalancesBalancesItem } from "./transactionBalancesBalancesItem";
 export interface TransactionBalances {
     balances: TransactionBalancesBalancesItem[];
+    /**
+     * As on LedgerPage.
+     * @nullable
+     */
+    balanceUnavailableReason: string | null;
     anchor: LedgerAnchor;
     account: LedgerAccountScope;
 }

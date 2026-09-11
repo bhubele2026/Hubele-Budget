@@ -8,7 +8,12 @@
 export type GetTransactionsLedgerParams = {
     /**
    * `plaid_accounts.id` of the ledger account. Optional; defaults to
-  the snapshot's account. Any account outside the ledger scope is a 400.
+  the snapshot's account. (PR14) Any Chase depository account of the
+  household is accepted with its mask twins. An account that is not
+  the snapshot's account (or its twin) lists its own rows, totals and
+  review counts with every balance null (`balanceUnavailableReason`
+  "not_snapshot_account"): no balance is computed for it, and manual
+  rows are not on it. Any other account is a 400 `account_not_ledger`.
   
    * @maxLength 64
    */

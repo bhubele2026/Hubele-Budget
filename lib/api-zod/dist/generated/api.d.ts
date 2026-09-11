@@ -1586,7 +1586,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
     }>, zod.ZodObject<{
         runningBalance: zod.ZodNullable<zod.ZodString>;
-        balanceAmount: zod.ZodString;
+        balanceAmount: zod.ZodNullable<zod.ZodString>;
         countsInBalance: zod.ZodBoolean;
         balanceReason: zod.ZodString;
         replacedPendingId: zod.ZodNullable<zod.ZodString>;
@@ -1595,7 +1595,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         stalePending: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
         runningBalance: string | null;
-        balanceAmount: string;
+        balanceAmount: string | null;
         countsInBalance: boolean;
         balanceReason: string;
         replacedPendingId: string | null;
@@ -1604,7 +1604,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         stalePending: boolean;
     }, {
         runningBalance: string | null;
-        balanceAmount: string;
+        balanceAmount: string | null;
         countsInBalance: boolean;
         balanceReason: string;
         replacedPendingId: string | null;
@@ -1644,6 +1644,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     balanceStart: zod.ZodNullable<zod.ZodString>;
     balanceEnd: zod.ZodNullable<zod.ZodString>;
     balanceToday: zod.ZodNullable<zod.ZodString>;
+    balanceUnavailableReason: zod.ZodNullable<zod.ZodString>;
     anchor: zod.ZodObject<{
         today: zod.ZodString;
         todayBalance: zod.ZodNullable<zod.ZodString>;
@@ -1713,7 +1714,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
     } & {
         runningBalance: string | null;
-        balanceAmount: string;
+        balanceAmount: string | null;
         countsInBalance: boolean;
         balanceReason: string;
         replacedPendingId: string | null;
@@ -1736,6 +1737,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     balanceStart: string | null;
     balanceEnd: string | null;
     balanceToday: string | null;
+    balanceUnavailableReason: string | null;
     anchor: {
         today: string;
         todayBalance: string | null;
@@ -1783,7 +1785,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         merchantSignature?: string | undefined;
     } & {
         runningBalance: string | null;
-        balanceAmount: string;
+        balanceAmount: string | null;
         countsInBalance: boolean;
         balanceReason: string;
         replacedPendingId: string | null;
@@ -1806,6 +1808,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     balanceStart: string | null;
     balanceEnd: string | null;
     balanceToday: string | null;
+    balanceUnavailableReason: string | null;
     anchor: {
         today: string;
         todayBalance: string | null;
@@ -1846,6 +1849,7 @@ export declare const GetTransactionsBalancesResponse: zod.ZodObject<{
         date: string;
         balance: string | null;
     }>, "many">;
+    balanceUnavailableReason: zod.ZodNullable<zod.ZodString>;
     anchor: zod.ZodObject<{
         today: zod.ZodString;
         todayBalance: zod.ZodNullable<zod.ZodString>;
@@ -1880,6 +1884,7 @@ export declare const GetTransactionsBalancesResponse: zod.ZodObject<{
         via: string;
         plaidAccountIds: string[];
     };
+    balanceUnavailableReason: string | null;
     anchor: {
         today: string;
         todayBalance: string | null;
@@ -1896,6 +1901,7 @@ export declare const GetTransactionsBalancesResponse: zod.ZodObject<{
         via: string;
         plaidAccountIds: string[];
     };
+    balanceUnavailableReason: string | null;
     anchor: {
         today: string;
         todayBalance: string | null;

@@ -9,6 +9,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import {
   LEDGER_FILTER_KEYS,
   LedgerRequestError,
+  balanceUnavailableReason,
   bulkReviewMatching,
   checkLedgerFilter,
   decodeLedgerCursor,
@@ -111,6 +112,7 @@ router.get("/transactions/balances", requireAuth, async (req, res): Promise<void
     );
     res.json({
       balances: await readLedgerBalances(scope, dates),
+      balanceUnavailableReason: balanceUnavailableReason(scope),
       anchor: scope.anchor,
       account: { via: scope.via, plaidAccountIds: scope.plaidAccountIds },
     });

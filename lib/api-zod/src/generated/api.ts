@@ -987,7 +987,7 @@ export const GetTransactionsLedgerQueryParams = zod.object({
     .max(getTransactionsLedgerQueryAccountMax)
     .optional()
     .describe(
-      "`plaid_accounts.id` of the ledger account. Optional; defaults to\nthe snapshot's account. Any account outside the ledger scope is a 400.\n",
+      "`plaid_accounts.id` of the ledger account. Optional; defaults to\nthe snapshot's account. (PR14) Any Chase depository account of the\nhousehold is accepted with its mask twins. An account that is not\nthe snapshot's account (or its twin) lists its own rows, totals and\nreview counts with every balance null (`balanceUnavailableReason`\n\"not_snapshot_account\"): no balance is computed for it, and manual\nrows are not on it. Any other account is a 400 `account_not_ledger`.\n",
     ),
   from: zod.coerce
     .string()
@@ -1144,8 +1144,9 @@ export const GetTransactionsLedgerResponse = zod.object({
             ),
           balanceAmount: zod
             .string()
+            .nullable()
             .describe(
-              "What this row moves the register by: its amount, or 0.00 when it\ndoes not count. `totals` sum these.\n",
+              "What this row moves the register by: its amount, or 0.00 when it\ndoes not count. `totals` sum these. (PR14) Null on an account\nother than the snapshot's, which has no register; there\n`countsInBalance` still says whether the row counts in the totals.\n",
             ),
           countsInBalance: zod
             .boolean()
@@ -1218,6 +1219,12 @@ export const GetTransactionsLedgerResponse = zod.object({
     .describe(
       "The balance at the end of today: the spine's `bank.balance`. Null\nwithout a bank snapshot.\n",
     ),
+  balanceUnavailableReason: zod
+    .string()
+    .nullable()
+    .describe(
+      '(PR14) Why every balance in this response is null, or null when they\nare given: \"no_snapshot\" (no bank snapshot time) or\n\"not_snapshot_account\" (an account other than the snapshot\'s; no\nbalance is computed for it).\n',
+    ),
   anchor: zod.object({
     today: zod
       .string()
@@ -1278,6 +1285,10 @@ export const GetTransactionsBalancesResponse = zod.object({
       balance: zod.string().nullable(),
     }),
   ),
+  balanceUnavailableReason: zod
+    .string()
+    .nullable()
+    .describe("As on LedgerPage."),
   anchor: zod.object({
     today: zod
       .string()
