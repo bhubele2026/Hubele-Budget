@@ -444,6 +444,178 @@ response — never persisted.
   merchantSignature?: string;
 }
 
+export type LedgerRow = Transaction & {
+  /**
+   * (PR13) The account balance straight after this row, on the
+register of all the account's rows. Null without a bank
+snapshot, and for a row dated after today.
+
+   * @nullable
+   */
+  runningBalance: string | null;
+  /** What this row moves the register by: its amount, or 0.00 when it
+does not count. `totals` sum these.
+ */
+  balanceAmount: string;
+  /** Whether this row moves the balance at all. */
+  countsInBalance: boolean;
+  /** counted (moves the balance by its amount); superseded (a pending
+row its posted row replaced); duplicate (a second row with the
+same Plaid transaction id); not_bank (a mask-twin row, which the
+bank balance does not read).
+ */
+  balanceReason: string;
+  /**
+   * For a posted row that replaced a pending row, that pending row's id.
+   * @nullable
+   */
+  replacedPendingId: string | null;
+  /** Dated after the snapshot day but already inside the snapshot
+balance. The days between the snapshot and this row's date read
+higher than the bank showed, by this row.
+ */
+  heldAhead: boolean;
+  /** Dated after the household's today. Such a row has no running balance. */
+  afterToday: boolean;
+  /** Still pending and dated more than 14 days before the household's
+today. A label only: the row moves the balance as balanceReason
+says. A leftover pending row its posted row could not replace
+counts beside that posted row.
+ */
+  stalePending: boolean;
+};
+
+export interface LedgerAnchor {
+  /** The household's today (America/Chicago), YYYY-MM-DD. */
+  today: string;
+  /**
+   * The balance at the end of `today`: the spine's `bank.balance`, from
+the same computation. Null without a bank snapshot.
+
+   * @nullable
+   */
+  todayBalance: string | null;
+  /** @nullable */
+  snapshotBalance: string | null;
+  /** @nullable */
+  snapshotAt: string | null;
+  /** @nullable */
+  snapshotDay: string | null;
+}
+
+export interface LedgerAccountScope {
+  /** How the snapshot's account was found: pointer, snapshot mask, sole
+checking, sole depository, or unresolved.
+ */
+  via: string;
+  /** The Plaid account ids on the ledger (the resolved account and its
+mask twins). Manual rows are on the ledger as well.
+ */
+  plaidAccountIds: string[];
+}
+
+/**
+ * Over every row matching the filters other than `reviewed`, rows dated
+after today included, summing each row's `balanceAmount`: a row that
+does not count adds nothing.
+
+ */
+export interface LedgerTotals {
+  /** Matching rows, including rows that do not count. */
+  count: number;
+  moneyIn: string;
+  moneyOut: string;
+  net: string;
+}
+
+export interface LedgerReviewCounts {
+  reviewed: number;
+  unreviewed: number;
+}
+
+export interface LedgerPage {
+  rows: LedgerRow[];
+  /** @nullable */
+  nextCursor: string | null;
+  limit: number;
+  /** Rows matching every filter, `reviewed` included. */
+  matchingCount: number;
+  totals: LedgerTotals;
+  review: LedgerReviewCounts;
+  /**
+   * The balance at the end of the day before `from`, or before the
+account's first row when `from` is absent. Null without a bank
+snapshot, or when that day is after today.
+
+   * @nullable
+   */
+  balanceStart: string | null;
+  /**
+   * The balance at the end of `to`, which defaults to today. Null without
+a bank snapshot, or when `to` is after today.
+
+   * @nullable
+   */
+  balanceEnd: string | null;
+  /**
+   * The balance at the end of today: the spine's `bank.balance`. Null
+without a bank snapshot.
+
+   * @nullable
+   */
+  balanceToday: string | null;
+  anchor: LedgerAnchor;
+  account: LedgerAccountScope;
+}
+
+export type TransactionBalancesBalancesItem = {
+  date: string;
+  /** @nullable */
+  balance: string | null;
+};
+
+export interface TransactionBalances {
+  balances: TransactionBalancesBalancesItem[];
+  anchor: LedgerAnchor;
+  account: LedgerAccountScope;
+}
+
+export interface LedgerFilter {
+  /** @maxLength 64 */
+  account?: string;
+  /** @maxLength 10 */
+  from?: string;
+  /** @maxLength 10 */
+  to?: string;
+  /** @maxLength 200 */
+  search?: string;
+  reviewed?: boolean;
+  pending?: boolean;
+  uncategorized?: boolean;
+  /** @maxLength 64 */
+  categoryId?: string;
+  /** @maxLength 100 */
+  source?: string;
+  /** @maxLength 100 */
+  member?: string;
+}
+
+export interface BulkReviewMatchingInput {
+  filter: LedgerFilter;
+  reviewed: boolean;
+  /**
+   * The `matchingCount` the client showed for this filter.
+   * @minimum 0
+   */
+  expectedCount: number;
+}
+
+export interface BulkReviewMatchingResult {
+  matched: number;
+  updated: number;
+  updatedIds: string[];
+}
+
 /**
  * @nullable
  */
@@ -3446,6 +3618,88 @@ export type DeleteMerchantAliasParams = {
    * The merchant signature whose alias should be cleared.
    */
   signature: string;
+};
+
+export type GetTransactionsLedgerParams = {
+  /**
+ * `plaid_accounts.id` of the ledger account. Optional; defaults to
+the snapshot's account. Any account outside the ledger scope is a 400.
+
+ * @maxLength 64
+ */
+  account?: string;
+  /**
+   * First day, YYYY-MM-DD, inclusive.
+   * @maxLength 10
+   */
+  from?: string;
+  /**
+   * Last day, YYYY-MM-DD, inclusive.
+   * @maxLength 10
+   */
+  to?: string;
+  /**
+   * Case-insensitive match on the description or the category name.
+   * @maxLength 200
+   */
+  search?: string;
+  /**
+   * "true" or "false".
+   * @maxLength 5
+   */
+  reviewed?: string;
+  /**
+   * "true" or "false".
+   * @maxLength 5
+   */
+  pending?: string;
+  /**
+   * "true" keeps only rows with no category; "false" is no filter.
+   * @maxLength 5
+   */
+  uncategorized?: string;
+  /**
+   * @maxLength 64
+   */
+  categoryId?: string;
+  /**
+   * @maxLength 100
+   */
+  source?: string;
+  /**
+   * @maxLength 100
+   */
+  member?: string;
+  /**
+   * Plain digits, 1 to 100.
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+  /**
+   * The `nextCursor` of the previous page.
+   * @maxLength 512
+   */
+  cursor?: string;
+};
+
+export type GetTransactionsBalancesParams = {
+  /**
+   * As on GET /transactions/ledger.
+   * @maxLength 64
+   */
+  account?: string;
+  /**
+   * Comma-separated YYYY-MM-DD dates, 1 to 120 of them.
+   * @maxLength 1400
+   */
+  dates: string;
+};
+
+export type BulkReviewMatchingTransactions409 = {
+  error: string;
+  code: string;
+  matchingCount: number;
 };
 
 export type ListPlaidLiabilityAccountsParams = {

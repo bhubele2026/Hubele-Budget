@@ -369,6 +369,150 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BulkSetForecastFlagResult" }
 
+  /transactions/ledger:
+    get:
+      operationId: getTransactionsLedger
+      tags: [transactions]
+      summary: |
+        (PR13) One page of the bank ledger, newest first. The server settles
+        the scope: the Plaid account the snapshot resolves to, its
+        same-institution mask twins, and manual rows (no Plaid account, source
+        neither "amex" nor "plaid:*"), which is the rule the bank balance reads
+        by. A client must not hide rows the register counts. Ordered by
+        occurredOn desc, occurredAt desc (nulls last), id desc, and paged with
+        an opaque keyset cursor. Each row carries what it moves the balance by
+        (`balanceAmount`, `countsInBalance`, `balanceReason`), from the cash
+        rule over the account's whole history. `matchingCount` counts every
+        row matching the filters; `totals` and `review` cover every row
+        matching the filters other than `reviewed`. `runningBalance`,
+        `balanceStart`, `balanceEnd`, `balanceToday` and `anchor` never depend
+        on the non-date filters or the page, and no balance is given for a day
+        after today. The boolean filters take the strings "true" or "false";
+        anything else is a 400.
+      parameters:
+        - in: query
+          name: account
+          description: |
+            `plaid_accounts.id` of the ledger account. Optional; defaults to
+            the snapshot's account. Any account outside the ledger scope is a 400.
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: from
+          description: First day, YYYY-MM-DD, inclusive.
+          schema: { type: string, maxLength: 10 }
+        - in: query
+          name: to
+          description: Last day, YYYY-MM-DD, inclusive.
+          schema: { type: string, maxLength: 10 }
+        - in: query
+          name: search
+          description: Case-insensitive match on the description or the category name.
+          schema: { type: string, maxLength: 200 }
+        - in: query
+          name: reviewed
+          description: '"true" or "false".'
+          schema: { type: string, maxLength: 5 }
+        - in: query
+          name: pending
+          description: '"true" or "false".'
+          schema: { type: string, maxLength: 5 }
+        - in: query
+          name: uncategorized
+          description: '"true" keeps only rows with no category; "false" is no filter.'
+          schema: { type: string, maxLength: 5 }
+        - in: query
+          name: categoryId
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: source
+          schema: { type: string, maxLength: 100 }
+        - in: query
+          name: member
+          schema: { type: string, maxLength: 100 }
+        - in: query
+          name: limit
+          description: Plain digits, 1 to 100.
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: cursor
+          description: The `nextCursor` of the previous page.
+          schema: { type: string, maxLength: 512 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LedgerPage" }
+        "400":
+          description: Invalid filter, limit, cursor or account, or a NUL byte in any value
+
+  /transactions/balances:
+    get:
+      operationId: getTransactionsBalances
+      tags: [transactions]
+      summary: |
+        (PR13) End-of-day balances of the ledger account for up to 120 dates,
+        on the same register as GET /transactions/ledger: a date's balance is
+        the runningBalance after the last account row dated on or before it.
+        Today's equals the bank balance on the spine. A date after today, and
+        every date without a bank snapshot, has a null balance: the register
+        is not a projection.
+      parameters:
+        - in: query
+          name: account
+          description: As on GET /transactions/ledger.
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: dates
+          required: true
+          description: Comma-separated YYYY-MM-DD dates, 1 to 120 of them.
+          schema: { type: string, maxLength: 1400 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionBalances" }
+        "400":
+          description: Invalid or too many dates, or an invalid account
+
+  /transactions/bulk-review-matching:
+    post:
+      operationId: bulkReviewMatchingTransactions
+      tags: [transactions]
+      summary: |
+        (PR13) Mark every ledger row matching a filter reviewed (or not) in
+        one request, without the client holding the ids. The filter is the
+        ledger's, `reviewed` included. `expectedCount` is the `matchingCount`
+        the client showed: when a different number of rows matches now, the
+        request is refused with 409 and nothing changes. More than 1,000
+        matching rows is a 400. Rows already in the target state count in
+        `matched` but not in `updated`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkReviewMatchingInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkReviewMatchingResult" }
+        "400":
+          description: Invalid filter, or more than 1,000 matching rows
+        "409":
+          description: The number of matching rows is not `expectedCount`
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, code, matchingCount]
+                properties:
+                  error: { type: string }
+                  code: { type: string }
+                  matchingCount: { type: integer }
+
   /debts:
     get:
       operationId: listDebts
@@ -2259,6 +2403,187 @@ components:
             to count how many rows a rename will affect. Empty string when no
             stable signature can be derived. Computed server-side per list
             response — never persisted.
+    LedgerRow:
+      allOf:
+        - $ref: "#/components/schemas/Transaction"
+        - type: object
+          required: [runningBalance, balanceAmount, countsInBalance, balanceReason, replacedPendingId, heldAhead, afterToday, stalePending]
+          properties:
+            runningBalance:
+              type: ["string", "null"]
+              description: |
+                (PR13) The account balance straight after this row, on the
+                register of all the account's rows. Null without a bank
+                snapshot, and for a row dated after today.
+            balanceAmount:
+              type: string
+              description: |
+                What this row moves the register by: its amount, or 0.00 when it
+                does not count. `totals` sum these.
+            countsInBalance:
+              type: boolean
+              description: Whether this row moves the balance at all.
+            balanceReason:
+              type: string
+              description: |
+                counted (moves the balance by its amount); superseded (a pending
+                row its posted row replaced); duplicate (a second row with the
+                same Plaid transaction id); not_bank (a mask-twin row, which the
+                bank balance does not read).
+            replacedPendingId:
+              type: ["string", "null"]
+              description: For a posted row that replaced a pending row, that pending row's id.
+            heldAhead:
+              type: boolean
+              description: |
+                Dated after the snapshot day but already inside the snapshot
+                balance. The days between the snapshot and this row's date read
+                higher than the bank showed, by this row.
+            afterToday:
+              type: boolean
+              description: Dated after the household's today. Such a row has no running balance.
+            stalePending:
+              type: boolean
+              description: |
+                Still pending and dated more than 14 days before the household's
+                today. A label only: the row moves the balance as balanceReason
+                says. A leftover pending row its posted row could not replace
+                counts beside that posted row.
+    LedgerAnchor:
+      type: object
+      required: [today, todayBalance, snapshotBalance, snapshotAt, snapshotDay]
+      properties:
+        today:
+          type: string
+          description: The household's today (America/Chicago), YYYY-MM-DD.
+        todayBalance:
+          type: ["string", "null"]
+          description: |
+            The balance at the end of `today`: the spine's `bank.balance`, from
+            the same computation. Null without a bank snapshot.
+        snapshotBalance: { type: ["string", "null"] }
+        snapshotAt: { type: ["string", "null"] }
+        snapshotDay: { type: ["string", "null"] }
+    LedgerAccountScope:
+      type: object
+      required: [via, plaidAccountIds]
+      properties:
+        via:
+          type: string
+          description: |
+            How the snapshot's account was found: pointer, snapshot mask, sole
+            checking, sole depository, or unresolved.
+        plaidAccountIds:
+          type: array
+          items: { type: string }
+          description: |
+            The Plaid account ids on the ledger (the resolved account and its
+            mask twins). Manual rows are on the ledger as well.
+    LedgerTotals:
+      type: object
+      description: |
+        Over every row matching the filters other than `reviewed`, rows dated
+        after today included, summing each row's `balanceAmount`: a row that
+        does not count adds nothing.
+      required: [count, moneyIn, moneyOut, net]
+      properties:
+        count:
+          type: integer
+          description: Matching rows, including rows that do not count.
+        moneyIn: { type: string }
+        moneyOut: { type: string }
+        net: { type: string }
+    LedgerReviewCounts:
+      type: object
+      required: [reviewed, unreviewed]
+      properties:
+        reviewed: { type: integer }
+        unreviewed: { type: integer }
+    LedgerPage:
+      type: object
+      required: [rows, nextCursor, limit, matchingCount, totals, review, balanceStart, balanceEnd, balanceToday, anchor, account]
+      properties:
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/LedgerRow" }
+        nextCursor: { type: ["string", "null"] }
+        limit: { type: integer }
+        matchingCount:
+          type: integer
+          description: Rows matching every filter, `reviewed` included.
+        totals:
+          $ref: "#/components/schemas/LedgerTotals"
+        review:
+          $ref: "#/components/schemas/LedgerReviewCounts"
+        balanceStart:
+          type: ["string", "null"]
+          description: |
+            The balance at the end of the day before `from`, or before the
+            account's first row when `from` is absent. Null without a bank
+            snapshot, or when that day is after today.
+        balanceEnd:
+          type: ["string", "null"]
+          description: |
+            The balance at the end of `to`, which defaults to today. Null without
+            a bank snapshot, or when `to` is after today.
+        balanceToday:
+          type: ["string", "null"]
+          description: |
+            The balance at the end of today: the spine's `bank.balance`. Null
+            without a bank snapshot.
+        anchor:
+          $ref: "#/components/schemas/LedgerAnchor"
+        account:
+          $ref: "#/components/schemas/LedgerAccountScope"
+    TransactionBalances:
+      type: object
+      required: [balances, anchor, account]
+      properties:
+        balances:
+          type: array
+          items:
+            type: object
+            required: [date, balance]
+            properties:
+              date: { type: string }
+              balance: { type: ["string", "null"] }
+        anchor:
+          $ref: "#/components/schemas/LedgerAnchor"
+        account:
+          $ref: "#/components/schemas/LedgerAccountScope"
+    LedgerFilter:
+      type: object
+      properties:
+        account: { type: string, maxLength: 64 }
+        from: { type: string, maxLength: 10 }
+        to: { type: string, maxLength: 10 }
+        search: { type: string, maxLength: 200 }
+        reviewed: { type: boolean }
+        pending: { type: boolean }
+        uncategorized: { type: boolean }
+        categoryId: { type: string, maxLength: 64 }
+        source: { type: string, maxLength: 100 }
+        member: { type: string, maxLength: 100 }
+    BulkReviewMatchingInput:
+      type: object
+      required: [filter, reviewed, expectedCount]
+      properties:
+        filter:
+          $ref: "#/components/schemas/LedgerFilter"
+        reviewed: { type: boolean }
+        expectedCount:
+          type: integer
+          minimum: 0
+          description: The `matchingCount` the client showed for this filter.
+    BulkReviewMatchingResult:
+      type: object
+      required: [matched, updated, updatedIds]
+      properties:
+        matched: { type: integer }
+        updated: { type: integer }
+        updatedIds:
+          type: array
+          items: { type: string }
     CreateTransactionInput:
       type: object
       required: [occurredOn, description, amount]
