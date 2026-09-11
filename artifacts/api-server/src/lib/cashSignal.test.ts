@@ -180,6 +180,19 @@ describe("expandItem - monthly", () => {
     expect(out.map((e) => e.date)).toEqual(["2026-02-28"]);
   });
 
+  it("(PR6) day 31 clamps in each short month and returns to the 31st: Feb 28, Mar 31, Apr 30", () => {
+    // Each month is computed from dayOfMonth, never chained from the previous
+    // clamped date, so February's 28th does not become March's 28th.
+    const item = rec({
+      frequency: "monthly",
+      dayOfMonth: 31,
+      anchorDate: "2026-01-31",
+      amount: "100",
+    });
+    const out = expandItem(item, parseISO("2026-02-01"), parseISO("2026-04-30"));
+    expect(out.map((e) => e.date)).toEqual(["2026-02-28", "2026-03-31", "2026-04-30"]);
+  });
+
   it("falls back to anchor's day when dayOfMonth is null", () => {
     const item = rec({
       frequency: "monthly",
