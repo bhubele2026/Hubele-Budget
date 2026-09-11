@@ -220,3 +220,20 @@ a curve from $0; now it is the empty state.
 | Web suite, TZ=America/Los_Angeles | 129 files, 1041 tests passed |
 | `pnpm run build && node scripts/check-entry-graph.mjs` | 572.6 KB of 580 KB, pass |
 | Codegen | not needed: spec untouched |
+
+## Review of the merged head (`75e0b4d`): APPROVE, with two corrections
+
+- **The CashFlow empty state is defensive only.** `forecast_settings.starting_balance` is `NOT NULL DEFAULT '0'`,
+  the route always creates a settings row, and the spec marks `startingBalance` required, so "No starting balance set
+  on Forecast" never shows on real data. A balance nobody set is `"0"`, and the card still draws from $0. Nothing
+  moves on real data from this change.
+- **Older issue, not changed here (pending Brad's decision):** the CashFlow forecast card starts its curve from
+  `settings.startingBalance` and ignores the `bankSnapshot` in the same response, while the Forecast page starts from
+  the snapshot when there is one (`forecast.tsx:690-693`). For a household with a linked bank the card's curve does
+  not start at the bank balance. Starting it where Forecast starts changes a money figure on screen.
+- **Fixed in review:** Banking's biggest one-off charges memo now also depends on `monthStartISO`, as this note already
+  said, so the list follows the household month without waiting for the next day's fetch.
+- **Note on tests:** the Allowances streak and variance tests mock `useListTransactions` to return every row, so they
+  do not cover the unfetched-weeks backlog bug listed under Residuals.
+- **Reviewer's gates on the merged tree:** typecheck green; API 136 files, 1270 pass, 7 todo; web 130 files, 1046
+  pass (UTC and Los Angeles); build and guard 572.6 KB.

@@ -380,7 +380,7 @@ export default function CommandCenterPage() {
       }))
       .sort((a, b) => a.id.localeCompare(b.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyTxns, recurringNames]);
+  }, [weeklyTxns, recurringNames, monthStartISO]);
 
   const bankAsOf = shortDate(spine?.bank?.asOfDate);
   const nextBill = spine?.nextBill ?? null;
