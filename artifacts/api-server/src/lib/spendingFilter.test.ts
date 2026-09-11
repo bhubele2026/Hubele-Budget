@@ -361,7 +361,7 @@ describe("CARD_PAYMENT_PATTERNS", () => {
     expect(matchesCardPaymentPattern("US BANK CREDIT CARD PAYMENT INDN:JANE DOE")).toBe(true);
   });
 
-  it("⚠️ (second review, disclosed) what the positioned rule still gets wrong, each as on main", () => {
+  it("⚠️ (second review, disclosed) what the positioned rule still gets wrong (the first two exactly as on main)", () => {
     // Caught, though it reads like a purchase: an unlabelled "REF" vouches for the
     // next word. `main` caught it too ("credit card pymt" anywhere).
     expect(matchesCardPaymentPattern("CREDIT CARD PYMT REF SUPPLIES")).toBe(true);
