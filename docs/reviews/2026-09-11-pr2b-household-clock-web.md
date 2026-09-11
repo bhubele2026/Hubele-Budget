@@ -106,8 +106,9 @@ No stored data is rewritten. Only newly entered dates follow the corrected defau
       The old route sent `2026-09-10T00:00:00.000Z`.
     - A POST with `asOf: "2026-04-01"` stores **`2026-04-01T12:00:00.000Z`**. The expectation moved from
       UTC midnight on purpose (see the second review).
-    - A bare day that does not exist returns 400, including `2026-02-30` and `2026-04-31`. V8 would roll
-      those into the next month, and the old code saved them.
+    - A bare day that does not exist returns 400: `2026-13-45`, `2026-02-29`, `2026-02-30` and
+      `2026-04-31`. V8 would roll the last three into the next month, and the old code saved them.
+    - A real leap day, `2028-02-29`, is still accepted and stores **`2028-02-29T12:00:00.000Z`**.
   - **`amexEndingBalance.test.ts`:**
     - The same balance dated `2026-09-10T00:00:00.000Z` gives **$130**: the Sep 10 rows count after 7pm
       on Sep 9. This pins why a day must not travel in that shape.
@@ -122,11 +123,12 @@ No stored data is rewritten. Only newly entered dates follow the corrected defau
   - **`forecastReconcile.test.ts`:**
     - A 9:30pm Central snapshot on May 15 still counts a May 16 plan of −$40, giving **$960**. The UTC
       slice gave $1,000.
-    - A snapshot at 9:30pm Central on Apr 30 does not make April a prior month. The UTC slice said it did,
-      so for that evening the Forecast page marked April "Prior period" and did the following:
+    - A snapshot at 9:30pm Central on Apr 30 does not make April a prior month. The UTC slice said it did.
+      Until a newer snapshot replaced it, the Forecast page marked April "Prior period" and did the
+      following:
       - hid the Forecast · Bank and Projected end figures
       - never showed the month as reconciled
-      - closed the month without its gap
+      - closed the month with every reconcile figure blank
   - **`chaseEndingBalance.test.ts`:** a snapshot at 9:30pm Central on Apr 30 ends April at **$1,000** and
     May at **$940** after May 1's −$60. By day, Apr 30 is **$1,000** and May 1 is **$940**. The UTC slice
     gave $1,060 and $1,000 for both.
@@ -144,11 +146,11 @@ No stored data is rewritten. Only newly entered dates follow the corrected defau
   - Full suite with the clock in UTC, as on CI: **109 files, 802 pass**.
   - The new and changed tests on Chicago time: 7 files, 74 pass.
 - **API tests:**
-  - Amex anchor route: 12 pass, re-run after the third review's fix.
-  - Full suite: **112 files, 794 pass plus 8 pending**, on an isolated database with the Mac held awake.
-    That is two tests more than PR2a: the computed anchor route and the date that does not exist.
-- **CI:** green on `1f2d862`. The third review's fix is a follow-up commit on the same branch, and it
-  merges only on green.
+  - Amex anchor route: 13 pass.
+  - Full suite: **112 files, 795 pass plus 8 pending**, on an isolated database with the Mac held awake.
+    That is three tests more than PR2a: the computed anchor route, the dates that do not exist, and the
+    real leap day.
+- **CI:** green on `1f2d862` and on `e41d321`. The last commit, tests and this note only, merges on green.
 - **Build:** passes. The calendar is its own lazy chunk (`householdTime-*.js`, 0.80 kB).
 - **Landing bundle guard:** **571.3 KB of 580**, up 0.1 KB. No recharts on open, and the calendar chunk
   is not preloaded.
@@ -238,8 +240,8 @@ these were clean:
      anchor on Mar 2.
    - The old code did the same. But this note and the test name claimed every impossible day returned
      400.
-   - The route now rejects a bare day that does not survive the round trip, and the test covers Feb 30
-     and Apr 31.
+   - The route now rejects a bare day that does not survive the round trip, and the test covers Feb 29
+     in a non-leap year, Feb 30 and Apr 31.
 2. **NIT — fixed.** A reconcile test comment said the old code shorted April's `forecastEnd`, which it did
    not. The comment now says what the wrong flag did.
 3. **NIT — accepted.** The debt branch keeps the later of the debt row's update time and the saved
@@ -250,14 +252,24 @@ these were clean:
      already inside it.
    - Only a direct API call can do this. It is listed below.
 
+**The follow-up commit, `e41d321`, went back to the same reviewer, which approved it.**
+- It checked the round trip in Node: 2028-02-29 and 2000-02-29 pass; 2026-02-29, 2026-02-30, 2026-04-31
+  and 1900-02-29 are rejected.
+- It confirmed every Forecast-page effect claimed above against `forecast.tsx`.
+- It left three optional nits, all applied in the last commit, tests and this note only:
+  - a real leap day now has its own test;
+  - the prior-month bullet says the wrong flag lasted until a newer snapshot and blanked every reconcile
+    figure;
+  - the deferred bullet gives the full 7pm-to-7am window.
+
 ## Deliberately not in PR2b
 
 - **Pages whose memoised "today" never rolls past midnight:** Allowances, Forecast, Chase, Reports.
 - **Browser-local date arithmetic,** which already means Central for the household on its own devices.
 - **`debts.ts` reads a bare `lastBalanceUpdate` as UTC midnight,** the same trap as the Amex POST. The web
   never sends a bare day there.
-- **A bare-day Amex anchor POST can outrank a debt row updated the evening before** (third review, NIT 3).
-  Only a direct API call reaches it.
+- **A bare-day Amex anchor POST can outrank a debt row updated earlier that UTC day,** from 7pm the
+  evening before to 7am Central (third review, NIT 3). Only a direct API call reaches it.
 - **The `AmexAnchor.source` spec enum lacks `plaid`,** which the route already returns. That predates
   this PR.
 - **The debt "paid off this month" edge, `debtPending`'s end-of-day cutoff, and the other server

@@ -237,7 +237,7 @@ describe("POST /amex/anchor", () => {
   it("returns 400 on a bare day that does not exist, including one V8 would roll over", async () => {
     // `new Date("2026-02-30T12:00:00.000Z")` is Mar 2, not an error. Without the
     // round-trip check that anchor would silently land on Mar 2.
-    for (const asOf of ["2026-13-45", "2026-02-30", "2026-04-31"]) {
+    for (const asOf of ["2026-13-45", "2026-02-29", "2026-02-30", "2026-04-31"]) {
       const res = await fetch(`${baseUrl}/amex/anchor`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -251,6 +251,18 @@ describe("POST /amex/anchor", () => {
       .from(settingsTable)
       .where(eq(settingsTable.userId, TEST_USER));
     expect(rows.length).toBe(0);
+  });
+
+  it("accepts a real leap day and stores it at noon UTC", async () => {
+    // The round-trip check must not turn away Feb 29 in a leap year.
+    const res = await fetch(`${baseUrl}/amex/anchor`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ balance: 42, asOf: "2028-02-29" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { asOf: string };
+    expect(body.asOf).toBe("2028-02-29T12:00:00.000Z");
   });
 
   it("returns 400 on a non-finite balance", async () => {
