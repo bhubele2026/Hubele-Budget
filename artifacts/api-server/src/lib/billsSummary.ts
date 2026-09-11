@@ -8,6 +8,7 @@ import {
   avalancheSettingsTable,
 } from "@workspace/db";
 import { expandItem, fmtISO } from "./cashSignal";
+import { householdTodayDate } from "./householdClock";
 import {
   buildDebtMinSchedule,
   buildAvalancheExtraRow,
@@ -53,9 +54,14 @@ export type BillsSummary = {
   };
 };
 
+/**
+ * The household's today (America/Chicago) as a server-local midnight Date.
+ * Everything bills-related — next occurrence, the month shown, archiving a
+ * one-time bill whose day has passed — reads this, so none of it runs a day
+ * early on a UTC server after 7pm Central.
+ */
 export function todayDate(): Date {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return householdTodayDate();
 }
 
 export async function archiveExpiredOneTime(householdId: string): Promise<void> {

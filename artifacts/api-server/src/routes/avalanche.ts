@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { monthEndExclusive } from "../lib/monthBounds";
+import { householdTodayISO, monthBounds } from "../lib/householdClock";
 import { UpdateAvalancheSettingsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -236,9 +237,9 @@ function present(row: typeof avalancheSettingsTable.$inferSelect) {
   };
 }
 
+/** First day of the household's current month (America/Chicago). */
 function currentMonthStart(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  return monthBounds(householdTodayISO()).start;
 }
 
 function monthEndStr(monthStart: string): string {

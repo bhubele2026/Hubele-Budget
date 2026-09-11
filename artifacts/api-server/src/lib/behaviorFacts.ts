@@ -33,6 +33,7 @@ import {
 } from "./spendingFilter";
 import { TRACKING_START } from "./spendingFacts";
 import { expandItem } from "./cashSignal";
+import { addDaysISO, householdTodayDate, householdTodayISO } from "./householdClock";
 
 // Re-export so callers can reach the floor without importing two modules.
 export { TRACKING_START } from "./spendingFacts";
@@ -438,12 +439,12 @@ export async function buildBehaviorFacts(
   rangeStart?: string,
   rangeEnd?: string,
 ): Promise<BehaviorFacts> {
-  const today = new Date();
-  const todayIso = isoDate(today);
+  // The household's today (America/Chicago). `today` is a server-local midnight
+  // Date for the expandItem arithmetic below; `todayIso` is the same date.
+  const todayIso = householdTodayISO();
+  const today = householdTodayDate();
   const defaultEnd = todayIso;
-  const back30 = new Date(today);
-  back30.setUTCDate(back30.getUTCDate() - 30);
-  const defaultStart = isoDate(back30);
+  const defaultStart = addDaysISO(todayIso, -30);
 
   let start = rangeStart || defaultStart;
   const end = rangeEnd || defaultEnd;

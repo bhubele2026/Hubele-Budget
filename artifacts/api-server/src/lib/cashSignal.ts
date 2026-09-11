@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { inForecastWhere } from "./forecastInclusion";
+import { householdDayOf, householdTodayDate } from "./householdClock";
 
 type Cadence =
   | "weekly"
@@ -303,7 +304,9 @@ export async function computeCashSignal(
   const daysAhead = opts.horizonDays ?? settings?.daysAhead ?? 90;
 
   const today = new Date();
-  const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  // The household's today (America/Chicago), as a server-local midnight Date so
+  // the local-field arithmetic below stays right on a UTC server.
+  const todayDateOnly = householdTodayDate(today);
   const fromDateOnly = opts.fromDate ? parseISO(opts.fromDate) : todayDateOnly;
   const fromISO = fmtISO(fromDateOnly);
   const to = addDays(fromDateOnly, daysAhead);
@@ -313,7 +316,9 @@ export async function computeCashSignal(
     ? Number(settings.bankSnapshotBalance)
     : null;
   const snapshotAt = settings?.bankSnapshotAt ?? null;
-  const snapshotISO = snapshotAt ? fmtISO(snapshotAt) : null;
+  // The calendar day the snapshot was taken on, in the household's timezone —
+  // a snapshot at 9pm Central belongs to that day, not to tomorrow in UTC.
+  const snapshotISO = snapshotAt ? householdDayOf(snapshotAt) : null;
 
   // No snapshot → fall back to startingBalance
   const startBalanceAtAnchor = snapshotBalance ?? (Number(settings?.startingBalance ?? 0) || 0);

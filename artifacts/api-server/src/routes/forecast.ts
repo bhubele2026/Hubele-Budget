@@ -35,6 +35,11 @@ import {
   inForecastWhere,
 } from "../lib/forecastInclusion";
 import {
+  addDaysISO,
+  householdTodayDate,
+  householdTodayISO,
+} from "../lib/householdClock";
+import {
   plaid,
   isValidPlaidAccessToken,
   isAccessTokenForCurrentEnv,
@@ -302,7 +307,10 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   }
   const days = Number(req.query.days) || settings.daysAhead || 90;
 
-  const today = new Date();
+  // `now` is the instant; `today` is the household's date (America/Chicago) as a
+  // server-local midnight Date for the local-field arithmetic below.
+  const now = new Date();
+  const today = householdTodayDate(now);
   const from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const to = addDays(today, days);
   const fromISO = fmtISO(from);
@@ -384,7 +392,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
         // `inForecast`: a row that has already happened is cash and belongs
         // in Review whatever its flag says; the flag gates only future rows.
         // Same rule the curve and the review badge apply.
-        inForecastWhere(forecastTodayISO(today)),
+        inForecastWhere(forecastTodayISO(now)),
         gte(transactionsTable.occurredOn, fromISO),
         lte(transactionsTable.occurredOn, toISO),
         // Original single-flow design (Task #6 Review inbox / Task #33
@@ -428,7 +436,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // A match on a row that has already happened stays whatever that row's flag
   // says: the row is still on the curve, and dropping the match here would
   // show the bill unpaid while the curve treats it as paid.
-  const forecastToday = forecastTodayISO(today);
+  const forecastToday = forecastTodayISO(now);
   const resolutions = resolutionRows
     .filter(
       (r) =>
@@ -989,13 +997,12 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
     // We no longer require rescheduledTo > occurrenceDate. We do bound it to
     // a sane window (today-1d .. today+60d) so it can't be set to an
     // arbitrary far-off date; earlier-than-original is allowed inside it.
-    const isoOf = (d: Date): string =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const lower = new Date();
-    lower.setDate(lower.getDate() - 1);
-    const upper = new Date();
-    upper.setDate(upper.getDate() + 60);
-    if (rescheduledTo < isoOf(lower) || rescheduledTo > isoOf(upper)) {
+    // Bounded against the household's today (America/Chicago), so the window
+    // doesn't slide a day early on a UTC server after 7pm Central.
+    const householdToday = householdTodayISO();
+    const lower = addDaysISO(householdToday, -1);
+    const upper = addDaysISO(householdToday, 60);
+    if (rescheduledTo < lower || rescheduledTo > upper) {
       res
         .status(400)
         .json({ error: "rescheduledTo out of allowed window" });

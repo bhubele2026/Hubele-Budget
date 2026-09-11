@@ -1,5 +1,6 @@
 import { eq, lte, or } from "drizzle-orm";
 import { transactionsTable } from "@workspace/db";
+import { householdTodayISO } from "./householdClock";
 
 export { inForecast } from "@workspace/avalanche-core";
 
@@ -18,11 +19,11 @@ export function inForecastWhere(todayISO: string) {
 }
 
 /**
- * Today's calendar date as the forecast reads it. This is the server's local
- * date — the same one `cashSignal` projects from — so the curve, the Review
- * bundle and the badge agree on which rows have "already happened".
+ * Today's calendar date as the forecast reads it: the household's
+ * (America/Chicago), the same date the curve, the Review bundle and the badge
+ * use — so which rows have "already happened" never depends on the server's
+ * timezone. Takes an INSTANT.
  */
 export function forecastTodayISO(now: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return householdTodayISO(now);
 }

@@ -10,6 +10,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { computeCashSignal } from "../lib/cashSignal";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
+import { householdDayOf, householdTodayISO } from "../lib/householdClock";
 
 const router: IRouter = Router();
 
@@ -98,10 +99,11 @@ router.get(
       whyNot = "the resolved account is no longer on file for this household";
     }
 
+    // Household calendar days (America/Chicago), matching the roll-forward.
     const anchorDay = settings?.bankSnapshotAt
-      ? new Date(settings.bankSnapshotAt).toISOString().slice(0, 10)
+      ? householdDayOf(settings.bankSnapshotAt)
       : null;
-    const todayDay = new Date().toISOString().slice(0, 10);
+    const todayDay = householdTodayISO();
 
     // What the roll-forward is adding on top of the anchor — the other half of
     // every figure on screen.

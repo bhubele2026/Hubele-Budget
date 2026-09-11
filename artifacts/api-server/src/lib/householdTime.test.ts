@@ -12,7 +12,9 @@ import {
 // UTC, Brad's laptop is Central. Every case runs under both.
 const ORIGINAL_TZ = process.env.TZ;
 afterEach(() => {
-  process.env.TZ = ORIGINAL_TZ;
+  // Assigning undefined would set the literal string "undefined".
+  if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+  else process.env.TZ = ORIGINAL_TZ;
 });
 
 for (const tz of ["UTC", "America/Chicago"]) {

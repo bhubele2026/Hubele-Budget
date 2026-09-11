@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, eq } from "drizzle-orm";
 import { db, weeklySettlementsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
+import { householdTodayISO } from "../lib/householdClock";
 
 const router: IRouter = Router();
 
@@ -39,7 +40,7 @@ router.put("/weekly-settlements", requireAuth, async (req, res): Promise<void> =
   }
   // (#629) Reject future weeks — there's nothing to settle yet, and a
   // direct API call shouldn't be able to seed rows the UI hides.
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = householdTodayISO();
   if (weekStart > todayIso) {
     res.status(400).json({ error: "Cannot close a future week" });
     return;

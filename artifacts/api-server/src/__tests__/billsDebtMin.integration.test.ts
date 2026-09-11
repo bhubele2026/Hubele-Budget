@@ -37,6 +37,7 @@ import {
 } from "@workspace/db";
 import billsRouter from "../routes/bills";
 import { createTestHousehold } from "./_helpers/testHousehold";
+import { addDaysISO, householdTodayISO, monthBounds } from "../lib/householdClock";
 import forecastRouter from "../routes/forecast";
 
 const app = express();
@@ -356,12 +357,11 @@ describe("bills/summary debt minimums", () => {
       dayOfMonth: 5,
     });
 
-    const today = new Date();
-    const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
-    const lastMonthEnd = (() => {
-      const d = new Date(today.getFullYear(), today.getMonth(), 0);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    })();
+    // The household's month (America/Chicago) — the month the server's bills
+    // summary reads. Built from the machine clock it would disagree with the
+    // server on the evening of the 1st whenever CI runs in UTC.
+    const monthStart = monthBounds(householdTodayISO()).start;
+    const lastMonthEnd = addDaysISO(monthStart, -1);
 
     const [rentTxn] = await db
       .insert(transactionsTable)
@@ -418,9 +418,12 @@ describe("bills/summary debt minimums", () => {
       amount: "200",
       dayOfMonth: 10,
     });
-    const today = new Date();
-    const y = today.getFullYear();
-    const m = String(today.getMonth() + 1).padStart(2, "0");
+    // The household's month (America/Chicago) — the month /bills/summary reads.
+    // From the machine clock it would be next month on a UTC runner on the
+    // evening of the 1st, and these matches would land outside the summary.
+    const householdMonthStart = monthBounds(householdTodayISO()).start;
+    const y = Number(householdMonthStart.slice(0, 4));
+    const m = householdMonthStart.slice(5, 7);
     const day1 = `${y}-${m}-05`;
     const day2 = `${y}-${m}-12`;
 
@@ -504,9 +507,9 @@ describe("bills/summary debt minimums", () => {
     expect(extra?.minPayment).toBe("200.00");
     expect(extra?.debtName).toBe("Avalanche extra payment");
     // Pinned to the last day of the current month
-    const today = new Date();
-    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    const dd = String(monthEnd.getDate()).padStart(2, "0");
+    // Last day of the household's month (America/Chicago) — the month the
+    // server's bills summary reads, even on a UTC runner after 7pm Central.
+    const dd = monthBounds(householdTodayISO()).end.slice(8, 10);
     expect(extra?.nextOccurrence).toMatch(new RegExp(`-${dd}$`));
     // Total includes the extra: 120 min + 200 extra = 320
     expect(summary.monthly.debtMin).toBe("320.00");
