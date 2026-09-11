@@ -8,6 +8,7 @@ import {
   useGetForecast,
 } from "@workspace/api-client-react";
 import { Sparkline, StackBar, MiniBars, RingStat, MoneyText } from "@/components/viz";
+import { dataState } from "@/lib/queryState";
 import { fmtISO } from "@/lib/reportsAnalytics";
 import { effectiveDebtBalance } from "@/lib/debtBalance";
 // Tokens only — no recharts on the hub. `viz` is plain SVG/CSS, so this whole
@@ -72,13 +73,19 @@ export default function ReportsPage() {
     d.setDate(d.getDate() - 30);
     return d;
   }, [today]);
-  const { data: facts } = useGetReportsSpendingFacts({
+  const factsQuery = useGetReportsSpendingFacts({
     from: fmtISO(fromDate),
     to: fmtISO(today),
   });
+  const facts = factsQuery.data;
+  // ⚠️ NO FACTS, NO CLAIMS. Until the aggregate arrives (or after it failed) a
+  // tile says so, rather than "$0.00", "No spend in range" or "No income
+  // recorded" standing in for figures it never received.
+  const factsFailed = dataState(factsQuery) === "failed";
+  const factsNote = factsFailed ? "Couldn't load" : "Loading…";
   const { data: debts } = useListDebts();
   const { data: debtBalanceHistory } = useListDebtBalanceHistory();
-  const { data: forecast } = useGetForecast({ days: 90 });
+  const { data: forecast, isError: forecastError } = useGetForecast({ days: 90 });
 
   // Debt momentum — total debt over time, carrying each debt's last-known
   // balance forward so the curve reads as one declining line.
@@ -157,7 +164,7 @@ export default function ReportsPage() {
       <h1 className="text-display font-semibold text-brand-navy">Reports</h1>
 
       {/* At-a-glance balance tiles — the household's live vitals */}
-      <ReportsBalanceTiles forecast={forecast} />
+      <ReportsBalanceTiles forecast={forecast} forecastError={forecastError} />
 
       {/* The five drill destinations */}
       <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -197,7 +204,7 @@ export default function ReportsPage() {
                 height={36}
               />
             ) : (
-              <div className={noteClass}>No activity in range</div>
+              <div className={noteClass}>{facts ? "No activity in range" : factsNote}</div>
             )
           }
         />
@@ -205,13 +212,13 @@ export default function ReportsPage() {
           index={2}
           label="Spending"
           href="/reports/spending"
-          value={<MoneyText countUp amount={spent} />}
+          value={facts ? <MoneyText countUp amount={spent} /> : "—"}
           sub="Last 30 days, by category"
           visual={
             spendMix.length ? (
               <StackBar segments={spendMix} legendMax={3} />
             ) : (
-              <div className={noteClass}>No spend in range</div>
+              <div className={noteClass}>{facts ? "No spend in range" : factsNote}</div>
             )
           }
         />
@@ -223,12 +230,16 @@ export default function ReportsPage() {
           sub={
             hasIncome
               ? "Of income spent, last 30 days"
-              : "No income recorded, last 30 days"
+              : facts
+                ? "No income recorded, last 30 days"
+                : factsNote
           }
           visual={
             <div className="flex items-center gap-3">
               <RingStat
                 value={spendRatio}
+                // Without income there is no ratio: a dash, never "0%".
+                centerText={hasIncome ? undefined : "—"}
                 size={48}
                 color={spendRatio > 1 ? CHART.orangeDeep : CHART.navy}
                 centerSub="spent"
@@ -236,17 +247,25 @@ export default function ReportsPage() {
               <div className="flex flex-col gap-0.5 text-micro text-neutral-400">
                 <span>
                   In{" "}
-                  <MoneyText
-                    amount={income}
-                    className="font-mono tabular-nums text-neutral-700"
-                  />
+                  {facts ? (
+                    <MoneyText
+                      amount={income}
+                      className="font-mono tabular-nums text-neutral-700"
+                    />
+                  ) : (
+                    "—"
+                  )}
                 </span>
                 <span>
                   Out{" "}
-                  <MoneyText
-                    amount={spent}
-                    className="font-mono tabular-nums text-neutral-700"
-                  />
+                  {facts ? (
+                    <MoneyText
+                      amount={spent}
+                      className="font-mono tabular-nums text-neutral-700"
+                    />
+                  ) : (
+                    "—"
+                  )}
                 </span>
               </div>
             </div>
@@ -259,14 +278,20 @@ export default function ReportsPage() {
           value="Weekday rhythm"
           sub="When you spend, and how often"
           visual={
-            <div>
-              <MiniBars data={dowSpend} height={36} accent={CHART.navy} />
-              <div className="mt-1 flex justify-between text-micro uppercase tracking-wide text-neutral-400">
-                {DOW.map((day) => (
-                  <span key={day}>{day[0]}</span>
-                ))}
+            // While loading, the empty bars keep their seven columns; after a
+            // failure they would stay flat for good, so the tile says so.
+            factsFailed ? (
+              <div className={noteClass}>Couldn't load</div>
+            ) : (
+              <div>
+                <MiniBars data={dowSpend} height={36} accent={CHART.navy} />
+                <div className="mt-1 flex justify-between text-micro uppercase tracking-wide text-neutral-400">
+                  {DOW.map((day) => (
+                    <span key={day}>{day[0]}</span>
+                  ))}
+                </div>
               </div>
-            </div>
+            )
           }
         />
       </div>

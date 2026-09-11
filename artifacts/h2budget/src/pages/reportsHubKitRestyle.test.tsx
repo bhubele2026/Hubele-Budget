@@ -98,18 +98,39 @@ vi.mock("wouter", () => ({
   ),
 }));
 
+// What each query answers in a test. "default" means the fixtures above; tests
+// that need a query loading or failed set it here, and beforeEach resets it.
+const hub = vi.hoisted(() => ({
+  facts: "default" as unknown,
+  factsFailed: false,
+  spine: "default" as unknown,
+  spineFailed: false,
+  forecast: null as unknown,
+  liabilities: [] as unknown,
+  forecastFailed: false,
+  liabilitiesFailed: false,
+}));
+
 vi.mock("@workspace/api-client-react", () => ({
   // Wrapped rather than passed directly: the factory is hoisted above this
   // file's consts, so it may only REFERENCE the spy from inside a call.
   useListTransactions: (...args: unknown[]) => listTransactionsSpy(...args),
-  useGetReportsSpendingFacts: () => ({ data: SPENDING_FACTS, isLoading: false }),
+  useGetReportsSpendingFacts: () => ({
+    data: hub.facts === "default" ? SPENDING_FACTS : hub.facts,
+    isLoading: false,
+    isLoadingError: hub.factsFailed,
+  }),
   useListDebts: () => ({ data: [{ id: "d1", balance: "5000.00", status: "active" }] }),
   useListDebtBalanceHistory: () => ({ data: [] }),
-  useGetForecast: () => ({ data: null }),
+  useGetForecast: () => ({ data: hub.forecast, isError: hub.forecastFailed }),
   useGetDashboard: () => ({ data: { totalDebt: "5000.00", activeDebtCount: 1 } }),
-  useGetSpine: () => ({ data: SPINE, isLoading: false }),
+  useGetSpine: () => ({
+    data: hub.spine === "default" ? SPINE : hub.spine,
+    isLoading: false,
+    isLoadingError: hub.spineFailed,
+  }),
   getGetSpineQueryKey: () => ["/api/spine"],
-  useListPlaidLiabilityAccounts: () => ({ data: [] }),
+  useListPlaidLiabilityAccounts: () => ({ data: hub.liabilities, isError: hub.liabilitiesFailed }),
 }));
 
 import ReportsPage from "./reports";
@@ -128,6 +149,14 @@ function renderPage() {
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(TEST_TODAY);
+  hub.facts = "default";
+  hub.factsFailed = false;
+  hub.spine = "default";
+  hub.spineFailed = false;
+  hub.forecast = null;
+  hub.liabilities = [];
+  hub.forecastFailed = false;
+  hub.liabilitiesFailed = false;
 });
 
 afterEach(() => {
@@ -241,5 +270,88 @@ describe("Reports hub — word diet", () => {
     // /reports never pays for recharts.
     const { container } = renderPage();
     expect(container.querySelector(".recharts-wrapper")).toBeNull();
+  });
+});
+
+describe("Reports hub — no claims before the figures arrive", () => {
+  const tileText = (id: string) => screen.getByTestId(id).textContent ?? "";
+
+  it("while the spending facts load: dashes and 'Loading…', never $0.00, 'No spend' or 'No income recorded'", () => {
+    hub.facts = undefined;
+    renderPage();
+    const spending = tileText("report-tile-spending");
+    expect(spending).toContain("—");
+    expect(spending).toContain("Loading…");
+    expect(spending).not.toContain("$0.00");
+    expect(spending).not.toContain("No spend in range");
+    const budget = tileText("report-tile-budget");
+    expect(budget).toContain("Loading…");
+    expect(budget).not.toContain("No income recorded");
+    expect(budget).not.toContain("0%");
+    expect(budget).not.toContain("$0.00");
+    const cashflow = tileText("report-tile-cashflow");
+    expect(cashflow).toContain("Loading…");
+    expect(cashflow).not.toContain("No activity in range");
+  });
+
+  it("after the spending facts fail: says it couldn't load", () => {
+    hub.facts = undefined;
+    hub.factsFailed = true;
+    renderPage();
+    expect(tileText("report-tile-spending")).toContain("Couldn't load");
+    expect(tileText("report-tile-budget")).toContain("Couldn't load");
+    expect(tileText("report-tile-cashflow")).toContain("Couldn't load");
+    expect(tileText("report-tile-behavior")).toContain("Couldn't load");
+  });
+
+  it("with facts but no income: the ring shows a dash, not 0%", () => {
+    hub.facts = { ...SPENDING_FACTS, realIncome: { total: 0, transactionCount: 0 } };
+    renderPage();
+    const budget = tileText("report-tile-budget");
+    expect(budget).toContain("No income recorded");
+    expect(budget).not.toContain("0%");
+  });
+
+  it("without the spine, the cash buffer says loading, not 'No Snapshot' or a setup hint", () => {
+    hub.spine = undefined;
+    renderPage();
+    const tile = tileText("reports-tile-cash-buffer");
+    expect(tile).toContain("—");
+    expect(tile).toContain("Loading…");
+    expect(tile).not.toContain("No Snapshot");
+    expect(tile).not.toContain("Set a checking balance");
+  });
+
+  it("after the spine fails, the cash buffer says it couldn't load", () => {
+    hub.spine = undefined;
+    hub.spineFailed = true;
+    renderPage();
+    expect(tileText("reports-tile-cash-buffer")).toContain("Couldn't load");
+  });
+
+  it("before the account and card queries answer, no 'No checking snapshot yet' and no 'Link an Amex card'", () => {
+    hub.forecast = undefined;
+    hub.liabilities = undefined;
+    renderPage();
+    expect(tileText("reports-tile-bank")).not.toContain("No checking snapshot yet");
+    expect(tileText("reports-tile-amex")).not.toContain("Link an Amex card");
+  });
+
+  it("once they answer with nothing, says so", () => {
+    renderPage();
+    expect(tileText("reports-tile-bank")).toContain("No checking snapshot yet");
+    expect(tileText("reports-tile-amex")).toContain("Link an Amex card");
+  });
+});
+
+describe("Reports hub — the account and card hints after a failure", () => {
+  it("says couldn't load when the forecast bundle or the card accounts failed, never blank for good", () => {
+    hub.forecast = undefined;
+    hub.forecastFailed = true;
+    hub.liabilities = undefined;
+    hub.liabilitiesFailed = true;
+    renderPage();
+    expect(screen.getByTestId("reports-tile-bank").textContent).toContain("Couldn't load");
+    expect(screen.getByTestId("reports-tile-amex").textContent).toContain("Couldn't load");
   });
 });
