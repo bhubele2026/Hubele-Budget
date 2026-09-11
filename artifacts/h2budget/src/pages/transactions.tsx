@@ -201,12 +201,9 @@ export default function TransactionsPage() {
   // Stable "today" (YYYY-MM-DD) used as the actual/forecast split anchor
   // and as the projection's `fromDate` so the dashed forecast line starts
   // at today and the cash-signal series aligns with the chart window.
-  const todayISO = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-      d.getDate(),
-    ).padStart(2, "0")}`;
-  }, []);
+  // The HOUSEHOLD day (America/Chicago), never the browser's: late in the
+  // Chicago evening a browser east of Chicago is already on tomorrow.
+  const todayISO = useMemo(() => householdToday(new Date()), []);
   // Forward-looking projection that powers the actual-vs-forecast trend
   // chart's dashed line. Sourced from the SAME cash-signal daily series
   // the /forecast page's projected-balance chart consumes (`proj.daily`),
