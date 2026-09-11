@@ -2,13 +2,16 @@
 
 Codex work-order point **6** ("probably paid" matching), plan PR5, web half. The server half (PR5a) pairs plans with
 bank rows and sends them as `CashSignal.matches`; this PR shows them as "Suggested", with Confirm / Not this /
-Partial, and teaches the register the new resolution statuses. Built on `feat/probably-paid-server` (`3d207e8`), to
-the contract as changed by the PR5a review (`offCurve`, the bundle's `not_match` / `partial` filter, a `partial` kept
-beside `rescheduled`). Plan: `~/.claude/plans/h2-budget-work-serene-pebble.md`.
+Partial, and teaches the register the new resolution statuses. Built on `feat/probably-paid-server` (`3d207e8`), then
+merged with the PR5a review fixes (`f40c4b0`: `offCurve`, confidence, windows, a `partial` and a `rescheduled` kept
+together). Plan: `~/.claude/plans/h2-budget-work-serene-pebble.md`.
 
 | Commit | What it does |
 |---|---|
 | `e30360a` | Register statuses, "Suggested" on the card and the row, client suggestions step aside, reconcile, tests, e2e. |
+| `028ecc3` | This note (first version). |
+| merge | `origin/feat/probably-paid-server` @ `f40c4b0`. No conflicts; no codegen needed (the merge brought the regenerated client). |
+| final | The bundle's `not_match` / `partial` filter removed, with a server test; Move allowed on a partly-paid plan; note. |
 
 ## The problem
 
@@ -19,8 +22,9 @@ beside `rescheduled`). Plan: `~/.claude/plans/h2-budget-work-serene-pebble.md`.
 - `forecastReconcile` still adds the plan into the Review header's "Forecast" end figure, so that figure and the
   curve disagree by the plan's amount.
 - The register reads resolutions "last write wins", per plan key and per row. PR5a keeps a "Not this" answer beside
-  the real decision, so a rejection listed after a row's match hid the match: the row went back to "pending", and
-  the resolved list's Undo pointed at the rejection instead of the match.
+  the real decision (and a `partial` beside a `rescheduled`), so a rejection listed after a row's match would hide
+  the match: the row goes back to "pending", and the resolved list's Undo points at the rejection instead of the
+  match. PR5a's review therefore kept `not_match` / `partial` out of the `GET /forecast` bundle until this PR.
 - `ResolutionStatus` had no `rescheduled`, `not_match` or `partial`.
 
 ## What changed
@@ -49,6 +53,20 @@ beside `rescheduled`). Plan: `~/.claude/plans/h2-budget-work-serene-pebble.md`.
 - **The bucket** lists a `partial` with the part that was settled (planned − remainder), and finds a moved
   occurrence's decision by its original key.
 
+### The bundle (`routes/forecast.ts`, the one server change)
+
+- The `(PR5)` filter that kept `not_match` and `partial` rows out of `GET /forecast`'s `resolutions` is removed; the
+  register above reads them. No money logic moves: the curve, the matcher and the resolution writes are PR5a's.
+- `forecastResolutionsPairs.integration.test.ts` gains a bundle test: `not_match(P,T1)` + `matched(P,T2)` and a
+  `partial` + `rescheduled` for one occurrence all come back.
+
+### `offCurve` (PR5a review contract)
+
+- `offCurve` is true only for a named, unambiguous pair where the row paid no less than plan − max($1, 1%) and no
+  more than plan + max($25, 10%); a later occurrence stays on while an earlier one of the same item is unpaid.
+- The web treats only `offCurve === true` as off the curve. Confidence is shown as a word and drives nothing: a
+  "medium" pair can be on or off the curve, and the strip says which ("Out of forecast" / "Still in forecast").
+
 ### `forecastReconcile`
 
 - Skips a plan only when `probablyPaid.offCurve`; a suggestion kept on the curve still counts.
@@ -70,8 +88,8 @@ beside `rescheduled`). Plan: `~/.claude/plans/h2-budget-work-serene-pebble.md`.
   hint are off for that row. The collapsed pinned row's Match confirms the server pair.
 - **Register row (both pages).** Chip "Suggested", then a line with the paying row (description, date, amount,
   difference, day delta, in or out of forecast), and the three answers in place of Move / Mark missed. A row click
-  does nothing. A partly-paid row reads "Partly paid", shows the remainder, and "Paid $X of $Y"; it has no Move or
-  Mark missed.
+  does nothing. A partly-paid row reads "Partly paid", shows the remainder, and "Paid $X of $Y"; it keeps Move (the
+  server keeps the partial beside the reschedule, so the remainder lands on the new date) and has no Mark missed.
 - **Answers** post through the generated `useUpsertForecastResolution`:
   - Confirm → `{status: "matched", recurringItemId, occurrenceDate: planDate, matchedTxnId}`;
   - Not this → the same with `not_match`;
@@ -97,8 +115,9 @@ These specs seed a plan and a same-amount row, which the server now pairs whenev
 - **"Suggested" is a field, not a plan status.** A suggested plan stays `pending_plan` / `future` with `probablyPaid`
   set. That keeps every existing eligibility check (drop, dropdown, linger on Review, month close) unchanged; the
   chip reads "Suggested".
-- **`partial` is a plan status**, and it is not match-, move- or miss-eligible. Each of those writes would replace the
-  partial resolution server-side and un-pay its row. Undo is in "Resolved this month" and the bucket.
+- **`partial` is a plan status**, and it is not match- or miss-eligible: either write would replace the partial
+  resolution server-side and un-pay its row. It **can move** (PR5a's review made a `rescheduled` write keep the
+  `partial`). Undo is in "Resolved this month" and the bucket.
 - **Suggested rows lose Move / Mark missed and the row click.** Their answers are the three buttons.
 - **Keyboard fix in `PlanDropRow`.** Enter or Space on a button inside a plan row used to run the row's own action.
   The row's `preventDefault` cancelled the button, so Enter on "Move to…" marked the plan missed. The row now ignores
@@ -137,8 +156,10 @@ These specs seed a plan and a same-amount row, which the server now pairs whenev
 - **Past-due card and chart tooltip.** Mark missed / Skip there act on the curve's event, so on a partly-paid plan's
   remainder they replace the partial server-side, and the paid row returns to Review. The register itself blocks
   both.
-- **Pairs whose plan is outside the bundle window** (the server looks back to today−45; the bundle starts at the
-  first of last month) are ignored on the web. Their row keeps the client's suggestions.
+- **Pairs whose plan is outside the bundle window** (the server looks back to today−45, rows to today−59; the bundle
+  starts at the first of last month) are ignored on the web. Their row keeps the client's suggestions.
+- **An underpaid named pair is on the curve** (`offCurve: false`) until the user answers Partial or Confirm; the strip
+  says "Still in forecast". That is PR5a's rule, shown as is.
 - **Two queries.** Until the cash signal loads, a row shows the client's suggestions, then switches. A cash signal
   older than the bundle can't resurrect a decided pair (the stale guards above).
 - **e2e not run.** Playwright's browsers are installed, but the specs need Clerk (`CLERK_SECRET_KEY`), a running API
@@ -167,14 +188,16 @@ These specs seed a plan and a same-amount row, which the server now pairs whenev
   - "Projected end" leaves out only the off-curve plan;
   - in/out-of-forecast words;
   - "Matched impact" identical with and without matches.
-- **Added to existing files (9):**
+- **Added to existing files (10):**
   - `forecastReconcile` (3): skips off-curve; counts kept-on-curve; partial remainder through the register;
   - `forecastSkipped` (1): a later "Not this" doesn't bring a skipped row back;
   - `forecastOneClickMatch` (1): no one-click pick for a server-paired plan;
   - `forecastOneClickMatchButton` (1): a server-paired card has Confirm, no Match, no Enter;
   - `forecastDragMatch` (1): drop onto a partly-paid row is refused;
-  - `forecastMissedActions` (2): a Suggested row and a partly-paid row have no Mark missed / Move, and a row click
-    writes nothing.
+  - `forecastMissedActions` (3): a Suggested row has no Mark missed / Move; a partly-paid row has no Mark missed; a
+    row click writes nothing on either; Move on a partly-paid row posts `rescheduled` for the original occurrence.
+- **Server (1):** `forecastResolutionsPairs.integration.test.ts` — the bundle returns `not_match`, `matched`,
+  `partial` and `rescheduled` rows for the same plans.
   - No existing assertion was changed or removed. Two page-test mocks now read a per-test cash signal / bundle,
     reset in `beforeEach`.
 - **Failing before:** with `3d207e8`'s seven source files (`forecastMatch.ts`, `forecastReconcile.ts`, `forecast.tsx`,
@@ -185,17 +208,21 @@ These specs seed a plan and a same-amount row, which the server now pairs whenev
     pin behaviour the base already had, since it ignored matches.
   - **Failing only because a new export is missing (5):** `partialRemainder`, `canRecordPartial`, the scorer
     control, and the `buildClientSuggestions` one-click test in `forecastOneClickMatch`. Their behaviour is new.
+  - The partial-Move page test was added after this proof and is not in the 42 / 46.
+  - **Server bundle test:** with the merge commit's `routes/forecast.ts` (the filter still in) swapped in, the new
+    bundle test fails and the file's other 11 pass.
 
 ## Verification
 
-- **Web suite:** **121 files, 979 pass** (`TZ=UTC CI=true`; base 119 / 933).
+On the merge with PR5a `f40c4b0` plus the bundle-filter removal:
+- **Web suite:** **121 files, 980 pass** (`TZ=UTC CI=true`; base 119 / 933; 979 before the partial-Move test).
 - **Workspace typecheck:** clean.
 - **Build + guard:** build exit 0; landing **572.5 KB of 580**, unchanged; no recharts on open.
-- **API suite:** not run; no server file changed in `e30360a`.
+- **API suite:** **128 files, 1079 pass, 7 todo** (`CI=true`, own database `h2budget_test_pr5b`, dropped after).
+- **Codegen:** not re-run; the merge brought PR5a's regenerated client and spec without conflicts, and no spec
+  changed here.
 
 ## Left for later
 
-- **PR5a's contract fixes:** merge the new PR5a head, remove the bundle's `not_match` / `partial` filter in
-  `routes/forecast.ts`, and run the API suite.
 - **An e2e spec for the server path**, run where Clerk and the dev servers are configured.
 - **PR6:** overdue bills can lean on "probably paid" before the pre-snapshot rule (#666) is retired.
