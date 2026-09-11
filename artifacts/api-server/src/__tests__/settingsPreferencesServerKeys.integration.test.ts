@@ -357,8 +357,30 @@ describe("PUT /settings keeps server-owned preference keys", () => {
           settled = true;
         },
       );
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      expect(settled).toBe(false);
+      // Wait until the PUT's backend is blocked on this transaction's row lock,
+      // instead of sleeping a fixed time. With the lock, the blocked statement is
+      // the PUT's SELECT … FOR UPDATE, which then reads the committed anchor.
+      // Without it, the PUT's plain SELECT has already read the old anchor and
+      // its UPDATE is what blocks.
+      const blockerPid = (
+        await client.query<{ pid: number }>("select pg_backend_pid() as pid")
+      ).rows[0]!.pid;
+      const deadline = Date.now() + 15_000;
+      let blocked = 0;
+      while (Date.now() < deadline && !settled) {
+        const { rows } = await pool.query<{ n: number }>(
+          `select count(*)::int as n
+             from pg_stat_activity
+            where wait_event_type = 'Lock'
+              and $1 = any(pg_blocking_pids(pid))`,
+          [blockerPid],
+        );
+        blocked = rows[0]?.n ?? 0;
+        if (blocked > 0) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      expect(settled, "the PUT finished while the server write was uncommitted").toBe(false);
+      expect(blocked, "the PUT never blocked on the server write's row lock").toBe(1);
       await client.query("COMMIT");
       committed = true;
     } finally {
@@ -458,20 +480,42 @@ describe("end to end: a settings save does not re-run the May 2026 budget reset"
 });
 
 /**
- * Guard for the hand-kept list. Scans the API server's own source (src and
- * scripts, never tests) for writes of a preference key and fails when a key is
- * neither server-owned nor in the spec, i.e. a key PUT /settings would strip.
+ * Guard for the hand-kept list. Scans the server's own source for writes of a
+ * settings preference key and fails when a key is neither server-owned nor in
+ * the spec, i.e. a key PUT /settings would strip.
  *
- * What it recognises, which is how every writer is shaped today:
- *   - an object literal that spreads a `*prefs` variable and adds keys
- *     (`{ ...prefs, amexAnchor: … }`, `{ ...(prefs ?? {}), budgetCategoriesV2: true }`);
+ * Where: `artifacts/api-server/src`, `artifacts/api-server/scripts` and the
+ * repo-root `scripts/` (home of `restoreAmexAnchor.ts`). Test files are skipped.
+ *
+ * Which files: only files that use `settingsTable`. The per-user UI preferences
+ * writer (`routes/me.ts`, `userUiPreferencesTable`) spreads `*Prefs` variables
+ * too, and never touches this column.
+ *
+ * What it reads, after blanking comment text and regex-literal bodies:
+ *   - an object literal that spreads a `*prefs` / `preferences` variable and adds
+ *     keys (`{ ...prefs, amexAnchor: … }`, `{ ...(prefs ?? {}), budgetCategoriesV2: true }`);
  *   - `delete (<…prefs>).key`;
  *   - `jsonb_set(preferences, '{key}', …)` in SQL.
- * A writer shaped otherwise (spreading `s?.preferences` directly, say) is not
- * seen. The first test fails if the scan stops seeing a writer it sees today.
+ *
+ * Limits (also residual 5 in the review note):
+ *   - a file that uses `settingsTable` is scanned whole, so a `*Prefs` spread in it
+ *     that feeds some other table is flagged;
+ *   - a writer in a file that never names `settingsTable` (raw SQL through a
+ *     helper, say) is not scanned;
+ *   - a writer shaped otherwise (spreading `s?.preferences` directly, or setting
+ *     keys one by one) is not seen;
+ *   - a regex literal is told from a division by the character or keyword before
+ *     the `/`, the usual heuristic, and a backtick inside `${…}` in a template
+ *     literal is not followed.
+ * The first test fails if the scan stops seeing a writer it sees today.
  */
 describe("SERVER_OWNED_PREFERENCE_KEYS matches the server's preference writers", () => {
-  const API_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+  const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
+  const SCAN_ROOTS = [
+    join(REPO_ROOT, "artifacts/api-server/src"),
+    join(REPO_ROOT, "artifacts/api-server/scripts"),
+    join(REPO_ROOT, "scripts"),
+  ];
 
   function sourceFiles(dir: string): string[] {
     const out: string[] = [];
@@ -487,6 +531,7 @@ describe("SERVER_OWNED_PREFERENCE_KEYS matches the server's preference writers",
     return out;
   }
 
+  /** Index of the closing quote of the string or template literal opening at `i`. */
   function skipQuoted(src: string, i: number): number {
     const quote = src[i];
     for (let j = i + 1; j < src.length; j++) {
@@ -499,29 +544,110 @@ describe("SERVER_OWNED_PREFERENCE_KEYS matches the server's preference writers",
     return src.length;
   }
 
+  /** End (exclusive, flags included) of a regex literal opening at `start`, or -1. */
+  function regexEnd(src: string, start: number): number {
+    let inClass = false;
+    for (let j = start + 1; j < src.length; j++) {
+      const ch = src[j];
+      if (ch === "\n") return -1;
+      if (ch === "\\") {
+        j++;
+        continue;
+      }
+      if (inClass) {
+        if (ch === "]") inClass = false;
+        continue;
+      }
+      if (ch === "[") {
+        inClass = true;
+        continue;
+      }
+      if (ch === "/") {
+        let k = j + 1;
+        while (k < src.length && /[a-z]/i.test(src[k]!)) k++;
+        return k;
+      }
+    }
+    return -1;
+  }
+
+  const REGEX_AFTER_CHAR = "(,=:[!&|?{};+-*%<>~^";
+  const REGEX_AFTER_WORD = new Set([
+    "return", "typeof", "case", "do", "else", "in", "of", "instanceof",
+    "new", "delete", "void", "throw", "yield", "await",
+  ]);
+
+  /**
+   * `src` with comment text and regex-literal bodies replaced by spaces.
+   * Newlines are kept, so offsets and line numbers do not move; strings are left
+   * as they are (SQL lives in them).
+   */
+  function blankCommentsAndRegex(src: string): string {
+    const out = src.split("");
+    const blank = (from: number, to: number) => {
+      for (let k = from; k < to; k++) if (out[k] !== "\n") out[k] = " ";
+    };
+    let prevChar = "";
+    let prevWord = "";
+    let i = 0;
+    while (i < src.length) {
+      const c = src[i]!;
+      if (c === "/" && src[i + 1] === "/") {
+        const nl = src.indexOf("\n", i);
+        const end = nl < 0 ? src.length : nl;
+        blank(i, end);
+        i = end;
+      } else if (c === "/" && src[i + 1] === "*") {
+        const close = src.indexOf("*/", i + 2);
+        const end = close < 0 ? src.length : close + 2;
+        blank(i, end);
+        i = end;
+      } else if (c === '"' || c === "'" || c === "`") {
+        i = skipQuoted(src, i) + 1;
+        prevChar = c;
+        prevWord = "";
+      } else if (
+        c === "/" &&
+        (prevChar === "" || REGEX_AFTER_CHAR.includes(prevChar) || REGEX_AFTER_WORD.has(prevWord)) &&
+        regexEnd(src, i) > 0
+      ) {
+        const end = regexEnd(src, i);
+        blank(i, end);
+        i = end;
+        prevChar = "0";
+        prevWord = "";
+      } else if (/\s/.test(c)) {
+        i++;
+      } else if (/[\w$]/.test(c)) {
+        let j = i;
+        while (j < src.length && /[\w$]/.test(src[j]!)) j++;
+        prevWord = src.slice(i, j);
+        prevChar = src[j - 1]!;
+        i = j;
+      } else {
+        prevChar = c;
+        prevWord = "";
+        i++;
+      }
+    }
+    return out.join("");
+  }
+
   /** The other top-level keys of the object literal a spread at `start` sits in. */
-  function siblingKeys(src: string, start: number): string[] {
+  function siblingKeys(code: string, start: number): string[] {
     const keys: string[] = [];
     let depth = 0;
     let entryStart = start;
     const take = (end: number) => {
-      const entry = src.slice(entryStart, end).trim();
+      const entry = code.slice(entryStart, end).trim();
       if (entry.startsWith("...")) return;
       const m = /^(?:([A-Za-z_$][\w$]*)|["']([^"']+)["'])\s*:/.exec(entry);
       if (m) keys.push((m[1] ?? m[2])!);
     };
-    for (let i = start; i < src.length; i++) {
-      const c = src[i];
+    for (let i = start; i < code.length; i++) {
+      const c = code[i];
       if (c === '"' || c === "'" || c === "`") {
-        i = skipQuoted(src, i);
-      } else if (c === "/" && src[i + 1] === "/") {
-        const nl = src.indexOf("\n", i);
-        if (nl < 0) break;
-        i = nl;
-      } else if (c === "/" && src[i + 1] === "*") {
-        const endComment = src.indexOf("*/", i + 2);
-        if (endComment < 0) break;
-        i = endComment + 1;
+        i = skipQuoted(code, i);
       } else if (c === "(" || c === "{" || c === "[") {
         depth++;
       } else if (c === ")" || c === "}" || c === "]") {
@@ -540,32 +666,33 @@ describe("SERVER_OWNED_PREFERENCE_KEYS matches the server's preference writers",
 
   type Write = { key: string; where: string };
 
-  function scanWrites(): Write[] {
+  /** Settings preference keys one source file writes (none if it never uses `settingsTable`). */
+  function writesInSource(src: string, file: string): Write[] {
+    const code = blankCommentsAndRegex(src);
+    if (!/\bsettingsTable\b/.test(code)) return [];
+    const where = (index: number) => `${file}:${code.slice(0, index).split("\n").length}`;
     const writes: Write[] = [];
-    const files = [
-      ...sourceFiles(join(API_ROOT, "src")),
-      ...sourceFiles(join(API_ROOT, "scripts")),
-    ];
-    for (const file of files) {
-      const src = readFileSync(file, "utf8");
-      const where = (index: number) =>
-        `${relative(API_ROOT, file)}:${src.slice(0, index).split("\n").length}`;
-      for (const m of src.matchAll(/\.\.\.\s*\(*\s*([A-Za-z_$][\w$]*)/g)) {
-        if (!/prefs$/i.test(m[1]!)) continue;
-        for (const key of siblingKeys(src, m.index!)) {
-          writes.push({ key, where: where(m.index!) });
-        }
-      }
-      for (const m of src.matchAll(
-        /delete\s+\(?\s*[A-Za-z_$][\w$]*prefs\b[^;\n]*?\)?\s*\.\s*([A-Za-z_$][\w$]*)/gi,
-      )) {
-        writes.push({ key: m[1]!, where: where(m.index!) });
-      }
-      for (const m of src.matchAll(/jsonb_set\(\s*[^,]*preferences[^,]*,\s*'\{([\w$]+)/g)) {
-        writes.push({ key: m[1]!, where: where(m.index!) });
+    for (const m of code.matchAll(/\.\.\.\s*\(*\s*([A-Za-z_$][\w$]*)/g)) {
+      if (!/(prefs|^preferences)$/i.test(m[1]!)) continue;
+      for (const key of siblingKeys(code, m.index!)) {
+        writes.push({ key, where: where(m.index!) });
       }
     }
+    for (const m of code.matchAll(
+      /delete\s+\(?\s*[A-Za-z_$][\w$]*prefs\b[^;\n]*?\)?\s*\.\s*([A-Za-z_$][\w$]*)/gi,
+    )) {
+      writes.push({ key: m[1]!, where: where(m.index!) });
+    }
+    for (const m of code.matchAll(/jsonb_set\(\s*[^,]*preferences[^,]*,\s*'\{([\w$]+)/g)) {
+      writes.push({ key: m[1]!, where: where(m.index!) });
+    }
     return writes;
+  }
+
+  function scanWrites(): Write[] {
+    return SCAN_ROOTS.flatMap(sourceFiles).flatMap((file) =>
+      writesInSource(readFileSync(file, "utf8"), relative(REPO_ROOT, file)),
+    );
   }
 
   const specKeys = new Set(
@@ -574,10 +701,15 @@ describe("SERVER_OWNED_PREFERENCE_KEYS matches the server's preference writers",
   const serverOwned = new Set<string>(SERVER_OWNED_PREFERENCE_KEYS);
 
   it("the scan still sees every server-owned key being written", () => {
-    const seen = new Set(scanWrites().map((w) => w.key));
+    const writes = scanWrites();
+    const seen = new Set(writes.map((w) => w.key));
     for (const key of SERVER_OWNED_PREFERENCE_KEYS) {
       expect(seen.has(key), `scan no longer sees a write of ${key}`).toBe(true);
     }
+    // The repo-root scripts/ folder is scanned too.
+    expect(
+      writes.some((w) => w.where.startsWith("scripts/src/restoreAmexAnchor.ts:")),
+    ).toBe(true);
   });
 
   it("every preference key the server writes is server-owned or in the spec", () => {
@@ -592,5 +724,46 @@ describe("SERVER_OWNED_PREFERENCE_KEYS matches the server's preference writers",
 
   it("no key is both server-owned and in the spec", () => {
     expect([...serverOwned].filter((k) => specKeys.has(k))).toEqual([]);
+  });
+
+  // The scanner on the shapes that fooled its first version.
+  const SETTINGS_READ =
+    "const [s] = await db.select({ preferences: settingsTable.preferences }).from(settingsTable);\n" +
+    "const prefs = (s?.preferences ?? {}) as Record<string, unknown>;\n";
+
+  it("scanner: a preference write inside a comment is not a write", () => {
+    const src =
+      SETTINGS_READ +
+      "// const next = { ...prefs, commentOnlyKey: 1 };\n" +
+      "/* const other = { ...prefs, blockCommentKey: 1 }; */\n" +
+      "const nextPrefs = { ...prefs, amexAnchor: 1 };\n";
+    expect(writesInSource(src, "probe.ts").map((w) => w.key)).toEqual(["amexAnchor"]);
+  });
+
+  it("scanner: a file that never uses settingsTable (the per-user UI preferences writer) is skipped", () => {
+    const src =
+      "const merged = { ...existingUiPrefs, sidebarCollapsed: true };\n" +
+      "await db.insert(userUiPreferencesTable).values({ userId, preferences: merged });\n";
+    expect(writesInSource(src, "probe.ts")).toEqual([]);
+  });
+
+  it("scanner: a quote inside a regex literal does not hide the keys after it", () => {
+    const src =
+      SETTINGS_READ +
+      'const nextPrefs = { ...prefs, re: /["]/.source, afterRegexKey: 1 };\n' +
+      'const later = { ...prefs, laterKey: "x" };\n';
+    expect(writesInSource(src, "probe.ts").map((w) => w.key)).toEqual([
+      "re",
+      "afterRegexKey",
+      "laterKey",
+    ]);
+  });
+
+  it("scanner: a real unlisted writer is reported with its file and line", () => {
+    const src =
+      SETTINGS_READ + "const nextPrefs = {\n  ...(prefs ?? {}),\n  someNewServerFlag: true,\n};\n";
+    expect(writesInSource(src, "probe.ts")).toEqual([
+      { key: "someNewServerFlag", where: "probe.ts:4" },
+    ]);
   });
 });
