@@ -10704,27 +10704,36 @@ export declare const GetMeResponse: zod.ZodObject<{
  */
 export declare const GetUiPreferencesResponse: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+    chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }>;
 /**
  * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
  */
 export declare const UpdateUiPreferencesBody: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+    chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }>;
 export declare const UpdateUiPreferencesResponse: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+    chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
+    chaseHideReviewed?: boolean | undefined;
 }>;
 /**
  * @summary List all invitations (owner only).

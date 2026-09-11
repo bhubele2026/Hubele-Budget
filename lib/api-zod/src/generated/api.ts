@@ -4615,6 +4615,12 @@ export const GetMeResponse = zod.object({
 export const GetUiPreferencesResponse = zod
   .object({
     sidebarCollapsed: zod.boolean().optional(),
+    chaseHideReviewed: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(PR14) The Chase list leaves out reviewed rows (the ledger's\nreviewed=false filter). A view setting only: no total or balance\ndepends on it.\n",
+      ),
   })
   .describe(
     "Per-user (not per-household) UI preferences for the signed-in user.",
@@ -4626,6 +4632,12 @@ export const GetUiPreferencesResponse = zod
 export const UpdateUiPreferencesBody = zod
   .object({
     sidebarCollapsed: zod.boolean().optional(),
+    chaseHideReviewed: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(PR14) The Chase list leaves out reviewed rows (the ledger's\nreviewed=false filter). A view setting only: no total or balance\ndepends on it.\n",
+      ),
   })
   .describe(
     "Per-user (not per-household) UI preferences for the signed-in user.",
@@ -4634,6 +4646,12 @@ export const UpdateUiPreferencesBody = zod
 export const UpdateUiPreferencesResponse = zod
   .object({
     sidebarCollapsed: zod.boolean().optional(),
+    chaseHideReviewed: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(PR14) The Chase list leaves out reviewed rows (the ledger's\nreviewed=false filter). A view setting only: no total or balance\ndepends on it.\n",
+      ),
   })
   .describe(
     "Per-user (not per-household) UI preferences for the signed-in user.",

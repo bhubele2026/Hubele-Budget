@@ -4055,6 +4055,12 @@ components:
       description: Per-user (not per-household) UI preferences for the signed-in user.
       properties:
         sidebarCollapsed: { type: boolean }
+        chaseHideReviewed:
+          type: boolean
+          description: |
+            (PR14) The Chase list leaves out reviewed rows (the ledger's
+            reviewed=false filter). A view setting only: no total or balance
+            depends on it.
     Settings:
       type: object
       required: [weeklyAllowanceAmount, monthlyAllowanceAmount, unplannedAllowanceAmount]

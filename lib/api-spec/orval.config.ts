@@ -37,6 +37,23 @@ export default defineConfig({
           path: path.resolve(apiClientReactSrc, "custom-fetch.ts"),
           name: "customFetch",
         },
+        // (PR14) The Chase review inbox pages the ledger with "Load more":
+        // an infinite-query hook keyed on the opaque `cursor` param. Only this
+        // operation; every other operation's output is unchanged.
+        operations: {
+          getTransactionsLedger: {
+            query: {
+              useQuery: true,
+              useInfinite: true,
+              useInfiniteQueryParam: "cursor",
+              // The client package names react-query as `catalog:`, which orval
+              // cannot read a version from, so it would emit v4 infinite types
+              // (an untyped pageParam). The app runs v5; say so for this
+              // operation only.
+              version: 5,
+            },
+          },
+        },
       },
     },
   },

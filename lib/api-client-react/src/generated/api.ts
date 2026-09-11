@@ -5,11 +5,20 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseInfiniteQueryResult,
+  DefinedUseQueryResult,
+  InfiniteData,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
+  UndefinedInitialDataOptions,
+  UseInfiniteQueryOptions,
+  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -1694,11 +1703,219 @@ export const getTransactionsLedger = async (
   });
 };
 
+export const getGetTransactionsLedgerInfiniteQueryKey = (
+  params?: GetTransactionsLedgerParams,
+) => {
+  return [
+    "infinite",
+    `/api/transactions/ledger`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
 export const getGetTransactionsLedgerQueryKey = (
   params?: GetTransactionsLedgerParams,
 ) => {
   return [`/api/transactions/ledger`, ...(params ? [params] : [])] as const;
 };
+
+export const getGetTransactionsLedgerInfiniteQueryOptions = <
+  TData = InfiniteData<
+    Awaited<ReturnType<typeof getTransactionsLedger>>,
+    GetTransactionsLedgerParams["cursor"]
+  >,
+  TError = ErrorType<void>,
+>(
+  params?: GetTransactionsLedgerParams,
+  options?: {
+    query?: Partial<
+      UseInfiniteQueryOptions<
+        Awaited<ReturnType<typeof getTransactionsLedger>>,
+        TError,
+        TData,
+        QueryKey,
+        GetTransactionsLedgerParams["cursor"]
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetTransactionsLedgerInfiniteQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTransactionsLedger>>,
+    QueryKey,
+    GetTransactionsLedgerParams["cursor"]
+  > = ({ signal, pageParam }) =>
+    getTransactionsLedger(
+      { ...params, cursor: pageParam || params?.["cursor"] },
+      { signal, ...requestOptions },
+    );
+
+  return { queryKey, queryFn, ...queryOptions } as UseInfiniteQueryOptions<
+    Awaited<ReturnType<typeof getTransactionsLedger>>,
+    TError,
+    TData,
+    QueryKey,
+    GetTransactionsLedgerParams["cursor"]
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetTransactionsLedgerInfiniteQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTransactionsLedger>>
+>;
+export type GetTransactionsLedgerInfiniteQueryError = ErrorType<void>;
+
+export function useGetTransactionsLedgerInfinite<
+  TData = InfiniteData<
+    Awaited<ReturnType<typeof getTransactionsLedger>>,
+    GetTransactionsLedgerParams["cursor"]
+  >,
+  TError = ErrorType<void>,
+>(
+  params: undefined | GetTransactionsLedgerParams,
+  options: {
+    query: Partial<
+      UseInfiniteQueryOptions<
+        Awaited<ReturnType<typeof getTransactionsLedger>>,
+        TError,
+        TData,
+        QueryKey,
+        GetTransactionsLedgerParams["cursor"]
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTransactionsLedger>>,
+          TError,
+          Awaited<ReturnType<typeof getTransactionsLedger>>,
+          QueryKey
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseInfiniteQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetTransactionsLedgerInfinite<
+  TData = InfiniteData<
+    Awaited<ReturnType<typeof getTransactionsLedger>>,
+    GetTransactionsLedgerParams["cursor"]
+  >,
+  TError = ErrorType<void>,
+>(
+  params?: GetTransactionsLedgerParams,
+  options?: {
+    query?: Partial<
+      UseInfiniteQueryOptions<
+        Awaited<ReturnType<typeof getTransactionsLedger>>,
+        TError,
+        TData,
+        QueryKey,
+        GetTransactionsLedgerParams["cursor"]
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTransactionsLedger>>,
+          TError,
+          Awaited<ReturnType<typeof getTransactionsLedger>>,
+          QueryKey
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseInfiniteQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetTransactionsLedgerInfinite<
+  TData = InfiniteData<
+    Awaited<ReturnType<typeof getTransactionsLedger>>,
+    GetTransactionsLedgerParams["cursor"]
+  >,
+  TError = ErrorType<void>,
+>(
+  params?: GetTransactionsLedgerParams,
+  options?: {
+    query?: Partial<
+      UseInfiniteQueryOptions<
+        Awaited<ReturnType<typeof getTransactionsLedger>>,
+        TError,
+        TData,
+        QueryKey,
+        GetTransactionsLedgerParams["cursor"]
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseInfiniteQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary (PR13) One page of the bank ledger, newest first. The server settles
+the scope: the Plaid account the snapshot resolves to, its
+same-institution mask twins, and manual rows (no Plaid account, source
+neither "amex" nor "plaid:*"), which is the rule the bank balance reads
+by. A client must not hide rows the register counts. Ordered by
+occurredOn desc, occurredAt desc (nulls last), id desc, and paged with
+an opaque keyset cursor. Each row carries what it moves the balance by
+(`balanceAmount`, `countsInBalance`, `balanceReason`), from the cash
+rule over the account's whole history. `matchingCount` counts every
+row matching the filters; `totals` and `review` cover every row
+matching the filters other than `reviewed`. `runningBalance`,
+`balanceStart`, `balanceEnd`, `balanceToday` and `anchor` never depend
+on the non-date filters or the page, and no balance is given for a day
+after today. The boolean filters take the strings "true" or "false";
+anything else is a 400.
+
+ */
+
+export function useGetTransactionsLedgerInfinite<
+  TData = InfiniteData<
+    Awaited<ReturnType<typeof getTransactionsLedger>>,
+    GetTransactionsLedgerParams["cursor"]
+  >,
+  TError = ErrorType<void>,
+>(
+  params?: GetTransactionsLedgerParams,
+  options?: {
+    query?: Partial<
+      UseInfiniteQueryOptions<
+        Awaited<ReturnType<typeof getTransactionsLedger>>,
+        TError,
+        TData,
+        QueryKey,
+        GetTransactionsLedgerParams["cursor"]
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseInfiniteQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetTransactionsLedgerInfiniteQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useInfiniteQuery(
+    queryOptions,
+    queryClient,
+  ) as UseInfiniteQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getGetTransactionsLedgerQueryOptions = <
   TData = Awaited<ReturnType<typeof getTransactionsLedger>>,
@@ -1706,10 +1923,12 @@ export const getGetTransactionsLedgerQueryOptions = <
 >(
   params?: GetTransactionsLedgerParams,
   options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getTransactionsLedger>>,
-      TError,
-      TData
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTransactionsLedger>>,
+        TError,
+        TData
+      >
     >;
     request?: SecondParameter<typeof customFetch>;
   },
@@ -1728,7 +1947,7 @@ export const getGetTransactionsLedgerQueryOptions = <
     Awaited<ReturnType<typeof getTransactionsLedger>>,
     TError,
     TData
-  > & { queryKey: QueryKey };
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 };
 
 export type GetTransactionsLedgerQueryResult = NonNullable<
@@ -1736,6 +1955,79 @@ export type GetTransactionsLedgerQueryResult = NonNullable<
 >;
 export type GetTransactionsLedgerQueryError = ErrorType<void>;
 
+export function useGetTransactionsLedger<
+  TData = Awaited<ReturnType<typeof getTransactionsLedger>>,
+  TError = ErrorType<void>,
+>(
+  params: undefined | GetTransactionsLedgerParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTransactionsLedger>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTransactionsLedger>>,
+          TError,
+          Awaited<ReturnType<typeof getTransactionsLedger>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetTransactionsLedger<
+  TData = Awaited<ReturnType<typeof getTransactionsLedger>>,
+  TError = ErrorType<void>,
+>(
+  params?: GetTransactionsLedgerParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTransactionsLedger>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTransactionsLedger>>,
+          TError,
+          Awaited<ReturnType<typeof getTransactionsLedger>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetTransactionsLedger<
+  TData = Awaited<ReturnType<typeof getTransactionsLedger>>,
+  TError = ErrorType<void>,
+>(
+  params?: GetTransactionsLedgerParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTransactionsLedger>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary (PR13) One page of the bank ledger, newest first. The server settles
 the scope: the Plaid account the snapshot resolves to, its
@@ -1761,19 +2053,25 @@ export function useGetTransactionsLedger<
 >(
   params?: GetTransactionsLedgerParams,
   options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getTransactionsLedger>>,
-      TError,
-      TData
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTransactionsLedger>>,
+        TError,
+        TData
+      >
     >;
     request?: SecondParameter<typeof customFetch>;
   },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
   const queryOptions = getGetTransactionsLedgerQueryOptions(params, options);
 
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return { ...query, queryKey: queryOptions.queryKey };
 }

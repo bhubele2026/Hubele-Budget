@@ -1,4 +1,4 @@
-import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
+import type { DataTag, DefinedInitialDataOptions, DefinedUseInfiniteQueryResult, DefinedUseQueryResult, InfiniteData, QueryClient, QueryKey, UndefinedInitialDataOptions, UseInfiniteQueryOptions, UseInfiniteQueryResult, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
 import type { AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkReviewMatchingInput, BulkReviewMatchingResult, BulkReviewMatchingTransactions409, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, GetTransactionsBalancesParams, GetTransactionsLedgerParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LedgerPage, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionBalances, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
@@ -542,38 +542,59 @@ anything else is a 400.
  */
 export declare const getGetTransactionsLedgerUrl: (params?: GetTransactionsLedgerParams) => string;
 export declare const getTransactionsLedger: (params?: GetTransactionsLedgerParams, options?: RequestInit) => Promise<LedgerPage>;
+export declare const getGetTransactionsLedgerInfiniteQueryKey: (params?: GetTransactionsLedgerParams) => readonly ["infinite", "/api/transactions/ledger", ...GetTransactionsLedgerParams[]];
 export declare const getGetTransactionsLedgerQueryKey: (params?: GetTransactionsLedgerParams) => readonly ["/api/transactions/ledger", ...GetTransactionsLedgerParams[]];
+export declare const getGetTransactionsLedgerInfiniteQueryOptions: <TData = InfiniteData<Awaited<ReturnType<typeof getTransactionsLedger>>, GetTransactionsLedgerParams["cursor"]>, TError = ErrorType<void>>(params?: GetTransactionsLedgerParams, options?: {
+    query?: Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData, QueryKey, GetTransactionsLedgerParams["cursor"]>>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseInfiniteQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData, QueryKey, GetTransactionsLedgerParams["cursor"]> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+};
+export type GetTransactionsLedgerInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getTransactionsLedger>>>;
+export type GetTransactionsLedgerInfiniteQueryError = ErrorType<void>;
+export declare function useGetTransactionsLedgerInfinite<TData = InfiniteData<Awaited<ReturnType<typeof getTransactionsLedger>>, GetTransactionsLedgerParams["cursor"]>, TError = ErrorType<void>>(params: undefined | GetTransactionsLedgerParams, options: {
+    query: Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData, QueryKey, GetTransactionsLedgerParams["cursor"]>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, Awaited<ReturnType<typeof getTransactionsLedger>>, QueryKey>, "initialData">;
+    request?: SecondParameter<typeof customFetch>;
+}, queryClient?: QueryClient): DefinedUseInfiniteQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+};
+export declare function useGetTransactionsLedgerInfinite<TData = InfiniteData<Awaited<ReturnType<typeof getTransactionsLedger>>, GetTransactionsLedgerParams["cursor"]>, TError = ErrorType<void>>(params?: GetTransactionsLedgerParams, options?: {
+    query?: Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData, QueryKey, GetTransactionsLedgerParams["cursor"]>> & Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, Awaited<ReturnType<typeof getTransactionsLedger>>, QueryKey>, "initialData">;
+    request?: SecondParameter<typeof customFetch>;
+}, queryClient?: QueryClient): UseInfiniteQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+};
+export declare function useGetTransactionsLedgerInfinite<TData = InfiniteData<Awaited<ReturnType<typeof getTransactionsLedger>>, GetTransactionsLedgerParams["cursor"]>, TError = ErrorType<void>>(params?: GetTransactionsLedgerParams, options?: {
+    query?: Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData, QueryKey, GetTransactionsLedgerParams["cursor"]>>;
+    request?: SecondParameter<typeof customFetch>;
+}, queryClient?: QueryClient): UseInfiniteQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+};
 export declare const getGetTransactionsLedgerQueryOptions: <TData = Awaited<ReturnType<typeof getTransactionsLedger>>, TError = ErrorType<void>>(params?: GetTransactionsLedgerParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData>;
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData>>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData> & {
-    queryKey: QueryKey;
+    queryKey: DataTag<QueryKey, TData, TError>;
 };
 export type GetTransactionsLedgerQueryResult = NonNullable<Awaited<ReturnType<typeof getTransactionsLedger>>>;
 export type GetTransactionsLedgerQueryError = ErrorType<void>;
-/**
- * @summary (PR13) One page of the bank ledger, newest first. The server settles
-the scope: the Plaid account the snapshot resolves to, its
-same-institution mask twins, and manual rows (no Plaid account, source
-neither "amex" nor "plaid:*"), which is the rule the bank balance reads
-by. A client must not hide rows the register counts. Ordered by
-occurredOn desc, occurredAt desc (nulls last), id desc, and paged with
-an opaque keyset cursor. Each row carries what it moves the balance by
-(`balanceAmount`, `countsInBalance`, `balanceReason`), from the cash
-rule over the account's whole history. `matchingCount` counts every
-row matching the filters; `totals` and `review` cover every row
-matching the filters other than `reviewed`. `runningBalance`,
-`balanceStart`, `balanceEnd`, `balanceToday` and `anchor` never depend
-on the non-date filters or the page, and no balance is given for a day
-after today. The boolean filters take the strings "true" or "false";
-anything else is a 400.
-
- */
-export declare function useGetTransactionsLedger<TData = Awaited<ReturnType<typeof getTransactionsLedger>>, TError = ErrorType<void>>(params?: GetTransactionsLedgerParams, options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData>;
+export declare function useGetTransactionsLedger<TData = Awaited<ReturnType<typeof getTransactionsLedger>>, TError = ErrorType<void>>(params: undefined | GetTransactionsLedgerParams, options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, Awaited<ReturnType<typeof getTransactionsLedger>>>, "initialData">;
     request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
+}, queryClient?: QueryClient): DefinedUseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+};
+export declare function useGetTransactionsLedger<TData = Awaited<ReturnType<typeof getTransactionsLedger>>, TError = ErrorType<void>>(params?: GetTransactionsLedgerParams, options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData>> & Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, Awaited<ReturnType<typeof getTransactionsLedger>>>, "initialData">;
+    request?: SecondParameter<typeof customFetch>;
+}, queryClient?: QueryClient): UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+};
+export declare function useGetTransactionsLedger<TData = Awaited<ReturnType<typeof getTransactionsLedger>>, TError = ErrorType<void>>(params?: GetTransactionsLedgerParams, options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getTransactionsLedger>>, TError, TData>>;
+    request?: SecondParameter<typeof customFetch>;
+}, queryClient?: QueryClient): UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
 };
 /**
  * @summary (PR13) End-of-day balances of the ledger account for up to 120 dates,
