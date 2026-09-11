@@ -2615,11 +2615,101 @@ export const GetForecastResponse = zod.object({
                 .string()
                 .optional()
                 .describe(
-                  "Original (pre-drag) date the plan was scheduled for.\nWhen `originalDate !== date`, this event was dragged\nforward by the pre-snapshot drag-to-today rule. Used\nby the chart tooltip to distinguish dragged plans\nfrom bills naturally due that day.\n",
+                  "The date the plan was due (after any reschedule), before\nany drag. When `originalDate !== date`, the curve moved\nthe event (see `assumption`). Used by the chart tooltip to\ndistinguish dragged plans from bills naturally due that\nday. ⚠️ Not the resolution key for a moved bill: actions\nsend `occurrenceDate`.\n",
+                ),
+              assumption: zod
+                .string()
+                .nullish()
+                .describe(
+                  "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n",
+                ),
+              occurrenceKey: zod
+                .string()
+                .optional()
+                .describe(
+                  "(PR6) `<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`.",
+                ),
+              occurrenceDate: zod
+                .string()
+                .optional()
+                .describe(
+                  "(PR6) The occurrence's own date (before any reschedule), which resolutions are keyed on.",
                 ),
             }),
           )
           .optional(),
+        overdueOutsideForecast: zod
+          .array(
+            zod
+              .object({
+                planKey: zod
+                  .string()
+                  .describe(
+                    "`<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`.",
+                  ),
+                itemId: zod.string(),
+                occurrenceDate: zod
+                  .string()
+                  .describe(
+                    "The date resolutions are keyed on (before any reschedule).",
+                  ),
+                dueDate: zod
+                  .string()
+                  .describe("The date it was due (after any reschedule)."),
+                amount: zod
+                  .string()
+                  .describe(
+                    "Signed; negative is money out. A partial lists its remainder.",
+                  ),
+                label: zod.string(),
+                daysOverdue: zod
+                  .number()
+                  .describe("Whole days from dueDate to today."),
+              })
+              .describe(
+                "(PR6) An unresolved plan occurrence kept off the forecast curve.",
+              ),
+          )
+          .optional()
+          .describe(
+            "(PR6) Unresolved expenses due more than 14 days ago that no bank\nrow confidently paid. Not on the curve, and never dropped\nsilently. Bounded by the forecast's expansion (the first of last\nmonth) and by the item's start. Sorted by due date.\n",
+          ),
+        incomeNotArrived: zod
+          .array(
+            zod
+              .object({
+                planKey: zod
+                  .string()
+                  .describe(
+                    "`<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`.",
+                  ),
+                itemId: zod.string(),
+                occurrenceDate: zod
+                  .string()
+                  .describe(
+                    "The date resolutions are keyed on (before any reschedule).",
+                  ),
+                dueDate: zod
+                  .string()
+                  .describe("The date it was due (after any reschedule)."),
+                amount: zod
+                  .string()
+                  .describe(
+                    "Signed; negative is money out. A partial lists its remainder.",
+                  ),
+                label: zod.string(),
+                daysOverdue: zod
+                  .number()
+                  .describe("Whole days from dueDate to today."),
+              })
+              .describe(
+                "(PR6) An unresolved plan occurrence kept off the forecast curve.",
+              ),
+          )
+          .optional()
+          .describe(
+            "(PR6, `income_not_arrived`) Unresolved income due before today that\nno bank row confidently paid. Not on the curve: a paycheck that\nhas not landed never raises it. Sorted by due date.\n",
+          ),
         matches: zod
           .array(
             zod.object({
@@ -2825,11 +2915,101 @@ export const GetForecastCashSignalResponse = zod.object({
           .string()
           .optional()
           .describe(
-            "Original (pre-drag) date the plan was scheduled for.\nWhen `originalDate !== date`, this event was dragged\nforward by the pre-snapshot drag-to-today rule. Used\nby the chart tooltip to distinguish dragged plans\nfrom bills naturally due that day.\n",
+            "The date the plan was due (after any reschedule), before\nany drag. When `originalDate !== date`, the curve moved\nthe event (see `assumption`). Used by the chart tooltip to\ndistinguish dragged plans from bills naturally due that\nday. ⚠️ Not the resolution key for a moved bill: actions\nsend `occurrenceDate`.\n",
+          ),
+        assumption: zod
+          .string()
+          .nullish()
+          .describe(
+            "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n",
+          ),
+        occurrenceKey: zod
+          .string()
+          .optional()
+          .describe(
+            "(PR6) `<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`.",
+          ),
+        occurrenceDate: zod
+          .string()
+          .optional()
+          .describe(
+            "(PR6) The occurrence's own date (before any reschedule), which resolutions are keyed on.",
           ),
       }),
     )
     .optional(),
+  overdueOutsideForecast: zod
+    .array(
+      zod
+        .object({
+          planKey: zod
+            .string()
+            .describe(
+              "`<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`.",
+            ),
+          itemId: zod.string(),
+          occurrenceDate: zod
+            .string()
+            .describe(
+              "The date resolutions are keyed on (before any reschedule).",
+            ),
+          dueDate: zod
+            .string()
+            .describe("The date it was due (after any reschedule)."),
+          amount: zod
+            .string()
+            .describe(
+              "Signed; negative is money out. A partial lists its remainder.",
+            ),
+          label: zod.string(),
+          daysOverdue: zod
+            .number()
+            .describe("Whole days from dueDate to today."),
+        })
+        .describe(
+          "(PR6) An unresolved plan occurrence kept off the forecast curve.",
+        ),
+    )
+    .optional()
+    .describe(
+      "(PR6) Unresolved expenses due more than 14 days ago that no bank\nrow confidently paid. Not on the curve, and never dropped\nsilently. Bounded by the forecast's expansion (the first of last\nmonth) and by the item's start. Sorted by due date.\n",
+    ),
+  incomeNotArrived: zod
+    .array(
+      zod
+        .object({
+          planKey: zod
+            .string()
+            .describe(
+              "`<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`.",
+            ),
+          itemId: zod.string(),
+          occurrenceDate: zod
+            .string()
+            .describe(
+              "The date resolutions are keyed on (before any reschedule).",
+            ),
+          dueDate: zod
+            .string()
+            .describe("The date it was due (after any reschedule)."),
+          amount: zod
+            .string()
+            .describe(
+              "Signed; negative is money out. A partial lists its remainder.",
+            ),
+          label: zod.string(),
+          daysOverdue: zod
+            .number()
+            .describe("Whole days from dueDate to today."),
+        })
+        .describe(
+          "(PR6) An unresolved plan occurrence kept off the forecast curve.",
+        ),
+    )
+    .optional()
+    .describe(
+      "(PR6, `income_not_arrived`) Unresolved income due before today that\nno bank row confidently paid. Not on the curve: a paycheck that\nhas not landed never raises it. Sorted by due date.\n",
+    ),
   matches: zod
     .array(
       zod.object({

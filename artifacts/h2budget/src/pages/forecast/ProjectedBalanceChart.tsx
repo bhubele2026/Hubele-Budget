@@ -21,6 +21,7 @@ import {
 } from "@/lib/charts";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { PlanLine } from "@/lib/forecastMatch";
+import { tooltipPlanLine } from "@/lib/forecastPastDue";
 
 /**
  * ⭐ THE CASH CURVE — the one chart on the most-used screen in the app.
@@ -50,6 +51,8 @@ export type DayEvent = {
   itemId?: string;
   dragged: boolean;
   originalDate?: string;
+  /** (PR6) The resolution key date (see lib/forecastPastDue). */
+  occurrenceDate?: string;
 };
 
 export type BigBillMarker = {
@@ -241,15 +244,8 @@ export function ProjectedBalanceChart({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onMarkMissed({
-                                          kind: "plan",
-                                          itemId: b.itemId!,
-                                          label: b.label,
-                                          amount: b.amount,
-                                          date: rawDate,
-                                          originalDate: b.originalDate!,
-                                          status: "pending_plan",
-                                        });
+                                        // (PR6) Sends the occurrence key, not the moved-to date.
+                                        onMarkMissed(tooltipPlanLine({ ...b, itemId: b.itemId! }, rawDate));
                                       }}
                                       data-testid={`tooltip-mark-missed-${b.itemId}-${b.originalDate}`}
                                       title="Mark this past-due plan as missed so it stops dragging the projection"

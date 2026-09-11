@@ -118,21 +118,71 @@ async function addRecurring(
   return r;
 }
 
+/** (PR6) Wire the snapshot (set it first) to a Chase checking account; returns its external id. */
+async function wireChase(externalId = "chase-pr6-pair"): Promise<string> {
+  const [item] = await db
+    .insert(plaidItemsTable)
+    .values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      itemId: `item-${randomUUID()}`,
+      accessToken: "test-token",
+      institutionSlug: "chase",
+    })
+    .returning();
+  const [acct] = await db
+    .insert(plaidAccountsTable)
+    .values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      itemId: item!.id,
+      accountId: externalId,
+      name: "Chase Checking",
+    })
+    .returning();
+  await db
+    .update(forecastSettingsTable)
+    .set({ bankSnapshotAccountId: acct!.id })
+    .where(eq(forecastSettingsTable.userId, TEST_USER));
+  return externalId;
+}
+
+/** (PR6) A posted Chase row, in the ledger since the start of its own day. */
+async function addBankRow(opts: {
+  externalId: string;
+  occurredOn: string;
+  amount: string;
+  description: string;
+}): Promise<string> {
+  const [t] = await db
+    .insert(transactionsTable)
+    .values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: opts.occurredOn,
+      description: opts.description,
+      amount: opts.amount,
+      plaidAccountId: opts.externalId,
+      source: "plaid:chase",
+      createdAt: createdAtStartOfHouseholdDay(opts.occurredOn),
+    })
+    .returning({ id: transactionsTable.id });
+  return t!.id;
+}
+
 describe("computeCashSignal — snapshot anchoring", () => {
-  it("(#666) pre-snapshot pending plans are dropped — snapshot is truth, not dragged onto today", async () => {
-    // (#666) Inverted from the old (#650) assertion. The previous
-    // semantic dragged pre-snapshot pending plans onto today, which
-    // silently shifted the chart's first point up or down depending
-    // on whether the dragged events happened to net positive or
-    // negative. Real-world bug: bank $4,922.56, but the chart started
-    // at $3,805 (drag negative) one day, then ~$8,000 (drag positive)
-    // the next day after a partial fix. Both wrong.
+  it("(PR6, replaces #666) unpaid plans due before the snapshot drag to the next business day — day 0 stays at the bank", async () => {
+    // ⭐ REPLACES "(#666) pre-snapshot pending plans are dropped". Stricter: the
+    // old test checked only that nothing landed on or before today; this one
+    // also pins where the two unpaid bills land and what they are tagged.
     //
-    // New semantic: the bank snapshot is the truth. Anything dated
-    // on or before it is already reflected — drop it entirely. The
-    // chart line is flat at the snapshot value from fromDate through
-    // today, and stays at the snapshot value on today when nothing
-    // is actionable.
+    // #666 fixed a real bug — the chart's FIRST point moved off the bank balance
+    // ($4,922.56 shown as $3,805) — by dropping every plan dated before the
+    // snapshot. But a Sync stamps the snapshot "now", so that also hid every
+    // unpaid bill due before the last Sync. PR6 keeps #666's guarantee (day 0
+    // and every day before it equal the bank) and needs evidence instead of a
+    // date: nothing here paid these bills (no resolution, no bank row), so both
+    // are assumed unpaid and weigh on the next business day.
     await setSettings({
       balance: "3248.68",
       at: new Date("2026-05-13T12:00:00Z"),
@@ -154,27 +204,41 @@ describe("computeCashSignal — snapshot anchoring", () => {
       horizonDays: 30,
     });
 
-    // Snapshot is truth — pre-snapshot plans are dropped, not dragged.
+    // Every day from fromDate through today is flat at the bank balance…
+    expect(sig.bankToday).toBe("3248.68");
     expect(sig.startingBalance).toBe("3248.68");
     const daily = sig.daily ?? [];
-    // Every day from fromDate through today is flat at the snapshot.
     const flatRange = daily.filter(
       (d) => d.date >= "2026-05-01" && d.date <= "2026-05-14",
     );
+    expect(flatRange).toHaveLength(14);
     for (const d of flatRange) {
       expect(d.balance).toBe("3248.68");
     }
-    // No drag onto today; no markers for the pre-snapshot dates.
-    const eventDates = (sig.events ?? []).map((e) => e.date);
-    expect(eventDates).not.toContain("2026-05-14");
-    expect(eventDates).not.toContain("2026-05-13");
-    expect(eventDates).not.toContain("2026-05-10");
+    // …and both unpaid bills land on the next business day (Fri 05-15):
+    // 3,248.68 − 1,989.81 − 38.00 = 1,220.87.
+    expect(daily.find((d) => d.date === "2026-05-15")?.balance).toBe("1220.87");
+    expect(sig.endingBalance).toBe("1220.87");
+    const events = (sig.events ?? [])
+      .map((e) => ({
+        date: e.date,
+        amount: e.amount,
+        originalDate: e.originalDate,
+        occurrenceDate: e.occurrenceDate,
+        assumption: e.assumption,
+      }))
+      .sort((a, b) => Number(a.amount) - Number(b.amount));
+    expect(events).toEqual([
+      { date: "2026-05-15", amount: "-1989.81", originalDate: "2026-05-13", occurrenceDate: "2026-05-13", assumption: "overdue_assumed_unpaid" },
+      { date: "2026-05-15", amount: "-38.00", originalDate: "2026-05-10", occurrenceDate: "2026-05-10", assumption: "overdue_assumed_unpaid" },
+    ]);
+    expect(sig.overdueOutsideForecast).toEqual([]);
   });
 
-  it("(#666) when fromDate == today, snapshot-day plans are dropped (chart starts at bank balance)", async () => {
-    // Companion to the broader (#666) drop rule: a recurring plan
-    // dated exactly on the snapshot date does NOT drag onto today.
-    // The chart's first day equals the bank balance to the cent.
+  it("(PR6, was #666) when fromDate == today, a snapshot-day plan drags to the next business day; day 0 is the bank balance", async () => {
+    // Was "(#666) … snapshot-day plans are dropped", which checked day 0 only.
+    // Stricter: day 0 still equals the bank balance to the cent, and day 1 now
+    // carries the unpaid 05-13 bill (3,248.68 − 1,989.81 = 1,258.87).
     await setSettings({
       balance: "3248.68",
       at: new Date("2026-05-13T12:00:00Z"),
@@ -196,20 +260,22 @@ describe("computeCashSignal — snapshot anchoring", () => {
       date: "2026-05-14",
       balance: "3248.68",
     });
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-15",
+      balance: "1258.87",
+    });
   });
 
-  it("(#666/#681) strictly pre-snapshot plans drop (both income AND expense) — bank is the truth", async () => {
-    // User's complaint scenario: the bank snapshot is the truth, and
-    // anything dated STRICTLY before the snapshot has already been
-    // accounted for (cleared at the bank) even if the auto-matcher
-    // didn't write a `matched` resolution row. These phantom
-    // pre-snapshot expansions must NOT drag onto today+1 — that's
-    // what was producing the "fuck ton of random shit" tooltip with
-    // Mortgages/HELOC/etc. dragging when the planned-items register
-    // only showed 3 real pendings.
+  it("(PR6, replaces #666/#681) an unpaid expense before the snapshot drags; income that has not arrived is listed, never on the curve", async () => {
+    // ⭐ REPLACES "(#666/#681) strictly pre-snapshot plans drop (both income AND
+    // expense)". Stricter: the expense's landing day, amount and tag are pinned,
+    // and the income is listed (`incomeNotArrived`) instead of vanishing.
     //
-    // (#681) drag only fires for plans dated ON OR AFTER the snapshot
-    // (mirroring what the user sees in their planned-items register).
+    // #666 suppressed the Mortgage/HELOC phantoms by assuming anything dated
+    // before the snapshot was paid. Those phantoms were bills a bank row had
+    // paid without a match; PR5's `offCurve` pair is now that evidence (see the
+    // paid/unpaid pair below). With no row and no resolution, the expense is
+    // assumed unpaid. Income never lands on the curve until it arrives.
     await setSettings({
       balance: "4922.56",
       at: new Date("2026-05-14T12:00:00Z"),
@@ -221,7 +287,7 @@ describe("computeCashSignal — snapshot anchoring", () => {
       anchorDate: "2026-05-12",
       amount: "1117.29",
     });
-    await addRecurring({
+    const income = await addRecurring({
       kind: "income",
       frequency: "onetime",
       anchorDate: "2026-05-13",
@@ -239,22 +305,32 @@ describe("computeCashSignal — snapshot anchoring", () => {
       date: "2026-05-14",
       balance: "4922.56",
     });
-    // Day 1 stays flat — BOTH the pre-snapshot expense (05-12) and
-    // the pre-snapshot income (05-13) are dropped. Neither drags.
+    // Day 1 carries the unpaid expense: 4,922.56 − 1,117.29 = 3,805.27. That is
+    // the figure the #666 report saw as DAY 0; it is now day 1, with day 0 at
+    // the bank. The income never lands on the curve.
     expect(sig.daily?.[1]).toEqual({
       date: "2026-05-15",
-      balance: "4922.56",
+      balance: "3805.27",
     });
-    // No pre-snapshot date appears as its own marker, and no
-    // dragged-to-today+1 marker either.
-    const eventDates = (sig.events ?? []).map((e) => e.date);
-    expect(eventDates).not.toContain("2026-05-12");
-    expect(eventDates).not.toContain("2026-05-13");
-    expect(eventDates).not.toContain("2026-05-14");
-    expect(eventDates).not.toContain("2026-05-15");
+    expect(sig.endingBalance).toBe("3805.27");
+    expect((sig.events ?? []).map((e) => [e.date, e.amount, e.originalDate, e.assumption])).toEqual([
+      ["2026-05-15", "-1117.29", "2026-05-12", "overdue_assumed_unpaid"],
+    ]);
+    expect(sig.incomeNotArrived).toEqual([
+      {
+        planKey: `${income.id}|2026-05-13`,
+        itemId: income.id,
+        occurrenceDate: "2026-05-13",
+        dueDate: "2026-05-13",
+        amount: "3500.00",
+        label: "Bill",
+        daysOverdue: 1,
+      },
+    ]);
+    expect(sig.overdueOutsideForecast).toEqual([]);
   });
 
-  it("(#688) yesterday's pending expense still drags to today+1 even when snapshot just refreshed to today", async () => {
+  it("(#688 → PR6) yesterday's unpaid expense drags to the next business day, tagged overdue_assumed_unpaid, even when the snapshot just refreshed", async () => {
     // Real-world bug: bank refreshed at Sat May 16 ~8pm.
     // bankSnapshotAt landed on today (05-16). User has pending plans
     // dated 05-15 (Verizon -$400, PlayStation -$18.98, Mattress -$33,
@@ -324,72 +400,100 @@ describe("computeCashSignal — snapshot anchoring", () => {
       "Verizon Wireless",
     ]);
     for (const e of dragTargetEvents) {
-      expect(e).toMatchObject({ originalDate: "2026-05-13" });
+      // (PR6) Stricter: the occurrence key and the assumption are pinned too.
+      expect(e).toMatchObject({
+        originalDate: "2026-05-13",
+        occurrenceDate: "2026-05-13",
+        assumption: "overdue_assumed_unpaid",
+      });
     }
   });
 
-  it("(#688) plans dated 2+ days before snapshot stay dropped (phantom suppression preserved)", async () => {
-    // Sibling to (#688) above — confirms the narrow exception does
-    // NOT bring back the (#666) Mortgage/HELOC phantom scenario.
-    // A plan dated 2 days before the snapshot is assumed to have
-    // already posted to the bank and is dropped, even if unmatched.
+  // ⭐ (PR6) REPLACES "(#688) plans dated 2+ days before snapshot stay dropped
+  // (phantom suppression preserved)" with a PAID / UNPAID PAIR. Stricter: the old
+  // test assumed a bill 2 days before the snapshot was paid because of its date;
+  // the pair proves the phantom stays off the curve only when a bank row paid it,
+  // and pins exactly where the unpaid one lands.
+  async function lakeviewMortgage(opts: { paid: boolean }): Promise<{ itemId: string; txnId: string | null }> {
     await setSettings({
       balance: "4871.20",
       at: new Date("2026-05-14T18:00:00Z"),
       cashBuffer: "500",
     });
-    await addRecurring({
-      name: "Old Phantom Mortgage",
+    const externalId = await wireChase();
+    const mortgage = await addRecurring({
+      name: "Lakeview Mortgage",
       kind: "expense",
       frequency: "onetime",
-      anchorDate: "2026-05-12", // 2 days before snapshot (05-14)
+      anchorDate: "2026-05-12", // 2 days before the snapshot (05-14)
       amount: "1500.00",
     });
+    const txnId = opts.paid
+      ? await addBankRow({ externalId, occurredOn: "2026-05-12", amount: "-1500.00", description: "LAKEVIEW MORTGAGE PMT" })
+      : null;
+    return { itemId: mortgage.id, txnId };
+  }
 
+  it("(PR6 pair, paid) a bill a named bank row paid stays off the curve", async () => {
+    const { itemId, txnId } = await lakeviewMortgage({ paid: true });
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-05-14",
       horizonDays: 30,
     });
-
-    expect(sig.startingBalance).toBe("4871.20");
-    expect(sig.daily?.[0]).toEqual({
-      date: "2026-05-14",
-      balance: "4871.20",
-    });
-    // Day 1 stays flat — the phantom plan is dropped, NOT dragged.
-    expect(sig.daily?.[1]).toEqual({
-      date: "2026-05-15",
-      balance: "4871.20",
-    });
-    const eventDates = (sig.events ?? []).map((e) => e.date);
-    expect(eventDates).not.toContain("2026-05-15");
+    // The row is dated before the snapshot day, so the balance already holds it.
+    expect(sig.bankToday).toBe("4871.20");
+    expect(sig.daily?.[0]).toEqual({ date: "2026-05-14", balance: "4871.20" });
+    expect(sig.daily?.[1]).toEqual({ date: "2026-05-15", balance: "4871.20" });
+    expect(sig.endingBalance).toBe("4871.20");
+    expect(sig.events).toEqual([]);
+    expect(sig.matches).toEqual([
+      expect.objectContaining({ planKey: `${itemId}|2026-05-12`, txnId, confidence: "high", offCurve: true }),
+    ]);
+    expect(sig.overdueOutsideForecast).toEqual([]);
   });
 
-  it("(#667) synthetic debt-min events dated before the snapshot do NOT drag onto today", async () => {
-    // User's bug report: "All my pending is matched, no forecasted
-    // pending, why is the bank off?" — bank $4,922.56, chart starts at
-    // $3,805.27 (down $1,117) with the Pending list completely empty.
-    //
-    // Root cause: `expandDebtMin` (and `expandAvalancheExtra`) used to
-    // emit events back to the prior-month start to mirror the recurring
-    // expansion lookback. But synthetic events have NO Pending UI row
-    // the user can match/skip/miss, so any pre-snapshot synthetic event
-    // would silently drag onto today with no way for the user to
-    // dismiss the dip. Snapshot is the truth — anything dated on or
-    // before it is already reflected in the bank balance.
-    //
-    // This test pins the fix: a debt-min that would naturally land on
-    // a pre-snapshot date is suppressed entirely and does NOT pull the
-    // chart down on today.
+  it("(PR6 pair, unpaid) the same bill with no bank row drags to the next business day, overdue_assumed_unpaid", async () => {
+    const { itemId } = await lakeviewMortgage({ paid: false });
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-14",
+      horizonDays: 30,
+    });
+    expect(sig.bankToday).toBe("4871.20");
+    expect(sig.daily?.[0]).toEqual({ date: "2026-05-14", balance: "4871.20" });
+    // 4,871.20 − 1,500.00 on Fri 05-15.
+    expect(sig.daily?.[1]).toEqual({ date: "2026-05-15", balance: "3371.20" });
+    expect(sig.endingBalance).toBe("3371.20");
+    expect(sig.events).toEqual([
+      {
+        date: "2026-05-15",
+        label: "Lakeview Mortgage",
+        amount: "-1500.00",
+        itemId,
+        originalDate: "2026-05-12",
+        assumption: "overdue_assumed_unpaid",
+        occurrenceKey: `${itemId}|2026-05-12`,
+        occurrenceDate: "2026-05-12",
+      },
+    ]);
+    expect(sig.matches).toEqual([]);
+  });
+
+  it("(PR6, was #667) a debt minimum due before the snapshot drags when due in the last 14 days, and is listed when older", async () => {
+    // Was "(#667) synthetic debt-min events dated before the snapshot do NOT
+    // drag onto today". The #667 report ("bank $4,922.56, chart starts at
+    // $3,805.27") was about DAY 0 leaving the bank balance — day 0 still equals
+    // it here. What flips: nothing paid the 05-10 minimum, so it weighs on the
+    // next business day; the 04-10 minimum (34 days) is listed in
+    // `overdueOutsideForecast` instead of vanishing. Stricter: both pinned by
+    // value. The debt existed before both dates (created 01-05).
     await setSettings({
       balance: "4922.56",
       at: new Date("2026-05-13T12:00:00Z"),
       cashBuffer: "0",
     });
-    // Debt with dueDay=10 → would emit 04-10 and 05-10 events back at
-    // expandStart=2026-04-01 under the old behavior. Both fall on/before
-    // the snapshot date (05-13) and would drag onto today (05-14).
-    await db.insert(debtsTable).values({
+    // Debt with dueDay=10 → 04-10 and 05-10 are expanded from
+    // expandStart=2026-04-01, both before the snapshot date (05-13).
+    const [debt] = await db.insert(debtsTable).values({
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       name: "Capital One Platinum",
@@ -398,33 +502,49 @@ describe("computeCashSignal — snapshot anchoring", () => {
       minPayment: "38",
       dueDay: 10,
       status: "active",
-    });
+      createdAt: new Date("2026-01-05T18:00:00Z"),
+    }).returning();
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-05-14",
       horizonDays: 30,
     });
 
-    // Chart starts AT the bank snapshot — no silent drag from the
-    // pre-snapshot synthetic debt-min.
+    // Chart starts AT the bank snapshot, as #667 required.
     expect(sig.startingBalance).toBe("4922.56");
     expect(sig.daily?.[0]).toEqual({
       date: "2026-05-14",
       balance: "4922.56",
     });
-    // Future debt-min events (06-10, 07-10, ...) still project normally.
-    const eventDates = (sig.events ?? []).map((e) => e.date).sort();
-    expect(eventDates).not.toContain("2026-04-10");
-    expect(eventDates).not.toContain("2026-05-10");
-    expect(eventDates.some((d) => d >= "2026-05-14")).toBe(true);
+    // The unpaid 05-10 minimum lands on Fri 05-15: 4,922.56 − 38.00.
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-15",
+      balance: "4884.56",
+    });
+    expect((sig.events ?? []).map((e) => [e.date, e.originalDate, e.assumption])).toEqual([
+      ["2026-05-15", "2026-05-10", "overdue_assumed_unpaid"],
+      ["2026-06-10", "2026-06-10", null],
+    ]);
+    // The 04-10 minimum is 34 days overdue: listed, off the curve.
+    expect(sig.overdueOutsideForecast).toEqual([
+      {
+        planKey: `debt:${debt!.id}|2026-04-10`,
+        itemId: `debt:${debt!.id}`,
+        occurrenceDate: "2026-04-10",
+        dueDate: "2026-04-10",
+        amount: "-38.00",
+        label: "Capital One Platinum minimum",
+        daysOverdue: 34,
+      },
+    ]);
   });
 
-  it("(#667) synthetic Avalanche extra payment dated before the snapshot does NOT drag", async () => {
-    // Companion to the debt-min regression: the avalanche extra series
-    // is also synthetic (no Pending UI row) and must respect the same
-    // snapshot anchor. Snapshot=2026-05-13, today=05-14, fromDate=05-14.
-    // The 04-30 month-end avalanche extra would otherwise expand back
-    // to expandStart=2026-04-01 and drag onto today.
+  it("(PR6, was #667) the Avalanche extra payment due 14 days ago drags to the next business day; day 0 stays at the bank", async () => {
+    // Was "(#667) synthetic Avalanche extra payment dated before the snapshot
+    // does NOT drag". Snapshot=2026-05-13, today=05-14. 04-30 is today−14, the
+    // last day inside the overdue window, and nothing paid it, so it now lands
+    // on Fri 05-15. Stricter: its landing day, amount and tag are pinned, and
+    // the debt's own 04-25 minimum (19 days) is listed instead of vanishing.
     await setSettings({
       balance: "4922.56",
       at: new Date("2026-05-13T12:00:00Z"),
@@ -437,8 +557,9 @@ describe("computeCashSignal — snapshot anchoring", () => {
       type: "credit_card",
       balance: "1000",
       minPayment: "38",
-      dueDay: 25, // post-snapshot, so debt-min isn't the noise here
+      dueDay: 25,
       status: "active",
+      createdAt: new Date("2026-01-05T18:00:00Z"),
     });
     await db.insert(avalancheSettingsTable).values({
       userId: TEST_USER,
@@ -455,10 +576,19 @@ describe("computeCashSignal — snapshot anchoring", () => {
       date: "2026-05-14",
       balance: "4922.56",
     });
-    // 04-30 avalanche extra is suppressed; 05-31 still appears.
-    const eventDates = (sig.events ?? []).map((e) => e.date);
-    expect(eventDates).not.toContain("2026-04-30");
-    expect(eventDates).toContain("2026-05-31");
+    // The unpaid 04-30 extra lands on Fri 05-15: 4,922.56 − 200.00.
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-15",
+      balance: "4722.56",
+    });
+    const extra = (sig.events ?? []).filter((e) => e.label === "Avalanche extra payment");
+    expect(extra.map((e) => [e.date, e.amount, e.originalDate, e.assumption])).toEqual([
+      ["2026-05-15", "-200.00", "2026-04-30", "overdue_assumed_unpaid"],
+      ["2026-05-31", "-200.00", "2026-05-31", null],
+    ]);
+    expect(
+      (sig.overdueOutsideForecast ?? []).map((p) => [p.label, p.dueDate, p.amount, p.daysOverdue]),
+    ).toEqual([["Capital One Platinum minimum", "2026-04-25", "-38.00", 19]]);
   });
 
   it("(#667/#681) boundary: synthetic event dated exactly on today drags to today+1", async () => {
@@ -481,6 +611,10 @@ describe("computeCashSignal — snapshot anchoring", () => {
       minPayment: "38",
       dueDay: 14,
       status: "active",
+      // (PR6) The debt existed before its 05-14 minimum. Without this the row
+      // takes the database's wall-clock time — after the pinned "today" — and
+      // the minimum would be from before the debt existed.
+      createdAt: new Date("2026-01-05T18:00:00Z"),
     });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
@@ -492,6 +626,11 @@ describe("computeCashSignal — snapshot anchoring", () => {
     // Dragged to today+1, not on today itself.
     expect(eventDates).not.toContain("2026-05-14");
     expect(eventDates).toContain("2026-05-15");
+    // (PR6) Stricter: a plan due today is tagged as not yet posted.
+    expect((sig.events ?? []).find((e) => e.date === "2026-05-15")).toMatchObject({
+      originalDate: "2026-05-14",
+      assumption: "due_today_not_posted",
+    });
     // Day 0 equals the bank snapshot; day 1 absorbs the drag.
     expect(sig.daily?.[0]).toEqual({
       date: "2026-05-14",
@@ -837,6 +976,10 @@ describe("computeCashSignal — snapshot anchoring", () => {
       balance: "1000.00",
     });
     expect(sig.endingBalance).toBe("1000.00");
+    // (PR6) Stricter: the paycheck is listed as not arrived, never dropped silently.
+    expect(sig.incomeNotArrived).toEqual([
+      expect.objectContaining({ dueDate: "2026-05-15", amount: "500.00", label: "Paycheck", daysOverdue: 1 }),
+    ]);
     const eventDates = (sig.events ?? []).map((e) => e.date);
     expect(eventDates).not.toContain("2026-05-15");
     expect(eventDates).not.toContain("2026-05-16");
@@ -1535,6 +1678,8 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
       minPayment: "33",
       dueDay: 15,
       status: "active",
+      // (PR6) Created before its 05-15 minimum (see the "Edge Card" test).
+      createdAt: new Date("2026-01-05T18:00:00Z"),
     });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {

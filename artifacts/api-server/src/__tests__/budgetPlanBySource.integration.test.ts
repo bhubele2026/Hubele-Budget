@@ -39,6 +39,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import budgetRouter from "../routes/budget";
+import { archiveExpiredOneTime } from "../lib/billsSummary";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
@@ -369,5 +370,43 @@ describe("GET /budget/months/:m — allowance", () => {
     const weekly = d.allowance.lines.find((l) => l.bucket === "weekly")!;
     // Unchanged from the previous assertion — none of the three counted.
     expect(weekly.actual).toBe("135.00");
+  });
+});
+
+describe("(PR6) a one-time bill the archive now keeps active", () => {
+  it("adds nothing to the plan: planBySource and its line are what they were when such a bill was archived", async () => {
+    // Before PR6 `archiveExpiredOneTime` set a one-time bill inactive the day
+    // after its date, so the Budget page never counted it. PR6 keeps an
+    // unresolved one active for 60 days for the forecast; `isPastOneTime`
+    // keeps it out of the plan exactly as before.
+    vi.setSystemTime(new Date("2026-06-20T17:00:00Z")); // Date only; the server's timers stay real
+    let billId: string | undefined;
+    try {
+      const before = await fetchMonth();
+      const [row] = await db
+        .insert(recurringItemsTable)
+        .values({
+          userId: TEST_USER,
+          householdId: TEST_HOUSEHOLD_ID,
+          name: "Furnace repair",
+          kind: "bill",
+          amount: "640.00",
+          frequency: "onetime",
+          anchorDate: "2026-06-15",
+          categoryId: await catId("Utilities"),
+        })
+        .returning();
+      billId = row!.id;
+      await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
+      const [stored] = await db.select().from(recurringItemsTable).where(eq(recurringItemsTable.id, billId));
+      expect(stored!.active).toBe("true"); // 5 days overdue, unresolved: kept for the forecast
+
+      const after = await fetchMonth();
+      expect(after.planBySource).toEqual(before.planBySource);
+      expect(lineNamed(after, "Utilities").plannedAmount).toBe(lineNamed(before, "Utilities").plannedAmount);
+    } finally {
+      if (billId) await db.delete(recurringItemsTable).where(eq(recurringItemsTable.id, billId));
+      vi.useRealTimers();
+    }
   });
 });

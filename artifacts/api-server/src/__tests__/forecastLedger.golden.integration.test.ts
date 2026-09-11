@@ -212,6 +212,9 @@ async function fullHousehold(opts: { snapshotAt?: Date } = {}): Promise<void> {
     minPayment: "38",
     dueDay: 25,
     status: "active",
+    // (PR6) Pinned: a debt minimum is never overdue from before the debt existed,
+    // so the database's wall-clock default would make this fixture depend on the day it runs.
+    createdAt: new Date("2026-01-05T18:00:00Z"),
   });
   await db.insert(avalancheSettingsTable).values({ userId: TEST_USER, manualExtra: "150" });
 

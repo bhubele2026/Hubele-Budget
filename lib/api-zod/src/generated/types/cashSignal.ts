@@ -7,6 +7,7 @@
  */
 import type { CashSignalDailyItem } from "./cashSignalDailyItem";
 import type { CashSignalEventsItem } from "./cashSignalEventsItem";
+import type { CashSignalListedPlan } from "./cashSignalListedPlan";
 import type { CashSignalMatchesItem } from "./cashSignalMatchesItem";
 import type { CashSignalStatus } from "./cashSignalStatus";
 
@@ -34,6 +35,17 @@ export interface CashSignal {
   acceptedImpact?: string;
   daily?: CashSignalDailyItem[];
   events?: CashSignalEventsItem[];
+  /** (PR6) Unresolved expenses due more than 14 days ago that no bank
+row confidently paid. Not on the curve, and never dropped
+silently. Bounded by the forecast's expansion (the first of last
+month) and by the item's start. Sorted by due date.
+ */
+  overdueOutsideForecast?: CashSignalListedPlan[];
+  /** (PR6, `income_not_arrived`) Unresolved income due before today that
+no bank row confidently paid. Not on the curve: a paycheck that
+has not landed never raises it. Sorted by due date.
+ */
+  incomeNotArrived?: CashSignalListedPlan[];
   /** (PR5) Plans a bank row probably paid, as suggestions for the user
 to confirm ("matched"/"partial") or reject ("not_match"). Only a
 match with `offCurve` true is off the forecast curve (the payee's

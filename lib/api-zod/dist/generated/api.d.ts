@@ -5150,18 +5150,77 @@ export declare const GetForecastResponse: zod.ZodObject<{
             amount: zod.ZodString;
             itemId: zod.ZodOptional<zod.ZodString>;
             originalDate: zod.ZodOptional<zod.ZodString>;
+            assumption: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            occurrenceKey: zod.ZodOptional<zod.ZodString>;
+            occurrenceDate: zod.ZodOptional<zod.ZodString>;
         }, "strip", zod.ZodTypeAny, {
             date: string;
             amount: string;
             label: string;
             itemId?: string | undefined;
+            occurrenceDate?: string | undefined;
             originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
         }, {
             date: string;
             amount: string;
             label: string;
             itemId?: string | undefined;
+            occurrenceDate?: string | undefined;
             originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
+        }>, "many">>;
+        overdueOutsideForecast: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            planKey: zod.ZodString;
+            itemId: zod.ZodString;
+            occurrenceDate: zod.ZodString;
+            dueDate: zod.ZodString;
+            amount: zod.ZodString;
+            label: zod.ZodString;
+            daysOverdue: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
+        }, {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
+        }>, "many">>;
+        incomeNotArrived: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            planKey: zod.ZodString;
+            itemId: zod.ZodString;
+            occurrenceDate: zod.ZodString;
+            dueDate: zod.ZodString;
+            amount: zod.ZodString;
+            label: zod.ZodString;
+            daysOverdue: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
+        }, {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
         }>, "many">>;
         matches: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
             planKey: zod.ZodString;
@@ -5227,7 +5286,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
             amount: string;
             label: string;
             itemId?: string | undefined;
+            occurrenceDate?: string | undefined;
             originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
@@ -5241,6 +5303,24 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+        }[] | undefined;
+        overdueOutsideForecast?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
+        }[] | undefined;
+        incomeNotArrived?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
         }[] | undefined;
     }, {
         status: "ready" | "tight" | "not_yet" | "no_data";
@@ -5269,7 +5349,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
             amount: string;
             label: string;
             itemId?: string | undefined;
+            occurrenceDate?: string | undefined;
             originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
@@ -5283,6 +5366,24 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+        }[] | undefined;
+        overdueOutsideForecast?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
+        }[] | undefined;
+        incomeNotArrived?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
         }[] | undefined;
     }>, zod.ZodNull]>>;
     plaidCheckingAccounts: zod.ZodArray<zod.ZodObject<{
@@ -5460,7 +5561,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
             amount: string;
             label: string;
             itemId?: string | undefined;
+            occurrenceDate?: string | undefined;
             originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
@@ -5474,6 +5578,24 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+        }[] | undefined;
+        overdueOutsideForecast?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
+        }[] | undefined;
+        incomeNotArrived?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
         }[] | undefined;
     } | null | undefined;
     checkingAccountExternalId?: string | null | undefined;
@@ -5599,7 +5721,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
             amount: string;
             label: string;
             itemId?: string | undefined;
+            occurrenceDate?: string | undefined;
             originalDate?: string | undefined;
+            assumption?: string | null | undefined;
+            occurrenceKey?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
@@ -5613,6 +5738,24 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+        }[] | undefined;
+        overdueOutsideForecast?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
+        }[] | undefined;
+        incomeNotArrived?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
         }[] | undefined;
     } | null | undefined;
     checkingAccountExternalId?: string | null | undefined;
@@ -5872,18 +6015,77 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         amount: zod.ZodString;
         itemId: zod.ZodOptional<zod.ZodString>;
         originalDate: zod.ZodOptional<zod.ZodString>;
+        assumption: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        occurrenceKey: zod.ZodOptional<zod.ZodString>;
+        occurrenceDate: zod.ZodOptional<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         date: string;
         amount: string;
         label: string;
         itemId?: string | undefined;
+        occurrenceDate?: string | undefined;
         originalDate?: string | undefined;
+        assumption?: string | null | undefined;
+        occurrenceKey?: string | undefined;
     }, {
         date: string;
         amount: string;
         label: string;
         itemId?: string | undefined;
+        occurrenceDate?: string | undefined;
         originalDate?: string | undefined;
+        assumption?: string | null | undefined;
+        occurrenceKey?: string | undefined;
+    }>, "many">>;
+    overdueOutsideForecast: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        planKey: zod.ZodString;
+        itemId: zod.ZodString;
+        occurrenceDate: zod.ZodString;
+        dueDate: zod.ZodString;
+        amount: zod.ZodString;
+        label: zod.ZodString;
+        daysOverdue: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
+    }, {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
+    }>, "many">>;
+    incomeNotArrived: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        planKey: zod.ZodString;
+        itemId: zod.ZodString;
+        occurrenceDate: zod.ZodString;
+        dueDate: zod.ZodString;
+        amount: zod.ZodString;
+        label: zod.ZodString;
+        daysOverdue: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
+    }, {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
     }>, "many">>;
     matches: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
         planKey: zod.ZodString;
@@ -5949,7 +6151,10 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         amount: string;
         label: string;
         itemId?: string | undefined;
+        occurrenceDate?: string | undefined;
         originalDate?: string | undefined;
+        assumption?: string | null | undefined;
+        occurrenceKey?: string | undefined;
     }[] | undefined;
     startingBalance?: string | undefined;
     snapshotAt?: string | null | undefined;
@@ -5963,6 +6168,24 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     daily?: {
         date: string;
         balance: string;
+    }[] | undefined;
+    overdueOutsideForecast?: {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
+    }[] | undefined;
+    incomeNotArrived?: {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
     }[] | undefined;
 }, {
     status: "ready" | "tight" | "not_yet" | "no_data";
@@ -5991,7 +6214,10 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         amount: string;
         label: string;
         itemId?: string | undefined;
+        occurrenceDate?: string | undefined;
         originalDate?: string | undefined;
+        assumption?: string | null | undefined;
+        occurrenceKey?: string | undefined;
     }[] | undefined;
     startingBalance?: string | undefined;
     snapshotAt?: string | null | undefined;
@@ -6005,6 +6231,24 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     daily?: {
         date: string;
         balance: string;
+    }[] | undefined;
+    overdueOutsideForecast?: {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
+    }[] | undefined;
+    incomeNotArrived?: {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
     }[] | undefined;
 }>;
 /**
