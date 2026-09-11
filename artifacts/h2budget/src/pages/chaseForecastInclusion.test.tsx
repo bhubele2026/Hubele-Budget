@@ -244,6 +244,68 @@ it("a future row sent to the forecast keeps its 'Remove from forecast' ×", () =
   ).toBe("Remove from forecast");
 });
 
+// (PR5b review H2) The bundle now carries "Not this" and partial answers.
+it("a posted row with a partial reads 'Partly paid' and offers no ×: every write here would replace the partial", () => {
+  state.forecast = {
+    ...state.forecast,
+    resolutions: [{ matchedTxnId: "posted", status: "partial" }],
+  };
+  show();
+  const chip = screen.getByTestId("badge-forecast-state-posted");
+  expect(chip.getAttribute("data-forecast-state")).toBe("partial");
+  expect(chip.textContent).toContain("Partly paid");
+  expect(screen.queryByTestId("button-remove-forecast-posted")).toBeNull();
+});
+
+it("a future row with a partial offers no × either", () => {
+  state.rows = [row("future", FUTURE, { forecastFlag: true })];
+  state.forecast = {
+    ...state.forecast,
+    resolutions: [{ matchedTxnId: "future", status: "partial" }],
+  };
+  show();
+  expect(
+    screen.getByTestId("badge-forecast-state-future").getAttribute("data-forecast-state"),
+  ).toBe("partial");
+  expect(screen.queryByTestId("button-remove-forecast-future")).toBeNull();
+});
+
+it("a 'Not this' answer beside a match never hides the match, in either order: chip Matched, no ×", () => {
+  const matched = { matchedTxnId: "posted", status: "matched" };
+  const rejected = { matchedTxnId: "posted", status: "not_match" };
+  for (const resolutions of [[matched, rejected], [rejected, matched]]) {
+    state.forecast = { ...state.forecast, resolutions };
+    show();
+    expect(
+      screen.getByTestId("badge-forecast-state-posted").getAttribute("data-forecast-state"),
+    ).toBe("matched");
+    expect(screen.queryByTestId("button-remove-forecast-posted")).toBeNull();
+    cleanup();
+  }
+});
+
+it("bulk Remove records 'not a planned payment' for a posted row whose only answer is 'Not this', and never for a partial", async () => {
+  state.rows = [row("posted", POSTED), row("paid", POSTED)];
+  state.forecast = {
+    ...state.forecast,
+    resolutions: [
+      { matchedTxnId: "posted", status: "not_match" },
+      { matchedTxnId: "paid", status: "partial" },
+    ],
+  };
+  show();
+  expect(
+    screen.getByTestId("badge-forecast-state-posted").getAttribute("data-forecast-state"),
+  ).toBe("in-review-bucket");
+  fireEvent.click(screen.getByText("Select posted"));
+  fireEvent.click(screen.getByText("Select paid"));
+  fireEvent.click(screen.getByTestId("bulk-remove-forecast"));
+  await waitFor(() => expect(state.upsertAsync).toHaveBeenCalledTimes(1));
+  expect(state.upsertAsync).toHaveBeenCalledWith({
+    data: { status: "ignored_unforecasted", matchedTxnId: "posted" },
+  });
+});
+
 it("bulk Remove flips the flag only on future rows and records 'not a planned payment' for posted ones", async () => {
   state.rows = [
     row("posted", POSTED),

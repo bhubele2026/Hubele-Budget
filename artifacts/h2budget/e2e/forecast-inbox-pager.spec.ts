@@ -109,8 +109,12 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
     // plan, so we resolve them via Mark unplanned and Remove respectively.
     const suffix = Math.random().toString(36).slice(2, 8);
     const billName = `PagerBill-${suffix}`;
-    const billDay = 12;
-    const billIso = currentMonthDay(billDay);
+    // (PR5b review) Row A pays the bill exactly, 4 days early, and no row
+    // description carries a word of the bill's name: a high-confidence CLIENT
+    // one-click match on every calendar day that the server's "probably paid"
+    // matcher can never pair (it needs the name, or ≤ 3 days).
+    const rowTag = `r${Math.random().toString(36).slice(2, 8)}`;
+    const billDay = 20;
 
     await apiCall<{ id: string }>(page, "POST", "/api/recurring-items", {
       name: billName,
@@ -122,15 +126,15 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
     });
 
     // Three pending bank inbox rows for the current month. Only the first
-    // one (same amount + same day as the bill) gets a one-click match; the
-    // other two are noise we'll resolve manually.
+    // one (same amount as the bill, 4 days before it) gets a one-click match;
+    // the other two are noise we'll resolve manually.
     const txnA = await apiCall<{ id: string }>(
       page,
       "POST",
       "/api/transactions",
       {
-        occurredOn: billIso,
-        description: `PAGER-${suffix} A`,
+        occurredOn: currentMonthDay(16),
+        description: `PAGER-${rowTag} A`,
         amount: "-75.00",
         forecastFlag: true,
       },
@@ -141,7 +145,7 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
       "/api/transactions",
       {
         occurredOn: currentMonthDay(14),
-        description: `PAGER-${suffix} B`,
+        description: `PAGER-${rowTag} B`,
         amount: "-13.50",
         forecastFlag: true,
       },
@@ -151,8 +155,8 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
       "POST",
       "/api/transactions",
       {
-        occurredOn: currentMonthDay(16),
-        description: `PAGER-${suffix} C`,
+        occurredOn: currentMonthDay(18),
+        description: `PAGER-${rowTag} C`,
         amount: "-22.40",
         forecastFlag: true,
       },
@@ -214,15 +218,7 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
     // to be the one with the matching plan; if not, page through until we
     // find it (the picker assigns the one-click button to the lone txn
     // matching the lone plan).
-    // (PR5b) Row A carries ONE suggestion: the client's one-click Match while
-    // it is dated after today, or — once the calendar reaches the bill day and
-    // the server's "probably paid" matcher can pair it — the server's Confirm.
-    // Either writes the same `matched` pair.
-    const matchFor = (id: string) =>
-      page.locator(
-        `[data-testid="one-click-match-${id}"], [data-testid="probably-paid-confirm-${id}"]`,
-      );
-    let oneClickBtn = matchFor(firstId);
+    let oneClickBtn = page.getByTestId(`one-click-match-${firstId}`);
     let activeId = firstId;
     let activeIndex = 1;
     while ((await oneClickBtn.count()) === 0) {
@@ -230,7 +226,7 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
       activeIndex += 1;
       await expect(indicator).toHaveText(`${activeIndex} of 3`);
       activeId = await visibleInboxTxnId(page);
-      oneClickBtn = matchFor(activeId);
+      oneClickBtn = page.getByTestId(`one-click-match-${activeId}`);
       if (activeIndex >= 3) break;
     }
     await expect(oneClickBtn).toBeVisible();

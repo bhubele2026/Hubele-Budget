@@ -410,6 +410,111 @@ describe("register — server matches (\"Suggested\")", () => {
   });
 });
 
+describe("(PR5b review H1) a pair answered 'Not this' is never a client suggestion", () => {
+  // Water $150 due 05-17; the row "CITY WATER 0514" $150 on 05-14. The user
+  // answered Not this; the server offers nothing. Without the fix the client
+  // made it a high-confidence Water match, and one bulk click wrote `matched`
+  // (the server then deleted the rejection).
+  const water17: CashEvent = { itemId: "water", date: "2026-05-17", label: "Water", amount: -150 };
+  const rejection = res({
+    id: "rn",
+    status: "not_match",
+    recurringItemId: "water",
+    occurrenceDate: "2026-05-17",
+    matchedTxnId: "t1",
+  });
+
+  it("the register exposes the pair, and no chip, one-click or confident pick offers it", () => {
+    const reg = buildLineRegister({
+      ...base,
+      events: [water17],
+      txns: [txn("t1", "2026-05-14", "-150.00", "CITY WATER 0514")],
+      resolutions: [rejection],
+    });
+    expect([...reg.rejectedPairs]).toEqual(["water|2026-05-17#t1"]);
+    const sugs = buildClientSuggestions(reg.allBank, reg.allPlan, reg.rejectedPairs);
+    expect(sugs.get("t1")).toEqual([]);
+    expect(pickOneClickBankMatches(sugs).size).toBe(0);
+    expect(pickConfidentBankMatches(sugs)).toEqual([]);
+    // Control: without the rejection it is the obvious high-confidence pick.
+    expect(buildClientSuggestions(reg.allBank, reg.allPlan).get("t1")?.[0]).toMatchObject({
+      confidence: "high",
+      plan: expect.objectContaining({ itemId: "water" }),
+    });
+  });
+
+  it("a moved plan's rejection is keyed on its original occurrence", () => {
+    const reg = buildLineRegister({
+      ...base,
+      events: [water17],
+      txns: [txn("t1", "2026-05-14", "-150.00", "CITY WATER 0514")],
+      resolutions: [
+        res({ id: "rr", status: "rescheduled", recurringItemId: "water", occurrenceDate: "2026-05-17", rescheduledTo: "2026-05-15" }),
+        rejection,
+      ],
+    });
+    expect(reg.allPlan[0]).toMatchObject({ date: "2026-05-15", originalDate: "2026-05-17" });
+    expect(buildClientSuggestions(reg.allBank, reg.allPlan, reg.rejectedPairs).get("t1")).toEqual([]);
+  });
+
+  it("another row can still be suggested for the same plan", () => {
+    const reg = buildLineRegister({
+      ...base,
+      events: [water17],
+      txns: [txn("t1", "2026-05-14", "-150.00", "CITY WATER 0514"), txn("t2", "2026-05-16", "-150.00", "WATER DEPT")],
+      resolutions: [rejection],
+    });
+    const sugs = buildClientSuggestions(reg.allBank, reg.allPlan, reg.rejectedPairs);
+    expect(sugs.get("t1")).toEqual([]);
+    expect(sugs.get("t2")?.[0]?.plan.itemId).toBe("water");
+  });
+});
+
+describe("(PR5b review M1 / NIT) partly-paid plans", () => {
+  const rent13: CashEvent = { itemId: "rent", date: "2026-05-13", label: "Rent", amount: -500 };
+  const partial13 = res({ id: "rp", status: "partial", recurringItemId: "rent", occurrenceDate: "2026-05-13", matchedTxnId: "t1" });
+
+  it("a past-due partial stays on Review's register while a remainder is planned; the forward view drops it", () => {
+    const opts = {
+      ...base,
+      events: [rent13],
+      txns: [txn("t1", "2026-05-12", "-250.00", "RENT PORTAL")],
+      resolutions: [partial13],
+      visibleFromISO: "2026-05-14",
+    };
+    const review = buildLineRegister({ ...opts, lingerPastDuePlans: true });
+    expect(review.rows.filter((r) => r.kind === "plan")).toEqual([
+      expect.objectContaining({ itemId: "rent", status: "partial", amount: -250 }),
+    ]);
+    const forward = buildLineRegister({ ...opts, lingerPastDuePlans: false });
+    expect(forward.rows.filter((r) => r.kind === "plan")).toEqual([]);
+  });
+
+  it("a settled partial (remainder of 0) does not linger", () => {
+    const review = buildLineRegister({
+      ...base,
+      events: [rent13],
+      txns: [txn("t1", "2026-05-12", "-499.25", "RENT PORTAL")],
+      resolutions: [partial13],
+      visibleFromISO: "2026-05-14",
+      lingerPastDuePlans: true,
+    });
+    expect(review.rows.filter((r) => r.kind === "plan")).toEqual([]);
+  });
+
+  it("the bucket shows what a partial actually paid, even when the shortfall was $1 or less", () => {
+    const resolutions = [partial13];
+    const { allPlan, allBank } = buildLineRegister({
+      ...base,
+      events: [rent13],
+      txns: [txn("t1", "2026-05-12", "-499.25", "RENT PORTAL")],
+      resolutions,
+    });
+    const bucket = buildBucket({ allPlan, allBank, resolutions, closedMonths: new Set(), monthFilter: "2026-05" });
+    expect(bucket).toEqual([expect.objectContaining({ id: "rp", status: "partial", amount: -499.25 })]);
+  });
+});
+
 describe("no duplicate suggestions", () => {
   // The server paired Water with t1 ($173, 8 days early). t2 is an exact
   // $150 two days before Water — on its own the client would call Water a

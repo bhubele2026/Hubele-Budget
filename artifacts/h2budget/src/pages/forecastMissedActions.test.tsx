@@ -344,7 +344,13 @@ describe("Forecast — Missed bucket actions (#480)", () => {
       ],
     };
     renderPage();
+    // Only the PR5 register reads the partial: the row is "Partly paid" and
+    // moves its $500 remainder, not the $1,500 plan.
+    expect(screen.getByTestId("plan-row-rent-2026-05-30").textContent).toContain("Partly paid");
     fireEvent.click(screen.getByTestId("move-plan-rent-2026-05-30"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain("$500.00");
+    expect(dialog.textContent).not.toContain("$1,500.00");
     fireEvent.change(screen.getByTestId("input-move-date") as HTMLInputElement, {
       target: { value: "2026-06-10" },
     });

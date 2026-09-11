@@ -74,20 +74,19 @@ async function apiCall<T>(
 }
 
 /**
- * Pick a current-month day that's a few days from today but still in the
- * month — gives the suggester a 0-day delta (we use the same day for the
- * bank txn) which is well inside the high-confidence ≤5-day window. We
- * cap at 28 so the date is always valid regardless of month length.
+ * (PR5b review) Seeds that take the CLIENT's one-click path on every calendar
+ * day. The bill is due on the 20th of the current month; a bank row for the
+ * exact amount on the 16th (or 24th) is 4 days away — a high-confidence client
+ * suggestion (exact amount within 5 days). The row's description shares no
+ * word with the bill's name, so the server's "probably paid" matcher can never
+ * pair it (without the name it needs the amount within $1 AND ≤ 3 days). No
+ * branch on today's date, no time-zone dependence.
  */
-function pickAnchorDay(): { iso: string; day: number } {
+const PLAN_DAY = 20;
+const ROW_DAY = 16;
+function currentMonthDay(day: number): string {
   const d = new Date();
-  const target = Math.min(Math.max(d.getDate() + 3, 5), 28);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  return {
-    iso: `${year}-${month}-${String(target).padStart(2, "0")}`,
-    day: target,
-  };
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 test.describe("Forecast inbox one-click Match button (#318)", () => {
@@ -104,9 +103,12 @@ test.describe("Forecast inbox one-click Match button (#318)", () => {
       timeout: 15_000,
     });
 
-    const { iso: anchorIso, day: anchorDay } = pickAnchorDay();
+    const anchorDay = PLAN_DAY;
+    const anchorIso = currentMonthDay(ROW_DAY);
     const suffix = Math.random().toString(36).slice(2, 8);
     const billName = `OneClickBill-${suffix}`;
+    // A separate tag for row descriptions: no word of the bill's name.
+    const rowTag = `r${Math.random().toString(36).slice(2, 8)}`;
 
     // Seed a single monthly recurring bill anchored to `anchorDay`. Plan
     // rows for the current month land on `anchorIso` with amount -120.00.
@@ -119,17 +121,17 @@ test.describe("Forecast inbox one-click Match button (#318)", () => {
       active: "true",
     });
 
-    // Seed a single manual bank inbox card with the exact same amount and
-    // date as the plan row. Same-day + exact amount = high-confidence top
+    // Seed a single manual bank inbox card with the exact same amount, 4 days
+    // before the plan row. Exact amount within 5 days = high-confidence top
     // suggestion, and there's no other plan competing for it → the picker
-    // emits a one-click match for this txn.
+    // emits a one-click match for this txn (and the server cannot pair it).
     const txn = await apiCall<{ id: string }>(
       page,
       "POST",
       "/api/transactions",
       {
         occurredOn: anchorIso,
-        description: `INBOX-${suffix} OBVIOUS`,
+        description: `INBOX-${rowTag} OBVIOUS`,
         amount: "-120.00",
         forecastFlag: true,
       },
@@ -140,26 +142,18 @@ test.describe("Forecast inbox one-click Match button (#318)", () => {
       timeout: 15_000,
     });
 
-    // (PR5b) The row is dated `anchorIso`. Dated after today, only the client
-    // suggests the bill: the one-click Match button. Dated today or earlier
-    // (the last days of a month, where `pickAnchorDay` clamps to the 28th),
-    // the server's "probably paid" matcher pairs it and the card carries the
-    // server's Confirm instead — the same `matched` write, the same toast.
-    const now = new Date();
-    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const serverPairs = anchorIso <= todayIso;
-    const matchTestId = serverPairs
-      ? `probably-paid-confirm-${txn.id}`
-      : `one-click-match-${txn.id}`;
+    const matchTestId = `one-click-match-${txn.id}`;
     const matchBtn = page.getByTestId(matchTestId);
     await expect(matchBtn).toBeVisible({ timeout: 15_000 });
-    await expect(matchBtn).toHaveText(serverPairs ? /Confirm/ : /Match/);
+    await expect(matchBtn).toHaveText(/Match/);
     // Title/aria-label encode the chosen plan so a regression that picks
     // the wrong plan would surface here.
     await expect(matchBtn).toHaveAttribute(
       "aria-label",
-      new RegExp(`${serverPairs ? "Confirm" : "Match to"} ${billName}`),
+      new RegExp(`Match to ${billName}`),
     );
+    // The server never paired this row, so there is no "Suggested" strip.
+    await expect(page.getByTestId(`probably-paid-${txn.id}`)).toHaveCount(0);
 
     // Watch for the matched-resolution POST so we can confirm the click
     // hits the same endpoint and payload shape as the dropdown path.
@@ -202,7 +196,7 @@ test.describe("Forecast inbox one-click Match button (#318)", () => {
     // … and shows up under "Resolved this month" with an Undo button.
     const resolvedList = page.getByTestId("bank-resolved-list");
     await expect(resolvedList).toBeVisible();
-    await expect(resolvedList).toContainText(`INBOX-${suffix} OBVIOUS`);
+    await expect(resolvedList).toContainText(`INBOX-${rowTag} OBVIOUS`);
     await expect(resolvedList).toContainText(/matched/i);
     const undoBtn = resolvedList.getByRole("button", { name: /undo/i }).first();
     await expect(undoBtn).toBeVisible();
@@ -262,13 +256,17 @@ test.describe("Forecast inbox one-click Match button (#318)", () => {
       timeout: 15_000,
     });
 
-    const { iso: anchorIso, day: anchorDay } = pickAnchorDay();
+    const anchorDay = PLAN_DAY;
+    const anchorIso = currentMonthDay(ROW_DAY);
     const suffix = Math.random().toString(36).slice(2, 8);
     const billName = `OneClickBill-${suffix}`;
+    // A separate tag for row descriptions: no word of the bill's name.
+    const rowTag = `r${Math.random().toString(36).slice(2, 8)}`;
 
     // ONE planned bill — both bank cards below will pick it as their
-    // only high-confidence suggestion (same amount, same day → 0 delta,
-    // 0 days away).
+    // only high-confidence suggestion (same amount, 4 days either side of
+    // the plan; neither description carries the bill's name, so the server
+    // pairs neither).
     await apiCall<{ id: string }>(page, "POST", "/api/recurring-items", {
       name: billName,
       kind: "bill",
@@ -280,13 +278,13 @@ test.describe("Forecast inbox one-click Match button (#318)", () => {
 
     const a = await apiCall<{ id: string }>(page, "POST", "/api/transactions", {
       occurredOn: anchorIso,
-      description: `INBOX-${suffix} TIE A`,
+      description: `INBOX-${rowTag} TIE A`,
       amount: "-120.00",
       forecastFlag: true,
     });
     const b = await apiCall<{ id: string }>(page, "POST", "/api/transactions", {
-      occurredOn: anchorIso,
-      description: `INBOX-${suffix} TIE B`,
+      occurredOn: currentMonthDay(PLAN_DAY + 4),
+      description: `INBOX-${rowTag} TIE B`,
       amount: "-120.00",
       forecastFlag: true,
     });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -201,13 +201,14 @@ const cashSignal = (matches: unknown[]) => ({
 });
 
 let cashSignalData: unknown = cashSignal(MATCHES);
+let forecastData: unknown = FORECAST;
 const upsertMutate = vi.fn();
 
 vi.mock("@workspace/api-client-react", () => {
   const noopMutation = () => ({ mutate: () => {}, mutateAsync: async () => undefined, isPending: false });
   const empty = { data: [], isLoading: false };
   return {
-    useGetForecast: () => ({ data: FORECAST, isLoading: false }),
+    useGetForecast: () => ({ data: forecastData, isLoading: false }),
     useGetForecastCashSignal: () => ({ data: cashSignalData, isLoading: false }),
     useUpsertForecastResolution: () => ({
       mutate: (vars: unknown, opts?: { onSuccess?: (row: { id: string }) => void }) => {
@@ -266,6 +267,7 @@ const goToCard = (txnId: string) => {
 beforeEach(() => {
   cleanup();
   cashSignalData = cashSignal(MATCHES);
+  forecastData = FORECAST;
   upsertMutate.mockClear();
   toastMock.mockClear();
   sessionStorage.clear();
@@ -396,6 +398,57 @@ describe("Forecast — probably paid (PR5b)", () => {
     expect(screen.getByTestId("probably-paid-curve-t-rent").textContent).toBe("Still in forecast");
   });
 
+  it("(review H1) a pair answered 'Not this' is never a client suggestion: no one-click, no Enter, not in Match all confident", () => {
+    // t-dup (an exact $150 a day before Water) was the rejected row, and the
+    // server offers nothing for Water after the answer.
+    forecastData = {
+      ...FORECAST,
+      resolutions: [
+        {
+          id: "r-not",
+          recurringItemId: "water",
+          occurrenceDate: "2026-05-20",
+          status: "not_match",
+          matchedTxnId: "t-dup",
+        },
+      ],
+    };
+    cashSignalData = cashSignal([MATCHES[1]]);
+    renderPage();
+    // Only Netflix ← t-other is confident; Water ← t-dup was rejected.
+    expect(screen.getByTestId("bulk-match-confident").textContent).toContain("(1)");
+    goToCard("t-dup");
+    expect(screen.queryByTestId("one-click-match-t-dup")).toBeNull();
+    expect(screen.queryByTestId("inbox-card-t-dup")).toBeNull();
+    expect(screen.queryByTestId("suggest-match-t-dup-water-2026-05-20")).toBeNull();
+    fireEvent.keyDown(screen.getByTestId("inbox-card-draggable-t-dup"), { key: "Enter" });
+    expect(upsertMutate).not.toHaveBeenCalled();
+  });
+
+  it("(review LOW) 'Mark all unplanned' and the selected-rows action leave out rows the server paired", async () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId("select-bank-t-water"));
+    fireEvent.click(screen.getByTestId("bulk-mark-unplanned-selected"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(upsertMutate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("bulk-mark-unplanned"));
+    await waitFor(() => expect(upsertMutate).toHaveBeenCalledTimes(2));
+    const ids = upsertMutate.mock.calls
+      .map(([v]) => (v as { data: { matchedTxnId: string } }).data.matchedTxnId)
+      .sort();
+    expect(ids).toEqual(["t-dup", "t-other"]);
+  });
+
+  it("(review LOW) a suggestion still counted on the curve keeps Move and Mark missed; an off-curve one does not", () => {
+    renderPage();
+    expect(screen.getByTestId("plan-confirm-rent-2026-05-22")).toBeTruthy();
+    expect(screen.getByTestId("move-plan-rent-2026-05-22")).toBeTruthy();
+    expect(screen.getByTestId("mark-missed-rent-2026-05-22")).toBeTruthy();
+    expect(screen.queryByTestId("move-plan-water-2026-05-20")).toBeNull();
+    expect(screen.queryByTestId("mark-missed-water-2026-05-20")).toBeNull();
+  });
+
   it("Matched impact is the server's figure, unchanged by suggestions", () => {
     renderPage("overall");
     const withMatches = screen.getByText(/^Matched impact/).textContent;
@@ -407,5 +460,63 @@ describe("Forecast — probably paid (PR5b)", () => {
     renderPage("overall");
     expect(screen.getByText(/^Matched impact/).textContent).toBe(withMatches);
     expect(screen.queryByTestId("plan-confirm-water-2026-05-20")).toBeNull();
+  });
+});
+
+describe("Forecast — a partly-paid plan past due (PR5b review M1)", () => {
+  // $500 rent due 05-13, a $250 row on 05-12, and a partial. The curve carries
+  // the $250 remainder onto 05-15 (the Past due card and the tooltip read that
+  // event). Mark missed / Skip / Match there used to replace the partial, and
+  // Undo then left the plan with no resolution at all.
+  const RENT_PARTIAL = {
+    ...FORECAST,
+    events: [
+      { itemId: "rent2", date: "2026-05-13", label: "Rent", kind: "expense", amount: -500 },
+      { itemId: "gym", date: "2026-05-12", label: "Gym", kind: "expense", amount: -40 },
+    ],
+    transactions: [txn("t-rent2", "2026-05-12", "RENT PORTAL", "-250.00")],
+    resolutions: [
+      {
+        id: "r-partial",
+        recurringItemId: "rent2",
+        occurrenceDate: "2026-05-13",
+        status: "partial",
+        matchedTxnId: "t-rent2",
+        txnAmount: "-250.00",
+      },
+    ],
+  };
+  const DRAGGED = {
+    ...cashSignal([]),
+    events: [
+      { date: "2026-05-15", itemId: "rent2", label: "Rent", amount: "-250.00", originalDate: "2026-05-13" },
+      { date: "2026-05-15", itemId: "gym", label: "Gym", amount: "-40.00", originalDate: "2026-05-12" },
+    ],
+  };
+
+  it("stays on Review's register as Partly paid with its remainder", () => {
+    forecastData = RENT_PARTIAL;
+    cashSignalData = DRAGGED;
+    renderPage("review");
+    const row = screen.getByTestId("plan-row-rent2-2026-05-13");
+    expect(row.textContent).toContain("Partly paid");
+    expect(row.textContent).toContain("$250.00");
+    expect(screen.queryByTestId("mark-missed-rent2-2026-05-13")).toBeNull();
+  });
+
+  it("the Past due card offers no Mark missed, Skip or Match for it — so nothing can replace the partial or need an Undo", () => {
+    forecastData = RENT_PARTIAL;
+    cashSignalData = DRAGGED;
+    renderPage("overall");
+    expect(screen.getByTestId("dragging-plan-partial-rent2-2026-05-13").textContent).toBe("Partly paid");
+    expect(screen.queryByTestId("dragging-plan-mark-missed-rent2-2026-05-13")).toBeNull();
+    expect(screen.queryByTestId("dragging-plan-skip-rent2-2026-05-13")).toBeNull();
+    expect(screen.queryByTestId("dragging-plan-match-trigger-rent2-2026-05-13")).toBeNull();
+    // An ordinary past-due plan keeps its actions.
+    expect(screen.getByTestId("dragging-plan-mark-missed-gym-2026-05-12")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("dragging-plan-skip-gym-2026-05-12"));
+    expect(upsertMutate).toHaveBeenCalledWith({
+      data: { status: "skipped", recurringItemId: "gym", occurrenceDate: "2026-05-12" },
+    });
   });
 });
