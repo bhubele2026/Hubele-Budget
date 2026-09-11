@@ -66,6 +66,9 @@ vi.mock("@workspace/api-client-react", () => ({
   useListRecurringItems: () => ({ data: state.recurring }),
   useGetReportsSpendingFacts: () => ({ data: state.spendingFacts }),
   getGetReportsSpendingFactsQueryKey: () => ["/api/reports/spending-facts"],
+  // "Why this number?" (PR3b5): closed, so nothing is fetched.
+  useGetForecastBankBalanceExplain: () => ({ data: undefined }),
+  getGetForecastBankBalanceExplainQueryKey: () => ["/api/forecast/bank-balance-explain"],
 }));
 
 import CommandCenterPage from "./command-center";
@@ -514,3 +517,11 @@ function todayISOForWeek(): string {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+describe("Banking — why this number?", () => {
+  it("puts a 'Why this number?' button on the bank balance tile", () => {
+    render(<CommandCenterPage />);
+    const tile = screen.getByTestId("cc-stat-bank").parentElement as HTMLElement;
+    expect(within(tile).getByRole("button", { name: "Why this number?" })).toBeTruthy();
+  });
+});

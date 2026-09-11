@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { BankBalanceWhy } from "@/components/bank-balance-why";
 import {
   useGetSettings,
   useListTransactions,
@@ -387,13 +388,18 @@ export default function CommandCenterPage() {
         data-testid="cc-spine-stats"
         className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
       >
-        <Stat
-          index={0}
-          data-testid="cc-stat-bank"
-          label="Bank balance"
-          value={money(spine?.bank?.balance)}
-          hint={bankAsOf ? `as of ${bankAsOf}` : undefined}
-        />
+        {/* "Why this number?" sits on the tile, one tap away. Nothing is fetched
+            until it opens, and every line in it is the server's diagnostic. */}
+        <div className="relative">
+          <Stat
+            index={0}
+            data-testid="cc-stat-bank"
+            label="Bank balance"
+            value={money(spine?.bank?.balance)}
+            hint={bankAsOf ? `as of ${bankAsOf}` : undefined}
+          />
+          <BankBalanceWhy />
+        </div>
         <Stat
           index={1}
           data-testid="cc-stat-spent-month"
