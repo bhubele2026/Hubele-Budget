@@ -280,6 +280,7 @@ export * from "./spendingFactsDailyNetItem";
 export * from "./spendingFactsDayOfWeekItem";
 export * from "./spendingFactsDayOfWeekItemTopMerchantsItem";
 export * from "./spendingFactsExcluded";
+export * from "./spendingFactsHouseholdSpend";
 export * from "./spendingFactsMonthlyTrendsItem";
 export * from "./spendingFactsMonthlyTrendsItemByTopCategoryItem";
 export * from "./spendingFactsRange";

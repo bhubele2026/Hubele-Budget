@@ -147,6 +147,7 @@ async function addTxn(row: {
   isTransfer?: boolean;
   weeklyAllowance?: boolean;
   unplannedAllowance?: boolean;
+  isTransferUserOverridden?: boolean;
 }): Promise<void> {
   const [t] = await db
     .insert(transactionsTable)
@@ -164,6 +165,7 @@ async function addTxn(row: {
       isTransfer: row.isTransfer ?? false,
       weeklyAllowance: row.weeklyAllowance ?? false,
       unplannedAllowance: row.unplannedAllowance ?? false,
+      isTransferUserOverridden: row.isTransferUserOverridden ?? false,
       createdAt: createdAtStartOfHouseholdDay(row.occurredOn),
     })
     .returning({ id: transactionsTable.id });
@@ -480,6 +482,9 @@ describe("household scenario — Sun 10/4 to Sat 10/10, 2026", () => {
       accountId: ACCOUNTS.chase.accountId,
       source: "plaid:chase",
       forecastFlag: true,
+      // Filed under Misc / Buffer by hand, as the Chase page does: picking a
+      // category sets this flag. Recognition must not depend on it (PR7 H1).
+      isTransferUserOverridden: true,
     });
     await post("/forecast/resolutions", {
       recurringItemId: plan.paycheckA,
@@ -493,10 +498,6 @@ describe("household scenario — Sun 10/4 to Sat 10/10, 2026", () => {
       .where(eq(transactionsTable.plaidAccountId, ACCOUNTS.chase.accountId));
     await expectToday("S10");
   });
-
-  it.todo(
-    `S10 spent this week = $274.00 once card payments stop counting as spending (${EXPECTED.S10.notYet!.turnsOnIn}); the app reports $424.00 today`,
-  );
 
   for (const column of CONTRACT_COLUMNS) {
     const perStep = (Object.keys(EXPECTED) as StepId[])

@@ -114,8 +114,11 @@ export function ChaseInsightStrip({
   );
 
   const period = PERIOD_WORD[range.mode];
-  const curTotal = cur?.realSpend.total ?? 0;
-  const prevTotal = prev?.realSpend.total ?? 0;
+  // Household spending — the spine's figure, from the same server rule.
+  // Optional access: a payload cached from before the field existed must not
+  // take the whole page down.
+  const curTotal = cur?.householdSpend?.total ?? 0;
+  const prevTotal = prev?.householdSpend?.total ?? 0;
   const pct = prevTotal > 0 ? ((curTotal - prevTotal) / prevTotal) * 100 : null;
 
   // Top 5 real categories for the window (spending-facts already excludes the
@@ -151,9 +154,9 @@ export function ChaseInsightStrip({
           Household spending this {period}
         </h2>
         <Help>
-          Real spend only, classified by the server: transfers, debt and loan
-          payments, and uncategorized rows are excluded. Compared against the
-          equal-length window immediately before this one.
+          Every purchase on any account, categorized or not. Transfers, card
+          and loan payments, and reimbursable charges are excluded. Compared
+          against the equal-length window immediately before this one.
         </Help>
         {actions && (
           <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>
@@ -193,6 +196,18 @@ export function ChaseInsightStrip({
                   : "Loading comparison…"}
             </span>
           </div>
+          {/* (PR7) The headline is household spending, categorized or not;
+              the category mix beside it is categorized only. Say by how much
+              they differ rather than let the bars look short. */}
+          {(cur?.uncategorized?.total ?? 0) > 0 && (
+            <div
+              className="mt-1 text-micro text-neutral-500"
+              data-testid="strip-uncategorized-note"
+            >
+              Includes {formatCurrency(cur!.uncategorized.total)} not yet
+              categorized
+            </div>
+          )}
         </div>
 
         <div className="min-w-0">
@@ -220,7 +235,7 @@ export function ChaseInsightStrip({
           value={
             cur?.uncategorized ? formatCurrency(cur.uncategorized.total) : "—"
           }
-          hint="Excluded from categorized spending above; may overlap UN"
+          hint="Included in the total above, not in the category mix; may overlap UN"
         />
       </div>
       <details

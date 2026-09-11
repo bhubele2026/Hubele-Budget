@@ -2241,8 +2241,8 @@ components:
             lastFailureAt: { type: ["string", "null"], description: computeBankFreshness().lastFailureAt }
             stale: { type: boolean, description: computeBankFreshness().stale }
             staleReason: { type: ["string", "null"], enum: [refresh_failed, old, manual_old, null], description: computeBankFreshness().staleReason }
-        spentMonth: { type: number, description: buildSpendingFacts(monthStart..today).realSpend.total }
-        spentWeek: { type: number, description: buildSpendingFacts(weekStart..weekEnd).realSpend.total }
+        spentMonth: { type: number, description: buildSpendingFacts(monthStart..today).householdSpend.total }
+        spentWeek: { type: number, description: buildSpendingFacts(weekStart..weekEnd).householdSpend.total }
         nextBill:
           oneOf:
             - $ref: "#/components/schemas/SpineNextBill"
@@ -2355,6 +2355,12 @@ components:
         plaidTransactionId: { type: ["string", "null"] }
         plaidAccountId: { type: ["string", "null"] }
         debtId: { type: ["string", "null"] }
+        pfcDetailed:
+          type: ["string", "null"]
+          description: >-
+            Plaid personal_finance_category.detailed, persisted on sync (#636);
+            null for manual and imported rows. Read by the one spending rule
+            (classifyOutflow, rule 8), which the web shares.
         pending:
           type: boolean
           description: |
@@ -4269,8 +4275,10 @@ components:
       required:
         [
           range,
+          householdSpend,
           realSpend,
           realIncome,
+          unplanned,
           uncategorized,
           excluded,
           byCategory,
@@ -4291,9 +4299,21 @@ components:
             daysCovered: { type: integer }
             trackingStart: { type: string }
             floorApplied: { type: boolean }
+        householdSpend:
+          type: object
+          description: >-
+            Every purchase on any account, categorized or not — realSpend plus
+            uncategorized — through the one spending rule (spendingFilter.ts
+            classifyOutflow). Transfers, debt payments, card payments,
+            reimbursable charges, excluded categories and income are out. The
+            spine's spentWeek and spentMonth.
+          required: [total, transactionCount]
+          properties:
+            total: { type: number }
+            transactionCount: { type: integer }
         unplanned:
           type: object
-          description: Explicit UN spending excluding transfers and debt payments; includes uncategorized eligible purchases. Details are the largest 20 purchases; total covers the whole window.
+          description: Purchases explicitly marked UN, categorized or not, through the same rule as householdSpend (so never a transfer, debt payment, card payment or reimbursable charge). Details are the largest 20 purchases; total covers the whole window.
           required: [total, transactionCount, transactions]
           properties:
             total: { type: number }
@@ -4310,6 +4330,7 @@ components:
                   amount: { type: number }
         realSpend:
           type: object
+          description: The categorized part of householdSpend; the basis of byCategory, byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends.
           required: [total, transactionCount]
           properties:
             total: { type: number }
@@ -4345,12 +4366,14 @@ components:
         excluded:
           type: object
           required:
-            [transfersTotal, debtPaymentsTotal, reimbursementTotal, ignoreTotal]
+            [transfersTotal, debtPaymentsTotal, reimbursementTotal, ignoreTotal, cardPayments, reimbursable]
           properties:
             transfersTotal: { type: number }
             debtPaymentsTotal: { type: number }
             reimbursementTotal: { type: number }
             ignoreTotal: { type: number }
+            cardPayments: { type: number, description: Payments to a credit card from another account — flagged, Plaid-classified or matched by description. Recognized in totals only; no row is re-tagged. }
+            reimbursable: { type: number, description: Charges flagged reimbursable. }
         byCategory:
           type: array
           items:

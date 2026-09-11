@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from "react";
+import { formatCurrency } from "@/lib/utils";
 import { Link } from "wouter";
 import { ChevronRight } from "lucide-react";
 import {
@@ -143,6 +144,9 @@ export default function ReportsPage() {
   // filtered figures: money earned against money spent at a merchant, with
   // transfers and debt payments out of both.
   const spent = facts?.realSpend.total ?? 0;
+  // (PR7) Real spend is categorized only; say what sits outside it so the tile
+  // and the household figure on Command Center reconcile on sight.
+  const uncategorizedSpent = facts?.uncategorized?.total ?? 0;
   const income = facts?.realIncome.total ?? 0;
   const hasIncome = income > 0;
   const spendRatio = hasIncome ? spent / income : 0;
@@ -213,7 +217,11 @@ export default function ReportsPage() {
           label="Spending"
           href="/reports/spending"
           value={facts ? <MoneyText countUp amount={spent} /> : "—"}
-          sub="Last 30 days, by category"
+          sub={
+            uncategorizedSpent > 0
+              ? `Last 30 days, by category · + ${formatCurrency(uncategorizedSpent)} uncategorized`
+              : "Last 30 days, by category"
+          }
           visual={
             spendMix.length ? (
               <StackBar segments={spendMix} legendMax={3} />
