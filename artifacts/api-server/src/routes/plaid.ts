@@ -59,6 +59,7 @@ import { verifyPlaidWebhook } from "../lib/plaidWebhookVerify";
 import {
   fetchLiabilitiesForItem,
   fetchLiabilitiesForUser,
+  recordLiabilitiesRefreshThrow,
 } from "../lib/plaidLiabilities";
 import {
   listRecentSyncAttempts,
@@ -214,11 +215,19 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
   // when the user edited the suggested name before clicking "Add as
   // debts"). Falls back to the institution+mask suggestion.
   nameOverride?: string | null;
+  // (PR-E) Set by the automatic revolving-Amex sweep, which runs on every Sync
+  // with nobody clicking anything. When it finds a same-name manual debt it
+  // LINKS it and changes nothing else: the entered balance/APR/minimum and
+  // their sources stay, and the bank balance shows beside the entered one
+  // until someone chooses "Use bank balance". Explicit create/link clicks
+  // leave this unset and adopt as before.
+  keepEnteredValues?: boolean;
 }): Promise<{
   debt: typeof debtsTable.$inferSelect;
   action: "created" | "linked-existing";
 }> {
   const { userId, householdId, account, institutionName, nameOverride } = opts;
+  const keepEnteredValues = opts.keepEnteredValues === true;
   const suggested = buildSuggestedDebt(account, institutionName);
   const overridden = nameOverride?.trim();
   const finalName = overridden && overridden.length > 0 ? overridden : suggested.name;
@@ -245,34 +254,38 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
     // does carry a value gets adopted automatically. Without this, an
     // initial-empty Plaid response would freeze the row at source=manual
     // and the eventual refresh would be ignored.
-    const patch: Partial<typeof debtsTable.$inferInsert> = {
-      plaidAccountId: account.id,
-      plaidLastSyncedAt: now,
-      updatedAt: now,
-      balanceSource: "plaid",
-      aprSource: "plaid",
-      minPaymentSource: "plaid",
-    };
-    if (suggested.balance != null) {
-      patch.balance = suggested.balance;
-      patch.lastBalanceUpdate = now;
-      if (target.originalBalance == null) {
-        patch.originalBalance = suggested.balance;
+    const patch: Partial<typeof debtsTable.$inferInsert> = keepEnteredValues
+      ? { plaidAccountId: account.id, plaidLastSyncedAt: now, updatedAt: now }
+      : {
+          plaidAccountId: account.id,
+          plaidLastSyncedAt: now,
+          updatedAt: now,
+          balanceSource: "plaid",
+          aprSource: "plaid",
+          minPaymentSource: "plaid",
+        };
+    if (!keepEnteredValues) {
+      if (suggested.balance != null) {
+        patch.balance = suggested.balance;
+        patch.lastBalanceUpdate = now;
+        if (target.originalBalance == null) {
+          patch.originalBalance = suggested.balance;
+        }
       }
-    }
-    if (suggested.apr != null) {
-      patch.apr = suggested.apr;
-    }
-    if (suggested.minPayment != null) {
-      patch.minPayment = suggested.minPayment;
-    }
-    // (#44) Only fill due/statement day when the existing debt row didn't
-    // already have a value — typed-over fields win over the Plaid hint.
-    if (suggested.dueDay != null && target.dueDay == null) {
-      patch.dueDay = suggested.dueDay;
-    }
-    if (suggested.statementDay != null && target.statementDay == null) {
-      patch.statementDay = suggested.statementDay;
+      if (suggested.apr != null) {
+        patch.apr = suggested.apr;
+      }
+      if (suggested.minPayment != null) {
+        patch.minPayment = suggested.minPayment;
+      }
+      // (#44) Only fill due/statement day when the existing debt row didn't
+      // already have a value — typed-over fields win over the Plaid hint.
+      if (suggested.dueDay != null && target.dueDay == null) {
+        patch.dueDay = suggested.dueDay;
+      }
+      if (suggested.statementDay != null && target.statementDay == null) {
+        patch.statementDay = suggested.statementDay;
+      }
     }
     try {
       const [updated] = await db
@@ -2461,6 +2474,7 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
             { err: liabErr, plaidItemRowId: r.plaidItemRowId },
             "fetchLiabilitiesForItem after /plaid/sync failed — Ending Balance tile may stay stale until next refresh",
           );
+          await recordLiabilitiesRefreshThrow(req.userId!, r.plaidItemRowId, liabErr);
         }
       }),
     );

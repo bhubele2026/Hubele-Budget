@@ -64,6 +64,7 @@ function kindLabel(k: string): string {
   if (k === "balance") return "Balance";
   if (k === "liabilities") return "Liabilities";
   if (k === "pending_cleanup") return "Pending cleanup";
+  if (k === "amex_anchor") return "Amex estimate";
   return k;
 }
 

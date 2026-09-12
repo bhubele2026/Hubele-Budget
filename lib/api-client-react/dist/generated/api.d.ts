@@ -625,6 +625,36 @@ export declare const useRefreshDebtFromPlaid: <TError = ErrorType<unknown>, TCon
 }) => UseMutationResult<Awaited<ReturnType<typeof refreshDebtFromPlaid>>, TError, {
     id: string;
 }, TContext>;
+/**
+ * (PR-E) The only call that swaps a kept balance for the bank's: sets
+balance to `bankBalance`, balanceSource to plaid, and records a
+balance-history row. Fetches nothing from Plaid.
+
+ * @summary Replace an entered balance with the linked bank balance
+ */
+export declare const getAdoptDebtBankBalanceUrl: (id: string) => string;
+export declare const adoptDebtBankBalance: (id: string, options?: RequestInit) => Promise<Debt>;
+export declare const getAdoptDebtBankBalanceMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof adoptDebtBankBalance>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof adoptDebtBankBalance>>, TError, {
+    id: string;
+}, TContext>;
+export type AdoptDebtBankBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof adoptDebtBankBalance>>>;
+export type AdoptDebtBankBalanceMutationError = ErrorType<void>;
+/**
+ * @summary Replace an entered balance with the linked bank balance
+ */
+export declare const useAdoptDebtBankBalance: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof adoptDebtBankBalance>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof adoptDebtBankBalance>>, TError, {
+    id: string;
+}, TContext>;
 export declare const getListPlaidLiabilityAccountsUrl: (params?: ListPlaidLiabilityAccountsParams) => string;
 export declare const listPlaidLiabilityAccounts: (params?: ListPlaidLiabilityAccountsParams, options?: RequestInit) => Promise<PlaidLiabilityAccount[]>;
 export declare const getListPlaidLiabilityAccountsQueryKey: (params?: ListPlaidLiabilityAccountsParams) => readonly ["/api/plaid/liability-accounts", ...ListPlaidLiabilityAccountsParams[]];

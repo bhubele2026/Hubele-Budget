@@ -2015,6 +2015,94 @@ export const useRefreshDebtFromPlaid = <
   return useMutation(getRefreshDebtFromPlaidMutationOptions(options));
 };
 
+/**
+ * (PR-E) The only call that swaps a kept balance for the bank's: sets
+balance to `bankBalance`, balanceSource to plaid, and records a
+balance-history row. Fetches nothing from Plaid.
+
+ * @summary Replace an entered balance with the linked bank balance
+ */
+export const getAdoptDebtBankBalanceUrl = (id: string) => {
+  return `/api/debts/${id}/use-bank-balance`;
+};
+
+export const adoptDebtBankBalance = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Debt> => {
+  return customFetch<Debt>(getAdoptDebtBankBalanceUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAdoptDebtBankBalanceMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adoptDebtBankBalance>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adoptDebtBankBalance>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["adoptDebtBankBalance"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adoptDebtBankBalance>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return adoptDebtBankBalance(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdoptDebtBankBalanceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adoptDebtBankBalance>>
+>;
+
+export type AdoptDebtBankBalanceMutationError = ErrorType<void>;
+
+/**
+ * @summary Replace an entered balance with the linked bank balance
+ */
+export const useAdoptDebtBankBalance = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adoptDebtBankBalance>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adoptDebtBankBalance>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAdoptDebtBankBalanceMutationOptions(options));
+};
+
 export const getListPlaidLiabilityAccountsUrl = (
   params?: ListPlaidLiabilityAccountsParams,
 ) => {

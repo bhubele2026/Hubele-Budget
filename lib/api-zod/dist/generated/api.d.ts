@@ -2040,6 +2040,11 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
+    bankBalance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceStale: zod.ZodOptional<zod.ZodBoolean>;
+    bankRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankRefreshFailedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
@@ -2097,6 +2102,11 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -2134,6 +2144,11 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -2172,6 +2187,11 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
+    bankBalance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceStale: zod.ZodOptional<zod.ZodBoolean>;
+    bankRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankRefreshFailedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
@@ -2229,6 +2249,11 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -2266,6 +2291,11 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -2358,6 +2388,11 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
+    bankBalance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceStale: zod.ZodOptional<zod.ZodBoolean>;
+    bankRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankRefreshFailedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
@@ -2415,6 +2450,11 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -2452,6 +2492,11 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -2497,6 +2542,11 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
+    bankBalance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceStale: zod.ZodOptional<zod.ZodBoolean>;
+    bankRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankRefreshFailedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
@@ -2554,6 +2604,11 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -2591,6 +2646,11 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -2636,6 +2696,11 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
+    bankBalance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceStale: zod.ZodOptional<zod.ZodBoolean>;
+    bankRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankRefreshFailedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
@@ -2693,6 +2758,11 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -2730,6 +2800,172 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
+    pendingPaymentTotal?: string | null | undefined;
+    pendingPaymentCount?: number | null | undefined;
+    plaidAccount?: {
+        id: string;
+        type?: string | null | undefined;
+        name?: string | null | undefined;
+        itemId?: string | null | undefined;
+        mask?: string | null | undefined;
+        subtype?: string | null | undefined;
+        liabilityKind?: string | null | undefined;
+        institutionName?: string | null | undefined;
+        institutionSlug?: string | null | undefined;
+    } | null | undefined;
+}>;
+/**
+ * (PR-E) The only call that swaps a kept balance for the bank's: sets
+balance to `bankBalance`, balanceSource to plaid, and records a
+balance-history row. Fetches nothing from Plaid.
+
+ * @summary Replace an entered balance with the linked bank balance
+ */
+export declare const AdoptDebtBankBalanceParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const AdoptDebtBankBalanceResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    name: zod.ZodString;
+    balance: zod.ZodString;
+    originalBalance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    apr: zod.ZodString;
+    minPayment: zod.ZodString;
+    payment: zod.ZodString;
+    type: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodString;
+    sortOrder: zod.ZodNumber;
+    dueDay: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    statementDay: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lastBalanceUpdate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidLastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidLastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidLastSyncErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidConsentExpirationAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidConsentExpirationLastRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    balanceSource: zod.ZodEnum<["plaid", "manual"]>;
+    aprSource: zod.ZodEnum<["plaid", "manual"]>;
+    minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
+    bankBalance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceStale: zod.ZodOptional<zod.ZodBoolean>;
+    bankRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankRefreshFailedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        id: zod.ZodString;
+        itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        mask: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        type: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        subtype: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        liabilityKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        institutionName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        institutionSlug: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        type?: string | null | undefined;
+        name?: string | null | undefined;
+        itemId?: string | null | undefined;
+        mask?: string | null | undefined;
+        subtype?: string | null | undefined;
+        liabilityKind?: string | null | undefined;
+        institutionName?: string | null | undefined;
+        institutionSlug?: string | null | undefined;
+    }, {
+        id: string;
+        type?: string | null | undefined;
+        name?: string | null | undefined;
+        itemId?: string | null | undefined;
+        mask?: string | null | undefined;
+        subtype?: string | null | undefined;
+        liabilityKind?: string | null | undefined;
+        institutionName?: string | null | undefined;
+        institutionSlug?: string | null | undefined;
+    }>, zod.ZodNull]>>;
+}, "strip", zod.ZodTypeAny, {
+    status: string;
+    id: string;
+    name: string;
+    balance: string;
+    apr: string;
+    minPayment: string;
+    payment: string;
+    sortOrder: number;
+    balanceSource: "plaid" | "manual";
+    aprSource: "plaid" | "manual";
+    minPaymentSource: "plaid" | "manual";
+    type?: string | null | undefined;
+    notes?: string | null | undefined;
+    plaidAccountId?: string | null | undefined;
+    originalBalance?: string | null | undefined;
+    dueDay?: number | null | undefined;
+    statementDay?: number | null | undefined;
+    lastBalanceUpdate?: string | null | undefined;
+    plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
+    plaidLastSyncErrorCode?: string | null | undefined;
+    plaidConsentExpirationAt?: string | null | undefined;
+    plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
+    pendingPaymentTotal?: string | null | undefined;
+    pendingPaymentCount?: number | null | undefined;
+    plaidAccount?: {
+        id: string;
+        type?: string | null | undefined;
+        name?: string | null | undefined;
+        itemId?: string | null | undefined;
+        mask?: string | null | undefined;
+        subtype?: string | null | undefined;
+        liabilityKind?: string | null | undefined;
+        institutionName?: string | null | undefined;
+        institutionSlug?: string | null | undefined;
+    } | null | undefined;
+}, {
+    status: string;
+    id: string;
+    name: string;
+    balance: string;
+    apr: string;
+    minPayment: string;
+    payment: string;
+    sortOrder: number;
+    balanceSource: "plaid" | "manual";
+    aprSource: "plaid" | "manual";
+    minPaymentSource: "plaid" | "manual";
+    type?: string | null | undefined;
+    notes?: string | null | undefined;
+    plaidAccountId?: string | null | undefined;
+    originalBalance?: string | null | undefined;
+    dueDay?: number | null | undefined;
+    statementDay?: number | null | undefined;
+    lastBalanceUpdate?: string | null | undefined;
+    plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
+    plaidLastSyncErrorCode?: string | null | undefined;
+    plaidConsentExpirationAt?: string | null | undefined;
+    plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -3297,6 +3533,11 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
+    bankBalance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankBalanceStale: zod.ZodOptional<zod.ZodBoolean>;
+    bankRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankRefreshFailedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
@@ -3354,6 +3595,11 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -3391,6 +3637,11 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
     plaidLastSyncErrorCode?: string | null | undefined;
     plaidConsentExpirationAt?: string | null | undefined;
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
+    bankBalance?: string | null | undefined;
+    bankBalanceAt?: string | null | undefined;
+    bankBalanceStale?: boolean | undefined;
+    bankRefreshError?: string | null | undefined;
+    bankRefreshFailedAt?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
     plaidAccount?: {
@@ -7361,6 +7612,7 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
     bankBalance: zod.ZodNumber;
     scheduleThroughDate: zod.ZodNullable<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
+    bankBalance: number;
     cashBuffer: number;
     proposedPayments: {
         date: string;
@@ -7379,9 +7631,9 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
         apr: number;
         debtName: string;
     } | null;
-    bankBalance: number;
     scheduleThroughDate: string | null;
 }, {
+    bankBalance: number;
     cashBuffer: number;
     proposedPayments: {
         date: string;
@@ -7400,7 +7652,6 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
         apr: number;
         debtName: string;
     } | null;
-    bankBalance: number;
     scheduleThroughDate: string | null;
 }>;
 /**
@@ -10157,7 +10408,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
     attempts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         attemptedAt: zod.ZodString;
-        kind: zod.ZodEnum<["transactions", "balance", "liabilities", "pending_cleanup"]>;
+        kind: zod.ZodEnum<["transactions", "balance", "liabilities", "pending_cleanup", "amex_anchor"]>;
         success: zod.ZodBoolean;
         errorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         errorMessage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -10217,7 +10468,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         }>, zod.ZodNull]>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
-        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup" | "amex_anchor";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -10242,7 +10493,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         } | null | undefined;
     }, {
         id: string;
-        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup" | "amex_anchor";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -10269,7 +10520,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     attempts: {
         id: string;
-        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup" | "amex_anchor";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -10296,7 +10547,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
 }, {
     attempts: {
         id: string;
-        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup" | "amex_anchor";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;

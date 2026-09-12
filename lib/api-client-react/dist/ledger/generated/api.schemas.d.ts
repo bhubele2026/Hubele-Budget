@@ -1206,6 +1206,36 @@ export interface Debt {
     aprSource: DebtAprSource;
     minPaymentSource: DebtMinPaymentSource;
     /**
+     * (PR-E) The linked bank account's own balance (the cached Plaid
+  liability balance), fetched on every refresh even while `balance`
+  is kept as entered. Null when the debt isn't linked or the bank has
+  not reported one. Compare with `balance` + `balanceSource`.
+  
+     * @nullable
+     */
+    bankBalance?: string | null;
+    /**
+     * (PR-E) ISO instant the bank balance was fetched.
+     * @nullable
+     */
+    bankBalanceAt?: string | null;
+    /** (PR-E) The bank balance is not current: its last refresh failed, or
+  it is older than 48 hours. False when there is no bank balance.
+   */
+    bankBalanceStale?: boolean;
+    /**
+     * (PR-E) Why the newest refresh of the linked account's bank balance
+  failed. Null when it succeeded, or none is recorded.
+  
+     * @nullable
+     */
+    bankRefreshError?: string | null;
+    /**
+     * (PR-E) ISO instant of that failed refresh.
+     * @nullable
+     */
+    bankRefreshFailedAt?: string | null;
+    /**
      * (#421) Sum (as a money string, e.g. "200.00") of payment-direction
   transactions tagged to this debt that the creditor has not yet
   reflected in the reported `balance`. A transaction counts as
@@ -3230,6 +3260,7 @@ export declare const PlaidSyncAttemptKind: {
     readonly balance: "balance";
     readonly liabilities: "liabilities";
     readonly pending_cleanup: "pending_cleanup";
+    readonly amex_anchor: "amex_anchor";
 };
 /**
  * @nullable

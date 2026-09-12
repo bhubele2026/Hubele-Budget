@@ -12,7 +12,7 @@ import {
   monthlySnapshotsTable,
 } from "@workspace/db";
 import { categorize, type RuleRow } from "./autoCategorize";
-import { refreshAmexAnchor } from "./amexAnchor";
+import { refreshAmexAnchorRecorded } from "./amexAnchorRefresh";
 import { captureImportSnapshot } from "./importSnapshot";
 
 type Row = (string | number | Date | null)[];
@@ -593,12 +593,16 @@ export async function importWorkbook(
     // Suppress unused-warning for debt mapping (used implicitly by future features)
     void debtByName;
 
-    // Auto-update the Amex anchor (debt.balance + settings.preferences.amexAnchor)
-    // to match the workbook we just imported. `adopt: true` because the
-    // debts table was wiped above, so any prior auto-vs-manual distinction
-    // no longer applies.
-    const anchor = await refreshAmexAnchor(userId, tx, { adopt: true });
-    counts.amex_anchor_updated = anchor.changed ? 1 : 0;
+    // Refresh the Amex estimate (settings.preferences.amexAnchor) from the rows
+    // just imported. (PR-E) It never writes a debt balance: the debts above hold
+    // exactly what the workbook says. A failure is recorded on the pref and
+    // logged, in its own savepoint, so it can never abort the import.
+    const anchor = await refreshAmexAnchorRecorded({
+      ownerUserId: userId,
+      exec: tx,
+      context: "workbook-import",
+    });
+    counts.amex_anchor_updated = anchor.ok && anchor.result.changed ? 1 : 0;
 
     // Sort attributions by count desc; insertion order (rule-first-hit
     // order) is the natural tiebreaker because Map preserves it.

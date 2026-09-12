@@ -1437,6 +1437,32 @@ export const ListDebtsResponseItem = zod.object({
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
+  bankBalance: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) The linked bank account's own balance (the cached Plaid\nliability balance), fetched on every refresh even while `balance`\nis kept as entered. Null when the debt isn't linked or the bank has\nnot reported one. Compare with `balance` + `balanceSource`.\n",
+    ),
+  bankBalanceAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant the bank balance was fetched."),
+  bankBalanceStale: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-E) The bank balance is not current: its last refresh failed, or\nit is older than 48 hours. False when there is no bank balance.\n",
+    ),
+  bankRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) Why the newest refresh of the linked account's bank balance\nfailed. Null when it succeeded, or none is recorded.\n",
+    ),
+  bankRefreshFailedAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant of that failed refresh."),
   pendingPaymentTotal: zod
     .string()
     .nullish()
@@ -1540,6 +1566,32 @@ export const LinkDebtToPlaidResponse = zod.object({
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
+  bankBalance: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) The linked bank account's own balance (the cached Plaid\nliability balance), fetched on every refresh even while `balance`\nis kept as entered. Null when the debt isn't linked or the bank has\nnot reported one. Compare with `balance` + `balanceSource`.\n",
+    ),
+  bankBalanceAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant the bank balance was fetched."),
+  bankBalanceStale: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-E) The bank balance is not current: its last refresh failed, or\nit is older than 48 hours. False when there is no bank balance.\n",
+    ),
+  bankRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) Why the newest refresh of the linked account's bank balance\nfailed. Null when it succeeded, or none is recorded.\n",
+    ),
+  bankRefreshFailedAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant of that failed refresh."),
   pendingPaymentTotal: zod
     .string()
     .nullish()
@@ -1623,6 +1675,32 @@ export const UnlinkDebtFromPlaidResponse = zod.object({
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
+  bankBalance: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) The linked bank account's own balance (the cached Plaid\nliability balance), fetched on every refresh even while `balance`\nis kept as entered. Null when the debt isn't linked or the bank has\nnot reported one. Compare with `balance` + `balanceSource`.\n",
+    ),
+  bankBalanceAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant the bank balance was fetched."),
+  bankBalanceStale: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-E) The bank balance is not current: its last refresh failed, or\nit is older than 48 hours. False when there is no bank balance.\n",
+    ),
+  bankRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) Why the newest refresh of the linked account's bank balance\nfailed. Null when it succeeded, or none is recorded.\n",
+    ),
+  bankRefreshFailedAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant of that failed refresh."),
   pendingPaymentTotal: zod
     .string()
     .nullish()
@@ -1706,6 +1784,148 @@ export const RefreshDebtFromPlaidResponse = zod.object({
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
+  bankBalance: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) The linked bank account's own balance (the cached Plaid\nliability balance), fetched on every refresh even while `balance`\nis kept as entered. Null when the debt isn't linked or the bank has\nnot reported one. Compare with `balance` + `balanceSource`.\n",
+    ),
+  bankBalanceAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant the bank balance was fetched."),
+  bankBalanceStale: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-E) The bank balance is not current: its last refresh failed, or\nit is older than 48 hours. False when there is no bank balance.\n",
+    ),
+  bankRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) Why the newest refresh of the linked account's bank balance\nfailed. Null when it succeeded, or none is recorded.\n",
+    ),
+  bankRefreshFailedAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant of that failed refresh."),
+  pendingPaymentTotal: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+    ),
+  pendingPaymentCount: zod
+    .number()
+    .nullish()
+    .describe(
+      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
+
+/**
+ * (PR-E) The only call that swaps a kept balance for the bank's: sets
+balance to `bankBalance`, balanceSource to plaid, and records a
+balance-history row. Fetches nothing from Plaid.
+
+ * @summary Replace an entered balance with the linked bank balance
+ */
+export const AdoptDebtBankBalanceParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AdoptDebtBankBalanceResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  balance: zod.string(),
+  originalBalance: zod.string().nullish(),
+  apr: zod.string(),
+  minPayment: zod.string(),
+  payment: zod.string(),
+  type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
+  plaidConsentExpirationLastRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#320) Mirrors the parent Plaid item\'s\n`consentExpirationLastRefreshError` — the latest \/item\/get\nfailure captured during the consent-refresh path (manual\n\"Refresh disconnect dates\" button, on-sync PENDING_EXPIRATION\nrefresh, or daily cron). Surfaced on debts so the inline\nDebtReauthBanner can warn users when the disconnect-date\ncheck itself has been failing (\"Couldn\'t verify disconnect\ndate: …\"), not just when a sync failed. Null when the\nconsent-refresh path is healthy or the debt isn\'t\nPlaid-linked.\n',
+    ),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  bankBalance: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) The linked bank account's own balance (the cached Plaid\nliability balance), fetched on every refresh even while `balance`\nis kept as entered. Null when the debt isn't linked or the bank has\nnot reported one. Compare with `balance` + `balanceSource`.\n",
+    ),
+  bankBalanceAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant the bank balance was fetched."),
+  bankBalanceStale: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-E) The bank balance is not current: its last refresh failed, or\nit is older than 48 hours. False when there is no bank balance.\n",
+    ),
+  bankRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) Why the newest refresh of the linked account's bank balance\nfailed. Null when it succeeded, or none is recorded.\n",
+    ),
+  bankRefreshFailedAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant of that failed refresh."),
   pendingPaymentTotal: zod
     .string()
     .nullish()
@@ -1955,6 +2175,32 @@ export const UpdateDebtResponse = zod.object({
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
+  bankBalance: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) The linked bank account's own balance (the cached Plaid\nliability balance), fetched on every refresh even while `balance`\nis kept as entered. Null when the debt isn't linked or the bank has\nnot reported one. Compare with `balance` + `balanceSource`.\n",
+    ),
+  bankBalanceAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant the bank balance was fetched."),
+  bankBalanceStale: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-E) The bank balance is not current: its last refresh failed, or\nit is older than 48 hours. False when there is no bank balance.\n",
+    ),
+  bankRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      "(PR-E) Why the newest refresh of the linked account's bank balance\nfailed. Null when it succeeded, or none is recorded.\n",
+    ),
+  bankRefreshFailedAt: zod
+    .string()
+    .nullish()
+    .describe("(PR-E) ISO instant of that failed refresh."),
   pendingPaymentTotal: zod
     .string()
     .nullish()
@@ -4551,6 +4797,7 @@ export const ListPlaidSyncAttemptsResponse = zod.object({
         "balance",
         "liabilities",
         "pending_cleanup",
+        "amex_anchor",
       ]),
       success: zod.boolean(),
       errorCode: zod.string().nullish(),

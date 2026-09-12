@@ -69,6 +69,29 @@ export class PlaidLiabilitiesError extends Error {
   }
 }
 
+/**
+ * (PR-E) Record a liabilities refresh that threw without recording itself, so
+ * the debt's `bankRefreshError` shows it. A `PlaidLiabilitiesError` is thrown
+ * only after `fetchLiabilitiesForItem` wrote its own failure row (with Plaid's
+ * code), so it is not written twice. Anything else — a database error, a bug —
+ * used to vanish into the caller's catch. Never throws.
+ */
+export async function recordLiabilitiesRefreshThrow(
+  userId: string,
+  itemRowId: string,
+  err: unknown,
+): Promise<void> {
+  if (err instanceof PlaidLiabilitiesError) return;
+  const message = err instanceof Error && err.message ? err.message : String(err);
+  await recordPlaidSyncAttempt({
+    userId,
+    plaidItemId: itemRowId,
+    kind: "liabilities",
+    success: false,
+    errorMessage: message.slice(0, 500),
+  });
+}
+
 // Plaid rejects /liabilities/get when the calling client isn't approved for
 // the liabilities product. That is an expected, recoverable state for this
 // app (we run with optional_products disabled by default), so callers should

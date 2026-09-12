@@ -7,8 +7,10 @@ import {
   transactionsTable,
   plaidAccountsTable,
   plaidItemsTable,
+  plaidSyncAttemptsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
+import { PLAID_FEED_QUIET_MS } from "../lib/bankFreshness";
 import {
   CreateDebtBody,
   UpdateDebtBody,
@@ -17,7 +19,10 @@ import {
   CreateDebtPaymentBody,
   CreateDebtPaymentParams,
 } from "@workspace/api-zod";
-import { fetchLiabilitiesForItem } from "../lib/plaidLiabilities";
+import {
+  fetchLiabilitiesForItem,
+  recordLiabilitiesRefreshThrow,
+} from "../lib/plaidLiabilities";
 import { householdTodayISO } from "../lib/householdClock";
 import {
   loadPendingPayments,
@@ -105,13 +110,25 @@ function normalize<T extends Record<string, unknown>>(input: T): Record<string, 
 type DebtRow = typeof debtsTable.$inferSelect;
 type AccountRow = typeof plaidAccountsTable.$inferSelect;
 type ItemRow = typeof plaidItemsTable.$inferSelect;
+type LiabAttempt = {
+  plaidItemId: string;
+  success: boolean;
+  errorCode: string | null;
+  errorMessage: string | null;
+  attemptedAt: Date;
+};
+type AccountContext = {
+  accountById: Map<string, AccountRow>;
+  itemById: Map<string, ItemRow>;
+  liabAttemptByItem: Map<string, LiabAttempt>;
+};
 
 async function loadAccountContext(
   householdId: string,
   accountIds: string[],
-): Promise<{ accountById: Map<string, AccountRow>; itemById: Map<string, ItemRow> }> {
+): Promise<AccountContext> {
   if (accountIds.length === 0) {
-    return { accountById: new Map(), itemById: new Map() };
+    return { accountById: new Map(), itemById: new Map(), liabAttemptByItem: new Map() };
   }
   const accounts = await db
     .select()
@@ -135,9 +152,34 @@ async function loadAccountContext(
             ),
           )
       : [];
+  // (PR-E) The newest liabilities refresh per item: a failure there is why a
+  // debt's bank balance may be stale.
+  const attempts =
+    itemIds.length > 0
+      ? await db
+          .selectDistinctOn([plaidSyncAttemptsTable.plaidItemId], {
+            plaidItemId: plaidSyncAttemptsTable.plaidItemId,
+            success: plaidSyncAttemptsTable.success,
+            errorCode: plaidSyncAttemptsTable.errorCode,
+            errorMessage: plaidSyncAttemptsTable.errorMessage,
+            attemptedAt: plaidSyncAttemptsTable.attemptedAt,
+          })
+          .from(plaidSyncAttemptsTable)
+          .where(
+            and(
+              inArray(plaidSyncAttemptsTable.plaidItemId, itemIds),
+              eq(plaidSyncAttemptsTable.kind, "liabilities"),
+            ),
+          )
+          .orderBy(
+            plaidSyncAttemptsTable.plaidItemId,
+            desc(plaidSyncAttemptsTable.attemptedAt),
+          )
+      : [];
   return {
     accountById: new Map(accounts.map((a) => [a.id, a])),
     itemById: new Map(items.map((i) => [i.id, i])),
+    liabAttemptByItem: new Map(attempts.map((a) => [a.plaidItemId, a])),
   };
 }
 
@@ -151,14 +193,34 @@ function shapeDebt(
   accountById: Map<string, AccountRow>,
   itemById: Map<string, ItemRow>,
   pendingByDebt: Map<string, PendingEntry> = new Map(),
+  liabAttemptByItem: Map<string, LiabAttempt> = new Map(),
 ) {
   const acct = d.plaidAccountId ? accountById.get(d.plaidAccountId) : null;
   const item = acct ? itemById.get(acct.itemId) : null;
   const pending = pendingByDebt.get(d.id) ?? null;
+  // (PR-E) Balance provenance. `balance` is the active figure; `balanceSource`
+  // says whose it is (anything but 'plaid' is kept as entered). The bank's own
+  // figure is the linked account's cached liability balance, fetched on every
+  // refresh whether or not the debt uses it.
+  const bankBalance = acct?.liabilityBalance ?? null;
+  const bankBalanceAt = acct?.liabilityLastFetchedAt ?? null;
+  const attempt = acct ? liabAttemptByItem.get(acct.itemId) : undefined;
+  const bankRefreshFailed = !!attempt && !attempt.success;
   return {
     ...d,
     pendingPaymentTotal: pending && pending.total > 0 ? pending.total.toFixed(2) : null,
     pendingPaymentCount: pending && pending.count > 0 ? pending.count : null,
+    bankBalance,
+    bankBalanceAt: bankBalanceAt ? bankBalanceAt.toISOString() : null,
+    bankBalanceStale:
+      bankBalance != null &&
+      (bankRefreshFailed ||
+        !bankBalanceAt ||
+        Date.now() - bankBalanceAt.getTime() > PLAID_FEED_QUIET_MS),
+    bankRefreshError: bankRefreshFailed
+      ? (attempt!.errorMessage ?? attempt!.errorCode ?? "Refresh failed")
+      : null,
+    bankRefreshFailedAt: bankRefreshFailed ? attempt!.attemptedAt.toISOString() : null,
     lastBalanceUpdate: d.lastBalanceUpdate
       ? d.lastBalanceUpdate.toISOString()
       : null,
@@ -315,6 +377,7 @@ async function refreshLinkedDebt(
   } catch (e) {
     fetchOk = false;
     error = e;
+    await recordLiabilitiesRefreshThrow(userId, acct.itemId, e);
   }
   // Only stamp plaidLastSyncedAt when the Plaid fetch actually succeeded —
   // otherwise the UI should keep showing the previous sync time and the
@@ -378,8 +441,10 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
       try {
         await fetchLiabilitiesForItem(userId, itemId);
         itemFetchOk.set(itemId, true);
-      } catch {
+      } catch (err) {
         itemFetchOk.set(itemId, false);
+        // (PR-E) Recorded so the debt shows `bankRefreshError`; balances untouched.
+        await recordLiabilitiesRefreshThrow(userId, itemId, err);
       }
     }
     const itemByAccount = new Map(accts.map((a) => [a.id, a.itemId]));
@@ -450,10 +515,10 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
   const accountIds = rows
     .map((r) => r.plaidAccountId)
     .filter((v): v is string => !!v);
-  const { accountById, itemById } = await loadAccountContext(householdId, accountIds);
+  const { accountById, itemById, liabAttemptByItem } = await loadAccountContext(householdId, accountIds);
   const pendingByDebt = await loadPendingPayments(householdId, rows);
   res.json(
-    rows.map((r) => shapeDebt(r, accountById, itemById, pendingByDebt)),
+    rows.map((r) => shapeDebt(r, accountById, itemById, pendingByDebt, liabAttemptByItem)),
   );
 });
 
@@ -635,9 +700,9 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     await recordBalanceSnapshot(req.userId!, req.householdId!, row.id, row.balance);
   }
   const accountIds = row.plaidAccountId ? [row.plaidAccountId] : [];
-  const { accountById, itemById } = await loadAccountContext(req.householdId!, accountIds);
+  const { accountById, itemById, liabAttemptByItem } = await loadAccountContext(req.householdId!, accountIds);
   const pendingByDebt = await loadPendingPayments(req.householdId!, [row]);
-  res.json(shapeDebt(row, accountById, itemById, pendingByDebt));
+  res.json(shapeDebt(row, accountById, itemById, pendingByDebt, liabAttemptByItem));
 });
 
 router.post(
@@ -711,10 +776,11 @@ router.post(
     let fetchOk = true;
     try {
       await fetchLiabilitiesForItem(userId, acct.itemId);
-    } catch {
+    } catch (err) {
       // Keep going with whatever cached values exist, but don't claim the
       // sync timestamp is fresh.
       fetchOk = false;
+      await recordLiabilitiesRefreshThrow(userId, acct.itemId, err);
     }
     const [linked] = await db
       .update(debtsTable)
@@ -740,9 +806,9 @@ router.post(
       }
       throw e;
     }
-    const { accountById, itemById } = await loadAccountContext(householdId, [plaidAccountId]);
+    const { accountById, itemById, liabAttemptByItem } = await loadAccountContext(householdId, [plaidAccountId]);
     const pendingByDebt = await loadPendingPayments(householdId, [refreshed]);
-    res.json(shapeDebt(refreshed, accountById, itemById, pendingByDebt));
+    res.json(shapeDebt(refreshed, accountById, itemById, pendingByDebt, liabAttemptByItem));
   },
 );
 
@@ -809,11 +875,91 @@ router.post(
       });
       return;
     }
-    const { accountById, itemById } = await loadAccountContext(householdId, [
+    const { accountById, itemById, liabAttemptByItem } = await loadAccountContext(householdId, [
       result.debt.plaidAccountId!,
     ]);
     const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
-    res.json(shapeDebt(result.debt, accountById, itemById, pendingByDebt));
+    res.json(shapeDebt(result.debt, accountById, itemById, pendingByDebt, liabAttemptByItem));
+  },
+);
+
+/**
+ * ⭐ USE THE BANK BALANCE — the explicit way back to the bank's figure (PR-E).
+ *
+ * A balance someone entered is never replaced by a refresh or a sync; the bank
+ * figure keeps arriving on the linked account and shows beside it. This is the
+ * one call that swaps it in: balance = the linked account's cached liability
+ * balance, balance_source = 'plaid' (so later refreshes keep it current), and a
+ * balance-history row for today. It fetches nothing from Plaid.
+ *
+ * Mirrors `applyLiabilityToDebt`'s balance half only — APR and minimum keep
+ * their own sources — including the original-balance anchor and the archive
+ * at $0.
+ */
+router.post(
+  "/debts/:id/use-bank-balance",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const userId = req.userId!;
+    const householdId = req.householdId!;
+    const debtId = String(req.params.id);
+    const [debt] = await db
+      .select()
+      .from(debtsTable)
+      .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)));
+    if (!debt) {
+      res.status(404).json({ error: "Debt not found" });
+      return;
+    }
+    if (!debt.plaidAccountId) {
+      res.status(400).json({ error: "Debt is not linked to a bank account" });
+      return;
+    }
+    const [acct] = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(
+        and(
+          eq(plaidAccountsTable.id, debt.plaidAccountId),
+          eq(plaidAccountsTable.householdId, householdId),
+        ),
+      );
+    if (!acct || acct.liabilityBalance == null) {
+      res.status(409).json({ error: "No bank balance on file for this debt yet" });
+      return;
+    }
+    const now = new Date();
+    const patch: Partial<typeof debtsTable.$inferInsert> = {
+      balance: acct.liabilityBalance,
+      balanceSource: "plaid",
+      lastBalanceUpdate: now,
+      updatedAt: now,
+    };
+    if (debt.originalBalance == null) patch.originalBalance = acct.liabilityBalance;
+    if (debt.status === "active" && Number(acct.liabilityBalance) <= 0.005) {
+      patch.status = "archived";
+    }
+    const [updated] = await db
+      .update(debtsTable)
+      .set(patch)
+      .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Debt not found" });
+      return;
+    }
+    await recordBalanceSnapshot(userId, householdId, updated.id, updated.balance);
+    const ctx = await loadAccountContext(householdId, [acct.id]);
+    const pendingByDebt = await loadPendingPayments(householdId, [updated]);
+    res.json(
+      shapeDebt(
+        updated,
+        ctx.accountById,
+        ctx.itemById,
+        pendingByDebt,
+        ctx.liabAttemptByItem,
+      ),
+    );
   },
 );
 
@@ -891,10 +1037,10 @@ router.post(
     }
     await recordBalanceSnapshot(req.userId!, householdId, result.debt.id, result.debt.balance);
     const accountIds = result.debt.plaidAccountId ? [result.debt.plaidAccountId] : [];
-    const { accountById, itemById } = await loadAccountContext(householdId, accountIds);
+    const { accountById, itemById, liabAttemptByItem } = await loadAccountContext(householdId, accountIds);
     const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
     res.status(201).json({
-      debt: shapeDebt(result.debt, accountById, itemById, pendingByDebt),
+      debt: shapeDebt(result.debt, accountById, itemById, pendingByDebt, liabAttemptByItem),
       transaction: result.transaction,
       killed: result.killed,
     });

@@ -54,6 +54,7 @@ import {
   DebtPlaidSource,
   DebtReauthBanner,
 } from "@/components/debt-plaid-link";
+import { DebtBankBalance } from "@/components/debt-bank-balance";
 import {
   Page,
   Stat,
@@ -1325,6 +1326,7 @@ export default function AvalanchePage() {
                               payments the creditor hasn't reflected; the hint
                               shows the delta and the arithmetic. */}
                           <DebtPendingHint debt={dbt} fmt={fmtMoney} />
+                          <DebtBankBalance debt={dbt} fmt={fmtMoney} />
                         </td>
                         <td className={tdNum}>{fmtMoney(d.minPayment)}</td>
                         <td className={td}>{dueChip}</td>

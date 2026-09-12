@@ -26,7 +26,7 @@ import {
   dedupeTransactionsForAccount,
   dedupeTransactionsAcrossAccountsForUser,
 } from "./dedupeTransactions";
-import { refreshAmexAnchor } from "./amexAnchor";
+import { refreshAmexAnchorRecorded } from "./amexAnchorRefresh";
 import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "./householdClock";
@@ -2045,20 +2045,16 @@ export async function syncPlaidItem(
       );
     void firstSyncMerged;
 
-    // If this item is American Express, refresh the persisted Amex anchor so
-    // GET /amex/anchor's `asOf` timestamp advances and the linked debt's
-    // balance moves forward (unless the user has manually overridden it via
-    // the debts UI since the last auto-update).
+    // If this item is American Express, refresh the Amex estimate kept in
+    // settings.preferences.amexAnchor. (PR-E) It never moves a debt balance;
+    // a failure is recorded (attempt row + the pref) and never breaks the sync.
+    // (#623) Anchor settings live on the household owner, not the actor.
     if (slug === "amex") {
-      try {
-        // (#623) Anchor settings live on the household owner, not
-        // the actor — pass `ownerUserId` so a member-driven sync
-        // still updates the same row the owner sees on the
-        // dashboard.
-        await refreshAmexAnchor(ownerUserId, db, { adopt: false });
-      } catch {
-        // Anchor refresh is best-effort; never break the sync result.
-      }
+      await refreshAmexAnchorRecorded({
+        ownerUserId,
+        attempt: { actorUserId: userId, plaidItemId: itemRowId },
+        context: "plaid-sync",
+      });
     }
 
     // Auto-refresh bank snapshot balance if a Plaid checking account is
@@ -2416,11 +2412,11 @@ export async function syncPlaidItem(
     // would clear from transactions but leave the Amex anchor inflated
     // until the next sync.
     if (slug === "amex" && backfillRan) {
-      try {
-        await refreshAmexAnchor(ownerUserId, db, { adopt: false });
-      } catch {
-        // Best-effort; the next sync's anchor refresh will catch up.
-      }
+      await refreshAmexAnchorRecorded({
+        ownerUserId,
+        attempt: { actorUserId: userId, plaidItemId: itemRowId },
+        context: "plaid-sync-backfill",
+      });
     }
     // ⭐ BANK RECONCILIATION (2026-08-25). Does our ledger actually explain the
     // bank's balance?

@@ -77,9 +77,10 @@ router.post(
  * key, and never takes one from the request: a browser's copy can be stale (a
  * Plaid sync may have moved the anchor since the page loaded).
  *
- * - `amexAnchor`: `lib/amexAnchor.ts` refreshAmexAnchor, and POST/DELETE
- *   /amex/anchor. Its `lastAutoBalance` is how the refresh tells a hand-edited
- *   Amex debt balance from its own last write.
+ * - `amexAnchor`: `lib/amexAnchor.ts` refreshAmexAnchor (the estimate, and a
+ *   recorded refresh failure), and POST/DELETE /amex/anchor. Its
+ *   `lastAutoBalance` is how the refresh tells a balance typed in through POST
+ *   /amex/anchor (kept) from its own last write (moved). It never writes a debt.
  * - `amexCleanupDoneAt`: `routes/amex.ts`, the one-shot duplicate-account heal
  *   stamp.
  * - `budgetCategoriesV2`: `routes/budget.ts`, the one-time category

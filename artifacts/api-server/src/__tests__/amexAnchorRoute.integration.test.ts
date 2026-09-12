@@ -355,7 +355,7 @@ describe("GET /amex/anchor", () => {
       amount: "25.00",
       source: "amex",
     });
-    await refreshAmexAnchor(TEST_USER, db, { adopt: false });
+    await refreshAmexAnchor(TEST_USER, db);
 
     const res = await fetch(`${baseUrl}/amex/anchor`);
     const body = (await res.json()) as {

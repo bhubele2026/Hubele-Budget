@@ -34,38 +34,71 @@ export const AMEX_TXN_SOURCES = ["amex", "plaid:amex"] as const;
 type Exec = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type AmexAnchorRefreshResult = {
+  /** The estimate was written to `settings.preferences.amexAnchor`. */
   changed: boolean;
-  updatedDebt: boolean;
+  /** The estimate: every Amex row summed. Null when there are none. */
   balance: number | null;
   asOf: string;
   txnCount: number;
+  /** Plaid `account_id`s behind the Amex rows that resolve to a `plaid_accounts` row. */
+  accountIds: string[];
+  /** Debts linked to those accounts. Reported, never written. */
+  linkedDebtIds: string[];
+  /** The stored anchor was entered by hand, so its balance and asOf were kept. */
+  keptEnteredAnchor: boolean;
 };
 
+type StoredAnchor = Record<string, unknown> & {
+  balance?: unknown;
+  lastAutoBalance?: unknown;
+};
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
 /**
- * Recompute the Amex ending-balance anchor from the current set of
- * `source='amex'` transactions and persist it.
+ * Whether the stored anchor's `balance` is this refresh's own last write, so
+ * the refresh may move it. Only the refresh writes `lastAutoBalance`, and always
+ * equal to `balance`; POST /amex/anchor and scripts/src/restoreAmexAnchor.ts
+ * replace the whole object without it. So:
+ *   - no anchor, or no balance in it  → owned (nothing to preserve);
+ *   - `lastAutoBalance` equal to `balance` → owned (the refresh wrote it);
+ *   - anything else (typed in, or origin unknown) → NOT owned, kept as it is.
+ */
+export function anchorBalanceIsRefreshOwned(stored: unknown): boolean {
+  if (!isPlainObject(stored)) return true;
+  const a = stored as StoredAnchor;
+  if (a.balance === undefined || a.balance === null) return true;
+  if (a.lastAutoBalance === undefined || a.lastAutoBalance === null) return false;
+  const b = Number(a.balance);
+  const l = Number(a.lastAutoBalance);
+  return Number.isFinite(b) && Number.isFinite(l) && Math.abs(b - l) < 0.005;
+}
+
+/**
+ * Recompute the Amex estimate (every `source in ('amex','plaid:amex')` row
+ * summed) and keep it in `settings.preferences.amexAnchor`.
  *
- * Always writes `settings.preferences.amexAnchor` (so `GET /amex/anchor`
- * advances even if the linked debts row was manually edited).
+ * ⚠️ IT NEVER WRITES A DEBT BALANCE (PR-E, owner decision 2). It used to move a
+ * debt matched by name — the first debt called "Amex"/"American Express", with
+ * no ORDER BY — to the all-card sum. A debt's bank balance comes only from
+ * Plaid liabilities (`applyLiabilityToDebt`), and a balance someone entered
+ * changes only when they say so (PATCH, or POST /debts/:id/use-bank-balance).
  *
- * Updates the linked Amex debts row's `balance` only when:
- *   - `adopt: true` is passed (workbook re-import flow — the debts table was
- *     just wiped and rebuilt from the workbook, so we always re-anchor), OR
- *   - the debt's current balance still matches the previous auto-anchor
- *     value (i.e. the user has NOT manually changed it since our last
- *     auto-update).
+ * What it writes, under a row lock, merged into the one key:
+ *   - always `computedBalance` / `computedAsOf` / `computedTxnCount` (the
+ *     estimate), and it clears a recorded `refreshError` / `refreshFailedAt`;
+ *   - `balance` / `asOf` / `lastAutoBalance` only when the stored balance is its
+ *     own last write (`anchorBalanceIsRefreshOwned`). A balance typed in through
+ *     POST /amex/anchor is kept.
  *
- * Otherwise the debt row is left alone — manual UI edits win.
- *
- * Returns `{ changed: false, balance: null }` when there are no
- * `source='amex'` transactions yet.
+ * Returns `{ changed: false, balance: null }` when there are no Amex rows yet.
  */
 export async function refreshAmexAnchor(
   userId: string,
   exec: Exec = db,
-  opts: { adopt?: boolean } = {},
 ): Promise<AmexAnchorRefreshResult> {
-  const adopt = opts.adopt === true;
   const asOf = new Date().toISOString();
 
   const [agg] = await exec
@@ -82,112 +115,133 @@ export async function refreshAmexAnchor(
     );
   const txnCount = Number(agg?.cnt ?? 0);
   if (txnCount === 0) {
-    return { changed: false, updatedDebt: false, balance: null, asOf, txnCount: 0 };
+    return {
+      changed: false,
+      balance: null,
+      asOf,
+      txnCount: 0,
+      accountIds: [],
+      linkedDebtIds: [],
+      keptEnteredAnchor: false,
+    };
   }
   const balance = Number(agg!.net);
-  const balanceStr = balance.toFixed(2);
 
-  // Find the Amex debt — prefer one linked to a Plaid account that has
-  // produced source='amex' transactions, fall back to a name match.
-  const acctRows = await exec
-    .selectDistinct({ plaidAccountId: transactionsTable.plaidAccountId })
+  // Which accounts, and which debts, sit behind these rows. Reported only.
+  // ⚠️ `transactions.plaid_account_id` holds Plaid's text `account_id`, while
+  // `debts.plaid_account_id` is the `plaid_accounts.id` uuid, so the two only
+  // meet through `plaid_accounts.account_id`. (The old lookup compared them
+  // directly, inside `ANY(${array})`, which Postgres rejected outright.)
+  const linkRows = await exec
+    .selectDistinct({
+      accountId: plaidAccountsTable.accountId,
+      debtId: debtsTable.id,
+    })
     .from(transactionsTable)
+    .innerJoin(
+      plaidAccountsTable,
+      eq(plaidAccountsTable.accountId, transactionsTable.plaidAccountId),
+    )
+    .leftJoin(
+      debtsTable,
+      and(
+        eq(debtsTable.plaidAccountId, plaidAccountsTable.id),
+        eq(debtsTable.userId, userId),
+      ),
+    )
     .where(
       and(
         eq(transactionsTable.userId, userId),
         inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
-        sql`${transactionsTable.plaidAccountId} is not null`,
       ),
     );
-  const amexPlaidAccountIds = acctRows
-    .map((r) => r.plaidAccountId)
-    .filter((v): v is string => !!v);
+  const accountIds = [...new Set(linkRows.map((r) => r.accountId))].sort();
+  const linkedDebtIds = [
+    ...new Set(linkRows.map((r) => r.debtId).filter((v): v is string => !!v)),
+  ].sort();
 
-  let debt: { id: string; balance: string } | undefined;
-  if (amexPlaidAccountIds.length > 0) {
-    const [byAcct] = await exec
-      .select({ id: debtsTable.id, balance: debtsTable.balance })
-      .from(debtsTable)
-      .where(
-        and(
-          eq(debtsTable.userId, userId),
-          sql`${debtsTable.plaidAccountId}::text = ANY(${amexPlaidAccountIds})`,
-        ),
-      )
-      .limit(1);
-    debt = byAcct;
-  }
-  if (!debt) {
-    const [byName] = await exec
-      .select({ id: debtsTable.id, balance: debtsTable.balance })
-      .from(debtsTable)
-      .where(
-        and(
-          eq(debtsTable.userId, userId),
-          sql`${debtsTable.name} ~* '(amex|american\\s*express)'`,
-        ),
-      )
-      .limit(1);
-    debt = byName;
-  }
-
-  // Read prior anchor so we can detect manual UI overrides since the last
-  // auto-update.
-  const [s] = await exec
-    .select({ preferences: settingsTable.preferences })
-    .from(settingsTable)
-    .where(eq(settingsTable.userId, userId));
-  const prefs =
-    (s?.preferences as Record<string, unknown> | null | undefined) ?? {};
-  const priorAnchor = (prefs as {
-    amexAnchor?: { balance?: number | string; lastAutoBalance?: number | string };
-  }).amexAnchor;
-  const priorAuto =
-    priorAnchor && priorAnchor.lastAutoBalance !== undefined
-      ? Number(priorAnchor.lastAutoBalance)
-      : undefined;
-
-  let updatedDebt = false;
-  if (debt) {
-    const debtNum = Number(debt.balance);
-    const matchesAuto =
-      priorAuto === undefined || !Number.isFinite(priorAuto)
-        ? true
-        : Math.abs(debtNum - priorAuto) < 0.005;
-    const wantsUpdate = Math.abs(debtNum - balance) >= 0.005;
-    if (wantsUpdate && (adopt || matchesAuto)) {
-      await exec
-        .update(debtsTable)
-        .set({
-          balance: balanceStr,
-          lastBalanceUpdate: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(debtsTable.id, debt.id));
-      updatedDebt = true;
-    }
-  }
-
-  const nextPrefs = {
-    ...prefs,
-    amexAnchor: { balance, asOf, lastAutoBalance: balance },
+  const estimate = {
+    computedBalance: balance,
+    computedAsOf: asOf,
+    computedTxnCount: txnCount,
   };
-  if (s) {
-    await exec
-      .update(settingsTable)
-      .set({ preferences: nextPrefs, updatedAt: new Date() })
-      .where(eq(settingsTable.userId, userId));
-  } else {
-    await exec
+  let keptEnteredAnchor = false;
+  // A transaction on `db`, a savepoint inside a caller's transaction. The lock
+  // means a POST /amex/anchor or PUT /settings landing between the read and the
+  // write is read here, never written over.
+  await exec.transaction(async (t) => {
+    await t
       .insert(settingsTable)
-      .values({ userId, preferences: nextPrefs })
-      .onConflictDoUpdate({
-        target: settingsTable.userId,
-        set: { preferences: nextPrefs, updatedAt: new Date() },
-      });
-  }
+      .values({ userId, preferences: {} })
+      .onConflictDoNothing({ target: settingsTable.userId });
+    const [row] = await t
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, userId))
+      .for("update");
+    const storedPrefs: unknown = row?.preferences;
+    const stored = isPlainObject(storedPrefs) ? storedPrefs.amexAnchor : undefined;
+    let next: Record<string, unknown>;
+    if (anchorBalanceIsRefreshOwned(stored)) {
+      next = { balance, asOf, lastAutoBalance: balance, ...estimate };
+    } else {
+      keptEnteredAnchor = true;
+      const kept = { ...(stored as Record<string, unknown>) };
+      delete kept.refreshError;
+      delete kept.refreshFailedAt;
+      next = { ...kept, ...estimate };
+    }
+    await t
+      .update(settingsTable)
+      .set({
+        preferences: sql`jsonb_set(coalesce(${settingsTable.preferences}, '{}'::jsonb), '{amexAnchor}', ${JSON.stringify(next)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(settingsTable.userId, userId));
+  });
 
-  return { changed: true, updatedDebt, balance, asOf, txnCount };
+  return {
+    changed: true,
+    balance,
+    asOf,
+    txnCount,
+    accountIds,
+    linkedDebtIds,
+    keptEnteredAnchor,
+  };
+}
+
+/**
+ * Record a failed estimate refresh on `settings.preferences.amexAnchor` as
+ * `refreshError` + `refreshFailedAt`, merged into whatever the key holds, in
+ * one statement. The next successful refresh clears both. Never touches a debt.
+ */
+export async function recordAmexAnchorRefreshFailure(
+  userId: string,
+  message: string,
+  exec: Exec = db,
+): Promise<void> {
+  const failure = {
+    refreshError: message.slice(0, 500),
+    refreshFailedAt: new Date().toISOString(),
+  };
+  const payload = JSON.stringify(failure);
+  await exec
+    .insert(settingsTable)
+    .values({ userId, preferences: { amexAnchor: failure } })
+    .onConflictDoUpdate({
+      target: settingsTable.userId,
+      set: {
+        preferences: sql`jsonb_set(
+          coalesce(${settingsTable.preferences}, '{}'::jsonb),
+          '{amexAnchor}',
+          (case when jsonb_typeof(${settingsTable.preferences} -> 'amexAnchor') = 'object'
+                then ${settingsTable.preferences} -> 'amexAnchor'
+                else '{}'::jsonb end) || ${payload}::jsonb
+        )`,
+        updatedAt: new Date(),
+      },
+    });
 }
 
 // ---------------------------------------------------------------------------

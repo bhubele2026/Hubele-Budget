@@ -26,7 +26,11 @@ export type PlaidSyncAttemptKind =
   // whenever it actually deletes one or more dropped pre-auths.
   // Always written with success=true and a populated cleanupDetails
   // blob; never produced for empty sweeps.
-  | "pending_cleanup";
+  | "pending_cleanup"
+  // (PR-E) A failed Amex estimate refresh (lib/amexAnchorRefresh.ts). Only
+  // failures are written; a later success clears the estimate's error on
+  // settings.preferences.amexAnchor instead.
+  | "amex_anchor";
 
 // (#733) Shape of `cleanupDetails` rows persisted on a
 // kind="pending_cleanup" attempt. Mirrors the JSONB blob the schema

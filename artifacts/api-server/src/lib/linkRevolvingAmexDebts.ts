@@ -91,6 +91,9 @@ export async function linkRevolvingAmexDebts(opts?: {
           householdId: r.account.householdId,
           account: r.account,
           institutionName: r.institutionName,
+          // (PR-E) Nobody clicked: a same-name manual debt is linked, never
+          // overwritten. Its bank balance shows beside the entered one.
+          keepEnteredValues: true,
         });
         summary.linked += 1;
         logger.info(

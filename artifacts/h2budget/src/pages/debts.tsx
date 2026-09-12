@@ -8,6 +8,7 @@ import {
 import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
+import { DebtBankBalance } from "@/components/debt-bank-balance";
 import {
   Page,
   Stat,
@@ -329,6 +330,7 @@ export default function DebtsPage() {
                           creditor hasn't reported; disclose the delta so the
                           figure can be reconciled against a statement. */}
                       <DebtPendingHint debt={debt} fmt={formatCurrency} />
+                      <DebtBankBalance debt={debt} fmt={formatCurrency} />
                     </td>
                     <td className={tdNum}>{formatCurrency(debt.minPayment)}</td>
                     <td

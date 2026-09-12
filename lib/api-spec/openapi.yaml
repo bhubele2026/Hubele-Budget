@@ -599,6 +599,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Debt" }
+  /debts/{id}/use-bank-balance:
+    post:
+      operationId: adoptDebtBankBalance
+      tags: [debts]
+      summary: Replace an entered balance with the linked bank balance
+      description: |
+        (PR-E) The only call that swaps a kept balance for the bank's: sets
+        balance to `bankBalance`, balanceSource to plaid, and records a
+        balance-history row. Fetches nothing from Plaid.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Debt" }
+        "400":
+          description: Debt is not linked to a bank account
+        "404":
+          description: Debt not found
+        "409":
+          description: No bank balance on file yet
   /plaid/liability-accounts:
     get:
       operationId: listPlaidLiabilityAccounts
@@ -3151,6 +3177,29 @@ components:
         balanceSource: { type: string, enum: [plaid, manual] }
         aprSource: { type: string, enum: [plaid, manual] }
         minPaymentSource: { type: string, enum: [plaid, manual] }
+        bankBalance:
+          type: ["string", "null"]
+          description: |
+            (PR-E) The linked bank account's own balance (the cached Plaid
+            liability balance), fetched on every refresh even while `balance`
+            is kept as entered. Null when the debt isn't linked or the bank has
+            not reported one. Compare with `balance` + `balanceSource`.
+        bankBalanceAt:
+          type: ["string", "null"]
+          description: (PR-E) ISO instant the bank balance was fetched.
+        bankBalanceStale:
+          type: boolean
+          description: |
+            (PR-E) The bank balance is not current: its last refresh failed, or
+            it is older than 48 hours. False when there is no bank balance.
+        bankRefreshError:
+          type: ["string", "null"]
+          description: |
+            (PR-E) Why the newest refresh of the linked account's bank balance
+            failed. Null when it succeeded, or none is recorded.
+        bankRefreshFailedAt:
+          type: ["string", "null"]
+          description: (PR-E) ISO instant of that failed refresh.
         pendingPaymentTotal:
           type: ["string", "null"]
           description: |
@@ -5627,7 +5676,7 @@ components:
         #                         deleted, never on empty sweeps.
         kind:
           type: string
-          enum: [transactions, balance, liabilities, pending_cleanup]
+          enum: [transactions, balance, liabilities, pending_cleanup, amex_anchor]
         success: { type: boolean }
         # Plaid's structured `error_code` when success=false; null on
         # success or when Plaid did not return one.
