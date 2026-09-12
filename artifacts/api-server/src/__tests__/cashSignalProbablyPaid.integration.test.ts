@@ -431,4 +431,115 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
 
     expect(matchFor(sig, `${figure}|2026-05-10`)).toMatchObject({ txnId: paidFull, tier: 2, remainderAmount: "0.00" });
   });
+
+  // ⭐ (Round 4, DECIDED — candidate C) Residual 5 from round 3: a tier ≤ 2
+  // pair on a FUTURE plan that underpays used to keep the FULL plan dragging
+  // until the user recorded Partial — on top of the row already having left
+  // the bank, understating projected cash by the paid part. The remainder-
+  // only drag (previously overdue-only) now also applies before the due
+  // date: the plan leaves the curve, only the unpaid remainder drags, dated
+  // on the plan's OWN date (never dragged to a business day like the overdue
+  // sibling). Only rules (a) category and (d) confirmed descriptor in range
+  // reach this — the name rules (b)/(c)/(c′) already require paying at least
+  // plan − max($1, 1%), so they never produce an underpaid tier-2 pair.
+  describe("(round 4, decided C) the remainder-only drag also applies before the due date", () => {
+    it("Verizon $430 due 05-16 (future), confirmed 425–434 across two months, paid $425 two days early: only the $5 remainder drags", async () => {
+      await snapshotOnChase();
+      const verizon = await plan("Verizon Wireless", "430", 16);
+      // Two confirmed months spanning the 425–434 range (round 3, MEDIUM 1):
+      // resolving them as `matched` also removes them from the earlier-
+      // occurrence hold-back (round 3, HIGH) — they're accounted for.
+      const jan = await row("2026-01-16", "-425.00", "VERIZON WIRELESS PAYMENTS");
+      await resolve("matched", verizon, "2026-01-16", { txnId: jan });
+      const apr = await row("2026-04-16", "-434.00", "VERIZON WIRELESS PAYMENTS");
+      await resolve("matched", verizon, "2026-04-16", { txnId: apr });
+      // Paid $5 short of $430, two days before the 05-16 due date.
+      const may = await row("2026-05-14", "-425.00", "VERIZON WIRELESS PAYMENTS");
+
+      const sig = await signal();
+
+      // Only the row's $425 leaves the bank; the plan's remainder is off the
+      // curve for its own $425, and drags only the $5 still assumed unpaid.
+      expect(sig.bankToday).toBe("575.00");
+      expect(matchFor(sig, `${verizon}|2026-05-16`)).toMatchObject({
+        txnId: may,
+        tier: 2,
+        offCurve: false,
+        remainderAmount: "-5.00",
+      });
+      expect((sig.events ?? []).find((e) => e.label === "Verizon Wireless")).toMatchObject({
+        date: "2026-05-16",
+        amount: "-5.00",
+        assumption: "remainder_assumed_unpaid",
+      });
+      // 575.00 − 5.00 (was 575.00 − 430.00 = 145.00 before this fix).
+      expect(balanceOn(sig, "2026-05-16")).toBe("570.00");
+      // The spine reads its low point and max safe extra off the same daily
+      // series — a short horizon so June's Verizon (unpaid, drags in full)
+      // doesn't also enter the window and mask the remainder's own effect.
+      const short = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 3 });
+      expect(short.lowestProjected).toBe("570.00");
+      expect(short.maxSafeExtra).toBe("570.00");
+    });
+
+    it("State Farm Insurance $180, sole in its category, paid $165 before the due date: only the $15 remainder drags", async () => {
+      await snapshotOnChase();
+      const CAT = randomUUID();
+      const sfIns = await plan("State Farm Insurance", "180", 20, { categoryId: CAT });
+      // April's occurrence is already handled, so it never triggers the
+      // earlier-occurrence hold-back for May's pairing.
+      const aprilRow = await row("2026-04-20", "-180.00", "STATE FARM RO 27 SFPP", { categoryId: CAT });
+      await resolve("matched", sfIns, "2026-04-20", { txnId: aprilRow });
+      // Paid $15 short of $180, eight days before the 05-20 due date.
+      const paidRow = await row("2026-05-12", "-165.00", "STATE FARM RO 27 SFPP", { categoryId: CAT });
+
+      const sig = await signal();
+
+      expect(matchFor(sig, `${sfIns}|2026-05-20`)).toMatchObject({
+        txnId: paidRow,
+        tier: 2,
+        offCurve: false,
+        remainderAmount: "-15.00",
+      });
+      expect((sig.events ?? []).find((e) => e.label === "State Farm Insurance")).toMatchObject({
+        date: "2026-05-20",
+        amount: "-15.00",
+        assumption: "remainder_assumed_unpaid",
+      });
+      // 1000.00 − 165.00 (the row, dated after the snapshot) − 15.00 (the
+      // remainder) = 820.00 (was 1000 − 165 − 180 = 655.00 before this fix).
+      expect(sig.bankToday).toBe("835.00");
+      expect(balanceOn(sig, "2026-05-20")).toBe("820.00");
+    });
+  });
+
+  // ⭐ (Round 4, MEDIUM — disclosed, NOT fixed) The hold-back's "named, not
+  // ambiguous" branch (round 3, HIGH) accepts a coincidental same-payee named
+  // charge as proof an earlier occurrence was paid, even when it plainly
+  // isn't the bill (wrong amount, wrong day) — because it is NAMED and not
+  // ambiguous, tightening this to tier ≤ 2 only would revive the exact
+  // understatement the first review measured (a named, late tier-3 July
+  // paying $672.80 held back August's exact Toyota payment). This is a known
+  // trade-off, not fixed this round; see docs/reviews for the owner question.
+  it("(round 4, residual, known — not fixed) a coincidental same-payee named charge clears an earlier occurrence for the hold-back", async () => {
+    await snapshotOnChase();
+    const water = await plan("City Water", "150");
+    // An unrelated fee, 5 days before April's due date: $10 short of the
+    // bill (medium confidence), not itself paying April — but named ("water")
+    // and not ambiguous is enough for the hold-back to treat April as
+    // accounted for.
+    await row("2026-04-15", "-140", "CITY WATER METER FEE");
+    // April's REAL payment, paid late.
+    const mayRow = await row("2026-05-12", "-150", "CITY WATER");
+
+    const sig = await signal();
+
+    expect(matchFor(sig, `${water}|2026-04-20`)).toMatchObject({ confidence: "medium", tier: 3, offCurve: false });
+    // Wrong attribution (the residual): May reads as paid and off the curve
+    // — full name, exact amount — though this row is really April's late
+    // payment, and May hasn't been paid.
+    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ txnId: mayRow, tier: 2, offCurve: true });
+    expect(sig.bankToday).toBe("850.00");
+    expect(balanceOn(sig, "2026-05-20")).toBe("850.00");
+  });
 });

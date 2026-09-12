@@ -597,7 +597,12 @@ export function buildLineRegister(opts: {
         r.runningBalance = proj;
         continue;
       }
-      proj = Math.round((proj + r.amount) * 100) / 100;
+      // (Decision 13, round 4) A plan the server counts paid in part
+      // (`remainderAmount`, offCurve stays false) only drags its unpaid
+      // remainder — the same rule `computeBankReconcile` applies.
+      const remainder = r.kind === "plan" ? r.probablyPaid?.remainderAmount : undefined;
+      const amt = remainder !== undefined ? Number(remainder) : r.amount;
+      proj = Math.round((proj + amt) * 100) / 100;
       r.runningBalance = proj;
     }
   }

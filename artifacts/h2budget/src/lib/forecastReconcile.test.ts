@@ -316,6 +316,48 @@ describe("computeBankReconcile", () => {
     expect(result.forecastEnd).toBe(800);
   });
 
+  // ⭐ (Decision 13, round 4, HIGH) A tier ≤ 2 pair the server counts paid in
+  // part (`remainderAmount`, offCurve stays false) already had the paid part
+  // removed from the curve server-side — adding the FULL plan amount here
+  // double-subtracts it. Repro: Insurance $180 due 05-10, paid $165 (tier 2,
+  // remainderAmount "-15.00"): "Projected end" used to subtract $180,
+  // understating by $165.
+  it("(round 4, HIGH) a pair the server counts paid in part drags only its remainder, not the full plan", () => {
+    // Insurance $180, paid $165 (tier 2, remainderAmount "-15.00"). Dated after
+    // the bank snapshot (this file's convention, like `suggestedPlan` above) so
+    // it falls inside the reconcile's projection window — computeBankReconcile
+    // doesn't care whether that's because the plan is overdue or upcoming, only
+    // that it's unresolved and dated after the snapshot.
+    const insurance: PlanLine = {
+      ...planLine({ itemId: "insurance", date: "2026-05-21", amount: -180, status: "pending_plan" }),
+      probablyPaid: {
+        txnId: "t-ins",
+        planDate: "2026-05-21",
+        txnAmount: -165,
+        difference: -15,
+        dayDelta: 0,
+        confidence: "high",
+        ambiguous: false,
+        tier: 2,
+        offCurve: false,
+        txnDate: "2026-05-21",
+        txnDescription: "FIGURE LENDING SVC",
+        remainderAmount: -15,
+      },
+    };
+    const result = computeBankReconcile(
+      baseInput({
+        allPlan: [
+          planLine({ itemId: "p1", date: "2026-05-20", amount: -50, status: "pending_plan" }),
+          insurance,
+        ],
+        bankSnapshot: { at: "2026-05-15T17:00:00.000Z", balance: 1000 },
+      }),
+    );
+    // 1000 − 50 (p1) − 15 (Insurance's remainder, not its full −180).
+    expect(result.forecastEnd).toBe(935);
+  });
+
   it("(PR5) counts only the unpaid remainder of a partly-paid plan, as the curve does", () => {
     // $500 rent, $250 paid by t1 → $250 still planned after the snapshot.
     const { allPlan, allBank } = buildLineRegister({

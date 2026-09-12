@@ -190,8 +190,10 @@ and that file's cleanup deletes debts.
    Using the descriptor as the payee's name for pairing is my addition to fix 2.
 4. **Manual checking rows are now evidence.** A mistaken manual or imported row can pay a bill. A manual row with a debt tag
    is excluded.
-5. **An underpaid future bill with strong evidence stays on the curve.** Until the user records Partial, it understates by
-   the paid part. This is the lead's asymmetric rule.
+5. ~~**An underpaid future bill with strong evidence stays on the curve.** Until the user records Partial, it understates by
+   the paid part. This is the lead's asymmetric rule.~~ **CLOSED, round 4 (decided candidate C):** the remainder-only
+   drag (previously overdue-only) now also applies before the due date — the plan leaves the curve, only the unpaid
+   remainder drags, on the plan's own date. See "Round 4" below.
 6. **The confirmed-descriptor read rides the existing resolved-row query.** That query loads every resolved row (unbounded,
    as before); only 12 per item are used.
 7. **Moves between past-due lists have no reader today.** For example, the Golden Card minimum moving from
@@ -370,3 +372,130 @@ popped.
 - Q3 from round 2 (fix 3 reversing the PR5 second review's guard) is effectively answered by this round: the guard is
   restored (nameless doesn't count), and fix 3's real case (a *named* late pair) is kept. No further owner input needed
   unless this reading is wrong.
+
+## Round 4
+
+The round-3 review verified all four fixes and merged cleanly with PR-C, then found one more real bug (HIGH) in the web's
+own reconciliation, decided the fix for residual 5 (understated future bills), and asked for one known trade-off to be
+pinned as a test and disclosed rather than fixed.
+
+### HIGH — `forecastReconcile.ts` double-subtracted a paid-in-part bill
+
+**Bug.** `computeBankReconcile` (`forecastReconcile.ts:~106-111`) added the plan's FULL amount to `forecastEnd` for any
+open plan not fully `offCurve` — including the new round-3 overdue tier-2 underpayments that carry `remainderAmount`.
+The row had already left the bank; adding the full plan on top double-subtracted the paid part. Repro: Insurance $180
+due 05-10, paid $165 (tier 2, `remainderAmount: "-15.00"`) — "Projected end" subtracted $180, understating by $165. The
+same bug existed a second time in `forecastMatch.ts`'s own running-balance fallback (`buildLineRegister`, the
+`bankInWindowAll.length === 0` branch), and the register row showed −$180 beside "Paid; $15.00 still assumed unpaid" —
+correct words, wrong number beside them.
+
+**Fix.** Both sums now read `Number(remainderAmount)` instead of the full `p.amount`/`r.amount` when a match carries a
+remainder. The register row's face amount does the same (`PlanDropRow.tsx`), with a new "Paid $165.00 of $180.00"
+caption (`data-testid="plan-remainder-paid-…"`) mirroring the existing `partial` line's own caption — `PlanLine.amount`
+itself is left untouched (still the full plan) so `canRecordPartial` and other consumers keep their existing meaning;
+only the three DISPLAY/SUM sites that specifically care about "what's still projected to leave the bank" changed.
+
+| Case | Before | After |
+|---|---|---|
+| `computeBankReconcile` unit test (p1 −$50, Insurance $180 paid $165) | forecastEnd **770** (1000 − 50 − 180) | forecastEnd **935** (1000 − 50 − 15) |
+| Register row face amount (Insurance $180 paid $165) | **−$180.00** beside "Paid; $15.00 still assumed unpaid" | **−$15.00**, with "Paid $165.00 of $180.00" underneath |
+
+Tests: `forecastReconcile.test.ts` (new unit case); `forecastProbablyPaid.test.tsx` (new register-figure case). Both
+fail on the pre-round-4 web source (770 vs 935; the caption testid doesn't exist).
+
+### DECIDED (candidate C) — the remainder-only drag now applies before the due date too
+
+Closes residual 5. **Fix (`forecastLedger.ts`):** for a plan due today or later, if its pair is tier ≤ 2 and the row
+underpaid (`paidByKey` already carries every tier ≤ 2 pair, overdue or not), the plan leaves the curve and only the
+unpaid remainder drags — **on the plan's own date**, never dragged to a business day like the overdue sibling. Tagged
+`remainder_assumed_unpaid` (sibling to `overdue_remainder_assumed_unpaid`); `remainderByPlanKey` (and so
+`CashSignal.matches[].remainderAmount`) is set the same way for these pairs as for overdue ones. The tier gates
+themselves are exactly round 3's — unchanged. As the review noted, this only ever reaches rules (a) category and (d)
+confirmed descriptor in range: the name rules (b)/(c)/(c′) already require paying ≥ plan − max($1, 1%), so they can
+never produce an underpaid tier-2 pair for this branch to catch. `offCurve` stays `false` for these (the web already
+reads `remainderAmount`, from round 3's LOW fix).
+
+| Case | Before (round 3) | After (round 4) |
+|---|---|---|
+| Verizon $430 due 05-16, confirmed 425–434, paid $425 two days early | balance 05-16 **145.00** (575 − 430, full bill drags) | balance 05-16 **570.00** (575 − 5, only the remainder) |
+| State Farm Insurance $180, sole category, paid $165 before due | balance 05-20 **655.00** (1000 − 165 − 180) | balance 05-20 **820.00** (1000 − 165 − 15) |
+
+Spine low point / max safe extra reflect the same fix: a 3-day-horizon read of the Verizon case gives
+`lowestProjected`/`maxSafeExtra` **570.00**, where the full plan would have given 145.00.
+
+**Unchanged, verified:** the round-3 hole repros (Verizon $425/$430 shared-category case, seed household case C, now
+8,618.98/8,118.98; State Farm Insurance $165/$180 sole-category case, seed household case D, now 8,528.00/8,028.00) and
+the HIGH water hold-back case (2,850.00) all still pass unmodified — this round's change only reaches FUTURE plans (a
+new branch at the bottom of the events loop); the OVERDUE branch these cases exercise is untouched. D2 (Toyota, tier 3
+hold-back) is likewise unmodified and still passes.
+
+Tests: `cashSignalProbablyPaid.integration.test.ts`, new describe block "the remainder-only drag also applies before the
+due date" (Verizon and State Farm Insurance cases above, plus the spine low-point/max-safe-extra check). Both fail on
+the pre-round-4 ledger source (`remainderAmount` absent from the match).
+
+### MEDIUM — disclosed, NOT fixed: a coincidental same-payee named charge can still misattribute the hold-back
+
+The hold-back's "named, not ambiguous" branch (`forecastLedger.ts`, the `pairedKeys` filter) accepts ANY named,
+non-ambiguous, non-low-confidence pair as proof an earlier occurrence was paid — even a charge that plainly isn't the
+bill (wrong amount, wrong day, just a same-payee coincidence). Repro: "City Water" $150 monthly; an unrelated "CITY
+WATER METER FEE" −$140 five days before April's due date (medium confidence — named via "water", $10 short — tier 3,
+not itself evidence April was paid) clears April for the hold-back anyway; April's REAL $150 payment, posted late, then
+pairs with MAY instead (full name, exact amount, tier 2) and takes May off the curve while May hasn't been paid.
+
+**Why this stays open.** Tightening the hold-back to require tier ≤ 2 (real evidence, not just "named and not
+ambiguous") would revive the exact UNDERSTATEMENT the first review measured: a named tier-3 pair (a $685 "late fee" on
+July's $672.80 Toyota, six days early — genuinely July's payment, just off by $12.20) is exactly this same shape, and
+holding it back is what let August's exact $672.80 payment stay correctly off the curve (round 3's own D2 case). The two
+repros are structurally identical to the matcher — a named, non-ambiguous, imperfect-amount pair for an earlier
+occurrence — and there is no rule inside `matchPlansToRows` today that tells "July's real late payment, $12.20 off" from
+"an unrelated April fee that happens to say WATER." Fixing one repro un-fixes the other. This is disclosed, not
+resolved, pending the owner's call on which failure mode is preferable (or a future PR that finds a real
+discriminator — e.g. requiring the earlier pair's amount within some tolerance of the item's OWN plan amount, which
+would pass the Toyota case ($672.80 vs $685, 1.8% off) and fail the water case ($150 vs $140, 6.7% off), but that
+tolerance choice is itself a judgment call for the owner, not mine to make unasked).
+
+Test (`cashSignalProbablyPaid.integration.test.ts`, "a coincidental same-payee named charge clears an earlier occurrence
+for the hold-back"): pins the current, round-3 behaviour exactly — April reads `tier: 3, confidence: "medium"`, May
+reads `tier: 2, offCurve: true` and the curve shows May paid ($850.00, same as bankToday) even though May hasn't been
+paid. This test is a residual pin, not a new fix — it passes on both the round-3 and round-4 source unchanged, and is
+included here so the trade-off has a concrete, checked repro rather than only prose.
+
+### Golden
+
+No entries changed this round. The full-household golden fixture (`forecastLedger.golden.integration.test.ts`) has no
+future tier ≤ 2 pair that underpays, so the new `remainder_assumed_unpaid` branch is never exercised by it; re-run with
+`CI=true` unchanged (11/11 pass, no `-u` needed).
+
+### Fails-before (round 4's new tests, stash-and-run against this branch's pre-round-4 source)
+
+Stashed the round-4 diff in the 4 behavioural source files (`forecastLedger.ts`, `forecastReconcile.ts`,
+`forecastMatch.ts`, `PlanDropRow.tsx` — `openapi.yaml`'s change is a description only) and, separately, `forecastLedger.ts`
+alone for the DECIDED-C cases, ran the new/changed tests, then popped.
+
+| Suite | Failed | Passed |
+|---|---|---|
+| `forecastReconcile.test.ts` (HIGH, unit) | **1** | 16 |
+| `forecastProbablyPaid.test.tsx` (HIGH, register figure) | **1** | 35 (both files together) |
+| `cashSignalProbablyPaid.integration.test.ts` (DECIDED C) | **2** | 19 |
+| **Total** | **4** | — |
+
+The MEDIUM residual-pin test is not counted here — it asserts EXISTING (round-3) behaviour and passes on both sides of
+the stash, by design.
+
+### Gates (this branch, before the PR-D merge below)
+
+- `pnpm run typecheck`: pass.
+- Web tests (138 files): `TZ=UTC CI=true` 1142 passed, 3 skipped; `TZ=America/Chicago CI=true` 1143 passed, 2 skipped.
+- Full API suite (`CI=true`, own DB, `caffeinate -i`, serial): **142 files, 1417 passed**, 7 todo.
+- `pnpm run build && node scripts/check-entry-graph.mjs`: OK — landing 574.4 KB of 580.0 KB, unchanged.
+- Codegen: `pnpm --filter @workspace/api-spec run codegen`, rerun with no further diff after the second run; generated
+  `src` + `dist` committed (only a description-comment change this round — `events[].assumption`'s new tag value).
+- Golden: verified with `CI=true`, no changes (see above).
+
+### Open questions for the owner (round 4)
+
+- The MEDIUM item above: is there a better discriminator than "named and not ambiguous" for the hold-back, or is the
+  current asymmetry (favor not re-dragging a genuinely-late payment, at the cost of an occasional same-payee
+  misattribution) the intended trade-off? A concrete idea is floated above (tolerance relative to the item's own
+  amount) but not implemented — it would move a real number in real households and shouldn't ship without a decision.
+- Everything else from round 3's open questions still stands as answered/closed; nothing new otherwise.

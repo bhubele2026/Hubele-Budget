@@ -107,8 +107,14 @@ export function computeBankReconcile(input: ReconcileInput): ReconcileResult {
       // left out until the user answers; the row is already in the bank
       // balance. A pair kept on the curve is a suggestion only and counts.
       if (p.probablyPaid?.offCurve) continue;
+      // (Decision 13, round 4) A pair the server counts paid in part
+      // (`remainderAmount` — offCurve stays false for an underpayment) has
+      // already had the paid part removed from the curve server-side; adding
+      // the FULL `p.amount` here would double-subtract it. Add only what the
+      // server says is still unpaid.
+      const remainder = p.probablyPaid?.remainderAmount;
       // A `partial` line's amount is its unpaid remainder — the curve's figure.
-      forecastEnd += p.amount;
+      forecastEnd += remainder !== undefined ? Number(remainder) : p.amount;
     }
     forecastEnd = round2(forecastEnd);
   }

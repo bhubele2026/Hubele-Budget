@@ -80,6 +80,10 @@ export type LedgerPlan = {
    * - `overdue_remainder_assumed_unpaid` (PR6 review): overdue, a bank row paid
    *   part of it (see `overdueAssumedPaid`), and only the unpaid remainder (over
    *   $1) lands on the next business day;
+   * - `remainder_assumed_unpaid` (decision 13, round 4): due TODAY OR LATER, a
+   *   tier-1/2 pair paid part of it (offCurve is false for an underpayment), and
+   *   only the unpaid remainder lands — on the plan's OWN date, never dragged to
+   *   a business day like the overdue sibling above;
    * - `dragged_past_due`: the pre-PR6 drag of a weekly-cadence expense due BEFORE
    *   today (`keepsPreSnapshotRule`, until PR8); due today it is
    *   `due_today_not_posted` like any other plan;
@@ -88,6 +92,7 @@ export type LedgerPlan = {
   assumption?:
     | "overdue_assumed_unpaid"
     | "overdue_remainder_assumed_unpaid"
+    | "remainder_assumed_unpaid"
     | "due_today_not_posted"
     | "dragged_past_due"
     | "pre_window_on_first_day";
@@ -1180,6 +1185,41 @@ export async function buildForecastLedger(
       // that don't include today): surface PRE-WINDOW pending plans
       // as a day-0 dip rather than silently shrinking startingBalance.
       effectiveDate = fromISO;
+    }
+    // ⭐ (Decision 13, round 4 — candidate C) A FUTURE OR NOT-YET-DUE EXPENSE with
+    // a tier ≤ 2 pair that UNDERPAID (offCurve already excluded a fully-paid pair
+    // above): the plan leaves the curve, and only the unpaid remainder drags, on
+    // the plan's own date — never dragged to a business day like an overdue
+    // remainder. The tier gates are unchanged (round 3's); this only reaches rules
+    // (a) category and (d) confirmed descriptor, since the name rules (b)/(c)/(c′)
+    // already require paying ≥ plan − max($1, 1%). Fixes residual 5 (the first
+    // review measured understated cash on a $5-short Verizon, a $15-short renewed
+    // State Farm Insurance): the FULL plan used to keep dragging until the user
+    // recorded Partial, on top of the row already having left the bank.
+    if (ev.amount < 0) {
+      const paidFuture = paidByKey.get(origKey);
+      if (paidFuture) {
+        const remainder = Math.max(
+          0,
+          Math.round((Math.abs(planAmount) - Math.abs(paidFuture.txnAmount)) * 100) / 100,
+        );
+        const signedRemainder = remainder > 1 ? -remainder : 0;
+        remainderByPlanKey.set(origKey, signedRemainder);
+        if (signedRemainder !== 0) {
+          plans.push({
+            kind: "plan",
+            eventKind: ev.kind,
+            date: effectiveDate,
+            originalDate: rawEffectiveDate,
+            occurrenceDate: ev.date,
+            amount: signedRemainder,
+            itemId: ev.itemId,
+            label: ev.label,
+            assumption: "remainder_assumed_unpaid",
+          });
+        }
+        continue;
+      }
     }
     plans.push({
       kind: "plan",

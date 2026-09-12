@@ -491,6 +491,42 @@ describe("Forecast — probably paid (PR5b)", () => {
     expect(screen.getByTestId("mark-missed-insurance-2026-05-10")).toBeTruthy();
   });
 
+  it("(round 4, HIGH) the register row's face amount is the remainder, not the full plan, with a 'paid X of Y' caption", () => {
+    forecastData = {
+      ...FORECAST,
+      events: [...FORECAST.events, { itemId: "insurance", date: "2026-05-10", label: "Insurance", kind: "expense", amount: -180 }],
+      transactions: [...FORECAST.transactions, txn("t-ins", "2026-05-10", "STATE FARM RO 27 SFPP", "-165.00")],
+    };
+    cashSignalData = cashSignal([
+      ...MATCHES,
+      {
+        planKey: "insurance|2026-05-10",
+        planItemId: "insurance",
+        planDate: "2026-05-10",
+        txnId: "t-ins",
+        planAmount: "-180.00",
+        txnAmount: "-165.00",
+        difference: "-15.00",
+        dayDelta: 0,
+        confidence: "high",
+        ambiguous: false,
+        tier: 2,
+        offCurve: false,
+        remainderAmount: "-15.00",
+      },
+    ]);
+    renderPage();
+    // The face amount is the $15.00 still assumed unpaid, never the full $180 —
+    // the review's own repro showed −$180 beside "Paid; $15.00 still assumed
+    // unpaid", which reads as if the whole bill were still due. The caption
+    // (mirroring `partial`'s own "Paid X of Y") is where $180 legitimately
+    // still appears, as the ORIGINAL plan, not the outstanding face amount.
+    expect(screen.getByTestId("plan-row-insurance-2026-05-10").textContent).toContain("$15.00");
+    const caption = screen.getByTestId("plan-remainder-paid-insurance-2026-05-10");
+    expect(caption.textContent).toContain("$165.00");
+    expect(caption.textContent).toContain("$180.00");
+  });
+
   it("(round 3, LOW) the bank-side strip shows the same remainder note", () => {
     forecastData = {
       ...FORECAST,

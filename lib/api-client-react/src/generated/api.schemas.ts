@@ -2609,6 +2609,11 @@ remainder lands on the next business day.
 weekly-cadence expenses due before today until PR8.
 `pre_window_on_first_day`: no snapshot, due before the
 window, placed on its first day.
+`remainder_assumed_unpaid` (decision 13, round 4): due today
+or later, a tier-1/2 pair paid part of it (`offCurve` stays
+false for an underpayment), and only the unpaid remainder
+lands — on the plan's OWN date, never dragged to a business
+day like the overdue sibling above.
 
    * @nullable
    */
