@@ -1,8 +1,9 @@
 # PR-E — Amex updater fixed; a balance someone entered is never silently replaced
 
 Branch `fix/amex-updater-balance-provenance`, base `origin/main` `df2adda`.
-Round 1 `d356c535`; round 2 answers the review (REQUEST CHANGES: H1, H2, M1, the
-LOW items and the NIT).
+Round 1 `d356c535`; round 2 `c0eca735` answers the first review (H1, H2, M1, the
+LOW items, the NIT); round 3 answers the second look (H3 and three LOW items) on
+top of `origin/main` `1a0c1f71` (PR-A, merged in).
 
 ## Owner decision (2)
 
@@ -44,6 +45,13 @@ LOW items and the NIT).
      freshness reads.
    - Recent activity lists an item's attempts whoever wrote them; the route still
      checks the item is the caller's household's.
+   - (round 3) A collapsed streak keeps its size and start. The otherwise-unused
+     `cleanup_details` jsonb (no DDL) holds `failureStreak: {count, firstFailedAt}`
+     on repeats.
+   - The API adds `failureCount` / `firstFailedAt` (additive, codegen).
+     `cleanupDetails` is returned only for `pending_cleanup`.
+   - Recent activity shows "N times · failing since <date>" and counts every try
+     in "Failed X of the last Y".
 5. **Debt API provenance** (additive, OpenAPI + codegen): `bankBalance`,
    `bankBalanceAt`, `bankBalanceStale`, `bankRefreshError`, `bankRefreshFailedAt`.
 6. **`POST /debts/:id/use-bank-balance`**, explicit only.
@@ -53,10 +61,20 @@ LOW items and the NIT).
    - PATCH /debts/:id stamps `last_balance_update = now` whenever it changes the
      balance, and POST /debts does when given one. A caller that sends
      `lastBalanceUpdate` itself wins.
-8. **Amex page date** (review H2).
-   - GET /amex/anchor dates a debt-row answer by the debts' own balance date:
-     `last_balance_update`, else `created_at`, latest across rows.
-   - It no longer uses `updated_at` or the saved anchor's `asOf`.
+8. **Amex page date** (review H2, H3; `lib/debtBalanceDate.ts`).
+   - GET /amex/anchor dates a debt-row answer by the debts' balance date. For each
+     debt it is the LATER of `last_balance_update` (else `created_at`) and the
+     household day its balance last changed in `debt_balance_history`. That day is
+     the newest row whose balance differs from the row before, a first row counting;
+     it is the same definition as the preview SQL's `last_change`, taken as noon UTC
+     on that day.
+   - Across debts the latest date is used. It never uses `updated_at` or the saved
+     anchor's `asOf`.
+   - History can only move the date later; a stamp on or after the change day wins.
+   - Nothing is backfilled: the date is read, never written.
+   - PATCH now compares balance, minimum (to the cent) and APR (to 0.0001)
+     numerically. "5000" for a stored "5000.00" is not a change: no new date, no
+     flip to manual, no history row.
 9. **Automatic revolving-Amex sweep.**
    - It links a same-name manual debt without adopting its balance, APR or minimum.
    - (review) It fills an empty due/statement day; a typed one stays. Explicit
@@ -76,8 +94,13 @@ LOW items and the NIT).
         and the looser `entered_date_older_than_updated_at`);
       - `old_amex_updater_name_match`.
     - Query 2, per household: the Amex page source and label today and after merge,
-      the debt-row date today and after, and the saved anchor's fate. Zero Amex rows
-      reads "the refresh writes nothing".
+      the debt-row date today and after (the H3 rule), and the saved anchor's fate.
+      Zero Amex rows reads "the refresh writes nothing".
+    - (round 3) Query 2 prices the date move, for the operator to read on production:
+      - `debt_tier_date_move`: earlier / later / same day;
+      - `debt_tier_date_move_risk`: earlier = counted twice if the balance already
+        held the rows; later = dropped if it did not;
+      - `amex_rows_between_dates` and the signed `page_total_change`.
     - Query 3: the Amex cards the sweep will link to a same-name manual debt.
     - `previewDebtBalanceProvenanceSql.integration.test.ts` runs the file itself
       against seeded households and checks every flag. It has run on the test DB only.
@@ -92,12 +115,14 @@ LOW items and the NIT).
 | `prefs.amexAnchor` typed in (POST /amex/anchor, `restoreAmexAnchor.ts`) | Overwritten by the next working refresh | Kept; estimate stored beside it |
 | **Amex page label**, household with Amex rows and an Amex Plaid item but no saved anchor and no debt/Plaid balance | "Calculated" (the refresh threw, so no anchor was ever written) | "From saved anchor" after its next Amex sync (query 2 `source_after_merge`) |
 | **Amex page, debt-row answer** (H2) — e.g. a manual "American Express" $1,000 dated Sep 1, charges $100 Sep 3 + $50 Sep 5, an updater-written anchor | main: dated the later of `updated_at` and the anchor's asOf; round 1: the refresh moved the anchor to today → $1,000 as of Sep 11, the $150 lost | $1,000 as of Sep 1 → September ends at $1,150 (query 2 `debt_tier_as_of_today` / `_after_merge`) |
+| **Amex page, legacy / stale balance date** (H3). An "American Express" debt created Jun 1, `last_balance_update` NULL, typed to $1,000 on Sep 1 by the pre-merge PATCH (history row that day). Charges $200 Jun 10, $300 Jul 10, $400 Aug 10, $50 Sep 5 | main: dated by `updated_at` Sep 1 → $1,050 (right by accident; an APR edit after Sep 1 would have dropped the Sep 5 charge). Round 2: dated Jun 1 → $1,950, charges counted twice. The same with an old bank date left in `last_balance_update` | Dated Sep 1, the day the balance last changed → September ends at $1,050. Rule: the later of `last_balance_update ?? created_at` and that history day; no data written. Query 2 flags the move per household with its dollar sum |
+| **PATCH repeating the same number** (`"5000"` for `"5000.00"`) | Treated as a change: re-dated, flipped a bank balance to manual, wrote a history row | No change |
 | **Hand-edited debts** (H1) | PATCH kept the old `last_balance_update`; POST left it null | Dated at the edit/create |
 | ↳ Amex page, hand-edited Amex-named debt | Rolled forward from the old date, counting charges already inside the typed balance (`amexEndingBalance.ts:263`, `amex.tsx:837/882`) | Rolls forward from the edit date |
 | ↳ Pending netting (effective balance, % paid) of a hand-edited manual debt | Payments tagged since the OLD date were subtracted from the new typed balance; a debt created by hand (null date) netted every tagged payment ever | Only payments after the edit/create count as pending |
 | Auto-sweep, same-name unlinked manual Amex debt (≥ $1,000, APR + min) | Balance/APR/min replaced by Plaid's, sources → plaid | Linked only; entered values kept; empty due/statement day filled (query 3) |
 | Debt row "refresh failed" | Also shown when only `/accounts/get` failed; the raw error text on hover; repeated under the reconnect banner | Only when `/liabilities/get` failed; plain sentence; hidden under the banner |
-| Settings → Recent activity | A member's sync attempts hidden from the owner; one row per failing retry | Every attempt on the household's item; a repeated failure is one row |
+| Settings → Recent activity | A member's sync attempts hidden from the owner; one row per failing retry | Every attempt on the household's item; a repeated failure is one row showing "N times · failing since <date>"; the "Failed X of the last Y" summary counts every try |
 
 ## Must not change (and didn't)
 
@@ -113,7 +138,28 @@ LOW items and the NIT).
   attempt after a burst (`plaidSyncAttemptBurst`).
 - No DDL.
 
-## Verification (round 2, head in the report)
+## Verification (round 3, head in the report)
+
+- `pnpm run typecheck`: green.
+- Web: `TZ=UTC` 137 files, 1123 passed / 3 skipped. `TZ=America/Chicago` 137 files,
+  1124 passed / 2 skipped.
+- API, full suite: 144 files, 1351 passed / 7 todo (before merging PR-A2).
+- Build + entry graph: OK, landing 574.8 KB against the 580 KB cap.
+- Codegen: spec changed (`failureCount`, `firstFailedAt`); generated `src` and `dist`
+  are committed and a re-run leaves the tree clean.
+- **Round-3 tests fail on `c0eca735`** — 6 API, 2 web:
+  - `amexAnchorDebtAsOf`: the H3 repro ($1,950 → $1,050) and the stale bank date
+    ($1,750 → $1,050).
+  - `debtBalanceProvenance`: PATCH with the same numbers written differently.
+  - `plaidSyncAttemptBurst`: streak count and start.
+  - `previewDebtBalanceProvenanceSql`, 2: the date-move columns for household C,
+    and household D (H3).
+  - `plaidSyncHistoryFailureStreak.test.tsx`, 2: "N times · failing since", and the
+    summary counting every try.
+  - Guards passing on both: a later `last_balance_update` wins over history; empty
+    history falls back to `created_at`; a single failure shows no streak line.
+
+## Verification (round 2)
 
 - `pnpm run typecheck`: green.
 - Web: `TZ=UTC` 136 files, 1120 passed / 3 skipped. `TZ=America/Chicago` 136 files,
@@ -162,8 +208,14 @@ LOW items and the NIT).
    hook in the shared `api.ts` chunk. Accepted for now; a separate PR splits the
    generated client.
 10. A debt-row answer combining several Amex debts is dated by the latest balance date
-    among them (as before with `updated_at`). A workbook-imported debt (no balance
-    date) is dated by its creation.
+    among them (as before with `updated_at`). A workbook-imported debt with no
+    balance date and no history is dated by its creation.
+12. **First history row counts as a change** (the rule the reviewer set, shared with
+    the preview SQL). A debt never edited whose first `debt_balance_history` row came
+    from a GET /debts snapshot days after it was created or imported is dated at
+    that first snapshot. That drops Amex charges between import and first view.
+    Query 2's `debt_tier_date_move = 'later'` with `amex_rows_between_dates` sizes
+    it on production.
 11. A caller that sends `lastBalanceUpdate` with a PATCH/POST balance keeps that date.
     The web never sends one.
 

@@ -35,6 +35,7 @@ vi.mock("../middlewares/requireAuth", () => ({
 
 import {
   db,
+  debtBalanceHistoryTable,
   debtsTable,
   plaidAccountsTable,
   plaidItemsTable,
@@ -223,7 +224,7 @@ describe("(PR-E review H2) GET /amex/anchor dates a debt-row balance by the debt
     expect(endOfSeptember2026(body, CHARGES)).toBe(1150);
   });
 
-  it("a debt whose balance was never dated (a workbook import) is dated by its creation", async () => {
+  it("a debt whose balance was never dated and has no balance history (a workbook import) is dated by its creation", async () => {
     await seedAmexWithoutBankBalance();
     await db.insert(debtsTable).values({
       userId: TEST_USER,
@@ -243,5 +244,105 @@ describe("(PR-E review H2) GET /amex/anchor dates a debt-row balance by the debt
     const body = await getAnchor();
 
     expect(body.asOf).toBe(SEP_1.toISOString());
+  });
+});
+
+describe("(PR-E review H3) a legacy or stale balance date is moved to the day the balance last changed", () => {
+  const LEGACY_ROWS = [
+    { occurredOn: "2026-06-10", amount: 200 },
+    { occurredOn: "2026-07-10", amount: 300 },
+    { occurredOn: "2026-08-10", amount: 400 },
+    { occurredOn: "2026-09-05", amount: 50 },
+  ];
+
+  /** No Plaid at all, so the page answers from the debt row. */
+  async function seedLegacyDebt(opts: {
+    lastBalanceUpdate: Date | null;
+    history: Array<{ recordedOn: string; balance: string }>;
+    rows: Array<{ occurredOn: string; amount: number }>;
+  }): Promise<void> {
+    for (const r of opts.rows) {
+      await db.insert(transactionsTable).values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: r.occurredOn,
+        description: "Amex charge",
+        amount: r.amount.toFixed(2),
+        source: "amex",
+      });
+    }
+    const [d] = await db
+      .insert(debtsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        name: "American Express",
+        balance: "1000.00",
+        lastBalanceUpdate: opts.lastBalanceUpdate,
+        createdAt: new Date("2026-06-01T17:00:00.000Z"),
+        updatedAt: new Date("2026-09-01T17:00:00.000Z"),
+      })
+      .returning({ id: debtsTable.id });
+    for (const h of opts.history) {
+      await db.insert(debtBalanceHistoryTable).values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        debtId: d!.id,
+        recordedOn: h.recordedOn,
+        balance: h.balance,
+      });
+    }
+    await db.insert(settingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      preferences: { amexCleanupDoneAt: "2026-08-01T00:00:00.000Z" },
+    });
+  }
+
+  it("the repro: created Jun 1 with no balance date, typed to $1,000 on Sep 1 by the old PATCH → dated Sep 1, September ends at $1,050 (not $1,950)", async () => {
+    await seedLegacyDebt({
+      lastBalanceUpdate: null,
+      history: [{ recordedOn: "2026-09-01", balance: "1000.00" }],
+      rows: LEGACY_ROWS,
+    });
+
+    const body = await getAnchor();
+
+    expect(body.source).toBe("debt");
+    expect(householdDay(body.asOf)).toBe("2026-09-01");
+    expect(endOfSeptember2026(body, LEGACY_ROWS)).toBe(1050);
+  });
+
+  it("a stale bank date the old PATCH left behind (Jul 1) is moved to the Sep 1 change → $1,050 (not $1,750)", async () => {
+    await seedLegacyDebt({
+      lastBalanceUpdate: new Date("2026-07-01T17:00:00.000Z"),
+      history: [
+        { recordedOn: "2026-07-01", balance: "700.00" },
+        { recordedOn: "2026-08-15", balance: "700.00" },
+        { recordedOn: "2026-09-01", balance: "1000.00" },
+        { recordedOn: "2026-09-09", balance: "1000.00" },
+      ],
+      rows: LEGACY_ROWS,
+    });
+
+    const body = await getAnchor();
+
+    expect(householdDay(body.asOf)).toBe("2026-09-01");
+    expect(endOfSeptember2026(body, LEGACY_ROWS)).toBe(1050);
+  });
+
+  it("a balance date later than the last history change wins (Sep 4 over Sep 1)", async () => {
+    const rows = [...LEGACY_ROWS, { occurredOn: "2026-09-03", amount: 25 }];
+    const sep4 = new Date("2026-09-04T17:00:00.000Z");
+    await seedLegacyDebt({
+      lastBalanceUpdate: sep4,
+      history: [{ recordedOn: "2026-09-01", balance: "1000.00" }],
+      rows,
+    });
+
+    const body = await getAnchor();
+
+    expect(body.asOf).toBe(sep4.toISOString());
+    expect(endOfSeptember2026(body, rows)).toBe(1050);
   });
 });

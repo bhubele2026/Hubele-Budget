@@ -197,8 +197,11 @@ export function PlaidSyncHistory({
 
   const failureSummary = useMemo(() => {
     if (attempts.length === 0) return null;
-    const failed = attempts.filter((a) => !a.success).length;
-    return `Failed ${failed} of the last ${attempts.length}`;
+    // (PR-E) One row can stand for a repeated failure; count every try.
+    const tries = (a: (typeof attempts)[number]) => (a.success ? 1 : (a.failureCount ?? 1));
+    const failed = attempts.reduce((s, a) => s + (a.success ? 0 : tries(a)), 0);
+    const total = attempts.reduce((s, a) => s + tries(a), 0);
+    return `Failed ${failed} of the last ${total}`;
   }, [attempts]);
 
   const toggleSort = (key: SortKey) => {
@@ -333,6 +336,15 @@ export function PlaidSyncHistory({
                         >
                           Failed
                           {a.errorCode ? ` · ${a.errorCode}` : ""}
+                          {a.failureCount && a.failureCount > 1 ? (
+                            <span
+                              className="block text-xs text-muted-foreground font-mono tabular-nums"
+                              data-testid={`sync-attempt-streak-${a.id}`}
+                            >
+                              {a.failureCount} times · failing since{" "}
+                              {new Date(a.firstFailedAt ?? a.attemptedAt).toLocaleString()}
+                            </span>
+                          ) : null}
                         </span>
                       )}
                     </td>

@@ -33,7 +33,8 @@ const tag = `${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 const U1 = `preview-sql-a-${tag}`;
 const U2 = `preview-sql-b-${tag}`;
 const U3 = `preview-sql-c-${tag}`;
-const USERS = [U1, U2, U3];
+const U4 = `preview-sql-d-${tag}`;
+const USERS = [U1, U2, U3, U4];
 const H: Record<string, string> = {};
 const ids: Record<string, string> = {};
 
@@ -202,6 +203,39 @@ beforeAll(async () => {
     preferences: { amexAnchor: { balance: 1000, asOf: "2026-09-11T05:00:00.000Z", lastAutoBalance: 1000 } },
   });
 
+  // Household D (review H3): a legacy debt created Jun 1 with no balance date,
+  // typed to $1,000 on Sep 1 by the old PATCH (history row that day), then an
+  // APR edit on Sep 10. No Plaid, so the page answers from the debt row.
+  const legacyDebt = await debt(U4, {
+    name: "American Express",
+    balance: "1000.00",
+    lastBalanceUpdate: null,
+    createdAt: new Date("2026-06-01T17:00:00.000Z"),
+    updatedAt: new Date("2026-09-10T15:00:00.000Z"),
+  });
+  await db.insert(debtBalanceHistoryTable).values({
+    userId: U4,
+    householdId: H[U4]!,
+    debtId: legacyDebt,
+    recordedOn: "2026-09-01",
+    balance: "1000.00",
+  });
+  for (const [day, amt] of [
+    ["2026-06-10", "200.00"],
+    ["2026-07-10", "300.00"],
+    ["2026-08-10", "400.00"],
+    ["2026-09-05", "50.00"],
+  ] as const) {
+    await db.insert(transactionsTable).values({
+      userId: U4,
+      householdId: H[U4]!,
+      occurredOn: day,
+      description: "Amex charge",
+      amount: amt,
+      source: "amex",
+    });
+  }
+
   const client = await pool.connect();
   try {
     const results = (await client.query(readFileSync(SQL_PATH, "utf8"))) as unknown as QueryResult[];
@@ -273,6 +307,27 @@ describe("(PR-E review M1) preview-debt-balance-provenance.sql", () => {
     });
     expect((c.debt_tier_as_of_today as Date).toISOString()).toBe("2026-09-11T05:00:00.000Z");
     expect((c.debt_tier_as_of_after_merge as Date).toISOString()).toBe("2026-09-01T17:00:00.000Z");
+    // The date moves earlier; the Sep 3 $100 row now counts.
+    expect(c).toMatchObject({
+      debt_tier_date_move: "earlier",
+      debt_tier_date_move_risk: "counted twice if the balance already held these rows",
+      amex_rows_between_dates: "100.00",
+      page_total_change: "100.00",
+    });
+  });
+
+  it("(review H3) dates a legacy debt by the day its balance last changed, and prices the move", () => {
+    const d = householdRow(U4);
+    expect(d).toMatchObject({ source_today: "debt", source_after_merge: "debt" });
+    // Today: the APR edit's updated_at. After: the Sep 1 history change, not Jun 1.
+    expect((d.debt_tier_as_of_today as Date).toISOString()).toBe("2026-09-10T15:00:00.000Z");
+    expect((d.debt_tier_as_of_after_merge as Date).toISOString()).toBe("2026-09-01T12:00:00.000Z");
+    expect(d).toMatchObject({
+      debt_tier_date_move: "earlier",
+      amex_rows_between_dates: "50.00",
+      page_total_change: "50.00",
+    });
+    expect(householdRow(U1).debt_tier_date_move).toBeNull();
   });
 
   it("lists the Amex cards the automatic sweep will link to a same-name manual debt", () => {

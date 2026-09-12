@@ -113,6 +113,17 @@ export async function recordPlaidSyncAttempt(opts: {
           .set({
             // The database clock, like the column default: one clock orders the rows.
             attemptedAt: sql`now()`,
+            // (PR-E review) Keep what collapsing would lose: how many times it
+            // failed and when the streak began. The jsonb column carries the
+            // pending-cleanup blob for that kind and is otherwise unused, so no
+            // DDL. The expressions read the row's values from before this update.
+            cleanupDetails: sql`jsonb_build_object('failureStreak', jsonb_build_object(
+              'count', coalesce((${plaidSyncAttemptsTable.cleanupDetails} -> 'failureStreak' ->> 'count')::int, 1) + 1,
+              'firstFailedAt', coalesce(
+                ${plaidSyncAttemptsTable.cleanupDetails} -> 'failureStreak' ->> 'firstFailedAt',
+                to_char(${plaidSyncAttemptsTable.attemptedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+              )
+            ))`,
             plaidDisplayMessage: opts.plaidDisplayMessage ?? null,
             requestId: opts.requestId ?? null,
             httpStatus: opts.httpStatus ?? null,
@@ -208,7 +219,27 @@ export async function listRecentSyncAttempts(
     .where(eq(plaidSyncAttemptsTable.plaidItemId, plaidItemId))
     .orderBy(sql`${plaidSyncAttemptsTable.attemptedAt} desc`)
     .limit(limit);
-  return rows.map((r) => ({
+  return rows.map((r) => {
+    const streak =
+      r.kind !== "pending_cleanup" && !r.success
+        ? ((r.cleanupDetails as { failureStreak?: { count?: number; firstFailedAt?: string } } | null)
+            ?.failureStreak ?? null)
+        : null;
+    return shapeAttempt(r, streak);
+  });
+}
+
+function shapeAttempt(
+  r: typeof plaidSyncAttemptsTable.$inferSelect,
+  streak: { count?: number; firstFailedAt?: string } | null,
+) {
+  return {
+    // (PR-E review) A failure streak collapsed into one row keeps its size and
+    // start: 1 and this row's time when it never repeated. Null on successes.
+    failureCount: r.success ? null : (streak?.count ?? 1),
+    firstFailedAt: r.success
+      ? null
+      : (streak?.firstFailedAt ?? r.attemptedAt.toISOString()),
     id: r.id,
     attemptedAt: r.attemptedAt.toISOString(),
     kind: r.kind,
@@ -225,8 +256,10 @@ export async function listRecentSyncAttempts(
     // (#733) Vanished-pending sweep audit blob. Null for every kind
     // other than "pending_cleanup".
     cleanupDetails:
-      (r.cleanupDetails as PlaidPendingCleanupDetails | null) ?? null,
-  }));
+      r.kind === "pending_cleanup"
+        ? ((r.cleanupDetails as PlaidPendingCleanupDetails | null) ?? null)
+        : null,
+  };
 }
 
 // Silence unused-import warnings if the helpers above happen to not

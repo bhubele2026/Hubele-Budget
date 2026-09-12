@@ -634,9 +634,17 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const overrides: Record<string, unknown> = {};
-  const changed = (a: unknown, b: unknown) =>
-    a !== undefined && String(a) !== String(b);
-  if (changed(parsed.data.balance, current.balance)) {
+  // (PR-E review) Compare numbers at the column's scale, not strings: "5000" and
+  // the stored "5000.00" are the same balance, and treating them as a change
+  // re-dated it, flipped a bank balance to manual and wrote a history row.
+  const changed = (a: unknown, b: unknown, scale: number) => {
+    if (a === undefined) return false;
+    const x = Number(a);
+    const y = Number(b);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return String(a) !== String(b);
+    return Math.round(x * scale) !== Math.round(y * scale);
+  };
+  if (changed(parsed.data.balance, current.balance, 100)) {
     overrides.balanceSource = "manual";
     // (PR-E review H1) A typed balance is as of the moment it is typed. The
     // entered date shows beside the bank's, and the Amex page and pending
@@ -659,9 +667,9 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
   ) {
     overrides.status = "archived";
   }
-  if (changed(parsed.data.apr, current.apr))
+  if (changed(parsed.data.apr, current.apr, 10000))
     overrides.aprSource = "manual";
-  if (changed(parsed.data.minPayment, current.minPayment))
+  if (changed(parsed.data.minPayment, current.minPayment, 100))
     overrides.minPaymentSource = "manual";
   let normalizedPatch: Record<string, unknown>;
   try {
@@ -684,7 +692,7 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  if (changed(parsed.data.balance, current.balance)) {
+  if (changed(parsed.data.balance, current.balance, 100)) {
     await recordBalanceSnapshot(req.userId!, req.householdId!, row.id, row.balance);
     // If a manual edit pushes the balance above the recorded original
     // (or no original anchor exists yet), bump the anchor so progress

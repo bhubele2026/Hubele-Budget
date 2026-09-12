@@ -12,6 +12,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { AMEX_TXN_SOURCES, computeWeeklyPayoff } from "../lib/amexAnchor";
 import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
 import { householdTodayISO } from "../lib/householdClock";
+import { debtBalanceAsOf, lastBalanceChangeDayByDebt } from "../lib/debtBalanceDate";
 
 const router: IRouter = Router();
 
@@ -301,12 +302,16 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     // `updated_at` (an APR edit or an hourly refresh moves it) and never by the
     // saved anchor (the estimate refresh moves that on every sync). Dated later
     // than its balance, the page rolls forward from the later day and drops the
-    // charges in between. A debt whose balance was never dated (a workbook
-    // import) is dated by its creation.
+    // charges in between.
+    // (PR-E review H3) …and never earlier either: a pre-merge hand edit left
+    // `last_balance_update` NULL or at an old bank date, which counted charges
+    // twice. `debtBalanceAsOf` takes the later of that date (else created_at)
+    // and the day the balance last changed in debt_balance_history.
+    const lastChangeDay = await lastBalanceChangeDayByDebt(debtRows.map((r) => r.id));
     const balanceAsOf = debtRows.reduce<Date>((acc, r) => {
-      const at = r.lastBalanceUpdate ?? r.createdAt;
+      const at = debtBalanceAsOf(r, lastChangeDay.get(r.id));
       return at > acc ? at : acc;
-    }, debtRows[0].lastBalanceUpdate ?? debtRows[0].createdAt);
+    }, new Date(0));
     debt = {
       id: debtRows[0].id,
       balance: String(totalBalance),

@@ -10466,6 +10466,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
             minOccurredOn: string;
             maxOccurredOn: string;
         }>, zod.ZodNull]>>;
+        failureCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        firstFailedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         kind: "balance" | "transactions" | "liabilities" | "pending_cleanup" | "amex_anchor";
@@ -10491,6 +10493,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
             minOccurredOn: string;
             maxOccurredOn: string;
         } | null | undefined;
+        failureCount?: number | null | undefined;
+        firstFailedAt?: string | null | undefined;
     }, {
         id: string;
         kind: "balance" | "transactions" | "liabilities" | "pending_cleanup" | "amex_anchor";
@@ -10516,6 +10520,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
             minOccurredOn: string;
             maxOccurredOn: string;
         } | null | undefined;
+        failureCount?: number | null | undefined;
+        firstFailedAt?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     attempts: {
@@ -10543,6 +10549,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
             minOccurredOn: string;
             maxOccurredOn: string;
         } | null | undefined;
+        failureCount?: number | null | undefined;
+        firstFailedAt?: string | null | undefined;
     }[];
 }, {
     attempts: {
@@ -10570,6 +10578,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
             minOccurredOn: string;
             maxOccurredOn: string;
         } | null | undefined;
+        failureCount?: number | null | undefined;
+        firstFailedAt?: string | null | undefined;
     }[];
 }>;
 /**

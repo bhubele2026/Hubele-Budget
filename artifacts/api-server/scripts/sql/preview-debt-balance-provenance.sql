@@ -153,11 +153,28 @@ ORDER BY household_id, status, sort_order, name;
 --   Amex sync, so "Calculated" becomes "From saved anchor". (Before the merge the
 --   refresh threw for these households and never wrote one.)
 --   debt_tier_as_of_today / _after_merge: the date the debt-row answer carries.
---   Today it is the later of the debts' updated_at and the anchor's asOf; after
---   the merge it is the debts' own balance date (last_balance_update, else
---   created_at). The page counts Amex rows only after that date.
+--   Today it is the later of the debts' updated_at and the anchor's asOf. After
+--   the merge it is each debt's balance date — the later of last_balance_update
+--   (else created_at) and the day its balance last changed in
+--   debt_balance_history (noon UTC on that day), the latest across the debts —
+--   the rule in lib/debtBalanceDate.ts. The page counts Amex rows only after it.
+--   debt_tier_date_move / _risk / amex_rows_between_dates / page_total_change:
+--   the dollar effect. Earlier → the page now adds the rows between (right if
+--   the balance lacked them, counted twice if it held them). Later → it stops
+--   adding them (right if the balance held them, dropped if not).
 --   anchor_after_merge: what the estimate refresh does with the saved anchor.
-WITH amex_accounts AS (
+WITH history AS (
+  SELECT dbh.debt_id, dbh.recorded_on, dbh.balance,
+         lag(dbh.balance) OVER (PARTITION BY dbh.debt_id ORDER BY dbh.recorded_on) AS prev_balance
+  FROM debt_balance_history dbh
+),
+last_change AS (
+  SELECT debt_id, max(recorded_on) AS last_balance_change_on
+  FROM history
+  WHERE prev_balance IS NULL OR prev_balance <> balance
+  GROUP BY debt_id
+),
+amex_accounts AS (
   SELECT pa.household_id, pa.id, pa.type, pa.liability_kind, pa.liability_balance
   FROM plaid_accounts pa
   LEFT JOIN plaid_items pi ON pi.id = pa.item_id
@@ -211,9 +228,18 @@ debt_tier AS (
     p.household_id,
     sum(d.balance)                                   AS debt_tier_balance,
     max(d.updated_at)                                AS max_updated_at,
-    max(coalesce(d.last_balance_update, d.created_at)) AS max_balance_date
+    max(
+      CASE
+        WHEN lc.last_balance_change_on IS NOT NULL
+         AND (coalesce(d.last_balance_update, d.created_at) AT TIME ZONE 'America/Chicago')::date
+             < lc.last_balance_change_on
+        THEN (lc.last_balance_change_on::text || 'T12:00:00Z')::timestamptz
+        ELSE coalesce(d.last_balance_update, d.created_at)
+      END
+    )                                                AS max_balance_date
   FROM per_household p
   JOIN debts d ON d.household_id = p.household_id
+  LEFT JOIN last_change lc ON lc.debt_id = d.id
   WHERE (p.has_linked_amex_debt
          AND d.plaid_account_id IN (SELECT a.id FROM amex_accounts a WHERE a.household_id = p.household_id))
      OR (NOT p.has_linked_amex_debt AND d.name ~* '(amex|american\s*express)')
@@ -257,6 +283,20 @@ sourced AS (
       ELSE 'missing'
     END AS source_after_merge
   FROM judged j
+),
+moved AS (
+  SELECT
+    s.*,
+    dates.date_today,
+    dates.date_after,
+    (dates.date_today AT TIME ZONE 'America/Chicago')::date AS day_today,
+    (dates.date_after AT TIME ZONE 'America/Chicago')::date AS day_after
+  FROM sourced s
+  CROSS JOIN LATERAL (
+    SELECT
+      CASE WHEN s.source_today = 'debt' THEN greatest(s.max_updated_at, s.anchor_as_of) END AS date_today,
+      CASE WHEN s.source_after_merge = 'debt' THEN s.max_balance_date END                AS date_after
+  ) dates
 )
 SELECT
   household_id,
@@ -278,8 +318,24 @@ SELECT
     ELSE 'none'
   END AS page_label_after_merge,
   debt_tier_balance,
-  CASE WHEN source_today = 'debt' THEN greatest(max_updated_at, anchor_as_of) END AS debt_tier_as_of_today,
-  CASE WHEN source_after_merge = 'debt' THEN max_balance_date END                AS debt_tier_as_of_after_merge,
+  date_today                          AS debt_tier_as_of_today,
+  date_after                          AS debt_tier_as_of_after_merge,
+  CASE
+    WHEN day_today IS NULL OR day_after IS NULL THEN NULL
+    WHEN day_after < day_today THEN 'earlier'
+    WHEN day_after > day_today THEN 'later'
+    ELSE 'same day'
+  END                                 AS debt_tier_date_move,
+  CASE
+    WHEN day_today IS NULL OR day_after IS NULL OR day_after = day_today THEN NULL
+    WHEN day_after < day_today THEN 'counted twice if the balance already held these rows'
+    ELSE 'dropped if the balance did not hold these rows'
+  END                                 AS debt_tier_date_move_risk,
+  btw.between_sum                     AS amex_rows_between_dates,
+  CASE
+    WHEN day_after < day_today THEN btw.between_sum
+    WHEN day_after > day_today THEN -btw.between_sum
+  END                                 AS page_total_change,
   (anchor IS NOT NULL)                AS has_amex_anchor,
   anchor ->> 'balance'                AS anchor_balance,
   anchor ->> 'asOf'                   AS anchor_as_of_text,
@@ -295,8 +351,16 @@ SELECT
   household_amex_rows,
   owner_amex_rows,
   estimate_now
-FROM sourced
-ORDER BY household_id;
+FROM moved m
+LEFT JOIN LATERAL (
+  SELECT coalesce(sum(t.amount), 0) AS between_sum
+  FROM transactions t
+  WHERE t.household_id = m.household_id
+    AND t.source IN ('amex', 'plaid:amex')
+    AND t.occurred_on > least(m.day_today, m.day_after)
+    AND t.occurred_on <= greatest(m.day_today, m.day_after)
+) btw ON m.day_today IS NOT NULL AND m.day_after IS NOT NULL AND m.day_today <> m.day_after
+ORDER BY m.household_id;
 
 -- 3. Amex cards the automatic sweep (linkRevolvingAmexDebts) will link to a
 --    same-name manual debt. Before the merge it replaced that debt's balance,

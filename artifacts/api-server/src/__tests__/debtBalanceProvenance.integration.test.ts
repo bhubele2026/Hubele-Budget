@@ -525,6 +525,44 @@ describe("(PR-E) a debt's balance provenance", () => {
     expect((await debtRow(debtId)).lastBalanceUpdate).toEqual(aug1);
   });
 
+  it("(review) PATCH with the same numbers written differently ('5000' for '5000.00', '0.2' for '0.2000') changes nothing: no new date, source or history", async () => {
+    const aug1 = new Date("2026-08-01T17:00:00.000Z");
+    const debtId = await seedDebt({
+      name: "Visa",
+      balance: "5000.00",
+      balanceSource: "plaid",
+      apr: "0.2000",
+      aprSource: "plaid",
+      minPayment: "25.00",
+      minPaymentSource: "plaid",
+      lastBalanceUpdate: aug1,
+    });
+
+    const patch = await request("PATCH", `/debts/${debtId}`, {
+      balance: "5000",
+      apr: "0.2",
+      minPayment: "25",
+    });
+
+    expect(patch.status).toBe(200);
+    const row = await debtRow(debtId);
+    expect(row.lastBalanceUpdate).toEqual(aug1);
+    expect([row.balanceSource, row.aprSource, row.minPaymentSource]).toEqual([
+      "plaid",
+      "plaid",
+      "plaid",
+    ]);
+    const history = await db
+      .select()
+      .from(debtBalanceHistoryTable)
+      .where(eq(debtBalanceHistoryTable.debtId, debtId));
+    expect(history).toEqual([]);
+
+    // A real change of one cent is still a change.
+    await request("PATCH", `/debts/${debtId}`, { balance: "5000.01" });
+    expect((await debtRow(debtId)).balanceSource).toBe("manual");
+  });
+
   it("(review H1) POST /debts with a balance dates it now, so a debt created by hand never shows 'date unknown'", async () => {
     const before = Date.now();
     const { status, json } = await request("POST", "/debts", {

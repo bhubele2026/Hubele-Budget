@@ -206,6 +206,46 @@ describe("(PR-E review) failure rows", () => {
     expect(await rows(itemRowId)).toHaveLength(5);
   });
 
+  it("a collapsed failure streak keeps how many times it failed and when it began", async () => {
+    const itemRowId = await seedBank();
+    const fail = () =>
+      recordPlaidSyncAttempt({
+        userId: OWNER,
+        plaidItemId: itemRowId,
+        kind: "liabilities",
+        success: false,
+        ...bankDown,
+      });
+    await fail();
+    const [first] = await rows(itemRowId);
+    for (let i = 0; i < 4; i++) await fail();
+    await recordPlaidSyncAttempt({
+      userId: OWNER,
+      plaidItemId: itemRowId,
+      kind: "balance",
+      success: true,
+    });
+
+    const res = await fetch(`${baseUrl}/plaid/items/${itemRowId}/sync-attempts`);
+    const body = (await res.json()) as {
+      attempts: Array<{
+        kind: string;
+        success: boolean;
+        failureCount: number | null;
+        firstFailedAt: string | null;
+        attemptedAt: string;
+        cleanupDetails: unknown;
+      }>;
+    };
+    const liab = body.attempts.find((a) => a.kind === "liabilities")!;
+    expect(liab.failureCount).toBe(5);
+    expect(Math.abs(new Date(liab.firstFailedAt!).getTime() - first!.attemptedAt.getTime())).toBeLessThanOrEqual(1);
+    expect(new Date(liab.attemptedAt).getTime()).toBeGreaterThan(first!.attemptedAt.getTime());
+    expect(liab.cleanupDetails).toBeNull();
+    const ok = body.attempts.find((a) => a.kind === "balance")!;
+    expect([ok.failureCount, ok.firstFailedAt]).toEqual([null, null]);
+  });
+
   it("the owner sees a failure a household member's sync recorded", async () => {
     const itemRowId = await seedBank();
     await recordPlaidSyncAttempt({

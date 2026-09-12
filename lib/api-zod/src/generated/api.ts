@@ -4836,6 +4836,18 @@ export const ListPlaidSyncAttemptsResponse = zod.object({
           zod.null(),
         ])
         .optional(),
+      failureCount: zod
+        .number()
+        .nullish()
+        .describe(
+          "(PR-E) How many times this failure happened. A failure identical to\nthe item's newest attempt of the same kind within an hour updates\nthat row instead of adding one, so one row can stand for several\ntries. 1 for a failure that never repeated; null on successes.\n",
+        ),
+      firstFailedAt: zod
+        .string()
+        .nullish()
+        .describe(
+          "(PR-E) ISO instant the failure streak on this row began\n(`attemptedAt` is its latest try). Null on successes.\n",
+        ),
     }),
   ),
 });

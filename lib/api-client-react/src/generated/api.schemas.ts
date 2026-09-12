@@ -3695,6 +3695,22 @@ export interface PlaidSyncAttempt {
   /** @nullable */
   errorKind?: PlaidSyncAttemptErrorKind;
   cleanupDetails?: PlaidPendingCleanupDetails | null;
+  /**
+   * (PR-E) How many times this failure happened. A failure identical to
+the item's newest attempt of the same kind within an hour updates
+that row instead of adding one, so one row can stand for several
+tries. 1 for a failure that never repeated; null on successes.
+
+   * @nullable
+   */
+  failureCount?: number | null;
+  /**
+   * (PR-E) ISO instant the failure streak on this row began
+(`attemptedAt` is its latest try). Null on successes.
+
+   * @nullable
+   */
+  firstFailedAt?: string | null;
 }
 
 export interface PlaidSyncAttemptsResult {
