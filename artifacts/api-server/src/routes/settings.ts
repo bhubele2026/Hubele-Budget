@@ -87,6 +87,9 @@ router.post(
  *   consolidation gate.
  * - `budgetMay2026AmountsV1`: `routes/budget.ts`, the one-time May 2026
  *   planned-amount gate.
+ * - `defaultsSeededAt`: `routes/budget.ts` seedDefaultsOnce, when the
+ *   household's default categories, bills and rules were settled. Losing it
+ *   would not re-seed a household with data, but it is the durable record.
  *
  * A new server-written preference key belongs in this list.
  */
@@ -95,6 +98,7 @@ export const SERVER_OWNED_PREFERENCE_KEYS = [
   "amexCleanupDoneAt",
   "budgetCategoriesV2",
   "budgetMay2026AmountsV1",
+  "defaultsSeededAt",
 ] as const;
 
 /**
