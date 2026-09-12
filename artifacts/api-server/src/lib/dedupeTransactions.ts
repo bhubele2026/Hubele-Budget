@@ -93,7 +93,15 @@ function mergeStatePatch(
   loser: TxnRow,
 ): Partial<typeof transactionsTable.$inferInsert> {
   const patch: Partial<typeof transactionsTable.$inferInsert> = {};
-  if (!survivor.categoryId && loser.categoryId) patch.categoryId = loser.categoryId;
+  // (round 6, review d) Track whether THIS merge actually moved categoryId
+  // and/or isTransfer from the loser — not merely whether the loser happens
+  // to carry isTransferUserOverridden. A loser can hold that flag while
+  // contributing neither value (e.g. categoryId null, isTransfer false: a
+  // "not a transfer" click with no category ever picked); gating on the
+  // carry itself, below, is what keeps that case from mislabeling a
+  // survivor's own untouched, automatic filing as hand-filed.
+  const categoryCarried = !survivor.categoryId && !!loser.categoryId;
+  if (categoryCarried) patch.categoryId = loser.categoryId;
   if (!survivor.debtId && loser.debtId) patch.debtId = loser.debtId;
   if (!survivor.forecastFlag && loser.forecastFlag) patch.forecastFlag = true;
   if (!survivor.weeklyAllowance && loser.weeklyAllowance) patch.weeklyAllowance = true;
@@ -106,12 +114,23 @@ function mergeStatePatch(
   if (!survivor.weeklyBucket && loser.weeklyBucket) patch.weeklyBucket = loser.weeklyBucket;
   if (!survivor.member && loser.member) patch.member = loser.member;
   if (!survivor.owedBy && loser.owedBy) patch.owedBy = loser.owedBy;
-  if (!survivor.isTransfer && loser.isTransfer) patch.isTransfer = true;
-  // (round 5, review M) The signal effectiveFiling (round 4) reads to decide
-  // hand-vs-automatic must survive a dedupe merge too, or a survivor that
-  // absorbs a loser's hand-filed category/isTransfer without absorbing the
-  // flag that explains WHY looks automatic to a later pending→posted pairing.
-  if (!survivor.isTransferUserOverridden && loser.isTransferUserOverridden) {
+  const transferCarried = !survivor.isTransfer && !!loser.isTransfer;
+  if (transferCarried) patch.isTransfer = true;
+  // (round 5, review M; round 6, review d) The signal effectiveFiling
+  // (round 4) reads to decide hand-vs-automatic must survive a dedupe merge
+  // too, or a survivor that absorbs a loser's hand-filed category/isTransfer
+  // without absorbing the flag that explains WHY looks automatic to a later
+  // pending→posted pairing. But it must carry ONLY alongside an actual
+  // categoryId/isTransfer carry (above) — the loser's override flag on its
+  // own proves nothing moved (round 6 repro: categoryId null, isTransfer
+  // false, override true — a bare "not a transfer" click with no category).
+  // Carrying it unconditionally would relabel the survivor's own, untouched,
+  // rule-assigned category as hand-filed for no reason a human decided.
+  if (
+    (categoryCarried || transferCarried) &&
+    !survivor.isTransferUserOverridden &&
+    loser.isTransferUserOverridden
+  ) {
     patch.isTransferUserOverridden = true;
   }
   if (

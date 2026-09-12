@@ -429,6 +429,32 @@ hole: one more user-facing write path never set it.
 **Gates (worktree root, this head):** see the top-level report; typecheck, both web TZs, full API suite, build +
 entry graph and codegen all re-ran clean on the merged tree after these two edits.
 
+## Review round 6
+
+Second look at round 5's `mergeStatePatch` fix found the override carry (~107-114, both call sites ~283 and ~570)
+fired on the wrong condition: `!survivor.isTransferUserOverridden && loser.isTransferUserOverridden`, with no check
+that the merge actually moved anything. A loser can carry `isTransferUserOverridden: true` while contributing
+neither `categoryId` nor `isTransfer` — e.g. someone once clicked "not a transfer" on a duplicate row that was
+never categorized (`categoryId` null, `isTransfer` false, override true). Merging that loser into a survivor with
+its own automatic, rule-assigned category left the survivor's `categoryId`/`isTransfer` untouched but flipped its
+override flag on anyway — the survivor then reads as hand-filed with no human decision behind it, so a later
+pending→posted pairing (`effectiveFiling`, round 4) would pick its stale automatic category over a posted row's
+current one and misallocate money.
+
+**Fix:** `mergeStatePatch` now tracks `categoryCarried` and `transferCarried` — whether this specific merge actually
+set `patch.categoryId` / `patch.isTransfer` from the loser — and gates the override carry on `categoryCarried ||
+transferCarried`, in addition to the existing "survivor doesn't already have it" guard.
+
+**Fails-before, round 6 (on `4cd09198`, source-only `git stash` of `dedupeTransactions.ts`; tests as of this head):**
+- **`dedupeTransactions.integration.test.ts`** (new "round 6, review d" describe): 1 of 2 new tests fails on a
+  figure — the false-positive repro (survivor's `isTransferUserOverridden` read `true` instead of staying `false`).
+  The "real carry" test and both existing round 5 tests (hand-filed-loser carry; already-overridden survivor)
+  already passed on `4cd09198` unchanged — neither relied on the ungated behavior, so they needed no adjustment.
+- Total: **1 of 2 new tests fails before the round 6 fix**, on a stored value.
+
+**Gates (this head):** typecheck green; `dedupeTransactions.integration.test.ts` (21/21), `budgetPendingOnce.integration.test.ts`
+and `pendingFiling.test.ts` all green; full API suite, both web TZs, build + entry graph — see the top-level report.
+
 ## Residuals
 
 1. **The Allowances page and the Banking strip still sum raw rows** in the browser (`bucketSpend.ts`): no pairing and no
