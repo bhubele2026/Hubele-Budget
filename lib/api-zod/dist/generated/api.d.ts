@@ -3549,7 +3549,7 @@ export declare const UpdateRecurringItemBody: zod.ZodObject<{
     anchorDate?: string | null | undefined;
     active?: string | undefined;
 }>;
-export declare const UpdateRecurringItemResponse: zod.ZodObject<{
+export declare const UpdateRecurringItemResponse: zod.ZodIntersection<zod.ZodObject<{
     id: zod.ZodString;
     name: zod.ZodString;
     kind: zod.ZodString;
@@ -3582,7 +3582,33 @@ export declare const UpdateRecurringItemResponse: zod.ZodObject<{
     debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
-}>;
+}>, zod.ZodObject<{
+    moveResult: zod.ZodOptional<zod.ZodObject<{
+        carried: zod.ZodNumber;
+        needsReview: zod.ZodNumber;
+        cleared: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        carried: number;
+        needsReview: number;
+        cleared: number;
+    }, {
+        carried: number;
+        needsReview: number;
+        cleared: number;
+    }>>;
+}, "strip", zod.ZodTypeAny, {
+    moveResult?: {
+        carried: number;
+        needsReview: number;
+        cleared: number;
+    } | undefined;
+}, {
+    moveResult?: {
+        carried: number;
+        needsReview: number;
+        cleared: number;
+    } | undefined;
+}>>;
 export declare const DeleteRecurringItemParams: zod.ZodObject<{
     id: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
