@@ -3216,12 +3216,13 @@ export const GetForecastResponse = zod.object({
               dayDelta: zod.number(),
               confidence: zod.string(),
               ambiguous: zod.boolean(),
+              tier: zod.union([zod.literal(1), zod.literal(2), zod.literal(3)]),
               offCurve: zod.boolean(),
             }),
           )
           .optional()
           .describe(
-            '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, and either an exact prompt payment or the\nplan\'s full name paying at most max($25, 10%) more); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+            '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). The bank\nrow always counts. Amounts are signed; `difference` is |txn| − |plan|\n(positive = paid more than planned). `confidence` is \"high\",\n\"medium\" or \"low\".\n(Decision 13) `tier` is what the pair proves: 1 explicit (a\nchecking row tagged to the plan\'s debt); 2 obligation evidence (not\nambiguous, on the checking account, paying the plan − max($1, 1%)\nto the plan + max($25, 10%), and the bill\'s own category when no\nother active bill has it, or its full name when no other active\nitem\'s full name is in the row, or some of its name within\nmax($1, 1%) and 5 days); 3 a suggestion only. Only a match with\n`offCurve` true (`tier` ≤ 2) is off the forecast curve, and only a\ntier 1 or 2 pair pays an overdue bill; every other plan still counts.\n',
           ),
       }),
       zod.null(),
@@ -3552,12 +3553,13 @@ export const GetForecastCashSignalResponse = zod.object({
         dayDelta: zod.number(),
         confidence: zod.string(),
         ambiguous: zod.boolean(),
+        tier: zod.union([zod.literal(1), zod.literal(2), zod.literal(3)]),
         offCurve: zod.boolean(),
       }),
     )
     .optional()
     .describe(
-      '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, and either an exact prompt payment or the\nplan\'s full name paying at most max($25, 10%) more); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+      '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). The bank\nrow always counts. Amounts are signed; `difference` is |txn| − |plan|\n(positive = paid more than planned). `confidence` is \"high\",\n\"medium\" or \"low\".\n(Decision 13) `tier` is what the pair proves: 1 explicit (a\nchecking row tagged to the plan\'s debt); 2 obligation evidence (not\nambiguous, on the checking account, paying the plan − max($1, 1%)\nto the plan + max($25, 10%), and the bill\'s own category when no\nother active bill has it, or its full name when no other active\nitem\'s full name is in the row, or some of its name within\nmax($1, 1%) and 5 days); 3 a suggestion only. Only a match with\n`offCurve` true (`tier` ≤ 2) is off the forecast curve, and only a\ntier 1 or 2 pair pays an overdue bill; every other plan still counts.\n',
     ),
 });
 

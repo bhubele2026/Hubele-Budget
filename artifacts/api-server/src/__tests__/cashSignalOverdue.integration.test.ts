@@ -248,38 +248,27 @@ describe("PR6 — the overdue window", () => {
     expect(sig.overdueOutsideForecast).toEqual([]);
   });
 
-  // ⭐ (PR6 review, H1) REPLACES "an overdue bill with only a low suggestion still
-  // drags". The reviewer measured that rule bringing back paid-but-unmatched
-  // bills as dips (rent paid by Zelle, a mortgage "LOAN PMT", card minimums). The
-  // adopted rule: an overdue plan with a non-ambiguous pair of any confidence is
-  // paid for the curve, and listed in `overdueAssumedPaid`.
-  it("an overdue bill with only a low, non-ambiguous pair counts as paid for the curve, and is listed", async () => {
+  // ⭐ (Decision 13) REPLACES "(PR6 review, H1) an overdue bill with only a low,
+  // non-ambiguous pair counts as paid for the curve, and is listed". The owner
+  // ruled that merchant similarity — let alone a nameless row of the same amount —
+  // is not proof of payment: such a pair is tier 3, a suggestion. The bill drags
+  // (before: 1,000.00 on 05-15 and listed in `overdueAssumedPaid`; now 940.00) and
+  // the pair stays in `matches` for the user to confirm.
+  it("(decision 13) an overdue bill with only a low, non-ambiguous pair still drags; the pair stays a tier-3 suggestion", async () => {
     await snapshot();
     const water = await bill({ name: "Water", frequency: "onetime", anchorDate: "2026-05-10", amount: "60" });
-    // No payee name, same amount, a day later: a "low" pair, never `offCurve`.
+    // No payee name, same amount, a day later: a "low" pair, tier 3, never `offCurve`.
     const txn = await bankRow("2026-05-11", "-60.00", "ACH DEBIT 88213");
     const sig = await signal();
     expect(sig.bankToday).toBe("1000.00"); // the row is dated before the snapshot day
-    expect(balanceOn(sig, "2026-05-15")).toBe("1000.00");
-    expect(sig.events).toEqual([]);
+    expect(balanceOn(sig, "2026-05-15")).toBe("940.00");
+    expect(sig.events).toEqual([
+      expect.objectContaining({ occurrenceKey: `${water}|2026-05-10`, date: "2026-05-15", amount: "-60.00", assumption: "overdue_assumed_unpaid" }),
+    ]);
     expect(sig.matches).toEqual([
-      expect.objectContaining({ planKey: `${water}|2026-05-10`, txnId: txn, confidence: "low", offCurve: false }),
+      expect.objectContaining({ planKey: `${water}|2026-05-10`, txnId: txn, confidence: "low", tier: 3, offCurve: false }),
     ]);
-    expect(sig.overdueAssumedPaid).toEqual([
-      {
-        planKey: `${water}|2026-05-10`,
-        itemId: water,
-        occurrenceDate: "2026-05-10",
-        dueDate: "2026-05-10",
-        label: "Water",
-        daysOverdue: 4,
-        planAmount: "-60.00",
-        txnId: txn,
-        txnAmount: "-60.00",
-        confidence: "low",
-        unpaidRemainder: "0.00",
-      },
-    ]);
+    expect(sig.overdueAssumedPaid).toEqual([]);
     expect(sig.overdueOutsideForecast).toEqual([]);
   });
 

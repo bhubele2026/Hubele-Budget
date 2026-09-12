@@ -162,6 +162,8 @@ describe("(PR5) a plan a bank row confidently paid leaves the curve", () => {
       dayDelta: -8,
       confidence: "medium",
       ambiguous: false,
+      // (Decision 13) The bill's full name, unique in the household: tier 2.
+      tier: 2,
       offCurve: true,
     });
   });
@@ -176,7 +178,8 @@ describe("(PR5) a plan a bank row confidently paid leaves the curve", () => {
 
     expect(sig.bankToday).toBe("827.00");
     expect(balanceOn(sig, "2026-05-20")).toBe("827.00");
-    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ difference: "23.00", dayDelta: -8, offCurve: true });
+    // (Decision 13) Still holds: the full name is unique in the household, so tier 2.
+    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ difference: "23.00", dayDelta: -8, tier: 2, offCurve: true });
   });
 
   it("'Not this' puts the plan back on the curve and the pair never returns", async () => {
@@ -272,7 +275,7 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
 
     expect(sig.bankToday).toBe("-500.00");
     expect(balanceOn(sig, "2026-05-15")).toBe("-2000.00");
-    expect(matchFor(sig, `${rent}|2026-05-15`)).toMatchObject({ confidence: "low", offCurve: false });
+    expect(matchFor(sig, `${rent}|2026-05-15`)).toMatchObject({ confidence: "low", tier: 3, offCurve: false });
   });
 
   it("a $15.49 subscription and a $15.00 lunch: the subscription still counts", async () => {

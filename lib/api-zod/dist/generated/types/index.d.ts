@@ -120,6 +120,7 @@ export * from "./cashSignalDailyItem";
 export * from "./cashSignalEventsItem";
 export * from "./cashSignalListedPlan";
 export * from "./cashSignalMatchesItem";
+export * from "./cashSignalMatchesItemTier";
 export * from "./cashSignalStatus";
 export * from "./category";
 export * from "./categoryInput";

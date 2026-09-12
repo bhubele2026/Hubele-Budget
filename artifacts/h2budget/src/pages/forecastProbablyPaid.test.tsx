@@ -162,7 +162,9 @@ const MATCHES = [
     dayDelta: -8,
     confidence: "medium",
     ambiguous: false,
-    // "water" is in the row, and $23 is within max($25, 10%): off the curve.
+    // "water" is in the row, and $23 is within max($25, 10%): tier 2 (the
+    // bill's full name), off the curve — but not confirmed.
+    tier: 2,
     offCurve: true,
   },
   {
@@ -176,7 +178,8 @@ const MATCHES = [
     dayDelta: -9,
     confidence: "low",
     ambiguous: false,
-    // $100 short is outside max($25, 10%): a suggestion only, still counted.
+    // $100 short is outside max($25, 10%): tier 3, a suggestion only, still counted.
+    tier: 3,
     offCurve: false,
   },
 ];
@@ -447,6 +450,23 @@ describe("Forecast — probably paid (PR5b)", () => {
     expect(screen.getByTestId("mark-missed-rent-2026-05-22")).toBeTruthy();
     expect(screen.queryByTestId("move-plan-water-2026-05-20")).toBeNull();
     expect(screen.queryByTestId("mark-missed-water-2026-05-20")).toBeNull();
+  });
+
+  it("(decision 13) a tier-2 pair nobody confirmed is still Suggested with Confirm / Not this; a tier-3 pair is a suggestion that keeps Move and Mark missed", () => {
+    renderPage();
+    // Tier 2 (Water): the server already leaves it out of the forecast, but nothing is written until an answer.
+    expect(screen.getByTestId("plan-row-water-2026-05-20").textContent).toContain("Suggested");
+    expect(screen.getByTestId("plan-probably-paid-curve-water-2026-05-20").textContent).toBe("Out of forecast");
+    expect(screen.getByTestId("plan-confirm-water-2026-05-20")).toBeTruthy();
+    expect(screen.getByTestId("plan-not-this-water-2026-05-20")).toBeTruthy();
+    // Tier 3 (Rent): still in the forecast, with the same answers plus Move and Mark missed.
+    expect(screen.getByTestId("plan-row-rent-2026-05-22").textContent).toContain("Suggested");
+    expect(screen.getByTestId("plan-probably-paid-curve-rent-2026-05-22").textContent).toBe("Still in forecast");
+    expect(screen.getByTestId("plan-confirm-rent-2026-05-22")).toBeTruthy();
+    expect(screen.getByTestId("plan-not-this-rent-2026-05-22")).toBeTruthy();
+    expect(screen.getByTestId("move-plan-rent-2026-05-22")).toBeTruthy();
+    expect(screen.getByTestId("mark-missed-rent-2026-05-22")).toBeTruthy();
+    expect(upsertMutate).not.toHaveBeenCalled();
   });
 
   it("Matched impact is the server's figure, unchanged by suggestions", () => {

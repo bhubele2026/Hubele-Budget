@@ -29,11 +29,15 @@ export {
   MATCH_EARLY_DAYS,
   MATCH_LATE_DAYS,
   MATCH_OFF_CURVE_SHARE,
+  MATCH_PROMPT_DAYS,
   MATCH_STOP_WORDS,
   MATCH_STRICT_DAYS,
   type MatchConfidence,
+  type MatchEvidence,
+  type MatchItem,
   type MatchPlan,
   type MatchRow,
+  type MatchTier,
   type PlanRowMatch,
 } from "./planMatch";
 export { plansPaidInFullByName, type PaidInFull } from "./planMatch";

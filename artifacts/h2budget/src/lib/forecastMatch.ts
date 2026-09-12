@@ -84,15 +84,19 @@ export type CashSignalMatch = {
   dayDelta: number;
   confidence: string;
   ambiguous: boolean;
-  /** True only for pairs the server took OFF the curve (payee name in the
-   *  row, not ambiguous, amounts close). Every other pair is a suggestion
-   *  only: the plan still counts. Anything but `true` is treated as on the
-   *  curve, so a missing flag can never hide a bill. */
+  /** (Decision 13) What the pair proves: 1 explicit, 2 obligation evidence,
+   *  3 a suggestion only. Informational here: `offCurve` still decides. */
+  tier?: number;
+  /** True only for pairs the server took OFF the curve (tier 1 or 2).
+   *  Every other pair is a suggestion only: the plan still counts. Anything
+   *  but `true` is treated as on the curve, so a missing flag can never hide
+   *  a bill. */
   offCurve?: boolean;
 };
 
 /** A bank row the server paired with an open plan. Shown as "Suggested"
- *  until the user answers; only an `offCurve` pair is out of the forecast. */
+ *  until the user answers — a tier-2 pair too, which the server already
+ *  leaves out of the forecast; only an `offCurve` pair is out of it. */
 export type ProbablyPaid = {
   txnId: string;
   /** Resolution key date — what Confirm / Not this / Partial post. */
@@ -102,6 +106,8 @@ export type ProbablyPaid = {
   dayDelta: number;
   confidence: string;
   ambiguous: boolean;
+  /** (Decision 13) The server's tier; 3 when it sent none. */
+  tier: number;
   /** The server's curve already leaves the plan out. */
   offCurve: boolean;
   txnDate: string;
@@ -397,6 +403,7 @@ export function buildLineRegister(opts: {
         dayDelta: m.dayDelta,
         confidence: m.confidence,
         ambiguous: m.ambiguous,
+        tier: m.tier ?? 3,
         offCurve: m.offCurve === true,
         txnDate: bank?.date ?? addDaysISO(date, m.dayDelta),
         txnDescription: bank?.txn.description ?? null,

@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { CashSignalMatchesItemTier } from "./cashSignalMatchesItemTier";
 export type CashSignalMatchesItem = {
     planKey: string;
     planItemId: string;
@@ -16,6 +17,7 @@ export type CashSignalMatchesItem = {
     dayDelta: number;
     confidence: string;
     ambiguous: boolean;
+    tier: CashSignalMatchesItemTier;
     offCurve: boolean;
 };
 //# sourceMappingURL=cashSignalMatchesItem.d.ts.map

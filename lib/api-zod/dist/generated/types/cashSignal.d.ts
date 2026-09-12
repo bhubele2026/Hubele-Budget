@@ -58,13 +58,19 @@ export interface CashSignal {
    */
     overdueAssumedPaid?: CashSignalAssumedPaidPlan[];
     /** (PR5) Plans a bank row probably paid, as suggestions for the user
-  to confirm ("matched"/"partial") or reject ("not_match"). Only a
-  match with `offCurve` true is off the forecast curve (the payee's
-  name, not ambiguous, and either an exact prompt payment or the
-  plan's full name paying at most max($25, 10%) more); every other plan still
-  counts. The bank row always counts. Amounts are signed;
-  `difference` is |txn| − |plan| (positive = paid more than planned).
-  `confidence` is "high", "medium" or "low".
+  to confirm ("matched"/"partial") or reject ("not_match"). The bank
+  row always counts. Amounts are signed; `difference` is |txn| − |plan|
+  (positive = paid more than planned). `confidence` is "high",
+  "medium" or "low".
+  (Decision 13) `tier` is what the pair proves: 1 explicit (a
+  checking row tagged to the plan's debt); 2 obligation evidence (not
+  ambiguous, on the checking account, paying the plan − max($1, 1%)
+  to the plan + max($25, 10%), and the bill's own category when no
+  other active bill has it, or its full name when no other active
+  item's full name is in the row, or some of its name within
+  max($1, 1%) and 5 days); 3 a suggestion only. Only a match with
+  `offCurve` true (`tier` ≤ 2) is off the forecast curve, and only a
+  tier 1 or 2 pair pays an overdue bill; every other plan still counts.
    */
     matches?: CashSignalMatchesItem[];
 }

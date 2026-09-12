@@ -17,16 +17,33 @@ import { matchesCardPaymentPattern, PFC_CARD_PAYMENT } from "./spendingRule";
  * Pairing is one to one, best score first; a pair whose runner-up is close is
  * flagged `ambiguous`.
  *
- * ⚠️ (PR5 review) Only an `offCurve` pair may take its plan off the forecast
- * curve before the user answers: not ambiguous, and either "high" (the payee's
- * name, within max($1, 1%) and 5 days) or the plan's FULL name with the row
- * paying no less than the plan − max($1, 1%) and no more than the plan +
- * max($25, 10%). An unconfirmed guess must never overstate projected cash — the
- * reviewer found $1,500 rent taken off the curve by an unrelated $1,500 Zelle
- * with no name, and "rent" inside "PARENTS". An UNDERPAID bill stays on the
- * curve (the user confirms "partial"): dropping it would hide what is still due.
- * A different bill from the same payee ("VERIZON FIOS" for "Verizon Wireless")
- * shares only part of the name and stays a suggestion too (second review).
+ * ⭐ (Owner decision 13) WHAT A PAIR PROVES — ITS `tier`. Pairing above is
+ * unchanged; the tier decides whether the pair is proof of payment.
+ * "A different charge from the same company must not hide an unpaid bill.
+ * Merchant similarity alone is insufficient proof of payment."
+ *   - Tier 1, EXPLICIT: the row is a checking-account row the user tagged to the
+ *     plan's debt, paying no less than the plan − max($1, 1%). (A matched or
+ *     partial resolution is explicit too; those plans never reach the matcher.)
+ *     ⚠️ HOOK: a stored payment link and an Amex payoff event are tier-1
+ *     evidence in later PRs — see `explicitEvidence`.
+ *   - Tier 2, OBLIGATION EVIDENCE, requires ALL of: not ambiguous; the row is on
+ *     the configured checking account (`onChecking`); dated 10 days before to 14
+ *     days after the plan (the pairing window); paying between the plan −
+ *     max($1, 1%) and the plan + max($25, 10%); AND ONE of:
+ *       (a) `category` — the row's category is the plan's, and that category is
+ *           on exactly one active expense bill (this one);
+ *       (b) `full_name` — the plan's FULL name, and no other active item of the
+ *           same direction carries its full name in this row too;
+ *       (c) `name_exact` — some of the plan's name, within max($1, 1%) and 5 days.
+ *   - Tier 3, SUGGESTION ONLY: every other pair. It stays on the curve (an
+ *     overdue plan drags) until the user answers.
+ * `offCurve` is `tier ≤ 2`: only those may take a plan off the forecast curve
+ * before the user answers. An unconfirmed guess must never overstate projected
+ * cash — the PR5 reviewer found $1,500 rent taken off the curve by an unrelated
+ * $1,500 Zelle with no name, and "rent" inside "PARENTS". An UNDERPAID bill stays
+ * on the curve (the user confirms "partial"): dropping it would hide what is
+ * still due. A different bill from the same payee ("VERIZON FIOS" for "Verizon
+ * Wireless") shares only part of the name and stays a suggestion too.
  */
 
 export type MatchPlan = {
@@ -41,10 +58,16 @@ export type MatchPlan = {
   amount: number;
   label: string;
   /**
-   * (Debt tag) The debt this plan is the minimum of. Read only by
-   * `plansPaidInFullByName`; the matcher ignores it.
+   * (Debt tag) The debt this plan pays: a `debt:` minimum's debt, or the debt a
+   * recurring bill is linked to. A row tagged to the same debt is tier-1
+   * evidence; a row tagged to another debt is never evidence (tier 3).
    */
   debtId?: string | null;
+  /**
+   * (Decision 13) The plan's category — a recurring bill's `category_id`. Null
+   * for a debt minimum and the Avalanche extra, which have none.
+   */
+  categoryId?: string | null;
 };
 
 export type MatchRow = {
@@ -58,11 +81,39 @@ export type MatchRow = {
   /** (PR6 second review) Plaid's detailed category (PR7 rule 8). */
   pfcDetailed?: string | null;
   /**
-   * (Debt tag) The debt the user tagged this row to (PR7 rule 2). Read only by
-   * `plansPaidInFullByName`; the matcher ignores it.
+   * (Debt tag) The debt the user tagged this row to (PR7 rule 2). The ledger
+   * passes it only for a Plaid row on the checking account (review M2).
    */
   debtId?: string | null;
+  /** (Decision 13) The row's category (a mapping rule's or the user's). */
+  categoryId?: string | null;
+  /**
+   * (Decision 13) A Plaid row on the configured checking account. Only such a
+   * row can be tier-1 or tier-2 evidence: a manual row, or any row when no
+   * checking account is configured, is at most a suggestion.
+   */
+  onChecking: boolean;
 };
+
+/**
+ * (Decision 13) An active planned item: every recurring item marked active, and
+ * each debt minimum and the Avalanche extra the forecast expands. Tier 2 judges
+ * "exactly one bill in the category" and "no other item with the full name"
+ * against this list, so it must hold every active item — not only the plans
+ * inside the matching window.
+ */
+export type MatchItem = {
+  itemId: string;
+  label: string;
+  categoryId: string | null;
+  income: boolean;
+};
+
+/** (Decision 13) 1 = explicit, 2 = obligation evidence, 3 = suggestion only. */
+export type MatchTier = 1 | 2 | 3;
+
+/** (Decision 13) Why a pair is tier 1 (`debt_tag`) or tier 2 (the rest). */
+export type MatchEvidence = "debt_tag" | "category" | "full_name" | "name_exact";
 
 /**
  * (PR6 second review) Is this row a payment TO A CREDIT CARD, by PR7's rule
@@ -92,15 +143,21 @@ export type PlanRowMatch = {
   dayDelta: number;
   confidence: MatchConfidence;
   ambiguous: boolean;
-  /** The plan may leave the forecast curve before the user answers (see above). */
+  /** (Decision 13) What the pair proves: 1 explicit, 2 obligation evidence, 3 suggestion only. */
+  tier: MatchTier;
+  /** (Decision 13) Why the pair is tier 1 or 2; null for tier 3. Not sent to the web. */
+  evidence: MatchEvidence | null;
+  /** The plan may leave the forecast curve before the user answers: `tier ≤ 2`. */
   offCurve: boolean;
 };
 
 export const MATCH_EARLY_DAYS = 10;
 export const MATCH_LATE_DAYS = 14;
 export const MATCH_STRICT_DAYS = 3;
-/** A pair carrying the plan's full name, overpaid by at most max($25, this share of the plan), may leave the curve. */
+/** A tier-2 pair may pay at most max($25, this share of the plan) more than planned. */
 export const MATCH_OFF_CURVE_SHARE = 0.1;
+/** (Decision 13, c) Some of the name, within max($1, 1%), at most this many days from the plan. */
+export const MATCH_PROMPT_DAYS = 5;
 
 /**
  * Words that appear in plan labels or bank descriptions without identifying a
@@ -123,6 +180,10 @@ const ALIASES: ReadonlyArray<ReadonlyArray<readonly string[]>> = [[["amex"], ["a
 
 const cents = (n: number): number => Math.round(Math.abs(n) * 100);
 const dayNumber = (iso: string): number => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
+/** max($1, 1% of the plan), in cents. */
+const strictCents = (planCents: number): number => Math.max(100, Math.round(planCents * 0.01));
+/** max($25, 10% of the plan), in cents. */
+const overpayCents = (planCents: number): number => Math.max(2500, Math.round(planCents * MATCH_OFF_CURVE_SHARE));
 
 /**
  * How much of the plan's name the description carries: 0 = none, 1 = some
@@ -158,7 +219,8 @@ export type PaidInFull = {
   txnAmount: number;
   /**
    * What made the row a payment of this plan: `card_payment` (a card payment
-   * naming the card) or `debt_tag` (the user tagged the row to the plan's debt).
+   * naming the card — decision 13's tier-2 "payment reference") or `debt_tag`
+   * (the user tagged the row to the plan's debt — tier 1).
    */
   evidence: "card_payment" | "debt_tag";
 };
@@ -176,16 +238,18 @@ export type PaidInFull = {
  *   - the row pays at least the plan;
  *   - the pair was not rejected ("Not this");
  *   - and the row is a payment OF THIS DEBT, by one of:
- *     - (debt tag) the user tagged the row to the plan's debt (`debtId`, PR7's
- *       rule 2). The name is not needed: "CHASE ONLINE PAYMENT" tagged to Chase
- *       Sapphire pays its minimum, although PR7's phrases don't know it.
- *       ⚠️ A row tagged to ANOTHER debt never pays this plan, by tag or by name;
- *     - (card_payment) an untagged row that is a CARD PAYMENT by PR7's rule
- *       (`isCardPaymentRow`; second review: a name word alone let "TARGET T-2331",
- *       a purchase, pay the Target RedCard minimum, "APPLE STORE" the Apple Card,
- *       and "CAPITAL ONE AUTO CARPAY", a car loan, a Capital One card) AND carries a
- *       distinctive word of the plan's label as a word of its description (the
- *       matcher's name rule: "Capital One Platinum minimum" ↔ "CAPITAL ONE MOBILE PYMT").
+ *     - (debt tag, decision 13 tier 1) the user tagged the row to the plan's debt
+ *       (`debtId`, PR7's rule 2). The name is not needed: "CHASE ONLINE PAYMENT"
+ *       tagged to Chase Sapphire pays its minimum, although PR7's phrases don't
+ *       know it. ⚠️ A row tagged to ANOTHER debt never pays this plan, by tag or by name;
+ *     - (card_payment, decision 13 tier 2 "payment reference") an untagged row
+ *       that is a CARD PAYMENT by PR7's rule (`isCardPaymentRow`; second review: a
+ *       name word alone let "TARGET T-2331", a purchase, pay the Target RedCard
+ *       minimum, "APPLE STORE" the Apple Card, and "CAPITAL ONE AUTO CARPAY", a
+ *       car loan, a Capital One card) AND carries a distinctive word of the plan's
+ *       label as a word of its description (the matcher's name rule: "Capital One
+ *       Platinum minimum" ↔ "CAPITAL ONE MOBILE PYMT"). Unchanged by decision 13:
+ *       it does not ask for `onChecking` or an upper amount bound.
  * One row pays one plan and one plan takes one row: tagged pairs first, then
  * nearest date first. A row inside two occurrences' windows pays only one.
  */
@@ -239,21 +303,101 @@ export function plansPaidInFullByName(
 type Candidate = {
   plan: MatchPlan;
   row: MatchRow;
+  rowWords: ReadonlySet<string>;
   gapCents: number;
   dayDelta: number;
-  evidence: boolean;
+  named: boolean;
   name: 0 | 1 | 2;
   score: number;
 };
 
+type Tiered = { tier: MatchTier; evidence: MatchEvidence | null };
+const SUGGESTION: Tiered = { tier: 3, evidence: null };
+
 /**
- * Pair plans with rows one to one. `notMatch` holds `<planKey>#<txnId>` pairs
- * the user rejected; they never pair again. Each label and description is split
- * into words once, and the cheap sign/date/amount checks run first.
+ * (Decision 13) TIER 1 — explicit evidence that the row paid the plan.
+ * ⚠️ HOOK for later PRs: a stored payment link (the user linked this row to this
+ * plan) and an Amex payoff event are tier-1 evidence and belong here.
+ */
+function explicitEvidence(c: Candidate): MatchEvidence | null {
+  const { plan, row } = c;
+  const p = cents(plan.amount);
+  if (
+    row.onChecking &&
+    !!row.debtId &&
+    row.debtId === (plan.debtId ?? null) &&
+    cents(row.amount) >= p - strictCents(p)
+  ) {
+    return "debt_tag";
+  }
+  return null;
+}
+
+/** (Decision 13) The tier of a chosen pair. See the file header. */
+function tierOf(c: Candidate, ambiguous: boolean, items: ItemIndex): Tiered {
+  const { plan, row } = c;
+  // A row the user tagged to another debt is never a payment of this plan.
+  if (row.debtId && plan.debtId && row.debtId !== plan.debtId) return SUGGESTION;
+  const explicit = explicitEvidence(c);
+  if (explicit) return { tier: 1, evidence: explicit };
+  if (ambiguous || !row.onChecking) return SUGGESTION;
+  const p = cents(plan.amount);
+  const r = cents(row.amount);
+  if (r < p - strictCents(p) || r > p + overpayCents(p)) return SUGGESTION;
+  const income = plan.amount > 0;
+  // (a) The row's category is the plan's, and only this bill carries it.
+  if (!income && plan.categoryId && row.categoryId === plan.categoryId) {
+    const inCategory = items.expenseByCategory.get(plan.categoryId) ?? [];
+    if (inCategory.length === 1 && inCategory[0] === plan.itemId) return { tier: 2, evidence: "category" };
+  }
+  // (b) The plan's full name, and no other active item's full name, in the row.
+  if (c.name === 2) {
+    const other = items.list.some(
+      (it) => it.item.itemId !== plan.itemId && it.item.income === income && nameMatch(it.words, c.rowWords) === 2,
+    );
+    if (!other) return { tier: 2, evidence: "full_name" };
+  }
+  // (c) Some of the name, paid within max($1, 1%) and 5 days.
+  if (c.named && c.gapCents <= strictCents(p) && Math.abs(c.dayDelta) <= MATCH_PROMPT_DAYS) {
+    return { tier: 2, evidence: "name_exact" };
+  }
+  return SUGGESTION;
+}
+
+type ItemIndex = {
+  list: Array<{ item: MatchItem; words: ReadonlySet<string> }>;
+  /** Active EXPENSE item ids per category. */
+  expenseByCategory: Map<string, string[]>;
+};
+
+function indexItems(items: readonly MatchItem[]): ItemIndex {
+  const seen = new Set<string>();
+  const list: ItemIndex["list"] = [];
+  const expenseByCategory = new Map<string, string[]>();
+  for (const item of items) {
+    if (seen.has(item.itemId)) continue;
+    seen.add(item.itemId);
+    list.push({ item, words: tokenizeDescription(item.label) });
+    if (!item.income && item.categoryId) {
+      const ids = expenseByCategory.get(item.categoryId) ?? [];
+      ids.push(item.itemId);
+      expenseByCategory.set(item.categoryId, ids);
+    }
+  }
+  return { list, expenseByCategory };
+}
+
+/**
+ * Pair plans with rows one to one, and grade each pair (decision 13). `items`
+ * is every active planned item (see `MatchItem`). `notMatch` holds
+ * `<planKey>#<txnId>` pairs the user rejected; they never pair again. Each label
+ * and description is split into words once, and the cheap sign/date/amount
+ * checks run first.
  */
 export function matchPlansToRows(
   plans: readonly MatchPlan[],
   rows: readonly MatchRow[],
+  items: readonly MatchItem[],
   notMatch: ReadonlySet<string> = new Set(),
 ): PlanRowMatch[] {
   const rowDays = rows.map((r) => dayNumber(r.occurredOn));
@@ -263,7 +407,7 @@ export function matchPlansToRows(
     if (plan.amount === 0) continue;
     const p = cents(plan.amount);
     const loose = Math.max(2500, Math.round(p * 0.25));
-    const strict = Math.max(100, Math.round(p * 0.01));
+    const strict = strictCents(p);
     const planDay = dayNumber(plan.date);
     let planWords: ReadonlySet<string> | undefined;
     rows.forEach((row, j) => {
@@ -276,14 +420,15 @@ export function matchPlansToRows(
       planWords ??= tokenizeDescription(plan.label);
       const words = (rowWords[j] ??= tokenizeDescription(row.description));
       const name = nameMatch(planWords, words);
-      const evidence = name > 0;
-      if (!evidence && (gapCents > strict || Math.abs(dayDelta) > MATCH_STRICT_DAYS)) return;
-      all.push({ plan, row, gapCents, dayDelta, evidence, name, score: gapCents + 100 * Math.abs(dayDelta) - (evidence ? 5000 : 0) });
+      const named = name > 0;
+      if (!named && (gapCents > strict || Math.abs(dayDelta) > MATCH_STRICT_DAYS)) return;
+      all.push({ plan, row, rowWords: words, gapCents, dayDelta, named, name, score: gapCents + 100 * Math.abs(dayDelta) - (named ? 5000 : 0) });
     });
   }
   all.sort(
     (a, b) => a.score - b.score || a.plan.key.localeCompare(b.plan.key) || a.row.txnId.localeCompare(b.row.txnId),
   );
+  const index = indexItems(items);
   const usedPlans = new Set<string>();
   const usedRows = new Set<string>();
   const out: PlanRowMatch[] = [];
@@ -299,14 +444,13 @@ export function matchPlansToRows(
         o.score - c.score <= margin,
     );
     const p = cents(c.plan.amount);
-    const strict = Math.max(100, Math.round(p * 0.01));
-    const offCurveGap = Math.max(2500, Math.round(p * MATCH_OFF_CURVE_SHARE));
     const confidence: MatchConfidence =
-      c.evidence && c.gapCents <= strict && Math.abs(c.dayDelta) <= 5
+      c.named && c.gapCents <= strictCents(p) && Math.abs(c.dayDelta) <= MATCH_PROMPT_DAYS
         ? "high"
-        : c.evidence && c.gapCents <= offCurveGap
+        : c.named && c.gapCents <= overpayCents(p)
           ? "medium"
           : "low";
+    const { tier, evidence } = tierOf(c, ambiguous, index);
     out.push({
       planKey: c.plan.key,
       planItemId: c.plan.itemId,
@@ -318,14 +462,9 @@ export function matchPlansToRows(
       dayDelta: c.dayDelta,
       confidence,
       ambiguous,
-      // A "high" pair, or the plan's FULL name with a row paying no less than the
-      // plan (an underpaid bill would hide the remainder still due) and at most
-      // max($25, 10%) more. Part of a name ("VERIZON FIOS" for "Verizon Wireless")
-      // may be a different bill from the same payee, so it stays a suggestion.
-      offCurve:
-        !ambiguous &&
-        (confidence === "high" ||
-          (c.name === 2 && c.gapCents <= (cents(c.row.amount) >= p ? offCurveGap : strict))),
+      tier,
+      evidence,
+      offCurve: tier <= 2,
     });
   }
   return out;

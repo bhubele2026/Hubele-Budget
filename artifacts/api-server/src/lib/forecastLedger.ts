@@ -22,6 +22,7 @@ import {
   plansPaidInFullByName,
   SUPERSEDE_MAX_DAYS,
   type PaidInFull,
+  type MatchItem,
   type MatchPlan,
   type MatchRow,
   type PlanRowMatch,
@@ -68,7 +69,8 @@ export type LedgerPlan = {
   /**
    * Present when the curve moved the plan off its due date:
    * - `overdue_assumed_unpaid` (PR6): due in [today−14, today), unresolved, and no
-   *   bank row confidently paid it, so it lands on the next business day;
+   *   bank row is tier-1/2 evidence that it was paid (decision 13), so it lands on
+   *   the next business day;
    * - `due_today_not_posted` (PR6): due today (or, with a snapshot dated after
    *   today, up to the snapshot day) and unresolved, so it lands on the next
    *   business day and day 0 still equals the bank;
@@ -108,11 +110,11 @@ export type LedgerListedPlan = {
 };
 
 /**
- * (PR6 review) An overdue plan the forecast treats as PAID because of a bank row:
- * a non-ambiguous pair of any confidence, or, for a debt's minimum, a payment of
- * at least the minimum that names the card (`card_payment`) or that the user
- * tagged to that debt (`debt_tag`). Listed so it is never silent, and so the user
- * can confirm or reject the pair.
+ * (PR6 review, decision 13) An overdue plan the forecast treats as PAID because of
+ * a bank row: a tier-1 or tier-2 pair (see `matchPlansToRows`), or, for a debt's
+ * minimum, a payment of at least the minimum that names the card (`card_payment`)
+ * or that the user tagged to that debt (`debt_tag`). Listed so it is never silent,
+ * and so the user can confirm or reject the pair.
  */
 export type LedgerAssumedPaidPlan = {
   planKey: string;
@@ -221,15 +223,21 @@ export function keepsPreSnapshotRule(
  *     before the last Sync. In order, a plan occurrence is:
  *       1. resolved (matched / skipped / missed / dismissed; a `partial` keeps
  *          its remainder) → as the resolution says;
- *       2. ⭐ (PR6 review) PAID ON EVIDENCE, once due: a non-ambiguous pair of
- *          ANY confidence (PR5) to a checking row dated on or before today (never
- *          a row the user tagged to a different debt than the plan's), or, for a
+ *       2. ⭐ (PR6 review, decision 13) PAID ON EVIDENCE, once due: a tier-1 or
+ *          tier-2 pair (`matchPlansToRows`: a checking row tagged to the plan's
+ *          debt; or, not ambiguous, on checking, paying the plan − max($1, 1%) to
+ *          the plan + max($25, 10%), the bill's own category when it is the only
+ *          active bill in it, its unique full name, or some of its name within
+ *          max($1, 1%) and 5 days) to a row dated on or before today, or, for a
  *          debt minimum, a payment of at least the minimum that names the card or
  *          (debt tag) that the user tagged to that debt → off the curve and
- *          listed in `overdueAssumedPaid`; an unpaid
- *          remainder over $1 still drags (`overdue_remainder_assumed_unpaid`).
- *          ⚠️ Accepted risk: an unrelated row of the same amount within 3 days
- *          hides an unpaid bill — one plan per row, and always listed.
+ *          listed in `overdueAssumedPaid`; an unpaid remainder over $1 still
+ *          drags (`overdue_remainder_assumed_unpaid`).
+ *          ⚠️ (Decision 13) A tier-3 pair — a nameless row of the same amount, a
+ *          different bill from the same payee — is a suggestion only: the plan
+ *          drags (step 3) and the pair stays in `matches`. Before decision 13 any
+ *          non-ambiguous pair paid it ("an unrelated row of the same amount within
+ *          3 days hides an unpaid bill" was the accepted risk).
  *          A plan due AFTER today still leaves the curve only on an `offCurve` pair;
  *       3. an expense due in [today−14, today) with no such evidence → the next
  *          business day, `overdue_assumed_unpaid`;
@@ -690,10 +698,13 @@ export async function buildForecastLedger(
   //     and not claimed by any resolution other than "Not this". A posted row
   //     whose replaced pending row is claimed counts as claimed.
   //   - `matchPlansToRows` (avalanche-core) pairs them one to one.
-  //   - ⚠️ (PR5 review) ONLY a pair marked `offCurve` — the payee's name as a
-  //     word in the bank row, not ambiguous, within max($25, 10%) — takes its
-  //     plan off the curve. Every other pair is a suggestion: the plan still
-  //     counts, so an unconfirmed guess never overstates projected cash. A later
+  //   - ⚠️ (PR5 review, decision 13) ONLY a tier-1 or tier-2 pair (`offCurve`) —
+  //     a checking row tagged to the plan's debt, or, not ambiguous and on
+  //     checking within plan − max($1, 1%) .. plan + max($25, 10%), the bill's own
+  //     category (the only active bill in it), its unique full name, or some of
+  //     its name paid exactly within 5 days — takes its plan off the curve. Every
+  //     other pair (tier 3) is a suggestion: the plan still counts, so an
+  //     unconfirmed guess never overstates projected cash. A later
   //     occurrence also stays on the curve when an earlier occurrence of the same
   //     item that no named pair paid is due on or before the row: the row may be
   //     that earlier bill, paid late.
@@ -711,6 +722,23 @@ export async function buildForecastLedger(
     if (r.status === "partial" && r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
       partialTxnByKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, r.matchedTxnId);
     }
+  }
+  // (Debt tag) The debt a plan pays: a `debt:` minimum's, or the debt its recurring bill is linked to.
+  const planDebtId = (itemId: string): string | null =>
+    itemId.startsWith("debt:") ? itemId.slice("debt:".length) : (recurringById.get(itemId)?.debtId ?? null);
+  // ⭐ (Decision 13) EVERY ACTIVE PLANNED ITEM — what tier 2 judges "the only
+  // active bill in this category" and "no other item's full name in the row"
+  // against: each recurring item marked active (whatever its dates), and each debt
+  // minimum and the Avalanche extra the forecast expanded. Never just the plans
+  // inside the matching window: a bill due next month still shares its category.
+  const matchItems: MatchItem[] = recurring
+    .filter((r) => r.active === "true")
+    .map((r) => ({ itemId: r.id, label: r.name, categoryId: r.categoryId ?? null, income: r.kind === "income" }));
+  const syntheticItemIds = new Set<string>();
+  for (const ev of events) {
+    if (recurringById.has(ev.itemId) || syntheticItemIds.has(ev.itemId)) continue;
+    syntheticItemIds.add(ev.itemId);
+    matchItems.push({ itemId: ev.itemId, label: ev.label, categoryId: null, income: ev.amount > 0 });
   }
   const planMatchFromISO = addDaysISO(todayISO, -45);
   const planMatchToISO = addDaysISO(todayISO, 10);
@@ -741,14 +769,25 @@ export async function buildForecastLedger(
     // (PR6) An occurrence from before its item existed is never due, so it never
     // competes for a row (nor holds back a later occurrence's pair).
     if (planDate <= dragCutoffISO && !keepsOldRule(ev) && beforeItemExisted(ev)) continue;
-    const plan: MatchPlan = { key, itemId: ev.itemId, occurrenceDate: ev.date, date: planDate, amount: ev.amount, label: ev.label };
+    // (Decision 13) The plan's own category (the only bill in it is tier-2 evidence)
+    // and the debt a row's tag must name (tier 1) travel with it.
+    const plan: MatchPlan = {
+      key,
+      itemId: ev.itemId,
+      occurrenceDate: ev.date,
+      date: planDate,
+      amount: ev.amount,
+      label: ev.label,
+      categoryId: recurringById.get(ev.itemId)?.categoryId ?? null,
+      debtId: planDebtId(ev.itemId),
+    };
     if (inMatchWindow) matchPlans.push(plan);
     else listingPlans.push(plan);
   }
   let matches: PlanRowMatch[] = [];
   let listingMatches: PlanRowMatch[] = [];
   let cardPayments: PaidInFull[] = [];
-  // Pairs that count as overdue evidence: non-ambiguous, and never a row tagged to another debt.
+  // Pairs that count as overdue evidence (decision 13): tier 1 or 2, so never a row tagged to another debt.
   let evidencePairs: PlanRowMatch[] = [];
   if (matchPlans.length > 0 || listingPlans.length > 0) {
     const candidateRowsAll = await db
@@ -785,8 +824,10 @@ export async function buildForecastLedger(
       // manual row's tag is ignored here, so the row is read exactly as before the tag
       // rule. (`o.counts` already keeps out Plaid rows on other accounts.)
       const full = candidateRowsAll[i]!;
-      const bankTag =
-        full.debtId && row.plaidAccountId && row.plaidAccountId === configuredCheckingExternalId ? full.debtId : null;
+      // (Decision 13) Only a Plaid row on the configured checking account can be
+      // tier-1 or tier-2 evidence; a manual row stays a suggestion at most.
+      const onChecking = !!row.plaidAccountId && row.plaidAccountId === configuredCheckingExternalId;
+      const bankTag = full.debtId && onChecking ? full.debtId : null;
       const candidate: MatchRow = {
         txnId: row.id,
         occurredOn: row.occurredOn,
@@ -795,37 +836,33 @@ export async function buildForecastLedger(
         isExternalCardPayment: full.isExternalCardPayment === true,
         pfcDetailed: full.pfcDetailed ?? null,
         debtId: bankTag,
+        categoryId: full.categoryId ?? null,
+        onChecking,
       };
       if (row.occurredOn >= listRowFromISO) listingRows.push(candidate);
       if (row.occurredOn >= rowMatchFromISO) matchRows.push(candidate);
     });
-    matches = matchPlansToRows(matchPlans, matchRows, notMatchPairs);
+    // ⭐ (Decision 13) The matcher grades each pair (`tier`): 1 explicit, 2
+    // obligation evidence, 3 a suggestion only. Its `offCurve` is `tier ≤ 2`.
+    matches = matchPlansToRows(matchPlans, matchRows, matchItems, notMatchPairs);
     // ⭐ (Debt tag) A ROW THE USER TAGGED TO ONE DEBT IS NEVER A PAYMENT OF ANOTHER
     // DEBT'S PLAN — a `debt:` minimum, or a recurring bill linked to a debt — even
     // when the matcher paired them ("CHASE ONLINE PAYMENT" −45 tagged to Chase
-    // Freedom, a day after a $40 Chase Sapphire minimum). Such a pair (`tagConflict`):
+    // Freedom, a day after a $40 Chase Sapphire minimum). (Decision 13) The matcher
+    // grades such a pair tier 3 (`MatchPlan.debtId` vs `MatchRow.debtId`), so it:
     //   - stays in `matches` as a suggestion, but (review M1) is never `offCurve`: a
     //     row tagged to Freedom must not both pay Freedom's overdue minimum by tag
     //     and take Sapphire's upcoming minimum off the curve;
-    //   - is not overdue evidence, and doesn't count as a named pair for the
+    //   - is not overdue evidence, and doesn't count as paying for the
     //     earlier-unpaid rule below;
     //   - doesn't use up its row, which stays free to pay its own debt by tag.
     // Pairs whose row carries no tag, and plans with no debt, are untouched.
-    const planDebtId = (itemId: string): string | null =>
-      itemId.startsWith("debt:") ? itemId.slice("debt:".length) : (recurringById.get(itemId)?.debtId ?? null);
-    const rowDebtById = new Map([...matchRows, ...listingRows].map((r) => [r.txnId, r.debtId ?? null] as const));
-    const tagConflict = (m: PlanRowMatch): boolean => {
-      const rowDebt = rowDebtById.get(m.txnId) ?? null;
-      const planDebt = planDebtId(m.planItemId);
-      return !!rowDebt && !!planDebt && rowDebt !== planDebt;
-    };
+    //
     // (PR5 review) A later occurrence never leaves the curve on a row dated on or
     // after an earlier occurrence of the same item that no row paid.
-    // (PR5 second review) Only a pair carrying the payee's name counts as paying an
-    // occurrence: a coincidental nameless "low" pair never marks last month paid.
-    const pairedKeys = new Set(
-      matches.filter((m) => m.confidence !== "low" && !tagConflict(m)).map((m) => m.planKey),
-    );
+    // (PR5 second review) Only a pair carrying the payee's name counted as paying an
+    // occurrence; (decision 13) now only a tier-1 or tier-2 pair does.
+    const pairedKeys = new Set(matches.filter((m) => m.tier <= 2).map((m) => m.planKey));
     const unpaidByItem = new Map<string, string[]>();
     for (const p of matchPlans) {
       if (pairedKeys.has(p.key)) continue;
@@ -834,16 +871,29 @@ export async function buildForecastLedger(
       unpaidByItem.set(p.itemId, list);
     }
     const rowDateById = new Map(matchRows.map((r) => [r.txnId, r.occurredOn] as const));
+    const planByKey = new Map(matchPlans.map((p) => [p.key, p] as const));
+    // The rule applies where `offCurve` decides the curve — a plan due after the
+    // cutoff, or a weekly-cadence expense (`keepsPreSnapshotRule`) — and a pair it
+    // holds back drops to tier 3, so `offCurve` stays `tier ≤ 2`. A plan already due
+    // is paid on its evidence instead (the plans loop), as before.
     matches = matches.map((m) => {
-      if (!m.offCurve) return m;
-      if (tagConflict(m)) return { ...m, offCurve: false };
+      if (m.tier > 2) return m;
+      const plan = planByKey.get(m.planKey);
+      if (!plan) return m;
+      const curveUsesOffCurve =
+        plan.date > dragCutoffISO || keepsPreSnapshotRule(recurringById.get(plan.itemId), plan.amount);
+      if (!curveUsesOffCurve) return m;
       const rowDate = rowDateById.get(m.txnId) ?? "";
       const earlierUnpaid = (unpaidByItem.get(m.planItemId) ?? []).some(
         (d) => d < m.planDate && d <= rowDate,
       );
-      return earlierUnpaid ? { ...m, offCurve: false } : m;
+      return earlierUnpaid ? { ...m, tier: 3 as const, evidence: null, offCurve: false } : m;
     });
-    const isEvidence = (m: PlanRowMatch): boolean => !m.ambiguous && !tagConflict(m);
+    // ⭐ (Decision 13) OVERDUE EVIDENCE: a tier-1 or tier-2 pair. A tier-3 pair is a
+    // suggestion; its plan drags. Income keeps PR6's rule (a non-ambiguous deposit
+    // paired with the paycheck arrived, name or not): income already due is never
+    // on the curve, so for income this decides only `incomeNotArrived`.
+    const isEvidence = (m: PlanRowMatch): boolean => (m.planAmount > 0 ? !m.ambiguous : m.tier <= 2);
     // (Debt tag, review M1) One row pays at most once: a row whose pair takes its
     // plan off the curve (`offCurve`) or counts as overdue evidence is used up.
     // (PR6 review, M2) The older overdue occurrences pair with the rows the pass
@@ -854,6 +904,7 @@ export async function buildForecastLedger(
       listingMatches = matchPlansToRows(
         listingPlans,
         listingRows.filter((r) => !usedRows.has(r.txnId)),
+        matchItems,
         notMatchPairs,
       );
       for (const m of listingMatches) if (isEvidence(m)) usedRows.add(m.txnId);
@@ -875,11 +926,12 @@ export async function buildForecastLedger(
     }
     evidencePairs = [...matches, ...listingMatches].filter(isEvidence);
   }
-  // Only confident pairs take a plan off the curve; the rest are suggestions.
+  // (Decision 13) Only tier-1/2 pairs (`offCurve`) take a plan off the curve; tier 3 is a suggestion.
   const probablyPaidKeys = new Set(matches.filter((m) => m.offCurve).map((m) => m.planKey));
-  // ⭐ (PR6 review, H1) EVIDENCE THAT AN OVERDUE PLAN WAS PAID: a non-ambiguous pair
-  // of any confidence (never a row tagged to another debt), or, for a debt
-  // minimum, a card payment naming the card or a checking row tagged to that debt.
+  // ⭐ (PR6 review H1, decision 13) EVIDENCE THAT AN OVERDUE PLAN WAS PAID: a tier-1
+  // or tier-2 pair (`isEvidence`; never a row tagged to another debt), or, for a
+  // debt minimum, a card payment naming the card (decision 13's tier-2 "payment
+  // reference") or a checking row tagged to that debt (tier 1).
   // Read only for plans due on or before today (the plans loop); a plan due later
   // still needs `offCurve` (never set on a pair whose row is tagged to another debt).
   const paidByKey = new Map<string, { txnId: string; txnAmount: number; confidence: string }>();

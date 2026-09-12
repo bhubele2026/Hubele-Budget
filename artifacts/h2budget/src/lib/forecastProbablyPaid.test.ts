@@ -59,6 +59,7 @@ const match = (over: Partial<CashSignalMatch> = {}): CashSignalMatch => ({
   dayDelta: -8,
   confidence: "medium",
   ambiguous: false,
+  tier: 2,
   offCurve: true,
   ...over,
 });
@@ -291,6 +292,7 @@ describe("register — server matches (\"Suggested\")", () => {
       dayDelta: -8,
       confidence: "medium",
       ambiguous: false,
+      tier: 2,
       offCurve: true,
       txnDate: "2026-05-12",
       txnDescription: "CITY WATER",

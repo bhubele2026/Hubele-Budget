@@ -265,7 +265,13 @@ export type CashSignal = {
     dayDelta: number;
     confidence: string;
     ambiguous: boolean;
-    /** Only these plans are off the curve; every other match is a suggestion. */
+    /**
+     * (Decision 13) What the pair proves: 1 explicit (a debt tag), 2 obligation
+     * evidence (the bill's own category, its unique full name, or some of its name
+     * paid exactly and promptly on checking), 3 a suggestion only.
+     */
+    tier: 1 | 2 | 3;
+    /** Only these plans are off the curve (`tier ≤ 2`); every other match is a suggestion. */
     offCurve: boolean;
   }>;
 };
@@ -459,6 +465,7 @@ export async function computeCashSignal(
       dayDelta: m.dayDelta,
       confidence: m.confidence,
       ambiguous: m.ambiguous,
+      tier: m.tier,
       offCurve: m.offCurve,
     })),
     overdueOutsideForecast: ledger.overdueOutsideForecast.map(listedPlan),
