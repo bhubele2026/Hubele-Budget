@@ -421,6 +421,69 @@ describe("category consolidation (budgetCategoriesV2) after a lost gate", () => 
     expect(p.amexAnchor).toEqual(ANCHOR);
   });
 
+  it("with no V2-only name and the gate lost, a legacy-named category used since June 2026 or held by a rule is kept, not merged", async () => {
+    await newHousehold("no-v2-names");
+    await setPrefs({ amexAnchor: ANCHOR, budgetMay2026AmountsV1: true });
+
+    // The reviewer's case: the user's "Gaming subs", 2 transactions Aug–Sept,
+    // 1 mapping rule, no budget line.
+    const gaming = await insertCategory("Gaming subs", { groupName: "Lifestyle & Shopping" });
+    const gamingTxns = await insertTransactions(gaming, ["2026-08-14", "2026-09-02"], "18.98");
+    await insertRule(gaming, "PLAYSTATION");
+    // Each guard alone: a June 2026 transaction only; a mapping rule only.
+    const coffee = await insertCategory("Coffee (Starbucks, Dunkin)");
+    const coffeeTxns = await insertTransactions(coffee, ["2026-06-05"], "6.45");
+    const menards = await insertCategory("Home & Menards");
+    await insertRule(menards, "MENARDS");
+    // A legacy category with May 2026 data only: still merged (full path).
+    const phone = await insertCategory("Phone (Verizon)");
+    await insertLine(phone, MAY_2026, "342.00");
+    const [phoneTxn] = await insertTransactions(phone, ["2026-05-16"], "342.00");
+
+    deploy();
+    await getMonth(SEPT_2026);
+
+    const cats = await categoriesByName();
+    expect(cats.get("Gaming subs")?.id, "Gaming subs kept").toBe(gaming);
+    expect(cats.get("Coffee (Starbucks, Dunkin)")?.id, "June transaction keeps it").toBe(coffee);
+    expect(cats.get("Home & Menards")?.id, "a mapping rule keeps it").toBe(menards);
+    expect(cats.has("Phone (Verizon)"), "May-only legacy category merged").toBe(false);
+    const utilities = cats.get("Utilities")!;
+    expect(utilities).toBeTruthy();
+
+    const txns = await db
+      .select({ id: transactionsTable.id, categoryId: transactionsTable.categoryId })
+      .from(transactionsTable)
+      .where(inArray(transactionsTable.id, [...gamingTxns, ...coffeeTxns, phoneTxn!]));
+    const catOf = new Map(txns.map((t) => [t.id, t.categoryId]));
+    for (const id of gamingTxns) expect(catOf.get(id), "Gaming subs transaction").toBe(gaming);
+    for (const id of coffeeTxns) expect(catOf.get(id), "Coffee transaction").toBe(coffee);
+    expect(catOf.get(phoneTxn!)).toBe(utilities.id);
+
+    const rules = await db
+      .select({ pattern: mappingRulesTable.pattern, categoryId: mappingRulesTable.categoryId })
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.householdId, CURRENT_HOUSEHOLD));
+    expect(new Map(rules.map((r) => [r.pattern, r.categoryId]))).toEqual(
+      new Map([
+        ["PLAYSTATION", gaming],
+        ["MENARDS", menards],
+      ]),
+    );
+    const subscriptions = cats.get("Subscriptions");
+    if (subscriptions) {
+      const moved = await db
+        .select({ id: transactionsTable.id })
+        .from(transactionsTable)
+        .where(eq(transactionsTable.categoryId, subscriptions.id));
+      expect(moved, "nothing moved into Subscriptions").toEqual([]);
+    }
+
+    const p = await prefs();
+    expect(p.budgetCategoriesV2).toBe(true);
+    expect(p.amexAnchor).toEqual(ANCHOR);
+  });
+
   it("the gate write waits for a settings write in flight and keeps its key", async () => {
     await newHousehold("lock-v2");
     await setPrefs({ budgetMay2026AmountsV1: true, dismissedDetectedSubs: ["Hulu"] });
@@ -552,49 +615,31 @@ describe("May 2026 amounts reset (budgetMay2026AmountsV1) after a lost gate", ()
     }
   });
 
-  it("a household with no budget data through May 2026 gets the canonical amount on plain envelopes only, unpinned", async () => {
-    await newHousehold("may-empty");
+  it("stores no May 2026 line at all: a Sept-only Groceries line is not seeded into May, nor carried into July as $460", async () => {
+    await newHousehold("may-sept-only");
     await setPrefs({ budgetCategoriesV2: true });
+    // The reviewer's case: Groceries holds only a Sept 2026 $300 line. Health
+    // has no line anywhere (an empty envelope).
     const groceries = await insertCategory("Groceries");
     const health = await insertCategory("Health");
-    const utilities = await insertCategory("Utilities");
-    await db.insert(recurringItemsTable).values({
-      userId: CURRENT_USER,
-      householdId: CURRENT_HOUSEHOLD,
-      name: "MGE Electric & Gas",
-      kind: "bill",
-      amount: "241.00",
-      frequency: "monthly",
-      dayOfMonth: 20,
-      anchorDate: null,
-      active: "true",
-      categoryId: utilities,
-    });
-    const paycheck = await insertCategory("Brad's paycheck (KFI)", {
-      groupName: "Income",
-      kind: "income",
-      sourceKind: "auto_bills",
-    });
+    await insertLine(groceries, SEPT_2026, "300.00");
 
     deploy();
     await getMonth(MAY_2026);
 
     const may = await monthLines(MAY_2026);
-    expect(may.find((l) => l.categoryId === groceries)).toEqual({
-      categoryId: groceries,
-      plannedAmount: "460.00",
-      pinned: false,
-    });
-    expect(may.find((l) => l.categoryId === health)).toEqual({
-      categoryId: health,
-      plannedAmount: "0.00",
-      pinned: false,
-    });
-    expect(may.find((l) => l.categoryId === utilities), "bill-backed: no stored line").toBeUndefined();
-    expect(may.find((l) => l.categoryId === paycheck), "auto: no stored line").toBeUndefined();
+    expect(may.find((l) => l.categoryId === groceries), "no May Groceries line").toBeUndefined();
+    expect(may.find((l) => l.categoryId === health), "no May Health line").toBeUndefined();
     expect(may.some((l) => l.pinned)).toBe(false);
-    expect(await monthPinned(MAY_2026)).toBe(false);
+    expect(await monthPinned(MAY_2026)).not.toBe(true);
     expect((await prefs()).budgetMay2026AmountsV1).toBe(true);
+
+    // July has no earlier line to carry forward, so no Groceries plan appears.
+    await getMonth("2026-07-01");
+    const july = await monthLines("2026-07-01");
+    expect(july.find((l) => l.categoryId === groceries), "no July Groceries line").toBeUndefined();
+    const sept = await monthLines(SEPT_2026);
+    expect(sept.find((l) => l.categoryId === groceries)?.plannedAmount).toBe("300.00");
   });
 
   it("a household with an April 2026 line gets only the gate; May carries April forward", async () => {

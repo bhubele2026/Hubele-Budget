@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, sql, asc, desc, lt, gte, lte, inArray, isNull, notInArray } from "drizzle-orm";
+import { and, eq, sql, asc, desc, lt, gte, inArray, isNull, notInArray } from "drizzle-orm";
 import {
   db,
   avalancheSettingsTable,
@@ -389,14 +389,21 @@ async function healLegacyRecurringBillLinks(householdId: string): Promise<void> 
     .returning({ id: budgetCategoriesTable.id });
   const removedIds = new Set(removed.map((r) => r.id));
   const kept = orphans.filter((c) => !removedIds.has(c.id));
-  logger.info(
-    {
-      householdId,
-      removedUnreferenced: orphans.filter((c) => removedIds.has(c.id)).map((c) => c.name),
-      keptStillReferenced: kept.map((c) => c.name),
-    },
-    "[budget] legacy bill-category heal: unlinked auto_bills categories that are still referenced were kept",
-  );
+  if (kept.length > 0) {
+    logger.info(
+      { householdId, keptStillReferenced: kept.map((c) => c.name) },
+      "[budget] legacy bill-category heal kept unlinked auto_bills categories that are still referenced",
+    );
+  }
+  if (removedIds.size > 0) {
+    logger.info(
+      {
+        householdId,
+        removedUnreferenced: orphans.filter((c) => removedIds.has(c.id)).map((c) => c.name),
+      },
+      "[budget] legacy bill-category heal removed unlinked auto_bills categories nothing references",
+    );
+  }
   HEAL_BILL_LINKS_DONE.add(householdId);
 }
 
@@ -573,8 +580,9 @@ const V2_ONLY_TARGET_NAMES: ReadonlySet<string> = new Set(
 );
 
 // First month after the consolidation shipped (4676c214, 2026-05-03). A legacy
-// category with a planned line in or after this month was planned on after the
-// V2 era began, so the migration leaves it alone.
+// category with a budget line or a transaction in or after this month has been
+// used since the V2 era began, so the migration leaves it alone (as it does any
+// legacy category a mapping rule points at).
 const V2_POST_ERA_MONTH = "2026-06-01";
 
 // One-time consolidation of the legacy ~45-category budget seed into the
@@ -587,9 +595,10 @@ const V2_POST_ERA_MONTH = "2026-06-01";
 //     → write the gate and change NOTHING else (no merge, no delete, no
 //       group/order reset). A legacy-named category in such a household was
 //       made by the user after the migration ("Gaming subs" is a legacy name).
-//   - otherwise the household is genuinely pre-migration and is migrated as
-//     before, except that a legacy category planned on in or after
-//     V2_POST_ERA_MONTH is left in place.
+//   - otherwise the household is treated as pre-migration and is migrated as
+//     before, except that a legacy category is left in place (never merged or
+//     deleted) when a mapping rule points at it, or it has a budget line or a
+//     transaction dated in or after V2_POST_ERA_MONTH.
 //
 // The migration, for each old → new mapping:
 //   - Find/create the new target category (matching the new SEED metadata)
@@ -651,7 +660,12 @@ async function migrateBudgetCategoriesV2(
     }
 
     const byName = new Map(cats.map((c) => [c.name, c]));
-    const leftForPostEraLines: string[] = [];
+    const leftInPlace: Array<{
+      name: string;
+      budgetLineSinceV2: boolean;
+      transactionSinceV2: boolean;
+      mappingRule: boolean;
+    }> = [];
 
     // Build sortOrder lookup from the new seed.
     const sortOrderByGroup = new Map<string, number>();
@@ -696,19 +710,41 @@ async function migrateBudgetCategoriesV2(
       const oldCat = byName.get(oldName);
       if (!oldCat) continue;
       if (oldName === newName) continue;
+      // Never merge or delete a legacy category the household has used since
+      // the V2 era began: a budget line or a transaction dated in or after
+      // V2_POST_ERA_MONTH, or any mapping rule pointing at it.
       const [postEraLine] = await tx
         .select({ id: budgetLinesTable.id })
         .from(budgetLinesTable)
         .where(
           and(
-            eq(budgetLinesTable.householdId, householdId),
             eq(budgetLinesTable.categoryId, oldCat.id),
             gte(budgetLinesTable.monthStart, V2_POST_ERA_MONTH),
           ),
         )
         .limit(1);
-      if (postEraLine) {
-        leftForPostEraLines.push(oldName);
+      const [postEraTxn] = await tx
+        .select({ id: transactionsTable.id })
+        .from(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.categoryId, oldCat.id),
+            gte(transactionsTable.occurredOn, V2_POST_ERA_MONTH),
+          ),
+        )
+        .limit(1);
+      const [rule] = await tx
+        .select({ id: mappingRulesTable.id })
+        .from(mappingRulesTable)
+        .where(eq(mappingRulesTable.categoryId, oldCat.id))
+        .limit(1);
+      if (postEraLine || postEraTxn || rule) {
+        leftInPlace.push({
+          name: oldName,
+          budgetLineSinceV2: Boolean(postEraLine),
+          transactionSinceV2: Boolean(postEraTxn),
+          mappingRule: Boolean(rule),
+        });
         continue;
       }
       const newCat = await ensureCategory(newName);
@@ -827,10 +863,10 @@ async function migrateBudgetCategoriesV2(
       }
     }
 
-    if (leftForPostEraLines.length > 0) {
+    if (leftInPlace.length > 0) {
       logger.info(
-        { householdId, legacyCategoriesLeftAlone: leftForPostEraLines },
-        `[budget] category consolidation left legacy categories planned on in or after ${V2_POST_ERA_MONTH} in place`,
+        { householdId, legacyCategoriesLeftAlone: leftInPlace },
+        `[budget] category consolidation left in place legacy categories with a mapping rule, or a budget line or transaction in or after ${V2_POST_ERA_MONTH}`,
       );
     }
 
@@ -839,58 +875,22 @@ async function migrateBudgetCategoriesV2(
   });
 }
 
-// One-time reconciliation of the May 2026 budget planned amounts to the
-// household's canonical values (task #106), gated by
+// The retired one-time May 2026 reset (task #106), gate
 // `settings.preferences.budgetMay2026AmountsV1`.
 //
-// ⚠️ Deploy safety (owner decision 3). It never overwrites a line and never
-// pins a month or a line. budget_lines has no updated_at, no edit history and
-// no "set by" column, so a line that differs from its canonical amount cannot
-// be told apart from a user's edit. The canonical amounts are also exactly the
-// seed amounts, so the lines the old reset changed were lines somebody had
-// changed, and its month pin undid clear-budget-pinned-state (#777). Now:
-//   - a household with a May 2026 budget_months row, or any budget line in or
-//     before May 2026, gets the gate written and nothing else;
-//   - a household with neither gets the canonical amount inserted for each
-//     plain manual envelope it has by name (no recurring item linked),
-//     insert-only and unpinned. Auto and bill-backed categories are skipped:
-//     their planned amount comes from Bills/Debts unless pinned, and a stored
-//     line would only shadow a later pin snapshot.
-// It no longer touches avalanche_settings.manualExtra (removed earlier: it
-// clobbered the user's Avalanche slider).
-const MAY_2026_CANONICAL_PLANNED: Record<string, string> = {
-  "Hannah's paycheck (Exact)": "4499.99",
-  "Brad's paycheck (KFI)": "8100.00",
-  "Other Income": "88.00",
-  "Mortgage (Lakeview)": "1989.81",
-  "HELOC (Figure)": "677.40",
-  "Utilities": "774.24",
-  "Home Maintenance & Warranty": "53.85",
-  "Health": "0",
-  "Insurance": "345.13",
-  "Groceries": "460.00",
-  "Dining & Coffee": "460.00",
-  "Car Payments": "1324.35",
-  "Gas, Maintenance & Parking": "250.00",
-  "Childcare & Activities": "0",
-  "Pets": "0",
-  "Subscriptions": "315.62",
-  "Shopping": "0",
-  "Entertainment": "0",
-  "Charitable Giving & Education": "0",
-  "Misc / Buffer": "237.58",
-  "Emergency Fund": "0",
-  "Investments & Retirement": "0",
-  "Kids' Savings / 529": "0",
-  "Tax Sinking Fund": "0",
-};
+// ⚠️ Deploy safety (owner decision 3). It used to overwrite 24 May 2026 planned
+// lines with hard-coded amounts and pin May (undoing #777). It now changes NO
+// budget data: when the gate is missing it only writes the gate. budget_lines
+// has no updated_at, history or "set by" column, so an edit cannot be detected,
+// and seeding already writes the same May amounts. An insert-only variant was
+// also dropped: with only a September line, reading May stored the canonical
+// amount and later months carried it forward.
 const MAY_2026_MONTH = "2026-05-01";
 const MAY_2026_AVALANCHE_MANUAL_EXTRA = "6225.00";
 
 async function reconcileMay2026Amounts(
   householdId: string,
   householdOwnerId: string,
-  userId: string,
 ): Promise<void> {
   // Cheap unlocked read first: the common case is a set gate.
   const [s] = await db
@@ -902,98 +902,18 @@ async function reconcileMay2026Amounts(
 
   await db.transaction(async (tx) => {
     const prefs = await lockOwnerPreferences(tx, householdOwnerId, householdId);
-    // Another process may have finished the pass while this one waited.
+    // Another process may have written the gate while this one waited.
     if (prefs.budgetMay2026AmountsV1 === true) return;
-    const writeGate = () =>
-      tx
-        .update(settingsTable)
-        .set({
-          preferences: sql`jsonb_set(${settingsTable.preferences}, '{budgetMay2026AmountsV1}', 'true'::jsonb, true)`,
-        })
-        .where(eq(settingsTable.userId, householdOwnerId));
-
-    const [mayMonth] = await tx
-      .select({ id: budgetMonthsTable.id })
-      .from(budgetMonthsTable)
-      .where(
-        and(
-          eq(budgetMonthsTable.householdId, householdId),
-          eq(budgetMonthsTable.monthStart, MAY_2026_MONTH),
-        ),
-      )
-      .limit(1);
-    const [lineThroughMay] = await tx
-      .select({ id: budgetLinesTable.id })
-      .from(budgetLinesTable)
-      .where(
-        and(
-          eq(budgetLinesTable.householdId, householdId),
-          lte(budgetLinesTable.monthStart, MAY_2026_MONTH),
-        ),
-      )
-      .limit(1);
-    if (mayMonth || lineThroughMay) {
-      logger.info(
-        {
-          householdId,
-          may2026MonthExists: Boolean(mayMonth),
-          lineInOrBeforeMay2026: Boolean(lineThroughMay),
-        },
-        "[budget] May 2026 amounts gate was missing; the household already has budget data through May 2026, so only the gate was written",
-      );
-      await writeGate();
-      return;
-    }
-
-    const cats = await tx
-      .select()
-      .from(budgetCategoriesTable)
-      .where(eq(budgetCategoriesTable.householdId, householdId));
-    const byName = new Map(cats.map((c) => [c.name, c]));
-    const billBacked = new Set(
-      (
-        await tx
-          .select({ categoryId: recurringItemsTable.categoryId })
-          .from(recurringItemsTable)
-          .where(eq(recurringItemsTable.householdId, householdId))
-      )
-        .map((r) => r.categoryId)
-        .filter((id): id is string => typeof id === "string"),
+    logger.info(
+      { householdId },
+      "[budget] May 2026 amounts gate was missing; only the gate was written, no budget data changed",
     );
-
-    const lines = Object.entries(MAY_2026_CANONICAL_PLANNED).flatMap(
-      ([catName, canonical]) => {
-        const cat = byName.get(catName);
-        if (!cat || cat.sourceKind !== "manual" || billBacked.has(cat.id)) return [];
-        return [
-          {
-            userId,
-            householdId,
-            monthStart: MAY_2026_MONTH,
-            categoryId: cat.id,
-            plannedAmount: canonical,
-          },
-        ];
-      },
-    );
-    if (lines.length > 0) {
-      await tx
-        .insert(budgetMonthsTable)
-        .values({ userId, householdId, monthStart: MAY_2026_MONTH })
-        .onConflictDoNothing();
-      await tx
-        .insert(budgetLinesTable)
-        .values(lines)
-        .onConflictDoNothing({
-          target: [
-            budgetLinesTable.householdId,
-            budgetLinesTable.monthStart,
-            budgetLinesTable.categoryId,
-          ],
-        });
-    }
-
-    await writeGate();
+    await tx
+      .update(settingsTable)
+      .set({
+        preferences: sql`jsonb_set(${settingsTable.preferences}, '{budgetMay2026AmountsV1}', 'true'::jsonb, true)`,
+      })
+      .where(eq(settingsTable.userId, householdOwnerId));
   });
 }
 
@@ -1771,10 +1691,10 @@ router.get(
     }
 
     // One-time reconciliation of May 2026 planned amounts to the household's
-    // canonical source-of-truth values (task #106). Only runs when this
-    // request is for May 2026; gated by a per-household flag thereafter.
+    // canonical source-of-truth values (task #106), now retired: with its gate
+    // missing it only writes the gate and changes no budget data.
     if (monthStart === MAY_2026_MONTH) {
-      await reconcileMay2026Amounts(householdId, householdOwnerId, userId);
+      await reconcileMay2026Amounts(householdId, householdOwnerId);
     }
 
     // Pull the live Debts tracker into auto_debts categories/lines for this

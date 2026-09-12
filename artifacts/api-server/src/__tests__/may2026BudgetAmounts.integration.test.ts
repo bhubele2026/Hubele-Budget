@@ -181,7 +181,11 @@ describe("May 2026 budget amounts reconciliation (task #106, owner decision 3)",
     const res = await fetch(`${baseUrl}/budget/months/${MONTH}`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      groups: Array<{ lines: Array<{ categoryName: string; plannedAmount: string }> }>;
+      groups: Array<{
+        groupName: string;
+        plannedTotal: string;
+        lines: Array<{ categoryName: string; plannedAmount: string }>;
+      }>;
     };
 
     // Every May line the household had is exactly as it was, and none is pinned.
@@ -193,6 +197,36 @@ describe("May 2026 budget amounts reconciliation (task #106, owner decision 3)",
     expect(after.get("Misc / Buffer")!.planned).toBe("0.00");
     expect(after.get("Groceries")!.planned).toBe("512.34");
     expect(await mayMonthPinned()).toBe(false);
+
+    // May's group totals for this unpinned seeded household. Unpinned, a
+    // bill-backed or auto category shows its linked bills for May; a plain
+    // envelope shows its stored line. From SEED_RECURRING_ITEMS, after the
+    // bill-link heal (Dog Waste Removal → Pets):
+    //   Income 33,387.98 = Brad 3 × 8,100.00 (May 1/15/29) + Hannah 2 × 4,499.99
+    //     (May 8/22) + Other Income 88.00
+    //   Housing & Utilities 3,405.08 = Mortgage 1,989.81 + HELOC 677.40 + Utilities
+    //     684.02 (342.00 + 241.00 + 101.02) + Home Maintenance 53.85 (stored; no bill)
+    //   Insurance & Health 345.13 = 95.00 + 121.54 + 128.59; Health 0
+    //   Food 972.34 = Groceries 512.34 (edited) + Dining & Coffee 460.00
+    //   Transportation 1,724.35 = Car Payments 651.55 + 672.80 + gas 2 × 200.00
+    //   Kids & Pets 80.00 = Dog Waste Removal
+    //   Lifestyle & Shopping 2,965.99 = Subscriptions 2 × 18.98 + Misc / Buffer
+    //     (Weekly Spend 5 × 450.00 + Monthly Spend 440.45 + Nelnet 237.58)
+    //   Savings & Debt Payoff 0; Avalanche 0 (manualExtra untouched)
+    const groupTotal = (name: string) => {
+      const g = body.groups.find((x) => x.groupName === name);
+      expect(g, `missing group ${name}`).toBeTruthy();
+      return g!.plannedTotal;
+    };
+    expect(groupTotal("Income")).toBe("33387.98");
+    expect(groupTotal("Housing & Utilities")).toBe("3405.08");
+    expect(groupTotal("Insurance & Health")).toBe("345.13");
+    expect(groupTotal("Food")).toBe("972.34");
+    expect(groupTotal("Transportation")).toBe("1724.35");
+    expect(groupTotal("Kids & Pets")).toBe("80.00");
+    expect(groupTotal("Lifestyle & Shopping")).toBe("2965.99");
+    expect(groupTotal("Savings & Debt Payoff")).toBe("0.00");
+    expect(groupTotal("Avalanche — Extra to Highest APR")).toBe("0.00");
 
     // Plain envelopes show their stored line on the page.
     const planned = new Map<string, number>();
