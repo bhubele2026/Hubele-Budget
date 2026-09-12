@@ -163,12 +163,11 @@ describe("budget category v2 migration", () => {
     );
     expect(utilitiesLine).toBeTruthy();
     if (!utilitiesLine) throw new Error("utilitiesLine missing");
-    // After the v2 migration sums the legacy lines (241 + 101.02 + 342 =
-    // 684.02), the May 2026 canonical reconciliation (task #106) overrides
-    // Utilities to the user's source-of-truth value of 774.24. The merged
-    // category still exists with re-pointed references — that's what this
-    // test cares about.
-    expect(parseFloat(utilitiesLine.plannedAmount)).toBeCloseTo(774.24, 2);
+    // The v2 migration sums the legacy lines (241 + 101.02 + 342 = 684.02).
+    // The May 2026 reconciliation (task #106) used to overwrite that with
+    // 774.24; since owner decision 3 it never overwrites an existing line
+    // (this household already has May 2026 lines), so the summed amount stands.
+    expect(parseFloat(utilitiesLine.plannedAmount)).toBeCloseTo(684.02, 2);
     expect(parseFloat(utilitiesLine.actualAmount)).toBeCloseTo(150.0, 2);
 
     // Mapping rule should now point at the new Utilities category.
