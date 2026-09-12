@@ -6,6 +6,8 @@ import {
   DayDelta,
   curveHelp,
   curveLabel,
+  RemainderNote,
+  remainderHelp,
   REVIEW_HELP,
   REVIEW_PARTIAL_HELP,
   type SuggestionAnswer,
@@ -47,7 +49,13 @@ export function ProbablyPaidStrip({
         ? "Match needs review"
         : "Suggested";
   const help =
-    pp.needsReview === "partial" ? REVIEW_PARTIAL_HELP : pp.needsReview ? REVIEW_HELP : curveHelp(pp.offCurve);
+    pp.remainderAmount !== undefined
+      ? remainderHelp()
+      : pp.needsReview === "partial"
+        ? REVIEW_PARTIAL_HELP
+        : pp.needsReview
+          ? REVIEW_HELP
+          : curveHelp(pp.offCurve);
   const partialButton = (className: string) => (
     <button
       type="button"
@@ -97,7 +105,11 @@ export function ProbablyPaidStrip({
         </span>
       )}
       <span className="text-neutral-500" data-testid={`probably-paid-curve-${txnId}`}>
-        {curveLabel(pp.offCurve)}
+        {pp.remainderAmount !== undefined ? (
+          <RemainderNote remainderAmount={pp.remainderAmount} />
+        ) : (
+          curveLabel(pp.offCurve)
+        )}
       </span>
       <Help>{help}</Help>
       <span className="ml-auto flex items-center gap-1.5">

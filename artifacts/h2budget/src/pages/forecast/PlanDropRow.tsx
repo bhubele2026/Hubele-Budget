@@ -17,6 +17,7 @@ import {
   AmountDifference,
   DayDelta,
   curveLabel,
+  RemainderNote,
   type SuggestionAnswer,
 } from "./probablyPaidText";
 
@@ -86,10 +87,24 @@ export function PlanDropRow({
   const pp = row.probablyPaid;
   const suggested = !!pp && !!onAnswer;
   const offCurveSuggestion = suggested && !!pp?.offCurve;
+  // (Decision 13, round 3) An overdue pair the server already counts paid, in
+  // part — `remainderAmount` set. Moving the occurrence would post the row's
+  // FULL plan amount on the new date while the server keeps dragging only the
+  // smaller remainder, double-counting the part already paid. Moving just the
+  // remainder isn't supported, so Move is hidden for these pairs entirely.
+  const hasRemainder = !!pp && pp.remainderAmount !== undefined;
+  // (Decision 13, round 4) The row's face amount is what still weighs on the
+  // curve: the full plan, unless the server counts it paid in part, in which
+  // case it's the remainder (never the full amount beside a "paid" note —
+  // the review's own repro: −$180 beside "Paid; $15.00 still assumed unpaid").
+  const remainderNum = hasRemainder ? (pp!.remainderAmount as number) : null;
+  const displayAmount = remainderNum ?? row.amount;
+  const paidSoFar = remainderNum !== null ? Math.round((row.amount - remainderNum) * 100) / 100 : null;
   // A partly-paid plan can move: the server keeps its `partial` beside the
   // `rescheduled` row, so the remainder lands on the new date.
   const canMove =
     !offCurveSuggestion &&
+    !hasRemainder &&
     !!onMove &&
     (row.status === "pending_plan" ||
       row.status === "future" ||
@@ -200,7 +215,11 @@ export function PlanDropRow({
               <DayDelta days={pp.dayDelta} />
               <span>·</span>
               <span data-testid={`plan-probably-paid-curve-${testKey}`}>
-                {curveLabel(pp.offCurve)}
+                {pp.remainderAmount !== undefined ? (
+                  <RemainderNote remainderAmount={pp.remainderAmount} />
+                ) : (
+                  curveLabel(pp.offCurve)
+                )}
               </span>
             </div>
           )}
@@ -219,6 +238,21 @@ export function PlanDropRow({
               </span>
             </div>
           )}
+          {remainderNum !== null && paidSoFar !== null && (
+            <div
+              className="text-micro text-neutral-500"
+              data-testid={`plan-remainder-paid-${testKey}`}
+            >
+              Paid{" "}
+              <span className="font-mono tabular-nums">
+                {formatCurrency(paidSoFar)}
+              </span>{" "}
+              of{" "}
+              <span className="font-mono tabular-nums">
+                {formatCurrency(row.amount)}
+              </span>
+            </div>
+          )}
         </div>
       </div>
       <div className="flex w-full items-center justify-end gap-3 sm:w-auto sm:gap-4">
@@ -233,10 +267,10 @@ export function PlanDropRow({
         )}
         <span
           className={`font-mono text-label tabular-nums ${
-            row.amount < 0 ? "text-bad" : "text-brand-navy"
+            displayAmount < 0 ? "text-bad" : "text-brand-navy"
           }`}
         >
-          {formatCurrency(row.amount)}
+          {formatCurrency(displayAmount)}
         </span>
         {suggested && pp && (() => {
           // (One-time bill move, review M3) A partial that needs review answers

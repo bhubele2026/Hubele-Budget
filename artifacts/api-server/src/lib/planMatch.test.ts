@@ -6,30 +6,56 @@ import {
   rowInMatchWindow,
   rowWithinMatchAmount,
   rowPaysPlanInFull,
+  type ConfirmedRow,
+  type MatchItem,
   type MatchPlan,
   type MatchRow,
 } from "@workspace/avalanche-core";
 
-const plan = (key: string, date: string, amount: number, label: string): MatchPlan => ({
+const plan = (key: string, date: string, amount: number, label: string, extra: Partial<MatchPlan> = {}): MatchPlan => ({
   key: `${key}|${date}`,
   itemId: key,
   occurrenceDate: date,
   date,
   amount,
   label,
+  ...extra,
 });
-const row = (txnId: string, occurredOn: string, amount: number, description: string): MatchRow => ({
+/** A Plaid row on the checking account, unless `extra` says otherwise. */
+const row = (txnId: string, occurredOn: string, amount: number, description: string, extra: Partial<MatchRow> = {}): MatchRow => ({
   txnId,
   occurredOn,
   amount,
   description,
+  onChecking: true,
+  plaidChecking: true,
+  ...extra,
 });
+/** (Decision 13) Pair and grade: every plan's item is an active item, plus `otherItems`. */
+const match = (
+  plans: readonly MatchPlan[],
+  rows: readonly MatchRow[],
+  notMatch?: ReadonlySet<string>,
+  otherItems: readonly MatchItem[] = [],
+) =>
+  matchPlansToRows(
+    plans,
+    rows,
+    [...plans.map((p) => ({ itemId: p.itemId, label: p.label, categoryId: p.categoryId ?? null, income: p.amount > 0 })), ...otherItems],
+    notMatch,
+  );
 
 describe("(one-time bill move, review L4) the edit re-check uses the matcher's own bounds", () => {
   // ⚠️ MERGE COUPLING: every `matchPlansToRows` call these pins make goes through
   // this one helper, so a signature change there (PR-B adds `items`) is one edit.
-  const pairOne = (planAmount: number, rowDate: string, rowAmount: number) =>
-    matchPlansToRows([plan("roof", "2026-09-20", planAmount, "Roof repair")], [row("t", rowDate, rowAmount, "ROOF REPAIR CO")]);
+  const pairOne = (planAmount: number, rowDate: string, rowAmount: number) => {
+    const roof = plan("roof", "2026-09-20", planAmount, "Roof repair");
+    return matchPlansToRows(
+      [roof],
+      [row("t", rowDate, rowAmount, "ROOF REPAIR CO")],
+      [{ itemId: roof.itemId, label: roof.label, categoryId: roof.categoryId ?? null, income: roof.amount > 0 }],
+    );
+  };
 
   it("rowInMatchWindow is exactly the date window matchPlansToRows pairs a named row in", () => {
     const cases: Array<[string, boolean]> = [
@@ -108,77 +134,77 @@ describe("labelEvidence", () => {
 
 describe("matchPlansToRows", () => {
   it("$150 plan, $150 paid on the day with the payee's name → high, off the curve", () => {
-    const [m, ...rest] = matchPlansToRows([plan("water", "2026-05-10", -150, "City Water")], [
+    const [m, ...rest] = match([plan("water", "2026-05-10", -150, "City Water")], [
       row("t1", "2026-05-10", -150, "CITY OF SPRINGFIELD WATER"),
     ]);
     expect(rest).toHaveLength(0);
-    expect(m).toMatchObject({ planKey: "water|2026-05-10", txnId: "t1", difference: 0, dayDelta: 0, confidence: "high", ambiguous: false, offCurve: true });
+    expect(m).toMatchObject({ planKey: "water|2026-05-10", txnId: "t1", difference: 0, dayDelta: 0, confidence: "high", ambiguous: false, tier: 2, offCurve: true });
   });
 
   it("$150 plan, $173 paid with the payee's name → medium, difference +23, off the curve (within $25)", () => {
-    const [m] = matchPlansToRows([plan("water", "2026-05-10", -150, "City Water")], [
+    const [m] = match([plan("water", "2026-05-10", -150, "City Water")], [
       row("t1", "2026-05-11", -173, "CITY WATER UTIL"),
     ]);
     expect(m).toMatchObject({ txnId: "t1", planAmount: -150, txnAmount: -173, difference: 23, dayDelta: 1, confidence: "medium", offCurve: true });
   });
 
   it("(PR5 review) a named pair beyond max($25, 10%) is a suggestion only: $1,500 rent vs a $1,200 payment", () => {
-    const [m] = matchPlansToRows([plan("rent", "2026-05-20", -1500, "Oak Street Rent")], [
+    const [m] = match([plan("rent", "2026-05-20", -1500, "Oak Street Rent")], [
       row("t1", "2026-05-18", -1200, "OAK STREET PROPERTIES"),
     ]);
-    expect(m).toMatchObject({ difference: -300, confidence: "low", offCurve: false });
+    expect(m).toMatchObject({ difference: -300, confidence: "low", tier: 3, offCurve: false });
   });
 
   it("(PR5 review) an underpaid named bill stays on the curve: $38 plan, $20 row → a suggestion only", () => {
-    const [m] = matchPlansToRows([plan("debt:card", "2026-05-10", -38, "Golden Card minimum")], [
+    const [m] = match([plan("debt:card", "2026-05-10", -38, "Golden Card minimum")], [
       row("t", "2026-05-12", -20, "GOLDEN CARD EPAY"),
     ]);
-    expect(m).toMatchObject({ difference: -18, confidence: "medium", ambiguous: false, offCurve: false });
-    const [close] = matchPlansToRows([plan("water", "2026-05-10", -150, "City Water")], [
+    expect(m).toMatchObject({ difference: -18, confidence: "medium", ambiguous: false, tier: 3, offCurve: false });
+    const [close] = match([plan("water", "2026-05-10", -150, "City Water")], [
       row("t", "2026-05-10", -149.25, "CITY WATER"),
     ]);
     expect(close).toMatchObject({ confidence: "high", offCurve: true });
   });
 
   it("(PR5 second review) a different bill from the same payee never leaves the curve; the full name does", () => {
-    const [fios] = matchPlansToRows([plan("vzw", "2026-05-20", -120, "Verizon Wireless")], [
+    const [fios] = match([plan("vzw", "2026-05-20", -120, "Verizon Wireless")], [
       row("t", "2026-05-12", -130, "VERIZON FIOS"),
     ]);
-    expect(fios).toMatchObject({ confidence: "medium", ambiguous: false, offCurve: false });
-    const [mktpl] = matchPlansToRows([plan("prime", "2026-05-15", -14.99, "Amazon Prime")], [
+    expect(fios).toMatchObject({ confidence: "medium", ambiguous: false, tier: 3, offCurve: false });
+    const [mktpl] = match([plan("prime", "2026-05-15", -14.99, "Amazon Prime")], [
       row("t", "2026-05-13", -29.99, "AMAZON MKTPL US"),
     ]);
     expect(mktpl).toMatchObject({ confidence: "medium", offCurve: false });
-    const [full] = matchPlansToRows([plan("vzw", "2026-05-20", -120, "Verizon Wireless")], [
+    const [full] = match([plan("vzw", "2026-05-20", -120, "Verizon Wireless")], [
       row("t", "2026-05-18", -130, "VERIZON WIRELESS PAYMENTS"),
     ]);
-    expect(full).toMatchObject({ confidence: "medium", offCurve: true });
+    expect(full).toMatchObject({ confidence: "medium", tier: 2, offCurve: true });
   });
 
   it("paid 6 days early and 5 days late both match with the payee's name; 11 early and 15 late do not", () => {
     const p = [plan("rent", "2026-05-15", -1200, "Oak Street Rent")];
-    expect(matchPlansToRows(p, [row("t", "2026-05-09", -1200, "OAK STREET PROPERTIES")])[0]?.dayDelta).toBe(-6);
-    expect(matchPlansToRows(p, [row("t", "2026-05-20", -1200, "OAK STREET PROPERTIES")])[0]?.dayDelta).toBe(5);
-    expect(matchPlansToRows(p, [row("t", "2026-05-04", -1200, "OAK STREET PROPERTIES")])).toHaveLength(0);
-    expect(matchPlansToRows(p, [row("t", "2026-05-30", -1200, "OAK STREET PROPERTIES")])).toHaveLength(0);
+    expect(match(p, [row("t", "2026-05-09", -1200, "OAK STREET PROPERTIES")])[0]?.dayDelta).toBe(-6);
+    expect(match(p, [row("t", "2026-05-20", -1200, "OAK STREET PROPERTIES")])[0]?.dayDelta).toBe(5);
+    expect(match(p, [row("t", "2026-05-04", -1200, "OAK STREET PROPERTIES")])).toHaveLength(0);
+    expect(match(p, [row("t", "2026-05-30", -1200, "OAK STREET PROPERTIES")])).toHaveLength(0);
   });
 
   it("(PR5 review) without the payee's name: exact within 3 days is a low suggestion that never leaves the curve", () => {
     const p = [plan("gym", "2026-05-10", -150, "Gym")];
-    expect(matchPlansToRows(p, [row("t", "2026-05-12", -150, "POS 4411")])[0]).toMatchObject({ confidence: "low", offCurve: false });
-    expect(matchPlansToRows(p, [row("t", "2026-05-11", -173, "POS 4411")])).toHaveLength(0);
-    expect(matchPlansToRows(p, [row("t", "2026-05-14", -150, "POS 4411")])).toHaveLength(0);
+    expect(match(p, [row("t", "2026-05-12", -150, "POS 4411")])[0]).toMatchObject({ confidence: "low", tier: 3, offCurve: false });
+    expect(match(p, [row("t", "2026-05-11", -173, "POS 4411")])).toHaveLength(0);
+    expect(match(p, [row("t", "2026-05-14", -150, "POS 4411")])).toHaveLength(0);
   });
 
   it("(PR5 review) a small bill and an unrelated card purchase: a low suggestion, never off the curve", () => {
-    const [m] = matchPlansToRows([plan("netflix", "2026-05-15", -15.49, "Netflix")], [
+    const [m] = match([plan("netflix", "2026-05-15", -15.49, "Netflix")], [
       row("t", "2026-05-13", -15, "CHIPOTLE 2231"),
     ]);
     expect(m).toMatchObject({ confidence: "low", offCurve: false });
   });
 
   it("two −$50 rows and one −$100 plan: no match, so the plan stays and never counts as −$200", () => {
-    const out = matchPlansToRows([plan("util", "2026-05-10", -100, "Utility")], [
+    const out = match([plan("util", "2026-05-10", -100, "Utility")], [
       row("a", "2026-05-10", -50, "UTILITY CO"),
       row("b", "2026-05-11", -50, "UTILITY CO"),
     ]);
@@ -187,44 +213,291 @@ describe("matchPlansToRows", () => {
 
   it("a stop-word never counts as evidence: 'ACH PAYMENT' does not match the avalanche plan off by $40", () => {
     expect(
-      matchPlansToRows([plan("avalanche:extra", "2026-05-31", -400, "Avalanche extra payment")], [
+      match([plan("avalanche:extra", "2026-05-31", -400, "Avalanche extra payment")], [
         row("t", "2026-05-30", -440, "ONLINE ACH PAYMENT"),
       ]),
     ).toHaveLength(0);
   });
 
   it("a card payment matches a debt minimum by the card's name", () => {
-    const [m] = matchPlansToRows([plan("debt:sapphire", "2026-05-20", -95, "Chase Sapphire minimum")], [
+    const [m] = match([plan("debt:sapphire", "2026-05-20", -95, "Chase Sapphire minimum")], [
       row("t", "2026-05-19", -95, "CHASE CREDIT CRD AUTOPAY"),
     ]);
-    expect(m).toMatchObject({ planItemId: "debt:sapphire", txnId: "t", confidence: "high", offCurve: true });
+    expect(m).toMatchObject({ planItemId: "debt:sapphire", txnId: "t", confidence: "high", tier: 2, evidence: "name_exact", offCurve: true });
   });
 
   it("never pairs opposite signs", () => {
-    expect(matchPlansToRows([plan("pay", "2026-05-10", 2000, "Paycheck")], [row("t", "2026-05-10", -2000, "PAYCHECK")])).toHaveLength(0);
+    expect(match([plan("pay", "2026-05-10", 2000, "Paycheck")], [row("t", "2026-05-10", -2000, "PAYCHECK")])).toHaveLength(0);
   });
 
   it("one to one: the better row wins, and a close runner-up marks the pair ambiguous — which keeps it on the curve", () => {
-    const out = matchPlansToRows([plan("water", "2026-05-10", -150, "City Water")], [
+    const out = match([plan("water", "2026-05-10", -150, "City Water")], [
       row("near", "2026-05-10", -150, "CITY WATER"),
       row("close", "2026-05-11", -150, "CITY WATER"),
     ]);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ txnId: "near", ambiguous: true, offCurve: false });
+    expect(out[0]).toMatchObject({ txnId: "near", ambiguous: true, tier: 3, offCurve: false });
   });
 
   it("a rejected pair ('Not this') never returns, and another row can still match", () => {
     const plans = [plan("water", "2026-05-10", -150, "City Water")];
     const rows = [row("wrong", "2026-05-10", -150, "CITY WATER"), row("right", "2026-05-12", -151, "CITY WATER")];
-    const out = matchPlansToRows(plans, rows, new Set(["water|2026-05-10#wrong"]));
+    const out = match(plans, rows, new Set(["water|2026-05-10#wrong"]));
     expect(out.map((m) => m.txnId)).toEqual(["right"]);
   });
 
   it("income: a deposit of the exact amount with no name is a low suggestion only", () => {
-    const [m] = matchPlansToRows([plan("pay-a", "2026-10-09", 2000, "Paycheck A")], [
+    const [m] = match([plan("pay-a", "2026-10-09", 2000, "Paycheck A")], [
       row("t", "2026-10-09", 2000, "ACME PAYROLL DIRECT DEP"),
     ]);
-    expect(m).toMatchObject({ txnId: "t", confidence: "low", offCurve: false });
+    expect(m).toMatchObject({ txnId: "t", confidence: "low", tier: 3, offCurve: false });
+  });
+});
+
+// ⭐ OWNER DECISION 13 — MATCH EVIDENCE TIERS. "A different charge from the same
+// company must not hide an unpaid bill. Merchant similarity alone is insufficient
+// proof of payment." Tier 1/2 pairs are evidence; tier 3 is a suggestion.
+describe("matchPlansToRows — decision 13 evidence tiers", () => {
+  const H = "cat-heloc";
+  const U = "cat-utilities";
+  const bill = (itemId: string, label: string, categoryId: string | null = null, oneTimeDate: string | null = null): MatchItem => ({
+    itemId,
+    label,
+    categoryId,
+    income: false,
+    oneTimeDate,
+  });
+
+  it("HELOC: $1,130 plan, FIGURE LENDING −1,185.19 in the plan's category, which is on this bill only → tier 2, off the curve, +55.19", () => {
+    const heloc = plan("heloc", "2026-05-01", -1130, "Figure HELOC", { categoryId: H });
+    const [m] = match([heloc], [row("t", "2026-05-01", -1185.19, "FIGURE LENDING", { categoryId: H })]);
+    expect(m).toMatchObject({ tier: 2, evidence: "category", offCurve: true, difference: 55.19, confidence: "medium", ambiguous: false });
+  });
+
+  it("HELOC: the same category also on a second active bill → tier 3, a suggestion that stays on the curve", () => {
+    const heloc = plan("heloc", "2026-05-01", -1130, "Figure HELOC", { categoryId: H });
+    const [m] = match([heloc], [row("t", "2026-05-01", -1185.19, "FIGURE LENDING", { categoryId: H })], undefined, [
+      bill("fee", "Figure annual fee", H),
+    ]);
+    expect(m).toMatchObject({ tier: 3, evidence: null, offCurve: false, difference: 55.19, confidence: "medium" });
+  });
+
+  it("(fix 8) a one-time bill in the category counts only when dated within 31 days of the plan", () => {
+    const heloc = plan("heloc", "2026-05-01", -1130, "Figure HELOC", { categoryId: H });
+    const figure = row("t", "2026-05-01", -1185.19, "FIGURE LENDING", { categoryId: H });
+    expect(match([heloc], [figure], undefined, [bill("fee", "Figure closing fee", H, "2026-12-01")])[0]).toMatchObject({ tier: 2, evidence: "category" });
+    // 31 days after the plan still counts; 32 does not.
+    expect(match([heloc], [figure], undefined, [bill("fee", "Figure closing fee", H, "2026-06-01")])[0]).toMatchObject({ tier: 3 });
+    expect(match([heloc], [figure], undefined, [bill("fee", "Figure closing fee", H, "2026-06-02")])[0]).toMatchObject({ tier: 2, evidence: "category" });
+    expect(match([heloc], [figure], undefined, [bill("fee", "Figure closing fee", H, "2026-05-31")])[0]).toMatchObject({ tier: 3 });
+    expect(match([heloc], [figure], undefined, [bill("fee", "Figure closing fee", H, "2026-04-01")])[0]).toMatchObject({ tier: 3 });
+  });
+
+  it("HELOC: no category on the row, or another category → tier 3 (part of the name is not proof)", () => {
+    const heloc = plan("heloc", "2026-05-01", -1130, "Figure HELOC", { categoryId: H });
+    expect(match([heloc], [row("t", "2026-05-01", -1185.19, "FIGURE LENDING")])[0]).toMatchObject({ tier: 3, offCurve: false });
+    expect(match([heloc], [row("t", "2026-05-01", -1185.19, "FIGURE LENDING", { categoryId: U })])[0]).toMatchObject({ tier: 3, offCurve: false });
+  });
+
+  it("(fix 5) the category counts items of the plan's direction only: income uses it too, when no other income item carries it", () => {
+    const heloc = plan("heloc", "2026-05-01", -1130, "Figure HELOC", { categoryId: H });
+    const [m] = match([heloc], [row("t", "2026-05-01", -1185.19, "FIGURE LENDING", { categoryId: H })], undefined, [
+      { itemId: "refund", label: "Figure refund", categoryId: H, income: true },
+    ]);
+    expect(m).toMatchObject({ tier: 2, evidence: "category" });
+    const pay = plan("brad", "2026-08-21", 8100, "Brad's paycheck (KFI)", { categoryId: "cat-brad" });
+    const deposit = row("d", "2026-08-20", 8100, "KFI STAFFING PAYROLL", { categoryId: "cat-brad" });
+    expect(match([pay], [deposit])[0]).toMatchObject({ tier: 2, evidence: "category", offCurve: true });
+    expect(
+      match([pay], [deposit], undefined, [{ itemId: "hannah", label: "Hannah's paycheck (Exact)", categoryId: "cat-brad", income: true }])[0],
+    ).toMatchObject({ tier: 3, offCurve: false });
+  });
+
+  it("the amount band for tier 2: the plan + max($25, 10%) at most; at least the plan − max($1, 1%) on a name, − max($25, 10%) on the category", () => {
+    const heloc = plan("heloc", "2026-05-01", -1130, "Figure HELOC", { categoryId: H });
+    const at = (amount: number) => match([heloc], [row("t", "2026-05-01", amount, "FIGURE LENDING", { categoryId: H })])[0];
+    expect(at(-1118.7)).toMatchObject({ tier: 2, offCurve: true }); // −11.30 = 1%
+    // (fix 6) Underpaid on the category: still tier 2, but it stays on the curve before it is due.
+    expect(at(-1118.69)).toMatchObject({ tier: 2, evidence: "category", offCurve: false, difference: -11.31 });
+    expect(at(-1017)).toMatchObject({ tier: 2, offCurve: false }); // −113.00 = 10%
+    expect(at(-1016.99)).toMatchObject({ tier: 3, offCurve: false });
+    expect(at(-1243)).toMatchObject({ tier: 2, offCurve: true }); // +113.00 = 10%
+    expect(at(-1243.01)).toMatchObject({ tier: 3 });
+    // A name alone keeps the strict floor.
+    const named = plan("heloc", "2026-05-01", -1130, "Figure HELOC");
+    expect(match([named], [row("t", "2026-05-01", -1118.7, "FIGURE HELOC")])[0]).toMatchObject({ tier: 2, evidence: "full_name" });
+    expect(match([named], [row("t", "2026-05-01", -1118.69, "FIGURE HELOC")])[0]).toMatchObject({ tier: 3 });
+  });
+
+  it("Verizon: overdue 'Verizon Fios' $120 (Utilities, on three bills) and 'VERIZON WIRELESS' −98 → tier 3; −85 does not pair", () => {
+    const fios = plan("fios", "2026-05-01", -120, "Verizon Fios", { categoryId: U });
+    const others = [bill("water", "City Water", U), bill("power", "Evergy Electric", U)];
+    const [m] = match([fios], [row("t", "2026-05-01", -98, "VERIZON WIRELESS", { categoryId: U })], undefined, others);
+    expect(m).toMatchObject({ difference: -22, confidence: "medium", ambiguous: false, tier: 3, evidence: null, offCurve: false });
+    expect(match([fios], [row("t", "2026-05-01", -85, "VERIZON WIRELESS", { categoryId: U })], undefined, others)).toEqual([]);
+  });
+
+  it("Verizon: bill 'Verizon Wireless' $85 and 'VERIZON WIRELESS' −85 → tier 2, even with Verizon Fios also a bill", () => {
+    const wireless = plan("vzw", "2026-05-01", -85, "Verizon Wireless");
+    const [m] = match([wireless], [row("t", "2026-05-01", -85, "VERIZON WIRELESS")], undefined, [bill("fios", "Verizon Fios")]);
+    expect(m).toMatchObject({ tier: 2, evidence: "full_name", offCurve: true });
+  });
+
+  it("(b) needs the full name to be unique: another active bill whose full name is also in the row → only (c) can still prove it", () => {
+    const wireless = plan("vzw", "2026-05-01", -85, "Verizon Wireless");
+    const verizon = bill("vz", "Verizon");
+    // $5 over: (b) fails ("Verizon" is fully in the row too), (c) fails (more than $1 off).
+    expect(match([wireless], [row("t", "2026-05-02", -90, "VERIZON WIRELESS")], undefined, [verizon])[0]).toMatchObject({ tier: 3, offCurve: false });
+    expect(match([wireless], [row("t", "2026-05-02", -90, "VERIZON WIRELESS")])[0]).toMatchObject({ tier: 2, evidence: "full_name" });
+    // Exact and prompt: (c).
+    expect(match([wireless], [row("t", "2026-05-02", -85, "VERIZON WIRELESS")], undefined, [verizon])[0]).toMatchObject({ tier: 2, evidence: "name_exact" });
+    // Past five days (c′) needs no other item sharing a name word: "Verizon" shares "verizon".
+    expect(match([wireless], [row("t", "2026-05-07", -85, "VERIZON")], undefined, [verizon])[0]).toMatchObject({ tier: 3 });
+    expect(match([wireless], [row("t", "2026-05-06", -85, "VERIZON")], undefined, [verizon])[0]).toMatchObject({ tier: 2, evidence: "name_exact" });
+  });
+
+  it("(fix 1) exact with some of the name anywhere in the window, when no other item shares a name word → tier 2", () => {
+    const toyota = plan("toyota", "2026-08-07", -672.8, "Toyota Lease");
+    const uw = bill("uw", "Hannah's Car (UW Credit Union)");
+    // Six days late, "toyota" only: past (c)'s five days.
+    expect(match([toyota], [row("t", "2026-08-13", -672.8, "TOYOTA MOTOR CR")], undefined, [uw])[0]).toMatchObject({ tier: 2, evidence: "name_exact_unique", offCurve: true });
+    expect(match([toyota], [row("t", "2026-08-21", -672.8, "TOYOTA MOTOR CR")], undefined, [uw])[0]).toMatchObject({ tier: 2, evidence: "name_exact_unique" });
+    // Not exact: no.
+    expect(match([toyota], [row("t", "2026-08-13", -680, "TOYOTA MOTOR CR")], undefined, [uw])[0]).toMatchObject({ tier: 3 });
+    // Another item shares "toyota": no.
+    expect(match([toyota], [row("t", "2026-08-13", -672.8, "TOYOTA MOTOR CR")], undefined, [uw, bill("ins", "Toyota Care plan")])[0]).toMatchObject({ tier: 3 });
+  });
+
+  it("(fix 1) State Farm's two policies share 'farm': six days late stays tier 3; within five days (c) still holds", () => {
+    const sf1 = plan("sf1", "2026-08-03", -121.54, "State Farm");
+    const sf2 = bill("sf2", "State Farm Insurance");
+    expect(match([sf1], [row("t", "2026-08-09", -121.54, "STATE FARM RO 27 SFPP")], undefined, [sf2])[0]).toMatchObject({ tier: 3, offCurve: false });
+    expect(match([sf1], [row("t", "2026-08-05", -121.54, "STATE FARM RO 27 SFPP")], undefined, [sf2])[0]).toMatchObject({ tier: 2, evidence: "name_exact" });
+  });
+
+  it("(fix 2) a confirmed descriptor: MGE 'MADISON GAS EL' is tier 3 before any confirmation, tier 2 after one, at its confirmed amount", () => {
+    const utilities = [bill("water", "Water/Sewer", U), bill("vzw", "Verizon Wireless", U)];
+    const confirmedRow = (description: string, amount = -241): ConfirmedRow => ({ description, amount });
+    const mge = (confirmed: ConfirmedRow[]) => plan("mge", "2026-08-20", -241, "MGE Electric & Gas", { categoryId: U, confirmedRows: confirmed });
+    const paid = (amount: number, description = "MADISON GAS EL") => row("t", "2026-08-20", amount, description, { categoryId: U });
+    expect(match([mge([])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ confidence: "low", tier: 3, offCurve: false });
+    // MGE confirmed as "MADISON GAS EL": still tier 2 at its exact confirmed amount.
+    expect(match([mge([confirmedRow("MADISON GAS EL")])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor", offCurve: true });
+    // (round 3) A superset no longer matches on "madison" alone: "MADISON GAS EL" has
+    // only ONE distinctive word ("gas" and "el" are too short), and a subset needs two.
+    // Only an EQUAL word set still matches — the exact confirmed string, case aside.
+    expect(match([mge([confirmedRow("MADISON GAS EL 0720 WEB")])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 3 });
+    expect(match([mge([confirmedRow("madison gas el")])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor" });
+    // (round 3) Underpaid past the confirmed amount's own max($1, 1%) band: no longer
+    // tier 2 on the descriptor alone — a different-amount charge from the same company
+    // must not hide an unpaid bill. $216 is $25 under the confirmed $241 (tolerance
+    // $2.41): a suggestion now, unless the bill's own category rescues it (MGE shares
+    // "Utilities" with two other bills here, so it does not).
+    expect(match([mge([confirmedRow("MADISON GAS EL")])], [paid(-216)], undefined, utilities)[0]).toMatchObject({ tier: 3, offCurve: false });
+    // The same underpayment DOES stay tier 2 when MGE is the sole bill in its
+    // category — rule (a), not the descriptor, is what pays it down to plan − max($25, 10%).
+    const soleUtilities: MatchItem[] = [];
+    expect(match([mge([confirmedRow("MADISON GAS EL")])], [paid(-216)], undefined, soleUtilities)[0]).toMatchObject({ tier: 2, evidence: "category", offCurve: false, difference: -25 });
+    // Without the reference a nameless row pairs only exact within 3 days; with it, 5 days late is tier 2 (exact amount, inside its own range).
+    const late = row("t", "2026-08-25", -241, "MADISON GAS EL", { categoryId: U });
+    expect(match([mge([])], [late], undefined, utilities)).toEqual([]);
+    expect(match([mge([confirmedRow("MADISON GAS EL")])], [late], undefined, utilities)[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor", dayDelta: 5 });
+    // Another item's confirmed descriptor is not this one's.
+    expect(match([mge([confirmedRow("CITY OF MADISON")])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 3 });
+    // An empty description is never a reference.
+    expect(match([mge([confirmedRow("")])], [paid(-241, "")], undefined, utilities)[0]).toMatchObject({ tier: 3 });
+  });
+
+  it("(round 3) a subset with two distinctive words still matches: 'TOYOTA MOTOR CREDIT' inside a confirmed 'TOYOTA MOTOR CREDIT CORP'", () => {
+    // A label unrelated to the descriptor, so only the confirmed reference can name it.
+    const auto = plan("auto", "2026-08-07", -672.8, "Auto Loan", {
+      confirmedRows: [{ description: "TOYOTA MOTOR CREDIT CORP", amount: -672.8 }],
+    });
+    // "toyota", "motor" and "credit" are all ≥ 4 letters and distinctive: two is enough.
+    expect(match([auto], [row("t", "2026-08-07", -672.8, "TOYOTA MOTOR CREDIT")])[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor" });
+  });
+
+  it("(round 3) 'ZELLE' inside a confirmed 'ZELLE TO JORDAN LEE' names no one: it never borrows Jordan's confirmation for a Zelle to someone else", () => {
+    const rent = plan("rent", "2026-05-01", -1500, "Oak Street Rent", {
+      confirmedRows: [{ description: "ZELLE TO JORDAN LEE", amount: -1500 }],
+    });
+    // The exact confirmed row (or an equally full one) still matches.
+    expect(match([rent], [row("t", "2026-05-01", -1500, "ZELLE TO JORDAN LEE")])[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor" });
+    // A bare "ZELLE", even for the exact planned amount: a subset of the confirmed
+    // words, but with only ONE distinctive word ("zelle" — "to" is under the 4-letter
+    // floor, "jordan" and "lee" are gone). Never enough on its own to claim Jordan's
+    // confirmation — the pair still shows up (exact amount, same day), just as tier 3.
+    expect(match([rent], [row("t", "2026-05-01", -1500, "ZELLE")])[0]).toMatchObject({ tier: 3, evidence: null });
+  });
+
+  it("(round 3) a confirmed range from several rows: any amount between them (± max($1, 1%)) is tier 2", () => {
+    const water = plan("water", "2026-08-24", -101.02, "Water/Sewer", {
+      confirmedRows: [
+        { description: "CITY OF MADISON", amount: -89.0 },
+        { description: "CITY OF MADISON", amount: -112.0 },
+      ],
+    });
+    // $95 sits inside the confirmed 89–112 range.
+    expect(match([water], [row("t", "2026-08-24", -95.0, "CITY OF MADISON")])[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor" });
+    // $87 sits below 89 − max($1, 1%) = 88.11: outside the range, a suggestion.
+    expect(match([water], [row("t", "2026-08-24", -87.0, "CITY OF MADISON")])[0]).toMatchObject({ tier: 3 });
+  });
+
+  it("(round 3, MEDIUM 2) a manual twin of a Plaid payment never makes the Plaid pair ambiguous: Toyota is paid, not a suggestion", () => {
+    const toyota = plan("toyota", "2026-08-07", -672.8, "Toyota Lease");
+    // A logged manual "Toyota Lease" row beside the bank's own "TOYOTA FINANCIAL
+    // SERVICES" debit — same day, same amount. Both would independently qualify
+    // (full name / exact name), so without ranking they'd tie and the Plaid pair
+    // would read as ambiguous, dragging a bill the bank already paid.
+    const manualTwin = row("manual", "2026-08-07", -672.8, "Toyota Lease", { plaidChecking: false });
+    const plaidRow = row("plaid", "2026-08-07", -672.8, "TOYOTA FINANCIAL SERVICES");
+    const out = match([toyota], [manualTwin, plaidRow]);
+    // Only one pair: the Plaid row, non-ambiguous, off the curve. The manual row
+    // stays unpaired — it still counts as cash (`onChecking`), just not as this
+    // bill's evidence.
+    expect(out).toEqual([expect.objectContaining({ txnId: "plaid", ambiguous: false, tier: 2, offCurve: true })]);
+  });
+
+  it("(fix 7) a pair that can be evidence is taken first: the HELOC keeps FIGURE LENDING from a 'Figure Lending fee' that could not use it", () => {
+    const heloc = plan("heloc", "2026-05-01", -1130, "Figure HELOC", { categoryId: H });
+    const fee = plan("fee", "2026-05-01", -1200, "Figure Lending fee");
+    const out = match([heloc, fee], [row("t", "2026-05-01", -1185.19, "FIGURE LENDING", { categoryId: H })]);
+    expect(out).toEqual([expect.objectContaining({ planItemId: "heloc", ambiguous: false, tier: 2, offCurve: true })]);
+  });
+
+  it("a nameless $1,500 Zelle and $1,500 rent on the same day → tier 3 suggestion", () => {
+    const [m] = match([plan("rent", "2026-05-01", -1500, "Oak Street Rent")], [row("t", "2026-05-01", -1500, "ZELLE TO J SMITH")]);
+    expect(m).toMatchObject({ confidence: "low", ambiguous: false, tier: 3, evidence: null, offCurve: false });
+  });
+
+  it("the $150 plan paid $173 with its full name (unique) → tier 2, difference +23", () => {
+    const [m] = match([plan("water", "2026-05-10", -150, "City Water")], [row("t1", "2026-05-11", -173, "CITY WATER UTIL")]);
+    expect(m).toMatchObject({ difference: 23, tier: 2, evidence: "full_name", offCurve: true });
+  });
+
+  it("tier 1 and 2 need a checking-cash row that is not a logged debt payment (`onChecking`)", () => {
+    const wireless = plan("vzw", "2026-05-01", -85, "Verizon Wireless");
+    expect(match([wireless], [row("t", "2026-05-01", -85, "VERIZON WIRELESS", { onChecking: false })])[0]).toMatchObject({ tier: 3, offCurve: false });
+    // A manual checking row is cash: it is evidence like a Plaid row.
+    expect(match([wireless], [row("t", "2026-05-01", -85, "VERIZON WIRELESS", { plaidChecking: false })])[0]).toMatchObject({ tier: 2 });
+    const sapphire = plan("debt:s", "2026-05-01", -40, "Chase Sapphire minimum", { debtId: "s" });
+    expect(match([sapphire], [row("t", "2026-05-02", -45, "CHASE ONLINE PAYMENT", { debtId: "s", onChecking: false })])[0]).toMatchObject({ tier: 3 });
+  });
+
+  it("an ambiguous pair is tier 3", () => {
+    const [m] = match([plan("water", "2026-05-10", -150, "City Water")], [row("near", "2026-05-10", -150, "CITY WATER"), row("close", "2026-05-11", -150, "CITY WATER")]);
+    expect(m).toMatchObject({ ambiguous: true, tier: 3, offCurve: false });
+  });
+
+  it("tier 1: a checking row tagged to the plan's debt, paying at least the plan − max($1, 1%); a tag to another debt is never evidence", () => {
+    const sapphire = plan("debt:s", "2026-05-01", -40, "Chase Sapphire minimum", { debtId: "s" });
+    // "chase" only and $5 over: no tier-2 rule holds; the tag does.
+    expect(match([sapphire], [row("t", "2026-05-02", -45, "CHASE ONLINE PAYMENT")])[0]).toMatchObject({ tier: 3, confidence: "medium" });
+    expect(match([sapphire], [row("t", "2026-05-02", -45, "CHASE ONLINE PAYMENT", { debtId: "s" })])[0]).toMatchObject({ tier: 1, evidence: "debt_tag", offCurve: true });
+    // Underpaid by more than $1: not tier 1, and outside tier 2's band.
+    expect(match([sapphire], [row("t", "2026-05-02", -38.99, "CHASE ONLINE PAYMENT", { debtId: "s" })])[0]).toMatchObject({ tier: 3, offCurve: false });
+    // Tagged to Freedom: never Sapphire's, even with Sapphire's full name, exact and on the day.
+    expect(match([sapphire], [row("t", "2026-05-01", -40, "CHASE SAPPHIRE PAYMENT", { debtId: "f" })])[0]).toMatchObject({ tier: 3, offCurve: false });
   });
 });
 
@@ -248,9 +521,13 @@ describe("plansPaidInFullByName", () => {
     ]);
   });
 
+  it("(decision 13) a card payment must be a Plaid checking row: a manual 'CAPITAL ONE MOBILE PYMT' pays nothing", () => {
+    expect(plansPaidInFullByName([capOne], [row("m", "2026-05-01", -812.4, "CAPITAL ONE MOBILE PYMT", { plaidChecking: false })])).toEqual([]);
+  });
+
   it("the matcher itself finds no pair for these (a named row is capped at max($25, 25%) off)", () => {
     expect(
-      matchPlansToRows([capOne], [row("t-cap", "2026-05-01", -812.4, "CAPITAL ONE MOBILE PYMT")]),
+      match([capOne], [row("t-cap", "2026-05-01", -812.4, "CAPITAL ONE MOBILE PYMT")]),
     ).toEqual([]);
   });
 

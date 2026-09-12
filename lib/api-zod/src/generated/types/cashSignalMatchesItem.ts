@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { CashSignalMatchesItemTier } from "./cashSignalMatchesItemTier";
 
 export type CashSignalMatchesItem = {
   planKey: string;
@@ -17,5 +18,13 @@ export type CashSignalMatchesItem = {
   dayDelta: number;
   confidence: string;
   ambiguous: boolean;
+  tier: CashSignalMatchesItemTier;
   offCurve: boolean;
+  /** (Decision 13) Present only when the forecast counts the plan
+paid by this row (an overdue tier 1 or 2 pair, also listed in
+`overdueAssumedPaid`): the amount still assumed unpaid, signed
+like the plan ("0.00" when paid in full). Only that remainder
+stays on the curve.
+ */
+  remainderAmount?: string;
 };

@@ -3168,7 +3168,7 @@ export const GetForecastResponse = zod.object({
                 .string()
                 .nullish()
                 .describe(
-                  "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n",
+                  "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n`remainder_assumed_unpaid` (decision 13, round 4): due today\nor later, a tier-1\/2 pair paid part of it (`offCurve` stays\nfalse for an underpayment), and only the unpaid remainder\nlands — on the plan's OWN date, never dragged to a business\nday like the overdue sibling above.\n",
                 ),
               occurrenceKey: zod
                 .string()
@@ -3308,12 +3308,19 @@ export const GetForecastResponse = zod.object({
               dayDelta: zod.number(),
               confidence: zod.string(),
               ambiguous: zod.boolean(),
+              tier: zod.union([zod.literal(1), zod.literal(2), zod.literal(3)]),
               offCurve: zod.boolean(),
+              remainderAmount: zod
+                .string()
+                .optional()
+                .describe(
+                  '(Decision 13) Present only when the forecast counts the plan\npaid by this row (an overdue tier 1 or 2 pair, also listed in\n`overdueAssumedPaid`): the amount still assumed unpaid, signed\nlike the plan (\"0.00\" when paid in full). Only that remainder\nstays on the curve.\n',
+                ),
             }),
           )
           .optional()
           .describe(
-            '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, and either an exact prompt payment or the\nplan\'s full name paying at most max($25, 10%) more); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+            '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). The bank\nrow always counts. Amounts are signed; `difference` is |txn| − |plan|\n(positive = paid more than planned). `confidence` is \"high\",\n\"medium\" or \"low\".\n(Decision 13) `tier` is what the pair proves: 1 explicit (a\nchecking row tagged to the plan\'s debt); 2 obligation evidence (not\nambiguous, a checking-cash row that is not a logged debt payment,\npaying at most the plan + max($25, 10%), and either strong evidence\npaying at least the plan − max($25, 10%) — the plan\'s own category\nwhen no other active item of its direction carries it, or a\ndescription the user confirmed for this item before — or name\nevidence paying at least the plan − max($1, 1%): its full name when\nno other active item\'s full name is in the row, some of its name\nwithin 5 days, or some of its name anywhere in the window when no\nother active item shares a name word with the row); 3 a suggestion\nonly. `offCurve` is true for a tier 1 or 2 pair paying at least the\nplan − max($1, 1%): only those plans are off the forecast curve\nbefore they are due. Once due, a tier 1 or 2 pair pays the bill and\nonly an unpaid remainder over $1 stays on the curve; a tier 3 pair\npays nothing and every other plan still counts.\n',
           ),
       }),
       zod.null(),
@@ -3506,7 +3513,7 @@ export const GetForecastCashSignalResponse = zod.object({
           .string()
           .nullish()
           .describe(
-            "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n",
+            "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n`remainder_assumed_unpaid` (decision 13, round 4): due today\nor later, a tier-1\/2 pair paid part of it (`offCurve` stays\nfalse for an underpayment), and only the unpaid remainder\nlands — on the plan's OWN date, never dragged to a business\nday like the overdue sibling above.\n",
           ),
         occurrenceKey: zod
           .string()
@@ -3644,12 +3651,19 @@ export const GetForecastCashSignalResponse = zod.object({
         dayDelta: zod.number(),
         confidence: zod.string(),
         ambiguous: zod.boolean(),
+        tier: zod.union([zod.literal(1), zod.literal(2), zod.literal(3)]),
         offCurve: zod.boolean(),
+        remainderAmount: zod
+          .string()
+          .optional()
+          .describe(
+            '(Decision 13) Present only when the forecast counts the plan\npaid by this row (an overdue tier 1 or 2 pair, also listed in\n`overdueAssumedPaid`): the amount still assumed unpaid, signed\nlike the plan (\"0.00\" when paid in full). Only that remainder\nstays on the curve.\n',
+          ),
       }),
     )
     .optional()
     .describe(
-      '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). Only a\nmatch with `offCurve` true is off the forecast curve (the payee\'s\nname, not ambiguous, and either an exact prompt payment or the\nplan\'s full name paying at most max($25, 10%) more); every other plan still\ncounts. The bank row always counts. Amounts are signed;\n`difference` is |txn| − |plan| (positive = paid more than planned).\n`confidence` is \"high\", \"medium\" or \"low\".\n',
+      '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). The bank\nrow always counts. Amounts are signed; `difference` is |txn| − |plan|\n(positive = paid more than planned). `confidence` is \"high\",\n\"medium\" or \"low\".\n(Decision 13) `tier` is what the pair proves: 1 explicit (a\nchecking row tagged to the plan\'s debt); 2 obligation evidence (not\nambiguous, a checking-cash row that is not a logged debt payment,\npaying at most the plan + max($25, 10%), and either strong evidence\npaying at least the plan − max($25, 10%) — the plan\'s own category\nwhen no other active item of its direction carries it, or a\ndescription the user confirmed for this item before — or name\nevidence paying at least the plan − max($1, 1%): its full name when\nno other active item\'s full name is in the row, some of its name\nwithin 5 days, or some of its name anywhere in the window when no\nother active item shares a name word with the row); 3 a suggestion\nonly. `offCurve` is true for a tier 1 or 2 pair paying at least the\nplan − max($1, 1%): only those plans are off the forecast curve\nbefore they are due. Once due, a tier 1 or 2 pair pays the bill and\nonly an unpaid remainder over $1 stays on the curve; a tier 3 pair\npays nothing and every other plan still counts.\n',
     ),
 });
 

@@ -162,7 +162,9 @@ const MATCHES = [
     dayDelta: -8,
     confidence: "medium",
     ambiguous: false,
-    // "water" is in the row, and $23 is within max($25, 10%): off the curve.
+    // "water" is in the row, and $23 is within max($25, 10%): tier 2 (the
+    // bill's full name), off the curve — but not confirmed.
+    tier: 2,
     offCurve: true,
   },
   {
@@ -176,7 +178,8 @@ const MATCHES = [
     dayDelta: -9,
     confidence: "low",
     ambiguous: false,
-    // $100 short is outside max($25, 10%): a suggestion only, still counted.
+    // $100 short is outside max($25, 10%): tier 3, a suggestion only, still counted.
+    tier: 3,
     offCurve: false,
   },
 ];
@@ -447,6 +450,129 @@ describe("Forecast — probably paid (PR5b)", () => {
     expect(screen.getByTestId("mark-missed-rent-2026-05-22")).toBeTruthy();
     expect(screen.queryByTestId("move-plan-water-2026-05-20")).toBeNull();
     expect(screen.queryByTestId("mark-missed-water-2026-05-20")).toBeNull();
+  });
+
+  it("(round 3, LOW) an overdue pair the server counts paid in part shows the remainder, not 'Still in forecast', and hides Move", () => {
+    // Insurance, due 05-10 (before today), $180 planned, paid $165 — the server
+    // counts it paid (`offCurve` stays false for an underpayment, decision 13)
+    // and sends `remainderAmount` for the $15.00 still assumed unpaid. Moving
+    // the occurrence would re-add the FULL $180, not the $15.00 the server is
+    // actually still counting, so Move must not be offered for this pair.
+    forecastData = {
+      ...FORECAST,
+      events: [...FORECAST.events, { itemId: "insurance", date: "2026-05-10", label: "Insurance", kind: "expense", amount: -180 }],
+      transactions: [...FORECAST.transactions, txn("t-ins", "2026-05-10", "STATE FARM RO 27 SFPP", "-165.00")],
+    };
+    cashSignalData = cashSignal([
+      ...MATCHES,
+      {
+        planKey: "insurance|2026-05-10",
+        planItemId: "insurance",
+        planDate: "2026-05-10",
+        txnId: "t-ins",
+        planAmount: "-180.00",
+        txnAmount: "-165.00",
+        difference: "-15.00",
+        dayDelta: 0,
+        confidence: "high",
+        ambiguous: false,
+        tier: 2,
+        offCurve: false,
+        remainderAmount: "-15.00",
+      },
+    ]);
+    renderPage();
+    const curve = screen.getByTestId("plan-probably-paid-curve-insurance-2026-05-10");
+    expect(curve.textContent).not.toContain("Still in forecast");
+    expect(curve.textContent).toContain("$15.00");
+    expect(curve.textContent).toContain("still assumed unpaid");
+    expect(screen.queryByTestId("move-plan-insurance-2026-05-10")).toBeNull();
+    // Mark missed is untouched by this fix — only Move re-adds the full amount.
+    expect(screen.getByTestId("mark-missed-insurance-2026-05-10")).toBeTruthy();
+  });
+
+  it("(round 4, HIGH) the register row's face amount is the remainder, not the full plan, with a 'paid X of Y' caption", () => {
+    forecastData = {
+      ...FORECAST,
+      events: [...FORECAST.events, { itemId: "insurance", date: "2026-05-10", label: "Insurance", kind: "expense", amount: -180 }],
+      transactions: [...FORECAST.transactions, txn("t-ins", "2026-05-10", "STATE FARM RO 27 SFPP", "-165.00")],
+    };
+    cashSignalData = cashSignal([
+      ...MATCHES,
+      {
+        planKey: "insurance|2026-05-10",
+        planItemId: "insurance",
+        planDate: "2026-05-10",
+        txnId: "t-ins",
+        planAmount: "-180.00",
+        txnAmount: "-165.00",
+        difference: "-15.00",
+        dayDelta: 0,
+        confidence: "high",
+        ambiguous: false,
+        tier: 2,
+        offCurve: false,
+        remainderAmount: "-15.00",
+      },
+    ]);
+    renderPage();
+    // The face amount is the $15.00 still assumed unpaid, never the full $180 —
+    // the review's own repro showed −$180 beside "Paid; $15.00 still assumed
+    // unpaid", which reads as if the whole bill were still due. The caption
+    // (mirroring `partial`'s own "Paid X of Y") is where $180 legitimately
+    // still appears, as the ORIGINAL plan, not the outstanding face amount.
+    expect(screen.getByTestId("plan-row-insurance-2026-05-10").textContent).toContain("$15.00");
+    const caption = screen.getByTestId("plan-remainder-paid-insurance-2026-05-10");
+    expect(caption.textContent).toContain("$165.00");
+    expect(caption.textContent).toContain("$180.00");
+  });
+
+  it("(round 3, LOW) the bank-side strip shows the same remainder note", () => {
+    forecastData = {
+      ...FORECAST,
+      events: [...FORECAST.events, { itemId: "insurance", date: "2026-05-10", label: "Insurance", kind: "expense", amount: -180 }],
+      transactions: [...FORECAST.transactions, txn("t-ins", "2026-05-10", "STATE FARM RO 27 SFPP", "-165.00")],
+    };
+    cashSignalData = cashSignal([
+      ...MATCHES,
+      {
+        planKey: "insurance|2026-05-10",
+        planItemId: "insurance",
+        planDate: "2026-05-10",
+        txnId: "t-ins",
+        planAmount: "-180.00",
+        txnAmount: "-165.00",
+        difference: "-15.00",
+        dayDelta: 0,
+        confidence: "high",
+        ambiguous: false,
+        tier: 2,
+        offCurve: false,
+        remainderAmount: "-15.00",
+      },
+    ]);
+    renderPage();
+    goToCard("t-ins");
+    const strip = screen.getByTestId("probably-paid-curve-t-ins");
+    expect(strip.textContent).not.toContain("Still in forecast");
+    expect(strip.textContent).toContain("$15.00");
+  });
+
+  it("(decision 13) a tier-2 pair nobody confirmed is still Suggested with Confirm / Not this; a tier-3 pair is a suggestion that keeps Move and Mark missed", () => {
+    renderPage();
+    // Tier 2 (Water): the server already leaves it out of the forecast, but nothing is written until an answer.
+    expect(screen.getByTestId("plan-row-water-2026-05-20").textContent).toContain("Suggested");
+    expect(screen.getByTestId("plan-probably-paid-curve-water-2026-05-20").textContent).toBe("Out of forecast");
+    expect(screen.getByTestId("plan-confirm-water-2026-05-20")).toBeTruthy();
+    expect(screen.getByTestId("plan-not-this-water-2026-05-20")).toBeTruthy();
+    // Tier 3 (Rent): still in the forecast, with the same answers plus Move and Mark missed.
+    expect(screen.getByTestId("plan-row-rent-2026-05-22").textContent).toContain("Suggested");
+    expect(screen.getByTestId("plan-probably-paid-curve-rent-2026-05-22").textContent).toBe("Still in forecast");
+    expect(screen.getByTestId("plan-confirm-rent-2026-05-22")).toBeTruthy();
+    expect(screen.getByTestId("plan-not-this-rent-2026-05-22")).toBeTruthy();
+    expect(screen.getByTestId("move-plan-rent-2026-05-22")).toBeTruthy();
+    expect(screen.getByTestId("mark-missed-rent-2026-05-22")).toBeTruthy();
+    expect(upsertMutate).not.toHaveBeenCalled();
   });
 
   it("Matched impact is the server's figure, unchanged by suggestions", () => {

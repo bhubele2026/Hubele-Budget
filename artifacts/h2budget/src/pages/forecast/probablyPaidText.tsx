@@ -23,6 +23,29 @@ export const REVIEW_PARTIAL_HELP =
   "This bill was edited, and the part payment matched to it no longer fits the new date or amount on its own. The forecast counts the whole bill until you answer. Partial keeps the unpaid rest planned, Confirm full treats the row as paying all of it, Not this frees the row.";
 
 /**
+ * (Decision 13, round 3) An overdue bill a bank row paid only part of. The
+ * forecast already counts it paid and drags only the remainder — never the
+ * full plan — so this replaces the on/off-curve label whenever the server
+ * sends `remainderAmount`; `offCurve` alone would read as "still due in full".
+ */
+export function RemainderNote({ remainderAmount }: { remainderAmount: number }) {
+  if (Math.abs(remainderAmount) < 0.005) return <span>Paid in full</span>;
+  return (
+    <span>
+      Paid;{" "}
+      <span className="font-mono tabular-nums">
+        {formatCurrency(Math.abs(remainderAmount))}
+      </span>{" "}
+      still assumed unpaid
+    </span>
+  );
+}
+
+export function remainderHelp(): string {
+  return "This bank row paid part of the overdue bill. The forecast counts it paid and only carries the unpaid remainder forward — moving the occurrence would re-add the full amount, so record the remainder as its own plan instead.";
+}
+
+/**
  * (PR5) How far the paying row sits from the plan, as a mono figure plus a
  * word — the word carries the meaning, never a colour.
  */

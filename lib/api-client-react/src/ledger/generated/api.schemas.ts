@@ -2655,6 +2655,11 @@ remainder lands on the next business day.
 weekly-cadence expenses due before today until PR8.
 `pre_window_on_first_day`: no snapshot, due before the
 window, placed on its first day.
+`remainder_assumed_unpaid` (decision 13, round 4): due today
+or later, a tier-1/2 pair paid part of it (`offCurve` stays
+false for an underpayment), and only the unpaid remainder
+lands — on the plan's OWN date, never dragged to a business
+day like the overdue sibling above.
 
    * @nullable
    */
@@ -2664,6 +2669,15 @@ window, placed on its first day.
   /** (PR6) The occurrence's own date (before any reschedule), which resolutions are keyed on. */
   occurrenceDate?: string;
 };
+
+export type CashSignalMatchesItemTier =
+  (typeof CashSignalMatchesItemTier)[keyof typeof CashSignalMatchesItemTier];
+
+export const CashSignalMatchesItemTier = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
 
 export type CashSignalMatchesItem = {
   planKey: string;
@@ -2676,7 +2690,15 @@ export type CashSignalMatchesItem = {
   dayDelta: number;
   confidence: string;
   ambiguous: boolean;
+  tier: CashSignalMatchesItemTier;
   offCurve: boolean;
+  /** (Decision 13) Present only when the forecast counts the plan
+paid by this row (an overdue tier 1 or 2 pair, also listed in
+`overdueAssumedPaid`): the amount still assumed unpaid, signed
+like the plan ("0.00" when paid in full). Only that remainder
+stays on the curve.
+ */
+  remainderAmount?: string;
 };
 
 /**
@@ -2767,13 +2789,26 @@ that hid an unpaid bill is never silent. Sorted by due date.
  */
   overdueAssumedPaid?: CashSignalAssumedPaidPlan[];
   /** (PR5) Plans a bank row probably paid, as suggestions for the user
-to confirm ("matched"/"partial") or reject ("not_match"). Only a
-match with `offCurve` true is off the forecast curve (the payee's
-name, not ambiguous, and either an exact prompt payment or the
-plan's full name paying at most max($25, 10%) more); every other plan still
-counts. The bank row always counts. Amounts are signed;
-`difference` is |txn| − |plan| (positive = paid more than planned).
-`confidence` is "high", "medium" or "low".
+to confirm ("matched"/"partial") or reject ("not_match"). The bank
+row always counts. Amounts are signed; `difference` is |txn| − |plan|
+(positive = paid more than planned). `confidence` is "high",
+"medium" or "low".
+(Decision 13) `tier` is what the pair proves: 1 explicit (a
+checking row tagged to the plan's debt); 2 obligation evidence (not
+ambiguous, a checking-cash row that is not a logged debt payment,
+paying at most the plan + max($25, 10%), and either strong evidence
+paying at least the plan − max($25, 10%) — the plan's own category
+when no other active item of its direction carries it, or a
+description the user confirmed for this item before — or name
+evidence paying at least the plan − max($1, 1%): its full name when
+no other active item's full name is in the row, some of its name
+within 5 days, or some of its name anywhere in the window when no
+other active item shares a name word with the row); 3 a suggestion
+only. `offCurve` is true for a tier 1 or 2 pair paying at least the
+plan − max($1, 1%): only those plans are off the forecast curve
+before they are due. Once due, a tier 1 or 2 pair pays the bill and
+only an unpaid remainder over $1 stays on the curve; a tier 3 pair
+pays nothing and every other plan still counts.
  */
   matches?: CashSignalMatchesItem[];
 }

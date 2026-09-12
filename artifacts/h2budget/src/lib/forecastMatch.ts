@@ -96,15 +96,22 @@ export type CashSignalMatch = {
   dayDelta: number;
   confidence: string;
   ambiguous: boolean;
-  /** True only for pairs the server took OFF the curve (payee name in the
-   *  row, not ambiguous, amounts close). Every other pair is a suggestion
-   *  only: the plan still counts. Anything but `true` is treated as on the
-   *  curve, so a missing flag can never hide a bill. */
+  /** (Decision 13) What the pair proves: 1 explicit, 2 obligation evidence,
+   *  3 a suggestion only. Informational here: `offCurve` still decides. */
+  tier?: number;
+  /** (Decision 13) Present when the server counts the plan paid by this row:
+   *  what is still assumed unpaid, signed like the plan ("0.00" when paid in full). */
+  remainderAmount?: string | number;
+  /** True only for pairs the server took OFF the curve (tier 1 or 2).
+   *  Every other pair is a suggestion only: the plan still counts. Anything
+   *  but `true` is treated as on the curve, so a missing flag can never hide
+   *  a bill. */
   offCurve?: boolean;
 };
 
 /** A bank row the server paired with an open plan. Shown as "Suggested"
- *  until the user answers; only an `offCurve` pair is out of the forecast. */
+ *  until the user answers — a tier-2 pair too, which the server already
+ *  leaves out of the forecast; only an `offCurve` pair is out of it. */
 export type ProbablyPaid = {
   txnId: string;
   /** Resolution key date — what Confirm / Not this / Partial post. */
@@ -114,10 +121,19 @@ export type ProbablyPaid = {
   dayDelta: number;
   confidence: string;
   ambiguous: boolean;
+  /** (Decision 13) The server's tier. Optional so every builder of this object
+   *  (a stored `needs_review` pair, test fixtures) need not supply it; a
+   *  missing tier reads as 3, a suggestion. `offCurve` still decides. */
+  tier?: number;
   /** The server's curve already leaves the plan out. */
   offCurve: boolean;
   txnDate: string;
   txnDescription: string | null;
+  /** (Decision 13, round 3) Present when the server counts the plan paid by
+   *  this row (an overdue underpayment): what is still assumed unpaid, signed
+   *  like the plan (0 when paid in full). `offCurve` stays false for these —
+   *  moving the row would otherwise re-add the FULL plan, not this remainder. */
+  remainderAmount?: number;
   /** (One-time bill move) Not a server suggestion: a stored pair an edit put in
    *  question — "match" (`needs_review`) or "partial" (`needs_review_partial`).
    *  Never off the curve; answered with the same Confirm / Not this, and a
@@ -447,6 +463,7 @@ export function buildLineRegister(opts: {
     const m = matchByPlanKey.get(origKey);
     if (!probablyPaid && m && (status === "pending_plan" || status === "future")) {
       const bank = bankById.get(m.txnId);
+      const remainderAmount = toNum(m.remainderAmount);
       probablyPaid = {
         txnId: m.txnId,
         planDate: m.planDate,
@@ -455,9 +472,11 @@ export function buildLineRegister(opts: {
         dayDelta: m.dayDelta,
         confidence: m.confidence,
         ambiguous: m.ambiguous,
+        tier: m.tier ?? 3,
         offCurve: m.offCurve === true,
         txnDate: bank?.date ?? addDaysISO(date, m.dayDelta),
         txnDescription: bank?.txn.description ?? null,
+        ...(remainderAmount !== null ? { remainderAmount } : {}),
       };
     }
     return [{
@@ -578,7 +597,12 @@ export function buildLineRegister(opts: {
         r.runningBalance = proj;
         continue;
       }
-      proj = Math.round((proj + r.amount) * 100) / 100;
+      // (Decision 13, round 4) A plan the server counts paid in part
+      // (`remainderAmount`, offCurve stays false) only drags its unpaid
+      // remainder — the same rule `computeBankReconcile` applies.
+      const remainder = r.kind === "plan" ? r.probablyPaid?.remainderAmount : undefined;
+      const amt = remainder !== undefined ? Number(remainder) : r.amount;
+      proj = Math.round((proj + amt) * 100) / 100;
       r.runningBalance = proj;
     }
   }
