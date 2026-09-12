@@ -16,7 +16,14 @@ plan.
 export interface BudgetAllowanceRollup {
     lines: BudgetAllowanceLine[];
     planned: string;
+    /** posted + pending, across the three buckets. */
     actual: string;
+    /** (PR-D) The part of actual from posted rows. */
+    posted: string;
+    /** (PR-D) The part of actual from pending rows no posted row has replaced. */
+    pending: string;
+    /** (PR-D) posted + pending. Always equal to actual. */
+    combined: string;
     weeksInMonth: string;
 }
 //# sourceMappingURL=budgetAllowanceRollup.d.ts.map

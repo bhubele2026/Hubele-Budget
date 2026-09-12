@@ -438,15 +438,14 @@ describe("PR7b review N3 — every dollar that left lands in exactly one bucket,
   });
 });
 
-describe("⚠️ KNOWN RESIDUAL (pending Brad's decision) — the Budget page still counts both halves of a pair", () => {
-  // PR7b review M2. The Budget page's per-category actual
-  // (`GET /budget/months/:m`, routes/budget.ts) sums rows in SQL and does not
-  // pair pending with posted rows. Changing it is a financial calculation on
-  // the Budget page and needs the owner's decision, so this PR leaves it.
-  // On `main` both pages double-counted and agreed; now they differ by the
-  // replaced pending rows. When the Budget page adopts pairing, UPDATE this
-  // test to assert agreement — do not delete it.
-  it("June 'Eating out': Spending shows 69.40, the Budget page 134.40 — the 65.00 of replaced pending rows", async () => {
+describe("(PR-D, owner decision 6) the Budget page counts a pair once, equal to Spending", () => {
+  // PR7b review M2 pinned this as a KNOWN RESIDUAL: the Budget page's
+  // per-category actual (`GET /budget/months/:m`, routes/budget.ts) summed
+  // rows in SQL without pairing, so it read 134.40 while Spending read 69.40.
+  // Owner decision 6: "Budget and Spending must use the same inclusion rules."
+  // PR-D made the Budget page read `loadSupersededPendingIds`, and this test
+  // now asserts the STRICTER claim — agreement to the cent — instead of the gap.
+  it("June 'Eating out': Spending and the Budget page both show 69.40 — the 65.00 of replaced pending rows count nowhere", async () => {
     const card = acct("budget-residual");
     await addTxn({ occurredOn: "2026-06-23", description: "OLIVE GARDEN 1234", amount: "-45.00", plaidAccountId: card, pending: true, categoryId: cat.eatingOut });
     await addTxn({ occurredOn: "2026-06-24", description: "OLIVE GARDEN 1234", amount: "-47.40", plaidAccountId: card, categoryId: cat.eatingOut });
@@ -461,7 +460,8 @@ describe("⚠️ KNOWN RESIDUAL (pending Brad's decision) — the Budget page st
       "/budget/months/2026-06-01",
     );
     const line = budget.lines.find((l) => l.categoryId === cat.eatingOut);
-    expect(line?.actualAmount).toBe("134.40");
-    expect(Number(line!.actualAmount) - spending!.total).toBeCloseTo(65, 2);
+    // Stricter than the residual it replaces: equality to the cent, not a known gap.
+    expect(line?.actualAmount).toBe("69.40");
+    expect(Number(line!.actualAmount)).toBe(spending!.total);
   });
 });

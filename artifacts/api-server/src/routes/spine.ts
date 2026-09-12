@@ -11,7 +11,7 @@ import {
   fmtISO,
 } from "../lib/cashSignal";
 import { buildSpendingFacts } from "../lib/spendingFacts";
-import { loadSupersededPendingIds } from "../lib/supersededPending";
+import { findSupersededPendingForRange } from "../lib/supersededPending";
 import { buildBillsSummary, pickNextBill, todayDate } from "../lib/billsSummary";
 import { computeReviewCount } from "../lib/reviewCount";
 import { withPendingPayments } from "../lib/debtPending";
@@ -73,22 +73,28 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   // ⚠️ `horizonDays: 90` is not a default — it is the horizon the Forecast tile
   // and the Forecast Overview page both request. Ask for a different window and
   // the low point stops matching the page that shows it.
-  // (PR7b review M1) The pending rows a posted row replaced, read ONCE and
-  // shared by both spend windows. It is the same set `buildSpendingFacts`
-  // loads on its own for /reports/spending-facts, so parity is unchanged.
+  // (PR7b review M1; PR-D review M3) The pending pairs, read ONCE and shared by
+  // both spend windows: one windowed read over the span covering both, which
+  // is the whole-ledger answer for every row in it
+  // (`findSupersededPendingForRange`). `buildSpendingFacts` reads the same
+  // answer on its own for /reports/spending-facts, so parity is unchanged.
   // `.then` attaches both consumers at once, so a failed read rejects the
   // Promise.all instead of surfacing as an unhandled rejection.
-  const replacedPending = loadSupersededPendingIds(householdId);
+  const weekStartISO = weekStartFor(today);
+  const weekEndISO = weekEndFor(today);
+  const supersedePromise = findSupersededPendingForRange(
+    householdId,
+    monthStartISO < weekStartISO ? monthStartISO : weekStartISO,
+    todayISO > weekEndISO ? todayISO : weekEndISO,
+  );
   const [signal, monthFacts, weekFacts, billsSummary, debtRows, reviewCount, freshness] =
     await Promise.all([
       computeCashSignal(householdId, ownerUserId, { horizonDays: 90 }),
-      replacedPending.then((replacedPendingIds) =>
-        buildSpendingFacts(householdId, monthStartISO, todayISO, { replacedPendingIds }),
+      supersedePromise.then((supersede) =>
+        buildSpendingFacts(householdId, monthStartISO, todayISO, { supersede }),
       ),
-      replacedPending.then((replacedPendingIds) =>
-        buildSpendingFacts(householdId, weekStartFor(today), weekEndFor(today), {
-          replacedPendingIds,
-        }),
+      supersedePromise.then((supersede) =>
+        buildSpendingFacts(householdId, weekStartISO, weekEndISO, { supersede }),
       ),
       buildBillsSummary(householdId, ownerUserId),
       db.select().from(debtsTable).where(eq(debtsTable.householdId, householdId)),

@@ -8,6 +8,7 @@
 import type { BudgetAllowanceRollup } from "./budgetAllowanceRollup";
 import type { BudgetGroup } from "./budgetGroup";
 import type { BudgetLineWithActual } from "./budgetLineWithActual";
+import type { BudgetMonthDetailInheritedCategoriesItem } from "./budgetMonthDetailInheritedCategoriesItem";
 import type { BudgetPlanBySource } from "./budgetPlanBySource";
 import type { BudgetSummary } from "./budgetSummary";
 
@@ -25,4 +26,18 @@ stored value instead of the live Bills/Debts derivation.
   summary: BudgetSummary;
   planBySource: BudgetPlanBySource;
   allowance: BudgetAllowanceRollup;
+  /** (PR-D) Pending rows dated in this month that a posted row replaced
+(loadSupersededPendingIds, PR4c pairing over the whole ledger). They
+count in no figure on this response - not a category actual, not
+the allowance - exactly as on Spending. Listed so the page's actuals
+drill can leave them out and still tie to its row.
+ */
+  replacedPendingIds: string[];
+  /** (PR-D review H1) Posted rows dated in this month that count under a
+category they do not store: the category of the pending row they
+replaced, because the posted row arrived with none (or only the
+system Uncategorized). Read-time only; nothing is written. Listed so
+the page's actuals drill files the row where its figure counts.
+ */
+  inheritedCategories: BudgetMonthDetailInheritedCategoriesItem[];
 }
