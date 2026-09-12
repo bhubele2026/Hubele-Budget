@@ -107,6 +107,13 @@ function mergeStatePatch(
   if (!survivor.member && loser.member) patch.member = loser.member;
   if (!survivor.owedBy && loser.owedBy) patch.owedBy = loser.owedBy;
   if (!survivor.isTransfer && loser.isTransfer) patch.isTransfer = true;
+  // (round 5, review M) The signal effectiveFiling (round 4) reads to decide
+  // hand-vs-automatic must survive a dedupe merge too, or a survivor that
+  // absorbs a loser's hand-filed category/isTransfer without absorbing the
+  // flag that explains WHY looks automatic to a later pending→posted pairing.
+  if (!survivor.isTransferUserOverridden && loser.isTransferUserOverridden) {
+    patch.isTransferUserOverridden = true;
+  }
   if (
     (!survivor.notes || survivor.notes === "[pending]") &&
     loser.notes &&

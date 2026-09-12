@@ -327,6 +327,16 @@ through `PATCH /transactions/:id`, or creates a row, and is never set by Plaid s
 `FilingContext.isRuleCategory` and `autoCategorize.ts`'s `loadRuleCategoryCheck` are deleted — nothing calls them
 (confirmed by grep) and the household's mapping rules are no longer read anywhere in this path.
 
+**Every setter of `isTransferUserOverridden` (as of round 5 — see the round 5 audit table for the full writer list):**
+- `PATCH /transactions/:id` (routes/transactions.ts ~352-373) — a user picks a category or sets `isTransfer`.
+- `POST /transactions` create (routes/transactions.ts ~278-288) — only the explicit system-Transfer-category pick;
+  moot for pairing otherwise (a manually created row never carries a `plaidAccountId`, so it can never be paired).
+- `POST /transactions/recategorize-by-pattern` (routes/transactions.ts ~915-960, round 4) — every row it moves.
+- `POST /transactions/bulk-update` (routes/transactions.ts, round 5 H1) — when the patch carries a non-null
+  `categoryId` or an `isTransfer` key.
+- `dedupeTransactions.ts` `mergeStatePatch` (round 5 M) — carries a loser's `true` onto a blank survivor, alongside
+  the category/isTransfer carry it already did.
+
 **Bulk re-file side effect.** `POST /transactions/recategorize-by-pattern` — the route the client's "apply to past
 charges?" and bulk-recategorize-by-pattern flows post to — now sets `isTransferUserOverridden: true` on every row it
 moves, the same as a one-off `PATCH`, since it is equally a user action. This also means those rows keep their
@@ -354,6 +364,71 @@ overridden row, so this was a one-line addition, not a new mechanism.
 - `pnpm run build` + `check-entry-graph`: 574.4 KB of 580 KB cap (unchanged; no `lib/api-spec` change, no codegen
   needed).
 
+## Review round 5
+
+The round 4 review found the premise "`isTransferUserOverridden` is set whenever a person picks a category" had a
+hole: one more user-facing write path never set it.
+
+- **H1 (bulk-update never sets the flag):** `POST /transactions/bulk-update` (routes/transactions.ts, wired to the
+  Amex page's `bulkSetCategory` and the Chase review inbox's bulk actions) writes `categoryId`/`isTransfer` straight
+  to the DB — `BulkUpdateTransactionsBody`'s own description calls it an explicit user action, same as a one-off
+  `PATCH` — but never derived `isTransferUserOverridden` from the patch.
+  - Repro: rule COSTCO PROBE → Groceries; a pending $100 Groceries row (by rule) bulk-recategorized to Auto via
+    bulk-update — the flag stayed `false`. Plaid posts $110, Groceries by rule → Budget showed Groceries 110 / Auto 0
+    (should be Auto 110, since the bulk pick was a hand filing).
+  - Mirror: pending hand-filed via PATCH (override true) to one category, then the POSTED row bulk-recategorized to
+    another — since the bulk write never marked P overridden, `effectiveFiling` read P as automatic and Q's stale
+    override won, discarding the household's most recent pick.
+  - **Fix:** in the bulk-update handler, when the patch (post `rememberPattern` strip) has an own `isTransfer` key,
+    or a `categoryId` key whose value is not null/undefined, also set `isTransferUserOverridden: true` in the same
+    `.set()` — the same `bodyHasIsTransfer` / `pickingCategory` derivation `PATCH /transactions/:id` already uses.
+- **M (dedupe never carries the flag):** `dedupeTransactions.ts`'s `mergeStatePatch` already carried a blank
+  survivor's `categoryId` and `isTransfer` up from a loser row, but never the override flag that explains WHY —
+  so a dedupe merge could hand a survivor a hand-filed category/transfer-flag pair that then read as automatic to
+  `effectiveFiling`. **Fix:** `if (!survivor.isTransferUserOverridden && loser.isTransferUserOverridden) patch.isTransferUserOverridden = true;`
+  alongside the existing category/isTransfer lines.
+- **LOW, disclosed, not changed:** `POST /transactions/uncategorize-by-ids` clears `categoryId` to `null` without
+  resetting `isTransferUserOverridden`. A row uncategorized this way keeps reading as user-overridden until the
+  household re-touches it, so it cannot inherit a pending row's `isTransfer` flag in the meantime. Listed as
+  residual 9 below; not touched per the coordinator's instruction.
+
+**Writer audit (`categoryId` / `isTransfer` writers on `transactions`, `grep -rn "categoryId" --include='*.ts' artifacts/api-server/src/routes` plus a walk of every `.update(transactionsTable)` / `.insert(transactionsTable)` call):**
+
+| Writer | Is it a person choosing? | Sets `isTransferUserOverridden`? |
+|---|---|---|
+| `PATCH /transactions/:id` (~352-373) | Yes | Yes — pre-existing |
+| `POST /transactions` create, explicit Transfer-category pick (~278-288) | Yes | Yes — pre-existing |
+| `POST /transactions` create, explicit non-Transfer `categoryId` | Yes, but moot | No — but a manually created row has no `plaidAccountId`, so `supersedeCandidatesQuery` can never pair it either side; does not affect `effectiveFiling` |
+| `POST /transactions/recategorize-by-pattern` (~915-960) | Yes | Yes — round 4 |
+| `POST /transactions/bulk-update` | Yes | **Yes — fixed round 5 (H1)** |
+| `dedupeTransactions.ts` `mergeStatePatch` (carry onto a blank survivor) | Yes (carries a person's earlier pick forward) | **Yes — fixed round 5 (M)** |
+| `POST /transactions/uncategorize-by-ids` (clears `categoryId`) | Yes | No — disclosed as residual 9, not changed |
+| `POST /transactions/:id/clear-transfer-override` | Yes, but its whole job is clearing the flag | Explicitly clears it — by design, unrelated to this bug class |
+| `POST /transactions/bulk-set-forecast-flag` | Yes | N/A — writes only `forecastFlag` |
+| `POST /transactions/send-to-review` / `unsend-from-review` | Yes | N/A — writes only `sentToReviewAt` |
+| `lib/bankLedger.ts` `bulkReviewMatching` (Chase ledger bulk-review) | Yes | N/A — writes only `reviewed` |
+| Plaid sync insert (`plaidSync.ts` fresh row, `categoryId: cat.categoryId` from `categorize()`) | No — automatic (mapping rules) | Correctly never sets it |
+| Plaid sync pending→posted re-key / re-mint updates (`plaidSync.ts` several sites) | No — automatic | Correctly never touches `categoryId`/`isTransfer`/any `*UserOverridden` flag (comment-documented "preserved") |
+| `routes/budget.ts` debt-payment backfill (~223-232, fills only `categoryId IS NULL` rows by description pattern) | No — automatic | Correctly never sets it |
+| `routes/budget.ts` category-consolidation migration (~757-785, re-points a legacy category id to its V2 replacement) | No — a deploy-time system migration | Correctly never sets it |
+| `workbookImporter.ts` (XLSX import via `categorize()`/rules) | No — automatic | Correctly never sets it |
+| `dedupePlaidAccounts.ts` (account-merge repoint) | No — automatic, and never touches `categoryId`/`isTransfer` at all (only `plaidAccountId`/`debtId`) | N/A |
+| `routes/mapping.ts` (mapping-rule CRUD) | N/A | Never writes `transactionsTable` directly |
+| `routes/avalanche.ts` (debt-tracker category refs) | N/A | Never writes `transactionsTable`; all `categoryId` there is `budget_categories`/`budget_lines` |
+
+**Fails-before, round 5 (on `6e7b77bd` before this round's two source edits; tests as of this head):**
+- **`budgetPendingOnce.integration.test.ts`** (new "PR-D round 5, review H1" describe): 2 of 3 fail on a figure — the
+  reproduced case (Groceries 110 / Auto 0 instead of Auto 110 / Groceries 0) and the mirror case (the posted row's
+  bulk pick lost to the pending row's stale filing). The allowance-only case passes unchanged on both sides (bulk-
+  update with no `categoryId`/`isTransfer` key never touched the flag either way).
+- **`dedupeTransactions.integration.test.ts`** (new "round 5, review M" describe): 1 of 2 fail on a figure — the
+  hand-filed-loser case (survivor's `isTransferUserOverridden` stayed `false`). The already-overridden-survivor case
+  passes unchanged on both sides (nothing to carry).
+- Total: **3 of 5 new tests fail before the round 5 fix**, all on a stored value.
+
+**Gates (worktree root, this head):** see the top-level report; typecheck, both web TZs, full API suite, build +
+entry graph and codegen all re-ran clean on the merged tree after these two edits.
+
 ## Residuals
 
 1. **The Allowances page and the Banking strip still sum raw rows** in the browser (`bucketSpend.ts`): no pairing and no
@@ -371,6 +446,10 @@ overridden row, so this was a one-line addition, not a new mechanism.
 7. **The actuals drill is capped at 200 month rows** (pre-existing).
 8. **Proposed DDL still waits.** The (household_id, plaid_account_id, occurred_on) index would speed the candidate
    join; it needs Brad's go.
+9. **(round 5 LOW) `POST /transactions/uncategorize-by-ids` doesn't reset `isTransferUserOverridden`.** A row
+   uncategorized this way keeps reading as user-overridden — harmless for `categoryId` (it's null, never real) but it
+   means the row still can't inherit a pending row's `isTransfer` flag until the household re-touches it by hand.
+   Disclosed, not changed.
 
 ## Owner decisions needed
 

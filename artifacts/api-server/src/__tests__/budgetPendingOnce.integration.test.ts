@@ -824,3 +824,84 @@ describe("(PR-D) MUST NOT CHANGE — the plan", () => {
     expect(after.planBySource.bills.actual).toBe((billsActual / 100).toFixed(2));
   });
 });
+
+describe("(PR-D round 5, review H1) POST /transactions/bulk-update marks a category/isTransfer pick user-overridden", () => {
+  it("⭐ reproduced: rule COSTCO PROBE → Groceries; a pending $100 Groceries row (by rule) bulk-recategorized to Auto; posted $110 lands Groceries by rule → Auto 110, Groceries 0", async () => {
+    const groceries = await addCategory("Groceries PR-D R5a");
+    const auto = await addCategory("Auto PR-D R5a");
+    await db.insert(mappingRulesTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      pattern: "COSTCO PROBE",
+      matchType: "contains",
+      categoryId: groceries,
+      priority: 100,
+    });
+    const card = acct("r5a-costco");
+    const pendingId = await addTxn({ occurredOn: "2027-10-06", description: "COSTCO PROBE 771", amount: "-100.00", plaidAccountId: card, categoryId: groceries, pending: true });
+
+    const bulk = await api("POST", "/transactions/bulk-update", {
+      ids: [pendingId],
+      patch: { categoryId: auto },
+    });
+    expect(bulk.status).toBe(200);
+    expect((bulk.json as { updated: number }).updated).toBe(1);
+
+    // Plaid posts the charge bare-but-rule-categorized, same as sync always does.
+    await addTxn({ occurredOn: "2027-10-07", description: "COSTCO PROBE 771", amount: "-110.00", plaidAccountId: card, categoryId: groceries });
+
+    const d = await month("2027-10-01");
+    expect(split(lineFor(d, auto))).toEqual({ posted: "110.00", pending: "0.00", combined: "110.00", actual: "110.00" });
+    expect(split(lineFor(d, groceries))).toMatchObject({ actual: "0.00" });
+    expect(await spendingTotal("2027-10-01", "2027-10-31", auto)).toBe(110);
+    expect(await spendingTotal("2027-10-01", "2027-10-31", groceries)).toBe(0);
+
+    const [row] = await db
+      .select({ v: transactionsTable.isTransferUserOverridden })
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, pendingId));
+    expect(row!.v).toBe(true);
+  });
+
+  it("⭐ mirror: pending hand-filed via PATCH (override true) to Auto, then the POSTED row is bulk-recategorized to Household → the posted row's bulk pick wins, not the stale pending filing", async () => {
+    const auto = await addCategory("Auto PR-D R5b");
+    const household = await addCategory("Household PR-D R5b");
+    const card = acct("r5b-mirror");
+    const pendingId = await addTxn({ occurredOn: "2027-10-13", description: "TARGET 55219", amount: "-50.00", plaidAccountId: card, categoryId: null, pending: true });
+    const r1 = await api("PATCH", `/transactions/${pendingId}`, { categoryId: auto });
+    expect(r1.status).toBe(200);
+
+    // Sync inserts the posted row bare, as always.
+    const postedId = await addTxn({ occurredOn: "2027-10-14", description: "TARGET 55219", amount: "-55.00", plaidAccountId: card, categoryId: null });
+    const bulk = await api("POST", "/transactions/bulk-update", {
+      ids: [postedId],
+      patch: { categoryId: household },
+    });
+    expect(bulk.status).toBe(200);
+    expect((bulk.json as { updated: number }).updated).toBe(1);
+
+    const d = await month("2027-10-01");
+    expect(split(lineFor(d, household))).toMatchObject({ actual: "55.00" });
+    expect(split(lineFor(d, auto))).toMatchObject({ actual: "0.00" });
+    expect(await spendingTotal("2027-10-01", "2027-10-31", household)).toBe(55);
+    expect(await spendingTotal("2027-10-01", "2027-10-31", auto)).toBe(0);
+  });
+
+  it("a bulk-update with only allowance flags does not set isTransferUserOverridden — same as a per-row PATCH", async () => {
+    const card = acct("r5c-allowance-only");
+    const id = await addTxn({ occurredOn: "2027-10-20", description: "CASEYS 5510", amount: "-12.00", plaidAccountId: card, categoryId: null });
+
+    const bulk = await api("POST", "/transactions/bulk-update", {
+      ids: [id],
+      patch: { weeklyAllowance: true },
+    });
+    expect(bulk.status).toBe(200);
+    expect((bulk.json as { updated: number }).updated).toBe(1);
+
+    const [row] = await db
+      .select({ v: transactionsTable.isTransferUserOverridden })
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, id));
+    expect(row!.v).toBe(false);
+  });
+});

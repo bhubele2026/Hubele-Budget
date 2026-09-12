@@ -499,6 +499,100 @@ describe("dedupeTransactionsForAccount (#452)", () => {
   });
 });
 
+describe("(round 5, review M) mergeStatePatch carries isTransferUserOverridden onto a blank survivor", () => {
+  it("⭐ a hand-filed loser's isTransferUserOverridden carries onto the survivor, alongside categoryId and isTransfer", async () => {
+    await cleanup();
+    const acct = await seedAccount();
+    const catId = randomUUID();
+    // Survivor wins on user state (forecastFlag + notes + reimbursable = 4)
+    // despite arriving blank on categoryId/isTransfer/override — exactly the
+    // "bare Plaid re-mint absorbs a hand-filed duplicate" shape this fixes.
+    const survivorId = await insertTxn(
+      {
+        plaidAccountId: acct,
+        occurredOn: "2026-08-01",
+        amount: "-25.00",
+        description: "VENMO *SPLIT DINNER",
+        forecastFlag: true,
+        notes: "kept",
+        reimbursable: true,
+      },
+      new Date(Date.now() - 60_000),
+    );
+    // Loser: the household hand-filed this as real spending, not a transfer
+    // auto-flag — categoryId(+2) + isTransfer(+1) = 3, so it loses on score.
+    const loserId = await insertTxn(
+      {
+        plaidAccountId: acct,
+        occurredOn: "2026-08-01",
+        amount: "-25.00",
+        description: "venmo *split dinner",
+        categoryId: catId,
+        isTransfer: true,
+        isTransferUserOverridden: true,
+      },
+      new Date(Date.now() - 1000),
+    );
+
+    const report = await dedupeTransactionsForAccount(TEST_USER, acct);
+    expect(report.duplicatesRemoved).toBe(1);
+
+    const [survivor] = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, survivorId));
+    expect(survivor.categoryId).toBe(catId);
+    expect(survivor.isTransfer).toBe(true);
+    expect(survivor.isTransferUserOverridden).toBe(true);
+
+    const [stale] = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, loserId));
+    expect(stale).toBeUndefined();
+  });
+
+  it("a survivor that is already overridden is unaffected by a loser that is not — the flag only ever fills a blank", async () => {
+    await cleanup();
+    const acct = await seedAccount();
+    const survivorId = await insertTxn(
+      {
+        plaidAccountId: acct,
+        occurredOn: "2026-08-05",
+        amount: "-10.00",
+        description: "AUTO SHOP 42",
+        forecastFlag: true,
+        notes: "kept",
+        categoryId: randomUUID(),
+        isTransfer: true,
+        isTransferUserOverridden: true,
+      },
+      new Date(Date.now() - 60_000),
+    );
+    // Loser carries no override at all — nothing for the survivor to absorb.
+    await insertTxn(
+      {
+        plaidAccountId: acct,
+        occurredOn: "2026-08-05",
+        amount: "-10.00",
+        description: "auto shop 42",
+        isTransfer: false,
+        isTransferUserOverridden: false,
+      },
+      new Date(Date.now() - 1000),
+    );
+
+    await dedupeTransactionsForAccount(TEST_USER, acct);
+    const [survivor] = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, survivorId));
+    // The survivor already had both fields set — the merge changes neither.
+    expect(survivor.isTransfer).toBe(true);
+    expect(survivor.isTransferUserOverridden).toBe(true);
+  });
+});
+
 describe("dedupeTransactionsAcrossAccountsForUser (#475-followup)", () => {
   it("collapses duplicates across multiple plaid_account_id strings for the same bank family, preferring the live account", async () => {
     await cleanup();

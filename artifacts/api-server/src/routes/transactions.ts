@@ -1033,6 +1033,27 @@ router.post(
       ...drizzlePatch
     } = patch as typeof patch & { rememberPattern?: string | null };
     void _rememberPattern;
+    // (round 5, review H1) Bulk recategorize is an explicit user action —
+    // BulkUpdateTransactionsBody's own description calls it that — exactly
+    // like a one-off PATCH. Mirror PATCH /transactions/:id's
+    // isTransferUserOverridden derivation (~:352-373) here: without it, a
+    // pending row bulk-recategorized by hand (e.g. the Amex page's "Set
+    // category" bulk action) never marks itself overridden, so
+    // `effectiveFiling` (round 4) misreads it as automatic and a rule-filed
+    // posted row's category can beat the household's bulk pick, or a bulk
+    // pick on the POSTED row is silently outranked by a stale hand filing
+    // on the pending row it replaced.
+    const bulkBodyHasIsTransfer = Object.prototype.hasOwnProperty.call(
+      patch,
+      "isTransfer",
+    );
+    const bulkPickingCategory =
+      Object.prototype.hasOwnProperty.call(patch, "categoryId") &&
+      drizzlePatch.categoryId !== null &&
+      drizzlePatch.categoryId !== undefined;
+    if (bulkBodyHasIsTransfer || bulkPickingCategory) {
+      (drizzlePatch as Record<string, unknown>).isTransferUserOverridden = true;
+    }
     if (
       drizzlePatch.debtId &&
       !(await userOwnsDebt(req.householdId!, drizzlePatch.debtId))
