@@ -3,11 +3,13 @@
 - **Branch:** `fix/deploy-safe-category-passes`, off `origin/main` `df2adda`.
   - **Round 1:** `5916bef5`.
   - **Round 2:** review fixes L1, L3, the log nit and the group-total nit, plus these note corrections.
+  - **Round 3:** second look **APPROVED the code in `96773647`**. Note-only corrections applied here, plus removal of the
+    unused `MAY_2026_AVALANCHE_MANUAL_EXTRA` constant.
 - **Implements owner decision 3:** "repeated deployments must never delete user categories; don't blindly set a
   completed flag; make the migration safe to rerun."
 - **Source changed:** `artifacts/api-server/src/routes/budget.ts` only. No OpenAPI, codegen, web, DDL or data change.
 - **Tests:**
-  - one new file, `deploySafeCategoryPasses.integration.test.ts` (8 tests);
+  - one new file, `deploySafeCategoryPasses.integration.test.ts` (9 tests);
   - two existing files had their expectations changed, because they asserted behaviour this PR removes (see "Existing
     tests changed").
 
@@ -50,15 +52,20 @@ category is left in place, never merged or deleted, when any of these holds:**
 - **Reviewer's case (L1, fixed):** no V2-only name, lost gate, "Gaming subs" with 2 transactions Aug–Sept, 1 rule and
   no line. It **was deleted** and its rows moved to Subscriptions on `df2adda` and `5916bef5`. It is **kept** now, with
   its transactions and rule.
-- **The bias is deliberate.** A wrong "keep" leaves a legacy row unmerged, which is cosmetic. A wrong "merge" deletes a
-  user category.
+- **The bias is deliberate.** A wrong "keep" leaves a legacy row unmerged. Once `ensureSeededDefaults` creates the V2
+  envelope beside it, both plan the money (see the next bullet), until PR-A2. A wrong "merge" deletes a user category.
 - **Consequence of "any rule" for a genuinely legacy household.** The legacy mapping seed (`mappingSeed.ts` at
   `4676c214^`) pointed rules at about 25 legacy names: Streaming, Phone, Water/Sewer, MGE, Groceries ($425/wk),
   DoorDash, Coffee, Walmart / Target, Toyota Lease and others.
   - On a seeded legacy household, those categories are now kept, so the migration merges only the rule-less, pre-June
-    ones. Cosmetic.
+    ones. **Not cosmetic:** when `ensureSeededDefaults` next runs it creates each V2 envelope beside the kept legacy one,
+    with its own May line, and both count.
+    - Reproduced: a kept "Groceries ($425/wk)" (May 1,841.00) plus the seeded "Groceries" (460.00) puts May Food at
+      **2,601.00** instead of 2,141.00 merged, **+$460** on the plan.
+    - PR-A2 fixes this.
   - `mapping_rules.created_at` exists. Keeping only categories with a rule created on or after 2026-06-01 is a
-    possible alternative; it was not chosen because the review asked for any rule.
+    possible alternative. "Any rule" is kept because, on the only path that reaches it, deleting a user's category is
+    worse than a temporary double plan.
 
 ### 2. Bill-category heal: never deletes anything referenced
 
@@ -164,8 +171,11 @@ month does and as #777 intended. The pinned May group totals for an unpinned see
   re-pointed, summed and re-grouped.
   - This depends on request order (L2). If GET `/budget/categories` runs first after a deploy, `ensureSeededDefaults`
     creates the V2 names.
-  - The check then says "already on V2", and the legacy rows are never merged. That is cosmetic, and unlike `df2adda`,
-    which merged them even after seeding.
+  - The check then says "already on V2", and the legacy rows are never merged. Unlike `df2adda`, which merged them even
+    after seeding, both the legacy and the seeded V2 envelopes now plan money.
+    - Reproduced: May Food **3,061.00** instead of 2,141.00 (**+$920**: seeded Groceries 460.00 and Dining & Coffee
+      460.00).
+    - PR-A2 fixes this.
 - The heal's step 1 relink.
 - Income `auto_bills` categories and `syncAutoBillsFromRecurring`.
 - Nothing pins a month or a line except the user's pin endpoints.
@@ -244,7 +254,8 @@ The pinned May group totals pass there too. They pin the figures; they do not te
     where c.source_kind = 'auto_bills' and c.kind = 'expense';
    ```
 5. **The V2 signature is name-based.** A pre-migration household where the user made a V2-only name by hand is treated
-   as migrated, so its legacy rows stay unmerged. Cosmetic.
+   as migrated, so its legacy rows stay unmerged, and the seed adds the missing V2 envelopes beside them. That is the
+   same double plan as the L2 case (May Food 3,061.00 against 2,141.00). PR-A2 fixes this.
 6. **The heal's check runs under READ COMMITTED.** A reference written by a transaction not yet committed when the
    `DELETE` runs is not seen; the window is one statement. No `category_id` column has a foreign key.
 7. **`scripts/clear-budget-pinned-state.ts` still writes its gate with read-then-spread.** It is operator-run, not run on

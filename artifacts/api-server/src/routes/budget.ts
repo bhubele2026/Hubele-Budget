@@ -886,7 +886,6 @@ async function migrateBudgetCategoriesV2(
 // also dropped: with only a September line, reading May stored the canonical
 // amount and later months carried it forward.
 const MAY_2026_MONTH = "2026-05-01";
-const MAY_2026_AVALANCHE_MANUAL_EXTRA = "6225.00";
 
 async function reconcileMay2026Amounts(
   householdId: string,
