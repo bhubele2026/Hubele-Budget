@@ -88,6 +88,16 @@ export function AllowanceCard({
           <div className="font-mono text-micro tabular-nums text-neutral-400">
             {formatCurrency(allowance.actual)} spent
           </div>
+          {/* (PR-D) How much of "spent" is still pending. Already inside the
+              figure above, counted once; said, never added again. */}
+          {n(allowance.pending) > 0 && (
+            <div
+              className="font-mono text-micro tabular-nums text-neutral-400"
+              data-testid="allowance-pending-total"
+            >
+              incl. {formatCurrency(allowance.pending)} pending
+            </div>
+          )}
         </div>
         <Link href="/allowances" className={btnLink} data-testid="budget-allowances-manage">
           Manage
@@ -162,6 +172,21 @@ export function AllowanceCard({
                   </span>
                 </Col>
               </div>
+
+              {/* (PR-D) The part of this bucket's spend still pending, on the
+                  Spent column's right edge — part of that figure, not more. */}
+              {n(l.pending) > 0 && (
+                <div className={`${rowGrid} !pb-1.5 !pt-0`}>
+                  <span className="hidden sm:block" />
+                  <span className="hidden sm:block" />
+                  <span
+                    className="text-right font-mono text-micro tabular-nums text-neutral-400"
+                    data-testid={`allowance-pending-${l.bucket}`}
+                  >
+                    incl. {formatCurrency(l.pending)} pending
+                  </span>
+                </div>
+              )}
 
               {/* The slices. Indented behind a rail so they read as parts of the
                   figure above and never as further spending on top of it. They
