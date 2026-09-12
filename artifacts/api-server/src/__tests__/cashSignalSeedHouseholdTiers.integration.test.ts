@@ -275,7 +275,9 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
   // (its own category), State Farm 08-03, State Farm Insurance 08-03 (renewed at
   // $165.00: the $15.00 remainder drags), HELOC 08-03, PSN 08-05 (paid 08-04).
   // Toyota 08-07 was paid early on 08-04 and July's Toyota was paid 07-13.
-  //   10,000 − 200 − 440.45 − 15.00 − 651.55 = 8,693.00 → max safe 8,193.00.
+  //   08-06: 10,000 − 200 − 440.45 − 15.00 − 651.55 = 8,693.00 → max safe 8,193.00.
+  //   08-07: Brad's paycheck +8,100 lands and Toyota is off the curve → 16,793.00 (the
+  //   ending balance). Held back by July, Toyota would take 672.80 more that day.
   async function earlyAugust(julyToyota: string): Promise<void> {
     await household("2026-08-05");
     await confirmed("water", "2026-06-24", "-101.02");
@@ -295,7 +297,7 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
   it("D 08-05, July Toyota +6, State Farm renewed at $165, Water exact: (fixes 1, 2, 6) 8,693.00 / 8,193.00", async () => {
     await earlyAugust("-672.80");
     const sig = await signal(2);
-    expect(figures(sig)).toEqual({ lowest: "8693.00", maxSafeExtra: "8193.00" });
+    expect({ ...figures(sig), ending: sig.endingBalance }).toEqual({ lowest: "8693.00", maxSafeExtra: "8193.00", ending: "16793.00" });
     expect(pairOf(sig, "water", "2026-07-24")).toMatchObject({ tier: 2 });
     expect(pairOf(sig, "sfIns", "2026-08-03")).toMatchObject({ difference: "-15.00", tier: 2, offCurve: false });
     expect(pairOf(sig, "toyota", "2026-07-07")).toMatchObject({ dayDelta: 6, tier: 2 });
@@ -306,7 +308,7 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
   it("D2 08-05, July Toyota paid $685.00 (a late fee: tier 3): (fix 3) July's own pair means July is not unpaid, so August's early exact payment stays off the curve (8,693.00 / 8,193.00)", async () => {
     await earlyAugust("-685.00");
     const sig = await signal(2);
-    expect(figures(sig)).toEqual({ lowest: "8693.00", maxSafeExtra: "8193.00" });
+    expect({ ...figures(sig), ending: sig.endingBalance }).toEqual({ lowest: "8693.00", maxSafeExtra: "8193.00", ending: "16793.00" });
     expect(pairOf(sig, "toyota", "2026-07-07")).toMatchObject({ difference: "12.20", ambiguous: false, tier: 3 });
     expect(pairOf(sig, "toyota", "2026-08-07")).toMatchObject({ dayDelta: -3, tier: 2, offCurve: true });
   });
