@@ -7,6 +7,7 @@ import {
   plaidAccountsTable,
   plaidItemsTable,
   budgetCategoriesTable,
+  householdsTable,
 } from "@workspace/db";
 import {
   isRealSpend,
@@ -132,29 +133,40 @@ export async function refreshAmexAnchor(
   // `debts.plaid_account_id` is the `plaid_accounts.id` uuid, so the two only
   // meet through `plaid_accounts.account_id`. (The old lookup compared them
   // directly, inside `ANY(${array})`, which Postgres rejected outright.)
-  const linkRows = await exec
-    .selectDistinct({
-      accountId: plaidAccountsTable.accountId,
-      debtId: debtsTable.id,
-    })
-    .from(transactionsTable)
-    .innerJoin(
-      plaidAccountsTable,
-      eq(plaidAccountsTable.accountId, transactionsTable.plaidAccountId),
-    )
-    .leftJoin(
-      debtsTable,
-      and(
-        eq(debtsTable.plaidAccountId, plaidAccountsTable.id),
-        eq(debtsTable.userId, userId),
-      ),
-    )
-    .where(
-      and(
-        eq(transactionsTable.userId, userId),
-        inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
-      ),
-    );
+  // Scoped to the owner's household: a debt a member linked counts, and no
+  // other household's account or debt can.
+  const [household] = await exec
+    .select({ id: householdsTable.id })
+    .from(householdsTable)
+    .where(eq(householdsTable.ownerUserId, userId));
+  const linkRows = household
+    ? await exec
+        .selectDistinct({
+          accountId: plaidAccountsTable.accountId,
+          debtId: debtsTable.id,
+        })
+        .from(transactionsTable)
+        .innerJoin(
+          plaidAccountsTable,
+          and(
+            eq(plaidAccountsTable.accountId, transactionsTable.plaidAccountId),
+            eq(plaidAccountsTable.householdId, household.id),
+          ),
+        )
+        .leftJoin(
+          debtsTable,
+          and(
+            eq(debtsTable.plaidAccountId, plaidAccountsTable.id),
+            eq(debtsTable.householdId, household.id),
+          ),
+        )
+        .where(
+          and(
+            eq(transactionsTable.userId, userId),
+            inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
+          ),
+        )
+    : [];
   const accountIds = [...new Set(linkRows.map((r) => r.accountId))].sort();
   const linkedDebtIds = [
     ...new Set(linkRows.map((r) => r.debtId).filter((v): v is string => !!v)),

@@ -215,10 +215,14 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   // the asOf so the Amex page's Ending Balance tile reflects the
   // combined liability across all cards rather than just whichever row
   // happened to come back first.
-  let debt:
-    | { id: string; balance: string; updatedAt: Date | null }
-    | undefined;
-  let debtRows: { id: string; balance: string; updatedAt: Date | null }[] = [];
+  type AmexDebtRow = {
+    id: string;
+    balance: string;
+    lastBalanceUpdate: Date | null;
+    createdAt: Date;
+  };
+  let debt: { id: string; balance: string; balanceAsOf: Date } | undefined;
+  let debtRows: AmexDebtRow[] = [];
   if (scopedAccountId) {
     // (#748) Per-card path: key debts on the resolved internal UUID.
     if (scopedInternalPlaidAccountRowId) {
@@ -226,7 +230,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
         .select({
           id: debtsTable.id,
           balance: debtsTable.balance,
-          updatedAt: debtsTable.updatedAt,
+          lastBalanceUpdate: debtsTable.lastBalanceUpdate, createdAt: debtsTable.createdAt,
         })
         .from(debtsTable)
         .where(
@@ -257,7 +261,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
         .select({
           id: debtsTable.id,
           balance: debtsTable.balance,
-          updatedAt: debtsTable.updatedAt,
+          lastBalanceUpdate: debtsTable.lastBalanceUpdate, createdAt: debtsTable.createdAt,
         })
         .from(debtsTable)
         .where(
@@ -278,7 +282,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       .select({
         id: debtsTable.id,
         balance: debtsTable.balance,
-        updatedAt: debtsTable.updatedAt,
+        lastBalanceUpdate: debtsTable.lastBalanceUpdate, createdAt: debtsTable.createdAt,
       })
       .from(debtsTable)
       .where(
@@ -293,23 +297,26 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       (acc, r) => acc + Number(r.balance ?? 0),
       0,
     );
-    const latestUpdatedAt = debtRows.reduce<Date | null>((acc, r) => {
-      if (!r.updatedAt) return acc;
-      if (!acc) return r.updatedAt;
-      return r.updatedAt > acc ? r.updatedAt : acc;
-    }, null);
+    // (PR-E review H2) Date the balance by when the BALANCE was set — never by
+    // `updated_at` (an APR edit or an hourly refresh moves it) and never by the
+    // saved anchor (the estimate refresh moves that on every sync). Dated later
+    // than its balance, the page rolls forward from the later day and drops the
+    // charges in between. A debt whose balance was never dated (a workbook
+    // import) is dated by its creation.
+    const balanceAsOf = debtRows.reduce<Date>((acc, r) => {
+      const at = r.lastBalanceUpdate ?? r.createdAt;
+      return at > acc ? at : acc;
+    }, debtRows[0].lastBalanceUpdate ?? debtRows[0].createdAt);
     debt = {
       id: debtRows[0].id,
       balance: String(totalBalance),
-      updatedAt: latestUpdatedAt,
+      balanceAsOf,
     };
   }
 
-  // Always read the settings anchor (even when a debt row resolves) so we
-  // can advance the returned `asOf` to the most recent of the two
-  // timestamps. Without this, an auto-refresh that intentionally LEAVES the
-  // debt row alone (manual UI override wins) would never bump the anchor's
-  // `asOf` for clients hitting this endpoint, defeating the auto-update.
+  // The saved anchor serves only the `anchor` tier below. (PR-E review H2) It
+  // no longer dates the `debt` tier: the estimate refresh advances its asOf on
+  // every sync, which dated an old debt balance today and dropped charges.
   const [settingsRow] = await db
     .select({ preferences: settingsTable.preferences })
     .from(settingsTable)
@@ -391,13 +398,9 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   }
 
   if (debt) {
-    const debtAsOf = (debt.updatedAt ?? new Date()).toISOString();
-    const anchorAsOf = anchor?.asOf ?? null;
-    const asOf =
-      anchorAsOf && anchorAsOf > debtAsOf ? anchorAsOf : debtAsOf;
     res.json({
       amexEndingBalance: Number(debt.balance),
-      asOf,
+      asOf: debt.balanceAsOf.toISOString(),
       source: "debt" as const,
     });
     return;

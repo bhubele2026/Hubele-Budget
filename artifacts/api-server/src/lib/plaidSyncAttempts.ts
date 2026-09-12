@@ -1,4 +1,4 @@
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import {
   db,
   plaidItemsTable,
@@ -17,6 +17,9 @@ export const PLAID_SYNC_ATTEMPT_KEEP_PER_ITEM = 50;
 // task spec calls for "the last ~20 attempts" — keep it small so the
 // expander stays responsive even on a flaky bank.
 export const PLAID_SYNC_ATTEMPT_LIST_LIMIT = 20;
+
+// (PR-E review) The same failure repeated inside this window updates the row.
+export const REPEAT_FAILURE_WINDOW_MS = 60 * 60 * 1000;
 
 export type PlaidSyncAttemptKind =
   | "transactions"
@@ -75,6 +78,50 @@ export async function recordPlaidSyncAttempt(opts: {
   cleanupDetails?: PlaidPendingCleanupDetails | null;
 }): Promise<void> {
   try {
+    // (PR-E review) A failure identical to the item's newest attempt of the same
+    // kind, within the hour, moves that row's timestamp instead of adding one.
+    // A failing streak (every GET /debts retries) used to write a row per try
+    // and, past PLAID_SYNC_ATTEMPT_KEEP_PER_ITEM, prune away the newest
+    // `transactions` / `balance` attempts that bank freshness reads.
+    if (!opts.success) {
+      const [newest] = await db
+        .select({
+          id: plaidSyncAttemptsTable.id,
+          success: plaidSyncAttemptsTable.success,
+          errorCode: plaidSyncAttemptsTable.errorCode,
+          errorMessage: plaidSyncAttemptsTable.errorMessage,
+          attemptedAt: plaidSyncAttemptsTable.attemptedAt,
+        })
+        .from(plaidSyncAttemptsTable)
+        .where(
+          and(
+            eq(plaidSyncAttemptsTable.plaidItemId, opts.plaidItemId),
+            eq(plaidSyncAttemptsTable.kind, opts.kind),
+          ),
+        )
+        .orderBy(desc(plaidSyncAttemptsTable.attemptedAt))
+        .limit(1);
+      if (
+        newest &&
+        !newest.success &&
+        (newest.errorCode ?? null) === (opts.errorCode ?? null) &&
+        (newest.errorMessage ?? null) === (opts.errorMessage ?? null) &&
+        Date.now() - newest.attemptedAt.getTime() < REPEAT_FAILURE_WINDOW_MS
+      ) {
+        await db
+          .update(plaidSyncAttemptsTable)
+          .set({
+            // The database clock, like the column default: one clock orders the rows.
+            attemptedAt: sql`now()`,
+            plaidDisplayMessage: opts.plaidDisplayMessage ?? null,
+            requestId: opts.requestId ?? null,
+            httpStatus: opts.httpStatus ?? null,
+            errorKind: opts.errorKind ?? null,
+          })
+          .where(eq(plaidSyncAttemptsTable.id, newest.id));
+        return;
+      }
+    }
     await db.insert(plaidSyncAttemptsTable).values({
       userId: opts.userId,
       plaidItemId: opts.plaidItemId,
@@ -132,11 +179,12 @@ export async function prunePlaidSyncAttempts(): Promise<number> {
 
 /**
  * (#279) Fetch the most recent attempts for a single item, newest
- * first. Caller is expected to have already verified that the item
- * belongs to the calling user.
+ * first. The caller must already have verified the item belongs to the
+ * caller's HOUSEHOLD. (PR-E review) Scoped by item, not by who wrote the
+ * row: a sync a household member ran — including a failed Amex estimate
+ * refresh — is shown to the owner too.
  */
 export async function listRecentSyncAttempts(
-  userId: string,
   plaidItemId: string,
   limit: number = PLAID_SYNC_ATTEMPT_LIST_LIMIT,
 ): Promise<
@@ -157,12 +205,7 @@ export async function listRecentSyncAttempts(
   const rows = await db
     .select()
     .from(plaidSyncAttemptsTable)
-    .where(
-      and(
-        eq(plaidSyncAttemptsTable.userId, userId),
-        eq(plaidSyncAttemptsTable.plaidItemId, plaidItemId),
-      ),
-    )
+    .where(eq(plaidSyncAttemptsTable.plaidItemId, plaidItemId))
     .orderBy(sql`${plaidSyncAttemptsTable.attemptedAt} desc`)
     .limit(limit);
   return rows.map((r) => ({

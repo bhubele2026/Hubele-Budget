@@ -10,6 +10,7 @@ import type { Debt } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { btnLink } from "@/ui";
 import { householdDayOfAt, householdToday } from "@/lib/householdDay";
+import { isPlaidReauthCode } from "@/components/plaid-reconnect-button";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -50,8 +51,13 @@ export function DebtBankBalance({
   const kept = debt.balanceSource !== "plaid";
   const differs =
     kept && hasBank && Number.isFinite(entered) && Math.abs(entered - bank) >= 0.005;
-  const failed = !!debt.bankRefreshError;
-  const stale = !failed && hasBank && debt.bankBalanceStale === true;
+  // The page-top reconnect banner already says this bank's figures may be out
+  // of date; a second line under each of its debts would only repeat it.
+  const bannerCovers =
+    isPlaidReauthCode(debt.plaidLastSyncErrorCode) && !!debt.plaidAccount?.itemId;
+  const failed = !bannerCovers && !!debt.bankRefreshError;
+  const stale =
+    !bannerCovers && !debt.bankRefreshError && hasBank && debt.bankBalanceStale === true;
   if (!differs && !failed && !stale) return null;
   const diff = differs ? Math.round((entered - bank) * 100) / 100 : 0;
 
@@ -85,12 +91,10 @@ export function DebtBankBalance({
         </>
       )}
       {failed && (
-        <div
-          className="text-bad"
-          title={debt.bankRefreshError ?? undefined}
-          data-testid={`debt-bank-refresh-failed-${debt.id}`}
-        >
-          Bank refresh failed · {balanceDayLabel(debt.bankRefreshFailedAt)}
+        // A plain sentence, never the stored error text (which can be a
+        // database message).
+        <div className="text-bad" data-testid={`debt-bank-refresh-failed-${debt.id}`}>
+          Couldn't refresh the bank balance · {balanceDayLabel(debt.bankRefreshFailedAt)}
         </div>
       )}
       {stale && (

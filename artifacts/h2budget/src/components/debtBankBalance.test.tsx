@@ -99,7 +99,26 @@ describe("DebtBankBalance (PR-E)", () => {
     expect(screen.getByTestId("button-use-bank-balance-d1")).toBeTruthy();
   });
 
-  it("says when the bank refresh failed, with the reason on hover, and offers no swap for a bank-sourced debt", () => {
+  it("says in a plain sentence when the bank refresh failed — never the stored error text — and offers no swap for a bank-sourced debt", () => {
+    renderIt(
+      debt({
+        balanceSource: "plaid",
+        balance: "4812.40",
+        bankBalanceStale: true,
+        bankRefreshError: 'relation "plaid_accounts" does not exist',
+        bankRefreshFailedAt: "2026-09-10T15:00:00.000Z",
+      }),
+    );
+    const block = screen.getByTestId("debt-bank-balance-d1");
+    const line = screen.getByTestId("debt-bank-refresh-failed-d1");
+    expect(line.textContent).toMatch(/^Couldn't refresh the bank balance · Sep 10(, 2026)?$/);
+    expect(line.getAttribute("title")).toBeNull();
+    expect(block.outerHTML).not.toContain("relation");
+    expect(screen.queryByTestId("button-use-bank-balance-d1")).toBeNull();
+    expect(screen.queryByTestId("debt-bank-balance-stale-d1")).toBeNull();
+  });
+
+  it("stays quiet about a failed or old refresh when the page-top reconnect banner already covers that bank", () => {
     renderIt(
       debt({
         balanceSource: "plaid",
@@ -107,13 +126,23 @@ describe("DebtBankBalance (PR-E)", () => {
         bankBalanceStale: true,
         bankRefreshError: "ITEM_LOGIN_REQUIRED",
         bankRefreshFailedAt: "2026-09-10T15:00:00.000Z",
+        plaidLastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+        plaidAccount: { id: "pa1", itemId: "item1" },
       }),
     );
-    const line = screen.getByTestId("debt-bank-refresh-failed-d1");
-    expect(line.textContent).toMatch(/^Bank refresh failed · Sep 10(, 2026)?$/);
-    expect(line.getAttribute("title")).toBe("ITEM_LOGIN_REQUIRED");
-    expect(screen.queryByTestId("button-use-bank-balance-d1")).toBeNull();
-    expect(screen.queryByTestId("debt-bank-balance-stale-d1")).toBeNull();
+    expect(screen.queryByTestId("debt-bank-balance-d1")).toBeNull();
+    cleanup();
+    // A difference still shows: the banner says nothing about which figure is active.
+    renderIt(
+      debt({
+        bankBalanceStale: true,
+        bankRefreshError: "ITEM_LOGIN_REQUIRED",
+        plaidLastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+        plaidAccount: { id: "pa1", itemId: "item1" },
+      }),
+    );
+    expect(screen.getByTestId("button-use-bank-balance-d1")).toBeTruthy();
+    expect(screen.queryByTestId("debt-bank-refresh-failed-d1")).toBeNull();
   });
 
   it("says when the bank balance is old", () => {

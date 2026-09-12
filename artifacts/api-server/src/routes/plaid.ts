@@ -278,14 +278,16 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
       if (suggested.minPayment != null) {
         patch.minPayment = suggested.minPayment;
       }
-      // (#44) Only fill due/statement day when the existing debt row didn't
-      // already have a value — typed-over fields win over the Plaid hint.
-      if (suggested.dueDay != null && target.dueDay == null) {
-        patch.dueDay = suggested.dueDay;
-      }
-      if (suggested.statementDay != null && target.statementDay == null) {
-        patch.statementDay = suggested.statementDay;
-      }
+    }
+    // (#44) Only fill due/statement day when the existing debt row didn't
+    // already have a value — typed-over fields win over the Plaid hint.
+    // (PR-E review) The unattended sweep fills these too: they are calendar
+    // hints, never money, and an empty one has nothing to preserve.
+    if (suggested.dueDay != null && target.dueDay == null) {
+      patch.dueDay = suggested.dueDay;
+    }
+    if (suggested.statementDay != null && target.statementDay == null) {
+      patch.statementDay = suggested.statementDay;
     }
     try {
       const [updated] = await db
@@ -2142,7 +2144,6 @@ router.get(
       return;
     }
     const attempts = await listRecentSyncAttempts(
-      req.userId!,
       itemRowId,
       PLAID_SYNC_ATTEMPT_LIST_LIMIT,
     );

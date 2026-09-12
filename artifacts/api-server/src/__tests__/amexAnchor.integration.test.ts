@@ -27,7 +27,7 @@ let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db.delete(transactionsTable).where(eq(transactionsTable.userId, USER));
-  await db.delete(debtsTable).where(eq(debtsTable.userId, USER));
+  await db.delete(debtsTable).where(eq(debtsTable.householdId, TEST_HOUSEHOLD_ID));
   await db.delete(settingsTable).where(eq(settingsTable.userId, USER));
   await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.userId, USER));
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, USER));
@@ -273,6 +273,52 @@ describe("refreshAmexAnchor", () => {
     expect(anchor.lastAutoBalance).toBeCloseTo(300, 2);
     expect(anchor.refreshError).toBeUndefined();
     expect(anchor.refreshFailedAt).toBeUndefined();
+  });
+});
+
+describe("refreshAmexAnchor — household scope (review NIT)", () => {
+  it("reports a debt a household member linked, because the lookup is scoped to the household, not the owner's user id", async () => {
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: `item-${randomUUID()}`,
+        accessToken: `access-sandbox-${randomUUID()}`,
+        institutionName: "American Express",
+        institutionSlug: "amex",
+      })
+      .returning();
+    const externalId = `acct-${randomUUID()}`;
+    const [acct] = await db
+      .insert(plaidAccountsTable)
+      .values({
+        userId: USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: externalId,
+        name: "Amex Blue",
+        type: "credit",
+        subtype: "credit card",
+      })
+      .returning();
+    const [memberDebt] = await db
+      .insert(debtsTable)
+      .values({
+        userId: `${USER}-member`,
+        householdId: TEST_HOUSEHOLD_ID,
+        name: "Blue Cash",
+        balance: "400.00",
+        plaidAccountId: acct!.id,
+      })
+      .returning({ id: debtsTable.id });
+    await insertAmexTxn("2026-09-02", "12.00", "plaid:amex", externalId);
+
+    const r = await refreshAmexAnchor(USER);
+
+    expect(r.accountIds).toEqual([externalId]);
+    expect(r.linkedDebtIds).toEqual([memberDebt!.id]);
+    expect((await debtRow(memberDebt!.id)).balance).toBe("400.00");
   });
 });
 

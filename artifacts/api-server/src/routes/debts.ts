@@ -543,6 +543,10 @@ router.post("/debts", requireAuth, async (req, res): Promise<void> => {
     throw e;
   }
   if (values.sortOrder == null) values.sortOrder = (maxOrder ?? 0) + 1;
+  // (PR-E review H1) A balance given at create is as of now, unless dated.
+  if (values.balance != null && values.lastBalanceUpdate == null) {
+    values.lastBalanceUpdate = new Date();
+  }
   // Anchor original balance at create so /avalanche can show real
   // paid-down progress from day one.
   if (values.originalBalance == null && values.balance != null) {
@@ -632,8 +636,16 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
   const overrides: Record<string, unknown> = {};
   const changed = (a: unknown, b: unknown) =>
     a !== undefined && String(a) !== String(b);
-  if (changed(parsed.data.balance, current.balance))
+  if (changed(parsed.data.balance, current.balance)) {
     overrides.balanceSource = "manual";
+    // (PR-E review H1) A typed balance is as of the moment it is typed. The
+    // entered date shows beside the bank's, and the Amex page and pending
+    // netting count forward from it; left at the old date they counted the
+    // same charges and payments twice. A caller that states the date wins.
+    if (parsed.data.lastBalanceUpdate == null) {
+      overrides.lastBalanceUpdate = new Date();
+    }
+  }
   // (#292) Auto-archive when a manual balance edit zeroes out an active
   // debt so the Bills "Stops at payoff" celebratory row fires without
   // requiring the user to also flip the status by hand. We only do this

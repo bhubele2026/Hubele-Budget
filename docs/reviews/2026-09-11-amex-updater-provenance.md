@@ -1,6 +1,8 @@
 # PR-E — Amex updater fixed; a balance someone entered is never silently replaced
 
 Branch `fix/amex-updater-balance-provenance`, base `origin/main` `df2adda`.
+Round 1 `d356c535`; round 2 answers the review (REQUEST CHANGES: H1, H2, M1, the
+LOW items and the NIT).
 
 ## Owner decision (2)
 
@@ -16,138 +18,158 @@ Branch `fix/amex-updater-balance-provenance`, base `origin/main` `df2adda`.
 ## What changed
 
 1. **`refreshAmexAnchor` never writes `debts.balance`** (`lib/amexAnchor.ts`).
-   - Bug 1 fixed: the `${debts.plaid_account_id}::text = ANY(${array})` lookup, which
-     Postgres rejected on every household with Plaid Amex rows, is gone.
-   - Bug 2 fixed: Amex rows resolve through `plaid_accounts.account_id` (the text id
-     `transactions.plaid_account_id` holds) to `plaid_accounts.id`, then to linked
-     debts. The result reports `accountIds` / `linkedDebtIds`; nothing is written to them.
-   - The name-match fallback (first "Amex"/"American Express" debt, no ORDER BY) and the
-     `adopt` option are removed.
-   - It keeps the estimate in `settings.preferences.amexAnchor` under a row lock,
-     merged into that one key: `computedBalance` / `computedAsOf` / `computedTxnCount`
-     always; `balance` / `asOf` / `lastAutoBalance` only when the stored balance is its
-     own last write (`anchorBalanceIsRefreshOwned`). A balance typed in through
-     POST /amex/anchor (no `lastAutoBalance`), or of unknown origin, is kept.
+   - The `ANY(${array})` lookup Postgres rejected is gone.
+   - Amex rows resolve through `plaid_accounts.account_id` to linked debts, scoped to
+     the owner's household. A member-linked debt counts; another household's never
+     does. These are reported only, never written.
+   - The name-match fallback and `adopt` are removed.
+   - The estimate is kept in `settings.preferences.amexAnchor` under a row lock:
+     - `computedBalance` / `computedAsOf` / `computedTxnCount` always;
+     - `balance` / `asOf` / `lastAutoBalance` only when the stored balance is the
+       refresh's own last write. A typed-in or unknown-origin anchor is kept.
 2. **Failures are recorded, never swallowed** (`lib/amexAnchorRefresh.ts`).
-   Both empty catches in `plaidSync.ts` and the bare workbook-import call go through
-   `refreshAmexAnchorRecorded`. It runs in its own savepoint, then writes
-   `refreshError` / `refreshFailedAt` to the pref and, from a sync, a
-   `plaid_sync_attempts` row of the new kind `amex_anchor` ("Amex estimate" in
-   Settings → Recent activity). The sync and the import always complete. A later
-   success clears the pref's error.
-3. **Liabilities throws are recorded.** `recordLiabilitiesRefreshThrow` writes a
-   `liabilities` failure for anything `fetchLiabilitiesForItem` didn't already record.
-   It is used in the GET /debts stale refresh (was `catch {}`), POST /debts/:id/refresh,
-   POST /debts/:id/link and POST /plaid/sync.
-4. **Debt API provenance (additive, OpenAPI + codegen).**
-   - New fields: `bankBalance` (the linked account's cached `liability_balance`),
-     `bankBalanceAt`, `bankBalanceStale` (last refresh failed, or older than 48 h),
-     `bankRefreshError`, `bankRefreshFailedAt` (the newest `liabilities` attempt for
-     the item, when it failed).
-   - `balanceSource` and `lastBalanceUpdate` were already returned.
-5. **`POST /debts/:id/use-bank-balance`** (`adoptDebtBankBalance`), explicit only.
-   - Sets balance = cached bank balance and `balance_source = 'plaid'`, and writes a
-     history row.
-   - Mirrors `applyLiabilityToDebt`'s balance half: anchors `original_balance` when
-     null, archives at $0. APR and minimum are untouched.
-   - Returns 400 when unlinked, 409 when there is no bank balance, 404 when the debt
-     isn't found. Nothing is fetched from Plaid.
-6. **The automatic revolving-Amex sweep links, never adopts.**
-   - `linkRevolvingAmexDebts` runs on every liabilities fetch with no click. It used to
-     overwrite a same-name manual debt's balance, APR and minimum and flip their
-     sources to plaid.
-   - It now passes `keepEnteredValues`: link only, and the values and sources stay.
-   - Explicit create/link clicks still adopt as before.
-7. **Web: `components/debt-bank-balance.tsx`.**
-   - Shown in the balance cell on Future Goal (`/avalanche`) and Debts rows. Never on
-     the landing or the hero.
-   - When a kept balance differs from the bank: "Entered $X · date", "Bank $Y · date",
-     "Difference ±$Z", and **Use bank balance**.
-   - Also "Bank refresh failed · date" (reason on hover) and "Bank balance old · date".
-   - Renders nothing otherwise.
-8. `artifacts/api-server/scripts/sql/preview-debt-balance-provenance.sql`: a READ ONLY
-   preview, ending in ROLLBACK. Query 1 lists every debt per household. Query 2 lists
-   the Amex anchor per household. Run only on the test DB so far.
+   - The empty catches in `plaidSync.ts` and the bare import call now use a
+     savepoint, a pref `refreshError`, and an `amex_anchor` attempt row from a sync.
+   - The sync and the import always complete.
+3. **Liabilities failures.**
+   - `recordLiabilitiesRefreshThrow` records throws the fetch didn't record itself
+     (GET /debts, POST /debts/:id/refresh, POST /debts/:id/link, POST /plaid/sync).
+   - (review) A failed `/accounts/get` alone is no longer recorded as a failure:
+     `/liabilities/get` answered and its accounts refreshed the balances. Only a
+     failed `/liabilities/get` is.
+4. **Attempt rows** (review, `lib/plaidSyncAttempts.ts`).
+   - A failure identical to the item's newest attempt of that kind within the hour
+     moves that row's timestamp (database clock) instead of adding a row, so a
+     failing streak can't prune away the `transactions` / `balance` attempts bank
+     freshness reads.
+   - Recent activity lists an item's attempts whoever wrote them; the route still
+     checks the item is the caller's household's.
+5. **Debt API provenance** (additive, OpenAPI + codegen): `bankBalance`,
+   `bankBalanceAt`, `bankBalanceStale`, `bankRefreshError`, `bankRefreshFailedAt`.
+6. **`POST /debts/:id/use-bank-balance`**, explicit only.
+   - Sets balance = cached bank balance, source plaid, and writes a history row.
+   - 400 unlinked / 409 no bank balance / 404 not found.
+7. **Entered dates** (review H1).
+   - PATCH /debts/:id stamps `last_balance_update = now` whenever it changes the
+     balance, and POST /debts does when given one. A caller that sends
+     `lastBalanceUpdate` itself wins.
+8. **Amex page date** (review H2).
+   - GET /amex/anchor dates a debt-row answer by the debts' own balance date:
+     `last_balance_update`, else `created_at`, latest across rows.
+   - It no longer uses `updated_at` or the saved anchor's `asOf`.
+9. **Automatic revolving-Amex sweep.**
+   - It links a same-name manual debt without adopting its balance, APR or minimum.
+   - (review) It fills an empty due/statement day; a typed one stays. Explicit
+     create/link clicks still adopt.
+10. **Web** (`components/debt-bank-balance.tsx`, Future Goal and Debts rows only).
+    - When they differ: "Entered $X · date", "Bank $Y · date", "Difference ±$Z" and
+      **Use bank balance**.
+    - "Couldn't refresh the bank balance · date" and "Bank balance old · date".
+    - (review) The failure line is a plain sentence, never the stored error text.
+      Both lines hide when the page-top reconnect banner already covers that item.
+11. **Preview SQL** (`artifacts/api-server/scripts/sql/preview-debt-balance-provenance.sql`),
+    READ ONLY, ending in ROLLBACK.
+    - Query 1, per debt:
+      - the three row lines (`shows_use_bank_balance` / `shows_refresh_failed` /
+        `shows_bank_balance_old`, with `reconnect_banner_covers`);
+      - the H1 symptom (`entered_date_unknown`, `entered_date_behind_balance_change`,
+        and the looser `entered_date_older_than_updated_at`);
+      - `old_amex_updater_name_match`.
+    - Query 2, per household: the Amex page source and label today and after merge,
+      the debt-row date today and after, and the saved anchor's fate. Zero Amex rows
+      reads "the refresh writes nothing".
+    - Query 3: the Amex cards the sweep will link to a same-name manual debt.
+    - `previewDebtBalanceProvenanceSql.integration.test.ts` runs the file itself
+      against seeded households and checks every flag. It has run on the test DB only.
 
 ## Figures that move (before → after)
 
 | Where | Before | After |
 |---|---|---|
-| Workbook re-import, household with Amex rows and an Amex-named debt | That debt (first name match) set to the all-card Amex transaction sum | Stays at the workbook's Debt Tracker balance |
-| Plaid sync, workbook-only Amex rows (no Plaid ids), Amex-named debt equal to `lastAutoBalance` | Debt moved to the sum | Unchanged |
-| Plaid sync, household with Plaid Amex rows | Refresh threw every time (Bug 1), swallowed: no debt write, no pref write | No debt write; the pref estimate advances; a failure, if any, is recorded |
-| `prefs.amexAnchor` typed in via POST /amex/anchor (or `restoreAmexAnchor.ts`) | Overwritten by the next working refresh | Kept; the estimate is stored beside it |
-| GET /amex/anchor `anchor` tier (only when there is no Plaid liability and no Amex debt row) | Value frozen in Plaid households (Bug 1) | A refresh-written anchor advances again; a typed-in one stays |
-| Auto-sweep, same-name unlinked manual Amex debt, card ≥ $1,000 with APR + min | Balance/APR/min replaced by Plaid's, sources → plaid | Linked only; entered values kept; bank balance shown beside them |
-| Debts / Future Goal rows | — | New lines only where a kept balance ≠ bank, or refresh failed/old |
-
-Run the preview SQL on production to size each row before merge. In query 1,
-`old_amex_updater_name_match` and `shows_use_bank_balance` flag the affected debts. In
-query 2, `anchor_after_merge` and `estimate_now` show the Amex anchor side.
+| Workbook re-import, Amex rows + an Amex-named debt | That debt set to the all-card Amex transaction sum | Stays at the workbook's balance |
+| Plaid sync, workbook-only Amex rows, Amex-named debt equal to `lastAutoBalance` | Debt moved to the sum | Unchanged |
+| Plaid sync, Plaid Amex rows | Refresh threw every time, swallowed | No debt write; estimate advances; failures recorded |
+| `prefs.amexAnchor` typed in (POST /amex/anchor, `restoreAmexAnchor.ts`) | Overwritten by the next working refresh | Kept; estimate stored beside it |
+| **Amex page label**, household with Amex rows and an Amex Plaid item but no saved anchor and no debt/Plaid balance | "Calculated" (the refresh threw, so no anchor was ever written) | "From saved anchor" after its next Amex sync (query 2 `source_after_merge`) |
+| **Amex page, debt-row answer** (H2) — e.g. a manual "American Express" $1,000 dated Sep 1, charges $100 Sep 3 + $50 Sep 5, an updater-written anchor | main: dated the later of `updated_at` and the anchor's asOf; round 1: the refresh moved the anchor to today → $1,000 as of Sep 11, the $150 lost | $1,000 as of Sep 1 → September ends at $1,150 (query 2 `debt_tier_as_of_today` / `_after_merge`) |
+| **Hand-edited debts** (H1) | PATCH kept the old `last_balance_update`; POST left it null | Dated at the edit/create |
+| ↳ Amex page, hand-edited Amex-named debt | Rolled forward from the old date, counting charges already inside the typed balance (`amexEndingBalance.ts:263`, `amex.tsx:837/882`) | Rolls forward from the edit date |
+| ↳ Pending netting (effective balance, % paid) of a hand-edited manual debt | Payments tagged since the OLD date were subtracted from the new typed balance; a debt created by hand (null date) netted every tagged payment ever | Only payments after the edit/create count as pending |
+| Auto-sweep, same-name unlinked manual Amex debt (≥ $1,000, APR + min) | Balance/APR/min replaced by Plaid's, sources → plaid | Linked only; entered values kept; empty due/statement day filled (query 3) |
+| Debt row "refresh failed" | Also shown when only `/accounts/get` failed; the raw error text on hover; repeated under the reconnect banner | Only when `/liabilities/get` failed; plain sentence; hidden under the banner |
+| Settings → Recent activity | A member's sync attempts hidden from the owner; one row per failing retry | Every attempt on the household's item; a repeated failure is one row |
 
 ## Must not change (and didn't)
 
 - `applyLiabilityToDebt` is untouched: bank-sourced debts stay current, non-'plaid'
-  sources are never overwritten, and an explicit link still adopts.
-- These behave as before: PATCH flipping to manual, payments, POST /debts, pending
-  netting, and create-debt-from-Plaid "linked-existing"
-  (`plaidCreateDebtFromAccount` passes).
+  sources are never overwritten, and an explicit link adopts.
+- These behave as before: PATCH flipping to manual, payments, and create-debt-from-Plaid
+  "linked-existing" (`plaidCreateDebtFromAccount` passes).
 - The spine carries no debt balance (`spineParity` passes). Landing and hero show %
   paid only (web suite passes).
-- GET /amex/anchor tier order and `source` enum are unchanged. No caller used the old
-  `updatedDebt`; the workbook import's `amex_anchor_updated` count is kept.
-- Bank freshness ignores `amex_anchor` attempts: it reads only `transactions` and
-  `balance`.
-- No DDL. Entry bundle is 574.8 KB against the 580 KB cap (+0.4 KB for the generated
-  hook in the shared client chunk).
+- GET /amex/anchor tier order and `source` enum are unchanged; plaid, anchor and
+  computed answers keep their dates.
+- Bank freshness ignores `amex_anchor` attempts and still sees the newest balance
+  attempt after a burst (`plaidSyncAttemptBurst`).
+- No DDL.
 
-## Verification
+## Verification (round 2, head in the report)
 
 - `pnpm run typecheck`: green.
-- Web: `TZ=UTC` 136 files, 1119 passed / 3 skipped. `TZ=America/Chicago` 136 files,
-  1120 passed / 2 skipped. Includes the new `debtBankBalance.test.tsx` (7).
-- API, full suite: 140 files, 1320 passed / 7 todo.
-- `pnpm run build && node scripts/check-entry-graph.mjs`: OK.
-- Codegen: generated `src` and `dist` are committed; a re-run leaves the tree clean.
-- **New tests fail on `df2adda`:**
-  - `debtBalanceProvenance.integration.test.ts`: 8/8 fail.
-  - `amexAnchor.integration.test.ts`: 9/11 fail. The 2 that pass are guards for
-    unchanged behaviour: no rows → no-op, both sources summed. The Plaid-rows case
-    threw at the old `amexAnchor.ts:108`.
-  - `amexAnchorRefreshRecorded.integration.test.ts` (4): the file fails to load, since
-    the module doesn't exist on base.
-  - `debtBankBalance.test.tsx` (7): the file fails to load.
-- Acceptance tests covered:
-  - Manual $5,000 with a $4,812.40 bank balance: the balance stays and the API returns
-    both values, dates and source.
-  - use-bank-balance: $4,812.40, source plaid, one history row.
-  - The refresh changes no debt (including a never-anchored Amex-named one) and no
-    longer throws; the lookup matches on `account_id`.
-  - Thrown liabilities refresh (Plaid and non-Plaid) and thrown anchor refresh (sync,
-    and an in-transaction SQL error): a failure is recorded, the sync or transaction
-    completes, and no balance moves.
+- Web: `TZ=UTC` 136 files, 1120 passed / 3 skipped. `TZ=America/Chicago` 136 files,
+  1121 passed / 2 skipped.
+- API, full suite: 143 files, 1336 passed / 7 todo.
+- `pnpm run build && node scripts/check-entry-graph.mjs`: OK, landing 574.8 KB against
+  the 580 KB cap.
+- Codegen: re-run leaves the tree clean. No spec change in round 2.
+- **Round-2 tests fail on `d356c535`** — 12 API failed and 1 file errored, 2 web failed:
+  - `debtBalanceProvenance`, 4: sweep due/statement fill; H1 PATCH-then-GET; H1 POST;
+    accounts-only failure.
+  - `amexAnchorRoute`, 1: the debt-row date.
+  - `amexAnchorDebtAsOf`, 3/3: $1,150 with a refreshed anchor, with no anchor, and
+    the creation-date fallback.
+  - `amexAnchor`, 1: the member-linked debt.
+  - `plaidSyncAttemptBurst`, 3/3: burst/freshness, repeat rules, member row visible.
+  - `previewDebtBalanceProvenanceSql`: errors in setup, since the old file has 2
+    SELECTs, so its 4 tests don't run.
+  - `debtBankBalance.test.tsx`, 2: plain failure line; banner covers.
+  - Guards that pass on both: a non-balance PATCH keeps its date; a liabilities-call
+    failure is still recorded.
+- Round-1 fails-before on `df2adda` stands: provenance 8/8, anchor 9/11, recorded
+  refresh (file missing), web (file missing).
 
 ## Residuals
 
-1. The Amex estimate's failure shows in Settings → Recent activity and in the pref, not
-   on the Amex page. GET /amex/anchor doesn't expose it.
-2. Only failures are written as `amex_anchor` attempts. After recovery the old failure
-   row stays in Recent activity; the pref's error clears.
-3. `bankRefreshError` reads only the newest `liabilities` attempt. While a refresh keeps
-   failing, each GET /debts writes another failure row, as the existing Plaid-failure
-   path already did.
-4. "Use bank balance" uses the cached bank figure. When it is old, the row shows the
-   date and "old"; no fetch happens on the click.
-5. The OpenAPI `balanceSource` enum is still `[plaid, manual]`. A stored other value is
+1. The Amex estimate's failure shows in Settings → Recent activity and the pref, not on
+   the Amex page.
+2. Only failures are written as `amex_anchor` attempts; a recovered failure row stays
+   in Recent activity (the pref clears).
+3. While a refresh keeps failing, every GET /debts still calls Plaid again; the
+   repeated failure now updates one row per hour instead of adding rows.
+4. "Use bank balance" uses the cached bank figure; an old one shows its date and "old".
+5. The `balanceSource` enum is still `[plaid, manual]`; any other stored value is
    returned as-is and treated as kept.
-6. `scripts/src/restoreAmexAnchor.ts` still writes a debt balance when someone runs it
-   by hand.
+6. `scripts/src/restoreAmexAnchor.ts` still writes a debt balance when run by hand.
+7. **Frozen figure after a relink.** If an Amex item is removed and re-added, the
+   sweep links the old debt row again and keeps its last figure. If that row's source
+   is manual (e.g. it was unlinked via the route first), the page labels it "Entered"
+   although nobody typed it, until someone chooses "Use bank balance". A plaid-sourced
+   row is adopted by the next refresh as before.
+8. **`POST /debts/sync-minimums`** (`routes/debts.ts` ~:560) overwrites `min_payment`
+   from transaction descriptions for any non-plaid source. It predates this PR and has
+   no web caller.
+9. **+0.4 KB on the landing** (574.4 → 574.8 KB, cap 580) comes from the generated
+   hook in the shared `api.ts` chunk. Accepted for now; a separate PR splits the
+   generated client.
+10. A debt-row answer combining several Amex debts is dated by the latest balance date
+    among them (as before with `updated_at`). A workbook-imported debt (no balance
+    date) is dated by its creation.
+11. A caller that sends `lastBalanceUpdate` with a PATCH/POST balance keeps that date.
+    The web never sends one.
 
 ## Owner decisions still open
 
-- Explicit clicks still adopt the bank's balance, APR and minimum: Link on a debt, and
-  create-debt-from-Plaid onto a same-name manual debt. Only the unattended paths were
-  changed. Confirm clicks should keep adopting.
-- A refresh-written `prefs.amexAnchor.balance` resumes advancing after merge. A
-  typed-in one is kept until DELETE /amex/anchor. Confirm, after reading query 2 on
-  production.
+- Explicit clicks still adopt the bank's balance, APR and minimum (Link on a debt,
+  create-debt-from-Plaid onto a same-name manual debt). Confirm.
+- A refresh-written `prefs.amexAnchor.balance` resumes advancing after merge; a typed-in
+  one is kept until DELETE /amex/anchor. Confirm after reading query 2 on production.

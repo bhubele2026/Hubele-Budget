@@ -277,8 +277,19 @@ export async function fetchLiabilitiesForItem(
       `Plaid fetch failed: ${String(acctErr ?? liabErr)}`,
     );
   }
-  if (fetchErr) {
-    const extracted = extractPlaidError(fetchErr);
+  // (PR-E review) Past this point at least one call answered, and Step 1 below
+  // caches balances from whichever did (`/liabilities/get` carries the accounts
+  // too). So a failed `/accounts/get` alone is NOT a failed refresh — recording
+  // it showed "Bank refresh failed" beside a balance that had just refreshed.
+  // Only a failed `/liabilities/get` (APR / minimum not refreshed) is recorded.
+  if (acctErr && !liabErr) {
+    logger.warn(
+      { userId, itemRowId, ...plaidLogContext(acctErr, "/accounts/get") },
+      "/accounts/get failed but /liabilities/get answered — balances refreshed from its accounts",
+    );
+  }
+  if (liabErr) {
+    const extracted = extractPlaidError(liabErr);
     const { code, message } = extracted;
     await db
       .update(plaidItemsTable)
@@ -302,7 +313,7 @@ export async function fetchLiabilitiesForItem(
       httpStatus: extracted.httpStatus,
       errorKind: extracted.kind,
     });
-  } else if (acctResp) {
+  } else {
     await db
       .update(plaidItemsTable)
       .set({

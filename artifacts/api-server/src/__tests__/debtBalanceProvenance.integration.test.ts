@@ -32,7 +32,12 @@ vi.mock("../middlewares/requireAuth", () => ({
 }));
 
 const plaidState = vi.hoisted(() => ({
-  mode: "ok" as "ok" | "plaidThrows" | "nonPlaidThrow",
+  mode: "ok" as
+    | "ok"
+    | "plaidThrows"
+    | "nonPlaidThrow"
+    | "accountsOnlyThrows"
+    | "liabilitiesOnlyThrows",
   accounts: [] as Array<{ account_id: string; current: number }>,
 }));
 
@@ -49,11 +54,15 @@ vi.mock("../lib/plaid", async () => {
     ...actual,
     plaid: () => ({
       accountsGet: async () => {
-        if (plaidState.mode === "plaidThrows") throw new Error("bank said no (test)");
+        if (plaidState.mode === "plaidThrows" || plaidState.mode === "accountsOnlyThrows") {
+          throw new Error("bank said no (test)");
+        }
         return { data: { accounts: accounts() } };
       },
       liabilitiesGet: async () => {
-        if (plaidState.mode === "plaidThrows") throw new Error("bank said no (test)");
+        if (plaidState.mode === "plaidThrows" || plaidState.mode === "liabilitiesOnlyThrows") {
+          throw new Error("bank said no (test)");
+        }
         return {
           data: {
             accounts: accounts(),
@@ -157,6 +166,8 @@ async function seedAccount(
     liabilityApr?: string | null;
     liabilityMinPayment?: string | null;
     liabilityKind?: string | null;
+    liabilityDueDay?: number | null;
+    liabilityStatementDay?: number | null;
   },
 ): Promise<{ accountRowId: string; externalId: string }> {
   const externalId = `acct-${randomUUID()}`;
@@ -176,6 +187,8 @@ async function seedAccount(
       liabilityApr: opts.liabilityApr ?? null,
       liabilityMinPayment: opts.liabilityMinPayment ?? null,
       liabilityKind: opts.liabilityKind ?? null,
+      liabilityDueDay: opts.liabilityDueDay ?? null,
+      liabilityStatementDay: opts.liabilityStatementDay ?? null,
     })
     .returning();
   return { accountRowId: acct!.id, externalId };
@@ -436,6 +449,8 @@ describe("(PR-E) a debt's balance provenance", () => {
       liabilityApr: "0.2499",
       liabilityMinPayment: "315.00",
       liabilityKind: "credit",
+      liabilityDueDay: 15,
+      liabilityStatementDay: 20,
     });
     const debtId = await seedDebt({
       name: "American Express ••1001",
@@ -444,6 +459,7 @@ describe("(PR-E) a debt's balance provenance", () => {
       minPayment: "250.00",
       payment: "250.00",
       balanceSource: "manual",
+      statementDay: 3,
     });
 
     const summary = await linkRevolvingAmexDebts({ householdId: TEST_HOUSEHOLD_ID });
@@ -454,6 +470,9 @@ describe("(PR-E) a debt's balance provenance", () => {
     expect(row.balance).toBe("10000.00");
     expect(row.apr).toBe("0.1999");
     expect(row.minPayment).toBe("250.00");
+    // Calendar hints only: an empty due day is filled, a typed statement day stays.
+    expect(row.dueDay).toBe(15);
+    expect(row.statementDay).toBe(3);
     expect([row.balanceSource, row.aprSource, row.minPaymentSource]).toEqual([
       "manual",
       "manual",
@@ -462,5 +481,116 @@ describe("(PR-E) a debt's balance provenance", () => {
     const d = (await listDebts()).find((x) => x.id === debtId)!;
     expect(d.balance).toBe("10000.00");
     expect(d.bankBalance).toBe("10512.33");
+  });
+
+  it("(review H1) a hand edit dates the entered balance now: PATCH then GET shows the edit's date beside the bank's", async () => {
+    const itemRowId = await seedItem();
+    const bankAt = new Date(Date.now() - 60 * 60 * 1000);
+    const { accountRowId } = await seedAccount(itemRowId, {
+      liabilityBalance: "4812.40",
+      liabilityLastFetchedAt: bankAt,
+    });
+    const aug1 = new Date("2026-08-01T17:00:00.000Z");
+    const debtId = await seedDebt({
+      name: "Visa",
+      balance: "4812.40",
+      balanceSource: "plaid",
+      lastBalanceUpdate: aug1,
+      plaidAccountId: accountRowId,
+      plaidLastSyncedAt: FRESH_SYNC(),
+    });
+    const before = Date.now();
+
+    const patch = await request("PATCH", `/debts/${debtId}`, { balance: "5000.00" });
+
+    expect(patch.status).toBe(200);
+    const d = (await listDebts()).find((x) => x.id === debtId)!;
+    expect(d.balance).toBe("5000.00");
+    expect(d.balanceSource).toBe("manual");
+    expect(d.lastBalanceUpdate).not.toBeNull();
+    expect(new Date(d.lastBalanceUpdate!).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(d.bankBalance).toBe("4812.40");
+    expect(d.bankBalanceAt).toBe(bankAt.toISOString());
+  });
+
+  it("(review H1) an edit that leaves the balance alone keeps the balance's date", async () => {
+    const aug1 = new Date("2026-08-01T17:00:00.000Z");
+    const debtId = await seedDebt({
+      name: "Loan",
+      balance: "5000.00",
+      lastBalanceUpdate: aug1,
+    });
+    const patch = await request("PATCH", `/debts/${debtId}`, { apr: "0.1500" });
+    expect(patch.status).toBe(200);
+    expect((await debtRow(debtId)).lastBalanceUpdate).toEqual(aug1);
+  });
+
+  it("(review H1) POST /debts with a balance dates it now, so a debt created by hand never shows 'date unknown'", async () => {
+    const before = Date.now();
+    const { status, json } = await request("POST", "/debts", {
+      name: "Hand-made card",
+      balance: "750.00",
+      apr: "0.1999",
+      minPayment: "25.00",
+    });
+    expect(status).toBe(201);
+    const body = json as DebtJson;
+    expect(body.lastBalanceUpdate).not.toBeNull();
+    expect(new Date(body.lastBalanceUpdate!).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect((await debtRow(body.id)).lastBalanceUpdate).not.toBeNull();
+  });
+
+  it("(review) a failed accounts call while the liabilities call answers is not a failed refresh: the balance lands, nothing is recorded as failed", async () => {
+    plaidState.mode = "accountsOnlyThrows";
+    const itemRowId = await seedItem();
+    const a = await seedAccount(itemRowId, {
+      liabilityBalance: "4812.40",
+      liabilityLastFetchedAt: STALE_SYNC,
+    });
+    plaidState.accounts = [{ account_id: a.externalId, current: 4700 }];
+    const debtId = await seedDebt({
+      name: "Visa",
+      balance: "5000.00",
+      plaidAccountId: a.accountRowId,
+      plaidLastSyncedAt: STALE_SYNC,
+    });
+
+    const d = (await listDebts()).find((x) => x.id === debtId)!;
+
+    expect(d.bankBalance).toBe("4700.00");
+    expect(d.bankRefreshError).toBeNull();
+    expect(d.bankBalanceStale).toBe(false);
+    expect(d.balance).toBe("5000.00");
+    const attempts = await db
+      .select()
+      .from(plaidSyncAttemptsTable)
+      .where(eq(plaidSyncAttemptsTable.plaidItemId, itemRowId));
+    expect(attempts.map((x) => [x.kind, x.success])).toEqual([["liabilities", true]]);
+  });
+
+  it("(review) a failed liabilities call is still recorded, even though the accounts call refreshed the balance", async () => {
+    plaidState.mode = "liabilitiesOnlyThrows";
+    const itemRowId = await seedItem();
+    const a = await seedAccount(itemRowId, {
+      liabilityBalance: "4812.40",
+      liabilityLastFetchedAt: STALE_SYNC,
+    });
+    plaidState.accounts = [{ account_id: a.externalId, current: 4700 }];
+    const debtId = await seedDebt({
+      name: "Visa",
+      balance: "5000.00",
+      plaidAccountId: a.accountRowId,
+      plaidLastSyncedAt: STALE_SYNC,
+    });
+
+    const d = (await listDebts()).find((x) => x.id === debtId)!;
+
+    expect(d.bankBalance).toBe("4700.00");
+    expect(d.bankRefreshError).not.toBeNull();
+    const attempts = await db
+      .select()
+      .from(plaidSyncAttemptsTable)
+      .where(eq(plaidSyncAttemptsTable.plaidItemId, itemRowId));
+    expect(attempts.map((x) => [x.kind, x.success])).toEqual([["liabilities", false]]);
   });
 });

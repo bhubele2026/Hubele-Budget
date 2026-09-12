@@ -303,7 +303,7 @@ describe("POST /amex/anchor", () => {
 });
 
 describe("GET /amex/anchor", () => {
-  it("advances asOf via the settings anchor even when manual override keeps debt unchanged", async () => {
+  it("(PR-E review H2) dates a debt-row answer by the debt's own balance date, never by the refreshed settings anchor", async () => {
     // Seed: one Amex txn + a linked debt row whose updatedAt is OLD.
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
@@ -325,6 +325,7 @@ describe("GET /amex/anchor", () => {
         minPayment: "40",
         payment: "40",
         updatedAt: oldDate,
+        lastBalanceUpdate: oldDate,
       })
       .returning({ id: debtsTable.id });
 
@@ -366,9 +367,10 @@ describe("GET /amex/anchor", () => {
     expect(body.source).toBe("debt");
     // Manual override balance still wins.
     expect(body.amexEndingBalance).toBeCloseTo(777.77, 2);
-    // But asOf advanced past the stale debt.updatedAt because the
-    // settings anchor was just refreshed.
-    expect(new Date(body.asOf).getTime()).toBeGreaterThan(oldDate.getTime());
+    // The refresh just advanced the settings anchor's asOf. The debt balance is
+    // still dated by itself: dated later, the page would roll forward from the
+    // later day and drop the charges in between.
+    expect(body.asOf).toBe(oldDate.toISOString());
   });
 
   it("dates a computed balance by its latest transaction's day, as a bare YYYY-MM-DD", async () => {
