@@ -1,0 +1,2733 @@
+{
+  "response": {
+    "categoriesInserted": 27,
+    "linesInserted": 24,
+    "mappingRulesInserted": 52,
+    "alreadySeeded": false
+  },
+  "seeded": {
+    "categories": [
+      {
+        "name": "Brad's paycheck (KFI)",
+        "kind": "income",
+        "groupName": "Income",
+        "sourceKind": "auto_bills",
+        "sortOrder": 1,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Car Payments",
+        "kind": "expense",
+        "groupName": "Transportation",
+        "sourceKind": "manual",
+        "sortOrder": 411,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Charitable Giving & Education",
+        "kind": "expense",
+        "groupName": "Lifestyle & Shopping",
+        "sourceKind": "manual",
+        "sortOrder": 818,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Childcare & Activities",
+        "kind": "expense",
+        "groupName": "Kids & Pets",
+        "sourceKind": "manual",
+        "sortOrder": 513,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Dining & Coffee",
+        "kind": "expense",
+        "groupName": "Food",
+        "sourceKind": "manual",
+        "sortOrder": 310,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Emergency Fund",
+        "kind": "expense",
+        "groupName": "Savings & Debt Payoff",
+        "sourceKind": "manual",
+        "sortOrder": 920,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Entertainment",
+        "kind": "expense",
+        "groupName": "Lifestyle & Shopping",
+        "sourceKind": "manual",
+        "sortOrder": 817,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Gas, Maintenance & Parking",
+        "kind": "expense",
+        "groupName": "Transportation",
+        "sourceKind": "manual",
+        "sortOrder": 412,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Groceries",
+        "kind": "expense",
+        "groupName": "Food",
+        "sourceKind": "manual",
+        "sortOrder": 309,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Hannah's paycheck (Exact)",
+        "kind": "income",
+        "groupName": "Income",
+        "sourceKind": "auto_bills",
+        "sortOrder": 0,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Health",
+        "kind": "expense",
+        "groupName": "Insurance & Health",
+        "sourceKind": "manual",
+        "sortOrder": 207,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "HELOC (Figure)",
+        "kind": "expense",
+        "groupName": "Housing & Utilities",
+        "sourceKind": "manual",
+        "sortOrder": 104,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Home Maintenance & Warranty",
+        "kind": "expense",
+        "groupName": "Housing & Utilities",
+        "sourceKind": "manual",
+        "sortOrder": 106,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Ignore",
+        "kind": "expense",
+        "groupName": "Ignore",
+        "sourceKind": "manual",
+        "sortOrder": 10025,
+        "excludeFromBudget": true,
+        "debt": false
+      },
+      {
+        "name": "Insurance",
+        "kind": "expense",
+        "groupName": "Insurance & Health",
+        "sourceKind": "manual",
+        "sortOrder": 208,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Investments & Retirement",
+        "kind": "expense",
+        "groupName": "Savings & Debt Payoff",
+        "sourceKind": "manual",
+        "sortOrder": 921,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Kids' Savings / 529",
+        "kind": "expense",
+        "groupName": "Savings & Debt Payoff",
+        "sourceKind": "manual",
+        "sortOrder": 922,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Misc / Buffer",
+        "kind": "expense",
+        "groupName": "Lifestyle & Shopping",
+        "sourceKind": "manual",
+        "sortOrder": 819,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Mortgage (Lakeview)",
+        "kind": "expense",
+        "groupName": "Housing & Utilities",
+        "sourceKind": "manual",
+        "sortOrder": 103,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Other Income",
+        "kind": "income",
+        "groupName": "Income",
+        "sourceKind": "auto_bills",
+        "sortOrder": 2,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Pets",
+        "kind": "expense",
+        "groupName": "Kids & Pets",
+        "sourceKind": "manual",
+        "sortOrder": 514,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Shopping",
+        "kind": "expense",
+        "groupName": "Lifestyle & Shopping",
+        "sourceKind": "manual",
+        "sortOrder": 816,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Subscriptions",
+        "kind": "expense",
+        "groupName": "Lifestyle & Shopping",
+        "sourceKind": "manual",
+        "sortOrder": 815,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Tax Sinking Fund",
+        "kind": "expense",
+        "groupName": "Savings & Debt Payoff",
+        "sourceKind": "manual",
+        "sortOrder": 923,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Transfer",
+        "kind": "expense",
+        "groupName": "Transfer",
+        "sourceKind": "manual",
+        "sortOrder": 10024,
+        "excludeFromBudget": true,
+        "debt": false
+      },
+      {
+        "name": "Uncategorized",
+        "kind": "expense",
+        "groupName": "Uncategorized",
+        "sourceKind": "manual",
+        "sortOrder": 10023,
+        "excludeFromBudget": true,
+        "debt": false
+      },
+      {
+        "name": "Utilities",
+        "kind": "expense",
+        "groupName": "Housing & Utilities",
+        "sourceKind": "manual",
+        "sortOrder": 105,
+        "excludeFromBudget": false,
+        "debt": false
+      }
+    ],
+    "recurring": [
+      {
+        "name": "Brad's paycheck (KFI)",
+        "kind": "income",
+        "amount": "8100.00",
+        "frequency": "biweekly",
+        "dayOfMonth": null,
+        "anchorDate": "2026-05-01",
+        "active": "true",
+        "category": "Brad's paycheck (KFI)"
+      },
+      {
+        "name": "Dog Waste Removal",
+        "kind": "bill",
+        "amount": "80.00",
+        "frequency": "monthly",
+        "dayOfMonth": 1,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Home Maintenance & Warranty"
+      },
+      {
+        "name": "Hannah's Car (UW Credit Union)",
+        "kind": "bill",
+        "amount": "651.55",
+        "frequency": "monthly",
+        "dayOfMonth": 6,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Car Payments"
+      },
+      {
+        "name": "Hannah's paycheck (Exact)",
+        "kind": "income",
+        "amount": "4499.99",
+        "frequency": "biweekly",
+        "dayOfMonth": null,
+        "anchorDate": "2026-05-08",
+        "active": "true",
+        "category": "Hannah's paycheck (Exact)"
+      },
+      {
+        "name": "HELOC (Figure)",
+        "kind": "bill",
+        "amount": "677.40",
+        "frequency": "monthly",
+        "dayOfMonth": 3,
+        "anchorDate": null,
+        "active": "true",
+        "category": "HELOC (Figure)"
+      },
+      {
+        "name": "Kwik Trip / gas",
+        "kind": "bill",
+        "amount": "200.00",
+        "frequency": "monthly",
+        "dayOfMonth": 24,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Gas, Maintenance & Parking"
+      },
+      {
+        "name": "Kwik Trip / gas",
+        "kind": "bill",
+        "amount": "200.00",
+        "frequency": "monthly",
+        "dayOfMonth": 9,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Gas, Maintenance & Parking"
+      },
+      {
+        "name": "MGE Electric & Gas",
+        "kind": "bill",
+        "amount": "241.00",
+        "frequency": "monthly",
+        "dayOfMonth": 20,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Utilities"
+      },
+      {
+        "name": "Mom — Verizon reimbursement",
+        "kind": "income",
+        "amount": "88.00",
+        "frequency": "monthly",
+        "dayOfMonth": 15,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Other Income"
+      },
+      {
+        "name": "Monthly Spend",
+        "kind": "bill",
+        "amount": "440.45",
+        "frequency": "monthly",
+        "dayOfMonth": 1,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Misc / Buffer"
+      },
+      {
+        "name": "Mortgage (Lakeview)",
+        "kind": "bill",
+        "amount": "1989.81",
+        "frequency": "monthly",
+        "dayOfMonth": 14,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Mortgage (Lakeview)"
+      },
+      {
+        "name": "PlayStation Network",
+        "kind": "bill",
+        "amount": "18.98",
+        "frequency": "monthly",
+        "dayOfMonth": 16,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Subscriptions"
+      },
+      {
+        "name": "PlayStation Network",
+        "kind": "bill",
+        "amount": "18.98",
+        "frequency": "monthly",
+        "dayOfMonth": 5,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Subscriptions"
+      },
+      {
+        "name": "State Farm Insurance",
+        "kind": "bill",
+        "amount": "128.59",
+        "frequency": "monthly",
+        "dayOfMonth": 3,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Insurance"
+      },
+      {
+        "name": "State Farm",
+        "kind": "bill",
+        "amount": "121.54",
+        "frequency": "monthly",
+        "dayOfMonth": 3,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Insurance"
+      },
+      {
+        "name": "Student Loan (Nelnet)",
+        "kind": "bill",
+        "amount": "237.58",
+        "frequency": "monthly",
+        "dayOfMonth": 29,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Misc / Buffer"
+      },
+      {
+        "name": "Toyota Lease",
+        "kind": "bill",
+        "amount": "672.80",
+        "frequency": "monthly",
+        "dayOfMonth": 7,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Car Payments"
+      },
+      {
+        "name": "TruStage / Ethos",
+        "kind": "bill",
+        "amount": "95.00",
+        "frequency": "monthly",
+        "dayOfMonth": 15,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Insurance"
+      },
+      {
+        "name": "Verizon Wireless",
+        "kind": "bill",
+        "amount": "342.00",
+        "frequency": "monthly",
+        "dayOfMonth": 16,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Utilities"
+      },
+      {
+        "name": "Water/Sewer",
+        "kind": "bill",
+        "amount": "101.02",
+        "frequency": "monthly",
+        "dayOfMonth": 24,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Utilities"
+      },
+      {
+        "name": "Weekly Spend",
+        "kind": "bill",
+        "amount": "450.00",
+        "frequency": "weekly",
+        "dayOfMonth": null,
+        "anchorDate": "2026-05-02",
+        "active": "true",
+        "category": "Misc / Buffer"
+      }
+    ],
+    "rules": [
+      {
+        "pattern": "AFFIRM",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "AMAZON",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Shopping"
+      },
+      {
+        "pattern": "AMERICAN EXPRESS ACH",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "AMEX ACH PMT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "AMEX EPAYMENT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "APPLECARD GSBANK",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "AT&T UVERSE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Utilities"
+      },
+      {
+        "pattern": "ATT*BILL PAYMENT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Utilities"
+      },
+      {
+        "pattern": "BEST BUY",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Shopping"
+      },
+      {
+        "pattern": "CAPITAL ONE CRCARDPMT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "CAPITAL ONE MOBILE PYMT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "CITI CARD ONLINE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "CITY OF MADISON",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Utilities"
+      },
+      {
+        "pattern": "COSTCO",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Groceries"
+      },
+      {
+        "pattern": "CREDIT ONE BANK",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "DEPT OF ED",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "DISCOVER E-PAYMENT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "DOORDASH",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Dining & Coffee"
+      },
+      {
+        "pattern": "DUNKIN",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Dining & Coffee"
+      },
+      {
+        "pattern": "EXACT SCIENCES",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Hannah's paycheck (Exact)"
+      },
+      {
+        "pattern": "FIGURE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "HELOC (Figure)"
+      },
+      {
+        "pattern": "GOLDMAN SACHS APPLE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "GRUBHUB",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Dining & Coffee"
+      },
+      {
+        "pattern": "HULU",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Subscriptions"
+      },
+      {
+        "pattern": "HY-VEE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Groceries"
+      },
+      {
+        "pattern": "KFI STAFFING",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Brad's paycheck (KFI)"
+      },
+      {
+        "pattern": "KWIK TRIP",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Gas, Maintenance & Parking"
+      },
+      {
+        "pattern": "LAKEVIEW",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Mortgage (Lakeview)"
+      },
+      {
+        "pattern": "MATTRESS FIRM",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "MENARDS BIG CARD",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "MENARDS",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Shopping"
+      },
+      {
+        "pattern": "MGE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Utilities"
+      },
+      {
+        "pattern": "NELNET",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "NETFLIX",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Subscriptions"
+      },
+      {
+        "pattern": "PAYPAL PAYMTHLY",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "PEACOCK",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Subscriptions"
+      },
+      {
+        "pattern": "RING.COM",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Subscriptions"
+      },
+      {
+        "pattern": "SPOTIFY",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Subscriptions"
+      },
+      {
+        "pattern": "STARBUCKS",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Dining & Coffee"
+      },
+      {
+        "pattern": "STATE FARM",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Insurance"
+      },
+      {
+        "pattern": "SYNCHRONY ASHLEY",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "SYNCHRONY PAYPAL",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "TARGET",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Shopping"
+      },
+      {
+        "pattern": "TOYOTA FINANCIAL",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Car Payments"
+      },
+      {
+        "pattern": "TRADER JOE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Groceries"
+      },
+      {
+        "pattern": "TRUSTAGE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Insurance"
+      },
+      {
+        "pattern": "UBER EATS",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Dining & Coffee"
+      },
+      {
+        "pattern": "UW CREDIT UNION",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Car Payments"
+      },
+      {
+        "pattern": "VERIZON",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Utilities"
+      },
+      {
+        "pattern": "WALMART",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Shopping"
+      },
+      {
+        "pattern": "WHOLE FOODS",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Groceries"
+      },
+      {
+        "pattern": "WOODMANS",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Gas, Maintenance & Parking"
+      }
+    ],
+    "lines": [
+      {
+        "monthStart": "2026-05-01",
+        "category": "Brad's paycheck (KFI)",
+        "plannedAmount": "8100.00",
+        "note": "Auto-pulled from Bills · biweekly",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Car Payments",
+        "plannedAmount": "1324.35",
+        "note": "Toyota Lease + Hannah's car",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Charitable Giving & Education",
+        "plannedAmount": "0.00",
+        "note": "Athenaeum + Becker/Eastern Univ",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Childcare & Activities",
+        "plannedAmount": "0.00",
+        "note": null,
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Dining & Coffee",
+        "plannedAmount": "460.00",
+        "note": "Restaurants, DoorDash, coffee",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Emergency Fund",
+        "plannedAmount": "0.00",
+        "note": "Build $1,000 starter first",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Entertainment",
+        "plannedAmount": "0.00",
+        "note": "Movies, concerts, fun",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Gas, Maintenance & Parking",
+        "plannedAmount": "250.00",
+        "note": null,
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Groceries",
+        "plannedAmount": "460.00",
+        "note": "Includes Costco",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Hannah's paycheck (Exact)",
+        "plannedAmount": "4499.99",
+        "note": "Auto-pulled from Bills · biweekly",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Health",
+        "plannedAmount": "0.00",
+        "note": "Premium + out-of-pocket",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "HELOC (Figure)",
+        "plannedAmount": "677.40",
+        "note": "Recurring — kept here, not in Debt Tracker",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Home Maintenance & Warranty",
+        "plannedAmount": "53.85",
+        "note": "Repairs + UHP warranty",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Insurance",
+        "plannedAmount": "345.13",
+        "note": "Auto, home, life",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Investments & Retirement",
+        "plannedAmount": "0.00",
+        "note": "Investments + extra retirement contributions",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Kids' Savings / 529",
+        "plannedAmount": "0.00",
+        "note": "Resume after high-APR debt is gone",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Misc / Buffer",
+        "plannedAmount": "237.58",
+        "note": "Catch-all small items + Nelnet student loan rolled in",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Mortgage (Lakeview)",
+        "plannedAmount": "1989.81",
+        "note": "Recurring — kept here, not in Debt Tracker",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Other Income",
+        "plannedAmount": "88.00",
+        "note": "Reimbursements, side income",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Pets",
+        "plannedAmount": "0.00",
+        "note": "Camp K9 + vet",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Shopping",
+        "plannedAmount": "0.00",
+        "note": "Amazon, Walmart/Target, clothing, electronics, home",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Subscriptions",
+        "plannedAmount": "315.62",
+        "note": "Streaming, tech, software, gaming",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Tax Sinking Fund",
+        "plannedAmount": "0.00",
+        "note": "Save for next April taxes (~$1,500/yr)",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Utilities",
+        "plannedAmount": "774.24",
+        "note": "Electric, gas, water, internet, phone",
+        "pinned": false
+      }
+    ],
+    "months": [
+      {
+        "monthStart": "2026-05-01",
+        "pinned": false,
+        "note": null
+      }
+    ]
+  },
+  "may": {
+    "monthPinned": false,
+    "summaryBudget": {
+      "income": "33387.98",
+      "expenses": "9440.55",
+      "net": "23947.43",
+      "percentSpent": "28.3"
+    },
+    "planBySource": {
+      "income": {
+        "planned": "33387.98",
+        "actual": "0.00",
+        "lineCount": 3
+      },
+      "bills": {
+        "planned": "8466.70",
+        "actual": "0.00",
+        "lineCount": 9
+      },
+      "debts": {
+        "planned": "0.00",
+        "actual": "0.00",
+        "lineCount": 1
+      },
+      "unbacked": {
+        "planned": "973.85",
+        "actual": "0.00",
+        "lineCount": 12
+      },
+      "plannedTotal": "8466.70",
+      "actualTotal": "0.00",
+      "net": "24921.28"
+    },
+    "groups": [
+      {
+        "groupName": "Income",
+        "plannedTotal": "33387.98",
+        "lines": [
+          {
+            "categoryName": "Hannah's paycheck (Exact)",
+            "plannedAmount": "8999.98",
+            "planSource": "income",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "auto_bills",
+            "kind": "income"
+          },
+          {
+            "categoryName": "Brad's paycheck (KFI)",
+            "plannedAmount": "24300.00",
+            "planSource": "income",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "auto_bills",
+            "kind": "income"
+          },
+          {
+            "categoryName": "Other Income",
+            "plannedAmount": "88.00",
+            "planSource": "income",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "auto_bills",
+            "kind": "income"
+          }
+        ]
+      },
+      {
+        "groupName": "Housing & Utilities",
+        "plannedTotal": "3405.08",
+        "lines": [
+          {
+            "categoryName": "Mortgage (Lakeview)",
+            "plannedAmount": "1989.81",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "HELOC (Figure)",
+            "plannedAmount": "677.40",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Utilities",
+            "plannedAmount": "684.02",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Home Maintenance & Warranty",
+            "plannedAmount": "53.85",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Insurance & Health",
+        "plannedTotal": "345.13",
+        "lines": [
+          {
+            "categoryName": "Health",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Insurance",
+            "plannedAmount": "345.13",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Food",
+        "plannedTotal": "920.00",
+        "lines": [
+          {
+            "categoryName": "Groceries",
+            "plannedAmount": "460.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Dining & Coffee",
+            "plannedAmount": "460.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Transportation",
+        "plannedTotal": "1724.35",
+        "lines": [
+          {
+            "categoryName": "Car Payments",
+            "plannedAmount": "1324.35",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Gas, Maintenance & Parking",
+            "plannedAmount": "400.00",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Kids & Pets",
+        "plannedTotal": "80.00",
+        "lines": [
+          {
+            "categoryName": "Childcare & Activities",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Pets",
+            "plannedAmount": "80.00",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Debt — Minimum Payments",
+        "plannedTotal": "0.00",
+        "lines": []
+      },
+      {
+        "groupName": "Avalanche — Extra to Highest APR",
+        "plannedTotal": "0.00",
+        "lines": [
+          {
+            "categoryName": "Avalanche payment",
+            "plannedAmount": "0.00",
+            "planSource": "debts",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Lifestyle & Shopping",
+        "plannedTotal": "2965.99",
+        "lines": [
+          {
+            "categoryName": "Subscriptions",
+            "plannedAmount": "37.96",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Shopping",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Entertainment",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Charitable Giving & Education",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Misc / Buffer",
+            "plannedAmount": "2928.03",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Savings & Debt Payoff",
+        "plannedTotal": "0.00",
+        "lines": [
+          {
+            "categoryName": "Emergency Fund",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Investments & Retirement",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Kids' Savings / 529",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Tax Sinking Fund",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "My budget",
+        "plannedTotal": "0.00",
+        "lines": []
+      }
+    ]
+  },
+  "sept": {
+    "monthPinned": false,
+    "summaryBudget": {
+      "income": "25287.98",
+      "expenses": "8990.55",
+      "net": "16297.43",
+      "percentSpent": "35.6"
+    },
+    "planBySource": {
+      "income": {
+        "planned": "25287.98",
+        "actual": "0.00",
+        "lineCount": 3
+      },
+      "bills": {
+        "planned": "8016.70",
+        "actual": "0.00",
+        "lineCount": 9
+      },
+      "debts": {
+        "planned": "0.00",
+        "actual": "0.00",
+        "lineCount": 1
+      },
+      "unbacked": {
+        "planned": "973.85",
+        "actual": "0.00",
+        "lineCount": 12
+      },
+      "plannedTotal": "8016.70",
+      "actualTotal": "0.00",
+      "net": "17271.28"
+    },
+    "groups": [
+      {
+        "groupName": "Income",
+        "plannedTotal": "25287.98",
+        "lines": [
+          {
+            "categoryName": "Hannah's paycheck (Exact)",
+            "plannedAmount": "8999.98",
+            "planSource": "income",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "auto_bills",
+            "kind": "income"
+          },
+          {
+            "categoryName": "Brad's paycheck (KFI)",
+            "plannedAmount": "16200.00",
+            "planSource": "income",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "auto_bills",
+            "kind": "income"
+          },
+          {
+            "categoryName": "Other Income",
+            "plannedAmount": "88.00",
+            "planSource": "income",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "auto_bills",
+            "kind": "income"
+          }
+        ]
+      },
+      {
+        "groupName": "Housing & Utilities",
+        "plannedTotal": "3405.08",
+        "lines": [
+          {
+            "categoryName": "Mortgage (Lakeview)",
+            "plannedAmount": "1989.81",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "HELOC (Figure)",
+            "plannedAmount": "677.40",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Utilities",
+            "plannedAmount": "684.02",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Home Maintenance & Warranty",
+            "plannedAmount": "53.85",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Insurance & Health",
+        "plannedTotal": "345.13",
+        "lines": [
+          {
+            "categoryName": "Health",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Insurance",
+            "plannedAmount": "345.13",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Food",
+        "plannedTotal": "920.00",
+        "lines": [
+          {
+            "categoryName": "Groceries",
+            "plannedAmount": "460.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Dining & Coffee",
+            "plannedAmount": "460.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Transportation",
+        "plannedTotal": "1724.35",
+        "lines": [
+          {
+            "categoryName": "Car Payments",
+            "plannedAmount": "1324.35",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Gas, Maintenance & Parking",
+            "plannedAmount": "400.00",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Kids & Pets",
+        "plannedTotal": "80.00",
+        "lines": [
+          {
+            "categoryName": "Childcare & Activities",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Pets",
+            "plannedAmount": "80.00",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Debt — Minimum Payments",
+        "plannedTotal": "0.00",
+        "lines": []
+      },
+      {
+        "groupName": "Avalanche — Extra to Highest APR",
+        "plannedTotal": "0.00",
+        "lines": [
+          {
+            "categoryName": "Avalanche payment",
+            "plannedAmount": "0.00",
+            "planSource": "debts",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Lifestyle & Shopping",
+        "plannedTotal": "2515.99",
+        "lines": [
+          {
+            "categoryName": "Subscriptions",
+            "plannedAmount": "37.96",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Shopping",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Entertainment",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Charitable Giving & Education",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Misc / Buffer",
+            "plannedAmount": "2478.03",
+            "planSource": "bills",
+            "plannedSource": "bills",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "Savings & Debt Payoff",
+        "plannedTotal": "0.00",
+        "lines": [
+          {
+            "categoryName": "Emergency Fund",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Investments & Retirement",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Kids' Savings / 529",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          },
+          {
+            "categoryName": "Tax Sinking Fund",
+            "plannedAmount": "0.00",
+            "planSource": "unbacked",
+            "plannedSource": "manual",
+            "pinned": false,
+            "sourceKind": "manual",
+            "kind": "expense"
+          }
+        ]
+      },
+      {
+        "groupName": "My budget",
+        "plannedTotal": "0.00",
+        "lines": []
+      }
+    ]
+  },
+  "afterReads": {
+    "categories": [
+      {
+        "name": "Avalanche payment",
+        "kind": "expense",
+        "groupName": "Avalanche — Extra to Highest APR",
+        "sourceKind": "manual",
+        "sortOrder": 800,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Brad's paycheck (KFI)",
+        "kind": "income",
+        "groupName": "Income",
+        "sourceKind": "auto_bills",
+        "sortOrder": 1,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Car Payments",
+        "kind": "expense",
+        "groupName": "Transportation",
+        "sourceKind": "manual",
+        "sortOrder": 411,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Charitable Giving & Education",
+        "kind": "expense",
+        "groupName": "Lifestyle & Shopping",
+        "sourceKind": "manual",
+        "sortOrder": 818,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Childcare & Activities",
+        "kind": "expense",
+        "groupName": "Kids & Pets",
+        "sourceKind": "manual",
+        "sortOrder": 513,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Dining & Coffee",
+        "kind": "expense",
+        "groupName": "Food",
+        "sourceKind": "manual",
+        "sortOrder": 310,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Emergency Fund",
+        "kind": "expense",
+        "groupName": "Savings & Debt Payoff",
+        "sourceKind": "manual",
+        "sortOrder": 920,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Entertainment",
+        "kind": "expense",
+        "groupName": "Lifestyle & Shopping",
+        "sourceKind": "manual",
+        "sortOrder": 817,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Gas, Maintenance & Parking",
+        "kind": "expense",
+        "groupName": "Transportation",
+        "sourceKind": "manual",
+        "sortOrder": 412,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Groceries",
+        "kind": "expense",
+        "groupName": "Food",
+        "sourceKind": "manual",
+        "sortOrder": 309,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Hannah's paycheck (Exact)",
+        "kind": "income",
+        "groupName": "Income",
+        "sourceKind": "auto_bills",
+        "sortOrder": 0,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Health",
+        "kind": "expense",
+        "groupName": "Insurance & Health",
+        "sourceKind": "manual",
+        "sortOrder": 207,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "HELOC (Figure)",
+        "kind": "expense",
+        "groupName": "Housing & Utilities",
+        "sourceKind": "manual",
+        "sortOrder": 104,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Home Maintenance & Warranty",
+        "kind": "expense",
+        "groupName": "Housing & Utilities",
+        "sourceKind": "manual",
+        "sortOrder": 106,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Ignore",
+        "kind": "expense",
+        "groupName": "Ignore",
+        "sourceKind": "manual",
+        "sortOrder": 10025,
+        "excludeFromBudget": true,
+        "debt": false
+      },
+      {
+        "name": "Insurance",
+        "kind": "expense",
+        "groupName": "Insurance & Health",
+        "sourceKind": "manual",
+        "sortOrder": 208,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Investments & Retirement",
+        "kind": "expense",
+        "groupName": "Savings & Debt Payoff",
+        "sourceKind": "manual",
+        "sortOrder": 921,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Kids' Savings / 529",
+        "kind": "expense",
+        "groupName": "Savings & Debt Payoff",
+        "sourceKind": "manual",
+        "sortOrder": 922,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Misc / Buffer",
+        "kind": "expense",
+        "groupName": "Lifestyle & Shopping",
+        "sourceKind": "manual",
+        "sortOrder": 819,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Mortgage (Lakeview)",
+        "kind": "expense",
+        "groupName": "Housing & Utilities",
+        "sourceKind": "manual",
+        "sortOrder": 103,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Other Income",
+        "kind": "income",
+        "groupName": "Income",
+        "sourceKind": "auto_bills",
+        "sortOrder": 2,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Pets",
+        "kind": "expense",
+        "groupName": "Kids & Pets",
+        "sourceKind": "manual",
+        "sortOrder": 514,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Shopping",
+        "kind": "expense",
+        "groupName": "Lifestyle & Shopping",
+        "sourceKind": "manual",
+        "sortOrder": 816,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Subscriptions",
+        "kind": "expense",
+        "groupName": "Lifestyle & Shopping",
+        "sourceKind": "manual",
+        "sortOrder": 815,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Tax Sinking Fund",
+        "kind": "expense",
+        "groupName": "Savings & Debt Payoff",
+        "sourceKind": "manual",
+        "sortOrder": 923,
+        "excludeFromBudget": false,
+        "debt": false
+      },
+      {
+        "name": "Transfer",
+        "kind": "expense",
+        "groupName": "Transfer",
+        "sourceKind": "manual",
+        "sortOrder": 10024,
+        "excludeFromBudget": true,
+        "debt": false
+      },
+      {
+        "name": "Uncategorized",
+        "kind": "expense",
+        "groupName": "Uncategorized",
+        "sourceKind": "manual",
+        "sortOrder": 10023,
+        "excludeFromBudget": true,
+        "debt": false
+      },
+      {
+        "name": "Utilities",
+        "kind": "expense",
+        "groupName": "Housing & Utilities",
+        "sourceKind": "manual",
+        "sortOrder": 105,
+        "excludeFromBudget": false,
+        "debt": false
+      }
+    ],
+    "recurring": [
+      {
+        "name": "Brad's paycheck (KFI)",
+        "kind": "income",
+        "amount": "8100.00",
+        "frequency": "biweekly",
+        "dayOfMonth": null,
+        "anchorDate": "2026-05-01",
+        "active": "true",
+        "category": "Brad's paycheck (KFI)"
+      },
+      {
+        "name": "Dog Waste Removal",
+        "kind": "bill",
+        "amount": "80.00",
+        "frequency": "monthly",
+        "dayOfMonth": 1,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Pets"
+      },
+      {
+        "name": "Hannah's Car (UW Credit Union)",
+        "kind": "bill",
+        "amount": "651.55",
+        "frequency": "monthly",
+        "dayOfMonth": 6,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Car Payments"
+      },
+      {
+        "name": "Hannah's paycheck (Exact)",
+        "kind": "income",
+        "amount": "4499.99",
+        "frequency": "biweekly",
+        "dayOfMonth": null,
+        "anchorDate": "2026-05-08",
+        "active": "true",
+        "category": "Hannah's paycheck (Exact)"
+      },
+      {
+        "name": "HELOC (Figure)",
+        "kind": "bill",
+        "amount": "677.40",
+        "frequency": "monthly",
+        "dayOfMonth": 3,
+        "anchorDate": null,
+        "active": "true",
+        "category": "HELOC (Figure)"
+      },
+      {
+        "name": "Kwik Trip / gas",
+        "kind": "bill",
+        "amount": "200.00",
+        "frequency": "monthly",
+        "dayOfMonth": 24,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Gas, Maintenance & Parking"
+      },
+      {
+        "name": "Kwik Trip / gas",
+        "kind": "bill",
+        "amount": "200.00",
+        "frequency": "monthly",
+        "dayOfMonth": 9,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Gas, Maintenance & Parking"
+      },
+      {
+        "name": "MGE Electric & Gas",
+        "kind": "bill",
+        "amount": "241.00",
+        "frequency": "monthly",
+        "dayOfMonth": 20,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Utilities"
+      },
+      {
+        "name": "Mom — Verizon reimbursement",
+        "kind": "income",
+        "amount": "88.00",
+        "frequency": "monthly",
+        "dayOfMonth": 15,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Other Income"
+      },
+      {
+        "name": "Monthly Spend",
+        "kind": "bill",
+        "amount": "440.45",
+        "frequency": "monthly",
+        "dayOfMonth": 1,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Misc / Buffer"
+      },
+      {
+        "name": "Mortgage (Lakeview)",
+        "kind": "bill",
+        "amount": "1989.81",
+        "frequency": "monthly",
+        "dayOfMonth": 14,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Mortgage (Lakeview)"
+      },
+      {
+        "name": "PlayStation Network",
+        "kind": "bill",
+        "amount": "18.98",
+        "frequency": "monthly",
+        "dayOfMonth": 16,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Subscriptions"
+      },
+      {
+        "name": "PlayStation Network",
+        "kind": "bill",
+        "amount": "18.98",
+        "frequency": "monthly",
+        "dayOfMonth": 5,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Subscriptions"
+      },
+      {
+        "name": "State Farm Insurance",
+        "kind": "bill",
+        "amount": "128.59",
+        "frequency": "monthly",
+        "dayOfMonth": 3,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Insurance"
+      },
+      {
+        "name": "State Farm",
+        "kind": "bill",
+        "amount": "121.54",
+        "frequency": "monthly",
+        "dayOfMonth": 3,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Insurance"
+      },
+      {
+        "name": "Student Loan (Nelnet)",
+        "kind": "bill",
+        "amount": "237.58",
+        "frequency": "monthly",
+        "dayOfMonth": 29,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Misc / Buffer"
+      },
+      {
+        "name": "Toyota Lease",
+        "kind": "bill",
+        "amount": "672.80",
+        "frequency": "monthly",
+        "dayOfMonth": 7,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Car Payments"
+      },
+      {
+        "name": "TruStage / Ethos",
+        "kind": "bill",
+        "amount": "95.00",
+        "frequency": "monthly",
+        "dayOfMonth": 15,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Insurance"
+      },
+      {
+        "name": "Verizon Wireless",
+        "kind": "bill",
+        "amount": "342.00",
+        "frequency": "monthly",
+        "dayOfMonth": 16,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Utilities"
+      },
+      {
+        "name": "Water/Sewer",
+        "kind": "bill",
+        "amount": "101.02",
+        "frequency": "monthly",
+        "dayOfMonth": 24,
+        "anchorDate": null,
+        "active": "true",
+        "category": "Utilities"
+      },
+      {
+        "name": "Weekly Spend",
+        "kind": "bill",
+        "amount": "450.00",
+        "frequency": "weekly",
+        "dayOfMonth": null,
+        "anchorDate": "2026-05-02",
+        "active": "true",
+        "category": "Misc / Buffer"
+      }
+    ],
+    "rules": [
+      {
+        "pattern": "AFFIRM",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "AMAZON",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Shopping"
+      },
+      {
+        "pattern": "AMERICAN EXPRESS ACH",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "AMEX ACH PMT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "AMEX EPAYMENT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "APPLECARD GSBANK",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "AT&T UVERSE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Utilities"
+      },
+      {
+        "pattern": "ATT*BILL PAYMENT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Utilities"
+      },
+      {
+        "pattern": "BEST BUY",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Shopping"
+      },
+      {
+        "pattern": "CAPITAL ONE CRCARDPMT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "CAPITAL ONE MOBILE PYMT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "CITI CARD ONLINE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "CITY OF MADISON",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Utilities"
+      },
+      {
+        "pattern": "COSTCO",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Groceries"
+      },
+      {
+        "pattern": "CREDIT ONE BANK",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "DEPT OF ED",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "DISCOVER E-PAYMENT",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "DOORDASH",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Dining & Coffee"
+      },
+      {
+        "pattern": "DUNKIN",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Dining & Coffee"
+      },
+      {
+        "pattern": "EXACT SCIENCES",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Hannah's paycheck (Exact)"
+      },
+      {
+        "pattern": "FIGURE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "HELOC (Figure)"
+      },
+      {
+        "pattern": "GOLDMAN SACHS APPLE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "GRUBHUB",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Dining & Coffee"
+      },
+      {
+        "pattern": "HULU",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Subscriptions"
+      },
+      {
+        "pattern": "HY-VEE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Groceries"
+      },
+      {
+        "pattern": "KFI STAFFING",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Brad's paycheck (KFI)"
+      },
+      {
+        "pattern": "KWIK TRIP",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Gas, Maintenance & Parking"
+      },
+      {
+        "pattern": "LAKEVIEW",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Mortgage (Lakeview)"
+      },
+      {
+        "pattern": "MATTRESS FIRM",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "MENARDS BIG CARD",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "MENARDS",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Shopping"
+      },
+      {
+        "pattern": "MGE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Utilities"
+      },
+      {
+        "pattern": "NELNET",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "NETFLIX",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Subscriptions"
+      },
+      {
+        "pattern": "PAYPAL PAYMTHLY",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "PEACOCK",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Subscriptions"
+      },
+      {
+        "pattern": "RING.COM",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Subscriptions"
+      },
+      {
+        "pattern": "SPOTIFY",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Subscriptions"
+      },
+      {
+        "pattern": "STARBUCKS",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Dining & Coffee"
+      },
+      {
+        "pattern": "STATE FARM",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Insurance"
+      },
+      {
+        "pattern": "SYNCHRONY ASHLEY",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "SYNCHRONY PAYPAL",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Misc / Buffer"
+      },
+      {
+        "pattern": "TARGET",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Shopping"
+      },
+      {
+        "pattern": "TOYOTA FINANCIAL",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Car Payments"
+      },
+      {
+        "pattern": "TRADER JOE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Groceries"
+      },
+      {
+        "pattern": "TRUSTAGE",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Insurance"
+      },
+      {
+        "pattern": "UBER EATS",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Dining & Coffee"
+      },
+      {
+        "pattern": "UW CREDIT UNION",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Car Payments"
+      },
+      {
+        "pattern": "VERIZON",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Utilities"
+      },
+      {
+        "pattern": "WALMART",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Shopping"
+      },
+      {
+        "pattern": "WHOLE FOODS",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Groceries"
+      },
+      {
+        "pattern": "WOODMANS",
+        "matchType": "contains",
+        "priority": 50,
+        "category": "Gas, Maintenance & Parking"
+      }
+    ],
+    "lines": [
+      {
+        "monthStart": "2026-05-01",
+        "category": "Avalanche payment",
+        "plannedAmount": "0.00",
+        "note": "Managed by Avalanche planner",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Brad's paycheck (KFI)",
+        "plannedAmount": "8100.00",
+        "note": "Auto-pulled from Bills · biweekly",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Car Payments",
+        "plannedAmount": "1324.35",
+        "note": "Toyota Lease + Hannah's car",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Charitable Giving & Education",
+        "plannedAmount": "0.00",
+        "note": "Athenaeum + Becker/Eastern Univ",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Childcare & Activities",
+        "plannedAmount": "0.00",
+        "note": null,
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Dining & Coffee",
+        "plannedAmount": "460.00",
+        "note": "Restaurants, DoorDash, coffee",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Emergency Fund",
+        "plannedAmount": "0.00",
+        "note": "Build $1,000 starter first",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Entertainment",
+        "plannedAmount": "0.00",
+        "note": "Movies, concerts, fun",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Gas, Maintenance & Parking",
+        "plannedAmount": "250.00",
+        "note": null,
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Groceries",
+        "plannedAmount": "460.00",
+        "note": "Includes Costco",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Hannah's paycheck (Exact)",
+        "plannedAmount": "4499.99",
+        "note": "Auto-pulled from Bills · biweekly",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Health",
+        "plannedAmount": "0.00",
+        "note": "Premium + out-of-pocket",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "HELOC (Figure)",
+        "plannedAmount": "677.40",
+        "note": "Recurring — kept here, not in Debt Tracker",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Home Maintenance & Warranty",
+        "plannedAmount": "53.85",
+        "note": "Repairs + UHP warranty",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Insurance",
+        "plannedAmount": "345.13",
+        "note": "Auto, home, life",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Investments & Retirement",
+        "plannedAmount": "0.00",
+        "note": "Investments + extra retirement contributions",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Kids' Savings / 529",
+        "plannedAmount": "0.00",
+        "note": "Resume after high-APR debt is gone",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Misc / Buffer",
+        "plannedAmount": "237.58",
+        "note": "Catch-all small items + Nelnet student loan rolled in",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Mortgage (Lakeview)",
+        "plannedAmount": "1989.81",
+        "note": "Recurring — kept here, not in Debt Tracker",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Other Income",
+        "plannedAmount": "88.00",
+        "note": "Reimbursements, side income",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Pets",
+        "plannedAmount": "0.00",
+        "note": "Camp K9 + vet",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Shopping",
+        "plannedAmount": "0.00",
+        "note": "Amazon, Walmart/Target, clothing, electronics, home",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Subscriptions",
+        "plannedAmount": "315.62",
+        "note": "Streaming, tech, software, gaming",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Tax Sinking Fund",
+        "plannedAmount": "0.00",
+        "note": "Save for next April taxes (~$1,500/yr)",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-05-01",
+        "category": "Utilities",
+        "plannedAmount": "774.24",
+        "note": "Electric, gas, water, internet, phone",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Avalanche payment",
+        "plannedAmount": "0.00",
+        "note": "Managed by Avalanche planner",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Car Payments",
+        "plannedAmount": "1324.35",
+        "note": "Toyota Lease + Hannah's car",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Charitable Giving & Education",
+        "plannedAmount": "0.00",
+        "note": "Athenaeum + Becker/Eastern Univ",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Childcare & Activities",
+        "plannedAmount": "0.00",
+        "note": null,
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Dining & Coffee",
+        "plannedAmount": "460.00",
+        "note": "Restaurants, DoorDash, coffee",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Emergency Fund",
+        "plannedAmount": "0.00",
+        "note": "Build $1,000 starter first",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Entertainment",
+        "plannedAmount": "0.00",
+        "note": "Movies, concerts, fun",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Gas, Maintenance & Parking",
+        "plannedAmount": "250.00",
+        "note": null,
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Groceries",
+        "plannedAmount": "460.00",
+        "note": "Includes Costco",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Health",
+        "plannedAmount": "0.00",
+        "note": "Premium + out-of-pocket",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "HELOC (Figure)",
+        "plannedAmount": "677.40",
+        "note": "Recurring — kept here, not in Debt Tracker",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Home Maintenance & Warranty",
+        "plannedAmount": "53.85",
+        "note": "Repairs + UHP warranty",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Insurance",
+        "plannedAmount": "345.13",
+        "note": "Auto, home, life",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Investments & Retirement",
+        "plannedAmount": "0.00",
+        "note": "Investments + extra retirement contributions",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Kids' Savings / 529",
+        "plannedAmount": "0.00",
+        "note": "Resume after high-APR debt is gone",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Misc / Buffer",
+        "plannedAmount": "237.58",
+        "note": "Catch-all small items + Nelnet student loan rolled in",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Mortgage (Lakeview)",
+        "plannedAmount": "1989.81",
+        "note": "Recurring — kept here, not in Debt Tracker",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Pets",
+        "plannedAmount": "0.00",
+        "note": "Camp K9 + vet",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Shopping",
+        "plannedAmount": "0.00",
+        "note": "Amazon, Walmart/Target, clothing, electronics, home",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Subscriptions",
+        "plannedAmount": "315.62",
+        "note": "Streaming, tech, software, gaming",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Tax Sinking Fund",
+        "plannedAmount": "0.00",
+        "note": "Save for next April taxes (~$1,500/yr)",
+        "pinned": false
+      },
+      {
+        "monthStart": "2026-09-01",
+        "category": "Utilities",
+        "plannedAmount": "774.24",
+        "note": "Electric, gas, water, internet, phone",
+        "pinned": false
+      }
+    ],
+    "months": [
+      {
+        "monthStart": "2026-05-01",
+        "pinned": false,
+        "note": null
+      },
+      {
+        "monthStart": "2026-09-01",
+        "pinned": false,
+        "note": null
+      }
+    ]
+  }
+}
