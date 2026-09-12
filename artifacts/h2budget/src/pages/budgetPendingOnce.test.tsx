@@ -215,6 +215,38 @@ describe("(PR-D) Budget rows say how much of the spend is still pending", () => 
     expect(screen.queryByTestId("actuals-split-cat-din")).toBeNull();
   });
 
+  it("(review H1) a bare posted row counted under the category it inherited is in that category's drill", async () => {
+    budgetMonth = makeBudgetMonth({
+      monthStart: TEST_MONTH,
+      lines: [
+        makeLine({
+          id: "l-din",
+          categoryId: "cat-din",
+          categoryName: "Dining",
+          planSource: "unbacked",
+          plannedAmount: "200.00",
+          actualAmount: "48.00",
+          postedAmount: "48.00",
+          pendingAmount: "0.00",
+          combinedAmount: "48.00",
+        }),
+      ],
+      replacedPendingIds: ["tx-h1-pending"],
+      inheritedCategories: [{ transactionId: "tx-h1-posted", categoryId: "cat-din" }],
+    });
+    txns = [
+      { id: "tx-h1-pending", description: "OLIVE GARDEN 1234", amount: "-40.00", occurredOn: "2026-07-14", categoryId: "cat-din", isTransfer: false, pending: true, source: "plaid:chase" },
+      // Sync inserted it bare: no category of its own.
+      { id: "tx-h1-posted", description: "OLIVE GARDEN 1234", amount: "-48.00", occurredOn: "2026-07-15", categoryId: null, isTransfer: false, pending: false, source: "plaid:chase" },
+    ];
+    renderPage();
+    fireEvent.click(screen.getByTestId("button-actuals-cat-din"));
+    const list = await screen.findByTestId("actuals-list-cat-din");
+    expect(within(list).getByTestId("actuals-row-tx-h1-posted")).toBeTruthy();
+    expect(within(list).queryByTestId("actuals-row-tx-h1-pending")).toBeNull();
+    expect(screen.getByTestId("actuals-running-tx-h1-posted").textContent).toBe(usd("-48.00"));
+  });
+
   it("the drill splits posted and pending, and marks the row that is still pending", async () => {
     renderPage();
     fireEvent.click(screen.getByTestId("button-actuals-cat-gro"));

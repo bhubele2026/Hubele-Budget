@@ -523,25 +523,39 @@ export default function BudgetPage() {
   // (PR-D) …and skip a pending row a posted row replaced. It counts in no
   // actual on this page, and the server names those rows rather than leaving
   // the page to guess, so the drill still ties to the row that opened it.
-  const replacedPendingIds = budgetData?.replacedPendingIds;
+  //
+  // (PR-D review H1) …and file a bare posted row under the category it counts
+  // in: the one it inherited from the pending row it replaced.
+  //
+  // ⚠️ (review L5) Only the response FOR THE MONTH ON SCREEN steers the drill.
+  // During a month switch the previous month's response stays up
+  // (keepPreviousData), and its pairing says nothing about this month's rows.
+  const pairingForMonth =
+    budgetData?.monthStart === currentMonth ? budgetData : undefined;
+  const replacedPendingIds = pairingForMonth?.replacedPendingIds;
+  const inheritedCategories = pairingForMonth?.inheritedCategories;
   const txnsByCategoryThisMonth = useMemo<Map<string, Transaction[]>>(() => {
     const map = new Map<string, Transaction[]>();
     if (!allTxns) return map;
     const replaced = new Set(replacedPendingIds ?? []);
+    const inherited = new Map(
+      (inheritedCategories ?? []).map((x) => [x.transactionId, x.categoryId] as const),
+    );
     for (const t of allTxns) {
       if (t.isTransfer) continue;
-      if (!t.categoryId) continue;
       if (replaced.has(t.id)) continue;
+      const categoryId = inherited.get(t.id) ?? t.categoryId;
+      if (!categoryId) continue;
       if (t.occurredOn < monthBounds.start || t.occurredOn >= monthBounds.end) continue;
-      const arr = map.get(t.categoryId) ?? [];
+      const arr = map.get(categoryId) ?? [];
       arr.push(t);
-      map.set(t.categoryId, arr);
+      map.set(categoryId, arr);
     }
     for (const arr of map.values()) {
       arr.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
     }
     return map;
-  }, [allTxns, monthBounds, replacedPendingIds]);
+  }, [allTxns, monthBounds, replacedPendingIds, inheritedCategories]);
 
   // Mapping rules grouped by the categoryId they assign to. Used to decide
   // which uncategorized rows should be surfaced as suggestions on a given

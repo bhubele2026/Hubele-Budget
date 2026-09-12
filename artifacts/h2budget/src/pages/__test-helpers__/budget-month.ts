@@ -108,6 +108,8 @@ export function makeBudgetMonth(opts: {
   allowance?: ReturnType<typeof makeAllowance>;
   /** (PR-D) Pending rows in the month a posted row replaced. */
   replacedPendingIds?: string[];
+  /** (PR-D review H1) Posted rows counted under the category they inherited. */
+  inheritedCategories?: { transactionId: string; categoryId: string }[];
 }) {
   const { lines } = opts;
   const roll = (key: TestLine["planSource"]): Bucket => {
@@ -172,5 +174,6 @@ export function makeBudgetMonth(opts: {
     },
     allowance: opts.allowance ?? makeAllowance(),
     replacedPendingIds: opts.replacedPendingIds ?? [],
+    inheritedCategories: opts.inheritedCategories ?? [],
   };
 }
