@@ -10,6 +10,9 @@
  * at most one other resolution per row.
  *
  * A `partial` is a decision like `matched`: the row paid part of a plan.
+ *
+ * (One-time bill move) A `needs_review` is not a decision: a move put the match
+ * in question and the row is back in Review until the user answers.
  */
 export type RowResolution = {
   status: string;
@@ -21,7 +24,13 @@ export function rowDecisionsByTxn(
 ): Map<string, { status: string }> {
   const out = new Map<string, { status: string }>();
   for (const r of resolutions) {
-    if (!r.matchedTxnId || r.status === "not_match") continue;
+    if (
+      !r.matchedTxnId ||
+      r.status === "not_match" ||
+      r.status === "needs_review" ||
+      r.status === "needs_review_partial"
+    )
+      continue;
     out.set(r.matchedTxnId, { status: r.status });
   }
   return out;

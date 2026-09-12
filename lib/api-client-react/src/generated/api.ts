@@ -137,6 +137,7 @@ import type {
   UncategorizeByIdsResult,
   UpdatePlaidImportCutoffDate200,
   UpdatePlaidImportCutoffDateBody,
+  UpdateRecurringItemResponse,
   UpdateTransactionResponse,
   VersionInfo,
   WeeklySettlement,
@@ -3059,13 +3060,16 @@ export const updateRecurringItem = async (
   id: string,
   recurringItemInput: RecurringItemInput,
   options?: RequestInit,
-): Promise<RecurringItem> => {
-  return customFetch<RecurringItem>(getUpdateRecurringItemUrl(id), {
-    ...options,
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(recurringItemInput),
-  });
+): Promise<UpdateRecurringItemResponse> => {
+  return customFetch<UpdateRecurringItemResponse>(
+    getUpdateRecurringItemUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(recurringItemInput),
+    },
+  );
 };
 
 export const getUpdateRecurringItemMutationOptions = <
