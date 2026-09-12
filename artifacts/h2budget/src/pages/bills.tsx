@@ -63,6 +63,7 @@ import {
   btnDanger,
   btnLink,
   btnLinkDanger,
+  btnSecondary,
   card,
   cardHead,
   emptyNote,
@@ -383,30 +384,89 @@ export default function BillsPage() {
     setDialogOpen(true);
   };
 
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // ⭐ (One-time bill move) Editing a one-time item offers two different acts:
+  //   - "Move this bill" (the default save, labelled so once the date changes):
+  //     the SAME bill on a new date. The server keeps its match, skip and
+  //     history on the new date, and asks for review when the new date is too far
+  //     from the bank row that paid it;
+  //   - "Create another bill": a NEW one-time item with the edited fields. The
+  //     bill being edited is not touched.
+  const editingOneTime = !!editing && editing.frequency === "onetime" && form.frequency === "onetime";
+  const movesOneTime =
+    editingOneTime && !!form.oneTimeDate && form.oneTimeDate !== (editing?.anchorDate ?? "");
+  const itemNoun = form.kind === "income" ? "item" : "bill";
+  // (Review L3) "Create another bill" is offered only once the date, name or
+  // amount differs from the bill being edited — otherwise it would just copy it.
+  const differsFromEditing =
+    editingOneTime &&
+    (form.oneTimeDate !== (editing?.anchorDate ?? "") ||
+      form.name.trim() !== (editing?.name ?? "").trim() ||
+      Number(form.amount) !== Number(editing?.amount));
+
+  const validateForm = (): boolean => {
     if (!form.name.trim()) {
       toast({ title: "Name is required", variant: "destructive" });
-      return;
+      return false;
     }
     const amt = parseFloat(form.amount);
     if (!Number.isFinite(amt) || amt < 0) {
       toast({ title: "Amount must be a positive number", variant: "destructive" });
-      return;
+      return false;
     }
     if (form.frequency === "onetime" && !form.oneTimeDate) {
       toast({ title: "Pick a date for the one-time item", variant: "destructive" });
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const onCreateAnother = () => {
+    if (!differsFromEditing || !validateForm()) return;
+    createItem.mutate(
+      // (Review L3) A new bill is active, whatever the paused original says.
+      { data: { ...buildPayload(form), active: "true" } },
+      {
+        onSuccess: () => {
+          invalidateAll();
+          setDialogOpen(false);
+          toast({ title: `Added another ${itemNoun}` });
+        },
+      },
+    );
+  };
+
+  // (One-time bill move, round 3) What the save did to the bill's match, in plain
+  // words, from the server's `moveResult`. Nothing to say when every answer was
+  // carried or none was re-checked.
+  const moveResultText = (
+    r: { needsReview: number; cleared: number } | null | undefined,
+  ): string | null => {
+    if (!r) return null;
+    const parts: string[] = [];
+    if (r.needsReview === 1) parts.push("1 match needs review.");
+    else if (r.needsReview > 1) parts.push(`${r.needsReview} matches need review.`);
+    if (r.cleared === 1) parts.push(`Its match was cleared, so the ${itemNoun} shows unpaid.`);
+    else if (r.cleared > 1) parts.push(`${r.cleared} matches were cleared, so the ${itemNoun} shows unpaid.`);
+    return parts.length > 0 ? parts.join(" ") : null;
+  };
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
     const payload = buildPayload(form);
     if (editing) {
+      const moved = movesOneTime;
       updateItem.mutate(
         { id: editing.id, data: payload },
         {
-          onSuccess: () => {
+          onSuccess: (saved) => {
             invalidateAll();
             setDialogOpen(false);
-            toast({ title: "Saved" });
+            const description = moveResultText(saved?.moveResult);
+            toast({
+              title: moved ? `Moved this ${itemNoun}` : "Saved",
+              ...(description ? { description } : {}),
+            });
           },
         },
       );
@@ -1212,14 +1272,32 @@ export default function BillsPage() {
               ) : (
                 <span />
               )}
-              <button
-                type="submit"
-                className={btn}
-                disabled={createItem.isPending || updateItem.isPending}
-                data-testid="button-save"
-              >
-                {editing ? "Save changes" : "Add item"}
-              </button>
+              <span className="flex flex-wrap items-center justify-end gap-2">
+                {editingOneTime && (
+                  <>
+                    <Help>{`Move this ${itemNoun} keeps its match, skip and history on the new date; a far move asks for review, and so does a new amount. Create another ${itemNoun} adds a separate one with these details and leaves this one as it is.`}</Help>
+                    {differsFromEditing && (
+                      <button
+                        type="button"
+                        className={btnSecondary}
+                        disabled={createItem.isPending || updateItem.isPending}
+                        onClick={onCreateAnother}
+                        data-testid="button-create-another"
+                      >
+                        Create another {itemNoun}
+                      </button>
+                    )}
+                  </>
+                )}
+                <button
+                  type="submit"
+                  className={btn}
+                  disabled={createItem.isPending || updateItem.isPending}
+                  data-testid="button-save"
+                >
+                  {editing ? (movesOneTime ? `Move this ${itemNoun}` : "Save changes") : "Add item"}
+                </button>
+              </span>
             </DialogFooter>
           </form>
         </DialogContent>

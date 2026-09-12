@@ -29,6 +29,7 @@ import {
   resolutionScheduleLookup,
 } from "../lib/debtMinSchedule";
 import { remapOrphanResolutions } from "../lib/resolutionRemap";
+import { readPausedReview } from "../lib/oneTimeBillMove";
 import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
 import { computeReviewCount } from "../lib/reviewCount";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
@@ -449,8 +450,12 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // (PR6) A resolution a schedule edit orphaned follows its bill to the item's
   // occurrence in the same period — the mapping the cash signal applies — so the
   // register and the curve agree. Read-only: the stored rows keep their dates.
+  // (One-time bill move, round 4) A pending review on a paused bill reads as the
+  // user's last answer — the ledger and the review count read it the same way —
+  // so the register never shows a question the paused bill cannot answer.
+  const pausedItemIds = new Set(recurring.filter((r) => r.active !== "true").map((r) => r.id));
   const resolutions = remapOrphanResolutions(
-    resolutionRows,
+    resolutionRows.map((r) => readPausedReview(r, pausedItemIds)),
     resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt),
   )
     .filter(
@@ -1128,12 +1133,19 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
   if (status === "not_match") {
     // Rejecting a pair replaces that pair's earlier answers: a previous
     // rejection, or a match / partial confirmation the user now takes back.
+    // (One-time bill move) It also answers a pending review on the same pair.
     await db
       .delete(forecastResolutionsTable)
       .where(
         and(
           eq(forecastResolutionsTable.householdId, householdId),
-          inArray(forecastResolutionsTable.status, ["not_match", "matched", "partial"]),
+          inArray(forecastResolutionsTable.status, [
+            "not_match",
+            "matched",
+            "partial",
+            "needs_review",
+            "needs_review_partial",
+          ]),
           eq(forecastResolutionsTable.recurringItemId, recurringItemId),
           eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
           eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
@@ -1152,7 +1164,16 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
             // (PR5 review) A partial confirmation and a reschedule of the same
             // plan coexist: the remainder is due on the date the user moved it to.
             ...(status === "partial" ? [ne(forecastResolutionsTable.status, "rescheduled")] : []),
-            ...(status === "rescheduled" ? [ne(forecastResolutionsTable.status, "partial")] : []),
+            // (One-time bill move) A move is not an answer: a pending review
+            // (`needs_review`, `needs_review_partial`) stays open beside it, like a
+            // partial, until it is answered.
+            ...(status === "rescheduled"
+              ? [
+                  ne(forecastResolutionsTable.status, "partial"),
+                  ne(forecastResolutionsTable.status, "needs_review"),
+                  ne(forecastResolutionsTable.status, "needs_review_partial"),
+                ]
+              : []),
           ),
         );
     }

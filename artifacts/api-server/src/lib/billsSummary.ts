@@ -119,6 +119,18 @@ export async function archiveExpiredOneTime(householdId: string): Promise<void> 
       const own = resolutions.filter((r) => r.recurringItemId === item.id);
       const moved = own.find((r) => r.status === "rescheduled" && r.occurrenceDate === item.anchorDate);
       const dueISO = moved?.rescheduledTo ?? item.anchorDate!;
+      // (One-time bill move, review M2d) A pair an edit put in question waits for an
+      // answer: `needs_review` / `needs_review_partial` ON THE BILL'S CURRENT DATE
+      // keeps it active while Forecast Review can still show it (due on or after the
+      // first of last month). One on any other date, or one Review can no longer
+      // show, holds nothing: the 60-day rule below applies as to any unresolved bill.
+      const reviewFromISO = fmtISO(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+      const pendingReview = own.some(
+        (r) =>
+          (r.status === "needs_review" || r.status === "needs_review_partial") &&
+          (r.occurrenceDate === item.anchorDate || r.occurrenceDate === dueISO),
+      );
+      if (pendingReview && dueISO >= reviewFromISO) return false;
       const resolved = own.some(
         (r) =>
           (r.status === "matched" || r.status === "skipped" || r.status === "missed" || r.status === "dismissed") &&
@@ -137,6 +149,21 @@ export async function archiveExpiredOneTime(householdId: string): Promise<void> 
         inArray(recurringItemsTable.id, archive),
       ),
     );
+  // ⭐ (One-time bill move, round 4) ARCHIVING NEVER DELETES A REVIEW. An archived
+  // bill has no event, so a pending review on it could never be answered — and
+  // this runs on every load of Forecast, Bills and the bill list, so deleting it
+  // would erase the user's match just by opening a page. Restore the user's last
+  // answer instead, deterministically, keeping its bank row: `needs_review` →
+  // `matched`, `needs_review_partial` → `partial`. The bill is inactive and past,
+  // so the curve cannot change; its month's actual reads what the user answered.
+  const reviewOnArchived = (status: string) =>
+    and(
+      eq(forecastResolutionsTable.householdId, householdId),
+      inArray(forecastResolutionsTable.recurringItemId, archive),
+      eq(forecastResolutionsTable.status, status),
+    );
+  await db.update(forecastResolutionsTable).set({ status: "matched" }).where(reviewOnArchived("needs_review"));
+  await db.update(forecastResolutionsTable).set({ status: "partial" }).where(reviewOnArchived("needs_review_partial"));
 }
 
 function nextOccurrenceISO(item: RecurringRow): string | null {

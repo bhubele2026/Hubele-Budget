@@ -3,6 +3,9 @@ import {
   labelEvidence,
   matchPlansToRows,
   plansPaidInFullByName,
+  rowInMatchWindow,
+  rowWithinMatchAmount,
+  rowPaysPlanInFull,
   type ConfirmedRow,
   type MatchItem,
   type MatchPlan,
@@ -41,6 +44,66 @@ const match = (
     [...plans.map((p) => ({ itemId: p.itemId, label: p.label, categoryId: p.categoryId ?? null, income: p.amount > 0 })), ...otherItems],
     notMatch,
   );
+
+describe("(one-time bill move, review L4) the edit re-check uses the matcher's own bounds", () => {
+  // ⚠️ MERGE COUPLING: every `matchPlansToRows` call these pins make goes through
+  // this one helper, so a signature change there (PR-B adds `items`) is one edit.
+  const pairOne = (planAmount: number, rowDate: string, rowAmount: number) => {
+    const roof = plan("roof", "2026-09-20", planAmount, "Roof repair");
+    return matchPlansToRows(
+      [roof],
+      [row("t", rowDate, rowAmount, "ROOF REPAIR CO")],
+      [{ itemId: roof.itemId, label: roof.label, categoryId: roof.categoryId ?? null, income: roof.amount > 0 }],
+    );
+  };
+
+  it("rowInMatchWindow is exactly the date window matchPlansToRows pairs a named row in", () => {
+    const cases: Array<[string, boolean]> = [
+      ["2026-09-10", true],
+      ["2026-09-09", false],
+      ["2026-10-04", true],
+      ["2026-10-05", false],
+    ];
+    for (const [date, inside] of cases) {
+      expect(rowInMatchWindow("2026-09-20", date)).toBe(inside);
+      expect(pairOne(-400, date, -400).length).toBe(inside ? 1 : 0);
+    }
+  });
+
+  it("rowWithinMatchAmount is exactly the loose tolerance max($25, 25%) matchPlansToRows pairs a named row within", () => {
+    const cases: Array<[number, boolean]> = [
+      [-500, true],
+      [-500.01, false],
+      [-300, true],
+      [-299.99, false],
+    ];
+    for (const [amount, inside] of cases) {
+      expect(rowWithinMatchAmount(-400, amount)).toBe(inside);
+      expect(pairOne(-400, "2026-09-20", amount).length).toBe(inside ? 1 : 0);
+    }
+    expect(rowWithinMatchAmount(-50, -75)).toBe(true);
+    expect(rowWithinMatchAmount(-50, -75.01)).toBe(false);
+    expect(rowWithinMatchAmount(400, -400)).toBe(false);
+  });
+
+  it("(round 3) rowPaysPlanInFull is exactly the band a same-day full-name pair leaves the curve in: short ≤ max($1, 1%), over ≤ max($25, 10%)", () => {
+    const cases: Array<[number, number, boolean]> = [
+      [-400, -396, true],
+      [-400, -395.99, false],
+      [-400, -440, true],
+      [-400, -440.01, false],
+      [-50, -49, true],
+      [-50, -48.99, false],
+      [-50, -75, true],
+      [-50, -75.01, false],
+    ];
+    for (const [planAmount, rowAmount, pays] of cases) {
+      expect(rowPaysPlanInFull(planAmount, rowAmount)).toBe(pays);
+      expect(pairOne(planAmount, "2026-09-20", rowAmount).some((m) => m.offCurve)).toBe(pays);
+    }
+    expect(rowPaysPlanInFull(300, -300)).toBe(false);
+  });
+});
 
 describe("labelEvidence", () => {
   it("finds a distinctive label word in the description, ignoring stop-words", () => {
