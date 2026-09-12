@@ -37,16 +37,17 @@ WITH history AS (
 ),
 last_change AS (
   -- The day a debt's balance last changed (lib/debtBalanceDate.ts, same rule):
-  -- a later row when its balance differs from the row before; the FIRST row
-  -- only when it falls on the household day of debts.updated_at (a page view
-  -- writes a row for every active debt, so a first row alone is not a change).
-  SELECT h.debt_id, max(h.recorded_on) AS last_balance_change_on
-  FROM history h
-  JOIN debts dd ON dd.id = h.debt_id
-  WHERE (h.prev_balance IS NULL
-         AND h.recorded_on = (dd.updated_at AT TIME ZONE 'America/Chicago')::date)
-     OR (h.prev_balance IS NOT NULL AND h.prev_balance <> h.balance)
-  GROUP BY h.debt_id
+  -- a debt's FIRST row always counts as a change; a later row counts when its
+  -- balance differs from the row before it. (PR-E round 5: reverted the round-4
+  -- "first row counts only when it matches debts.updated_at" rule — updated_at
+  -- is bumped by unrelated writes (an APR/name/min edit, a Plaid refresh), which
+  -- made that rule's error unbounded. This rule's residual is bounded: it can
+  -- only date a never-edited legacy debt's balance too early, at most back to
+  -- its first history row.)
+  SELECT debt_id, max(recorded_on) AS last_balance_change_on
+  FROM history
+  WHERE prev_balance IS NULL OR prev_balance <> balance
+  GROUP BY debt_id
 ),
 base AS (
   SELECT
@@ -177,16 +178,17 @@ WITH history AS (
 ),
 last_change AS (
   -- The day a debt's balance last changed (lib/debtBalanceDate.ts, same rule):
-  -- a later row when its balance differs from the row before; the FIRST row
-  -- only when it falls on the household day of debts.updated_at (a page view
-  -- writes a row for every active debt, so a first row alone is not a change).
-  SELECT h.debt_id, max(h.recorded_on) AS last_balance_change_on
-  FROM history h
-  JOIN debts dd ON dd.id = h.debt_id
-  WHERE (h.prev_balance IS NULL
-         AND h.recorded_on = (dd.updated_at AT TIME ZONE 'America/Chicago')::date)
-     OR (h.prev_balance IS NOT NULL AND h.prev_balance <> h.balance)
-  GROUP BY h.debt_id
+  -- a debt's FIRST row always counts as a change; a later row counts when its
+  -- balance differs from the row before it. (PR-E round 5: reverted the round-4
+  -- "first row counts only when it matches debts.updated_at" rule — updated_at
+  -- is bumped by unrelated writes (an APR/name/min edit, a Plaid refresh), which
+  -- made that rule's error unbounded. This rule's residual is bounded: it can
+  -- only date a never-edited legacy debt's balance too early, at most back to
+  -- its first history row.)
+  SELECT debt_id, max(recorded_on) AS last_balance_change_on
+  FROM history
+  WHERE prev_balance IS NULL OR prev_balance <> balance
+  GROUP BY debt_id
 ),
 amex_accounts AS (
   SELECT pa.household_id, pa.id, pa.type, pa.liability_kind, pa.liability_balance

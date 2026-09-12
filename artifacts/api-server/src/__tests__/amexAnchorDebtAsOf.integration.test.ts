@@ -334,48 +334,71 @@ describe("(PR-E review H3) a legacy or stale balance date is moved to the day th
     expect(endOfSeptember2026(body, LEGACY_ROWS)).toBe(1050);
   });
 
-  it("(review M1) a never-edited debt whose first history row is a Jun 15 page view stays dated Jun 1 → $1,650 (not $1,450)", async () => {
+  it("(round 5) a legacy raise on Sep 1 (its only history row) still dates Sep 1 → $1,050, even after a later unrelated edit moves updated_at to Sep 10", async () => {
+    // Reproduces the round-4 review finding (a): gating the first row on
+    // debts.updated_at made a later APR/name/min PATCH (or a Plaid refresh)
+    // un-match the first row against its now-later updated_at, dropping the
+    // Sep 1 change entirely and falling back to created_at (Jun 1) — an
+    // unbounded double count back to creation ($1,950 instead of $1,050).
+    // Fails on 46668d6b for exactly that reason.
+    await seedLegacyDebt({
+      lastBalanceUpdate: null,
+      history: [{ recordedOn: "2026-09-01", balance: "1000.00" }],
+      updatedAt: new Date("2026-09-10T15:00:00.000Z"),
+      rows: LEGACY_ROWS,
+    });
+
+    const body = await getAnchor();
+
+    expect(body.source).toBe("debt");
+    expect(householdDay(body.asOf)).toBe("2026-09-01");
+    expect(endOfSeptember2026(body, LEGACY_ROWS)).toBe(1050);
+  });
+
+  it("(known residual) a never-edited debt whose first history row is a Jun 15 page view is dated Jun 15 → $1,450, whether or not an APR edit landed that same day", async () => {
+    // Documented bounded residual (round 5 decision): a debt's first history
+    // row always counts as a change, so a never-edited legacy debt with no
+    // history until someone views it is dated by that view, dropping charges
+    // between its creation and the first view. Here that drops the Jun 10
+    // $200 charge, landing $1,450 instead of the "true" $1,650. The residual
+    // is the same with or without a same-day APR edit — this rule never reads
+    // updated_at, so an edit that day changes nothing. The durable fix is an
+    // owner-approved one-time backfill of last_balance_update for legacy
+    // debts, not a read-time heuristic.
     const rows = [
       { occurredOn: "2026-06-10", amount: 200 },
       { occurredOn: "2026-07-10", amount: 300 },
       { occurredOn: "2026-08-10", amount: 100 },
       { occurredOn: "2026-09-05", amount: 50 },
     ];
+    const history = [
+      { recordedOn: "2026-06-15", balance: "1000.00" },
+      { recordedOn: "2026-07-20", balance: "1000.00" },
+      { recordedOn: "2026-09-09", balance: "1000.00" },
+    ];
+
     await seedLegacyDebt({
       lastBalanceUpdate: null,
-      // Created Jun 1 and never edited: updated_at is its creation.
+      // Never edited: updated_at is still its creation.
       updatedAt: new Date("2026-06-01T17:00:00.000Z"),
-      // Page views from Jun 15 on, the balance never changing.
-      history: [
-        { recordedOn: "2026-06-15", balance: "1000.00" },
-        { recordedOn: "2026-07-20", balance: "1000.00" },
-        { recordedOn: "2026-09-09", balance: "1000.00" },
-      ],
+      history,
       rows,
     });
+    const noEditBody = await getAnchor();
+    expect(householdDay(noEditBody.asOf)).toBe("2026-06-15");
+    expect(endOfSeptember2026(noEditBody, rows)).toBe(1450);
 
-    const body = await getAnchor();
-
-    expect(householdDay(body.asOf)).toBe("2026-06-01");
-    expect(endOfSeptember2026(body, rows)).toBe(1650);
-  });
-
-  it("(review M1) a legacy raise on the first history day, which also bumped original_balance and updated_at that day, still dates Sep 1 → $1,050", async () => {
+    await cleanup();
     await seedLegacyDebt({
       lastBalanceUpdate: null,
-      originalBalance: "1000.00",
-      updatedAt: new Date("2026-09-01T17:00:00.000Z"),
-      history: [
-        { recordedOn: "2026-09-01", balance: "1000.00" },
-        { recordedOn: "2026-09-09", balance: "1000.00" },
-      ],
-      rows: LEGACY_ROWS,
+      // An APR edit landed the same day as the first (page-view) history row.
+      updatedAt: new Date("2026-06-15T18:00:00.000Z"),
+      history,
+      rows,
     });
-
-    const body = await getAnchor();
-
-    expect(householdDay(body.asOf)).toBe("2026-09-01");
-    expect(endOfSeptember2026(body, LEGACY_ROWS)).toBe(1050);
+    const sameDayEditBody = await getAnchor();
+    expect(householdDay(sameDayEditBody.asOf)).toBe("2026-06-15");
+    expect(endOfSeptember2026(sameDayEditBody, rows)).toBe(1450);
   });
 
   it("a balance date later than the last history change wins (Sep 4 over Sep 1)", async () => {

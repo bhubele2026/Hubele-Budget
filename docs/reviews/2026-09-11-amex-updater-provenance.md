@@ -3,7 +3,9 @@
 Branch `fix/amex-updater-balance-provenance`, base `origin/main` `df2adda`.
 Round 1 `d356c535`; round 2 `c0eca735` answers the first review (H1, H2, M1, the
 LOW items, the NIT); round 3 answers the second look (H3 and three LOW items) on
-top of `origin/main` `1a0c1f71` (PR-A, merged in).
+top of `origin/main` `1a0c1f71` (PR-A, merged in). Round 4 (`46668d6b`) tried
+gating a debt's first history row on `debts.updated_at`; round 5 reverts that —
+see the Round 5 section below.
 
 ## Owner decision (2)
 
@@ -65,12 +67,13 @@ top of `origin/main` `1a0c1f71` (PR-A, merged in).
    - GET /amex/anchor dates a debt-row answer by the debts' balance date. For each
      debt it is the LATER of `last_balance_update` (else `created_at`) and the
      household day its balance last changed in `debt_balance_history`. That day is
-     the newest row whose balance differs from the row before. (Round 4, decided) A
-     debt's FIRST row counts only when it falls on the household day of the debt's
-     `updated_at`: a page view writes a row for every active debt, so a first row
-     alone is usually a view, not an edit;
-     it is the same definition as the preview SQL's `last_change`, taken as noon UTC
-     on that day.
+     the newest row whose balance differs from the row before, and a debt's FIRST
+     row always counts as a change (round 3's rule, restored in round 5). Round 4
+     tried gating the first row on whether it fell on the household day of the
+     debt's `updated_at`, on the theory that a page view writes a row for every
+     active debt, so a first row alone is usually a view, not an edit. Round 5
+     reverted it — see the Round 5 section below for why. It is the same
+     definition as the preview SQL's `last_change`, taken as noon UTC on that day.
    - Across debts the latest date is used. It never uses `updated_at` or the saved
      anchor's `asOf`.
    - History can only move the date later; a stamp on or after the change day wins.
@@ -119,7 +122,8 @@ top of `origin/main` `1a0c1f71` (PR-A, merged in).
 | **Amex page label**, household with Amex rows and an Amex Plaid item but no saved anchor and no debt/Plaid balance | "Calculated" (the refresh threw, so no anchor was ever written) | "From saved anchor" after its next Amex sync (query 2 `source_after_merge`) |
 | **Amex page, debt-row answer** (H2) — e.g. a manual "American Express" $1,000 dated Sep 1, charges $100 Sep 3 + $50 Sep 5, an updater-written anchor | main: dated the later of `updated_at` and the anchor's asOf; round 1: the refresh moved the anchor to today → $1,000 as of Sep 11, the $150 lost | $1,000 as of Sep 1 → September ends at $1,150 (query 2 `debt_tier_as_of_today` / `_after_merge`) |
 | **Amex page, legacy / stale balance date** (H3). An "American Express" debt created Jun 1, `last_balance_update` NULL, typed to $1,000 on Sep 1 by the pre-merge PATCH (history row that day). Charges $200 Jun 10, $300 Jul 10, $400 Aug 10, $50 Sep 5 | main: dated by `updated_at` Sep 1 → $1,050 (right by accident; an APR edit after Sep 1 would have dropped the Sep 5 charge). Round 2: dated Jun 1 → $1,950, charges counted twice. The same with an old bank date left in `last_balance_update` | Dated Sep 1, the day the balance last changed → September ends at $1,050. Rule: the later of `last_balance_update ?? created_at` and that history day; no data written. Query 2 flags the move per household with its dollar sum |
-| **Amex page, never-edited debt first seen later** (round 4). Created Jun 1, never edited (`updated_at` Jun 1), first history row a Jun 15 page view. $1,000; charges $200 Jun 10, $300 Jul 10, $100 Aug 10, $50 Sep 5 | main: dated Jun 1 by `updated_at` → $1,650. Round 3: dated Jun 15 by the first row → $1,450, the Jun 10 charge dropped | Dated Jun 1 → $1,650. A first history row counts only on the household day of `updated_at`. A legacy raise that wrote the first row that same day still dates to it ($1,050), and it does not rely on `original_balance`, which such a raise also bumps |
+| **Amex page, never-edited debt first seen later** (round 4 attempt, reverted round 5). Created Jun 1, never edited (`updated_at` Jun 1), first history row a Jun 15 page view. $1,000; charges $200 Jun 10, $300 Jul 10, $100 Aug 10, $50 Sep 5 | main: dated Jun 1 by `updated_at` → $1,650. Round 4: dated Jun 1 by gating the first row on `updated_at` → $1,650 (this was the round-4 attempt, later found to be unbounded elsewhere) | **Round 5 (current head):** dated Jun 15 by the first row → $1,450, the Jun 10 charge dropped. This is round 3's rule and its documented bounded residual — see Round 5 below |
+| **Amex page, legacy raise then a later unrelated edit** (round 5 drift fix). Created Jun 1, a Sep 1 legacy raise (its only history row) to $1,000, then a later APR/name/min PATCH or Plaid refresh moves `updated_at` to Sep 10. Charges $200 Jun 10, $300 Jul 10, $400 Aug 10, $50 Sep 5 | Round 4: the first row (Sep 1) no longer matched the now-later `updated_at` (Sep 10), so it fell back to `created_at` (Jun 1) → $1,950, double-counting everything since creation. Unbounded: any later unrelated edit could trigger this on any legacy debt | **Round 5 (current head):** dated Sep 1 regardless of the later edit → $1,050. The first row always counts, so an unrelated edit can't move the date |
 | **PATCH repeating the same number** (`"5000"` for `"5000.00"`) | Treated as a change: re-dated, flipped a bank balance to manual, wrote a history row | No change |
 | **Hand-edited debts** (H1) | PATCH kept the old `last_balance_update`; POST left it null | Dated at the edit/create |
 | ↳ Amex page, hand-edited Amex-named debt | Rolled forward from the old date, counting charges already inside the typed balance (`amexEndingBalance.ts:263`, `amex.tsx:837/882`) | Rolls forward from the edit date |
@@ -141,6 +145,102 @@ top of `origin/main` `1a0c1f71` (PR-A, merged in).
 - Bank freshness ignores `amex_anchor` attempts and still sees the newest balance
   attempt after a burst (`plaidSyncAttemptBurst`).
 - No DDL.
+
+## Round 5 — round-4's `updated_at` gate reverted (owner decision)
+
+Round 4's review requested changes on the first-row rule (gate a debt's first
+`debt_balance_history` row on whether it falls on the household day of
+`debts.updated_at`). The round-4 review reproduced the finding both directions:
+
+- **(a) False negative, unbounded.** A legacy debt (`lastBalanceUpdate` NULL,
+  created Jun 1) whose only history row is a Sep 1 legacy raise (`updated_at`
+  Sep 1) dates Sep 1 correctly, September ending at $1,050. One later, wholly
+  unrelated APR edit moves `updated_at` to Sep 10; the first row (Sep 1) no
+  longer matches it, stops counting as a change, and the date falls back to
+  `created_at` (Jun 1) — September ends at $1,950, double-counting everything
+  since creation. `debts.updated_at` is bumped by writes that have nothing to
+  do with the balance: a PATCH /debts/:id name/APR/min/status edit
+  (`routes/debts.ts` ~:686) and every Plaid refresh via `applyLiabilityToDebt`
+  (~:309). Any later unrelated edit to any legacy debt could trigger this —
+  the error is unbounded, growing with how long ago the debt was created.
+- **(b) False positive.** A never-edited Jun 1 debt, first viewed Jun 15 with
+  an APR edit that same day, is dated Jun 15 → $1,450 instead of the "true"
+  $1,650 (the Jun 10 charge dropped).
+
+### Decision (lead): revert to round 3's bounded rule
+
+No read-time signal in the data separates a view-written first row from a real
+balance change. The `updated_at` rule's error (a) is unbounded — it can move a
+correctly-dated legacy debt's date all the way back to `created_at` on any
+later, wholly unrelated edit. Round 3's rule — a debt's first history row
+always counts as a change — has a bounded error instead: it can only date a
+never-edited legacy debt's balance too early, at most back to its first
+history row (usually the same day a debt is created, since it's typically
+viewed right after). Round 5 reverts `lib/debtBalanceDate.ts`
+(`lastBalanceChangeDayByDebt`, back to taking plain debt ids) and both
+`last_change` CTEs in
+`artifacts/api-server/scripts/sql/preview-debt-balance-provenance.sql` to
+round 3's rule, byte-for-byte the same behaviour as `4ffd429d`.
+
+### The bounded residual (accepted)
+
+A never-edited legacy debt whose first `debt_balance_history` row is a page
+view, not an edit, is dated by that view — dropping charges between the
+debt's creation and the view. Pinned in
+`amexAnchorDebtAsOf.integration.test.ts` ("(known residual)"): created Jun 1,
+first history row a Jun 15 view, $200 charged Jun 10 → dated Jun 15, September
+ends at $1,450 (not the "true" $1,650), with or without an APR edit landing
+the same day as the view — the rule never reads `updated_at`, so an edit that
+day changes nothing. Residuals list item 15 has the full writeup.
+
+### Owner item (not implemented here)
+
+The durable fix is a **one-time, owner-approved production backfill of
+`last_balance_update` for legacy debts** — it stamps the real answer directly
+and makes this function's first-row heuristic moot for backfilled debts. That
+is a production write and needs the owner's explicit sign-off; it is
+deliberately out of scope for this PR.
+
+## Verification (round 5, head in the report)
+
+Round 5 changes:
+- Reverted the round-4 first-row rule in `lib/debtBalanceDate.ts` and both
+  `last_change` CTEs of the preview SQL to round 3's rule; removed the now-
+  unused `updatedAt` plumbing (`lastBalanceChangeDayByDebt` takes debt ids
+  again; `routes/amex.ts`'s `AmexDebtRow` no longer selects `updatedAt`).
+  Rewrote the `debtBalanceDate.ts` doc comment with the rule, the bounded
+  residual, why `updated_at` was rejected, and the owner backfill item.
+- Replaced the round-4 `updated_at` test cases in `amexAnchorDebtAsOf` and
+  `previewDebtBalanceProvenanceSql` with the drift-fix case (locks in (a)) and
+  the known-residual case (pins (b) as accepted); kept round 3's H3 cases and
+  the empty-history fallback.
+- `docs/reviews/2026-09-11-amex-updater-provenance.md`: this section, the
+  updated figures table, and residuals item 15 (item 13 closed).
+- `origin/main` moved (PR-C, `193af636`, recurring/forecast/ledger/
+  billsSummary/reviewCount and generated clients) and was merged in; only
+  generated `.map` files conflicted, resolved by regenerating via
+  `pnpm --filter @workspace/api-spec run codegen`. No spec change from this PR.
+
+Results:
+- `pnpm run typecheck`: green.
+- Web: `TZ=UTC` 140 files, 1148 passed / 3 skipped. `TZ=America/Chicago` 140 files,
+  1149 passed / 2 skipped.
+- API, full suite: 146 files, 1416 passed / 7 todo.
+- Build + entry graph: OK, landing 574.8 KB against the 580 KB cap (unchanged —
+  this PR touches no web code).
+- Codegen: no spec change from this PR; PR-C's spec change
+  (`recurringItemMoveResult`, `updateRecurringItemResponse`) came in on the
+  merge and was regenerated as part of resolving the merge's generated-file
+  conflicts.
+- **The round-5 drift-fix test fails on `46668d6b`** (round 4's head):
+  `amexAnchorDebtAsOf` "(round 5) a legacy raise on Sep 1 ... even after a
+  later unrelated edit moves updated_at to Sep 10" — expected dated Sep 1 /
+  $1,050, got dated Jun 1 (would price at $1,950). Verified by swapping in
+  `46668d6b`'s `debtBalanceDate.ts` / `routes/amex.ts` / preview SQL, running
+  just that test, then restoring the round-5 files.
+  - Guards passing on both round 4 and round 5: the H3 repro ($1,050 with a
+    null date), the stale bank date case, the empty-history fallback, and a
+    later `last_balance_update` winning over history.
 
 ## Verification (round 4, head in the report)
 
@@ -254,20 +354,34 @@ Results:
     The next page view on a later day writes a row that differs from the previous
     one, so the balance is dated at that view. Charges between the write and that
     view are dropped; the gap is at most write → next view.
-13. **An edit after a legacy first-row change** (round 4, from the decided rule). A
-    debt whose ONLY history rows start with a pre-merge hand edit (never viewed
-    before it) and which was then edited again on a later day without a balance
-    change (an APR edit, say) moves `updated_at` off that first row's day. That
-    first row then no longer counts, and the debt falls back to `created_at`,
-    counting charges twice. It needs a debt that was never viewed between creation
-    and its first hand edit. Query 2 (`debt_tier_date_move = 'earlier'`,
-    `amex_rows_between_dates`) sizes it on production.
+13. ~~**An edit after a legacy first-row change** (round 4, from the decided
+    rule).~~ **CLOSED in round 5** — this was round 4's own bug, fixed by
+    reverting the `updated_at` gate. See item 15 for round 5's residual, which
+    replaces it.
 14. **Account dedupe moves history** (round 4, NIT). `dedupePlaidAccounts` (~:240)
     repoints a losing debt's `debt_balance_history` rows onto the surviving debt, so
     the merged history can show an apparent balance change on a day nothing was
     typed, which dates the survivor at that day.
 11. A caller that sends `lastBalanceUpdate` with a PATCH/POST balance keeps that date.
     The web never sends one.
+15. **A never-edited legacy debt is dated by its first page view, not its creation**
+    (round 5, KNOWN, ACCEPTED). Round 3's rule, restored in round 5: a debt's first
+    `debt_balance_history` row always counts as a change. GET /debts writes a row
+    for every active debt on every view, so a never-edited legacy debt's first row
+    is usually just the day someone first looked, not a real balance change.
+    Counting it drops the charges between the debt's creation and that first view
+    (a Jun 1 debt first viewed Jun 15 with $200 of Jun 10 charges is dated Jun 15,
+    dropping that $200; see the Figures table and
+    `amexAnchorDebtAsOf.integration.test.ts` "(known residual)"). Bounded: at most
+    creation → first history row, and in practice usually the same day since a
+    debt is typically viewed right after it's created. Round 4's attempt to close
+    this (gate the first row on `updated_at`) was rejected instead of kept, because
+    its own error was unbounded (item 13, now closed) — `updated_at` is bumped by
+    a PATCH /debts/:id name/APR/min/status edit and by every Plaid refresh via
+    `applyLiabilityToDebt`, neither of which has anything to do with the balance.
+    **The durable fix is a one-time, owner-approved production backfill of
+    `last_balance_update` for legacy debts** (a production write, out of scope
+    here — needs the owner's explicit sign-off before it runs).
 
 ## Owner decisions still open
 

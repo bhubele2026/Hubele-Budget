@@ -3,7 +3,7 @@ import { db, debtBalanceHistoryTable } from "@workspace/db";
 import { householdDayOf } from "./householdClock";
 
 /**
- * ⭐ WHEN WAS THIS DEBT'S BALANCE SET? (PR-E review H3)
+ * ⭐ WHEN WAS THIS DEBT'S BALANCE SET? (PR-E review H3, round 5)
  *
  * `debts.last_balance_update` is not enough on its own. Before PR-E a hand edit
  * (PATCH /debts/:id) never stamped it: a legacy debt kept NULL (so the date fell
@@ -18,32 +18,42 @@ import { householdDayOf } from "./householdClock";
  * what counts as a change; as an instant, noon UTC on that day,
  * the convention POST /amex/anchor uses for a bare day). A stamp on or after
  * that day wins; history can only move the date later.
+ *
+ * Round 4 tried gating a debt's first history row on whether its household day
+ * matched `debts.updated_at`, to stop a never-edited legacy debt's first-viewed
+ * day (GET /debts writes a history row for every active debt on every view)
+ * from being read as a real balance change. Review rejected it: `updated_at` is
+ * bumped by writes that have nothing to do with the balance — a PATCH
+ * /debts/:id name/APR/min/status edit (routes/debts.ts) and every Plaid refresh
+ * via `applyLiabilityToDebt` — so a debt dated correctly from a legacy raise
+ * could lose that date to a later unrelated edit and fall back to `created_at`,
+ * double-counting everything since creation (unbounded). It could also date a
+ * never-touched debt from an APR edit made the same day as its first view
+ * (false positive). Both reproduced in
+ * `amexAnchorDebtAsOf.integration.test.ts`.
+ *
+ * Round 5 reverts to round 3's rule: a debt's first row always counts as a
+ * change. Its error is bounded, not unbounded — it can only date a
+ * never-edited legacy debt's balance at its first-viewed day, dropping charges
+ * between creation and that day (usually the same day, since a debt is
+ * typically viewed right after it's created). The durable fix is a one-time,
+ * owner-approved production backfill of `last_balance_update` for legacy
+ * debts, which stamps the real answer directly and makes this function's
+ * first-row heuristic moot for backfilled debts. That backfill is a production
+ * write and is out of scope here.
  */
 
 /**
- * The household day each debt's balance last changed in `debt_balance_history`.
- * The SAME definition as the `last_change` CTE in
- * artifacts/api-server/scripts/sql/preview-debt-balance-provenance.sql:
- *
- *   - a later row is a change when its balance differs from the row before it;
- *   - (PR-E review, decided) a debt's FIRST row is a change only when its
- *     household day equals the household day of `debts.updated_at`.
- *
- * Why the first-row condition: GET /debts writes a row for every active debt on
- * every view (so do a Plaid refresh, an archive and "Use bank balance"), so a
- * never-edited debt's first row is usually just the day someone first looked.
- * Counting it dated a Jun 1 balance at a Jun 15 view and dropped the charges in
- * between. A pre-merge hand edit that wrote the first row also moved
- * `updated_at` that day, so that case still counts. (Comparing the first row to
- * `original_balance` would not work: a legacy raise bumps that too.)
+ * The household day each debt's balance last changed in `debt_balance_history`:
+ * the newest row whose balance differs from the row before it, a debt's first
+ * row counting as a change. The SAME definition as the `last_change` CTE in
+ * artifacts/api-server/scripts/sql/preview-debt-balance-provenance.sql.
  */
 export async function lastBalanceChangeDayByDebt(
-  debts: Array<{ id: string; updatedAt: Date }>,
+  debtIds: string[],
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  if (debts.length === 0) return out;
-  const debtIds = debts.map((d) => d.id);
-  const updatedDay = new Map(debts.map((d) => [d.id, householdDayOf(d.updatedAt)]));
+  if (debtIds.length === 0) return out;
   const rows = await db
     .select({
       debtId: debtBalanceHistoryTable.debtId,
@@ -61,11 +71,7 @@ export async function lastBalanceChangeDayByDebt(
       prevDebt = r.debtId;
       prevCents = null;
     }
-    const isChange =
-      prevCents === null
-        ? r.recordedOn === updatedDay.get(r.debtId)
-        : cents !== prevCents;
-    if (isChange) out.set(r.debtId, r.recordedOn);
+    if (prevCents === null || cents !== prevCents) out.set(r.debtId, r.recordedOn);
     prevCents = cents;
   }
   return out;

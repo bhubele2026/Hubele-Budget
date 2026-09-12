@@ -35,7 +35,8 @@ const U2 = `preview-sql-b-${tag}`;
 const U3 = `preview-sql-c-${tag}`;
 const U4 = `preview-sql-d-${tag}`;
 const U5 = `preview-sql-e-${tag}`;
-const USERS = [U1, U2, U3, U4, U5];
+const U6 = `preview-sql-f-${tag}`;
+const USERS = [U1, U2, U3, U4, U5, U6];
 const H: Record<string, string> = {};
 const ids: Record<string, string> = {};
 
@@ -215,8 +216,11 @@ beforeAll(async () => {
     updatedAt: new Date("2026-09-01T17:00:00.000Z"),
   });
 
-  // Household E (review M1): created Jun 1 and never edited; its first history
-  // row is a Jun 15 page view. The first row is not a change.
+  // Household E (round 5 known residual): created Jun 1 and never edited; its
+  // first history row is a Jun 15 page view. The rule's first row always
+  // counts as a change, so this dates the debt Jun 15 — dropping the Jun 10
+  // charge before it. Bounded, and documented as the one known residual of
+  // reverting the round-4 updated_at-gated rule.
   const viewedDebt = await debt(U5, {
     name: "American Express",
     balance: "1000.00",
@@ -236,6 +240,28 @@ beforeAll(async () => {
     amount: "200.00",
     source: "amex",
   });
+
+  // Household F (round 5 drift fix): a legacy raise on Sep 1 (its only
+  // history row), then a later unrelated PATCH (an APR/name/min edit, or a
+  // Plaid refresh) moves updated_at to Sep 10. Round 4's rule un-matched the
+  // first row against the now-later updated_at and fell back to created_at
+  // (Jun 1) — unbounded. Round 5's rule (the first row always counts) still
+  // dates this Sep 1 regardless of the later edit.
+  const driftDebt = await debt(U6, {
+    name: "American Express",
+    balance: "1000.00",
+    lastBalanceUpdate: null,
+    createdAt: new Date("2026-06-01T17:00:00.000Z"),
+    updatedAt: new Date("2026-09-10T15:00:00.000Z"),
+  });
+  await db.insert(debtBalanceHistoryTable).values({
+    userId: U6,
+    householdId: H[U6]!,
+    debtId: driftDebt,
+    recordedOn: "2026-09-01",
+    balance: "1000.00",
+  });
+
   await db.insert(debtBalanceHistoryTable).values({
     userId: U4,
     householdId: H[U4]!,
@@ -349,11 +375,24 @@ describe("(PR-E review M1) preview-debt-balance-provenance.sql", () => {
     expect(householdRow(U1).debt_tier_date_move).toBeNull();
   });
 
-  it("(review M1) does not date a never-edited debt by its first page-view history row", () => {
+  it("(round 5 known residual) dates a never-edited debt by its first page-view history row", () => {
     const e = householdRow(U5);
     expect(e).toMatchObject({ source_today: "debt", source_after_merge: "debt" });
-    expect((e.debt_tier_as_of_after_merge as Date).toISOString()).toBe("2026-06-01T17:00:00.000Z");
-    expect(e.debt_tier_date_move).toBe("same day");
+    // Today: updated_at Jun 1 (never edited). After: the first history row,
+    // Jun 15 — the documented bounded residual, not the "true" Jun 1.
+    expect((e.debt_tier_as_of_today as Date).toISOString()).toBe("2026-06-01T17:00:00.000Z");
+    expect((e.debt_tier_as_of_after_merge as Date).toISOString()).toBe("2026-06-15T12:00:00.000Z");
+    expect(e.debt_tier_date_move).toBe("later");
+  });
+
+  it("(round 5 drift fix) a legacy raise's date survives a later unrelated edit to updated_at", () => {
+    const f = householdRow(U6);
+    expect(f).toMatchObject({ source_today: "debt", source_after_merge: "debt" });
+    // Today: updated_at Sep 10 (the later unrelated edit). After: still the
+    // Sep 1 balance change — unmoved by that edit.
+    expect((f.debt_tier_as_of_today as Date).toISOString()).toBe("2026-09-10T15:00:00.000Z");
+    expect((f.debt_tier_as_of_after_merge as Date).toISOString()).toBe("2026-09-01T12:00:00.000Z");
+    expect(f.debt_tier_date_move).toBe("earlier");
   });
 
   it("lists the Amex cards the automatic sweep will link to a same-name manual debt", () => {
