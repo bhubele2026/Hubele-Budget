@@ -65,13 +65,20 @@ row always counts. Amounts are signed; `difference` is |txn| − |plan|
 "medium" or "low".
 (Decision 13) `tier` is what the pair proves: 1 explicit (a
 checking row tagged to the plan's debt); 2 obligation evidence (not
-ambiguous, on the checking account, paying the plan − max($1, 1%)
-to the plan + max($25, 10%), and the bill's own category when no
-other active bill has it, or its full name when no other active
-item's full name is in the row, or some of its name within
-max($1, 1%) and 5 days); 3 a suggestion only. Only a match with
-`offCurve` true (`tier` ≤ 2) is off the forecast curve, and only a
-tier 1 or 2 pair pays an overdue bill; every other plan still counts.
+ambiguous, a checking-cash row that is not a logged debt payment,
+paying at most the plan + max($25, 10%), and either strong evidence
+paying at least the plan − max($25, 10%) — the plan's own category
+when no other active item of its direction carries it, or a
+description the user confirmed for this item before — or name
+evidence paying at least the plan − max($1, 1%): its full name when
+no other active item's full name is in the row, some of its name
+within 5 days, or some of its name anywhere in the window when no
+other active item shares a name word with the row); 3 a suggestion
+only. `offCurve` is true for a tier 1 or 2 pair paying at least the
+plan − max($1, 1%): only those plans are off the forecast curve
+before they are due. Once due, a tier 1 or 2 pair pays the bill and
+only an unpaid remainder over $1 stays on the curve; a tier 3 pair
+pays nothing and every other plan still counts.
  */
   matches?: CashSignalMatchesItem[];
 }

@@ -687,8 +687,11 @@ describe("debt tag — a row tagged to a debt pays that debt's overdue minimum",
     expect(paidList(sig).filter((p) => p[1] >= "2026-05-01")).toEqual([
       ["Chase Freedom minimum", "2026-05-03", "debt_tag", "0.00"],
     ]);
-    // The matcher is unchanged: the pair is still offered as a suggestion.
-    expect(sig.matches?.find((m) => m.planItemId === `debt:${sapphire}`)).toMatchObject({ txnId: pay, confidence: "medium", ambiguous: false, offCurve: false });
+    // (Decision 13, fix 7) REPLACES "the matcher is unchanged: the pair [with Sapphire] is still
+    // offered as a suggestion". A pair that can be evidence is taken first: the Freedom-tagged row
+    // now pairs with Freedom's own minimum (tier 1), so Sapphire has no pair. Same figures.
+    expect(sig.matches?.find((m) => m.planItemId === `debt:${sapphire}`)).toBeUndefined();
+    expect(sig.matches?.find((m) => m.planItemId === `debt:${freedom}`)).toMatchObject({ txnId: pay, tier: 1, offCurve: true });
   });
 });
 
@@ -718,8 +721,12 @@ describe("review M1 — a row tagged to one debt never takes another debt's mini
       txnId: pay,
       confidence: "debt_tag",
     });
-    // The pair stays a suggestion, never off the curve.
-    expect(sig.matches?.find((m) => m.planKey === `debt:${sapphire}|2026-05-08`)).toMatchObject({ txnId: pay, confidence: "high", offCurve: false });
+    // (Decision 13, fix 7) REPLACES "the pair [with Sapphire's 05-08 minimum] stays a suggestion,
+    // never off the curve". A pair that can be evidence is taken first: the Freedom-tagged row now
+    // pairs with Freedom's overdue minimum (tier 1), so Sapphire's 05-08 minimum has no pair and stays
+    // on the curve. Same figures.
+    expect(sig.matches?.find((m) => m.planKey === `debt:${sapphire}|2026-05-08`)).toBeUndefined();
+    expect(sig.matches?.find((m) => m.planKey === `debt:${freedom}|2026-04-28`)).toMatchObject({ txnId: pay, tier: 1, offCurve: true });
     expect((sig.events ?? []).some((e) => e.itemId === `debt:${sapphire}` && e.date === "2026-05-08")).toBe(true);
 
     // T6c, the same row untagged: unchanged from base — it pays Sapphire's 05-08 (off the curve), Freedom drags.
@@ -820,10 +827,13 @@ describe("decision 13 — only tier-1/2 evidence pays an overdue bill", () => {
   }
   const may = (sig: CashSignal, itemId: string) => sig.matches?.find((m) => m.planKey === `${itemId}|2026-05-01`);
 
-  it("HELOC: FIGURE LENDING −1,185.19 in 'HELOC (Figure)', a category on that bill only → tier 2, paid, +55.19 (max safe extra 5,500)", async () => {
+  it("HELOC: FIGURE LENDING −1,185.19 in 'HELOC (Figure)', a category on that bill only → tier 2, paid, +55.19 (max safe extra 5,500); (fix 8) a December one-time bill in the category doesn't break it", async () => {
     await snapshot({ balance: "6000" });
     const H = randomUUID();
     const heloc = await bill({ name: "Figure HELOC", amount: "1130", dayOfMonth: 1, categoryId: H });
+    // (Fix 8) Active, one-time, same category, but dated more than 31 days from every
+    // HELOC occurrence the matcher grades — and past the horizon, so off the curve.
+    await bill({ name: "Figure closing fee", amount: "250", frequency: "onetime", dayOfMonth: null, anchorDate: "2026-12-01", categoryId: H });
     await paycheck("1130");
     await catRow("2026-04-01", "-1185.19", "FIGURE LENDING", H);
     const txn = await catRow("2026-05-01", "-1185.19", "FIGURE LENDING", H);
@@ -843,8 +853,9 @@ describe("decision 13 — only tier-1/2 evidence pays an overdue bill", () => {
     await snapshot({ balance: "6000" });
     const H = randomUUID();
     const heloc = await bill({ name: "Figure HELOC", amount: "1130", dayOfMonth: 1, categoryId: H });
-    // Active, one-time in December: no occurrence in the window, but it shares the category.
-    await bill({ name: "Figure annual fee", amount: "75", frequency: "onetime", dayOfMonth: null, anchorDate: "2026-12-01", categoryId: H });
+    // Active, one-time on 03-31: within 31 days of both HELOC occurrences (fix 8), so it
+    // shares the category; before the first of last month, so it is never dragged or listed.
+    await bill({ name: "Figure annual fee", amount: "75", frequency: "onetime", dayOfMonth: null, anchorDate: "2026-03-31", categoryId: H });
     await paycheck("1130");
     await catRow("2026-04-01", "-1185.19", "FIGURE LENDING", H);
     const txn = await catRow("2026-05-01", "-1185.19", "FIGURE LENDING", H);
@@ -870,7 +881,8 @@ describe("decision 13 — only tier-1/2 evidence pays an overdue bill", () => {
     expect(balanceOn(unique, "2026-05-10")).toBe("6000.00");
     expect(unique.matches?.find((m) => m.planKey === `${heloc}|2026-05-10`)).toMatchObject({ txnId: txn, dayDelta: -6, difference: "55.19", tier: 2, offCurve: true });
 
-    await bill({ name: "Figure annual fee", amount: "75", frequency: "onetime", dayOfMonth: null, anchorDate: "2026-12-01", categoryId: H });
+    // One-time on 04-10: within 31 days of May's HELOC (fix 8); overdue 25 days, so only listed.
+    await bill({ name: "Figure annual fee", amount: "75", frequency: "onetime", dayOfMonth: null, anchorDate: "2026-04-10", categoryId: H });
     const shared = await signal();
     expect(balanceOn(shared, "2026-05-10")).toBe("4870.00");
     expect(shared.matches?.find((m) => m.planKey === `${heloc}|2026-05-10`)).toMatchObject({ txnId: txn, tier: 3, offCurve: false });
@@ -880,8 +892,10 @@ describe("decision 13 — only tier-1/2 evidence pays an overdue bill", () => {
     await snapshot({ balance: "3000" });
     const U = randomUUID();
     const fios = await bill({ name: "Verizon Fios", amount: "120", dayOfMonth: 1, categoryId: U });
-    await bill({ name: "City Water", amount: "60", frequency: "onetime", dayOfMonth: null, anchorDate: "2026-12-01", categoryId: U });
-    await bill({ name: "Evergy Electric", amount: "150", frequency: "onetime", dayOfMonth: null, anchorDate: "2026-12-01", categoryId: U });
+    // One-time on 03-31: within 31 days of April's and May's Fios (fix 8), and before
+    // the first of last month, so never dragged or listed.
+    await bill({ name: "City Water", amount: "60", frequency: "onetime", dayOfMonth: null, anchorDate: "2026-03-31", categoryId: U });
+    await bill({ name: "Evergy Electric", amount: "150", frequency: "onetime", dayOfMonth: null, anchorDate: "2026-03-31", categoryId: U });
     await paycheck("120");
     await catRow("2026-04-01", "-120.00", "VERIZON FIOS", U);
     const txn = await catRow("2026-05-01", "-98.00", "VERIZON WIRELESS", U);

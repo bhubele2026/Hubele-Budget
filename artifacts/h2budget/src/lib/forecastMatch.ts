@@ -106,8 +106,10 @@ export type ProbablyPaid = {
   dayDelta: number;
   confidence: string;
   ambiguous: boolean;
-  /** (Decision 13) The server's tier; 3 when it sent none. */
-  tier: number;
+  /** (Decision 13) The server's tier. Optional so every builder of this object
+   *  (a stored `needs_review` pair, test fixtures) need not supply it; a
+   *  missing tier reads as 3, a suggestion. `offCurve` still decides. */
+  tier?: number;
   /** The server's curve already leaves the plan out. */
   offCurve: boolean;
   txnDate: string;

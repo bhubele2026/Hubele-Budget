@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import {
   db,
+  debtsTable,
   forecastSettingsTable,
   recurringItemsTable,
   transactionsTable,
@@ -28,6 +29,7 @@ async function cleanup(): Promise<void> {
   await db.delete(forecastResolutionsTable).where(eq(forecastResolutionsTable.userId, TEST_USER));
   await db.delete(transactionsTable).where(eq(transactionsTable.userId, TEST_USER));
   await db.delete(recurringItemsTable).where(eq(recurringItemsTable.userId, TEST_USER));
+  await db.delete(debtsTable).where(eq(debtsTable.userId, TEST_USER));
   await db.delete(forecastSettingsTable).where(eq(forecastSettingsTable.userId, TEST_USER));
   await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.userId, TEST_USER));
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
@@ -303,9 +305,19 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
 
   it("a logged Avalanche payment plus its bank debit do not take two different card minimums off the curve", async () => {
     await snapshotOnChase();
-    await plan("Chase Freedom minimum", "50");
+    const freedomBill = await plan("Chase Freedom minimum", "50");
     await plan("Chase Sapphire minimum", "40");
-    await row("2026-05-12", "-50", "Payment — Chase Freedom", { manual: true });
+    // What `POST /debts/:id/payments` writes: a manual row tagged to the debt.
+    // (Decision 13) Such a logged payment is never evidence; an untagged manual
+    // checking row is cash and would be. The bill is linked to the debt, so the
+    // debt adds no second minimum of its own.
+    const [freedom] = await db
+      .insert(debtsTable)
+      .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, name: "Chase Freedom", type: "credit_card", balance: "900", minPayment: "50", dueDay: 20, status: "active" })
+      .returning({ id: debtsTable.id });
+    await db.update(recurringItemsTable).set({ debtId: freedom!.id }).where(eq(recurringItemsTable.id, freedomBill));
+    const logged = await row("2026-05-12", "-50", "Payment — Chase Freedom", { manual: true });
+    await db.update(transactionsTable).set({ debtId: freedom!.id }).where(eq(transactionsTable.id, logged));
     await row("2026-05-13", "-50", "CHASE CREDIT CRD AUTOPAY");
 
     const sig = await signal();
@@ -328,7 +340,17 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
     expect(matchFor(sig, `${vzw}|2026-05-20`)).toMatchObject({ confidence: "medium", offCurve: false });
   });
 
-  it("(PR5 second review) a nameless pair never marks last month paid: April 'paid' by HOME DEPOT, its late payment can't take May off", async () => {
+  // ⭐ (Decision 13, fix 3) REPLACES "(PR5 second review) a nameless pair never
+  // marks last month paid: April 'paid' by HOME DEPOT, its late payment can't take
+  // May off" (05-20 700.00, May's pair on the curve). The lead's ruling: an earlier
+  // occurrence with a non-ambiguous pair of its own, of ANY tier, is not unpaid —
+  // pairing is one to one, so its row is a different row from the later pair's.
+  // Holding May back left an exact, full-name May payment on the curve twice (a
+  // July paid by a tier-3 row held back August's exact $672.80 Toyota payment).
+  // ⚠️ Reverses the PR5 second review's guard: here April's pair is a nameless
+  // HOME DEPOT row, and if April's water bill was in fact unpaid, the forecast now
+  // reads $150 high until April's suggestion is answered.
+  it("(decision 13, fix 3) an earlier occurrence with its own non-ambiguous pair, any tier, does not hold back a later payment: April 'paid' by HOME DEPOT, May's exact full-name payment is off the curve (700 → 850)", async () => {
     await snapshotOnChase();
     const water = await plan("City Water", "150");
     await row("2026-04-21", "-150", "HOME DEPOT 4411");
@@ -337,8 +359,9 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
     const sig = await signal();
 
     expect(sig.bankToday).toBe("850.00");
-    expect(balanceOn(sig, "2026-05-20")).toBe("700.00");
-    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ offCurve: false });
+    expect(balanceOn(sig, "2026-05-20")).toBe("850.00");
+    expect(matchFor(sig, `${water}|2026-04-20`)).toMatchObject({ confidence: "low", ambiguous: false, tier: 3, offCurve: false });
+    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ tier: 2, offCurve: true });
   });
 
   it("last month's bill paid late never takes this month's bill off the curve", async () => {

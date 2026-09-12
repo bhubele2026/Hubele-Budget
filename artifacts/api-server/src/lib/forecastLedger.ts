@@ -17,6 +17,7 @@ import {
   addDaysISO,
   classifyCashRows,
   isBankRow,
+  MATCH_CONFIRMED_DESCRIPTORS,
   MATCH_EARLY_DAYS,
   matchPlansToRows,
   plansPaidInFullByName,
@@ -588,6 +589,7 @@ export async function buildForecastLedger(
   );
   const matchedTxnBankSet = new Set<string>();
   const resolvedTxnAmount = new Map<string, number>();
+  const resolvedTxnDescription = new Map<string, string | null>();
   if (matchedIds.length > 0) {
     const matchedTxns = await db
       .select({
@@ -595,6 +597,7 @@ export async function buildForecastLedger(
         source: transactionsTable.source,
         plaidAccountId: transactionsTable.plaidAccountId,
         amount: transactionsTable.amount,
+        description: transactionsTable.description,
       })
       .from(transactionsTable)
       .where(
@@ -605,9 +608,30 @@ export async function buildForecastLedger(
       );
     for (const t of matchedTxns) {
       resolvedTxnAmount.set(t.id, Number(t.amount) || 0);
+      resolvedTxnDescription.set(t.id, t.description ?? null);
       if (isBankRow(t.source, t.plaidAccountId ?? null, configuredCheckingExternalId)) {
         matchedTxnBankSet.add(t.id);
       }
+    }
+  }
+  // ⭐ (Decision 13, d) CONFIRMED DESCRIPTORS — a reliable payment reference. The
+  // descriptions of the rows the user confirmed ("matched" or "partial") for each
+  // item, newest occurrence first, at most MATCH_CONFIRMED_DESCRIPTORS per item. A
+  // later row whose description fuzzy-equals one of them is tier-2 evidence for the
+  // same item ("MADISON GAS EL" for MGE after one confirmed month). No extra query:
+  // the read above already loads every resolved row.
+  const confirmedDescriptionsByItem = new Map<string, string[]>();
+  {
+    const confirmed = resolutionsAll
+      .filter((r) => (r.status === "matched" || r.status === "partial") && r.recurringItemId && r.matchedTxnId)
+      .sort((a, b) => ((a.occurrenceDate ?? "") < (b.occurrenceDate ?? "") ? 1 : (a.occurrenceDate ?? "") > (b.occurrenceDate ?? "") ? -1 : 0));
+    for (const r of confirmed) {
+      const list = confirmedDescriptionsByItem.get(r.recurringItemId!) ?? [];
+      if (list.length >= MATCH_CONFIRMED_DESCRIPTORS) continue;
+      const description = resolvedTxnDescription.get(r.matchedTxnId!);
+      if (!description) continue;
+      list.push(description);
+      confirmedDescriptionsByItem.set(r.recurringItemId!, list);
     }
   }
   const matchedPlanKeys = new Set<string>();
@@ -731,9 +755,17 @@ export async function buildForecastLedger(
   // against: each recurring item marked active (whatever its dates), and each debt
   // minimum and the Avalanche extra the forecast expanded. Never just the plans
   // inside the matching window: a bill due next month still shares its category.
+  // (Fix 8) A one-time item carries its date: it shares a category with a plan only
+  // when dated within 31 days of it.
   const matchItems: MatchItem[] = recurring
     .filter((r) => r.active === "true")
-    .map((r) => ({ itemId: r.id, label: r.name, categoryId: r.categoryId ?? null, income: r.kind === "income" }));
+    .map((r) => ({
+      itemId: r.id,
+      label: r.name,
+      categoryId: r.categoryId ?? null,
+      income: r.kind === "income",
+      oneTimeDate: r.frequency === "onetime" ? r.anchorDate ?? null : null,
+    }));
   const syntheticItemIds = new Set<string>();
   for (const ev of events) {
     if (recurringById.has(ev.itemId) || syntheticItemIds.has(ev.itemId)) continue;
@@ -780,6 +812,7 @@ export async function buildForecastLedger(
       label: ev.label,
       categoryId: recurringById.get(ev.itemId)?.categoryId ?? null,
       debtId: planDebtId(ev.itemId),
+      confirmedDescriptions: confirmedDescriptionsByItem.get(ev.itemId) ?? [],
     };
     if (inMatchWindow) matchPlans.push(plan);
     else listingPlans.push(plan);
@@ -824,10 +857,14 @@ export async function buildForecastLedger(
       // manual row's tag is ignored here, so the row is read exactly as before the tag
       // rule. (`o.counts` already keeps out Plaid rows on other accounts.)
       const full = candidateRowsAll[i]!;
-      // (Decision 13) Only a Plaid row on the configured checking account can be
-      // tier-1 or tier-2 evidence; a manual row stays a suggestion at most.
-      const onChecking = !!row.plaidAccountId && row.plaidAccountId === configuredCheckingExternalId;
-      const bankTag = full.debtId && onChecking ? full.debtId : null;
+      // (Decision 13, fix 4) Every row here counts as checking cash (`o.counts`: a
+      // Plaid row on the configured account, or a manual/imported checking row). Any
+      // of them can be evidence — a cash row that proves nothing would leave its bill
+      // dragging while the row also subtracts — EXCEPT a manual row carrying a debt
+      // tag: a payment logged in the app against a debt (PR-F pairs those).
+      const plaidChecking = !!row.plaidAccountId && row.plaidAccountId === configuredCheckingExternalId;
+      const onChecking = plaidChecking || !full.debtId;
+      const bankTag = full.debtId && plaidChecking ? full.debtId : null;
       const candidate: MatchRow = {
         txnId: row.id,
         occurredOn: row.occurredOn,
@@ -838,6 +875,7 @@ export async function buildForecastLedger(
         debtId: bankTag,
         categoryId: full.categoryId ?? null,
         onChecking,
+        plaidChecking,
       };
       if (row.occurredOn >= listRowFromISO) listingRows.push(candidate);
       if (row.occurredOn >= rowMatchFromISO) matchRows.push(candidate);
@@ -860,9 +898,26 @@ export async function buildForecastLedger(
     //
     // (PR5 review) A later occurrence never leaves the curve on a row dated on or
     // after an earlier occurrence of the same item that no row paid.
-    // (PR5 second review) Only a pair carrying the payee's name counted as paying an
-    // occurrence; (decision 13) now only a tier-1 or tier-2 pair does.
-    const pairedKeys = new Set(matches.filter((m) => m.tier <= 2).map((m) => m.planKey));
+    // ⭐ (Decision 13, fix 3) An earlier occurrence is NOT unpaid when it has a
+    // non-ambiguous pair of its own, of ANY tier: pairing is one to one, so its row
+    // is a different row from the later pair's. Holding the later pair back put an
+    // exact payment on the curve twice (a July paid by a tier-3 row held back
+    // August's exact $672.80 Toyota payment). A pair whose row is tagged to another
+    // debt pays nothing, so it doesn't count. (PR5 second review counted only a named
+    // pair; the first decision-13 head only a tier-1/2 pair.)
+    const planByKey = new Map(matchPlans.map((p) => [p.key, p] as const));
+    const rowDebtById = new Map(matchRows.map((r) => [r.txnId, r.debtId ?? null] as const));
+    const pairedKeys = new Set(
+      matches
+        .filter((m) => {
+          if (m.tier <= 2) return true;
+          if (m.ambiguous) return false;
+          const rowDebt = rowDebtById.get(m.txnId) ?? null;
+          const planDebt = planByKey.get(m.planKey)?.debtId ?? null;
+          return !(rowDebt && planDebt && rowDebt !== planDebt);
+        })
+        .map((m) => m.planKey),
+    );
     const unpaidByItem = new Map<string, string[]>();
     for (const p of matchPlans) {
       if (pairedKeys.has(p.key)) continue;
@@ -871,7 +926,6 @@ export async function buildForecastLedger(
       unpaidByItem.set(p.itemId, list);
     }
     const rowDateById = new Map(matchRows.map((r) => [r.txnId, r.occurredOn] as const));
-    const planByKey = new Map(matchPlans.map((p) => [p.key, p] as const));
     // The rule applies where `offCurve` decides the curve — a plan due after the
     // cutoff, or a weekly-cadence expense (`keepsPreSnapshotRule`) — and a pair it
     // holds back drops to tier 3, so `offCurve` stays `tier ≤ 2`. A plan already due
@@ -936,7 +990,9 @@ export async function buildForecastLedger(
   // still needs `offCurve` (never set on a pair whose row is tagged to another debt).
   const paidByKey = new Map<string, { txnId: string; txnAmount: number; confidence: string }>();
   for (const m of evidencePairs) {
-    paidByKey.set(m.planKey, { txnId: m.txnId, txnAmount: m.txnAmount, confidence: m.confidence });
+    // (Decision 13) A tier-1 tag pair reads as the tag, as `plansPaidInFullByName`'s does.
+    const confidence = m.evidence === "debt_tag" ? "debt_tag" : m.confidence;
+    paidByKey.set(m.planKey, { txnId: m.txnId, txnAmount: m.txnAmount, confidence });
   }
   for (const c of cardPayments) {
     if (!paidByKey.has(c.planKey)) {
