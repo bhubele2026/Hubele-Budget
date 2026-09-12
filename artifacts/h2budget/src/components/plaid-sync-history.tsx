@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, Link2, Copy, Check } from "lucide-react";
 import { dispatchPlaidReconnect } from "@/components/plaid-reconnect-listener";
 import { useToast } from "@/hooks/use-toast";
+import { householdDateTimeLabel } from "@/lib/householdDay";
 
 function CopyRequestIdButton({
   attemptId,
@@ -342,7 +343,7 @@ export function PlaidSyncHistory({
                               data-testid={`sync-attempt-streak-${a.id}`}
                             >
                               {a.failureCount} times · failing since{" "}
-                              {new Date(a.firstFailedAt ?? a.attemptedAt).toLocaleString()}
+                              {householdDateTimeLabel(a.firstFailedAt ?? a.attemptedAt)}
                             </span>
                           ) : null}
                         </span>

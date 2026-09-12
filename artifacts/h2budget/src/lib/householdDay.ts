@@ -14,6 +14,7 @@ import {
   addDaysISO,
   householdDateOf,
   householdToday,
+  HOUSEHOLD_TZ,
   monthBounds,
   weekBounds,
 } from "@workspace/avalanche-core/householdTime";
@@ -38,6 +39,43 @@ export function householdDayOfAt(at: string): string {
   // error panel. Fall back to the text's own date prefix, as the old slice did.
   if (Number.isNaN(instant.getTime())) return at.slice(0, 10);
   return householdDateOf(instant);
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * "Sep 10" for a stored timestamp (or bare day) on the household calendar, with
+ * the year only when it isn't this household year. "date unknown" for none.
+ */
+export function householdDayLabel(
+  at: string | null | undefined,
+  today: string = householdToday(),
+): string {
+  if (!at) return "date unknown";
+  const day = householdDayOfAt(at);
+  const m = Number(day.slice(5, 7));
+  const d = Number(day.slice(8, 10));
+  if (!(m >= 1 && m <= 12) || !(d >= 1 && d <= 31)) return "date unknown";
+  const label = `${MONTHS[m - 1]} ${d}`;
+  return day.slice(0, 4) === today.slice(0, 4) ? label : `${label}, ${day.slice(0, 4)}`;
+}
+
+/**
+ * "Sep 11, 4:05 AM" for a stored instant, in household time — never the
+ * browser's zone, which would put a failure on another day for a viewer
+ * elsewhere. "time unknown" for a malformed value.
+ */
+export function householdDateTimeLabel(at: string, today: string = householdToday()): string {
+  const instant = new Date(at);
+  if (Number.isNaN(instant.getTime())) return "time unknown";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: HOUSEHOLD_TZ,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(instant);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${householdDayLabel(at, today)}, ${part("hour")}:${part("minute")} ${part("dayPeriod").toUpperCase()}`;
 }
 
 /**

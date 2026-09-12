@@ -36,10 +36,17 @@ WITH history AS (
   FROM debt_balance_history dbh
 ),
 last_change AS (
-  SELECT debt_id, max(recorded_on) AS last_balance_change_on
-  FROM history
-  WHERE prev_balance IS NULL OR prev_balance <> balance
-  GROUP BY debt_id
+  -- The day a debt's balance last changed (lib/debtBalanceDate.ts, same rule):
+  -- a later row when its balance differs from the row before; the FIRST row
+  -- only when it falls on the household day of debts.updated_at (a page view
+  -- writes a row for every active debt, so a first row alone is not a change).
+  SELECT h.debt_id, max(h.recorded_on) AS last_balance_change_on
+  FROM history h
+  JOIN debts dd ON dd.id = h.debt_id
+  WHERE (h.prev_balance IS NULL
+         AND h.recorded_on = (dd.updated_at AT TIME ZONE 'America/Chicago')::date)
+     OR (h.prev_balance IS NOT NULL AND h.prev_balance <> h.balance)
+  GROUP BY h.debt_id
 ),
 base AS (
   SELECT
@@ -169,10 +176,17 @@ WITH history AS (
   FROM debt_balance_history dbh
 ),
 last_change AS (
-  SELECT debt_id, max(recorded_on) AS last_balance_change_on
-  FROM history
-  WHERE prev_balance IS NULL OR prev_balance <> balance
-  GROUP BY debt_id
+  -- The day a debt's balance last changed (lib/debtBalanceDate.ts, same rule):
+  -- a later row when its balance differs from the row before; the FIRST row
+  -- only when it falls on the household day of debts.updated_at (a page view
+  -- writes a row for every active debt, so a first row alone is not a change).
+  SELECT h.debt_id, max(h.recorded_on) AS last_balance_change_on
+  FROM history h
+  JOIN debts dd ON dd.id = h.debt_id
+  WHERE (h.prev_balance IS NULL
+         AND h.recorded_on = (dd.updated_at AT TIME ZONE 'America/Chicago')::date)
+     OR (h.prev_balance IS NOT NULL AND h.prev_balance <> h.balance)
+  GROUP BY h.debt_id
 ),
 amex_accounts AS (
   SELECT pa.household_id, pa.id, pa.type, pa.liability_kind, pa.liability_balance

@@ -9,24 +9,11 @@ import {
 import type { Debt } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { btnLink } from "@/ui";
-import { householdDayOfAt, householdToday } from "@/lib/householdDay";
+import { householdDayLabel } from "@/lib/householdDay";
 import { isPlaidReauthCode } from "@/components/plaid-reconnect-button";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 /** "Sep 10" on the household calendar; the year only when it isn't this year. */
-export function balanceDayLabel(
-  at: string | null | undefined,
-  today: string = householdToday(),
-): string {
-  if (!at) return "date unknown";
-  const day = householdDayOfAt(at);
-  const m = Number(day.slice(5, 7));
-  const d = Number(day.slice(8, 10));
-  if (!(m >= 1 && m <= 12) || !(d >= 1 && d <= 31)) return "date unknown";
-  const label = `${MONTHS[m - 1]} ${d}`;
-  return day.slice(0, 4) === today.slice(0, 4) ? label : `${label}, ${day.slice(0, 4)}`;
-}
+export const balanceDayLabel = householdDayLabel;
 
 /**
  * ⭐ WHOSE BALANCE IS THIS (PR-E). Debt detail rows only — never the landing or

@@ -260,6 +260,8 @@ describe("(PR-E review H3) a legacy or stale balance date is moved to the day th
     lastBalanceUpdate: Date | null;
     history: Array<{ recordedOn: string; balance: string }>;
     rows: Array<{ occurredOn: string; amount: number }>;
+    updatedAt?: Date;
+    originalBalance?: string | null;
   }): Promise<void> {
     for (const r of opts.rows) {
       await db.insert(transactionsTable).values({
@@ -279,8 +281,9 @@ describe("(PR-E review H3) a legacy or stale balance date is moved to the day th
         name: "American Express",
         balance: "1000.00",
         lastBalanceUpdate: opts.lastBalanceUpdate,
+        originalBalance: opts.originalBalance ?? null,
         createdAt: new Date("2026-06-01T17:00:00.000Z"),
-        updatedAt: new Date("2026-09-01T17:00:00.000Z"),
+        updatedAt: opts.updatedAt ?? new Date("2026-09-01T17:00:00.000Z"),
       })
       .returning({ id: debtsTable.id });
     for (const h of opts.history) {
@@ -319,6 +322,50 @@ describe("(PR-E review H3) a legacy or stale balance date is moved to the day th
       history: [
         { recordedOn: "2026-07-01", balance: "700.00" },
         { recordedOn: "2026-08-15", balance: "700.00" },
+        { recordedOn: "2026-09-01", balance: "1000.00" },
+        { recordedOn: "2026-09-09", balance: "1000.00" },
+      ],
+      rows: LEGACY_ROWS,
+    });
+
+    const body = await getAnchor();
+
+    expect(householdDay(body.asOf)).toBe("2026-09-01");
+    expect(endOfSeptember2026(body, LEGACY_ROWS)).toBe(1050);
+  });
+
+  it("(review M1) a never-edited debt whose first history row is a Jun 15 page view stays dated Jun 1 → $1,650 (not $1,450)", async () => {
+    const rows = [
+      { occurredOn: "2026-06-10", amount: 200 },
+      { occurredOn: "2026-07-10", amount: 300 },
+      { occurredOn: "2026-08-10", amount: 100 },
+      { occurredOn: "2026-09-05", amount: 50 },
+    ];
+    await seedLegacyDebt({
+      lastBalanceUpdate: null,
+      // Created Jun 1 and never edited: updated_at is its creation.
+      updatedAt: new Date("2026-06-01T17:00:00.000Z"),
+      // Page views from Jun 15 on, the balance never changing.
+      history: [
+        { recordedOn: "2026-06-15", balance: "1000.00" },
+        { recordedOn: "2026-07-20", balance: "1000.00" },
+        { recordedOn: "2026-09-09", balance: "1000.00" },
+      ],
+      rows,
+    });
+
+    const body = await getAnchor();
+
+    expect(householdDay(body.asOf)).toBe("2026-06-01");
+    expect(endOfSeptember2026(body, rows)).toBe(1650);
+  });
+
+  it("(review M1) a legacy raise on the first history day, which also bumped original_balance and updated_at that day, still dates Sep 1 → $1,050", async () => {
+    await seedLegacyDebt({
+      lastBalanceUpdate: null,
+      originalBalance: "1000.00",
+      updatedAt: new Date("2026-09-01T17:00:00.000Z"),
+      history: [
         { recordedOn: "2026-09-01", balance: "1000.00" },
         { recordedOn: "2026-09-09", balance: "1000.00" },
       ],

@@ -65,7 +65,10 @@ top of `origin/main` `1a0c1f71` (PR-A, merged in).
    - GET /amex/anchor dates a debt-row answer by the debts' balance date. For each
      debt it is the LATER of `last_balance_update` (else `created_at`) and the
      household day its balance last changed in `debt_balance_history`. That day is
-     the newest row whose balance differs from the row before, a first row counting;
+     the newest row whose balance differs from the row before. (Round 4, decided) A
+     debt's FIRST row counts only when it falls on the household day of the debt's
+     `updated_at`: a page view writes a row for every active debt, so a first row
+     alone is usually a view, not an edit;
      it is the same definition as the preview SQL's `last_change`, taken as noon UTC
      on that day.
    - Across debts the latest date is used. It never uses `updated_at` or the saved
@@ -116,6 +119,7 @@ top of `origin/main` `1a0c1f71` (PR-A, merged in).
 | **Amex page label**, household with Amex rows and an Amex Plaid item but no saved anchor and no debt/Plaid balance | "Calculated" (the refresh threw, so no anchor was ever written) | "From saved anchor" after its next Amex sync (query 2 `source_after_merge`) |
 | **Amex page, debt-row answer** (H2) — e.g. a manual "American Express" $1,000 dated Sep 1, charges $100 Sep 3 + $50 Sep 5, an updater-written anchor | main: dated the later of `updated_at` and the anchor's asOf; round 1: the refresh moved the anchor to today → $1,000 as of Sep 11, the $150 lost | $1,000 as of Sep 1 → September ends at $1,150 (query 2 `debt_tier_as_of_today` / `_after_merge`) |
 | **Amex page, legacy / stale balance date** (H3). An "American Express" debt created Jun 1, `last_balance_update` NULL, typed to $1,000 on Sep 1 by the pre-merge PATCH (history row that day). Charges $200 Jun 10, $300 Jul 10, $400 Aug 10, $50 Sep 5 | main: dated by `updated_at` Sep 1 → $1,050 (right by accident; an APR edit after Sep 1 would have dropped the Sep 5 charge). Round 2: dated Jun 1 → $1,950, charges counted twice. The same with an old bank date left in `last_balance_update` | Dated Sep 1, the day the balance last changed → September ends at $1,050. Rule: the later of `last_balance_update ?? created_at` and that history day; no data written. Query 2 flags the move per household with its dollar sum |
+| **Amex page, never-edited debt first seen later** (round 4). Created Jun 1, never edited (`updated_at` Jun 1), first history row a Jun 15 page view. $1,000; charges $200 Jun 10, $300 Jul 10, $100 Aug 10, $50 Sep 5 | main: dated Jun 1 by `updated_at` → $1,650. Round 3: dated Jun 15 by the first row → $1,450, the Jun 10 charge dropped | Dated Jun 1 → $1,650. A first history row counts only on the household day of `updated_at`. A legacy raise that wrote the first row that same day still dates to it ($1,050), and it does not rely on `original_balance`, which such a raise also bumps |
 | **PATCH repeating the same number** (`"5000"` for `"5000.00"`) | Treated as a change: re-dated, flipped a bank balance to manual, wrote a history row | No change |
 | **Hand-edited debts** (H1) | PATCH kept the old `last_balance_update`; POST left it null | Dated at the edit/create |
 | ↳ Amex page, hand-edited Amex-named debt | Rolled forward from the old date, counting charges already inside the typed balance (`amexEndingBalance.ts:263`, `amex.tsx:837/882`) | Rolls forward from the edit date |
@@ -138,7 +142,34 @@ top of `origin/main` `1a0c1f71` (PR-A, merged in).
   attempt after a burst (`plaidSyncAttemptBurst`).
 - No DDL.
 
-## Verification (round 3, head in the report)
+## Verification (round 4, head in the report)
+
+Round 4 changes:
+- The decided first-row rule, in `lib/debtBalanceDate.ts` (the Amex route passes each
+  debt's `updated_at`) and in both `last_change` CTEs of the preview SQL, with
+  household (America/Chicago) days in both.
+- "failing since" in Recent activity is formatted in household time
+  (`householdDateTimeLabel`, new in `lib/householdDay.ts` next to
+  `householdDayLabel`, which the debt row lines now share).
+- `origin/main` has not moved since PR-A2 (`6b355065`).
+
+Results:
+- `pnpm run typecheck`: green.
+- Web: `TZ=UTC` 137 files, 1123 passed / 3 skipped. `TZ=America/Chicago` 137 files,
+  1124 passed / 2 skipped.
+- API, full suite: ROUND4_API_COUNTS.
+- Build + entry graph: OK, landing 574.8 KB against the 580 KB cap.
+- Codegen: no spec change; a re-run leaves the tree clean.
+- **Round-4 tests fail on `46cafeb4`** — 2 API, 1 web:
+  - `amexAnchorDebtAsOf`: the never-edited debt with a Jun 15 first view
+    ($1,450 → $1,650).
+  - `previewDebtBalanceProvenanceSql`: household E, the same case in SQL.
+  - `plaidSyncHistoryFailureStreak`: "failing since Sep 11, 4:00 AM" in household
+    time.
+  - Guards passing on both: a legacy raise on the first history day ($1,050); the
+    existing H3 cases ($1,050 twice, later date wins, empty history).
+
+## Verification (round 3)
 
 - `pnpm run typecheck`: green.
 - Web: `TZ=UTC` 137 files, 1123 passed / 3 skipped. `TZ=America/Chicago` 137 files,
@@ -218,12 +249,23 @@ top of `origin/main` `1a0c1f71` (PR-A, merged in).
 10. A debt-row answer combining several Amex debts is dated by the latest balance date
     among them (as before with `updated_at`). A workbook-imported debt with no
     balance date and no history is dated by its creation.
-12. **First history row counts as a change** (the rule the reviewer set, shared with
-    the preview SQL). A debt never edited whose first `debt_balance_history` row came
-    from a GET /debts snapshot days after it was created or imported is dated at
-    that first snapshot. That drops Amex charges between import and first view.
-    Query 2's `debt_tier_date_move = 'later'` with `amex_rows_between_dates` sizes
-    it on production.
+12. **A write that skipped history, then a later view** (round 4). The restore
+    script or the old Amex updater changed a balance without writing a history row.
+    The next page view on a later day writes a row that differs from the previous
+    one, so the balance is dated at that view. Charges between the write and that
+    view are dropped; the gap is at most write → next view.
+13. **An edit after a legacy first-row change** (round 4, from the decided rule). A
+    debt whose ONLY history rows start with a pre-merge hand edit (never viewed
+    before it) and which was then edited again on a later day without a balance
+    change (an APR edit, say) moves `updated_at` off that first row's day. That
+    first row then no longer counts, and the debt falls back to `created_at`,
+    counting charges twice. It needs a debt that was never viewed between creation
+    and its first hand edit. Query 2 (`debt_tier_date_move = 'earlier'`,
+    `amex_rows_between_dates`) sizes it on production.
+14. **Account dedupe moves history** (round 4, NIT). `dedupePlaidAccounts` (~:240)
+    repoints a losing debt's `debt_balance_history` rows onto the surviving debt, so
+    the merged history can show an apparent balance change on a day nothing was
+    typed, which dates the survivor at that day.
 11. A caller that sends `lastBalanceUpdate` with a PATCH/POST balance keeps that date.
     The web never sends one.
 

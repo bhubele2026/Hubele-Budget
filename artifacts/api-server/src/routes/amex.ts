@@ -221,6 +221,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     balance: string;
     lastBalanceUpdate: Date | null;
     createdAt: Date;
+    updatedAt: Date;
   };
   let debt: { id: string; balance: string; balanceAsOf: Date } | undefined;
   let debtRows: AmexDebtRow[] = [];
@@ -231,7 +232,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
         .select({
           id: debtsTable.id,
           balance: debtsTable.balance,
-          lastBalanceUpdate: debtsTable.lastBalanceUpdate, createdAt: debtsTable.createdAt,
+          lastBalanceUpdate: debtsTable.lastBalanceUpdate, createdAt: debtsTable.createdAt, updatedAt: debtsTable.updatedAt,
         })
         .from(debtsTable)
         .where(
@@ -262,7 +263,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
         .select({
           id: debtsTable.id,
           balance: debtsTable.balance,
-          lastBalanceUpdate: debtsTable.lastBalanceUpdate, createdAt: debtsTable.createdAt,
+          lastBalanceUpdate: debtsTable.lastBalanceUpdate, createdAt: debtsTable.createdAt, updatedAt: debtsTable.updatedAt,
         })
         .from(debtsTable)
         .where(
@@ -283,7 +284,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       .select({
         id: debtsTable.id,
         balance: debtsTable.balance,
-        lastBalanceUpdate: debtsTable.lastBalanceUpdate, createdAt: debtsTable.createdAt,
+        lastBalanceUpdate: debtsTable.lastBalanceUpdate, createdAt: debtsTable.createdAt, updatedAt: debtsTable.updatedAt,
       })
       .from(debtsTable)
       .where(
@@ -307,7 +308,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     // `last_balance_update` NULL or at an old bank date, which counted charges
     // twice. `debtBalanceAsOf` takes the later of that date (else created_at)
     // and the day the balance last changed in debt_balance_history.
-    const lastChangeDay = await lastBalanceChangeDayByDebt(debtRows.map((r) => r.id));
+    const lastChangeDay = await lastBalanceChangeDayByDebt(debtRows);
     const balanceAsOf = debtRows.reduce<Date>((acc, r) => {
       const at = debtBalanceAsOf(r, lastChangeDay.get(r.id));
       return at > acc ? at : acc;

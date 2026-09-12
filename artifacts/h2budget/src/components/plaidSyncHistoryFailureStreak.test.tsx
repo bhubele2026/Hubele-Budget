@@ -59,14 +59,14 @@ beforeEach(() => {
 });
 
 describe("PlaidSyncHistory — collapsed failure streaks (PR-E)", () => {
-  it("shows how many times a row failed and when the streak began", () => {
-    const since = "2026-09-11T09:00:00.000Z";
-    mockAttempts = [attempt({ id: "a1", failureCount: 7, firstFailedAt: since })];
+  it("shows how many times a row failed and when the streak began, in household (Chicago) time whatever the browser's zone", () => {
+    // 09:00 UTC is 4:00 AM in Chicago on Sep 11.
+    mockAttempts = [
+      attempt({ id: "a1", failureCount: 7, firstFailedAt: "2026-09-11T09:00:00.000Z" }),
+    ];
     renderHistory();
     const streak = screen.getByTestId("sync-attempt-streak-a1");
-    expect(streak.textContent).toBe(
-      `7 times · failing since ${new Date(since).toLocaleString()}`,
-    );
+    expect(streak.textContent).toMatch(/^7 times · failing since Sep 11(, 2026)?, 4:00 AM$/);
   });
 
   it("says nothing extra for a failure that happened once", () => {

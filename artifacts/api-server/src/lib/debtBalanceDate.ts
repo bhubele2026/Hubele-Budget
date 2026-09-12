@@ -14,22 +14,36 @@ import { householdDayOf } from "./householdClock";
  * backfilled; the date is read, never written.
  *
  * The rule: the later of `last_balance_update ?? created_at` and the household
- * day the balance last changed in history (as an instant, noon UTC on that day,
+ * day the balance last changed in history (see `lastBalanceChangeDayByDebt` for
+ * what counts as a change; as an instant, noon UTC on that day,
  * the convention POST /amex/anchor uses for a bare day). A stamp on or after
  * that day wins; history can only move the date later.
  */
 
 /**
- * The household day each debt's balance last changed in `debt_balance_history`:
- * the newest row whose balance differs from the row before it, a debt's first
- * row counting as a change. The SAME definition as the `last_change` CTE in
- * artifacts/api-server/scripts/sql/preview-debt-balance-provenance.sql.
+ * The household day each debt's balance last changed in `debt_balance_history`.
+ * The SAME definition as the `last_change` CTE in
+ * artifacts/api-server/scripts/sql/preview-debt-balance-provenance.sql:
+ *
+ *   - a later row is a change when its balance differs from the row before it;
+ *   - (PR-E review, decided) a debt's FIRST row is a change only when its
+ *     household day equals the household day of `debts.updated_at`.
+ *
+ * Why the first-row condition: GET /debts writes a row for every active debt on
+ * every view (so do a Plaid refresh, an archive and "Use bank balance"), so a
+ * never-edited debt's first row is usually just the day someone first looked.
+ * Counting it dated a Jun 1 balance at a Jun 15 view and dropped the charges in
+ * between. A pre-merge hand edit that wrote the first row also moved
+ * `updated_at` that day, so that case still counts. (Comparing the first row to
+ * `original_balance` would not work: a legacy raise bumps that too.)
  */
 export async function lastBalanceChangeDayByDebt(
-  debtIds: string[],
+  debts: Array<{ id: string; updatedAt: Date }>,
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  if (debtIds.length === 0) return out;
+  if (debts.length === 0) return out;
+  const debtIds = debts.map((d) => d.id);
+  const updatedDay = new Map(debts.map((d) => [d.id, householdDayOf(d.updatedAt)]));
   const rows = await db
     .select({
       debtId: debtBalanceHistoryTable.debtId,
@@ -47,7 +61,11 @@ export async function lastBalanceChangeDayByDebt(
       prevDebt = r.debtId;
       prevCents = null;
     }
-    if (prevCents === null || cents !== prevCents) out.set(r.debtId, r.recordedOn);
+    const isChange =
+      prevCents === null
+        ? r.recordedOn === updatedDay.get(r.debtId)
+        : cents !== prevCents;
+    if (isChange) out.set(r.debtId, r.recordedOn);
     prevCents = cents;
   }
   return out;
