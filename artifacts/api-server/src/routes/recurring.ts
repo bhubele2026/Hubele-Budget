@@ -14,6 +14,7 @@ import {
   DeleteRecurringItemParams,
 } from "@workspace/api-zod";
 import { archiveExpiredOneTime } from "./bills";
+import { moveOneTimeResolutions, oneTimeDateMove } from "../lib/oneTimeBillMove";
 import { MY_BUDGET_GROUP } from "./budget";
 
 const router: IRouter = Router();
@@ -123,16 +124,28 @@ router.patch(
         return;
       }
     }
-    const [row] = await db
-      .update(recurringItemsTable)
-      .set(parsed.data)
-      .where(
-        and(
-          eq(recurringItemsTable.id, params.data.id),
-          eq(recurringItemsTable.householdId, req.householdId!),
-        ),
-      )
-      .returning();
+    // ⭐ (One-time bill move) The item update and the move of its answers are one
+    // transaction: a moved one-time bill keeps its match, skip or rejection on the
+    // new date, and a match the new date puts in question becomes `needs_review`.
+    // Bank rows are never written. See `lib/oneTimeBillMove.ts`.
+    const householdId = req.householdId!;
+    const row = await db.transaction(async (tx) => {
+      const where = and(
+        eq(recurringItemsTable.id, params.data.id),
+        eq(recurringItemsTable.householdId, householdId),
+      );
+      const [before] = await tx
+        .select({ frequency: recurringItemsTable.frequency, anchorDate: recurringItemsTable.anchorDate })
+        .from(recurringItemsTable)
+        .where(where)
+        .for("update");
+      if (!before) return null;
+      const [updated] = await tx.update(recurringItemsTable).set(parsed.data).where(where).returning();
+      if (!updated) return null;
+      const move = oneTimeDateMove(before, parsed.data);
+      if (move) await moveOneTimeResolutions(tx, householdId, updated.id, move.from, move.to);
+      return updated;
+    });
     if (!row) {
       res.status(404).json({ error: "Not found" });
       return;

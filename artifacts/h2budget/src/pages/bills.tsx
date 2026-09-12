@@ -63,6 +63,7 @@ import {
   btnDanger,
   btnLink,
   btnLinkDanger,
+  btnSecondary,
   card,
   cardHead,
   emptyNote,
@@ -383,30 +384,62 @@ export default function BillsPage() {
     setDialogOpen(true);
   };
 
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // ⭐ (One-time bill move) Editing a one-time item offers two different acts:
+  //   - "Move this bill" (the default save, labelled so once the date changes):
+  //     the SAME bill on a new date. The server keeps its match, skip and
+  //     history on the new date, and asks for review when the new date is too far
+  //     from the bank row that paid it;
+  //   - "Create another bill": a NEW one-time item with the edited fields. The
+  //     bill being edited is not touched.
+  const editingOneTime = !!editing && editing.frequency === "onetime" && form.frequency === "onetime";
+  const movesOneTime =
+    editingOneTime && !!form.oneTimeDate && form.oneTimeDate !== (editing?.anchorDate ?? "");
+  const itemNoun = form.kind === "income" ? "item" : "bill";
+
+  const validateForm = (): boolean => {
     if (!form.name.trim()) {
       toast({ title: "Name is required", variant: "destructive" });
-      return;
+      return false;
     }
     const amt = parseFloat(form.amount);
     if (!Number.isFinite(amt) || amt < 0) {
       toast({ title: "Amount must be a positive number", variant: "destructive" });
-      return;
+      return false;
     }
     if (form.frequency === "onetime" && !form.oneTimeDate) {
       toast({ title: "Pick a date for the one-time item", variant: "destructive" });
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const onCreateAnother = () => {
+    if (!validateForm()) return;
+    createItem.mutate(
+      { data: buildPayload(form) },
+      {
+        onSuccess: () => {
+          invalidateAll();
+          setDialogOpen(false);
+          toast({ title: `Added another ${itemNoun}` });
+        },
+      },
+    );
+  };
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
     const payload = buildPayload(form);
     if (editing) {
+      const moved = movesOneTime;
       updateItem.mutate(
         { id: editing.id, data: payload },
         {
           onSuccess: () => {
             invalidateAll();
             setDialogOpen(false);
-            toast({ title: "Saved" });
+            toast({ title: moved ? `Moved this ${itemNoun}` : "Saved" });
           },
         },
       );
@@ -1212,14 +1245,30 @@ export default function BillsPage() {
               ) : (
                 <span />
               )}
-              <button
-                type="submit"
-                className={btn}
-                disabled={createItem.isPending || updateItem.isPending}
-                data-testid="button-save"
-              >
-                {editing ? "Save changes" : "Add item"}
-              </button>
+              <span className="flex flex-wrap items-center justify-end gap-2">
+                {editingOneTime && (
+                  <>
+                    <Help>{`Move this ${itemNoun} keeps its match, skip and history on the new date. Create another ${itemNoun} adds a separate one with these details and leaves this one as it is.`}</Help>
+                    <button
+                      type="button"
+                      className={btnSecondary}
+                      disabled={createItem.isPending || updateItem.isPending}
+                      onClick={onCreateAnother}
+                      data-testid="button-create-another"
+                    >
+                      Create another {itemNoun}
+                    </button>
+                  </>
+                )}
+                <button
+                  type="submit"
+                  className={btn}
+                  disabled={createItem.isPending || updateItem.isPending}
+                  data-testid="button-save"
+                >
+                  {editing ? (movesOneTime ? `Move this ${itemNoun}` : "Save changes") : "Add item"}
+                </button>
+              </span>
             </DialogFooter>
           </form>
         </DialogContent>

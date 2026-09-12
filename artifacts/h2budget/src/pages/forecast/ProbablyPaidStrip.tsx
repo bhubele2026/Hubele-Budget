@@ -6,6 +6,7 @@ import {
   DayDelta,
   curveHelp,
   curveLabel,
+  REVIEW_HELP,
   type SuggestionAnswer,
 } from "./probablyPaidText";
 
@@ -37,7 +38,14 @@ export function ProbablyPaidStrip({
       className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-control bg-white px-2 py-1.5 text-micro ring-1 ring-brand-navy/25"
       data-testid={`probably-paid-${txnId}`}
     >
-      <span className="chip info">Suggested</span>
+      {/* (One-time bill move) A confirmed match whose bill was moved away from
+          its row reads "Match needs review": same answers, no confidence. */}
+      <span
+        className={`chip ${pp.needsReview ? "warn" : "info"}`}
+        data-testid={`probably-paid-kind-${txnId}`}
+      >
+        {pp.needsReview ? "Match needs review" : "Suggested"}
+      </span>
       <span className="max-w-[160px] truncate font-semibold text-neutral-700">
         {plan.label}
       </span>
@@ -54,14 +62,19 @@ export function ProbablyPaidStrip({
       <span className="text-neutral-500" data-testid={`probably-paid-days-${txnId}`}>
         <DayDelta days={pp.dayDelta} />
       </span>
-      <span className="uppercase tracking-wide text-neutral-400">
-        {pp.confidence}
-        {pp.ambiguous ? " · close call" : ""}
-      </span>
+      {!pp.needsReview && (
+        <span
+          className="uppercase tracking-wide text-neutral-400"
+          data-testid={`probably-paid-confidence-${txnId}`}
+        >
+          {pp.confidence}
+          {pp.ambiguous ? " · close call" : ""}
+        </span>
+      )}
       <span className="text-neutral-500" data-testid={`probably-paid-curve-${txnId}`}>
         {curveLabel(pp.offCurve)}
       </span>
-      <Help>{curveHelp(pp.offCurve)}</Help>
+      <Help>{pp.needsReview ? REVIEW_HELP : curveHelp(pp.offCurve)}</Help>
       <span className="ml-auto flex items-center gap-1.5">
         <button
           type="button"

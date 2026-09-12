@@ -117,6 +117,10 @@ export async function archiveExpiredOneTime(householdId: string): Promise<void> 
   const archive = expired
     .filter((item) => {
       const own = resolutions.filter((r) => r.recurringItemId === item.id);
+      // (One-time bill move) A match the move put in question waits for an answer:
+      // `needs_review` is unresolved, and the bill stays active — past the 60 days
+      // too — until the user confirms or rejects the pair.
+      if (own.some((r) => r.status === "needs_review")) return false;
       const moved = own.find((r) => r.status === "rescheduled" && r.occurrenceDate === item.anchorDate);
       const dueISO = moved?.rescheduledTo ?? item.anchorDate!;
       const resolved = own.some(

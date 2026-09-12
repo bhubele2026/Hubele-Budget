@@ -30,12 +30,16 @@ export function applyResolutionWrite(
   const kept = list.filter((r) => {
     if (r.id === row.id) return false;
     if (row.status === "not_match") {
-      return !(samePair(r) && (r.status === "not_match" || r.status === "matched" || r.status === "partial"));
+      return !(
+        samePair(r) &&
+        (r.status === "not_match" || r.status === "matched" || r.status === "partial" || r.status === "needs_review")
+      );
     }
     if (r.status === "not_match") return !samePair(r);
     if (samePlan(r)) {
       if (row.status === "partial" && r.status === "rescheduled") return true;
-      if (row.status === "rescheduled" && r.status === "partial") return true;
+      // (One-time bill move) A move keeps a `needs_review` pair open too.
+      if (row.status === "rescheduled" && (r.status === "partial" || r.status === "needs_review")) return true;
       return false;
     }
     return !sameTxn(r);

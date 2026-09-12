@@ -103,6 +103,17 @@ export const MATCH_STRICT_DAYS = 3;
 export const MATCH_OFF_CURVE_SHARE = 0.1;
 
 /**
+ * (One-time bill move) Is a row dated `rowISO` inside the matcher's date window
+ * for a plan due `planISO` — 10 days before to 14 days after the plan, the same
+ * bounds `matchPlansToRows` applies? A confirmed match whose plan is moved
+ * outside this window is no longer believable without a fresh answer.
+ */
+export function rowInMatchWindow(planISO: string, rowISO: string): boolean {
+  const dayDelta = dayNumber(rowISO) - dayNumber(planISO);
+  return dayDelta >= -MATCH_EARLY_DAYS && dayDelta <= MATCH_LATE_DAYS;
+}
+
+/**
  * Words that appear in plan labels or bank descriptions without identifying a
  * payee. Every debt minimum's label ends in "minimum"; the avalanche plan is
  * "Avalanche extra payment"; bank rows say "ACH PMT", "AUTOPAY", "ONLINE"; and

@@ -31,6 +31,7 @@ export {
   MATCH_OFF_CURVE_SHARE,
   MATCH_STOP_WORDS,
   MATCH_STRICT_DAYS,
+  rowInMatchWindow,
   type MatchConfidence,
   type MatchPlan,
   type MatchRow,

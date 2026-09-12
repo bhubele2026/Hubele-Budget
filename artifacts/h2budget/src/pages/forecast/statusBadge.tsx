@@ -25,6 +25,8 @@ const CHIP: Record<string, { label: string; tone: string }> = {
   /** (PR5) A bank row probably paid it. Whether the curve still counts it is
    *  said separately ("Out of forecast" / "Still in forecast"). */
   suggested: { label: "Suggested", tone: "info" },
+  /** (One-time bill move) A confirmed match the bill's new date put in question. */
+  needs_review: { label: "Match needs review", tone: "warn" },
   matched: { label: "Matched", tone: "ok" },
   partial: { label: "Partly paid", tone: "warn" },
   missed: { label: "Missed", tone: "bad" },

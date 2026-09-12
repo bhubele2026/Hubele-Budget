@@ -1128,12 +1128,13 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
   if (status === "not_match") {
     // Rejecting a pair replaces that pair's earlier answers: a previous
     // rejection, or a match / partial confirmation the user now takes back.
+    // (One-time bill move) It also answers a `needs_review` on the same pair.
     await db
       .delete(forecastResolutionsTable)
       .where(
         and(
           eq(forecastResolutionsTable.householdId, householdId),
-          inArray(forecastResolutionsTable.status, ["not_match", "matched", "partial"]),
+          inArray(forecastResolutionsTable.status, ["not_match", "matched", "partial", "needs_review"]),
           eq(forecastResolutionsTable.recurringItemId, recurringItemId),
           eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
           eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
@@ -1152,7 +1153,11 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
             // (PR5 review) A partial confirmation and a reschedule of the same
             // plan coexist: the remainder is due on the date the user moved it to.
             ...(status === "partial" ? [ne(forecastResolutionsTable.status, "rescheduled")] : []),
-            ...(status === "rescheduled" ? [ne(forecastResolutionsTable.status, "partial")] : []),
+            // (One-time bill move) A move is not an answer: a `needs_review` pair
+            // stays open beside it, like a partial, until Confirm / Not this.
+            ...(status === "rescheduled"
+              ? [ne(forecastResolutionsTable.status, "partial"), ne(forecastResolutionsTable.status, "needs_review")]
+              : []),
           ),
         );
     }

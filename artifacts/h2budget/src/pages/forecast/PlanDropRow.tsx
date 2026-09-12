@@ -222,7 +222,7 @@ export function PlanDropRow({
         </div>
       </div>
       <div className="flex w-full items-center justify-end gap-3 sm:w-auto sm:gap-4">
-        {statusBadge(pp ? "suggested" : row.status)}
+        {statusBadge(pp ? (pp.needsReview ? "needs_review" : "suggested") : row.status)}
         <span
           className={`font-mono text-label tabular-nums ${
             row.amount < 0 ? "text-bad" : "text-brand-navy"

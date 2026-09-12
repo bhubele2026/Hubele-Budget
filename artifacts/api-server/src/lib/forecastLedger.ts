@@ -707,6 +707,10 @@ export async function buildForecastLedger(
       }
       continue;
     }
+    // (One-time bill move) A `needs_review` pair is in none of the key sets above,
+    // so its plan is unresolved and weighs on the curve by the usual rules. It
+    // still holds its row: that row waits for the user's answer on the pair and is
+    // not offered to another plan meanwhile.
     if (r.matchedTxnId) claimedTxnIds.add(r.matchedTxnId);
     if (r.status === "partial" && r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
       partialTxnByKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, r.matchedTxnId);

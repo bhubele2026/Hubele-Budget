@@ -66,7 +66,11 @@ export type ResolutionStatus =
    *  neither the plan nor the row — both stay open. */
   | "not_match"
   /** (PR5) The row paid part of the plan; the remainder stays planned. */
-  | "partial";
+  | "partial"
+  /** (One-time bill move) A match or partial whose one-time bill was moved
+   *  outside the matcher's window. Unresolved on both sides; shown as
+   *  "Match needs review" until the user confirms or rejects the pair. */
+  | "needs_review";
 
 /** One pair from `CashSignal.matches` (PR5a), as the API sends it. */
 export type CashSignalMatch = {
@@ -106,6 +110,10 @@ export type ProbablyPaid = {
   offCurve: boolean;
   txnDate: string;
   txnDescription: string | null;
+  /** (One-time bill move) Not a server suggestion: a stored `needs_review`
+   *  pair — a match whose bill was moved away from its row. Never off the
+   *  curve; answered with the same Confirm / Not this. */
+  needsReview?: boolean;
 };
 
 export type Resolution = {
@@ -302,10 +310,23 @@ export function buildLineRegister(opts: {
   const rescheduleByKey = new Map<string, Resolution>();
   const byTxn = new Map<string, Resolution>();
   const rejectedPairs = new Set<string>();
+  const reviewByKey = new Map<string, Resolution>();
+  const reviewTxnIds = new Set<string>();
   for (const r of resolutions) {
     if (r.status === "not_match") {
       if (r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
         rejectedPairs.add(`${r.recurringItemId}|${r.occurrenceDate}#${r.matchedTxnId}`);
+      }
+      continue;
+    }
+    // (One-time bill move) A `needs_review` pair decides neither side either:
+    // the plan stays open (on the curve) and the row stays in Review. Both show
+    // it as the pair to answer — "Match needs review" — in place of any server
+    // suggestion.
+    if (r.status === "needs_review") {
+      if (r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
+        reviewByKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, r);
+        reviewTxnIds.add(r.matchedTxnId);
       }
       continue;
     }
@@ -347,6 +368,8 @@ export function buildLineRegister(opts: {
     if (matchByPlanKey.has(m.planKey) || pairedTxnIds.has(m.txnId)) continue;
     if (rejectedPairs.has(`${m.planKey}#${m.txnId}`)) continue;
     if (byTxn.has(m.txnId)) continue;
+    // (One-time bill move) A row or plan in a `needs_review` pair carries that pair.
+    if (reviewTxnIds.has(m.txnId) || reviewByKey.has(m.planKey)) continue;
     matchByPlanKey.set(m.planKey, m);
     pairedTxnIds.add(m.txnId);
   }
@@ -386,8 +409,32 @@ export function buildLineRegister(opts: {
     else status = "pending_plan";
 
     let probablyPaid: ProbablyPaid | undefined;
+    // (One-time bill move) The stored `needs_review` pair, when the plan is still
+    // open and its row is not decided elsewhere. The row's own fields come from
+    // the register when it is in the window, else from the bundle's join.
+    const review = reviewByKey.get(origKey);
+    if (review?.matchedTxnId && (status === "pending_plan" || status === "future")) {
+      const bank = bankById.get(review.matchedTxnId);
+      const txnDate = bank?.date ?? review.txnDate ?? null;
+      const txnAmount = bank ? bank.amount : toNum(review.txnAmount);
+      if ((!bank || bank.status === "pending_bank") && txnDate && txnAmount != null) {
+        probablyPaid = {
+          txnId: review.matchedTxnId,
+          planDate: ev.date,
+          txnAmount,
+          difference: Math.round((Math.abs(txnAmount) - Math.abs(ev.amount)) * 100) / 100,
+          dayDelta: Math.round((parseISO(txnDate) - parseISO(date)) / DAY),
+          confidence: "review",
+          ambiguous: false,
+          offCurve: false,
+          txnDate,
+          txnDescription: bank?.txn.description ?? review.txnDescription ?? null,
+          needsReview: true,
+        };
+      }
+    }
     const m = matchByPlanKey.get(origKey);
-    if (m && (status === "pending_plan" || status === "future")) {
+    if (!probablyPaid && m && (status === "pending_plan" || status === "future")) {
       const bank = bankById.get(m.txnId);
       probablyPaid = {
         txnId: m.txnId,
