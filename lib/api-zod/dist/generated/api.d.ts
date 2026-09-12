@@ -4343,6 +4343,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         weeksInMonth: string;
     }>;
     replacedPendingIds: zod.ZodArray<zod.ZodString, "many">;
+    inheritedCategories: zod.ZodArray<zod.ZodObject<{
+        transactionId: zod.ZodString;
+        categoryId: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        categoryId: string;
+        transactionId: string;
+    }, {
+        categoryId: string;
+        transactionId: string;
+    }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     monthStart: string;
     monthPinned: boolean;
@@ -4481,6 +4491,10 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         weeksInMonth: string;
     };
     replacedPendingIds: string[];
+    inheritedCategories: {
+        categoryId: string;
+        transactionId: string;
+    }[];
     note?: string | null | undefined;
 }, {
     monthStart: string;
@@ -4620,6 +4634,10 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         weeksInMonth: string;
     };
     replacedPendingIds: string[];
+    inheritedCategories: {
+        categoryId: string;
+        transactionId: string;
+    }[];
     note?: string | null | undefined;
 }>;
 /**

@@ -17,7 +17,11 @@ import {
   type SpendContext,
   type SpendTxn,
 } from "./spendingFilter";
-import { loadSupersededPendingIds } from "./supersededPending";
+import {
+  findSupersededPendingForRange,
+  type SupersededPending,
+} from "./supersededPending";
+import { effectiveFiling, uncategorizedCategoryIds } from "./pendingFiling";
 import { addDaysISO, householdTodayISO } from "./householdClock";
 
 // The household only started tracking transactions on this date; ranges that
@@ -116,12 +120,13 @@ export async function buildSpendingFacts(
   rangeEnd?: string,
   opts: {
     /**
-     * (PR7b review M1) The household's replaced pending ids
-     * (`loadSupersededPendingIds`), when the caller already has them — the
-     * spine reads them once for both of its windows. Omitted, they are loaded
-     * here. Either way it is the same whole-ledger set.
+     * (PR7b review M1; PR-D review M3) The pending pairs, when the caller
+     * already has them — the spine reads them once for both of its windows.
+     * They must be the whole-ledger answer for every row in this range: a
+     * `findSupersededPendingForRange` result whose range covers it, or
+     * `findSupersededPending`. Omitted, they are read here for this range.
      */
-    replacedPendingIds?: ReadonlySet<string>;
+    supersede?: Pick<SupersededPending, "replacedIds" | "replacedBy">;
   } = {},
 ): Promise<SpendingFacts> {
   // (PR2) The default window is the household's last 30 days, ending on the
@@ -186,6 +191,10 @@ export async function buildSpendingFacts(
       debtId: transactionsTable.debtId,
       isExternalCardPayment: transactionsTable.isExternalCardPayment,
       pfcDetailed: transactionsTable.pfcDetailed,
+      // (PR-D review H1) The rest of the filing a posted row can inherit.
+      weeklyAllowance: transactionsTable.weeklyAllowance,
+      monthlyAllowance: transactionsTable.monthlyAllowance,
+      weeklyBucket: transactionsTable.weeklyBucket,
     })
     .from(transactionsTable)
     .where(
@@ -196,10 +205,13 @@ export async function buildSpendingFacts(
       ),
     );
 
-  // (PR7b) Pending rows a posted row replaced, paired over the whole ledger so
-  // the answer does not depend on where this window starts or ends.
-  const replacedPendingIds =
-    opts.replacedPendingIds ?? (await loadSupersededPendingIds(householdId));
+  // (PR7b) Pending rows a posted row replaced — the whole-ledger answer, so it
+  // does not depend on where this window starts or ends. (PR-D review M3) Read
+  // for this range (`findSupersededPendingForRange`), exact for every row in it.
+  const supersede =
+    opts.supersede ?? (await findSupersededPendingForRange(householdId, start, end));
+  // (PR-D review H1) Which categories count as "no category" for inheritance.
+  const uncategorizedIds = uncategorizedCategoryIds(cats);
 
   // --- Accumulators -------------------------------------------------------
   let householdTotal = 0;
@@ -245,18 +257,21 @@ export async function buildSpendingFacts(
   let unplannedTotal = 0;
   let unplannedCount = 0;
   const unplannedRows: { id: string; date: string; description: string; amount: number }[] = [];
-  for (const t of txns) {
-    const tx: SpendTxn = t;
-    const spend = spendAmount(tx);
-
+  for (const row of txns) {
     // (PR7b) The pending half of a pair its posted row replaced is not a second
     // charge: it counts nowhere (not spend, not income, not another bucket).
-    // The posted row carries the charge, with its own date, amount and
-    // classification.
-    if (replacedPendingIds.has(t.id)) {
-      replacedPendingTotal += spend;
+    // The posted row carries the charge, with its own date and amount.
+    if (supersede.replacedIds.has(row.id)) {
+      replacedPendingTotal += spendAmount(row);
       continue;
     }
+
+    // (PR-D review H1) …and the filing the household put on the pending row,
+    // wherever the posted row (inserted bare by sync) lacks its own. The same
+    // helper the Budget month uses, so both pages file the row alike.
+    const t = effectiveFiling(row, supersede.replacedBy.get(row.id)?.filing, uncategorizedIds);
+    const tx: SpendTxn = t;
+    const spend = spendAmount(tx);
 
     // Amex reimbursable accounting is independent of the real-spend buckets.
     if (t.source === "amex" && spend > 0) {

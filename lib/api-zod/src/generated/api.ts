@@ -2401,6 +2401,16 @@ export const GetBudgetMonthResponse = zod.object({
     .describe(
       "(PR-D) Pending rows dated in this month that a posted row replaced\n(loadSupersededPendingIds, PR4c pairing over the whole ledger). They\ncount in no figure on this response - not a category actual, not\nthe allowance - exactly as on Spending. Listed so the page's actuals\ndrill can leave them out and still tie to its row.\n",
     ),
+  inheritedCategories: zod
+    .array(
+      zod.object({
+        transactionId: zod.string(),
+        categoryId: zod.string(),
+      }),
+    )
+    .describe(
+      "(PR-D review H1) Posted rows dated in this month that count under a\ncategory they do not store: the category of the pending row they\nreplaced, because the posted row arrived with none (or only the\nsystem Uncategorized). Read-time only; nothing is written. Listed so\nthe page's actuals drill files the row where its figure counts.\n",
+    ),
 });
 
 /**

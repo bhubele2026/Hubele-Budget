@@ -1603,6 +1603,10 @@ export interface PinResult {
     monthPinned: boolean;
     linesPinned: number;
 }
+export type BudgetMonthDetailInheritedCategoriesItem = {
+    transactionId: string;
+    categoryId: string;
+};
 export type BudgetLineWithActualSourceKind = (typeof BudgetLineWithActualSourceKind)[keyof typeof BudgetLineWithActualSourceKind];
 export declare const BudgetLineWithActualSourceKind: {
     readonly manual: "manual";
@@ -1880,6 +1884,13 @@ export interface BudgetMonthDetail {
   drill can leave them out and still tie to its row.
    */
     replacedPendingIds: string[];
+    /** (PR-D review H1) Posted rows dated in this month that count under a
+  category they do not store: the category of the pending row they
+  replaced, because the posted row arrived with none (or only the
+  system Uncategorized). Read-time only; nothing is written. Listed so
+  the page's actuals drill files the row where its figure counts.
+   */
+    inheritedCategories: BudgetMonthDetailInheritedCategoriesItem[];
 }
 export interface SeedDefaultBudgetResult {
     categoriesInserted: number;
