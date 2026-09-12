@@ -939,9 +939,14 @@ router.post(
       const m = `${c.occurredOn.slice(0, 7)}-01`;
       monthSet.add(m);
     }
+    // (round 4, PR-D review note) This is a user action re-filing these rows
+    // by hand: mark it the same way `PATCH /transactions/:id` does so
+    // `effectiveFiling` (round 4) treats a re-file here exactly like a
+    // one-off PATCH re-file, and so a future Plaid re-mint preserves the
+    // pick (plaidSync.ts's `isTransferUserOverridden` preservation).
     const updated = await db
       .update(transactionsTable)
-      .set({ categoryId: toCategoryId })
+      .set({ categoryId: toCategoryId, isTransferUserOverridden: true })
       .where(
         and(
           eq(transactionsTable.householdId, req.householdId!),

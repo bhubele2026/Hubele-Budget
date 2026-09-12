@@ -1,8 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, eq, ne, sql, asc, desc, lt, gte, inArray, isNull, notInArray } from "drizzle-orm";
 import { findSupersededPendingForRange } from "../lib/supersededPending";
-import { needsRuleCheck, uncategorizedCategoryIds } from "../lib/pendingFiling";
-import { loadRuleCategoryCheck } from "../lib/autoCategorize";
+import { uncategorizedCategoryIds } from "../lib/pendingFiling";
 import { aggregateBudgetMonth } from "../lib/budgetActuals";
 import {
   db,
@@ -2092,6 +2091,9 @@ router.get(
             weeklyBucket: transactionsTable.weeklyBucket,
             reimbursable: transactionsTable.reimbursable,
             debtId: transactionsTable.debtId,
+            // (round 4, review H1/H2) THE signal `effectiveFiling` decides
+            // hand-vs-automatic and transfer inheritance from.
+            isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
           })
           .from(transactionsTable)
           .where(
@@ -2105,20 +2107,12 @@ router.get(
       },
       { isolationLevel: "repeatable read", accessMode: "read only" },
     );
-    // (round 3 M1) A hand filing on a pending row beats a rule's category on its
-    // posted row. The rules are read only when a pair carries two real,
-    // different categories (`needsRuleCheck`) — at most once per request.
+    // (round 4) A hand filing on a pending row beats an automatic one on its
+    // posted row, decided from the stored `isTransferUserOverridden` flag —
+    // never by re-reading mapping rules (review H1).
     const uncategorizedIds = uncategorizedCategoryIds(allCats);
-    const isRuleCategory = needsRuleCheck(
-      snapshot.monthRows,
-      snapshot.supersede.replacedBy,
-      uncategorizedIds,
-    )
-      ? await loadRuleCategoryCheck(householdId)
-      : undefined;
     const monthSpend = aggregateBudgetMonth(snapshot.monthRows, snapshot.supersede, {
       uncategorizedIds,
-      isRuleCategory,
     });
     const replacedInMonth = monthSpend.replacedPendingIds;
 

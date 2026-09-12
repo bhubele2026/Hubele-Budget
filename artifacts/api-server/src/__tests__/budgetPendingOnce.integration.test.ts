@@ -12,6 +12,14 @@
 // the month). The filing a posted row lacks comes from the pending row it
 // replaced (`effectiveFiling`) — sync inserts the posted row bare, so without
 // this the charge would leave its envelope the moment it posts (review H1).
+//
+// (round 4) Round 3 decided "hand vs rule filing" by re-reading the CURRENT
+// mapping rules — wrong, because `PATCH /transactions/:id` repoints matching
+// rules onto whatever the user just picked, so the check misread real routes
+// in both directions (review H1). Round 3 also inherited `isTransfer`
+// unconditionally, which hid real spending sync auto-flags as a transfer
+// (Venmo/Zelle/PayPal, PFC TRANSFER_OUT — review H2). Round 4 decides both
+// from the stored `isTransferUserOverridden` flag and never re-reads rules.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -74,6 +82,7 @@ import {
 import { pairPendingWithPostedAmong } from "@workspace/avalanche-core";
 import budgetRouter from "../routes/budget";
 import reportsRouter from "../routes/reports";
+import transactionsRouter from "../routes/transactions";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
@@ -84,6 +93,7 @@ app.use((req: { log?: unknown }, _res, next) => {
 });
 app.use(budgetRouter);
 app.use(reportsRouter);
+app.use(transactionsRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -129,13 +139,33 @@ type Facts = {
   householdSpend: { total: number; transactionCount: number };
   uncategorized: { total: number; transactionCount: number };
   byCategory: { categoryId: string; total: number; txnCount: number }[];
-  excluded: { reimbursable: number; replacedPending: number };
+  excluded: { reimbursable: number; replacedPending: number; transfersTotal: number };
 };
 
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(`${baseUrl}${path}`);
   if (!r.ok) throw new Error(`GET ${path} -> ${r.status} ${await r.text()}`);
   return (await r.json()) as T;
+}
+/** A real route call — used by the round 4 H1 repros so the auto-relearn /
+ * rule-repoint side effects of `PATCH /transactions/:id` actually run. */
+async function api(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<{ status: number; json: unknown }> {
+  const r = await fetch(`${baseUrl}${path}`, {
+    method,
+    headers: body ? { "content-type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let json: unknown = null;
+  try {
+    json = await r.json();
+  } catch {
+    json = null;
+  }
+  return { status: r.status, json };
 }
 const month = (m: string) => get<Month>(`/budget/months/${m}`);
 const facts = (from: string, to: string) =>
@@ -430,10 +460,10 @@ describe("(PR-D review H1) the posted row arrives bare — it carries the pendin
   });
 });
 
-describe("(PR-D round 3 M1) a hand filing on the pending row beats a rule's automatic category on the posted row", () => {
-  it("⭐ rule COSTCO GAS → Groceries; the $40 pending re-filed by hand to Auto posts at $45 with the rule's Groceries → Auto 45, Groceries 0, on Budget and Spending", async () => {
-    const auto = await addCategory("Auto PR-D M1");
-    const groceries = await addCategory("Groceries PR-D M1");
+describe("(PR-D round 4) a hand filing beats an automatic one — decided from isTransferUserOverridden, never by re-reading mapping rules", () => {
+  it("⭐ a: the $40 pending re-filed by hand to Auto (isTransferUserOverridden), posts at $45 with the rule's Groceries (no override) → Auto 45, Groceries 0, on Budget and Spending", async () => {
+    const auto = await addCategory("Auto PR-D R4a");
+    const groceries = await addCategory("Groceries PR-D R4a");
     await db.insert(mappingRulesTable).values({
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
@@ -442,9 +472,17 @@ describe("(PR-D round 3 M1) a hand filing on the pending row beats a rule's auto
       categoryId: groceries,
       priority: 100,
     });
-    const card = acct("m1-costco");
-    await addTxn({ occurredOn: "2027-04-06", description: "COSTCO GAS #0123", amount: "-40.00", plaidAccountId: card, categoryId: auto, pending: true });
-    // Sync inserts the posted row with the rule's category.
+    const card = acct("r4a-costco");
+    await addTxn({
+      occurredOn: "2027-04-06",
+      description: "COSTCO GAS #0123",
+      amount: "-40.00",
+      plaidAccountId: card,
+      categoryId: auto,
+      pending: true,
+      extra: { isTransferUserOverridden: true },
+    });
+    // Sync inserts the posted row with the rule's category, no override.
     const postedId = await addTxn({ occurredOn: "2027-04-07", description: "COSTCO GAS #0123", amount: "-45.00", plaidAccountId: card, categoryId: groceries });
 
     const d = await month("2027-04-01");
@@ -455,25 +493,106 @@ describe("(PR-D round 3 M1) a hand filing on the pending row beats a rule's auto
     expect(await spendingTotal("2027-04-01", "2027-04-30", groceries)).toBe(0);
   });
 
-  it("a posted row filed by hand away from its rule keeps its own category", async () => {
-    // The COSTCO GAS → Groceries rule from the test above still applies.
-    const autoB = await addCategory("Auto PR-D M1-B");
-    const dining = await addCategory("Dining PR-D M1-B");
-    const card = acct("m1-own");
-    await addTxn({ occurredOn: "2027-04-13", description: "COSTCO GAS #0456", amount: "-40.00", plaidAccountId: card, categoryId: autoB, pending: true });
-    await addTxn({ occurredOn: "2027-04-14", description: "COSTCO GAS #0456", amount: "-48.00", plaidAccountId: card, categoryId: dining });
+  it("⭐ b1 (review H1 repro): rule COSTCO WHSE → Groceries; pending $100 and posted $110 both Groceries, no overrides; PATCH the POSTED row to Auto → Auto 110, Groceries 0", async () => {
+    const groceries = await addCategory("Groceries PR-D R4b1");
+    const auto = await addCategory("Auto PR-D R4b1");
+    await db.insert(mappingRulesTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      pattern: "COSTCO WHSE",
+      matchType: "contains",
+      categoryId: groceries,
+      priority: 100,
+    });
+    const card = acct("r4b1-costco");
+    await addTxn({ occurredOn: "2027-08-06", description: "COSTCO WHSE 1035", amount: "-100.00", plaidAccountId: card, categoryId: groceries, pending: true });
+    const postedId = await addTxn({ occurredOn: "2027-08-07", description: "COSTCO WHSE 1035", amount: "-110.00", plaidAccountId: card, categoryId: groceries });
 
-    const d = await month("2027-04-01");
-    expect(split(lineFor(d, autoB))).toMatchObject({ actual: "0.00" });
-    expect(split(lineFor(d, dining))).toMatchObject({ actual: "48.00" });
-    expect(await spendingTotal("2027-04-01", "2027-04-30", dining)).toBe(48);
+    // The real route: re-filing the POSTED row also repoints the rule (auto-
+    // relearn) — the whole point of the review's regression. The outcome must
+    // still be Auto 110, not the stale rule's Groceries.
+    const r = await api("PATCH", `/transactions/${postedId}`, { categoryId: auto });
+    expect(r.status).toBe(200);
+
+    const d = await month("2027-08-01");
+    expect(split(lineFor(d, auto))).toEqual({ posted: "110.00", pending: "0.00", combined: "110.00", actual: "110.00" });
+    expect(split(lineFor(d, groceries))).toMatchObject({ actual: "0.00" });
+    expect(await spendingTotal("2027-08-01", "2027-08-31", auto)).toBe(110);
+    expect(await spendingTotal("2027-08-01", "2027-08-31", groceries)).toBe(0);
+  });
+
+  it("⭐ b2 (review H1 repro, reverse order): same setup, PATCH the PENDING row to Auto instead → Auto 110, Groceries 0", async () => {
+    const groceries = await addCategory("Groceries PR-D R4b2");
+    const auto = await addCategory("Auto PR-D R4b2");
+    await db.insert(mappingRulesTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      pattern: "COSTCO WHSE",
+      matchType: "contains",
+      categoryId: groceries,
+      priority: 100,
+    });
+    const card = acct("r4b2-costco");
+    const pendingId = await addTxn({ occurredOn: "2027-08-13", description: "COSTCO WHSE 1035", amount: "-100.00", plaidAccountId: card, categoryId: groceries, pending: true });
+    await addTxn({ occurredOn: "2027-08-14", description: "COSTCO WHSE 1035", amount: "-110.00", plaidAccountId: card, categoryId: groceries });
+
+    const r = await api("PATCH", `/transactions/${pendingId}`, { categoryId: auto });
+    expect(r.status).toBe(200);
+
+    const d = await month("2027-08-01");
+    expect(split(lineFor(d, auto))).toEqual({ posted: "110.00", pending: "0.00", combined: "110.00", actual: "110.00" });
+    expect(split(lineFor(d, groceries))).toMatchObject({ actual: "0.00" });
+    expect(await spendingTotal("2027-08-01", "2027-08-31", auto)).toBe(110);
+    expect(await spendingTotal("2027-08-01", "2027-08-31", groceries)).toBe(0);
+  });
+
+  it("c (review H1 repro): the outcome does not depend on the mapping rule at all — deleting or repointing it after sync changes nothing", async () => {
+    const groceries = await addCategory("Groceries PR-D R4c");
+    const [rule] = await db
+      .insert(mappingRulesTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        pattern: "COSTCO WHSE",
+        matchType: "contains",
+        categoryId: groceries,
+        priority: 100,
+      })
+      .returning();
+    const card = acct("r4c-costco");
+    // Sync filed both rows Groceries via the rule; neither was ever PATCHed.
+    await addTxn({ occurredOn: "2027-08-20", description: "COSTCO WHSE 2091", amount: "-40.00", plaidAccountId: card, categoryId: groceries, pending: true });
+    await addTxn({ occurredOn: "2027-08-21", description: "COSTCO WHSE 2091", amount: "-45.00", plaidAccountId: card, categoryId: groceries });
+
+    const before = await month("2027-08-01");
+    expect(split(lineFor(before, groceries))).toMatchObject({ actual: "45.00" });
+
+    // The rule is deleted, then a differently-shaped rule repoints the same
+    // pattern elsewhere. Neither write touches the transactions table.
+    await db.delete(mappingRulesTable).where(eq(mappingRulesTable.id, rule!.id));
+    const otherCat = await addCategory("Household PR-D R4c");
+    await db.insert(mappingRulesTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      pattern: "COSTCO WHSE",
+      matchType: "contains",
+      categoryId: otherCat,
+      priority: 100,
+    });
+
+    const after = await month("2027-08-01");
+    expect(split(lineFor(after, groceries))).toMatchObject({ actual: "45.00" });
+    expect(await spendingTotal("2027-08-01", "2027-08-31", groceries)).toBe(45);
   });
 });
 
 describe("(PR-D round 3 L2, NIT4) the transfer flag and the weekly slice carry over", () => {
-  it("L2: a pending $40 Zelle marked transfer, posted bare at $48 → a transfer on Spending, not Uncategorized spend; out of the allowance", async () => {
+  it("L2 (round 4: pending marked transfer BY HAND): a pending $40 Zelle marked transfer, posted bare at $48 → still a transfer on Spending, not Uncategorized spend; out of the allowance", async () => {
     const checking = acct("l2-transfer");
-    await addTxn({ occurredOn: "2027-05-10", description: "ZELLE TO JOHN SMITH", amount: "-40.00", plaidAccountId: checking, categoryId: null, pending: true, extra: { isTransfer: true, weeklyAllowance: true } });
+    // (round 4, review H2) Only a USER-SET transfer flag inherits — mark the
+    // pending row `isTransferUserOverridden: true` the way a person clearing
+    // it in the UI, or PATCH isTransfer=true, would.
+    await addTxn({ occurredOn: "2027-05-10", description: "ZELLE TO JOHN SMITH", amount: "-40.00", plaidAccountId: checking, categoryId: null, pending: true, extra: { isTransfer: true, isTransferUserOverridden: true, weeklyAllowance: true } });
     await addTxn({ occurredOn: "2027-05-11", description: "ZELLE TO JOHN SMITH", amount: "-48.00", plaidAccountId: checking, categoryId: null });
 
     const f = await facts("2027-05-09", "2027-05-15");
@@ -492,6 +611,102 @@ describe("(PR-D round 3 L2, NIT4) the transfer flag and the weekly slice carry o
     const weekly = bucket(await month("2027-06-01"), "weekly");
     expect(weekly.subBuckets.find((s) => s.bucket === "dining")).toEqual({ bucket: "dining", actual: "48.00", count: 1 });
     expect(weekly.subBuckets.find((s) => s.bucket === "misc")).toEqual({ bucket: "misc", actual: "0.00", count: 0 });
+  });
+});
+
+describe("(PR-D round 4, review H2) an auto-flagged pending transfer never overrules a posted row the household filed as real spending", () => {
+  it("⭐ d1: pending 'VENMO *JOES PIZZA' auto-flagged transfer (no override); posted filed Dining by rule, weekly/dining (no override) → Dining 34, weekly 34, no transfer", async () => {
+    const dining = await addCategory("Dining PR-D d1");
+    const checking = acct("h2-d1-venmo");
+    await addTxn({
+      occurredOn: "2027-09-06",
+      description: "VENMO *JOES PIZZA",
+      amount: "-34.00",
+      plaidAccountId: checking,
+      categoryId: null,
+      pending: true,
+      extra: { isTransfer: true }, // sync's auto-flag; nobody overrode it
+    });
+    await addTxn({
+      occurredOn: "2027-09-07",
+      description: "VENMO *JOES PIZZA",
+      amount: "-34.00",
+      plaidAccountId: checking,
+      categoryId: dining,
+      extra: { weeklyAllowance: true, weeklyBucket: "dining" },
+    });
+
+    const d = await month("2027-09-01");
+    expect(split(lineFor(d, dining))).toMatchObject({ actual: "34.00" });
+    expect(bucket(d, "weekly")).toMatchObject({ actual: "34.00", count: 1 });
+    expect(bucket(d, "weekly").subBuckets.find((s) => s.bucket === "dining")).toMatchObject({ actual: "34.00" });
+
+    const f = await facts("2027-09-01", "2027-09-30");
+    expect(f.excluded.transfersTotal).toBe(0);
+    expect(f.byCategory.find((c) => c.categoryId === dining)).toMatchObject({ total: 34 });
+  });
+
+  it("⭐ d2: pending 'VENMO *SITTER ANNA' auto-flagged transfer; the user filed the posted row Dining, explicitly not a transfer (overridden) → Dining 60, no transfer, real spend counted", async () => {
+    const dining = await addCategory("Dining PR-D d2");
+    const checking = acct("h2-d2-venmo");
+    await addTxn({
+      occurredOn: "2027-09-13",
+      description: "VENMO *SITTER ANNA",
+      amount: "-60.00",
+      plaidAccountId: checking,
+      categoryId: null,
+      pending: true,
+      extra: { isTransfer: true }, // sync's auto-flag; nobody overrode it
+    });
+    await addTxn({
+      occurredOn: "2027-09-14",
+      description: "VENMO *SITTER ANNA",
+      amount: "-60.00",
+      plaidAccountId: checking,
+      categoryId: dining,
+      // The household filed this by hand: real spending, not a transfer.
+      extra: { isTransfer: false, isTransferUserOverridden: true },
+    });
+
+    const d = await month("2027-09-01");
+    expect(split(lineFor(d, dining))).toMatchObject({ actual: "60.00" });
+
+    const f = await facts("2027-09-01", "2027-09-30");
+    expect(f.excluded.transfersTotal).toBe(0);
+    expect(f.householdSpend.total).toBeGreaterThanOrEqual(60);
+    expect(f.byCategory.find((c) => c.categoryId === dining)).toMatchObject({ total: 60 });
+  });
+});
+
+describe("(PR-D round 4, item 6) the bulk re-file-by-pattern route marks rows user-overridden", () => {
+  it("POST /transactions/recategorize-by-pattern sets isTransferUserOverridden=true on every row it moves", async () => {
+    const from = await addCategory("Misc PR-D bulk");
+    const to = await addCategory("Groceries PR-D bulk");
+    const t1 = await addTxn({ occurredOn: "2027-10-01", description: "ALDI 4471 BULK", amount: "-20.00", plaidAccountId: acct("bulk-1"), categoryId: from });
+    const t2 = await addTxn({ occurredOn: "2027-10-02", description: "ALDI 4471 BULK", amount: "-30.00", plaidAccountId: acct("bulk-2"), categoryId: from });
+
+    const [before1, before2] = await Promise.all([
+      db.select({ v: transactionsTable.isTransferUserOverridden }).from(transactionsTable).where(eq(transactionsTable.id, t1)),
+      db.select({ v: transactionsTable.isTransferUserOverridden }).from(transactionsTable).where(eq(transactionsTable.id, t2)),
+    ]);
+    expect(before1[0]!.v).toBe(false);
+    expect(before2[0]!.v).toBe(false);
+
+    const r = await api("POST", "/transactions/recategorize-by-pattern", {
+      pattern: "ALDI 4471 BULK",
+      matchType: "contains",
+      fromCategoryId: from,
+      toCategoryId: to,
+    });
+    expect(r.status).toBe(200);
+    expect((r.json as { updated: number }).updated).toBe(2);
+
+    const [after1, after2] = await Promise.all([
+      db.select({ v: transactionsTable.isTransferUserOverridden }).from(transactionsTable).where(eq(transactionsTable.id, t1)),
+      db.select({ v: transactionsTable.isTransferUserOverridden }).from(transactionsTable).where(eq(transactionsTable.id, t2)),
+    ]);
+    expect(after1[0]!.v).toBe(true);
+    expect(after2[0]!.v).toBe(true);
   });
 });
 

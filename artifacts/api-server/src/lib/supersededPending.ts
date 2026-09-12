@@ -262,6 +262,9 @@ export function supersedeCandidatesQuery(
       pDebtId: pendingRow.debtId,
       // (round 3 L2) dedupe's mergeStatePatch carries the transfer flag too.
       pIsTransfer: pendingRow.isTransfer,
+      // (round 4, review H1/H2) The signal `effectiveFiling` decides hand-vs-
+      // automatic and transfer inheritance from — never re-read mapping rules.
+      pIsTransferUserOverridden: pendingRow.isTransferUserOverridden,
       qId: postedRow.id,
       qAccount: postedRow.plaidAccountId,
       qOn: postedRow.occurredOn,
@@ -352,6 +355,7 @@ function pairCandidates(
         reimbursable: c.pReimbursable,
         debtId: c.pDebtId,
         isTransfer: c.pIsTransfer,
+        isTransferUserOverridden: c.pIsTransferUserOverridden,
       });
     }
     rowOf(postedRowOf(c));
@@ -374,7 +378,6 @@ function pairCandidates(
       replacedBy.set(postedId, {
         id: pending.id,
         occurredOn: pending.occurredOn,
-        // No description matches no rule: its category then counts as a hand filing.
         description: pending.description ?? "",
         filing: filingById.get(pending.id)!,
       });

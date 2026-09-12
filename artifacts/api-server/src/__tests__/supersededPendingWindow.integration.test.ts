@@ -248,6 +248,7 @@ describe("findSupersededPendingForRange — the whole-ledger answer inside the r
         reimbursable: false,
         debtId: null,
         isTransfer: false,
+        isTransferUserOverridden: false,
       },
     });
   });

@@ -1,5 +1,6 @@
-// (PR-D review H1; round 3 M1, L2, NIT4; owner decisions 6 and 14) The filing a
-// posted row carries when it replaced a pending row the household had filed.
+// (PR-D review H1/H2, round 4; round 3 M1, L2, NIT4; owner decisions 6 and 14)
+// The filing a posted row carries when it replaced a pending row the
+// household had filed.
 //
 // ⚠️ WHY. Sync never deletes a pending row the user filed, and the posted row
 // that replaces it arrives as a FRESH insert: its category is whatever the
@@ -13,27 +14,47 @@
 // category actuals and allowance card, `buildSpendingFacts`) calls this one
 // helper, so Budget and Spending cannot file the same posted row differently.
 //
-// ⭐ THE RULE (for PR-I to reuse when it writes this at sync). With P the posted
-// row and Q the pending row it replaced; "real category" = not null and not the
-// system Uncategorized; "rule category" = what the household's mapping rules
-// assign the row's description (`findMatchedRuleId` non-null for that
-// category — rules match on description only, and `categorize` sets a category
-// from rules and nothing else):
+// ⚠️ ROUND 3 → ROUND 4: NOT "was this the rule's category" — the review found
+// re-reading the CURRENT mapping rules gets the hand-vs-rule call wrong in both
+// directions, because `PATCH /transactions/:id` repoints every matching rule
+// onto whatever category the user just picked (routes/transactions.ts): by the
+// time this runs, the "rule" and the user's pick are often the same thing, so a
+// row the user JUST re-filed by hand reads back as "automatic", and a stale
+// rule nobody asked about reads back as "hand-filed" (review H1). Round 4
+// decides it instead from a fact already stored on the row:
+// `isTransferUserOverridden` — set whenever the user chooses a category
+// through PATCH, or creates a row, and never set by Plaid sync. It answers
+// "did a person point this row here" without re-consulting rules that may have
+// moved since.
+//
+// ⚠️ Inheriting `isTransfer` unconditionally also hid real spending (review
+// H2): sync auto-flags Venmo/Zelle/PayPal and PFC TRANSFER_OUT rows as
+// transfers with no user in the loop, so a pending row could carry that
+// auto-flag onto a posted row the user had deliberately filed as real spending
+// (categorized, `isTransferUserOverridden: true`, `isTransfer: false`). Round 4
+// never lets an inherited transfer flag overrule a posted row the user
+// overrode either way.
+//
+// ⭐ THE RULE (for PR-I to reuse when it writes this at sync). With P the
+// posted row and Q the pending row it replaced; "real category" = not null and
+// not the system Uncategorized:
 //
 //   categoryId      Q's, when Q's is real and either
 //                     - P has no real category, or
-//                     - P's category IS its rule category (automatic) and Q's
-//                       category is NOT Q's rule category (a hand filing).
-//                   Otherwise P's own. With no rules loaded, every real
-//                   category counts as a hand filing, so P keeps its own.
+//                     - both are real and different, and P is NOT
+//                       `isTransferUserOverridden` while Q IS.
+//                   Otherwise P's own. (Both un-overridden, or both
+//                   overridden, or only P overridden → P's own.)
 //   weekly / monthly / unplanned flags
 //                   Q's three, only when P has none of them.
 //   weeklyBucket    Q's, when P has none and both rows are weekly (after the
 //                   flag step) — mergeStatePatch fills a blank slice the same way.
 //   reimbursable    true when either is.
 //   debtId          Q's, when P has none.
-//   isTransfer      true when either is (mergeStatePatch carries it the same way;
-//                   it carries no override flag).
+//   isTransfer      true only when P is not already a transfer, Q is, Q's
+//                   transfer flag was USER-SET (`isTransferUserOverridden`),
+//                   and P itself was never overridden either way. A posted row
+//                   the user overrode (transfer or not) is never changed.
 //
 // Otherwise P's own filing stands, even when that moves the whole charge to
 // another envelope (review M2).
@@ -50,6 +71,14 @@ export interface Filing {
   reimbursable: boolean;
   debtId: string | null;
   isTransfer: boolean;
+  /**
+   * (round 4) True when a person, not Plaid sync, is the reason this row
+   * carries what it carries — set by `PATCH /transactions/:id` whenever the
+   * body picks a category or sets `isTransfer`, and by row creation; never
+   * set by sync. THE signal `effectiveFiling` decides hand-vs-automatic from;
+   * it never re-reads the household's mapping rules (round 3 → round 4 above).
+   */
+  isTransferUserOverridden: boolean;
 }
 
 /** The pending row a posted row replaced, as far as inheritance needs it. */
@@ -61,13 +90,6 @@ export interface ReplacedFiling {
 export interface FilingContext {
   /** The household's system Uncategorized category ids. */
   uncategorizedIds: ReadonlySet<string>;
-  /**
-   * True when the household's mapping rules assign `categoryId` to
-   * `description` (`loadRuleCategoryCheck`). Absent = rules not loaded: every
-   * real category counts as a hand filing. Load it only when
-   * `needsRuleCheck` says a pair needs it.
-   */
-  isRuleCategory?: (description: string, categoryId: string) => boolean;
 }
 
 /** The household's system "Uncategorized" category ids (by its exact name). */
@@ -85,30 +107,6 @@ const isReal = (id: string | null, uncategorizedIds: ReadonlySet<string>): id is
   id != null && !uncategorizedIds.has(id);
 
 /**
- * Does any posted row here need the rules? Only a posted row and its replaced
- * pending row that BOTH carry real, DIFFERENT categories — every other case is
- * decided without asking who filed what.
- */
-export function needsRuleCheck(
-  rows: Iterable<{ id: string; categoryId: string | null }>,
-  replacedBy: ReadonlyMap<string, ReplacedFiling>,
-  uncategorizedIds: ReadonlySet<string>,
-): boolean {
-  for (const row of rows) {
-    const r = replacedBy.get(row.id);
-    if (!r) continue;
-    if (
-      isReal(row.categoryId, uncategorizedIds) &&
-      isReal(r.filing.categoryId, uncategorizedIds) &&
-      row.categoryId !== r.filing.categoryId
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
  * ⭐ The posted row as it counts, given the pending row it replaced — THE RULE
  * above. Pure: returns a new object, never mutates either row. With no
  * replaced row it returns the posted row unchanged.
@@ -121,16 +119,15 @@ export function effectiveFiling<T extends Filing & { description: string }>(
   if (!replaced) return posted;
   const from = replaced.filing;
   const out: T = { ...posted };
-  const { uncategorizedIds, isRuleCategory } = ctx;
+  const { uncategorizedIds } = ctx;
 
   if (isReal(from.categoryId, uncategorizedIds)) {
     if (!isReal(posted.categoryId, uncategorizedIds)) {
       out.categoryId = from.categoryId;
     } else if (
       posted.categoryId !== from.categoryId &&
-      isRuleCategory !== undefined &&
-      isRuleCategory(posted.description, posted.categoryId) &&
-      !isRuleCategory(replaced.description, from.categoryId)
+      !posted.isTransferUserOverridden &&
+      from.isTransferUserOverridden
     ) {
       out.categoryId = from.categoryId;
     }
@@ -147,6 +144,17 @@ export function effectiveFiling<T extends Filing & { description: string }>(
 
   if (!posted.reimbursable && from.reimbursable) out.reimbursable = true;
   if (!posted.debtId && from.debtId) out.debtId = from.debtId;
-  if (!posted.isTransfer && from.isTransfer) out.isTransfer = true;
+  // (round 4, review H2) Only a USER-SET transfer flag on the pending row can
+  // turn a non-transfer posted row into one, and only when the posted row was
+  // never overridden itself — a posted row the user explicitly filed (either
+  // way) is never re-flagged by an auto-tagged pending row's flag.
+  if (
+    !posted.isTransfer &&
+    from.isTransfer &&
+    from.isTransferUserOverridden &&
+    !posted.isTransferUserOverridden
+  ) {
+    out.isTransfer = true;
+  }
   return out;
 }

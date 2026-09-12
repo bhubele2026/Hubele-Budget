@@ -284,6 +284,76 @@ June is measured with a median of 7 or 9 runs. "Stale" means straight after the 
   - The L2 and NIT4 cases fail on their assertions.
   - The figure-level proof for M1 is the integration test.
 
+## Review round 4
+
+The independent review of round 3 found two HIGH regressions, both reproduced on real routes.
+
+- **H1 (rule re-read misjudges hand-vs-automatic in both directions):** round 3 decided "hand vs rule filing" by
+  re-reading the household's CURRENT mapping rules. `PATCH /transactions/:id` repoints every matching rule onto
+  whatever category the user just picked (routes/transactions.ts, the auto-relearn block), so by the time the check
+  ran, the rule and the user's pick were often the same thing.
+  - Real repro: rule COSTCO WHSE → Groceries; pending $100 and posted $110 both Groceries by rule, no overrides. PATCH
+    the POSTED row to Auto → the rule gets repointed to Auto too, and round 3's rule-re-read misread the row as still
+    "automatic," so Budget/Spending kept showing Groceries 110 / Auto 0 (should be Auto 110). Same wrong outcome
+    PATCHing the PENDING row instead.
+  - Also wrong with no PATCH at all: deleting or repointing the rule after sync changed what a stored, unchanged pair
+    counted as, even though nobody touched either row.
+- **H2 (auto-tagged transfer flag overrides real spending):** round 3 inherited `isTransfer` unconditionally ("true
+  when either row's is"). Plaid sync auto-flags Venmo/Zelle/PayPal and PFC `TRANSFER_OUT` rows as transfers with no
+  user in the loop. A pending row auto-flagged that way could carry the flag onto a posted row the household had
+  filed as real spending.
+  - d1: pending "VENMO *JOES PIZZA" auto-flagged transfer (no override); posted filed Dining by rule, weekly/dining
+    (no override) → round 3 showed Dining 0, weekly 0, `transfersTotal` +34 instead of real spending.
+  - d2: pending "VENMO *SITTER ANNA" auto-flagged transfer; the user filed the posted row Dining, explicitly
+    `isTransfer: false` with `isTransferUserOverridden: true` → round 3 still showed Dining 0, spend 0,
+    `transfersTotal` +60, overruling the household's own hand filing.
+
+**The decided fix.** Stop re-reading mapping rules entirely. Use the one signal already stored on every row —
+`transactions.is_transfer_user_overridden` — which is set whenever a person picks a category or sets `isTransfer`
+through `PATCH /transactions/:id`, or creates a row, and is never set by Plaid sync:
+
+- **`categoryId`**, both real and different: P (posted) keeps its own unless P is NOT overridden and Q (the replaced
+  pending row) IS — i.e. only a hand filing on one side, and it's Q's, can move the category. P overridden (either
+  way), or neither overridden, or only P overridden → P's own stands. This makes the outcome depend on who last
+  touched which row, never on the mapping rules' current shape.
+- **`isTransfer`**: inherited only when Q's flag was user-set (`isTransferUserOverridden`) AND P itself was never
+  overridden either way. A posted row the user explicitly filed — transfer or not — is never re-flagged by an
+  auto-tagged pending row.
+- Every other field (allowance flags, `weeklyBucket`, `reimbursable`, `debtId`) is unchanged from round 3.
+
+**Plumbing.** `Filing` gained `isTransferUserOverridden: boolean`. `supersedeCandidatesQuery` now selects
+`pIsTransferUserOverridden` for the pending row and `pairCandidates` carries it into `filingById`. Posted-row readers
+(`routes/budget.ts` month rows, `spendingFacts.ts` txns) now select the column too. `needsRuleCheck`,
+`FilingContext.isRuleCategory` and `autoCategorize.ts`'s `loadRuleCategoryCheck` are deleted — nothing calls them
+(confirmed by grep) and the household's mapping rules are no longer read anywhere in this path.
+
+**Bulk re-file side effect.** `POST /transactions/recategorize-by-pattern` — the route the client's "apply to past
+charges?" and bulk-recategorize-by-pattern flows post to — now sets `isTransferUserOverridden: true` on every row it
+moves, the same as a one-off `PATCH`, since it is equally a user action. This also means those rows keep their
+picked category/flags across a future Plaid re-mint: `plaidSync.ts` (~1802, ~3864) already preserves flags on an
+overridden row, so this was a one-line addition, not a new mechanism.
+
+**Fails-before, round 4 (on `8643c682`, source-only stash; tests as of this head):**
+- **`pendingFiling.test.ts`:** 4 of 23 fail — the two category-override cases ("Q overridden beats P" and its PATCH-
+  the-pending-row mirror) and the two H2 cases (an un-overridden auto-transfer never inherits; an overridden P is
+  never re-flagged).
+- **`budgetPendingOnce.integration.test.ts`:** 5 of 22 fail on a figure — both real-route H1 repros (b1, b2: Auto
+  0.00 instead of 110.00), both H2 repros (d1, d2: Dining 0.00 instead of 34.00 / 60.00), and the bulk re-file test
+  (`isTransferUserOverridden` stayed `false`).
+- Total: **9 of 45 new/changed tests fail on `8643c682`**, all on a figure or a stored value, none only on a missing
+  field.
+
+**Gates (worktree root, this head):**
+- `pnpm run typecheck`: green.
+- Web: `TZ=UTC` 136 files, 1118 passed / 3 skipped; `TZ=America/Chicago` 136 files, 1119 passed / 2 skipped (one run
+  under `TZ=America/Chicago` hit vitest worker timeouts from an unrelated, heavily loaded Mac — load average ~30 from
+  long-lived dev servers in other project directories; a clean re-run with the machine otherwise idle passed in full).
+- Full API suite (`caffeinate -i`, own test DB `h2budget_test_prd`, run in the foreground): 143 files, 1372 passed /
+  7 todo (one pre-existing test, `supersededPendingWindow.integration.test.ts`, had its expected `filing` object
+  updated to include the new `isTransferUserOverridden: false` field — a shape change, not a behavior change).
+- `pnpm run build` + `check-entry-graph`: 574.4 KB of 580 KB cap (unchanged; no `lib/api-spec` change, no codegen
+  needed).
+
 ## Residuals
 
 1. **The Allowances page and the Banking strip still sum raw rows** in the browser (`bucketSpend.ts`): no pairing and no

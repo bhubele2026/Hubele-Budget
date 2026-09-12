@@ -23,11 +23,9 @@ import {
 } from "./supersededPending";
 import {
   effectiveFiling,
-  needsRuleCheck,
   uncategorizedCategoryIds,
   type FilingContext,
 } from "./pendingFiling";
-import { loadRuleCategoryCheck } from "./autoCategorize";
 import { addDaysISO, householdTodayISO } from "./householdClock";
 
 // The household only started tracking transactions on this date; ranges that
@@ -201,6 +199,9 @@ export async function buildSpendingFacts(
       weeklyAllowance: transactionsTable.weeklyAllowance,
       monthlyAllowance: transactionsTable.monthlyAllowance,
       weeklyBucket: transactionsTable.weeklyBucket,
+      // (round 4, review H1/H2) THE signal `effectiveFiling` decides hand-vs-
+      // automatic and transfer inheritance from.
+      isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
     })
     .from(transactionsTable)
     .where(
@@ -216,17 +217,11 @@ export async function buildSpendingFacts(
   // for this range (`findSupersededPendingForRange`), exact for every row in it.
   const supersede =
     opts.supersede ?? (await findSupersededPendingForRange(householdId, start, end));
-  // (PR-D review H1; round 3 M1) What a posted row inherits from the pending row
-  // it replaced (`effectiveFiling`). The household's mapping rules are read only
-  // when a pair has two real, different categories — the one case where "filed
-  // by hand or by a rule?" decides.
+  // (PR-D review H1; round 4) What a posted row inherits from the pending row
+  // it replaced (`effectiveFiling`) — decided from the stored
+  // `isTransferUserOverridden` flag, never by re-reading mapping rules.
   const uncategorizedIds = uncategorizedCategoryIds(cats);
-  const filingCtx: FilingContext = {
-    uncategorizedIds,
-    isRuleCategory: needsRuleCheck(txns, supersede.replacedBy, uncategorizedIds)
-      ? await loadRuleCategoryCheck(householdId)
-      : undefined,
-  };
+  const filingCtx: FilingContext = { uncategorizedIds };
 
   // --- Accumulators -------------------------------------------------------
   let householdTotal = 0;

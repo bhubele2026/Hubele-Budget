@@ -106,22 +106,6 @@ export function findMatchedRuleId(
 }
 
 /**
- * (PR-D round 3 M1) "Would the household's rules put this category on this
- * description?" — `findMatchedRuleId` non-null, over the household's rules read
- * once. A real category that is NOT its rule category was filed by hand
- * (`effectiveFiling` lets a hand filing on a pending row beat the rule's
- * category on its posted row). Callers load it only when `needsRuleCheck` says
- * a pair needs it.
- */
-export async function loadRuleCategoryCheck(
-  householdId: string,
-): Promise<(description: string, categoryId: string) => boolean> {
-  const rules = await loadUserRules(householdId);
-  return (description, categoryId) =>
-    findMatchedRuleId(description, categoryId, rules) !== null;
-}
-
-/**
  * Returns every rule whose pattern matches the description, ignoring whether
  * the rule currently has a `categoryId`. This is the auto-relearn entrypoint
  * used by the PATCH /transactions handler to repoint stale rules (e.g. seed
