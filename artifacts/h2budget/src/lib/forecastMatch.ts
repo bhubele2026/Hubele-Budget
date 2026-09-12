@@ -67,10 +67,18 @@ export type ResolutionStatus =
   | "not_match"
   /** (PR5) The row paid part of the plan; the remainder stays planned. */
   | "partial"
-  /** (One-time bill move) A match or partial whose one-time bill was moved
-   *  outside the matcher's window. Unresolved on both sides; shown as
-   *  "Match needs review" until the user confirms or rejects the pair. */
-  | "needs_review";
+  /** (One-time bill move) A match whose one-time bill was edited so its row no
+   *  longer fits (date window, sign or amount). Unresolved on both sides; shown
+   *  as "Match needs review" until the user confirms or rejects the pair. */
+  | "needs_review"
+  /** (One-time bill move, review M3) The same for a partial: shown as "Partial
+   *  payment needs review", answered Partial first. */
+  | "needs_review_partial";
+
+/** (One-time bill move) Either status that asks the user to review an edited bill's pair. */
+export function isNeedsReviewStatus(status: string): boolean {
+  return status === "needs_review" || status === "needs_review_partial";
+}
 
 /** One pair from `CashSignal.matches` (PR5a), as the API sends it. */
 export type CashSignalMatch = {
@@ -110,10 +118,11 @@ export type ProbablyPaid = {
   offCurve: boolean;
   txnDate: string;
   txnDescription: string | null;
-  /** (One-time bill move) Not a server suggestion: a stored `needs_review`
-   *  pair — a match whose bill was moved away from its row. Never off the
-   *  curve; answered with the same Confirm / Not this. */
-  needsReview?: boolean;
+  /** (One-time bill move) Not a server suggestion: a stored pair an edit put in
+   *  question — "match" (`needs_review`) or "partial" (`needs_review_partial`).
+   *  Never off the curve; answered with the same Confirm / Not this, and a
+   *  partial with Partial first. */
+  needsReview?: "match" | "partial";
 };
 
 export type Resolution = {
@@ -323,7 +332,7 @@ export function buildLineRegister(opts: {
     // the plan stays open (on the curve) and the row stays in Review. Both show
     // it as the pair to answer — "Match needs review" — in place of any server
     // suggestion.
-    if (r.status === "needs_review") {
+    if (isNeedsReviewStatus(r.status)) {
       if (r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
         reviewByKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, r);
         reviewTxnIds.add(r.matchedTxnId);
@@ -429,7 +438,7 @@ export function buildLineRegister(opts: {
           offCurve: false,
           txnDate,
           txnDescription: bank?.txn.description ?? review.txnDescription ?? null,
-          needsReview: true,
+          needsReview: review.status === "needs_review_partial" ? "partial" : "match",
         };
       }
     }

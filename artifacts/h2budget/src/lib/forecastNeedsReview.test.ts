@@ -15,9 +15,9 @@ import type { CashEvent } from "./forecast";
 
 // (One-time bill move, owner decision 9) A $300 one-time bill matched to the
 // −$300 row dated 9/19 was moved to 10/20, outside the matcher's window. The
-// server stored `needs_review` (keeping the row id). On the web it is unresolved
-// on both sides — the plan is planned, the row is in Review — and the pair shows
-// as "Match needs review" with Confirm / Not this.
+// server stored `needs_review` (keeping the row id); a partial stores
+// `needs_review_partial`. On the web both are unresolved on both sides — the
+// plan is planned, the row is in Review — and the pair shows as needing review.
 
 const TODAY = new Date(2026, 8, 19);
 const base = {
@@ -53,6 +53,7 @@ const review = res({
   txnDescription: "ROOF CO",
   txnAmount: "-300.00",
 });
+const reviewPartial = { ...review, id: "rvp", status: "needs_review_partial", txnAmount: "-200.00" };
 const matched = { ...review, id: "m", status: "matched" };
 
 describe("register — a needs-review pair is unresolved and asks for an answer", () => {
@@ -69,7 +70,7 @@ describe("register — a needs-review pair is unresolved and asks for an answer"
       resolutionId: undefined,
       matchedTxnId: null,
       probablyPaid: {
-        needsReview: true,
+        needsReview: "match",
         offCurve: false,
         txnId: "t1",
         planDate: "2026-10-20",
@@ -82,6 +83,21 @@ describe("register — a needs-review pair is unresolved and asks for an answer"
     });
     expect(allBank[0]).toMatchObject({ status: "pending_bank", resolutionId: undefined, resolutionStatus: undefined });
     expect(allBank[0]!.suggestedPlan?.itemId).toBe("roof");
+  });
+
+  it("a partial that needs review keeps the WHOLE plan planned and says it was a partial", () => {
+    const { allPlan, allBank } = buildLineRegister({
+      ...base,
+      events: [roof],
+      txns: [txn("t1", "2026-09-19", "-200.00")],
+      resolutions: [reviewPartial],
+    });
+    expect(allPlan[0]).toMatchObject({
+      status: "future",
+      amount: -300,
+      probablyPaid: { needsReview: "partial", offCurve: false, txnAmount: -200, difference: -100 },
+    });
+    expect(allBank[0]).toMatchObject({ status: "pending_bank" });
   });
 
   it("a matched pair, by contrast, is decided on both sides", () => {
@@ -106,16 +122,16 @@ describe("register — a needs-review pair is unresolved and asks for an answer"
     });
     expect(allPlan[0]).toMatchObject({
       status: "pending_plan",
-      probablyPaid: { needsReview: true, txnId: "t1", txnAmount: -300, dayDelta: 18, txnDate: "2026-09-19" },
+      probablyPaid: { needsReview: "match", txnId: "t1", txnAmount: -300, dayDelta: 18, txnDate: "2026-09-19" },
     });
   });
 
   it("a server suggestion for the same row or plan never replaces the pair", () => {
     const water: CashEvent = { itemId: "water", date: "2026-09-18", label: "Water", amount: -300 } as CashEvent;
-    const serverPair = (planKey: string, planItemId: string, planDate: string): CashSignalMatch => ({
-      planKey,
-      planItemId,
-      planDate,
+    const serverPair: CashSignalMatch = {
+      planKey: "water|2026-09-18",
+      planItemId: "water",
+      planDate: "2026-09-18",
       txnId: "t1",
       planAmount: "-300.00",
       txnAmount: "-300.00",
@@ -124,19 +140,19 @@ describe("register — a needs-review pair is unresolved and asks for an answer"
       confidence: "low",
       ambiguous: false,
       offCurve: false,
-    });
+    };
     const { allPlan, allBank } = buildLineRegister({
       ...base,
       events: [roof, water],
       txns: [txn("t1", "2026-09-19", "-300.00")],
       resolutions: [review],
-      matches: [serverPair("water|2026-09-18", "water", "2026-09-18")],
+      matches: [serverPair],
     });
     expect(allPlan.find((p) => p.itemId === "water")!.probablyPaid).toBeUndefined();
     expect(allBank[0]!.suggestedPlan?.itemId).toBe("roof");
   });
 
-  it("offers no client suggestion for the row, keeps the plan out of the manual dropdown's matched filter, and writes no bucket row", () => {
+  it("offers no client suggestion for the row, keeps the plan in the manual dropdown, and writes no bucket row", () => {
     const { allPlan, allBank, rows } = buildLineRegister({
       ...base,
       events: [roof],
@@ -147,7 +163,7 @@ describe("register — a needs-review pair is unresolved and asks for an answer"
     expect(filterDropdownPlans(allPlan, new Date(2026, 9, 1))).toHaveLength(1);
     expect(rows.some((r) => r.kind === "bank" && r.status === "pending_bank")).toBe(true);
     for (const month of ["2026-09", "2026-10"]) {
-      expect(buildBucket({ allPlan, allBank, resolutions: [review], closedMonths: new Set(), monthFilter: month })).toEqual([]);
+      expect(buildBucket({ allPlan, allBank, resolutions: [review, reviewPartial], closedMonths: new Set(), monthFilter: month })).toEqual([]);
     }
   });
 });
@@ -174,6 +190,7 @@ describe("reconcile — the moved bill counts again, the row is pending", () => 
   it("needs review: October ends at 1,700 and September has one pending row", () => {
     expect(input([review], "2026-10").forecastEnd).toBe(1700);
     expect(input([review], "2026-09")).toMatchObject({ pending: 1, matched: 0 });
+    expect(input([reviewPartial], "2026-10").forecastEnd).toBe(1700);
   });
 
   it("matched: October ends at 2,000 and September's row is matched", () => {
@@ -183,21 +200,24 @@ describe("reconcile — the moved bill counts again, the row is pending", () => 
 });
 
 describe("row state and the cached bundle", () => {
-  it("rowDecisionsByTxn: a needs-review pair is not the row's decision", () => {
+  it("rowDecisionsByTxn: neither needs-review status is the row's decision", () => {
     expect(rowDecisionsByTxn([review]).has("t1")).toBe(false);
+    expect(rowDecisionsByTxn([reviewPartial]).has("t1")).toBe(false);
     expect(rowDecisionsByTxn([matched]).get("t1")).toEqual({ status: "matched" });
   });
 
-  it("applyResolutionWrite: Confirm and Not this on the pair replace it; a rejection of another pair keeps it", () => {
+  it("applyResolutionWrite: Confirm, Partial and Not this on the pair replace it; a rejection of another pair or a move keeps it", () => {
     const answer = (status: string, txnId = "t1") =>
       res({ id: `new-${status}-${txnId}`, status, recurringItemId: "roof", occurrenceDate: "2026-10-20", matchedTxnId: txnId });
-    expect(applyResolutionWrite([review], answer("matched")).map((r) => r.status)).toEqual(["matched"]);
-    expect(applyResolutionWrite([review], answer("not_match")).map((r) => r.status)).toEqual(["not_match"]);
-    expect(applyResolutionWrite([review], answer("not_match", "t9")).map((r) => r.status).sort()).toEqual([
-      "needs_review",
-      "not_match",
-    ]);
-    const move = res({ id: "mv", status: "rescheduled", recurringItemId: "roof", occurrenceDate: "2026-10-20", rescheduledTo: "2026-10-22" });
-    expect(applyResolutionWrite([review], move).map((r) => r.status).sort()).toEqual(["needs_review", "rescheduled"]);
+    for (const pending of [review, reviewPartial]) {
+      expect(applyResolutionWrite([pending], answer("matched")).map((r) => r.status)).toEqual(["matched"]);
+      expect(applyResolutionWrite([pending], answer("partial")).map((r) => r.status)).toEqual(["partial"]);
+      expect(applyResolutionWrite([pending], answer("not_match")).map((r) => r.status)).toEqual(["not_match"]);
+      expect(applyResolutionWrite([pending], answer("not_match", "t9")).map((r) => r.status).sort()).toEqual(
+        [pending.status, "not_match"].sort(),
+      );
+      const move = res({ id: "mv", status: "rescheduled", recurringItemId: "roof", occurrenceDate: "2026-10-20", rescheduledTo: "2026-10-22" });
+      expect(applyResolutionWrite([pending], move).map((r) => r.status).sort()).toEqual([pending.status, "rescheduled"].sort());
+    }
   });
 });

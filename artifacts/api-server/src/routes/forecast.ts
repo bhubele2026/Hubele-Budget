@@ -1128,13 +1128,19 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
   if (status === "not_match") {
     // Rejecting a pair replaces that pair's earlier answers: a previous
     // rejection, or a match / partial confirmation the user now takes back.
-    // (One-time bill move) It also answers a `needs_review` on the same pair.
+    // (One-time bill move) It also answers a pending review on the same pair.
     await db
       .delete(forecastResolutionsTable)
       .where(
         and(
           eq(forecastResolutionsTable.householdId, householdId),
-          inArray(forecastResolutionsTable.status, ["not_match", "matched", "partial", "needs_review"]),
+          inArray(forecastResolutionsTable.status, [
+            "not_match",
+            "matched",
+            "partial",
+            "needs_review",
+            "needs_review_partial",
+          ]),
           eq(forecastResolutionsTable.recurringItemId, recurringItemId),
           eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
           eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),

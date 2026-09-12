@@ -103,14 +103,34 @@ export const MATCH_STRICT_DAYS = 3;
 export const MATCH_OFF_CURVE_SHARE = 0.1;
 
 /**
- * (One-time bill move) Is a row dated `rowISO` inside the matcher's date window
- * for a plan due `planISO` — 10 days before to 14 days after the plan, the same
- * bounds `matchPlansToRows` applies? A confirmed match whose plan is moved
- * outside this window is no longer believable without a fresh answer.
+ * ⭐ (One-time bill move) THE EDIT RE-CHECK USES THE MATCHER'S CANDIDATE BOUNDS.
+ *
+ * `rowInMatchWindow` and `rowWithinMatchAmount` are exactly the date window
+ * (`MATCH_EARLY_DAYS` / `MATCH_LATE_DAYS`) and the loose amount tolerance
+ * (`MATCH_LOOSE_MIN_CENTS` / `MATCH_LOOSE_SHARE`) inside which `matchPlansToRows`
+ * pairs a row carrying the payee's name at all — the CANDIDATE bounds, not a
+ * confidence tier (the 5-day "high" window, the strict nameless tolerance, or
+ * any tier window added later). A one-time bill edited so its confirmed row falls
+ * outside them could never have been suggested for it, so its match needs a fresh
+ * answer. ⚠️ `matchPlansToRows` still writes these bounds inline;
+ * `planMatch.test.ts` pins both helpers to its pairing at the edges, so changing
+ * the candidate bounds there fails that test until these follow.
  */
 export function rowInMatchWindow(planISO: string, rowISO: string): boolean {
   const dayDelta = dayNumber(rowISO) - dayNumber(planISO);
   return dayDelta >= -MATCH_EARLY_DAYS && dayDelta <= MATCH_LATE_DAYS;
+}
+
+/** The loose amount tolerance's floor, in cents: a named row may miss the plan by $25. */
+export const MATCH_LOOSE_MIN_CENTS = 2500;
+/** The loose amount tolerance's share of the plan: a named row may miss it by 25%. */
+export const MATCH_LOOSE_SHARE = 0.25;
+
+/** Same sign, and |row| within max($25, 25% of the plan) of |plan| — the matcher's loose tolerance. */
+export function rowWithinMatchAmount(planAmount: number, rowAmount: number): boolean {
+  if (planAmount === 0 || Math.sign(planAmount) !== Math.sign(rowAmount)) return false;
+  const p = cents(planAmount);
+  return Math.abs(cents(rowAmount) - p) <= Math.max(MATCH_LOOSE_MIN_CENTS, Math.round(p * MATCH_LOOSE_SHARE));
 }
 
 /**

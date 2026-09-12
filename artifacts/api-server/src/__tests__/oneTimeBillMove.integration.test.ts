@@ -10,7 +10,9 @@
 //
 // Today is pinned to Sat 2026-09-19 (noon Chicago). The bank snapshot reads
 // $2,000 at 10:00 CT and already holds the −$300 "ROOF CO" row dated 9/19.
-// The matcher's window is 10 days before to 14 days after the plan.
+// The matcher's candidate window is 10 days before to 14 days after the plan;
+// its loose amount tolerance is max($25, 25%). The Forecast Review register
+// reaches back to the first of last month (8/01) and ahead 90 days (12/18).
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -133,7 +135,12 @@ async function oneTime(anchorDate: string): Promise<string> {
   return r!.id;
 }
 
-async function row(occurredOn: string, amount: string, description = "ROOF CO"): Promise<string> {
+async function row(
+  occurredOn: string,
+  amount: string,
+  description = "ROOF CO",
+  account: { plaidAccountId: string; source: string } = { plaidAccountId: CHASE, source: "plaid:chase" },
+): Promise<string> {
   const [t] = await db
     .insert(transactionsTable)
     .values({
@@ -142,8 +149,7 @@ async function row(occurredOn: string, amount: string, description = "ROOF CO"):
       occurredOn,
       description,
       amount,
-      plaidAccountId: CHASE,
-      source: "plaid:chase",
+      ...account,
       createdAt: createdAtStartOfHouseholdDay(occurredOn),
     })
     .returning({ id: transactionsTable.id });
@@ -206,6 +212,8 @@ const balanceOn = (sig: CashSignal, date: string) => sig.daily?.find((d) => d.da
 const reviewCount = () => computeReviewCount(TEST_HOUSEHOLD_ID, TEST_USER);
 const billRow = async (itemId: string, month: string) =>
   (await buildBillsSummary(TEST_HOUSEHOLD_ID, TEST_USER, month)).bills.find((b) => b.item.id === itemId);
+const activeOf = async (id: string) =>
+  (await db.select().from(recurringItemsTable).where(eq(recurringItemsTable.id, id)))[0]!.active;
 
 /** A $300 one-time bill on 9/20, matched to the −$300 row dated 9/19. */
 async function paidRoof(): Promise<{ id: string; txn: string }> {
@@ -252,7 +260,7 @@ describe("moving a one-time bill keeps its answers (owner decision 9)", () => {
     ]);
   });
 
-  it("Confirm on a needs-review pair writes matched and replaces it", async () => {
+  it("control: Confirm on a needs-review pair writes matched and replaces it", async () => {
     const { id, txn } = await paidRoof();
     await patch(id, { anchorDate: "2026-10-20" });
     const res = await post("/forecast/resolutions", { recurringItemId: id, occurrenceDate: "2026-10-20", status: "matched", matchedTxnId: txn });
@@ -303,20 +311,6 @@ describe("moving a one-time bill keeps its answers (owner decision 9)", () => {
     expect(planOf(await signal(), id)).toEqual([]);
   });
 
-  it("a partial stays partial inside the window (the $100 remainder moves with it) and needs review outside it", async () => {
-    const id = await oneTime("2026-09-20");
-    const txn = await row("2026-09-19", "-200.00");
-    await resolve("partial", id, "2026-09-20", { txnId: txn });
-
-    await patch(id, { anchorDate: "2026-09-22" });
-    expect(await stored(id)).toEqual([`partial@2026-09-22#${txn}`]);
-    expect(planOf(await signal(), id)).toEqual([["2026-09-22", "-100.00", null]]);
-
-    await patch(id, { anchorDate: "2026-10-20" });
-    expect(await stored(id)).toEqual([`needs_review@2026-10-20#${txn}`]);
-    expect(planOf(await signal(), id)).toEqual([["2026-10-20", "-300.00", null]]);
-  });
-
   it("a Forecast Move on the old date is replaced by the edit; a rejection follows the bill", async () => {
     const id = await oneTime("2026-09-20");
     const other = await row("2026-09-05", "-300.00", "OTHER");
@@ -337,15 +331,15 @@ describe("moving a one-time bill keeps its answers (owner decision 9)", () => {
     expect(planOf(await signal(), id)).toEqual([]);
   });
 
-  it("no date change, or a change away from one-time, leaves the answers where they are", async () => {
+  it("control: no change, or a change away from one-time, leaves a match where it is", async () => {
     const { id, txn } = await paidRoof();
-    await patch(id, { anchorDate: "2026-09-20", amount: "310" });
+    await patch(id, { anchorDate: "2026-09-20" });
     expect(await stored(id)).toEqual([`matched@2026-09-20#${txn}`]);
     await patch(id, { frequency: "monthly", dayOfMonth: 25, anchorDate: "2026-09-25" });
     expect(await stored(id)).toEqual([`matched@2026-09-20#${txn}`]);
   });
 
-  it("a recurring bill's edit is unchanged: the stored answer keeps its date and resolutionRemap maps it", async () => {
+  it("control: a recurring bill's edit is unchanged — the stored answer keeps its date and resolutionRemap maps it", async () => {
     const [monthly] = await db
       .insert(recurringItemsTable)
       .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, name: "Water", kind: "expense", amount: "80", frequency: "monthly", dayOfMonth: 14, anchorDate: "2026-01-14", active: "true" })
@@ -357,7 +351,7 @@ describe("moving a one-time bill keeps its answers (owner decision 9)", () => {
     expect(planOf(await signal(), monthly!.id).map((p) => p[0])).not.toContain("2026-09-20");
   });
 
-  it("'Create another bill' is a new item with no answers; the original keeps its match", async () => {
+  it("control: 'Create another bill' is a new item with no answers; the original keeps its match", async () => {
     const { id, txn } = await paidRoof();
     const created = await post("/recurring-items", { ...BILL, frequency: "onetime", active: "true", anchorDate: "2026-10-20" });
     expect(created.status).toBe(201);
@@ -371,26 +365,108 @@ describe("moving a one-time bill keeps its answers (owner decision 9)", () => {
   });
 });
 
-describe("archiveExpiredOneTime never archives a needs-review bill", () => {
-  const activeOf = async (id: string) =>
-    (await db.select().from(recurringItemsTable).where(eq(recurringItemsTable.id, id)))[0]!.active;
+describe("review H1 — amount and kind are revalidated with the date", () => {
+  it("9/28 and $3,000 in one save: needs review, the $3,000 bill on the curve (9/28 balance −1,000.00), in Review", async () => {
+    const { id, txn } = await paidRoof();
+    expect(await patch(id, { anchorDate: "2026-09-28", amount: "3000" })).toBe(200);
+    expect(await stored(id)).toEqual([`needs_review@2026-09-28#${txn}`]);
+    const sig = await signal();
+    expect(planOf(sig, id)).toEqual([["2026-09-28", "-3000.00", null]]);
+    expect(balanceOn(sig, "2026-09-28")).toBe("-1000.00");
+    expect(await reviewCount()).toBe(1);
+  });
 
-  it("moved to 9/01 (18 days before its row): needs review, listed overdue, still active", async () => {
+  it("$3,000 on the same date: needs review too", async () => {
+    const { id, txn } = await paidRoof();
+    await patch(id, { anchorDate: "2026-09-20", amount: "3000" });
+    expect(await stored(id)).toEqual([`needs_review@2026-09-20#${txn}`]);
+    expect(planOf(await signal(), id)).toEqual([["2026-09-20", "-3000.00", null]]);
+  });
+
+  it("expense → income with a new date: a debit never pays an income plan", async () => {
+    const { id, txn } = await paidRoof();
+    await patch(id, { anchorDate: "2026-09-25", kind: "income" });
+    expect(await stored(id)).toEqual([`needs_review@2026-09-25#${txn}`]);
+    // `events` lists outflows only; the +$300 income is on the curve on 9/25.
+    const sig = await signal();
+    expect(balanceOn(sig, "2026-09-24")).toBe("2000.00");
+    expect(balanceOn(sig, "2026-09-25")).toBe("2300.00");
+  });
+
+  it("control: $320 on 9/25 stays within max($25, 25%) and stays matched", async () => {
+    const { id, txn } = await paidRoof();
+    await patch(id, { anchorDate: "2026-09-25", amount: "320" });
+    expect(await stored(id)).toEqual([`matched@2026-09-25#${txn}`]);
+  });
+});
+
+describe("review M1 — one decision per key when the new date already holds a stranded answer", () => {
+  it("neither passes: the live match needs review, the stranded one is dropped, the bill is on the curve", async () => {
+    const id = await oneTime("2026-09-20");
+    const stale = await row("2026-09-02", "-300.00", "ROOF CO DEPOSIT");
+    const live = await row("2026-09-19", "-300.00");
+    await resolve("matched", id, "2026-10-01", { txnId: stale });
+    await resolve("matched", id, "2026-09-20", { txnId: live });
+    await patch(id, { anchorDate: "2026-10-01" });
+    expect(await stored(id)).toEqual([`needs_review@2026-10-01#${live}`]);
+    expect(planOf(await signal(), id)).toEqual([["2026-10-01", "-300.00", null]]);
+  });
+
+  it("the stranded one passes and the live one does not: only the passing match is kept", async () => {
+    const id = await oneTime("2026-09-20");
+    const near = await row("2026-09-18", "-300.00");
+    const far = await row("2026-09-05", "-300.00", "ROOF CO EARLY");
+    await resolve("matched", id, "2026-09-25", { txnId: near });
+    await resolve("matched", id, "2026-09-20", { txnId: far });
+    await patch(id, { anchorDate: "2026-09-25" });
+    expect(await stored(id)).toEqual([`matched@2026-09-25#${near}`]);
+    expect(planOf(await signal(), id)).toEqual([]);
+  });
+});
+
+describe("review M2 — every needs-review answer can be answered", () => {
+  it("(a) moved to 7/01, before the Review register: the match is cleared, not left unanswerable; the 60-day rule archives the bill", async () => {
+    const { id, txn } = await paidRoof();
+    await patch(id, { anchorDate: "2026-07-01" });
+    expect(await stored(id)).toEqual([]);
+    expect(await bankRow(txn)).toEqual({ occurredOn: "2026-09-19", amount: "-300.00", description: "ROOF CO" });
+    await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
+    expect(await activeOf(id)).toBe("false");
+  });
+
+  it("(b) paid from a card row Review cannot show: the match is cleared and the bill is unpaid on its new date", async () => {
+    const id = await oneTime("2026-09-20");
+    const card = await row("2026-09-19", "-300.00", "ROOF CO", { plaidAccountId: "amex-onetime-move", source: "plaid:amex" });
+    await resolve("matched", id, "2026-09-20", { txnId: card });
+    await patch(id, { anchorDate: "2026-10-20" });
+    expect(await stored(id)).toEqual([]);
+    expect(planOf(await signal(), id)).toEqual([["2026-10-20", "-300.00", null]]);
+  });
+
+  it("(c) leaving one-time clears a needs-review answer: the row is no longer claimed", async () => {
+    const { id, txn } = await paidRoof();
+    await patch(id, { anchorDate: "2026-10-20" });
+    expect(await stored(id)).toEqual([`needs_review@2026-10-20#${txn}`]);
+    await patch(id, { frequency: "monthly", dayOfMonth: 20, anchorDate: "2026-10-20" });
+    expect(await stored(id)).toEqual([]);
+    expect(await reviewCount()).toBe(1);
+  });
+
+  it("(d) a needs-review answer on another date does not hold the bill active", async () => {
+    const id = await oneTime("2026-07-01");
+    const txn = await row("2026-09-19", "-300.00");
+    await resolve("needs_review", id, "2026-09-01", { txnId: txn });
+    await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
+    expect(await activeOf(id)).toBe("false");
+  });
+
+  it("moved to 9/01 (18 days before its row, inside the register): needs review, listed overdue, still active", async () => {
     const { id, txn } = await paidRoof();
     await patch(id, { anchorDate: "2026-09-01" });
     expect(await stored(id)).toEqual([`needs_review@2026-09-01#${txn}`]);
     await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
     expect(await activeOf(id)).toBe("true");
-    const sig = await signal();
-    expect(listedOf(sig, id)).toEqual([["overdue", "2026-09-01", "-300.00"]]);
-  });
-
-  it("moved to 7/01, past the 60-day keep: still active until answered", async () => {
-    const { id, txn } = await paidRoof();
-    await patch(id, { anchorDate: "2026-07-01" });
-    expect(await stored(id)).toEqual([`needs_review@2026-07-01#${txn}`]);
-    await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
-    expect(await activeOf(id)).toBe("true");
+    expect(listedOf(await signal(), id)).toEqual([["overdue", "2026-09-01", "-300.00"]]);
   });
 
   it("control: a matched one-time bill dated before today is archived as before", async () => {
@@ -399,5 +475,61 @@ describe("archiveExpiredOneTime never archives a needs-review bill", () => {
     await resolve("matched", id, "2026-09-10", { txnId: txn });
     await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
     expect(await activeOf(id)).toBe("false");
+  });
+});
+
+describe("review M3 — a partial that needs review stays a partial", () => {
+  it("inside the window it stays partial (the $100 remainder moves with it)", async () => {
+    const id = await oneTime("2026-09-20");
+    const txn = await row("2026-09-19", "-200.00");
+    await resolve("partial", id, "2026-09-20", { txnId: txn });
+    await patch(id, { anchorDate: "2026-09-22" });
+    expect(await stored(id)).toEqual([`partial@2026-09-22#${txn}`]);
+    expect(planOf(await signal(), id)).toEqual([["2026-09-22", "-100.00", null]]);
+  });
+
+  it("outside it: needs_review_partial, in Review, whole bill on the curve; answering Partial leaves $100 (10/20 balance 1,900.00)", async () => {
+    const id = await oneTime("2026-09-20");
+    const txn = await row("2026-09-19", "-200.00");
+    await resolve("partial", id, "2026-09-20", { txnId: txn });
+    await patch(id, { anchorDate: "2026-10-20" });
+    expect(await stored(id)).toEqual([`needs_review_partial@2026-10-20#${txn}`]);
+    expect(planOf(await signal(), id)).toEqual([["2026-10-20", "-300.00", null]]);
+    expect(await reviewCount()).toBe(1);
+
+    const res = await post("/forecast/resolutions", { recurringItemId: id, occurrenceDate: "2026-10-20", status: "partial", matchedTxnId: txn });
+    expect(res.status).toBe(200);
+    expect(await stored(id)).toEqual([`partial@2026-10-20#${txn}`]);
+    const sig = await signal();
+    expect(planOf(sig, id)).toEqual([["2026-10-20", "-100.00", null]]);
+    expect(balanceOn(sig, "2026-10-20")).toBe("1900.00");
+  });
+
+  it("Not this replaces a needs_review_partial", async () => {
+    const id = await oneTime("2026-09-20");
+    const txn = await row("2026-09-19", "-200.00");
+    await resolve("partial", id, "2026-09-20", { txnId: txn });
+    await patch(id, { anchorDate: "2026-10-20" });
+    await post("/forecast/resolutions", { recurringItemId: id, occurrenceDate: "2026-10-20", status: "not_match", matchedTxnId: txn });
+    expect(await stored(id)).toEqual([`not_match@2026-10-20#${txn}`]);
+  });
+
+  it("a partial whose new amount the row now covers needs review rather than turning paid", async () => {
+    const id = await oneTime("2026-09-20");
+    const txn = await row("2026-09-19", "-200.00");
+    await resolve("partial", id, "2026-09-20", { txnId: txn });
+    await patch(id, { anchorDate: "2026-09-22", amount: "200" });
+    expect(await stored(id)).toEqual([`needs_review_partial@2026-09-22#${txn}`]);
+    expect(planOf(await signal(), id)).toEqual([["2026-09-22", "-200.00", null]]);
+  });
+});
+
+describe("review L1 — a match on a deleted row is not carried", () => {
+  it("the row is gone: the match is dropped and the bill is unpaid on its new date", async () => {
+    const { id, txn } = await paidRoof();
+    await db.delete(transactionsTable).where(eq(transactionsTable.id, txn));
+    await patch(id, { anchorDate: "2026-09-25" });
+    expect(await stored(id)).toEqual([]);
+    expect(planOf(await signal(), id)).toEqual([["2026-09-25", "-300.00", null]]);
   });
 });

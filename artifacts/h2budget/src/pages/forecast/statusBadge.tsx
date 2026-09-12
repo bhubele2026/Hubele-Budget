@@ -27,6 +27,8 @@ const CHIP: Record<string, { label: string; tone: string }> = {
   suggested: { label: "Suggested", tone: "info" },
   /** (One-time bill move) A confirmed match the bill's new date put in question. */
   needs_review: { label: "Match needs review", tone: "warn" },
+  /** (One-time bill move, review M3) The same for a partial payment. */
+  needs_review_partial: { label: "Partial payment needs review", tone: "warn" },
   matched: { label: "Matched", tone: "ok" },
   partial: { label: "Partly paid", tone: "warn" },
   missed: { label: "Missed", tone: "bad" },

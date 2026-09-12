@@ -6,7 +6,8 @@ import React from "react";
 // (One-time bill move, owner decision 9) Editing a one-time bill offers two
 // different acts: "Move this bill" (the default save once the date changes —
 // the SAME bill, whose answers the server moves with it) and "Create another
-// bill" (a NEW item with the edited fields; the original is not touched).
+// bill" (a NEW, active item with the edited fields; the original is not
+// touched), offered only once the date, name or amount differs.
 
 if (!(Element.prototype as { scrollIntoView?: unknown }).scrollIntoView) {
   (Element.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = () => {};
@@ -105,6 +106,12 @@ function renderPage() {
   );
 }
 
+async function openRoof(): Promise<HTMLInputElement> {
+  renderPage();
+  fireEvent.click(screen.getByTestId("row-bill-bill-roof"));
+  return (await screen.findByTestId("input-onetime-date")) as HTMLInputElement;
+}
+
 beforeEach(() => {
   cleanup();
   createItemMock.mockClear();
@@ -114,9 +121,7 @@ beforeEach(() => {
 
 describe("Bills editor — one-time bills: Move this bill vs Create another bill", () => {
   it("a new date turns the save into 'Move this bill', which updates the same bill", async () => {
-    renderPage();
-    fireEvent.click(screen.getByTestId("row-bill-bill-roof"));
-    const date = (await screen.findByTestId("input-onetime-date")) as HTMLInputElement;
+    const date = await openRoof();
     expect(date.value).toBe("2026-09-20");
     expect(screen.getByTestId("button-save").textContent).toBe("Save changes");
 
@@ -133,9 +138,7 @@ describe("Bills editor — one-time bills: Move this bill vs Create another bill
   });
 
   it("'Create another bill' creates a new one-time item with the edited fields and never updates the original", async () => {
-    renderPage();
-    fireEvent.click(screen.getByTestId("row-bill-bill-roof"));
-    const date = (await screen.findByTestId("input-onetime-date")) as HTMLInputElement;
+    const date = await openRoof();
     fireEvent.change(date, { target: { value: "2026-10-20" } });
     fireEvent.click(screen.getByTestId("button-create-another"));
 
@@ -144,6 +147,29 @@ describe("Bills editor — one-time bills: Move this bill vs Create another bill
     expect(arg.id).toBeUndefined();
     expect(arg.data).toMatchObject({ name: "Roof repair", amount: "300", frequency: "onetime", anchorDate: "2026-10-20" });
     expect(updateItemMock).not.toHaveBeenCalled();
+  });
+
+  it("(review L3) 'Create another bill' is not offered until the date, name or amount differs", async () => {
+    await openRoof();
+    expect(screen.queryByTestId("button-create-another")).toBeNull();
+    fireEvent.change(screen.getByTestId("input-name"), { target: { value: "Roof repair, second visit" } });
+    expect(screen.getByTestId("button-create-another")).toBeTruthy();
+    fireEvent.change(screen.getByTestId("input-name"), { target: { value: "Roof repair" } });
+    expect(screen.queryByTestId("button-create-another")).toBeNull();
+  });
+
+  it("(review L3) the new bill is active even when the original was paused", async () => {
+    items = [{ ...ROOF, active: "false" }, WATER];
+    const date = await openRoof();
+    fireEvent.change(date, { target: { value: "2026-10-20" } });
+    fireEvent.click(screen.getByTestId("button-create-another"));
+    const arg = createItemMock.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect(arg.data.active).toBe("true");
+  });
+
+  it("the help says a far move asks for review", async () => {
+    await openRoof();
+    expect(screen.getByLabelText(/far move asks for review/i)).toBeTruthy();
   });
 
   it("a recurring bill has no 'Create another bill' and saves as before", async () => {

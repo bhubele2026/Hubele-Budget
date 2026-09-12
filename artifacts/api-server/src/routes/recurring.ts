@@ -14,7 +14,7 @@ import {
   DeleteRecurringItemParams,
 } from "@workspace/api-zod";
 import { archiveExpiredOneTime } from "./bills";
-import { moveOneTimeResolutions, oneTimeDateMove } from "../lib/oneTimeBillMove";
+import { clearPendingReviews, moveOneTimeResolutions, oneTimeEdit } from "../lib/oneTimeBillMove";
 import { MY_BUDGET_GROUP } from "./budget";
 
 const router: IRouter = Router();
@@ -124,26 +124,37 @@ router.patch(
         return;
       }
     }
-    // ⭐ (One-time bill move) The item update and the move of its answers are one
-    // transaction: a moved one-time bill keeps its match, skip or rejection on the
-    // new date, and a match the new date puts in question becomes `needs_review`.
-    // Bank rows are never written. See `lib/oneTimeBillMove.ts`.
+    // ⭐ (One-time bill move) The item update and the re-check of its answers are
+    // one transaction. A one-time bill whose date, amount or kind changed keeps its
+    // answers on its date; a pair the edit puts in question needs review (or is
+    // cleared when Review could not show it). A bill that stops being one-time
+    // drops its pending reviews. Bank rows are never written. See
+    // `lib/oneTimeBillMove.ts`.
     const householdId = req.householdId!;
+    const ownerUserId = req.householdOwnerId!;
     const row = await db.transaction(async (tx) => {
       const where = and(
         eq(recurringItemsTable.id, params.data.id),
         eq(recurringItemsTable.householdId, householdId),
       );
       const [before] = await tx
-        .select({ frequency: recurringItemsTable.frequency, anchorDate: recurringItemsTable.anchorDate })
+        .select({
+          frequency: recurringItemsTable.frequency,
+          anchorDate: recurringItemsTable.anchorDate,
+          kind: recurringItemsTable.kind,
+          amount: recurringItemsTable.amount,
+        })
         .from(recurringItemsTable)
         .where(where)
         .for("update");
       if (!before) return null;
       const [updated] = await tx.update(recurringItemsTable).set(parsed.data).where(where).returning();
       if (!updated) return null;
-      const move = oneTimeDateMove(before, parsed.data);
-      if (move) await moveOneTimeResolutions(tx, householdId, updated.id, move.from, move.to);
+      if (before.frequency === "onetime" && updated.frequency !== "onetime") {
+        await clearPendingReviews(tx, householdId, updated.id);
+      }
+      const edit = oneTimeEdit(before, updated);
+      if (edit) await moveOneTimeResolutions(tx, { householdId, ownerUserId }, updated.id, edit);
       return updated;
     });
     if (!row) {

@@ -117,12 +117,20 @@ export async function archiveExpiredOneTime(householdId: string): Promise<void> 
   const archive = expired
     .filter((item) => {
       const own = resolutions.filter((r) => r.recurringItemId === item.id);
-      // (One-time bill move) A match the move put in question waits for an answer:
-      // `needs_review` is unresolved, and the bill stays active — past the 60 days
-      // too — until the user confirms or rejects the pair.
-      if (own.some((r) => r.status === "needs_review")) return false;
       const moved = own.find((r) => r.status === "rescheduled" && r.occurrenceDate === item.anchorDate);
       const dueISO = moved?.rescheduledTo ?? item.anchorDate!;
+      // (One-time bill move, review M2d) A pair an edit put in question waits for an
+      // answer: `needs_review` / `needs_review_partial` ON THE BILL'S CURRENT DATE
+      // keeps it active while Forecast Review can still show it (due on or after the
+      // first of last month). One on any other date, or one Review can no longer
+      // show, holds nothing: the 60-day rule below applies as to any unresolved bill.
+      const reviewFromISO = fmtISO(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+      const pendingReview = own.some(
+        (r) =>
+          (r.status === "needs_review" || r.status === "needs_review_partial") &&
+          (r.occurrenceDate === item.anchorDate || r.occurrenceDate === dueISO),
+      );
+      if (pendingReview && dueISO >= reviewFromISO) return false;
       const resolved = own.some(
         (r) =>
           (r.status === "matched" || r.status === "skipped" || r.status === "missed" || r.status === "dismissed") &&

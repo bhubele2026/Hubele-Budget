@@ -77,11 +77,13 @@ export async function computeReviewCount(
     .where(eq(forecastResolutionsTable.householdId, householdId));
   // (PR5) A "Not this" (`not_match`) answer rejects one suggested plan for the
   // row; the row itself is still unreviewed.
-  // (One-time bill move) Neither does a `needs_review` pair: a move put the match
-  // in question, and the row waits for Confirm / Not this.
+  // (One-time bill move) Neither does a pair an edit put in question
+  // (`needs_review`, `needs_review_partial`): the row waits for the user's answer.
   const resolvedTxnIds = new Set(
     resolutions
-      .filter((r) => r.status !== "not_match" && r.status !== "needs_review")
+      .filter(
+        (r) => r.status !== "not_match" && r.status !== "needs_review" && r.status !== "needs_review_partial",
+      )
       .map((r) => r.matchedTxnId)
       .filter(Boolean),
   );

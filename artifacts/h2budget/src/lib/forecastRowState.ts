@@ -24,7 +24,13 @@ export function rowDecisionsByTxn(
 ): Map<string, { status: string }> {
   const out = new Map<string, { status: string }>();
   for (const r of resolutions) {
-    if (!r.matchedTxnId || r.status === "not_match" || r.status === "needs_review") continue;
+    if (
+      !r.matchedTxnId ||
+      r.status === "not_match" ||
+      r.status === "needs_review" ||
+      r.status === "needs_review_partial"
+    )
+      continue;
     out.set(r.matchedTxnId, { status: r.status });
   }
   return out;

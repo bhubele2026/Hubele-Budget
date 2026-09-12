@@ -27,19 +27,21 @@ export function applyResolutionWrite(
   const sameTxn = (r: Resolution) => !!row.matchedTxnId && r.matchedTxnId === row.matchedTxnId;
   const samePair = (r: Resolution) => samePlan(r) && sameTxn(r);
 
+  // (One-time bill move) A pair an edit put in question, awaiting an answer.
+  const pendingReview = (status: string) => status === "needs_review" || status === "needs_review_partial";
   const kept = list.filter((r) => {
     if (r.id === row.id) return false;
     if (row.status === "not_match") {
       return !(
         samePair(r) &&
-        (r.status === "not_match" || r.status === "matched" || r.status === "partial" || r.status === "needs_review")
+        (r.status === "not_match" || r.status === "matched" || r.status === "partial" || pendingReview(r.status))
       );
     }
     if (r.status === "not_match") return !samePair(r);
     if (samePlan(r)) {
       if (row.status === "partial" && r.status === "rescheduled") return true;
-      // (One-time bill move) A move keeps a `needs_review` pair open too.
-      if (row.status === "rescheduled" && (r.status === "partial" || r.status === "needs_review")) return true;
+      // (One-time bill move) A move keeps a pending review open too.
+      if (row.status === "rescheduled" && (r.status === "partial" || pendingReview(r.status))) return true;
       return false;
     }
     return !sameTxn(r);

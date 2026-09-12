@@ -16,7 +16,11 @@ export function curveHelp(offCurve: boolean): string {
 
 /** (One-time bill move) What a "Match needs review" pair means. */
 export const REVIEW_HELP =
-  "This bill was moved, and the bank row matched to it is now too far from the new date to count on its own. The forecast counts the bill again until you answer. Confirm keeps the match, Not this frees the row.";
+  "This bill was edited, and the bank row matched to it no longer fits the new date or amount on its own. The forecast counts the bill again until you answer. Confirm keeps the match, Not this frees the row.";
+
+/** (One-time bill move, review M3) What a "Partial payment needs review" pair means. */
+export const REVIEW_PARTIAL_HELP =
+  "This bill was edited, and the part payment matched to it no longer fits the new date or amount on its own. The forecast counts the whole bill until you answer. Partial keeps the unpaid rest planned, Confirm full treats the row as paying all of it, Not this frees the row.";
 
 /**
  * (PR5) How far the paying row sits from the plan, as a mono figure plus a

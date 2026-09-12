@@ -3,6 +3,8 @@ import {
   labelEvidence,
   matchPlansToRows,
   plansPaidInFullByName,
+  rowInMatchWindow,
+  rowWithinMatchAmount,
   type MatchPlan,
   type MatchRow,
 } from "@workspace/avalanche-core";
@@ -20,6 +22,39 @@ const row = (txnId: string, occurredOn: string, amount: number, description: str
   occurredOn,
   amount,
   description,
+});
+
+describe("(one-time bill move, review L4) the move re-check uses the matcher's own candidate bounds", () => {
+  it("rowInMatchWindow is exactly the date window matchPlansToRows pairs a named row in", () => {
+    const plans = [plan("roof", "2026-09-20", -400, "Roof repair")];
+    const cases: Array<[string, boolean]> = [
+      ["2026-09-10", true],
+      ["2026-09-09", false],
+      ["2026-10-04", true],
+      ["2026-10-05", false],
+    ];
+    for (const [date, inside] of cases) {
+      expect(rowInMatchWindow("2026-09-20", date)).toBe(inside);
+      expect(matchPlansToRows(plans, [row("t", date, -400, "ROOF REPAIR CO")]).length).toBe(inside ? 1 : 0);
+    }
+  });
+
+  it("rowWithinMatchAmount is exactly the loose tolerance max($25, 25%) matchPlansToRows pairs a named row within", () => {
+    const plans = [plan("roof", "2026-09-20", -400, "Roof repair")];
+    const cases: Array<[number, boolean]> = [
+      [-500, true],
+      [-500.01, false],
+      [-300, true],
+      [-299.99, false],
+    ];
+    for (const [amount, inside] of cases) {
+      expect(rowWithinMatchAmount(-400, amount)).toBe(inside);
+      expect(matchPlansToRows(plans, [row("t", "2026-09-20", amount, "ROOF REPAIR CO")]).length).toBe(inside ? 1 : 0);
+    }
+    expect(rowWithinMatchAmount(-50, -75)).toBe(true);
+    expect(rowWithinMatchAmount(-50, -75.01)).toBe(false);
+    expect(rowWithinMatchAmount(400, -400)).toBe(false);
+  });
 });
 
 describe("labelEvidence", () => {

@@ -395,6 +395,13 @@ export default function BillsPage() {
   const movesOneTime =
     editingOneTime && !!form.oneTimeDate && form.oneTimeDate !== (editing?.anchorDate ?? "");
   const itemNoun = form.kind === "income" ? "item" : "bill";
+  // (Review L3) "Create another bill" is offered only once the date, name or
+  // amount differs from the bill being edited — otherwise it would just copy it.
+  const differsFromEditing =
+    editingOneTime &&
+    (form.oneTimeDate !== (editing?.anchorDate ?? "") ||
+      form.name.trim() !== (editing?.name ?? "").trim() ||
+      Number(form.amount) !== Number(editing?.amount));
 
   const validateForm = (): boolean => {
     if (!form.name.trim()) {
@@ -414,9 +421,10 @@ export default function BillsPage() {
   };
 
   const onCreateAnother = () => {
-    if (!validateForm()) return;
+    if (!differsFromEditing || !validateForm()) return;
     createItem.mutate(
-      { data: buildPayload(form) },
+      // (Review L3) A new bill is active, whatever the paused original says.
+      { data: { ...buildPayload(form), active: "true" } },
       {
         onSuccess: () => {
           invalidateAll();
@@ -1248,16 +1256,18 @@ export default function BillsPage() {
               <span className="flex flex-wrap items-center justify-end gap-2">
                 {editingOneTime && (
                   <>
-                    <Help>{`Move this ${itemNoun} keeps its match, skip and history on the new date. Create another ${itemNoun} adds a separate one with these details and leaves this one as it is.`}</Help>
-                    <button
-                      type="button"
-                      className={btnSecondary}
-                      disabled={createItem.isPending || updateItem.isPending}
-                      onClick={onCreateAnother}
-                      data-testid="button-create-another"
-                    >
-                      Create another {itemNoun}
-                    </button>
+                    <Help>{`Move this ${itemNoun} keeps its match, skip and history on the new date; a far move asks for review, and so does a new amount. Create another ${itemNoun} adds a separate one with these details and leaves this one as it is.`}</Help>
+                    {differsFromEditing && (
+                      <button
+                        type="button"
+                        className={btnSecondary}
+                        disabled={createItem.isPending || updateItem.isPending}
+                        onClick={onCreateAnother}
+                        data-testid="button-create-another"
+                      >
+                        Create another {itemNoun}
+                      </button>
+                    )}
                   </>
                 )}
                 <button
