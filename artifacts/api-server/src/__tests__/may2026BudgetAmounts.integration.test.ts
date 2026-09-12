@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import express from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 let TEST_HOUSEHOLD_ID: string;
@@ -68,6 +68,8 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
+// The canonical amounts (task #106). They equal the seed amounts, which is why
+// the reset can no longer tell a drifted line from a user's edit.
 const CANONICAL: Array<[string, number]> = [
   ["Hannah's paycheck (Exact)", 4499.99],
   ["Brad's paycheck (KFI)", 8100.0],
@@ -95,33 +97,87 @@ const CANONICAL: Array<[string, number]> = [
   ["Tax Sinking Fund", 0],
 ];
 
-describe("May 2026 budget amounts reconciliation (task #106)", () => {
-  it("seeds defaults then reconciles May 2026 to the canonical source-of-truth amounts", async () => {
-    // 1. Seed defaults for a fresh user.
+// Manual categories with no bill linked: the Budget page shows their stored
+// line as is, so the response can be checked as well as the row. (Pets is not
+// one: the bill-link heal points "Dog Waste Removal" at it, so its planned
+// amount comes from that bill unless the month is pinned.)
+const PLAIN_ENVELOPES = [
+  "Health",
+  "Groceries",
+  "Dining & Coffee",
+  "Childcare & Activities",
+  "Shopping",
+  "Entertainment",
+  "Charitable Giving & Education",
+  "Emergency Fund",
+  "Investments & Retirement",
+  "Kids' Savings / 529",
+  "Tax Sinking Fund",
+];
+
+async function mayLinesByName(): Promise<Map<string, { planned: string; pinned: boolean }>> {
+  const rows = await db
+    .select({
+      name: budgetCategoriesTable.name,
+      planned: budgetLinesTable.plannedAmount,
+      pinned: budgetLinesTable.pinned,
+    })
+    .from(budgetLinesTable)
+    .innerJoin(budgetCategoriesTable, eq(budgetCategoriesTable.id, budgetLinesTable.categoryId))
+    .where(
+      and(
+        eq(budgetLinesTable.householdId, TEST_HOUSEHOLD_ID),
+        eq(budgetLinesTable.monthStart, MONTH),
+      ),
+    );
+  return new Map(rows.map((r) => [r.name, { planned: r.planned, pinned: r.pinned }]));
+}
+
+async function mayMonthPinned(): Promise<boolean | undefined> {
+  const [m] = await db
+    .select({ pinned: budgetMonthsTable.pinned })
+    .from(budgetMonthsTable)
+    .where(
+      and(
+        eq(budgetMonthsTable.householdId, TEST_HOUSEHOLD_ID),
+        eq(budgetMonthsTable.monthStart, MONTH),
+      ),
+    );
+  return m?.pinned;
+}
+
+describe("May 2026 budget amounts reconciliation (task #106, owner decision 3)", () => {
+  it("never overwrites a seeded household's May 2026 lines and never pins the month", async () => {
+    // 1. Seed defaults for a fresh user: May 2026 lines at the canonical amounts.
     const seedRes = await fetch(`${baseUrl}/budget/seed-defaults`, {
       method: "POST",
     });
     expect(seedRes.status).toBe(200);
 
-    // 2. Hand-edit a couple of manual categories to simulate prior drift, so
-    //    we can prove the reconciliation forces them back to canonical.
+    const seeded = await mayLinesByName();
+    for (const [name, expected] of CANONICAL) {
+      expect(parseFloat(seeded.get(name)!.planned), `seeded ${name}`).toBeCloseTo(expected, 2);
+    }
+
+    // 2. The household edits two lines. The old reset forced both back.
     const cats = await db
       .select()
       .from(budgetCategoriesTable)
       .where(eq(budgetCategoriesTable.userId, TEST_USER));
     const byName = new Map(cats.map((c) => [c.name, c]));
     const misc = byName.get("Misc / Buffer")!;
-    const utilities = byName.get("Utilities")!;
+    const groceries = byName.get("Groceries")!;
     await db
       .update(budgetLinesTable)
       .set({ plannedAmount: "0" })
       .where(eq(budgetLinesTable.categoryId, misc.id));
     await db
       .update(budgetLinesTable)
-      .set({ plannedAmount: "100.00" })
-      .where(eq(budgetLinesTable.categoryId, utilities.id));
+      .set({ plannedAmount: "512.34" })
+      .where(eq(budgetLinesTable.categoryId, groceries.id));
+    const before = await mayLinesByName();
 
-    // 3. Hit the May 2026 budget endpoint, which triggers reconciliation.
+    // 3. Hit the May 2026 budget endpoint, which runs the reconciliation.
     const res = await fetch(`${baseUrl}/budget/months/${MONTH}`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -132,47 +188,58 @@ describe("May 2026 budget amounts reconciliation (task #106)", () => {
       }>;
     };
 
-    // Build a flat lookup of category planned amounts.
+    // Every May line the household had is exactly as it was, and none is pinned.
+    const after = await mayLinesByName();
+    for (const [name, line] of before) {
+      expect(after.get(name), `May line ${name}`).toEqual(line);
+      expect(after.get(name)!.pinned, `May line ${name} pinned`).toBe(false);
+    }
+    expect(after.get("Misc / Buffer")!.planned).toBe("0.00");
+    expect(after.get("Groceries")!.planned).toBe("512.34");
+    expect(await mayMonthPinned()).toBe(false);
+
+    // May's group totals for this unpinned seeded household. Unpinned, a
+    // bill-backed or auto category shows its linked bills for May; a plain
+    // envelope shows its stored line. From SEED_RECURRING_ITEMS, after the
+    // bill-link heal (Dog Waste Removal → Pets):
+    //   Income 33,387.98 = Brad 3 × 8,100.00 (May 1/15/29) + Hannah 2 × 4,499.99
+    //     (May 8/22) + Other Income 88.00
+    //   Housing & Utilities 3,405.08 = Mortgage 1,989.81 + HELOC 677.40 + Utilities
+    //     684.02 (342.00 + 241.00 + 101.02) + Home Maintenance 53.85 (stored; no bill)
+    //   Insurance & Health 345.13 = 95.00 + 121.54 + 128.59; Health 0
+    //   Food 972.34 = Groceries 512.34 (edited) + Dining & Coffee 460.00
+    //   Transportation 1,724.35 = Car Payments 651.55 + 672.80 + gas 2 × 200.00
+    //   Kids & Pets 80.00 = Dog Waste Removal
+    //   Lifestyle & Shopping 2,965.99 = Subscriptions 2 × 18.98 + Misc / Buffer
+    //     (Weekly Spend 5 × 450.00 + Monthly Spend 440.45 + Nelnet 237.58)
+    //   Savings & Debt Payoff 0; Avalanche 0 (manualExtra untouched)
+    const groupTotal = (name: string) => {
+      const g = body.groups.find((x) => x.groupName === name);
+      expect(g, `missing group ${name}`).toBeTruthy();
+      return g!.plannedTotal;
+    };
+    expect(groupTotal("Income")).toBe("33387.98");
+    expect(groupTotal("Housing & Utilities")).toBe("3405.08");
+    expect(groupTotal("Insurance & Health")).toBe("345.13");
+    expect(groupTotal("Food")).toBe("972.34");
+    expect(groupTotal("Transportation")).toBe("1724.35");
+    expect(groupTotal("Kids & Pets")).toBe("80.00");
+    expect(groupTotal("Lifestyle & Shopping")).toBe("2965.99");
+    expect(groupTotal("Savings & Debt Payoff")).toBe("0.00");
+    expect(groupTotal("Avalanche — Extra to Highest APR")).toBe("0.00");
+
+    // Plain envelopes show their stored line on the page.
     const planned = new Map<string, number>();
     for (const g of body.groups) {
-      for (const l of g.lines) {
-        planned.set(l.categoryName, parseFloat(l.plannedAmount));
-      }
+      for (const l of g.lines) planned.set(l.categoryName, parseFloat(l.plannedAmount));
+    }
+    expect(planned.get("Groceries")).toBeCloseTo(512.34, 2);
+    for (const name of PLAIN_ENVELOPES.filter((n) => n !== "Groceries")) {
+      const expected = CANONICAL.find(([n]) => n === name)![1];
+      expect(planned.get(name), `expected ${name} = ${expected}`).toBeCloseTo(expected, 2);
     }
 
-    for (const [name, expected] of CANONICAL) {
-      expect(planned.get(name), `expected ${name} = ${expected}`).toBeCloseTo(
-        expected,
-        2,
-      );
-    }
-
-    // 4. Group totals derived from the per-line canonical values (per-line
-    //    table is the source of truth; the prose totals in the task spec
-    //    omit the Home Maintenance line for Housing & Utilities).
-    const groupTotal = (name: string) => {
-      const g = body.groups.find((g) => g.groupName === name);
-      expect(g, `missing group ${name}`).toBeTruthy();
-      return parseFloat(g!.plannedTotal);
-    };
-    expect(groupTotal("Income")).toBeCloseTo(12687.99, 2);
-    expect(groupTotal("Housing & Utilities")).toBeCloseTo(3495.3, 2); // 1989.81+677.40+774.24+53.85
-    expect(groupTotal("Insurance & Health")).toBeCloseTo(345.13, 2);
-    expect(groupTotal("Food")).toBeCloseTo(920.0, 2);
-    expect(groupTotal("Transportation")).toBeCloseTo(1574.35, 2);
-    // Avalanche group's "Avalanche payment" line mirrors manualExtra. The
-    // May-2026 reconcile intentionally NO LONGER force-sets manualExtra (it
-    // used to clobber the user's own avalanche slider with a hardcoded
-    // $6,225 and surface a giant Forecast row), so the managed line — and
-    // therefore the group total — defaults to $0.00.
-    expect(groupTotal("Avalanche — Extra to Highest APR")).toBeCloseTo(
-      0.0,
-      2,
-    );
-
-    // 5. Avalanche manualExtra is NOT touched by the May-2026 reconcile.
-    // The managed-line sync (ensureSettings) creates the row at the $0
-    // default; the user controls the real value via the Avalanche slider.
+    // 4. Avalanche manualExtra is NOT touched by the May-2026 reconcile.
     const [av] = await db
       .select()
       .from(avalancheSettingsTable)
@@ -180,7 +247,7 @@ describe("May 2026 budget amounts reconciliation (task #106)", () => {
     expect(av).toBeTruthy();
     expect(parseFloat(av!.manualExtra)).toBeCloseTo(0.0, 2);
 
-    // 6. The per-user flag should be set so reconciliation is a no-op next time.
+    // 5. The per-household gate is set so the pass is a no-op next time.
     const [s] = await db
       .select()
       .from(settingsTable)
@@ -189,18 +256,14 @@ describe("May 2026 budget amounts reconciliation (task #106)", () => {
     const prefs = s!.preferences as { budgetMay2026AmountsV1?: boolean } | null;
     expect(prefs?.budgetMay2026AmountsV1).toBe(true);
 
-    // 7. After reconciliation, a user edit on Misc / Buffer survives a refresh
-    //    (i.e. reconciliation doesn't run a second time and clobber the edit).
+    // 6. A later edit survives a refresh too.
     await db
       .update(budgetLinesTable)
       .set({ plannedAmount: "999.00" })
       .where(eq(budgetLinesTable.categoryId, misc.id));
     const res2 = await fetch(`${baseUrl}/budget/months/${MONTH}`);
     expect(res2.status).toBe(200);
-    const body2 = (await res2.json()) as typeof body;
-    const miscLine = body2.groups
-      .flatMap((g) => g.lines)
-      .find((l) => l.categoryName === "Misc / Buffer");
-    expect(parseFloat(miscLine!.plannedAmount)).toBeCloseTo(999.0, 2);
+    expect((await mayLinesByName()).get("Misc / Buffer")!.planned).toBe("999.00");
+    expect(await mayMonthPinned()).toBe(false);
   });
 });
