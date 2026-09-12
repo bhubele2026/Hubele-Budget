@@ -4,6 +4,9 @@
 - **Branch:** `fix/budget-pending-once`.
 - **Round 1:** `c35b3701`.
 - **Round 2:** answers the PR-D review (REQUEST CHANGES: H1, M2, M3, L4, L5, NIT6). See **Review round 2**.
+- **Merge:** `origin/main` at `1a0c1f71` (PR-A, deploy-safe category passes) merged in with no rebase.
+  - The conflicts were imports only in `routes/budget.ts`: main's `gte` and `logger` imports were kept beside PR-D's.
+  - Every gate below ran on the merged tree.
 - **Owner decision 6:** "Budget should count pending purchases consistently with Spending: once. Show posted spending,
   pending spending, combined spending so far. Pending purchases consume available budget. When they post, replace the
   pending version and adjust for the final amount. Example: a $40 pending restaurant charge posts at $48 → spending
@@ -193,10 +196,11 @@ Only the pending pair and its filing were decided. Everything below differs and 
 
 **After:** all pass.
 
-**Gates (worktree root, this head):**
+**Gates (worktree root, merged tree `a9b89a1e` = round 2 + `origin/main` 1a0c1f71):**
 - `pnpm run typecheck` green.
+- Budget-related API files (15, including PR-A's deploy-safe and May 2026 tests): 105 passed.
 - Web: `TZ=UTC` 136 files, 1118 passed / 3 skipped; `TZ=America/Chicago` 136 files, 1119 passed / 2 skipped.
-- Full API suite (`caffeinate -i`, own test DB): FULL_API_RESULT.
+- Full API suite (`caffeinate -i`, own test DB): 142 files, 1338 passed / 7 todo.
 - `pnpm run build` + `check-entry-graph`: 574.4 KB of 580 (unchanged; the Budget page is lazy).
 - Codegen re-run: byte-identical.
 
