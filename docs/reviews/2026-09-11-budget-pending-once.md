@@ -196,11 +196,13 @@ Only the pending pair and its filing were decided. Everything below differs and 
 
 **After:** all pass.
 
-**Gates (worktree root, merged tree `a9b89a1e` = round 2 + `origin/main` 1a0c1f71):**
+**Gates (worktree root, merged tree `603fd299` = round 3 + `origin/main` 6b355065):**
+- **Merge:** `origin/main` 6b355065 (PR-A2, seed defaults once) merged in with no rebase. The only conflict was the
+  drizzle import in `routes/budget.ts`; main's `ne` was kept beside PR-D's imports.
 - `pnpm run typecheck` green.
-- Budget-related API files (15, including PR-A's deploy-safe and May 2026 tests): 105 passed.
+- Budget-related API files (16, including `seedDefaultsOnce`, `deploySafeCategoryPasses` and May 2026): 128 passed.
 - Web: `TZ=UTC` 136 files, 1118 passed / 3 skipped; `TZ=America/Chicago` 136 files, 1119 passed / 2 skipped.
-- Full API suite (`caffeinate -i`, own test DB): 142 files, 1338 passed / 7 todo.
+- Full API suite (`caffeinate -i`, own test DB, run in the foreground): 143 files, 1361 passed / 7 todo.
 - `pnpm run build` + `check-entry-graph`: 574.4 KB of 580 (unchanged; the Budget page is lazy).
 - Codegen re-run: byte-identical.
 
