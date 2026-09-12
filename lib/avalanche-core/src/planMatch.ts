@@ -1,4 +1,4 @@
-import { descriptionsFuzzyEqual, tokenizeDescription } from "./descriptionMatch";
+import { tokenizeDescription } from "./descriptionMatch";
 import { matchesCardPaymentPattern, PFC_CARD_PAYMENT } from "./spendingRule";
 
 /**
@@ -12,13 +12,14 @@ import { matchesCardPaymentPattern, PFC_CARD_PAYMENT } from "./spendingRule";
  *   - same sign;
  *   - the row is dated 10 days before to 14 days after the plan;
  *   - WITH the payee's name (a distinctive word of the plan's label appears as a
- *     WORD in the row's description, or — decision 13 — the description
- *     fuzzy-equals a row the user confirmed for this item): |difference| ≤
- *     max($25, 25% of the plan);
+ *     WORD in the row's description, or — decision 13 — the description matches a
+ *     row the user confirmed for this item, see `descriptorsMatch`): |difference|
+ *     ≤ max($25, 25% of the plan);
  *   - WITHOUT it: |difference| ≤ max($1, 1% of the plan) and within 3 days.
- * Pairing is one to one: a pair that can be tier-1/2 evidence (below, ignoring
- * ambiguity) is taken before one that cannot, then best score first. A pair whose
- * runner-up of the same rank is close is flagged `ambiguous`.
+ * Pairing is one to one. A pair that can be tier-1/2 evidence (below, ignoring
+ * ambiguity) is taken before one that cannot; then a Plaid checking row before a
+ * manual one; then best score first. A runner-up of the same or a better rank
+ * whose score is close makes a pair `ambiguous`.
  *
  * ⭐ (Owner decision 13) WHAT A PAIR PROVES — ITS `tier`.
  * "A different charge from the same company must not hide an unpaid bill.
@@ -33,19 +34,22 @@ import { matchesCardPaymentPattern, PFC_CARD_PAYMENT } from "./spendingRule";
  *     checking cash and not a logged debt payment (`onChecking`); dated 10 days
  *     before to 14 days after the plan (the pairing window); paying at most the
  *     plan + max($25, 10%); AND ONE of:
- *       STRONG — may pay as little as the plan − max($25, 10%):
  *       (a) `category` — the row's category is the plan's, and no other active item
  *           of the same direction carries it (a one-time item counts only when it
- *           is dated within 31 days of the plan);
- *       (d) `confirmed_descriptor` — the row's description fuzzy-equals the row the
- *           user confirmed ("matched"/"partial") for this item before (the last 12);
- *       NAME — must pay at least the plan − max($1, 1%):
+ *           is dated within 31 days of the plan). May pay as little as the plan −
+ *           max($25, 10%);
+ *       (d) `confirmed_descriptor` — the row's description matches a row the user
+ *           confirmed ("matched"/"partial") for this item (the last 12;
+ *           `descriptorsMatch`), AND it pays inside those confirmed rows' amounts,
+ *           widened by max($1, 1%) each way (and no less than the plan −
+ *           max($25, 10%));
  *       (b) `full_name` — the plan's FULL name, and no other active item of the
  *           same direction carries its full name in this row too;
  *       (c) `name_exact` — some of the plan's name, within max($1, 1%), ≤ 5 days;
  *       (c′) `name_exact_unique` — some of the plan's name, within max($1, 1%),
  *           anywhere in the window, and no other active item of the same
  *           direction shares a name word with the row.
+ *     (b), (c) and (c′) must pay at least the plan − max($1, 1%).
  *   - Tier 3, SUGGESTION ONLY: every other pair, including a row tagged to another
  *     debt. It stays on the curve (an overdue plan drags) until the user answers.
  * `offCurve` is `tier ≤ 2` AND the row pays at least the plan − max($1, 1%): an
@@ -81,11 +85,14 @@ export type MatchPlan = {
    */
   categoryId?: string | null;
   /**
-   * (Decision 13, d) Descriptions of the rows the user confirmed as "matched" or
-   * "partial" for this item (the ledger sends the last 12).
+   * (Decision 13, d) The rows the user confirmed as "matched" or "partial" for
+   * this item: their descriptions and signed amounts (the ledger sends the last 12).
    */
-  confirmedDescriptions?: readonly string[];
+  confirmedRows?: readonly ConfirmedRow[];
 };
+
+/** (Decision 13, d) A row the user confirmed for an item. */
+export type ConfirmedRow = { description: string; amount: number };
 
 export type MatchRow = {
   txnId: string;
@@ -116,6 +123,8 @@ export type MatchRow = {
    * (Decision 13) A Plaid row on the configured checking account. PR7's
    * card-payment rule (`plansPaidInFullByName`) reads only these: a manual
    * "CAPITAL ONE MOBILE PYMT" beside its bank debit paid two Capital One minimums.
+   * In pairing, a Plaid row is taken before a manual one: a manual twin of a bank
+   * payment must not make the bank's pair ambiguous.
    */
   plaidChecking: boolean;
 };
@@ -190,7 +199,7 @@ export type PlanRowMatch = {
 export const MATCH_EARLY_DAYS = 10;
 export const MATCH_LATE_DAYS = 14;
 export const MATCH_STRICT_DAYS = 3;
-/** A tier-2 pair may pay at most max($25, this share of the plan) more — or, on strong evidence, less — than planned. */
+/** A tier-2 pair may pay at most max($25, this share of the plan) more — or, on its own category, less — than planned. */
 export const MATCH_OFF_CURVE_SHARE = 0.1;
 /** (Decision 13, c) Some of the name, within max($1, 1%), at most this many days from the plan. */
 export const MATCH_PROMPT_DAYS = 5;
@@ -220,8 +229,8 @@ const ALIASES: ReadonlyArray<ReadonlyArray<readonly string[]>> = [[["amex"], ["a
 
 const cents = (n: number): number => Math.round(Math.abs(n) * 100);
 const dayNumber = (iso: string): number => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
-/** max($1, 1% of the plan), in cents. */
-const strictCents = (planCents: number): number => Math.max(100, Math.round(planCents * 0.01));
+/** max($1, 1% of the amount), in cents. */
+const strictCents = (amountCents: number): number => Math.max(100, Math.round(amountCents * 0.01));
 /** max($25, 10% of the plan), in cents. */
 const wideCents = (planCents: number): number => Math.max(2500, Math.round(planCents * MATCH_OFF_CURVE_SHARE));
 
@@ -251,6 +260,33 @@ function nameMatch(label: ReadonlySet<string>, desc: ReadonlySet<string>): 0 | 1
 /** Does a distinctive word of the plan's label appear as a word in the row's description? */
 export function labelEvidence(label: string, description: string | null): boolean {
   return nameMatch(tokenizeDescription(label), tokenizeDescription(description)) > 0;
+}
+
+/** (Decision 13, d) A word that names someone on its own: not a stop word, with ≥ 4 letters or ≥ 3 digits. */
+function distinctiveWord(word: string): boolean {
+  if (MATCH_STOP_WORDS.has(word)) return false;
+  return word.replace(/[^a-z]/g, "").length >= 4 || word.replace(/[^0-9]/g, "").length >= 3;
+}
+
+/**
+ * ⭐ (Decision 13, d) DOES A ROW'S DESCRIPTION MATCH A CONFIRMED ONE?
+ *
+ * Stricter than `descriptionsFuzzyEqual` (the dedupe pass's token-subset rule,
+ * unchanged): the two word sets are EQUAL, or one is a subset of the other and
+ * the shorter carries at least two distinctive words. "ZELLE" is inside "ZELLE TO
+ * JORDAN LEE" but names no one, so it never borrows Jordan's confirmation; "MADISON
+ * GAS EL" (one distinctive word) matches only itself. Empty descriptions never match.
+ */
+export function descriptorsMatch(confirmed: string | null | undefined, description: string | null | undefined): boolean {
+  const a = tokenizeDescription(confirmed);
+  const b = tokenizeDescription(description);
+  if (a.size === 0 || b.size === 0) return false;
+  const [small, big] = a.size <= b.size ? [a, b] : [b, a];
+  for (const w of small) if (!big.has(w)) return false;
+  if (small.size === big.size) return true;
+  let distinctive = 0;
+  for (const w of small) if (distinctiveWord(w)) distinctive++;
+  return distinctive >= 2;
 }
 
 export type PaidInFull = {
@@ -352,8 +388,12 @@ type Candidate = {
   named: boolean;
   name: 0 | 1 | 2;
   score: number;
-  /** (Decision 13) 0 when the pair would be tier 1 or 2 if not ambiguous, else 1. Taken first. */
-  rank: 0 | 1;
+  /**
+   * (Decision 13) Pairing order, taken lowest first: 0/1 whether the pair would
+   * be tier 1 or 2 if not ambiguous (×2), plus 0 for a Plaid checking row, 1 for
+   * a manual one.
+   */
+  rank: number;
 };
 
 type Tiered = { tier: MatchTier; evidence: MatchEvidence | null };
@@ -405,12 +445,24 @@ function soleInCategory(plan: MatchPlan, income: boolean, items: ItemIndex): boo
   );
 }
 
-/** (d) The row's description fuzzy-equals a row the user confirmed for this item. */
-function confirmedDescriptor(plan: MatchPlan, row: MatchRow, rowWords: ReadonlySet<string>): boolean {
-  if (rowWords.size === 0 || !plan.confirmedDescriptions?.length) return false;
-  return plan.confirmedDescriptions.some(
-    (d) => tokenizeDescription(d).size > 0 && descriptionsFuzzyEqual(d, row.description),
-  );
+/** (d) The row's description matches a row the user confirmed for this item. */
+function confirmedDescriptor(plan: MatchPlan, row: MatchRow): boolean {
+  if (!plan.confirmedRows?.length) return false;
+  return plan.confirmedRows.some((c) => descriptorsMatch(c.description, row.description));
+}
+
+/** (d) The row pays inside the item's confirmed amounts, widened by max($1, 1%) each way. */
+function inConfirmedRange(plan: MatchPlan, rowCents: number): boolean {
+  const rows = plan.confirmedRows ?? [];
+  if (rows.length === 0) return false;
+  let lo = Infinity;
+  let hi = 0;
+  for (const c of rows) {
+    const x = cents(c.amount);
+    if (x < lo) lo = x;
+    if (x > hi) hi = x;
+  }
+  return rowCents >= lo - strictCents(lo) && rowCents <= hi + strictCents(hi);
 }
 
 /** (Decision 13) The tier of a pair. See the file header. */
@@ -424,14 +476,15 @@ function tierOf(c: Candidate, ambiguous: boolean, items: ItemIndex): Tiered {
   const p = cents(plan.amount);
   const r = cents(row.amount);
   const wide = wideCents(p);
-  if (r > p + wide) return SUGGESTION;
+  if (r > p + wide || r < p - wide) return SUGGESTION;
   const income = plan.amount > 0;
-  // STRONG evidence may pay as little as the plan − max($25, 10%).
-  if (r >= p - wide) {
-    if (plan.categoryId && row.categoryId === plan.categoryId && soleInCategory(plan, income, items)) {
-      return { tier: 2, evidence: "category" };
-    }
-    if (confirmedDescriptor(plan, row, c.rowWords)) return { tier: 2, evidence: "confirmed_descriptor" };
+  // (a) Its own category may pay as little as the plan − max($25, 10%).
+  if (plan.categoryId && row.categoryId === plan.categoryId && soleInCategory(plan, income, items)) {
+    return { tier: 2, evidence: "category" };
+  }
+  // (d) A confirmed descriptor, inside the confirmed amounts ± max($1, 1%).
+  if (confirmedDescriptor(plan, row) && inConfirmedRange(plan, r)) {
+    return { tier: 2, evidence: "confirmed_descriptor" };
   }
   // NAME evidence must pay at least the plan − max($1, 1%).
   const strict = strictCents(p);
@@ -487,7 +540,7 @@ export function matchPlansToRows(
       const named = name > 0;
       // (Decision 13, d) A description the user confirmed for this item names its
       // payee as surely as the label does ("MADISON GAS EL" for "MGE Electric & Gas").
-      const referenced = !named && confirmedDescriptor(plan, row, words);
+      const referenced = !named && confirmedDescriptor(plan, row);
       if (!named && !referenced && (gapCents > strict || Math.abs(dayDelta) > MATCH_STRICT_DAYS)) return;
       const c: Candidate = {
         plan,
@@ -498,10 +551,11 @@ export function matchPlansToRows(
         named,
         name,
         score: gapCents + 100 * Math.abs(dayDelta) - (named || referenced ? 5000 : 0),
-        rank: 1,
+        rank: 0,
       };
-      // (Decision 13) A pair that would be evidence is taken before one that would not.
-      c.rank = tierOf(c, false, index).tier <= 2 ? 0 : 1;
+      // (Decision 13) A pair that would be evidence is taken before one that would
+      // not; then a Plaid checking row before a manual one.
+      c.rank = (tierOf(c, false, index).tier <= 2 ? 0 : 2) + (row.plaidChecking ? 0 : 1);
       all.push(c);
     });
   }
@@ -521,7 +575,8 @@ export function matchPlansToRows(
     usedRows.add(c.row.txnId);
     const margin = Math.max(100, Math.abs(c.score) * 0.1);
     // A close runner-up makes a pair ambiguous only when it is of the same or a
-    // better rank: a pair that proves nothing never casts doubt on one that would.
+    // better rank: a pair that proves nothing, or a manual twin of a Plaid row,
+    // never casts doubt on one that ranks above it.
     const ambiguous = all.some(
       (o) =>
         o !== c &&

@@ -3218,6 +3218,12 @@ export const GetForecastResponse = zod.object({
               ambiguous: zod.boolean(),
               tier: zod.union([zod.literal(1), zod.literal(2), zod.literal(3)]),
               offCurve: zod.boolean(),
+              remainderAmount: zod
+                .string()
+                .optional()
+                .describe(
+                  '(Decision 13) Present only when the forecast counts the plan\npaid by this row (an overdue tier 1 or 2 pair, also listed in\n`overdueAssumedPaid`): the amount still assumed unpaid, signed\nlike the plan (\"0.00\" when paid in full). Only that remainder\nstays on the curve.\n',
+                ),
             }),
           )
           .optional()
@@ -3555,6 +3561,12 @@ export const GetForecastCashSignalResponse = zod.object({
         ambiguous: zod.boolean(),
         tier: zod.union([zod.literal(1), zod.literal(2), zod.literal(3)]),
         offCurve: zod.boolean(),
+        remainderAmount: zod
+          .string()
+          .optional()
+          .describe(
+            '(Decision 13) Present only when the forecast counts the plan\npaid by this row (an overdue tier 1 or 2 pair, also listed in\n`overdueAssumedPaid`): the amount still assumed unpaid, signed\nlike the plan (\"0.00\" when paid in full). Only that remainder\nstays on the curve.\n',
+          ),
       }),
     )
     .optional()

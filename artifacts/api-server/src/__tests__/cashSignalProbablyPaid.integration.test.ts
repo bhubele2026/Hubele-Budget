@@ -51,7 +51,7 @@ afterEach(() => {
 
 const CHASE = "chase-probably-paid";
 
-async function snapshotOnChase(): Promise<void> {
+async function snapshotOnChase(balance = "1000"): Promise<void> {
   const [item] = await db
     .insert(plaidItemsTable)
     .values({
@@ -72,14 +72,14 @@ async function snapshotOnChase(): Promise<void> {
     daysAhead: 90,
     startingBalance: "0",
     cashBuffer: "0",
-    bankSnapshotBalance: "1000",
+    bankSnapshotBalance: balance,
     bankSnapshotAt: new Date("2026-05-01T15:00:00Z"),
     bankSnapshotSource: "plaid",
     bankSnapshotAccountId: acct!.id,
   });
 }
 
-async function plan(name: string, amount: string, day = 20): Promise<string> {
+async function plan(name: string, amount: string, day = 20, opts: { categoryId?: string } = {}): Promise<string> {
   const [r] = await db
     .insert(recurringItemsTable)
     .values({
@@ -92,6 +92,7 @@ async function plan(name: string, amount: string, day = 20): Promise<string> {
       dayOfMonth: day,
       anchorDate: `2026-01-${String(day).padStart(2, "0")}`,
       active: "true",
+      categoryId: opts.categoryId ?? null,
     })
     .returning();
   return r!.id;
@@ -101,7 +102,7 @@ async function row(
   occurredOn: string,
   amount: string,
   description: string,
-  opts: { pending?: boolean; manual?: boolean } = {},
+  opts: { pending?: boolean; manual?: boolean; categoryId?: string } = {},
 ): Promise<string> {
   const [t] = await db
     .insert(transactionsTable)
@@ -114,6 +115,7 @@ async function row(
       plaidAccountId: opts.manual ? null : CHASE,
       source: opts.manual ? "manual" : "plaid:chase",
       pending: opts.pending ?? false,
+      categoryId: opts.categoryId ?? null,
       createdAt: createdAtStartOfHouseholdDay(occurredOn),
     })
     .returning({ id: transactionsTable.id });
@@ -340,17 +342,19 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
     expect(matchFor(sig, `${vzw}|2026-05-20`)).toMatchObject({ confidence: "medium", offCurve: false });
   });
 
-  // ⭐ (Decision 13, fix 3) REPLACES "(PR5 second review) a nameless pair never
-  // marks last month paid: April 'paid' by HOME DEPOT, its late payment can't take
-  // May off" (05-20 700.00, May's pair on the curve). The lead's ruling: an earlier
-  // occurrence with a non-ambiguous pair of its own, of ANY tier, is not unpaid —
-  // pairing is one to one, so its row is a different row from the later pair's.
-  // Holding May back left an exact, full-name May payment on the curve twice (a
-  // July paid by a tier-3 row held back August's exact $672.80 Toyota payment).
-  // ⚠️ Reverses the PR5 second review's guard: here April's pair is a nameless
-  // HOME DEPOT row, and if April's water bill was in fact unpaid, the forecast now
-  // reads $150 high until April's suggestion is answered.
-  it("(decision 13, fix 3) an earlier occurrence with its own non-ambiguous pair, any tier, does not hold back a later payment: April 'paid' by HOME DEPOT, May's exact full-name payment is off the curve (700 → 850)", async () => {
+  // ⭐ (Round 3, HIGH) REVERTS 46262e80's "(decision 13, fix 3)" case: the second
+  // review of round 2 measured OVERSTATEMENT here. April's water is genuinely
+  // unpaid; the nameless HOME DEPOT row proves nothing about it. Treating "any
+  // non-ambiguous pair of ANY tier" as evidence let a nameless coincidence clear
+  // April, so "CITY WATER" on 05-11 (April paid late) was free to pair with May
+  // instead and take it fully off the curve — a bill counted paid that wasn't.
+  // (round 3) An earlier occurrence now counts as paid for the hold-back only when
+  // its own pair is tier 1/2, or named and not ambiguous (`confidence !== "low"`).
+  // HOME DEPOT is nameless (`confidence: "low"`), so April stays unpaid, May's
+  // pairing is held back, and May keeps dragging (back to the PR5-second-review
+  // figure, 700.00 — the July/August Toyota case below is why "any tier" was tried
+  // and is now proven wrong instead: a NAMED late pair is what should rescue it).
+  it("(round 3) a nameless earlier pair never marks last month paid: April 'paid' by HOME DEPOT, its late payment can't take May off (700, not 850)", async () => {
     await snapshotOnChase();
     const water = await plan("City Water", "150");
     await row("2026-04-21", "-150", "HOME DEPOT 4411");
@@ -359,9 +363,27 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
     const sig = await signal();
 
     expect(sig.bankToday).toBe("850.00");
-    expect(balanceOn(sig, "2026-05-20")).toBe("850.00");
+    expect(balanceOn(sig, "2026-05-20")).toBe("700.00");
     expect(matchFor(sig, `${water}|2026-04-20`)).toMatchObject({ confidence: "low", ambiguous: false, tier: 3, offCurve: false });
-    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ tier: 2, offCurve: true });
+    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ tier: 3, offCurve: false });
+  });
+
+  // (Round 3, HIGH — the review's own repro) Same mechanism, worked at the review's
+  // numbers: balance 3,150.00, "CITY WATER" on 05-12 (not 05-11). Today 05-14, May
+  // due 05-20. The 05-12 row is conceptually April paid late, so the correct 05-20
+  // balance is 2,850.00 (bankToday 3,000.00, May still drags −150.00); the round-2
+  // bug gave 3,000.00 (May wrongly taken off the curve entirely).
+  it("(round 3) the review's repro: April 'paid' by HOME DEPOT, May still drags (2,850, not 3,000)", async () => {
+    await snapshotOnChase("3150");
+    const water = await plan("City Water", "150");
+    await row("2026-04-21", "-150", "HOME DEPOT 4411");
+    await row("2026-05-12", "-150", "CITY WATER");
+
+    const sig = await signal();
+
+    expect(sig.bankToday).toBe("3000.00");
+    expect(balanceOn(sig, "2026-05-20")).toBe("2850.00");
+    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ tier: 3, offCurve: false });
   });
 
   it("last month's bill paid late never takes this month's bill off the curve", async () => {
@@ -374,5 +396,39 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
     expect(sig.bankToday).toBe("850.00");
     expect(balanceOn(sig, "2026-05-20")).toBe("700.00");
     expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ offCurve: false });
+  });
+
+  // ⭐ (Round 3, LOW) An overdue tier-2 pair that PAID LESS than the plan (offCurve
+  // stays false — decision 13) must expose how much is still assumed unpaid, so a
+  // caller reading only `offCurve` never mistakes it for "still due in full": the
+  // web used to show "Still in forecast" and offer Move, which would have re-added
+  // the FULL plan while the server counts only the remainder.
+  it("(round 3, LOW) an overdue underpayment inside the bill's own category exposes remainderAmount, signed like the plan; overdueAssumedPaid agrees", async () => {
+    await snapshotOnChase();
+    const CAT = randomUUID();
+    // Named (shares "figure lending" with the row) so it is a candidate at all;
+    // graded on its own category (sole in it), which tolerates the $15 gap.
+    const figure = await plan("Figure Lending", "95", 10, { categoryId: CAT });
+    const under = await row("2026-05-10", "-80", "FIGURE LENDING SVC", { categoryId: CAT });
+
+    const sig = await signal();
+
+    const m = matchFor(sig, `${figure}|2026-05-10`);
+    expect(m).toMatchObject({ txnId: under, tier: 2, offCurve: false, remainderAmount: "-15.00" });
+    expect(sig.overdueAssumedPaid?.find((p) => p.planKey === `${figure}|2026-05-10`)).toMatchObject({
+      txnId: under,
+      unpaidRemainder: "-15.00",
+    });
+  });
+
+  it("(round 3, LOW) paid in full overdue: remainderAmount is '0.00', not absent", async () => {
+    await snapshotOnChase();
+    const CAT = randomUUID();
+    const figure = await plan("Figure Lending", "95", 10, { categoryId: CAT });
+    const paidFull = await row("2026-05-10", "-95", "FIGURE LENDING SVC", { categoryId: CAT });
+
+    const sig = await signal();
+
+    expect(matchFor(sig, `${figure}|2026-05-10`)).toMatchObject({ txnId: paidFull, tier: 2, remainderAmount: "0.00" });
   });
 });

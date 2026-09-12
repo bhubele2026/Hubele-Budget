@@ -6,6 +6,8 @@ import {
   DayDelta,
   curveHelp,
   curveLabel,
+  RemainderNote,
+  remainderHelp,
   type SuggestionAnswer,
 } from "./probablyPaidText";
 
@@ -59,9 +61,13 @@ export function ProbablyPaidStrip({
         {pp.ambiguous ? " · close call" : ""}
       </span>
       <span className="text-neutral-500" data-testid={`probably-paid-curve-${txnId}`}>
-        {curveLabel(pp.offCurve)}
+        {pp.remainderAmount !== undefined ? (
+          <RemainderNote remainderAmount={pp.remainderAmount} />
+        ) : (
+          curveLabel(pp.offCurve)
+        )}
       </span>
-      <Help>{curveHelp(pp.offCurve)}</Help>
+      <Help>{pp.remainderAmount !== undefined ? remainderHelp() : curveHelp(pp.offCurve)}</Help>
       <span className="ml-auto flex items-center gap-1.5">
         <button
           type="button"

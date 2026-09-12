@@ -452,6 +452,76 @@ describe("Forecast — probably paid (PR5b)", () => {
     expect(screen.queryByTestId("mark-missed-water-2026-05-20")).toBeNull();
   });
 
+  it("(round 3, LOW) an overdue pair the server counts paid in part shows the remainder, not 'Still in forecast', and hides Move", () => {
+    // Insurance, due 05-10 (before today), $180 planned, paid $165 — the server
+    // counts it paid (`offCurve` stays false for an underpayment, decision 13)
+    // and sends `remainderAmount` for the $15.00 still assumed unpaid. Moving
+    // the occurrence would re-add the FULL $180, not the $15.00 the server is
+    // actually still counting, so Move must not be offered for this pair.
+    forecastData = {
+      ...FORECAST,
+      events: [...FORECAST.events, { itemId: "insurance", date: "2026-05-10", label: "Insurance", kind: "expense", amount: -180 }],
+      transactions: [...FORECAST.transactions, txn("t-ins", "2026-05-10", "STATE FARM RO 27 SFPP", "-165.00")],
+    };
+    cashSignalData = cashSignal([
+      ...MATCHES,
+      {
+        planKey: "insurance|2026-05-10",
+        planItemId: "insurance",
+        planDate: "2026-05-10",
+        txnId: "t-ins",
+        planAmount: "-180.00",
+        txnAmount: "-165.00",
+        difference: "-15.00",
+        dayDelta: 0,
+        confidence: "high",
+        ambiguous: false,
+        tier: 2,
+        offCurve: false,
+        remainderAmount: "-15.00",
+      },
+    ]);
+    renderPage();
+    const curve = screen.getByTestId("plan-probably-paid-curve-insurance-2026-05-10");
+    expect(curve.textContent).not.toContain("Still in forecast");
+    expect(curve.textContent).toContain("$15.00");
+    expect(curve.textContent).toContain("still assumed unpaid");
+    expect(screen.queryByTestId("move-plan-insurance-2026-05-10")).toBeNull();
+    // Mark missed is untouched by this fix — only Move re-adds the full amount.
+    expect(screen.getByTestId("mark-missed-insurance-2026-05-10")).toBeTruthy();
+  });
+
+  it("(round 3, LOW) the bank-side strip shows the same remainder note", () => {
+    forecastData = {
+      ...FORECAST,
+      events: [...FORECAST.events, { itemId: "insurance", date: "2026-05-10", label: "Insurance", kind: "expense", amount: -180 }],
+      transactions: [...FORECAST.transactions, txn("t-ins", "2026-05-10", "STATE FARM RO 27 SFPP", "-165.00")],
+    };
+    cashSignalData = cashSignal([
+      ...MATCHES,
+      {
+        planKey: "insurance|2026-05-10",
+        planItemId: "insurance",
+        planDate: "2026-05-10",
+        txnId: "t-ins",
+        planAmount: "-180.00",
+        txnAmount: "-165.00",
+        difference: "-15.00",
+        dayDelta: 0,
+        confidence: "high",
+        ambiguous: false,
+        tier: 2,
+        offCurve: false,
+        remainderAmount: "-15.00",
+      },
+    ]);
+    renderPage();
+    goToCard("t-ins");
+    const strip = screen.getByTestId("probably-paid-curve-t-ins");
+    expect(strip.textContent).not.toContain("Still in forecast");
+    expect(strip.textContent).toContain("$15.00");
+  });
+
   it("(decision 13) a tier-2 pair nobody confirmed is still Suggested with Confirm / Not this; a tier-3 pair is a suggestion that keeps Move and Mark missed", () => {
     renderPage();
     // Tier 2 (Water): the server already leaves it out of the forecast, but nothing is written until an answer.

@@ -87,6 +87,9 @@ export type CashSignalMatch = {
   /** (Decision 13) What the pair proves: 1 explicit, 2 obligation evidence,
    *  3 a suggestion only. Informational here: `offCurve` still decides. */
   tier?: number;
+  /** (Decision 13) Present when the server counts the plan paid by this row:
+   *  what is still assumed unpaid, signed like the plan ("0.00" when paid in full). */
+  remainderAmount?: string | number;
   /** True only for pairs the server took OFF the curve (tier 1 or 2).
    *  Every other pair is a suggestion only: the plan still counts. Anything
    *  but `true` is treated as on the curve, so a missing flag can never hide
@@ -114,6 +117,11 @@ export type ProbablyPaid = {
   offCurve: boolean;
   txnDate: string;
   txnDescription: string | null;
+  /** (Decision 13, round 3) Present when the server counts the plan paid by
+   *  this row (an overdue underpayment): what is still assumed unpaid, signed
+   *  like the plan (0 when paid in full). `offCurve` stays false for these —
+   *  moving the row would otherwise re-add the FULL plan, not this remainder. */
+  remainderAmount?: number;
 };
 
 export type Resolution = {
@@ -397,6 +405,7 @@ export function buildLineRegister(opts: {
     const m = matchByPlanKey.get(origKey);
     if (m && (status === "pending_plan" || status === "future")) {
       const bank = bankById.get(m.txnId);
+      const remainderAmount = toNum(m.remainderAmount);
       probablyPaid = {
         txnId: m.txnId,
         planDate: m.planDate,
@@ -409,6 +418,7 @@ export function buildLineRegister(opts: {
         offCurve: m.offCurve === true,
         txnDate: bank?.date ?? addDaysISO(date, m.dayDelta),
         txnDescription: bank?.txn.description ?? null,
+        ...(remainderAmount !== null ? { remainderAmount } : {}),
       };
     }
     return [{

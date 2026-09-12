@@ -17,6 +17,7 @@ import {
   AmountDifference,
   DayDelta,
   curveLabel,
+  RemainderNote,
   type SuggestionAnswer,
 } from "./probablyPaidText";
 
@@ -86,10 +87,17 @@ export function PlanDropRow({
   const pp = row.probablyPaid;
   const suggested = !!pp && !!onAnswer;
   const offCurveSuggestion = suggested && !!pp?.offCurve;
+  // (Decision 13, round 3) An overdue pair the server already counts paid, in
+  // part — `remainderAmount` set. Moving the occurrence would post the row's
+  // FULL plan amount on the new date while the server keeps dragging only the
+  // smaller remainder, double-counting the part already paid. Moving just the
+  // remainder isn't supported, so Move is hidden for these pairs entirely.
+  const hasRemainder = !!pp && pp.remainderAmount !== undefined;
   // A partly-paid plan can move: the server keeps its `partial` beside the
   // `rescheduled` row, so the remainder lands on the new date.
   const canMove =
     !offCurveSuggestion &&
+    !hasRemainder &&
     !!onMove &&
     (row.status === "pending_plan" ||
       row.status === "future" ||
@@ -200,7 +208,11 @@ export function PlanDropRow({
               <DayDelta days={pp.dayDelta} />
               <span>·</span>
               <span data-testid={`plan-probably-paid-curve-${testKey}`}>
-                {curveLabel(pp.offCurve)}
+                {pp.remainderAmount !== undefined ? (
+                  <RemainderNote remainderAmount={pp.remainderAmount} />
+                ) : (
+                  curveLabel(pp.offCurve)
+                )}
               </span>
             </div>
           )}

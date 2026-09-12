@@ -23,6 +23,7 @@ import {
   plansPaidInFullByName,
   SUPERSEDE_MAX_DAYS,
   type PaidInFull,
+  type ConfirmedRow,
   type MatchItem,
   type MatchPlan,
   type MatchRow,
@@ -171,6 +172,15 @@ export type ForecastLedger = {
    * took its plan off the curve (`items`); the row itself still counts.
    */
   matches: PlanRowMatch[];
+  /**
+   * (Decision 13, round 3) `matches`' `planKey` → what is still assumed unpaid
+   * after this pair (signed like the plan; 0 when paid in full) — set only for
+   * an overdue pair the ledger counted paid (also in `overdueAssumedPaid`).
+   * `computeCashSignal` exposes this as `CashSignal.matches[].remainderAmount`
+   * so a future plan taken off the curve, never an overdue underpayment, never
+   * looks fully clear to a caller reading only `offCurve`.
+   */
+  remainderByPlanKey: Map<string, number>;
   /** (PR6) Expenses overdue by more than 14 days: not on the curve, listed. Sorted by due date. */
   overdueOutsideForecast: LedgerListedPlan[];
   /** (PR6) Income due before today that has not arrived: not on the curve, listed. Sorted by due date. */
@@ -614,24 +624,27 @@ export async function buildForecastLedger(
       }
     }
   }
-  // ⭐ (Decision 13, d) CONFIRMED DESCRIPTORS — a reliable payment reference. The
-  // descriptions of the rows the user confirmed ("matched" or "partial") for each
-  // item, newest occurrence first, at most MATCH_CONFIRMED_DESCRIPTORS per item. A
-  // later row whose description fuzzy-equals one of them is tier-2 evidence for the
-  // same item ("MADISON GAS EL" for MGE after one confirmed month). No extra query:
-  // the read above already loads every resolved row.
-  const confirmedDescriptionsByItem = new Map<string, string[]>();
+  // ⭐ (Decision 13, d) CONFIRMED ROWS — a reliable payment reference. The rows
+  // the user confirmed ("matched" or "partial") for each item, newest occurrence
+  // first, at most MATCH_CONFIRMED_DESCRIPTORS per item, with their description
+  // AND signed amount: `descriptorsMatch` names the payee, and `inConfirmedRange`
+  // (round 3) keeps that evidence from paying a charge to someone else at a
+  // wildly different amount ("ZELLE TO JORDAN LEE" confirming a $1,400 Zelle to
+  // someone else). No extra query: the read above already loads every resolved row.
+  const confirmedRowsByItem = new Map<string, ConfirmedRow[]>();
   {
     const confirmed = resolutionsAll
       .filter((r) => (r.status === "matched" || r.status === "partial") && r.recurringItemId && r.matchedTxnId)
       .sort((a, b) => ((a.occurrenceDate ?? "") < (b.occurrenceDate ?? "") ? 1 : (a.occurrenceDate ?? "") > (b.occurrenceDate ?? "") ? -1 : 0));
     for (const r of confirmed) {
-      const list = confirmedDescriptionsByItem.get(r.recurringItemId!) ?? [];
+      const list = confirmedRowsByItem.get(r.recurringItemId!) ?? [];
       if (list.length >= MATCH_CONFIRMED_DESCRIPTORS) continue;
       const description = resolvedTxnDescription.get(r.matchedTxnId!);
       if (!description) continue;
-      list.push(description);
-      confirmedDescriptionsByItem.set(r.recurringItemId!, list);
+      const amount = resolvedTxnAmount.get(r.matchedTxnId!);
+      if (amount == null) continue;
+      list.push({ description, amount });
+      confirmedRowsByItem.set(r.recurringItemId!, list);
     }
   }
   const matchedPlanKeys = new Set<string>();
@@ -812,7 +825,7 @@ export async function buildForecastLedger(
       label: ev.label,
       categoryId: recurringById.get(ev.itemId)?.categoryId ?? null,
       debtId: planDebtId(ev.itemId),
-      confirmedDescriptions: confirmedDescriptionsByItem.get(ev.itemId) ?? [],
+      confirmedRows: confirmedRowsByItem.get(ev.itemId) ?? [],
     };
     if (inMatchWindow) matchPlans.push(plan);
     else listingPlans.push(plan);
@@ -898,20 +911,21 @@ export async function buildForecastLedger(
     //
     // (PR5 review) A later occurrence never leaves the curve on a row dated on or
     // after an earlier occurrence of the same item that no row paid.
-    // ⭐ (Decision 13, fix 3) An earlier occurrence is NOT unpaid when it has a
-    // non-ambiguous pair of its own, of ANY tier: pairing is one to one, so its row
-    // is a different row from the later pair's. Holding the later pair back put an
-    // exact payment on the curve twice (a July paid by a tier-3 row held back
-    // August's exact $672.80 Toyota payment). A pair whose row is tagged to another
-    // debt pays nothing, so it doesn't count. (PR5 second review counted only a named
-    // pair; the first decision-13 head only a tier-1/2 pair.)
+    // ⭐ (Decision 13, fix 3; round 3) An earlier occurrence is NOT unpaid when its
+    // own pair is tier 1 or 2, or carries the payee's name (confidence not "low")
+    // without being ambiguous. Holding the later pair back put an exact payment on
+    // the curve twice (a July paid late by a named tier-3 row held back August's
+    // exact $672.80 Toyota payment). A NAMELESS tier-3 pair is not enough (the PR5
+    // second review's guard, restored): April's water "paid" by an unrelated HOME
+    // DEPOT −150 must not let "CITY WATER" −150 — April paid late — take May off.
+    // A pair whose row is tagged to another debt pays nothing, so it doesn't count.
     const planByKey = new Map(matchPlans.map((p) => [p.key, p] as const));
     const rowDebtById = new Map(matchRows.map((r) => [r.txnId, r.debtId ?? null] as const));
     const pairedKeys = new Set(
       matches
         .filter((m) => {
           if (m.tier <= 2) return true;
-          if (m.ambiguous) return false;
+          if (m.ambiguous || m.confidence === "low") return false;
           const rowDebt = rowDebtById.get(m.txnId) ?? null;
           const planDebt = planByKey.get(m.planKey)?.debtId ?? null;
           return !(rowDebt && planDebt && rowDebt !== planDebt);
@@ -1004,6 +1018,7 @@ export async function buildForecastLedger(
   const overdueOutsideForecast: LedgerListedPlan[] = [];
   const incomeNotArrived: LedgerListedPlan[] = [];
   const overdueAssumedPaid: LedgerAssumedPaidPlan[] = [];
+  const remainderByPlanKey = new Map<string, number>();
   for (const ev of events) {
     const origKey = `${ev.itemId}|${ev.date}`;
     const rawEffectiveDate = rescheduledByKey.get(origKey) ?? ev.date;
@@ -1102,6 +1117,8 @@ export async function buildForecastLedger(
           0,
           Math.round((Math.abs(planAmount) - Math.abs(paid.txnAmount)) * 100) / 100,
         );
+        const signedRemainder = remainder > 1 ? -remainder : 0;
+        remainderByPlanKey.set(origKey, signedRemainder);
         overdueAssumedPaid.push({
           planKey: origKey,
           itemId: ev.itemId,
@@ -1113,7 +1130,7 @@ export async function buildForecastLedger(
           txnId: paid.txnId,
           txnAmount: paid.txnAmount,
           confidence: paid.confidence,
-          unpaidRemainder: remainder > 1 ? -remainder : 0,
+          unpaidRemainder: signedRemainder,
         });
         if (remainder > 1 && rawEffectiveDate >= dragFloorISO) {
           plans.push({
@@ -1202,6 +1219,7 @@ export async function buildForecastLedger(
     bankToday,
     items,
     matches,
+    remainderByPlanKey,
     overdueOutsideForecast,
     incomeNotArrived,
     overdueAssumedPaid,

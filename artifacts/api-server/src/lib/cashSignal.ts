@@ -273,6 +273,13 @@ export type CashSignal = {
     tier: 1 | 2 | 3;
     /** Only these plans are off the curve (`tier ≤ 2`); every other match is a suggestion. */
     offCurve: boolean;
+    /**
+     * (Decision 13, round 3) Present only when the forecast counts the plan PAID by
+     * this row (an overdue tier-1/2 pair, listed in `overdueAssumedPaid`): what is
+     * still assumed unpaid, signed like the plan — "0.00" when paid in full. Only
+     * that remainder stays on the curve; `offCurve` is false for an underpayment.
+     */
+    remainderAmount?: string;
   }>;
 };
 
@@ -454,20 +461,24 @@ export async function computeCashSignal(
         occurrenceKey: `${e.itemId}|${e.occurrenceDate}`,
         occurrenceDate: e.occurrenceDate,
       })),
-    matches: ledger.matches.map((m) => ({
-      planKey: m.planKey,
-      planItemId: m.planItemId,
-      planDate: m.planDate,
-      txnId: m.txnId,
-      planAmount: r2(m.planAmount),
-      txnAmount: r2(m.txnAmount),
-      difference: r2(m.difference),
-      dayDelta: m.dayDelta,
-      confidence: m.confidence,
-      ambiguous: m.ambiguous,
-      tier: m.tier,
-      offCurve: m.offCurve,
-    })),
+    matches: ledger.matches.map((m) => {
+      const remainder = ledger.remainderByPlanKey.get(m.planKey);
+      return {
+        planKey: m.planKey,
+        planItemId: m.planItemId,
+        planDate: m.planDate,
+        txnId: m.txnId,
+        planAmount: r2(m.planAmount),
+        txnAmount: r2(m.txnAmount),
+        difference: r2(m.difference),
+        dayDelta: m.dayDelta,
+        confidence: m.confidence,
+        ambiguous: m.ambiguous,
+        tier: m.tier,
+        offCurve: m.offCurve,
+        ...(remainder !== undefined ? { remainderAmount: r2(remainder) } : {}),
+      };
+    }),
     overdueOutsideForecast: ledger.overdueOutsideForecast.map(listedPlan),
     incomeNotArrived: ledger.incomeNotArrived.map(listedPlan),
     overdueAssumedPaid: ledger.overdueAssumedPaid.map((p) => ({

@@ -207,3 +207,166 @@ and that file's cleanup deletes debts.
 - **Q3:** Fix 3 reverses a prior reviewer's guard (residual 2). Confirm, for the owner.
 - **Q4:** Should a confirmed descriptor name the payee for pairing (residual 3)? Without it, fix 6 never reaches a nameless
   descriptor, and a nameless bill paid more than 3 days off its date never pairs.
+
+## Round 3
+
+The second review of round 2 measured OVERSTATEMENT again — round 2's own fixes for understatement (fix 3's "any tier"
+hold-back, fix 2/6's confirmed descriptor as STRONG evidence) each reopened a way to count an unpaid bill paid. All four
+findings are fixed below, plus the one LOW item (a display bug, not a money bug).
+
+### HIGH — hold-back: "any tier" was too permissive
+
+**Bug.** Round 2's hold-back let an earlier occurrence's pair of ANY tier — including a nameless, low-confidence
+coincidence — count as "paid", freeing the later occurrence's row to take a DIFFERENT bill fully off the curve. Case:
+April water $150 unpaid; an unrelated nameless "HOME DEPOT" −150 on 04-21; "CITY WATER" −150 on 05-12 (April, paid late);
+today 05-14; May due 05-20.
+
+**Fix.** An earlier occurrence counts as paid for the hold-back only if its own pair is tier ≤ 2, OR named AND not
+ambiguous (`confidence !== "low"`) — restoring the PR5 second review's nameless guard, but keeping fix 3's real gain (a
+*named* late pair, e.g. July's Toyota, still frees August's exact payment). `forecastLedger.ts`'s `pairedKeys` filter now
+reads `if (m.ambiguous || m.confidence === "low") return false;`.
+
+| Case | Round 1 (base) | Round 2 (bug) | Round 3 |
+|---|---|---|---|
+| HOME DEPOT / CITY WATER, balance 1,000 | 700.00 | **850.00** | **700.00** |
+| The review's own repro, balance 3,150 | — (new case) | **3,000.00** | **2,850.00** |
+
+Tests: `cashSignalProbablyPaid.integration.test.ts` — the existing HOME DEPOT case reverted to 700.00 (its title and
+comment now explain the revert instead of celebrating the since-disproven fix); a new case at the review's own balance
+(3,150 → bankToday 3,000 → May still due 2,850).
+
+### MEDIUM 1 — confirmed descriptor as STRONG evidence hid unpaid bills
+
+**Bug.** Round 2 treated a confirmed descriptor as STRONG evidence (able to underpay down to plan − max($25, 10%), the
+same band as the bill's own category). A *different* charge from the confirmed company, at a *different* amount, then
+paid the bill: (a) Water/Sewer confirmed in July as "CITY OF MADISON"; a different August city charge −85 (on a $101.02
+bill, generalized in the review as $1,212.24 vs $1,297.24 on a larger household) counted paid; (b) rent confirmed as
+"ZELLE TO JORDAN LEE", then a bare "ZELLE" −1,400 to someone else counted paid.
+
+**Fix, two parts (`planMatch.ts`):**
+1. **`descriptorsMatch`** — stricter than the dedupe pass's `descriptionsFuzzyEqual`: the two word sets must be EQUAL, or
+   one a subset of the other with the SHORTER side carrying ≥ 2 distinctive words (not a stop word, ≥ 4 letters or ≥ 3
+   digits). "ZELLE" is inside "ZELLE TO JORDAN LEE" but names no one (one distinctive word); "MADISON GAS EL" (also one
+   distinctive word) now only matches its own exact string.
+2. **`inConfirmedRange`** — the row's amount must sit inside the confirmed rows' own amount range (± max($1, 1%)), not
+   the bill's wide $25/10% band. `MatchPlan.confirmedRows` replaces `confirmedDescriptions` (description **and** signed
+   amount, last 12 per item); the ledger's `confirmedRowsByItem` map now carries `{ description, amount }` using the
+   `resolvedTxnAmount` it already reads.
+
+The wide $25/10% band still applies, but only to rule (a) — the bill's own, sole category — which is a claim about the
+*plan*, not about a specific past payment, so it isn't vulnerable to "a different amount from the same company."
+
+**Owner trade-off (flagging, not deciding):** a confirmed descriptor is now a much narrower reference than before — a
+single confirmed month effectively pins the accepted amount to within about 1%. A bill that legitimately varies month to
+month (a utility, a usage-based charge) will need either several confirmed months spanning its real range, or its own
+category, to keep clearing automatically; otherwise every off-amount month is a suggestion again until confirmed. This
+is deliberately the more conservative failure mode (never overstates), at the cost of asking more often.
+
+| Case | Round 1 | Round 2 (bug) | Round 3 |
+|---|---|---|---|
+| Verizon $425 on $430, confirmed at $430, shared category (seed household, case C) | 9,043.98 / 8,543.98 | **9,043.98 / 8,543.98** (bug: only $5 drags) | **8,618.98 / 8,118.98** (whole $430 drags) |
+| State Farm Insurance renewed $165 on $180, confirmed at $180, shared category (case D/D2) | 8,693.00 / 8,193.00 | **8,693.00 / 8,193.00** (bug: only $15 drags) | **8,528.00 / 8,028.00** (whole $180 drags) |
+
+(The review's own $1,212.24/$1,297.24 and $8,500/$9,900 figures describe the same mechanism on a different household;
+the seed-household cases above are what this repo's test fixtures could measure exactly — same bug, same fix, real
+dollar amounts pinned by an existing hand-worked household.)
+
+Tests (`planMatch.test.ts`, unit-level): MGE confirmed exact amount still tier 2; a superseded "fuzzy" case (one
+distinctive word) now requires the equal set, not a superset; a genuine ≥ 2-distinctive-word subset ("TOYOTA MOTOR
+CREDIT" inside "TOYOTA MOTOR CREDIT CORP") still matches; "ZELLE" inside "ZELLE TO JORDAN LEE" no longer matches; a
+confirmed range from several rows (Water $89–$112) accepts anything between, and rejects just outside it; the MGE
+$216-on-$241 underpayment (round 2's own worked example) is now a suggestion unless the bill is sole in its category, in
+which case rule (a) — not the descriptor — pays it. Integration-level (`cashSignalSeedHouseholdTiers.integration.test.ts`):
+cases C, D and D2 updated to the round-3 figures above, with the trade-off noted in each test's comment.
+
+### MEDIUM 2 — a manual twin made a paid bill drag
+
+**Bug.** A manual "Toyota Lease" −672.80 logged beside the bank's own "TOYOTA FINANCIAL SERVICES" −672.80 tied on rank
+and score, so the pairing was ambiguous — Toyota dragged $672.80 even though the bank had paid it.
+
+**Fix (`planMatch.ts`).** Pairing rank now has two components: whether the pair would be tier ≤ 2 (unchanged), then
+whether the row is a Plaid checking row (0) or manual (1). A Plaid row is always taken over a manual twin, and a
+runner-up only makes a pair ambiguous when it is of the **same or better** rank — a lower-ranked manual twin never casts
+doubt on the Plaid pair it shadows.
+
+Test (`planMatch.test.ts`, unit-level, "MEDIUM 2"): the manual twin and the Plaid row both offered; the Plaid row wins,
+non-ambiguous, tier 2, off the curve; the manual row is simply unpaired (never surfaced) — it still counts as cash under
+the existing checking-row rule, just not as this bill's evidence. On the pre-round-3 source this same test picks the
+manual row (alphabetically) and marks the pair ambiguous — the exact bug.
+
+### LOW — an overdue underpayment read as "Still in forecast" and offered a Move that would re-add the full bill
+
+**Bug.** An overdue tier ≤ 2 pair that paid LESS than the plan keeps `offCurve: false` (by design — the plan still needs
+its remainder). The web read `offCurve` alone, so it showed "Still in forecast" and offered Move — which posts the
+occurrence's FULL planned amount on a new date, while the server is already counting the row as paid and dragging only
+the smaller remainder. Confirming Move would have double-subtracted the paid part.
+
+**Fix.**
+- `CashSignal.matches[].remainderAmount` (spec + `cashSignal.ts` + `forecastMatch.ts`, web type): present only when the
+  ledger counts the plan paid by this row (the same overdue evidence pass that builds `overdueAssumedPaid`), signed like
+  the plan, `"0.00"` when paid in full. `forecastLedger.ts` now tracks a `remainderByPlanKey` map alongside
+  `overdueAssumedPaid` (same `signedRemainder` value) and returns it on the ledger; `cashSignal.ts` looks it up by
+  `planKey` when building each match.
+- Web: `probablyPaidText.tsx` adds `RemainderNote` (mono numerals, "Paid; $X still assumed unpaid" / "Paid in full") and
+  `remainderHelp()`. `PlanDropRow.tsx` and `ProbablyPaidStrip.tsx` render it instead of `curveLabel` whenever
+  `remainderAmount` is present.
+- **Move is hidden entirely** for a pair with `remainderAmount` set (`hasRemainder` alongside the existing
+  `offCurveSuggestion` guard in `PlanDropRow.tsx`) — moving only the remainder is not supported, so the safe choice is no
+  Move rather than a wrong one. Mark missed is untouched (it does not re-add an amount).
+- `ProbablyPaid.tier` stays optional, unchanged — this PR does not touch that contract.
+
+Codegen: `pnpm --filter @workspace/api-spec run codegen` regenerated `lib/api-zod` and `lib/api-client-react` (`src` +
+`dist`, committed); a second run is a no-op.
+
+Tests: `cashSignalProbablyPaid.integration.test.ts` — an overdue $95 bill (sole category) paid $80 exposes
+`remainderAmount: "-15.00"` and a matching `overdueAssumedPaid` entry; paid in full it is `"0.00"`, not absent.
+`forecastProbablyPaid.test.tsx` — the remainder note replaces "Still in forecast" on both the register row and the bank
+strip, and Move is hidden for that pair while Mark missed stays. Both fail on the pre-round-3 web source (it renders
+"Still in forecast").
+
+### Golden changes, explained
+
+`forecastLedger.golden.integration.test.ts` — exactly one shape changed, in all 6 entries that carry the Golden Card
+minimum pair: `remainderAmount: "0.00"` added to that one match object (the $38 minimum paid $60 — paid in full, tier 2,
+`offCurve: true`). No balance, low point, ending, or projected figure changed in any entry; this fixture doesn't exercise
+the HIGH/MEDIUM-1/MEDIUM-2 scenarios (no shared categories, confirmed descriptors, or manual twins in its rows). Re-
+recorded without `CI=true` (`-u`), diff reviewed (`git diff` — 6 insertions, all the same line), then verified with
+`CI=true`.
+
+### Fails-before (round 3's new/changed assertions, stash-and-run against this branch's pre-round-3 source)
+
+Stashed the round-3 diff in the 5 source files only (`planMatch.ts`, `forecastLedger.ts`, `cashSignal.ts`,
+`forecastMatch.ts`, `openapi.yaml` — no effect on the spec/type-only file) and, separately, the 4 web display files
+(`forecastMatch.ts`, `PlanDropRow.tsx`, `ProbablyPaidStrip.tsx`, `probablyPaidText.tsx`), ran the new/changed tests, then
+popped.
+
+| Suite | Failed | Passed |
+|---|---|---|
+| `planMatch.test.ts` (unit) | **5** | 54 |
+| `cashSignalProbablyPaid.integration.test.ts` (HIGH cases) | **2** | 16 |
+| `cashSignalSeedHouseholdTiers.integration.test.ts` (MEDIUM 1 cases) | **3** | 6 |
+| `forecastProbablyPaid.test.tsx` (LOW, web-only stash) | **2** | 17 |
+| **Total** | **12** | — |
+
+### Gates (this branch, before the PR-C merge below)
+
+- `pnpm run typecheck`: pass.
+- Web tests (135 files): `TZ=UTC CI=true` 1115 passed, 3 skipped; `TZ=America/Chicago CI=true` 1116 passed, 2 skipped.
+- Full API suite (`CI=true`, own DB `h2budget_test_prb`, `caffeinate -i`, serial): **141 files, 1365 passed**, 7 todo.
+- `pnpm run build && node scripts/check-entry-graph.mjs`: OK — landing 574.4 KB of 580.0 KB (unchanged; this round adds
+  no weight to the open path).
+- Codegen: `pnpm --filter @workspace/api-spec run codegen`, rerun with no further diff; generated `src` + `dist`
+  committed.
+- Golden: re-recorded without `CI`, verified with `CI=true` (6 entries, one field each, explained above).
+
+### Open questions for the owner
+
+- The MEDIUM 1 trade-off above: a confirmed descriptor is now a tight reference (~1% of one or a few past amounts), not
+  a wide one. Is that the right default for a bill known to vary (e.g. usage-based utilities), or should such a bill
+  instead rely on its own category (rule a) once it's the only bill there?
+- Residual 3 from round 2 (two bills sharing one descriptor, e.g. the two State Farm policies) is unaffected by this
+  round — `descriptorsMatch` requiring word-set equality/2-distinctive-word-subset does not disambiguate which OF two
+  same-descriptor bills a confirmed reference belongs to; it only stops an unrelated shorter charge from borrowing it.
+- Q3 from round 2 (fix 3 reversing the PR5 second review's guard) is effectively answered by this round: the guard is
+  restored (nameless doesn't count), and fix 3's real case (a *named* late pair) is kept. No further owner input needed
+  unless this reading is wrong.

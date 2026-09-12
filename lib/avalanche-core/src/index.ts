@@ -34,6 +34,8 @@ export {
   MATCH_PROMPT_DAYS,
   MATCH_STOP_WORDS,
   MATCH_STRICT_DAYS,
+  descriptorsMatch,
+  type ConfirmedRow,
   type MatchConfidence,
   type MatchEvidence,
   type MatchItem,

@@ -3,6 +3,7 @@ import {
   labelEvidence,
   matchPlansToRows,
   plansPaidInFullByName,
+  type ConfirmedRow,
   type MatchItem,
   type MatchPlan,
   type MatchRow,
@@ -311,26 +312,87 @@ describe("matchPlansToRows — decision 13 evidence tiers", () => {
     expect(match([sf1], [row("t", "2026-08-05", -121.54, "STATE FARM RO 27 SFPP")], undefined, [sf2])[0]).toMatchObject({ tier: 2, evidence: "name_exact" });
   });
 
-  it("(fix 2) a confirmed descriptor: MGE 'MADISON GAS EL' is tier 3 before any confirmation, tier 2 after one", () => {
+  it("(fix 2) a confirmed descriptor: MGE 'MADISON GAS EL' is tier 3 before any confirmation, tier 2 after one, at its confirmed amount", () => {
     const utilities = [bill("water", "Water/Sewer", U), bill("vzw", "Verizon Wireless", U)];
-    const mge = (confirmed: string[]) => plan("mge", "2026-08-20", -241, "MGE Electric & Gas", { categoryId: U, confirmedDescriptions: confirmed });
+    const confirmedRow = (description: string, amount = -241): ConfirmedRow => ({ description, amount });
+    const mge = (confirmed: ConfirmedRow[]) => plan("mge", "2026-08-20", -241, "MGE Electric & Gas", { categoryId: U, confirmedRows: confirmed });
     const paid = (amount: number, description = "MADISON GAS EL") => row("t", "2026-08-20", amount, description, { categoryId: U });
     expect(match([mge([])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ confidence: "low", tier: 3, offCurve: false });
-    expect(match([mge(["MADISON GAS EL"])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor", offCurve: true });
-    // Fuzzy: one token set inside the other.
-    expect(match([mge(["MADISON GAS EL 0720 WEB"])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 2 });
-    // (fix 6) Underpaid on a confirmed descriptor: tier 2 down to the plan − max($25, 10%), kept on the curve before it is due.
-    expect(match([mge(["MADISON GAS EL"])], [paid(-216)], undefined, utilities)[0]).toMatchObject({ tier: 2, offCurve: false, difference: -25 });
-    // −215 pairs on the descriptor (it names the payee) but is below the plan − max($25, 10%): a suggestion.
-    expect(match([mge(["MADISON GAS EL"])], [paid(-215)], undefined, utilities)[0]).toMatchObject({ tier: 3, offCurve: false, confidence: "low" });
-    // Without the reference a nameless row pairs only exact within 3 days; with it, 5 days late is tier 2.
+    // MGE confirmed as "MADISON GAS EL": still tier 2 at its exact confirmed amount.
+    expect(match([mge([confirmedRow("MADISON GAS EL")])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor", offCurve: true });
+    // (round 3) A superset no longer matches on "madison" alone: "MADISON GAS EL" has
+    // only ONE distinctive word ("gas" and "el" are too short), and a subset needs two.
+    // Only an EQUAL word set still matches — the exact confirmed string, case aside.
+    expect(match([mge([confirmedRow("MADISON GAS EL 0720 WEB")])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 3 });
+    expect(match([mge([confirmedRow("madison gas el")])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor" });
+    // (round 3) Underpaid past the confirmed amount's own max($1, 1%) band: no longer
+    // tier 2 on the descriptor alone — a different-amount charge from the same company
+    // must not hide an unpaid bill. $216 is $25 under the confirmed $241 (tolerance
+    // $2.41): a suggestion now, unless the bill's own category rescues it (MGE shares
+    // "Utilities" with two other bills here, so it does not).
+    expect(match([mge([confirmedRow("MADISON GAS EL")])], [paid(-216)], undefined, utilities)[0]).toMatchObject({ tier: 3, offCurve: false });
+    // The same underpayment DOES stay tier 2 when MGE is the sole bill in its
+    // category — rule (a), not the descriptor, is what pays it down to plan − max($25, 10%).
+    const soleUtilities: MatchItem[] = [];
+    expect(match([mge([confirmedRow("MADISON GAS EL")])], [paid(-216)], undefined, soleUtilities)[0]).toMatchObject({ tier: 2, evidence: "category", offCurve: false, difference: -25 });
+    // Without the reference a nameless row pairs only exact within 3 days; with it, 5 days late is tier 2 (exact amount, inside its own range).
     const late = row("t", "2026-08-25", -241, "MADISON GAS EL", { categoryId: U });
     expect(match([mge([])], [late], undefined, utilities)).toEqual([]);
-    expect(match([mge(["MADISON GAS EL"])], [late], undefined, utilities)[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor", dayDelta: 5 });
+    expect(match([mge([confirmedRow("MADISON GAS EL")])], [late], undefined, utilities)[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor", dayDelta: 5 });
     // Another item's confirmed descriptor is not this one's.
-    expect(match([mge(["CITY OF MADISON"])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 3 });
+    expect(match([mge([confirmedRow("CITY OF MADISON")])], [paid(-241)], undefined, utilities)[0]).toMatchObject({ tier: 3 });
     // An empty description is never a reference.
-    expect(match([mge([""])], [paid(-241, "")], undefined, utilities)[0]).toMatchObject({ tier: 3 });
+    expect(match([mge([confirmedRow("")])], [paid(-241, "")], undefined, utilities)[0]).toMatchObject({ tier: 3 });
+  });
+
+  it("(round 3) a subset with two distinctive words still matches: 'TOYOTA MOTOR CREDIT' inside a confirmed 'TOYOTA MOTOR CREDIT CORP'", () => {
+    // A label unrelated to the descriptor, so only the confirmed reference can name it.
+    const auto = plan("auto", "2026-08-07", -672.8, "Auto Loan", {
+      confirmedRows: [{ description: "TOYOTA MOTOR CREDIT CORP", amount: -672.8 }],
+    });
+    // "toyota", "motor" and "credit" are all ≥ 4 letters and distinctive: two is enough.
+    expect(match([auto], [row("t", "2026-08-07", -672.8, "TOYOTA MOTOR CREDIT")])[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor" });
+  });
+
+  it("(round 3) 'ZELLE' inside a confirmed 'ZELLE TO JORDAN LEE' names no one: it never borrows Jordan's confirmation for a Zelle to someone else", () => {
+    const rent = plan("rent", "2026-05-01", -1500, "Oak Street Rent", {
+      confirmedRows: [{ description: "ZELLE TO JORDAN LEE", amount: -1500 }],
+    });
+    // The exact confirmed row (or an equally full one) still matches.
+    expect(match([rent], [row("t", "2026-05-01", -1500, "ZELLE TO JORDAN LEE")])[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor" });
+    // A bare "ZELLE", even for the exact planned amount: a subset of the confirmed
+    // words, but with only ONE distinctive word ("zelle" — "to" is under the 4-letter
+    // floor, "jordan" and "lee" are gone). Never enough on its own to claim Jordan's
+    // confirmation — the pair still shows up (exact amount, same day), just as tier 3.
+    expect(match([rent], [row("t", "2026-05-01", -1500, "ZELLE")])[0]).toMatchObject({ tier: 3, evidence: null });
+  });
+
+  it("(round 3) a confirmed range from several rows: any amount between them (± max($1, 1%)) is tier 2", () => {
+    const water = plan("water", "2026-08-24", -101.02, "Water/Sewer", {
+      confirmedRows: [
+        { description: "CITY OF MADISON", amount: -89.0 },
+        { description: "CITY OF MADISON", amount: -112.0 },
+      ],
+    });
+    // $95 sits inside the confirmed 89–112 range.
+    expect(match([water], [row("t", "2026-08-24", -95.0, "CITY OF MADISON")])[0]).toMatchObject({ tier: 2, evidence: "confirmed_descriptor" });
+    // $87 sits below 89 − max($1, 1%) = 88.11: outside the range, a suggestion.
+    expect(match([water], [row("t", "2026-08-24", -87.0, "CITY OF MADISON")])[0]).toMatchObject({ tier: 3 });
+  });
+
+  it("(round 3, MEDIUM 2) a manual twin of a Plaid payment never makes the Plaid pair ambiguous: Toyota is paid, not a suggestion", () => {
+    const toyota = plan("toyota", "2026-08-07", -672.8, "Toyota Lease");
+    // A logged manual "Toyota Lease" row beside the bank's own "TOYOTA FINANCIAL
+    // SERVICES" debit — same day, same amount. Both would independently qualify
+    // (full name / exact name), so without ranking they'd tie and the Plaid pair
+    // would read as ambiguous, dragging a bill the bank already paid.
+    const manualTwin = row("manual", "2026-08-07", -672.8, "Toyota Lease", { plaidChecking: false });
+    const plaidRow = row("plaid", "2026-08-07", -672.8, "TOYOTA FINANCIAL SERVICES");
+    const out = match([toyota], [manualTwin, plaidRow]);
+    // Only one pair: the Plaid row, non-ambiguous, off the curve. The manual row
+    // stays unpaired — it still counts as cash (`onChecking`), just not as this
+    // bill's evidence.
+    expect(out).toEqual([expect.objectContaining({ txnId: "plaid", ambiguous: false, tier: 2, offCurve: true })]);
   });
 
   it("(fix 7) a pair that can be evidence is taken first: the HELOC keeps FIGURE LENDING from a 'Figure Lending fee' that could not use it", () => {
