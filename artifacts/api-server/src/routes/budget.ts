@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, sql, asc, desc, lt, gte, inArray, isNull, notInArray } from "drizzle-orm";
+import { and, eq, ne, sql, asc, desc, lt, gte, inArray, isNull, notInArray } from "drizzle-orm";
 import {
   db,
   avalancheSettingsTable,
@@ -1027,7 +1027,7 @@ async function ensureIgnoreCategory(
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;
   const userId = req.userId!;
-  await ensureSeededDefaults(householdId, userId);
+  await ensureSeededDefaults(householdId, req.householdOwnerId!, userId);
   await ensureUncategorizedCategory(householdId, userId);
   await ensureTransferCategory(householdId, userId);
   await ensureIgnoreCategory(householdId, userId);
@@ -1250,16 +1250,23 @@ export function _resetBudgetOneTimePassGatesForTests(): void {
   ENSURE_SEEDED_DEFAULTS_FAILED_AT.clear();
 }
 
-async function seedDefaultsForUser(
-  householdId: string,
-  userId: string,
-): Promise<{
+type SeedDefaultsResult = {
   categoriesInserted: number;
   linesInserted: number;
   mappingRulesInserted: number;
   alreadySeeded: boolean;
-}> {
-  return db.transaction(async (tx) => {
+};
+
+// The full default seed, unchanged: categories, the May 2026 month and lines,
+// bills and mapping rules, each filled in by name. Its only caller is
+// seedDefaultsOnce, which runs it inside its own transaction (this body is a
+// savepoint there) and only for a household that has never been seeded.
+async function seedDefaultsForUser(
+  outer: BudgetTx,
+  householdId: string,
+  userId: string,
+): Promise<SeedDefaultsResult> {
+  return outer.transaction(async (tx) => {
       const existing = await tx
         .select()
         .from(budgetCategoriesTable)
@@ -1450,12 +1457,122 @@ async function seedDefaultsForUser(
     });
 }
 
+// Server-owned preference key (routes/settings.ts SERVER_OWNED_PREFERENCE_KEYS):
+// when the household's defaults were settled, as an ISO timestamp. Written
+// once, either with the full seed or instead of it.
+const DEFAULTS_SEEDED_KEY = "defaultsSeededAt";
+
+// Categories the server makes on its own, which say nothing about whether the
+// household has been set up: the three system rows, the Avalanche payment row
+// (every month read makes it) and one auto_debts row per active debt (every
+// month read syncs them). A month read can land before the first category read
+// on a brand-new household, so these must not block its first seed.
+const SERVER_MADE_CATEGORY_NAMES = [
+  UNCATEGORIZED_CATEGORY_NAME,
+  TRANSFER_CATEGORY_NAME,
+  IGNORE_CATEGORY_NAME,
+  AVALANCHE_PAYMENT_NAME,
+];
+
+const NOTHING_SEEDED: SeedDefaultsResult = {
+  categoriesInserted: 0,
+  linesInserted: 0,
+  mappingRulesInserted: 0,
+  alreadySeeded: true,
+};
+
+// ⚠️ Owner decision 3, extended: a deploy must never re-create a category, bill
+// or rule the household deleted. The seed used to run whenever any seed
+// category name was missing, and the in-process gate is empty after every
+// deploy, so a deleted "Entertainment" or "Weekly Spend" came back on the first
+// category read after each deploy.
+//
+// The defaults are now settled once per household, decided under the owner's
+// settings row lock (the lock PUT /settings takes):
+//   - marker present → nothing.
+//   - no marker, and the household has any category it made (not a
+//     SERVER_MADE_CATEGORY_NAMES row, not auto_debts), any recurring item or
+//     any mapping rule → write the marker, seed NOTHING. This is every
+//     household seeded before the marker existed.
+//   - no marker and none of those → the full seed exactly as before, then the
+//     marker, in one transaction (a failed seed leaves no marker).
+// The marker is written with jsonb_set, so no other preference key changes.
+async function seedDefaultsOnce(
+  householdId: string,
+  householdOwnerId: string,
+  userId: string,
+): Promise<SeedDefaultsResult> {
+  // Cheap unlocked read first: the common case is a written marker.
+  const [s] = await db
+    .select({ preferences: settingsTable.preferences })
+    .from(settingsTable)
+    .where(eq(settingsTable.userId, householdOwnerId));
+  const stored = (s?.preferences as Record<string, unknown> | null) ?? null;
+  if (stored && stored[DEFAULTS_SEEDED_KEY] != null) return NOTHING_SEEDED;
+
+  return db.transaction(async (tx) => {
+    const prefs = await lockOwnerPreferences(tx, householdOwnerId, householdId);
+    // Another request may have settled the defaults while this one waited.
+    if (prefs[DEFAULTS_SEEDED_KEY] != null) return NOTHING_SEEDED;
+
+    const [ownCategory] = await tx
+      .select({ id: budgetCategoriesTable.id })
+      .from(budgetCategoriesTable)
+      .where(
+        and(
+          eq(budgetCategoriesTable.householdId, householdId),
+          notInArray(budgetCategoriesTable.name, SERVER_MADE_CATEGORY_NAMES),
+          ne(budgetCategoriesTable.sourceKind, "auto_debts"),
+        ),
+      )
+      .limit(1);
+    const [recurringItem] = await tx
+      .select({ id: recurringItemsTable.id })
+      .from(recurringItemsTable)
+      .where(eq(recurringItemsTable.householdId, householdId))
+      .limit(1);
+    const [mappingRule] = await tx
+      .select({ id: mappingRulesTable.id })
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.householdId, householdId))
+      .limit(1);
+
+    let result = NOTHING_SEEDED;
+    if (ownCategory || recurringItem || mappingRule) {
+      logger.info(
+        {
+          householdId,
+          hasCategories: Boolean(ownCategory),
+          hasRecurringItems: Boolean(recurringItem),
+          hasMappingRules: Boolean(mappingRule),
+        },
+        "[budget] defaults marker was missing; household already has its own data, so only the marker was written and nothing was seeded",
+      );
+    } else {
+      result = await seedDefaultsForUser(tx, householdId, userId);
+      logger.info(
+        { householdId, ...result },
+        "[budget] seeded the defaults for an empty household and wrote the marker",
+      );
+    }
+    await tx
+      .update(settingsTable)
+      .set({
+        preferences: sql`jsonb_set(${settingsTable.preferences}, '{defaultsSeededAt}', to_jsonb(${new Date().toISOString()}::text), true)`,
+      })
+      .where(eq(settingsTable.userId, householdOwnerId));
+    return result;
+  });
+}
+
 // (#594-followup) Lazy-trigger the seed on the first read, so e2e
 // specs that just call GET /budget/categories (and poll for length>0)
 // see the full default seed without depending on the frontend
-// useEffect that fires on /budget mount. Per-process gated.
+// useEffect that fires on /budget mount. Per-process gated; the
+// household-level decision is seedDefaultsOnce's.
 async function ensureSeededDefaults(
   householdId: string,
+  householdOwnerId: string,
   userId: string,
 ): Promise<void> {
   if (ENSURE_SEEDED_DEFAULTS_DONE.has(householdId)) return;
@@ -1478,31 +1595,12 @@ async function ensureSeededDefaults(
     return;
   }
   const attempt = (async () => {
-    // Skip the seed only when every canonical SEED_CATEGORIES name is
-    // already present for this household. The previous "any non-excluded
-    // category exists -> skip" check produced an intermittent partial-
-    // seed bug: if any other code path (or a prior failed seed) had
-    // inserted even one non-excluded category before this lazy seed
-    // first fired, the full seed would be skipped and downstream
-    // expectations like "Dining & Coffee exists" would silently fail.
-    // The seed transaction is idempotent (onConflictDoUpdate on the
-    // (householdId, name) unique index) so re-running it on a partially-
-    // seeded household is safe and just fills the gaps.
-    const existing = await db
-      .select({ name: budgetCategoriesTable.name })
-      .from(budgetCategoriesTable)
-      .where(eq(budgetCategoriesTable.householdId, householdId));
-    const existingNames = new Set(existing.map((r) => r.name));
-    const allSeedPresent = SEED_CATEGORIES.every((c) =>
-      existingNames.has(c.name),
-    );
-    if (allSeedPresent) {
-      ENSURE_SEEDED_DEFAULTS_DONE.add(householdId);
-      ENSURE_SEEDED_DEFAULTS_FAILED_AT.delete(householdId);
-      return;
-    }
+    // It no longer fills in missing seed names: that re-created whatever the
+    // household had deleted, on every deploy. The categories the server makes
+    // before a first seed (system rows, Avalanche payment, auto_debts) do not
+    // block it, which was the partial-seed bug the old name check fixed.
     try {
-      await seedDefaultsForUser(householdId, userId);
+      await seedDefaultsOnce(householdId, householdOwnerId, userId);
       ENSURE_SEEDED_DEFAULTS_DONE.add(householdId);
       ENSURE_SEEDED_DEFAULTS_FAILED_AT.delete(householdId);
     } catch (err) {
@@ -1526,7 +1624,13 @@ router.post(
   "/budget/seed-defaults",
   requireAuth,
   async (req, res): Promise<void> => {
-    const result = await seedDefaultsForUser(req.householdId!, req.userId!);
+    // The web calls this when the category list has no budget row. Same rule
+    // as the lazy seed: only a never-seeded, empty household is seeded.
+    const result = await seedDefaultsOnce(
+      req.householdId!,
+      req.householdOwnerId!,
+      req.userId!,
+    );
     ENSURE_SEEDED_DEFAULTS_DONE.add(req.householdId!);
     res.json(result);
   },
