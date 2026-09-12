@@ -67,6 +67,9 @@ type BudgetLineWithActual = {
   categoryName: string;
   plannedAmount: string;
   actualAmount: string;
+  /** (PR-D) The posted / still-pending split of `actualAmount`, from the server. */
+  postedAmount?: string;
+  pendingAmount?: string;
   note?: string | null;
   groupName: string;
   sourceKind: string;
@@ -516,22 +519,43 @@ export default function BudgetPage() {
   // Categorized transactions this month, indexed by categoryId. Powers the
   // actuals-breakdown popover on each row (Item 5) — same scope/exclusion
   // rules as the server-side actuals total in /budget/months (skip transfers).
+  //
+  // (PR-D) …and skip a pending row a posted row replaced. It counts in no
+  // actual on this page, and the server names those rows rather than leaving
+  // the page to guess, so the drill still ties to the row that opened it.
+  //
+  // (PR-D review H1) …and file a bare posted row under the category it counts
+  // in: the one it inherited from the pending row it replaced.
+  //
+  // ⚠️ (review L5) Only the response FOR THE MONTH ON SCREEN steers the drill.
+  // During a month switch the previous month's response stays up
+  // (keepPreviousData), and its pairing says nothing about this month's rows.
+  const pairingForMonth =
+    budgetData?.monthStart === currentMonth ? budgetData : undefined;
+  const replacedPendingIds = pairingForMonth?.replacedPendingIds;
+  const inheritedCategories = pairingForMonth?.inheritedCategories;
   const txnsByCategoryThisMonth = useMemo<Map<string, Transaction[]>>(() => {
     const map = new Map<string, Transaction[]>();
     if (!allTxns) return map;
+    const replaced = new Set(replacedPendingIds ?? []);
+    const inherited = new Map(
+      (inheritedCategories ?? []).map((x) => [x.transactionId, x.categoryId] as const),
+    );
     for (const t of allTxns) {
       if (t.isTransfer) continue;
-      if (!t.categoryId) continue;
+      if (replaced.has(t.id)) continue;
+      const categoryId = inherited.get(t.id) ?? t.categoryId;
+      if (!categoryId) continue;
       if (t.occurredOn < monthBounds.start || t.occurredOn >= monthBounds.end) continue;
-      const arr = map.get(t.categoryId) ?? [];
+      const arr = map.get(categoryId) ?? [];
       arr.push(t);
-      map.set(t.categoryId, arr);
+      map.set(categoryId, arr);
     }
     for (const arr of map.values()) {
       arr.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
     }
     return map;
-  }, [allTxns, monthBounds]);
+  }, [allTxns, monthBounds, replacedPendingIds, inheritedCategories]);
 
   // Mapping rules grouped by the categoryId they assign to. Used to decide
   // which uncategorized rows should be surfaced as suggestions on a given
@@ -945,8 +969,9 @@ export default function BudgetPage() {
 
       {summary && (
         <Foot data-testid="budget-basis-note">
-          Every figure on this page is the server's, for {monthName}. Spend is
-          what has cleared — {formatCurrency(summary.expenses.actual)} against
+          Every figure on this page is the server's, for {monthName}. Spend
+          counts a pending purchase once, at its final amount when it posts —{" "}
+          {formatCurrency(summary.expenses.actual)} against
           all envelopes, of which {formatCurrency(actualTotal)} sits against the
           plan.
         </Foot>
@@ -1520,6 +1545,8 @@ function BudgetLineRow({
   }, [uncategorizedTxns, categoryRules, line.categoryName]);
   const planned = parseFloat(line.plannedAmount) || 0;
   const actual = parseFloat(line.actualAmount) || 0;
+  // (PR-D) The server's still-pending part of `actual` — parsed, not computed.
+  const pending = parseFloat(line.pendingAmount ?? "0") || 0;
   const isIncome = line.kind === "income";
   // Income: positive diff = surplus (actual > budget). Expense: positive diff = under budget.
   const diff = isIncome ? actual - planned : planned - actual;
@@ -1808,6 +1835,17 @@ function BudgetLineRow({
                 {contributingTxns.length} txn{contributingTxns.length === 1 ? "" : "s"} · {formatCurrency(line.actualAmount)}
               </div>
             </div>
+            {/* (PR-D) The row's figure, split by posting state. Both halves are
+                the server's; together they are the figure above. */}
+            {pending > 0 && (
+              <div
+                className="mb-2 flex items-center justify-end gap-3 font-mono text-micro tabular-nums text-neutral-500"
+                data-testid={`actuals-split-${line.categoryId}`}
+              >
+                <span>Posted {formatCurrency(line.postedAmount ?? "0")}</span>
+                <span>Pending {formatCurrency(line.pendingAmount ?? "0")}</span>
+              </div>
+            )}
             {contributingTxns.length === 0 ? (
               <div className="py-2 text-micro text-neutral-400">
                 No transactions contributed to this line this month.
@@ -1850,6 +1888,8 @@ function BudgetLineRow({
                                 const lbl = friendlySourceLabel(t.source);
                                 return lbl ? ` · ${lbl}` : "";
                               })()}
+                              {/* (PR-D) Still waiting to post: counted, once. */}
+                              {t.pending ? " · pending" : ""}
                             </div>
                           </div>
                           <div className="flex flex-col items-end whitespace-nowrap">
@@ -1984,11 +2024,22 @@ function BudgetLineRow({
         </div>
       </Cell>
 
-    {contributingTxns.length > 0 && (
+    {(contributingTxns.length > 0 || pending > 0) && (
       <div
         className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-micro text-neutral-400 tabular-nums sm:col-span-5"
         data-testid={`analysis-strip-${line.categoryId}`}
       >
+        {/* (PR-D) How much of the Spent figure is still pending. It is inside
+            that figure already, counted once; below the row so the figure
+            keeps the row's baseline. */}
+        {pending > 0 && (
+          <span
+            className="font-mono"
+            data-testid={`actual-pending-${line.categoryId}`}
+          >
+            incl. {formatCurrency(line.pendingAmount ?? "0")} pending
+          </span>
+        )}
         {planned > 0 && !isIncome && (() => {
           // The household's month and today (America/Chicago) — never UTC,
           // which is already tomorrow after 7pm Central.

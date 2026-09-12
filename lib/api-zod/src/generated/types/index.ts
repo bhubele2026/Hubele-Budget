@@ -94,6 +94,7 @@ export * from "./budgetLineWithActualSourceBreakdownItem";
 export * from "./budgetLineWithActualSourceBreakdownItemSource";
 export * from "./budgetLineWithActualSourceKind";
 export * from "./budgetMonthDetail";
+export * from "./budgetMonthDetailInheritedCategoriesItem";
 export * from "./budgetPlanBucket";
 export * from "./budgetPlanBySource";
 export * from "./budgetStreakCell";

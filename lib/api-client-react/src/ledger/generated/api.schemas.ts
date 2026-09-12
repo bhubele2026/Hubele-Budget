@@ -1794,6 +1794,11 @@ export interface PinResult {
   linesPinned: number;
 }
 
+export type BudgetMonthDetailInheritedCategoriesItem = {
+  transactionId: string;
+  categoryId: string;
+};
+
 export type BudgetLineWithActualSourceKind =
   (typeof BudgetLineWithActualSourceKind)[keyof typeof BudgetLineWithActualSourceKind];
 
@@ -1897,7 +1902,18 @@ export interface BudgetLineWithActual {
   categoryId: string;
   categoryName: string;
   plannedAmount: string;
+  /** Spending (income: money in) so far this month = postedAmount +
+pendingAmount. A pending purchase counts once: while pending it is
+in pendingAmount; once its posted row replaces it, only the posted
+row counts, at its final amount (owner decision 6).
+ */
   actualAmount: string;
+  /** (PR-D) The part of actualAmount from posted rows. */
+  postedAmount: string;
+  /** (PR-D) The part of actualAmount from pending rows no posted row has replaced. */
+  pendingAmount: string;
+  /** (PR-D) postedAmount + pendingAmount. Always equal to actualAmount. */
+  combinedAmount: string;
   /** @nullable */
   note?: string | null;
   groupName: string;
@@ -2029,7 +2045,16 @@ scaled by daysInMonth / 7. Per-week overrides in
 settings.preferences.weeklyAllowanceOverrides are NOT applied.
  */
   planned: string;
+  /** Filed spend so far = posted + pending. A pending row a posted row
+replaced counts nowhere (see BudgetMonthDetail.replacedPendingIds).
+ */
   actual: string;
+  /** (PR-D) The part of actual from posted rows. */
+  posted: string;
+  /** (PR-D) The part of actual from pending rows no posted row has replaced. */
+  pending: string;
+  /** (PR-D) posted + pending. Always equal to actual. */
+  combined: string;
   count: number;
   /** Weekly only - the five slices of the weekly envelope, which
 partition it rather than adding to it. Weekly spend with no slice
@@ -2049,7 +2074,14 @@ plan.
 export interface BudgetAllowanceRollup {
   lines: BudgetAllowanceLine[];
   planned: string;
+  /** posted + pending, across the three buckets. */
   actual: string;
+  /** (PR-D) The part of actual from posted rows. */
+  posted: string;
+  /** (PR-D) The part of actual from pending rows no posted row has replaced. */
+  pending: string;
+  /** (PR-D) posted + pending. Always equal to actual. */
+  combined: string;
   weeksInMonth: string;
 }
 
@@ -2067,6 +2099,20 @@ stored value instead of the live Bills/Debts derivation.
   summary: BudgetSummary;
   planBySource: BudgetPlanBySource;
   allowance: BudgetAllowanceRollup;
+  /** (PR-D) Pending rows dated in this month that a posted row replaced
+(loadSupersededPendingIds, PR4c pairing over the whole ledger). They
+count in no figure on this response - not a category actual, not
+the allowance - exactly as on Spending. Listed so the page's actuals
+drill can leave them out and still tie to its row.
+ */
+  replacedPendingIds: string[];
+  /** (PR-D review H1) Posted rows dated in this month that count under a
+category they do not store: the category of the pending row they
+replaced, because the posted row arrived with none (or only the
+system Uncategorized). Read-time only; nothing is written. Listed so
+the page's actuals drill files the row where its figure counts.
+ */
+  inheritedCategories: BudgetMonthDetailInheritedCategoriesItem[];
 }
 
 export interface SeedDefaultBudgetResult {

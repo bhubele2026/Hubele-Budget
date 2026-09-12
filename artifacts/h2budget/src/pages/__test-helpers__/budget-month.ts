@@ -25,6 +25,10 @@ export type TestLine = {
   pinned: boolean;
   planSource: "income" | "bills" | "debts" | "unbacked";
   sourceBreakdown: Array<{ source: string; count: number; amount: string }>;
+  /** (PR-D) The posted / still-pending split of `actualAmount`. */
+  postedAmount?: string;
+  pendingAmount?: string;
+  combinedAmount?: string;
   plannedSource?: {
     kind: "bills" | "pinned" | "derived" | "manual";
     bills: Array<{
@@ -75,6 +79,10 @@ export type TestAllowanceLine = {
   actual: string;
   count: number;
   subBuckets: Array<{ bucket: string; actual: string; count: number }>;
+  /** (PR-D) The posted / still-pending split of `actual`. */
+  posted?: string;
+  pending?: string;
+  combined?: string;
 };
 
 export function makeAllowance(
@@ -85,6 +93,9 @@ export function makeAllowance(
     lines,
     planned: money(lines.reduce((a, l) => a + n(l.planned), 0)),
     actual: money(lines.reduce((a, l) => a + n(l.actual), 0)),
+    posted: money(lines.reduce((a, l) => a + n(l.posted ?? l.actual), 0)),
+    pending: money(lines.reduce((a, l) => a + n(l.pending ?? "0"), 0)),
+    combined: money(lines.reduce((a, l) => a + n(l.actual), 0)),
     weeksInMonth,
   };
 }
@@ -95,6 +106,10 @@ export function makeBudgetMonth(opts: {
   summary?: TestSummary;
   monthPinned?: boolean;
   allowance?: ReturnType<typeof makeAllowance>;
+  /** (PR-D) Pending rows in the month a posted row replaced. */
+  replacedPendingIds?: string[];
+  /** (PR-D review H1) Posted rows counted under the category they inherited. */
+  inheritedCategories?: { transactionId: string; categoryId: string }[];
 }) {
   const { lines } = opts;
   const roll = (key: TestLine["planSource"]): Bucket => {
@@ -158,5 +173,7 @@ export function makeBudgetMonth(opts: {
       net: money(n(income.planned) - plannedTotal),
     },
     allowance: opts.allowance ?? makeAllowance(),
+    replacedPendingIds: opts.replacedPendingIds ?? [],
+    inheritedCategories: opts.inheritedCategories ?? [],
   };
 }

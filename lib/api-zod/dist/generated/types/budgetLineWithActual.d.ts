@@ -15,7 +15,18 @@ export interface BudgetLineWithActual {
     categoryId: string;
     categoryName: string;
     plannedAmount: string;
+    /** Spending (income: money in) so far this month = postedAmount +
+  pendingAmount. A pending purchase counts once: while pending it is
+  in pendingAmount; once its posted row replaces it, only the posted
+  row counts, at its final amount (owner decision 6).
+   */
     actualAmount: string;
+    /** (PR-D) The part of actualAmount from posted rows. */
+    postedAmount: string;
+    /** (PR-D) The part of actualAmount from pending rows no posted row has replaced. */
+    pendingAmount: string;
+    /** (PR-D) postedAmount + pendingAmount. Always equal to actualAmount. */
+    combinedAmount: string;
     /** @nullable */
     note?: string | null;
     groupName: string;

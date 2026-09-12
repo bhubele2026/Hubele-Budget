@@ -36,17 +36,32 @@ export interface AllowanceSubBucket {
   count: number;
 }
 
-export interface AllowanceLine {
+/**
+ * (PR-D, owner decision 6) Spend so far, split by posting state. A pending row
+ * a posted row replaced is not in either half — the route filters it out
+ * before aggregating — so `combined` counts a pending purchase once.
+ */
+export interface AllowanceSplit {
+  /** From posted rows. */
+  posted: string;
+  /** From pending rows no posted row has replaced. */
+  pending: string;
+  /** posted + pending. Always equal to `actual`. */
+  combined: string;
+}
+
+export interface AllowanceLine extends AllowanceSplit {
   bucket: AllowanceBucketName;
   /** The cap for the whole month. See `monthlyCapFor` for the basis. */
   planned: string;
+  /** posted + pending. */
   actual: string;
   count: number;
   /** Weekly only — the five sub-buckets. Empty for monthly/unplanned. */
   subBuckets: AllowanceSubBucket[];
 }
 
-export interface AllowanceRollup {
+export interface AllowanceRollup extends AllowanceSplit {
   lines: AllowanceLine[];
   planned: string;
   actual: string;
@@ -58,6 +73,8 @@ export interface AllowanceRollup {
 export interface AllowanceAggregateRow {
   bucket: string | null;
   subBucket: string | null;
+  /** (PR-D) The rows' posting state. Absent or null reads as posted. */
+  pending?: boolean | null;
   spend: string;
   cnt: string;
 }
@@ -67,6 +84,10 @@ const numberOf = (v: string | number | null | undefined): number => {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
   return Number.isFinite(n) ? n : 0;
 };
+/** Whole cents, so posted + pending is exactly the combined figure. */
+const centsOf = (v: string | number | null | undefined): number =>
+  Math.round(numberOf(v) * 100);
+const fromCents = (c: number): string => (c / 100).toFixed(2);
 
 /**
  * The weekly cap is stored per WEEK and the page shows a MONTH, so it is
@@ -107,15 +128,17 @@ export function buildAllowanceRollup(
   const monthlyCap = numberOf(caps.monthly);
   const unplannedCap = numberOf(caps.unplanned);
 
-  const totals = new Map<string, { spend: number; count: number }>();
+  // Cents throughout, so the halves add up to the whole exactly.
+  const totals = new Map<string, { posted: number; pending: number; count: number }>();
   const subs = new Map<string, { spend: number; count: number }>();
 
   for (const r of rows) {
     if (!r.bucket) continue;
-    const spend = numberOf(r.spend);
+    const spend = centsOf(r.spend);
     const count = parseInt(r.cnt, 10) || 0;
-    const t = totals.get(r.bucket) ?? { spend: 0, count: 0 };
-    t.spend += spend;
+    const t = totals.get(r.bucket) ?? { posted: 0, pending: 0, count: 0 };
+    if (r.pending === true) t.pending += spend;
+    else t.posted += spend;
     t.count += count;
     totals.set(r.bucket, t);
     if (r.bucket === "weekly") {
@@ -134,29 +157,41 @@ export function buildAllowanceRollup(
     }
   }
 
+  let postedTotal = 0;
+  let pendingTotal = 0;
   const lines: AllowanceLine[] = ALLOWANCE_BUCKETS.map((bucket) => {
-    const t = totals.get(bucket) ?? { spend: 0, count: 0 };
+    const t = totals.get(bucket) ?? { posted: 0, pending: 0, count: 0 };
+    postedTotal += t.posted;
+    pendingTotal += t.pending;
+    const combined = fromCents(t.posted + t.pending);
     return {
       bucket,
       planned: money(
         monthlyCapFor(bucket, weeklyCap, monthlyCap, unplannedCap, daysInMonth),
       ),
-      actual: money(t.spend),
+      actual: combined,
+      posted: fromCents(t.posted),
+      pending: fromCents(t.pending),
+      combined,
       count: t.count,
       subBuckets:
         bucket === "weekly"
           ? WEEKLY_SUB_BUCKETS.map((sb) => {
               const s = subs.get(sb) ?? { spend: 0, count: 0 };
-              return { bucket: sb, actual: money(s.spend), count: s.count };
+              return { bucket: sb, actual: fromCents(s.spend), count: s.count };
             })
           : [],
     };
   });
 
+  const combined = fromCents(postedTotal + pendingTotal);
   return {
     lines,
     planned: money(lines.reduce((a, l) => a + numberOf(l.planned), 0)),
-    actual: money(lines.reduce((a, l) => a + numberOf(l.actual), 0)),
+    actual: combined,
+    posted: fromCents(postedTotal),
+    pending: fromCents(pendingTotal),
+    combined,
     weeksInMonth: (daysInMonth / 7).toFixed(2),
   };
 }
