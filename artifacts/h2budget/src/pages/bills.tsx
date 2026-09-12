@@ -435,6 +435,21 @@ export default function BillsPage() {
     );
   };
 
+  // (One-time bill move, round 3) What the save did to the bill's match, in plain
+  // words, from the server's `moveResult`. Nothing to say when every answer was
+  // carried or none was re-checked.
+  const moveResultText = (
+    r: { needsReview: number; cleared: number } | null | undefined,
+  ): string | null => {
+    if (!r) return null;
+    const parts: string[] = [];
+    if (r.needsReview === 1) parts.push("1 match needs review.");
+    else if (r.needsReview > 1) parts.push(`${r.needsReview} matches need review.`);
+    if (r.cleared === 1) parts.push(`Its match was cleared, so the ${itemNoun} shows unpaid.`);
+    else if (r.cleared > 1) parts.push(`${r.cleared} matches were cleared, so the ${itemNoun} shows unpaid.`);
+    return parts.length > 0 ? parts.join(" ") : null;
+  };
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -444,10 +459,14 @@ export default function BillsPage() {
       updateItem.mutate(
         { id: editing.id, data: payload },
         {
-          onSuccess: () => {
+          onSuccess: (saved) => {
             invalidateAll();
             setDialogOpen(false);
-            toast({ title: moved ? `Moved this ${itemNoun}` : "Saved" });
+            const description = moveResultText(saved?.moveResult);
+            toast({
+              title: moved ? `Moved this ${itemNoun}` : "Saved",
+              ...(description ? { description } : {}),
+            });
           },
         },
       );

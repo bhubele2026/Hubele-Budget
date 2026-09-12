@@ -33,6 +33,7 @@ export {
   MATCH_STRICT_DAYS,
   rowInMatchWindow,
   rowWithinMatchAmount,
+  rowPaysPlanInFull,
   MATCH_LOOSE_MIN_CENTS,
   MATCH_LOOSE_SHARE,
   type MatchConfidence,

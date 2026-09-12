@@ -7,7 +7,8 @@ import React from "react";
 // different acts: "Move this bill" (the default save once the date changes —
 // the SAME bill, whose answers the server moves with it) and "Create another
 // bill" (a NEW, active item with the edited fields; the original is not
-// touched), offered only once the date, name or amount differs.
+// touched), offered only once the date, name or amount differs. The save's
+// toast says plainly what happened to the bill's match.
 
 if (!(Element.prototype as { scrollIntoView?: unknown }).scrollIntoView) {
   (Element.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = () => {};
@@ -46,8 +47,11 @@ const ROOF: Item = {
 const WATER: Item = { ...ROOF, id: "bill-water", name: "Water", amount: "80", frequency: "monthly", dayOfMonth: 14, anchorDate: null };
 
 let items: Item[] = [];
+/** What the PATCH answers with; `moveResult` only when answers were re-checked. */
+let updateResult: Record<string, unknown> = {};
 const createItemMock = vi.fn();
 const updateItemMock = vi.fn();
+const toastMock = vi.fn();
 
 vi.mock("wouter", () => ({
   useSearch: () => "month=2026-09-01",
@@ -56,7 +60,7 @@ vi.mock("wouter", () => ({
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: toastMock }),
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -82,9 +86,9 @@ vi.mock("@workspace/api-client-react", () => ({
     isPending: false,
   }),
   useUpdateRecurringItem: () => ({
-    mutate: (args: unknown, opts?: { onSuccess?: () => void }) => {
+    mutate: (args: { id: string; data: Record<string, unknown> }, opts?: { onSuccess?: (data: unknown) => void }) => {
       updateItemMock(args);
-      opts?.onSuccess?.();
+      opts?.onSuccess?.({ ...ROOF, ...args.data, ...updateResult });
     },
     isPending: false,
   }),
@@ -112,11 +116,19 @@ async function openRoof(): Promise<HTMLInputElement> {
   return (await screen.findByTestId("input-onetime-date")) as HTMLInputElement;
 }
 
+async function moveRoofTo(date: string): Promise<void> {
+  const input = await openRoof();
+  fireEvent.change(input, { target: { value: date } });
+  fireEvent.click(screen.getByTestId("button-save"));
+}
+
 beforeEach(() => {
   cleanup();
   createItemMock.mockClear();
   updateItemMock.mockClear();
+  toastMock.mockClear();
   items = [ROOF, WATER];
+  updateResult = {};
 });
 
 describe("Bills editor — one-time bills: Move this bill vs Create another bill", () => {
@@ -178,5 +190,43 @@ describe("Bills editor — one-time bills: Move this bill vs Create another bill
     await screen.findByTestId("input-day-of-month");
     expect(screen.queryByTestId("button-create-another")).toBeNull();
     expect(screen.getByTestId("button-save").textContent).toBe("Save changes");
+  });
+});
+
+describe("(round 3, 4) the save says what happened to the bill's match", () => {
+  const lastToast = () => toastMock.mock.calls.at(-1)?.[0] as { title: string; description?: string };
+
+  it("a match carried to the new date: just 'Moved this bill'", async () => {
+    updateResult = { moveResult: { carried: 1, needsReview: 0, cleared: 0 } };
+    await moveRoofTo("2026-09-25");
+    expect(lastToast()).toEqual({ title: "Moved this bill" });
+  });
+
+  it("a match put in question: says it needs review", async () => {
+    updateResult = { moveResult: { carried: 0, needsReview: 1, cleared: 0 } };
+    await moveRoofTo("2026-10-20");
+    expect(lastToast()).toEqual({ title: "Moved this bill", description: "1 match needs review." });
+  });
+
+  it("a match cleared: says the bill shows unpaid", async () => {
+    updateResult = { moveResult: { carried: 0, needsReview: 0, cleared: 1 } };
+    await moveRoofTo("2026-07-01");
+    expect(lastToast()).toEqual({
+      title: "Moved this bill",
+      description: "Its match was cleared, so the bill shows unpaid.",
+    });
+  });
+
+  it("an amount change that puts two answers in question, without moving: 'Saved' and a plural", async () => {
+    updateResult = { moveResult: { carried: 0, needsReview: 2, cleared: 0 } };
+    await openRoof();
+    fireEvent.change(screen.getByTestId("input-amount"), { target: { value: "3000" } });
+    fireEvent.click(screen.getByTestId("button-save"));
+    expect(lastToast()).toEqual({ title: "Saved", description: "2 matches need review." });
+  });
+
+  it("no summary: the toast is unchanged", async () => {
+    await moveRoofTo("2026-09-25");
+    expect(lastToast()).toEqual({ title: "Moved this bill" });
   });
 });

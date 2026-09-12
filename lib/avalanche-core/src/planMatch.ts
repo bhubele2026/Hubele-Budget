@@ -134,6 +134,24 @@ export function rowWithinMatchAmount(planAmount: number, rowAmount: number): boo
 }
 
 /**
+ * (One-time bill move, round 3) Does the row pay the plan IN FULL: same sign,
+ * short by at most max($1, 1%), over by at most max($25, 10%)? That is the band
+ * inside which a pair carrying the plan's full name leaves the forecast curve
+ * (`offCurve`) — the only proof that pays a plan before anyone answers. A
+ * confirmed match whose bill's amount is changed stays paid only inside it; the
+ * loose tolerance would let a $300 row keep a $376 bill paid. Pinned to
+ * `matchPlansToRows` in `planMatch.test.ts`.
+ */
+export function rowPaysPlanInFull(planAmount: number, rowAmount: number): boolean {
+  if (planAmount === 0 || Math.sign(planAmount) !== Math.sign(rowAmount)) return false;
+  const p = cents(planAmount);
+  const r = cents(rowAmount);
+  const short = Math.max(100, Math.round(p * 0.01));
+  const over = Math.max(2500, Math.round(p * MATCH_OFF_CURVE_SHARE));
+  return r >= p ? r - p <= over : p - r <= short;
+}
+
+/**
  * Words that appear in plan labels or bank descriptions without identifying a
  * payee. Every debt minimum's label ends in "minimum"; the avalanche plan is
  * "Avalanche extra payment"; bank rows say "ACH PMT", "AUTOPAY", "ONLINE"; and

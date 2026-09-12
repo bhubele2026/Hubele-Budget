@@ -149,6 +149,17 @@ export async function archiveExpiredOneTime(householdId: string): Promise<void> 
         inArray(recurringItemsTable.id, archive),
       ),
     );
+  // (One-time bill move, round 3) An archived bill has no event, so a pending
+  // review left on it could never be answered and would keep claiming its row.
+  await db
+    .delete(forecastResolutionsTable)
+    .where(
+      and(
+        eq(forecastResolutionsTable.householdId, householdId),
+        inArray(forecastResolutionsTable.recurringItemId, archive),
+        inArray(forecastResolutionsTable.status, ["needs_review", "needs_review_partial"]),
+      ),
+    );
 }
 
 function nextOccurrenceISO(item: RecurringRow): string | null {

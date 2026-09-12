@@ -5,6 +5,7 @@ import {
   inForecast,
   isBankRow,
   rowInMatchWindow,
+  rowPaysPlanInFull,
   rowWithinMatchAmount,
 } from "@workspace/avalanche-core";
 import { householdTodayISO } from "./householdClock";
@@ -28,15 +29,17 @@ import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
  *     written on the date a Forecast "Move" sent the bill to (pre-PR6);
  *   - a Forecast "Move" (`rescheduled`) on the old date — or one left on the new
  *     date — is DELETED: the edit now carries the date;
- *   - a `matched` / `partial` pair is re-checked against the matcher's own
- *     CANDIDATE bounds (`rowInMatchWindow`, `rowWithinMatchAmount` in
- *     avalanche-core — the window and loose tolerance `matchPlansToRows` pairs in,
- *     not a confidence tier), around the new date and the new signed amount:
- *       · a match still pays when its row is inside the window, the same sign,
- *         and within max($25, 25%) of the new amount;
- *       · a partial still pays part when its row is inside the window, the same
- *         sign, and leaves more than $1 of the new amount unpaid (the ledger's
- *         remainder rule) — otherwise the edit would turn it silently paid;
+ *   - a `matched` / `partial` pair is re-checked around the new due date:
+ *       · its row must sit inside the matcher's CANDIDATE date window
+ *         (`rowInMatchWindow`: 10 days before to 14 after) and have the plan's sign;
+ *       · (round 3) when the signed amount changed, a MATCH stays paid only if its
+ *         row pays the new amount in full (`rowPaysPlanInFull`: short by at most
+ *         max($1, 1%), over by at most max($25, 10%) — the proof that takes a plan
+ *         off the curve). A date-only move keeps the match the user accepted;
+ *       · a PARTIAL still pays part when its row leaves more than $1 of the new
+ *         amount unpaid (the ledger's remainder rule) and, when the amount changed,
+ *         the new amount is within max($25, 25%) of the old one — a bill re-amounted
+ *         into a clearly different bill (round 3) is not silently credited;
  *       · a pair that no longer pays becomes `needs_review` (a match) or
  *         `needs_review_partial` (a partial), keeping `matched_txn_id` — but only
  *         when Forecast Review can show it: the new date inside the register
@@ -50,12 +53,16 @@ import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
  *     still holds wins, then a stranded pair that still pays, then the live
  *     pending review, then a stranded pending review Review can show. The rest
  *     are deleted (a stranded skip or miss is never adopted).
+ * The result (`carried`, `needsReview`, `cleared`) goes back in the PATCH
+ * response, and the Bills page says it in its toast (round 3).
  * Every reader treats both review statuses as UNRESOLVED: the plan is on the
  * curve (or overdue by the usual rules), the row counts in Review, Bills does not
  * count it paid. Forecast Review answers them with Confirm (→ `matched`), Not
  * this (→ `not_match`) and, for a partial first, Partial (→ `partial`).
+ * A bill paused, archived, deleted or no longer one-time drops its pending
+ * reviews (`clearPendingReviews`): nothing could show them any more.
  * Bank transaction rows are only read, never written. Recurring (non-one-time)
- * bills are not handled here: `resolutionRemap` maps their answers at read time.
+ * bills are not re-checked here: `resolutionRemap` maps their answers at read time.
  */
 
 export const NEEDS_REVIEW_STATUS = "needs_review";
@@ -88,29 +95,37 @@ export function planAmountOf(item: { kind: string; amount: string | number }): n
   return item.kind === "income" ? amount : -amount;
 }
 
-export type OneTimeEdit = { from: string; to: string; planAmount: number };
+export type OneTimeEdit = { from: string; to: string; planAmount: number; previousPlanAmount: number };
 
 /** The edit to re-check when a one-time bill stays one-time and its date or signed amount changed; null otherwise. */
 export function oneTimeEdit(before: ItemFields, after: ItemFields): OneTimeEdit | null {
   if (before.frequency !== "onetime" || after.frequency !== "onetime") return null;
   if (!before.anchorDate || !after.anchorDate) return null;
   const planAmount = planAmountOf(after);
-  if (before.anchorDate === after.anchorDate && planAmountOf(before) === planAmount) return null;
-  return { from: before.anchorDate, to: after.anchorDate, planAmount };
+  const previousPlanAmount = planAmountOf(before);
+  if (before.anchorDate === after.anchorDate && previousPlanAmount === planAmount) return null;
+  return { from: before.anchorDate, to: after.anchorDate, planAmount, previousPlanAmount };
 }
 
 /**
- * (Review M2c) A bill that stops being one-time drops its pending reviews: nothing
- * would move them again, and each would keep claiming its row. The row goes back
- * to Review unclaimed; the recurring bill's occurrences are unresolved.
+ * Drops an item's pending reviews (`needs_review`, `needs_review_partial`) when
+ * nothing can show them any more — the bill stopped being one-time (review M2c),
+ * was paused or archived, or was deleted (round 3). Each would otherwise keep
+ * claiming its bank row. The row goes back to Review unclaimed.
  */
-export async function clearPendingReviews(tx: Tx, householdId: string, itemId: string): Promise<number> {
+export async function clearPendingReviews(
+  tx: Tx | typeof db,
+  householdId: string,
+  itemIds: string | readonly string[],
+): Promise<number> {
+  const ids = typeof itemIds === "string" ? [itemIds] : [...itemIds];
+  if (ids.length === 0) return 0;
   const gone = await tx
     .delete(forecastResolutionsTable)
     .where(
       and(
         eq(forecastResolutionsTable.householdId, householdId),
-        eq(forecastResolutionsTable.recurringItemId, itemId),
+        inArray(forecastResolutionsTable.recurringItemId, ids),
         inArray(forecastResolutionsTable.status, [NEEDS_REVIEW_STATUS, NEEDS_REVIEW_PARTIAL_STATUS]),
       ),
     )
@@ -118,13 +133,14 @@ export async function clearPendingReviews(tx: Tx, householdId: string, itemId: s
   return gone.length;
 }
 
+/** What an edit did to a one-time bill's answers — returned in the PATCH response as `moveResult`. */
 export type OneTimeMoveResult = {
-  /** Decisions and rejections now on the new date (or re-checked in place). */
-  kept: number;
-  /** Pairs that became `needs_review` / `needs_review_partial`. */
+  /** Answers kept on the bill as they were: a match still paying it, a skip, a rejection. */
+  carried: number;
+  /** Bank-row pairs that now wait for an answer in Forecast Review. */
   needsReview: number;
-  /** Answers deleted: cleared matches, duplicates on the key, replaced Forecast Moves. */
-  deleted: number;
+  /** The bill's own matches removed — Review could not show them, or their row is gone. The bill shows unpaid. */
+  cleared: number;
 };
 
 type PaidRow = {
@@ -196,8 +212,9 @@ export async function moveOneTimeResolutions(
   edit: OneTimeEdit,
 ): Promise<OneTimeMoveResult> {
   const { householdId, ownerUserId } = ctx;
-  const { from, to, planAmount } = edit;
+  const { from, to, planAmount, previousPlanAmount } = edit;
   const dateMoved = from !== to;
+  const amountChanged = planAmount !== previousPlanAmount;
 
   // (Review L2) The item row is already locked by the route; lock its answers too,
   // so a concurrent Review answer cannot land between this read and the writes.
@@ -275,12 +292,17 @@ export async function moveOneTimeResolutions(
   const stillPays = (status: string, row: PaidRow): boolean => {
     if (status !== "matched" && status !== "partial") return false;
     if (!rowInMatchWindow(dueISO, row.occurredOn)) return false;
-    return status === "matched" ? rowWithinMatchAmount(planAmount, row.amount) : stillPartial(planAmount, row.amount);
+    if (Math.sign(row.amount) !== Math.sign(planAmount)) return false;
+    if (status === "matched") return !amountChanged || rowPaysPlanInFull(planAmount, row.amount);
+    return (
+      stillPartial(planAmount, row.amount) && (!amountChanged || rowWithinMatchAmount(previousPlanAmount, planAmount))
+    );
   };
 
   type Kept = { id: string; occurrenceDate: string | null; was: string; status: string; rank: number };
   const kept: Kept[] = [];
   const deletes: string[] = replacedMoves.map((r) => r.id);
+  let cleared = 0;
   const keep = (r: (typeof own)[number], status: string, rank: number) =>
     kept.push({ id: r.id, occurrenceDate: r.occurrenceDate, was: r.status, status, rank });
 
@@ -291,10 +313,13 @@ export async function moveOneTimeResolutions(
       continue;
     }
     const row = r.matchedTxnId ? rows.get(r.matchedTxnId) : undefined;
-    if (!row) deletes.push(r.id); // (Review L1) its bank row is gone
-    else if (stillPays(r.status, row)) keep(r, r.status, 0);
-    else if (await reviewCanShow(row)) keep(r, toReviewStatus(r.status), 2);
-    else deletes.push(r.id); // (Review M2a/b) Review could never show the question
+    if (row && stillPays(r.status, row)) keep(r, r.status, 0);
+    else if (row && (await reviewCanShow(row))) keep(r, toReviewStatus(r.status), 2);
+    else {
+      // (Review L1) its bank row is gone; (M2a/b) Review could never show the question.
+      deletes.push(r.id);
+      cleared++;
+    }
   }
   for (const r of stranded) {
     if (!DECISION_STATUSES.has(r.status)) continue;
@@ -313,28 +338,25 @@ export async function moveOneTimeResolutions(
   }
 
   const inHousehold = eq(forecastResolutionsTable.householdId, householdId);
-  let needsReview = 0;
   for (const k of winners) {
     const date = dateMoved ? to : k.occurrenceDate;
-    if (k.status !== k.was && isNeedsReviewStatus(k.status)) needsReview++;
     if (date === k.occurrenceDate && k.status === k.was) continue;
     await tx
       .update(forecastResolutionsTable)
       .set({ occurrenceDate: date, status: k.status })
       .where(and(inHousehold, eq(forecastResolutionsTable.id, k.id)));
   }
-  let rejections: string[] = [];
-  if (dateMoved) {
-    rejections = live.filter((r) => r.status === "not_match" && r.occurrenceDate !== to).map((r) => r.id);
-    if (rejections.length > 0) {
-      await tx
-        .update(forecastResolutionsTable)
-        .set({ occurrenceDate: to })
-        .where(and(inHousehold, inArray(forecastResolutionsTable.id, rejections)));
-    }
+  const rejections = live.filter((r) => r.status === "not_match");
+  const rekey = rejections.filter((r) => dateMoved && r.occurrenceDate !== to).map((r) => r.id);
+  if (rekey.length > 0) {
+    await tx
+      .update(forecastResolutionsTable)
+      .set({ occurrenceDate: to })
+      .where(and(inHousehold, inArray(forecastResolutionsTable.id, rekey)));
   }
   if (deletes.length > 0) {
     await tx.delete(forecastResolutionsTable).where(and(inHousehold, inArray(forecastResolutionsTable.id, deletes)));
   }
-  return { kept: winners.length + rejections.length, needsReview, deleted: deletes.length };
+  const needsReview = winners.filter((k) => isNeedsReviewStatus(k.status)).length;
+  return { carried: winners.length - needsReview + rejections.length, needsReview, cleared };
 }

@@ -14,7 +14,12 @@ import {
   DeleteRecurringItemParams,
 } from "@workspace/api-zod";
 import { archiveExpiredOneTime } from "./bills";
-import { clearPendingReviews, moveOneTimeResolutions, oneTimeEdit } from "../lib/oneTimeBillMove";
+import {
+  clearPendingReviews,
+  moveOneTimeResolutions,
+  oneTimeEdit,
+  type OneTimeMoveResult,
+} from "../lib/oneTimeBillMove";
 import { MY_BUDGET_GROUP } from "./budget";
 
 const router: IRouter = Router();
@@ -127,12 +132,13 @@ router.patch(
     // ⭐ (One-time bill move) The item update and the re-check of its answers are
     // one transaction. A one-time bill whose date, amount or kind changed keeps its
     // answers on its date; a pair the edit puts in question needs review (or is
-    // cleared when Review could not show it). A bill that stops being one-time
-    // drops its pending reviews. Bank rows are never written. See
-    // `lib/oneTimeBillMove.ts`.
+    // cleared when Review could not show it). A bill that is paused or stops being
+    // one-time drops its pending reviews (round 3). The response carries what
+    // happened as `moveResult`, so the Bills page can say it. Bank rows are never
+    // written. See `lib/oneTimeBillMove.ts`.
     const householdId = req.householdId!;
     const ownerUserId = req.householdOwnerId!;
-    const row = await db.transaction(async (tx) => {
+    const outcome = await db.transaction(async (tx) => {
       const where = and(
         eq(recurringItemsTable.id, params.data.id),
         eq(recurringItemsTable.householdId, householdId),
@@ -150,18 +156,22 @@ router.patch(
       if (!before) return null;
       const [updated] = await tx.update(recurringItemsTable).set(parsed.data).where(where).returning();
       if (!updated) return null;
-      if (before.frequency === "onetime" && updated.frequency !== "onetime") {
-        await clearPendingReviews(tx, householdId, updated.id);
-      }
+      let moveResult: OneTimeMoveResult | undefined;
       const edit = oneTimeEdit(before, updated);
-      if (edit) await moveOneTimeResolutions(tx, { householdId, ownerUserId }, updated.id, edit);
-      return updated;
+      if (edit) moveResult = await moveOneTimeResolutions(tx, { householdId, ownerUserId }, updated.id, edit);
+      const leftOneTime = before.frequency === "onetime" && updated.frequency !== "onetime";
+      if (leftOneTime || updated.active !== "true") {
+        const dropped = await clearPendingReviews(tx, householdId, updated.id);
+        if (moveResult) moveResult = { carried: moveResult.carried, needsReview: 0, cleared: moveResult.cleared + dropped };
+        else if (dropped > 0) moveResult = { carried: 0, needsReview: 0, cleared: dropped };
+      }
+      return { row: updated, moveResult };
     });
-    if (!row) {
+    if (!outcome) {
       res.status(404).json({ error: "Not found" });
       return;
     }
-    res.json(row);
+    res.json(outcome.moveResult ? { ...outcome.row, moveResult: outcome.moveResult } : outcome.row);
   },
 );
 
@@ -174,14 +184,23 @@ router.delete(
       res.status(400).json({ error: params.error.message });
       return;
     }
-    await db
-      .delete(recurringItemsTable)
-      .where(
-        and(
-          eq(recurringItemsTable.id, params.data.id),
-          eq(recurringItemsTable.householdId, req.householdId!),
-        ),
-      );
+    const householdId = req.householdId!;
+    // (One-time bill move, round 3) A deleted bill's pending review would keep
+    // claiming its bank row with no bill to answer it on, so the row could never
+    // pay another bill. Older matches and partials on a deleted bill are left as
+    // they were (see the review note's residuals).
+    await db.transaction(async (tx) => {
+      const gone = await tx
+        .delete(recurringItemsTable)
+        .where(
+          and(
+            eq(recurringItemsTable.id, params.data.id),
+            eq(recurringItemsTable.householdId, householdId),
+          ),
+        )
+        .returning({ id: recurringItemsTable.id });
+      if (gone.length > 0) await clearPendingReviews(tx, householdId, gone.map((g) => g.id));
+    });
     res.sendStatus(204);
   },
 );

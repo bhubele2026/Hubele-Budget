@@ -10,6 +10,8 @@ import type { PlanLine, ProbablyPaid } from "@/lib/forecastMatch";
 // partial reads "Partial payment needs review": Partial (keeps the remainder)
 // is its primary answer, and "Confirm full" stays available but secondary.
 
+// ⚠️ MERGE COUPLING: the only `ProbablyPaid` this file builds. A field added to
+// `ProbablyPaid` (PR-B adds a required `tier`) is added here.
 const plan = (needsReview: ProbablyPaid["needsReview"], txnAmount = -300): PlanLine => ({
   kind: "plan",
   date: "2026-10-20",

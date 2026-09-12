@@ -5,6 +5,7 @@ import {
   plansPaidInFullByName,
   rowInMatchWindow,
   rowWithinMatchAmount,
+  rowPaysPlanInFull,
   type MatchPlan,
   type MatchRow,
 } from "@workspace/avalanche-core";
@@ -24,9 +25,13 @@ const row = (txnId: string, occurredOn: string, amount: number, description: str
   description,
 });
 
-describe("(one-time bill move, review L4) the move re-check uses the matcher's own candidate bounds", () => {
+describe("(one-time bill move, review L4) the edit re-check uses the matcher's own bounds", () => {
+  // ⚠️ MERGE COUPLING: every `matchPlansToRows` call these pins make goes through
+  // this one helper, so a signature change there (PR-B adds `items`) is one edit.
+  const pairOne = (planAmount: number, rowDate: string, rowAmount: number) =>
+    matchPlansToRows([plan("roof", "2026-09-20", planAmount, "Roof repair")], [row("t", rowDate, rowAmount, "ROOF REPAIR CO")]);
+
   it("rowInMatchWindow is exactly the date window matchPlansToRows pairs a named row in", () => {
-    const plans = [plan("roof", "2026-09-20", -400, "Roof repair")];
     const cases: Array<[string, boolean]> = [
       ["2026-09-10", true],
       ["2026-09-09", false],
@@ -35,12 +40,11 @@ describe("(one-time bill move, review L4) the move re-check uses the matcher's o
     ];
     for (const [date, inside] of cases) {
       expect(rowInMatchWindow("2026-09-20", date)).toBe(inside);
-      expect(matchPlansToRows(plans, [row("t", date, -400, "ROOF REPAIR CO")]).length).toBe(inside ? 1 : 0);
+      expect(pairOne(-400, date, -400).length).toBe(inside ? 1 : 0);
     }
   });
 
   it("rowWithinMatchAmount is exactly the loose tolerance max($25, 25%) matchPlansToRows pairs a named row within", () => {
-    const plans = [plan("roof", "2026-09-20", -400, "Roof repair")];
     const cases: Array<[number, boolean]> = [
       [-500, true],
       [-500.01, false],
@@ -49,11 +53,29 @@ describe("(one-time bill move, review L4) the move re-check uses the matcher's o
     ];
     for (const [amount, inside] of cases) {
       expect(rowWithinMatchAmount(-400, amount)).toBe(inside);
-      expect(matchPlansToRows(plans, [row("t", "2026-09-20", amount, "ROOF REPAIR CO")]).length).toBe(inside ? 1 : 0);
+      expect(pairOne(-400, "2026-09-20", amount).length).toBe(inside ? 1 : 0);
     }
     expect(rowWithinMatchAmount(-50, -75)).toBe(true);
     expect(rowWithinMatchAmount(-50, -75.01)).toBe(false);
     expect(rowWithinMatchAmount(400, -400)).toBe(false);
+  });
+
+  it("(round 3) rowPaysPlanInFull is exactly the band a same-day full-name pair leaves the curve in: short ≤ max($1, 1%), over ≤ max($25, 10%)", () => {
+    const cases: Array<[number, number, boolean]> = [
+      [-400, -396, true],
+      [-400, -395.99, false],
+      [-400, -440, true],
+      [-400, -440.01, false],
+      [-50, -49, true],
+      [-50, -48.99, false],
+      [-50, -75, true],
+      [-50, -75.01, false],
+    ];
+    for (const [planAmount, rowAmount, pays] of cases) {
+      expect(rowPaysPlanInFull(planAmount, rowAmount)).toBe(pays);
+      expect(pairOne(planAmount, "2026-09-20", rowAmount).some((m) => m.offCurve)).toBe(pays);
+    }
+    expect(rowPaysPlanInFull(300, -300)).toBe(false);
   });
 });
 

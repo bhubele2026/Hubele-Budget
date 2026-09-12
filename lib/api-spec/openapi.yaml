@@ -810,7 +810,7 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/RecurringItem" }
+              schema: { $ref: "#/components/schemas/UpdateRecurringItemResponse" }
     delete:
       operationId: deleteRecurringItem
       tags: [recurring]
@@ -3392,6 +3392,28 @@ components:
         active: { type: string }
         categoryId: { type: ["string", "null"] }
         debtId: { type: ["string", "null"] }
+    RecurringItemMoveResult:
+      type: object
+      description: >-
+        (One-time bill move) What an edit of a one-time bill's date, amount or
+        kind did to its answers. `carried`: answers kept on the bill (a match
+        still paying it, a skip, a rejection). `needsReview`: bank-row pairs
+        that now wait for Confirm / Partial / Not this in Forecast Review.
+        `cleared`: matches removed because Review could not show them or their
+        bank row is gone, plus pending reviews dropped when the bill was paused
+        or stopped being one-time — the bill shows unpaid.
+      required: [carried, needsReview, cleared]
+      properties:
+        carried: { type: integer }
+        needsReview: { type: integer }
+        cleared: { type: integer }
+    UpdateRecurringItemResponse:
+      allOf:
+        - $ref: "#/components/schemas/RecurringItem"
+        - type: object
+          properties:
+            moveResult:
+              $ref: "#/components/schemas/RecurringItemMoveResult"
     RecurringItemInput:
       type: object
       required: [name]

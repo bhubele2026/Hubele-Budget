@@ -10,9 +10,11 @@
 //
 // Today is pinned to Sat 2026-09-19 (noon Chicago). The bank snapshot reads
 // $2,000 at 10:00 CT and already holds the −$300 "ROOF CO" row dated 9/19.
-// The matcher's candidate window is 10 days before to 14 days after the plan;
-// its loose amount tolerance is max($25, 25%). The Forecast Review register
-// reaches back to the first of last month (8/01) and ahead 90 days (12/18).
+// The matcher's candidate window is 10 days before to 14 days after the plan.
+// A match whose bill's amount changed stays paid only when its row pays the new
+// amount in full: short by at most max($1, 1%), over by at most max($25, 10%).
+// The Forecast Review register reaches back to the first of last month (8/01)
+// and ahead 90 days (12/18).
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -127,10 +129,10 @@ async function snapshot(): Promise<void> {
 
 const BILL = { name: "Roof repair", kind: "expense", amount: "300" };
 
-async function oneTime(anchorDate: string): Promise<string> {
+async function oneTime(anchorDate: string, amount = "300"): Promise<string> {
   const [r] = await db
     .insert(recurringItemsTable)
-    .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, ...BILL, frequency: "onetime", anchorDate, active: "true" })
+    .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, ...BILL, amount, frequency: "onetime", anchorDate, active: "true" })
     .returning();
   return r!.id;
 }
@@ -169,13 +171,18 @@ async function resolve(status: string, itemId: string, occurrenceDate: string, e
 }
 
 /** What the Bills editor sends: the whole form. */
-async function patch(id: string, over: Record<string, unknown>): Promise<number> {
+async function patchJson(id: string, over: Record<string, unknown>): Promise<{ status: number; json: Record<string, unknown> }> {
   const res = await fetch(`${baseUrl}/recurring-items/${id}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ ...BILL, frequency: "onetime", active: "true", dayOfMonth: null, categoryId: null, ...over }),
   });
-  return res.status;
+  return { status: res.status, json: (await res.json()) as Record<string, unknown> };
+}
+const patch = async (id: string, over: Record<string, unknown>): Promise<number> => (await patchJson(id, over)).status;
+
+async function remove(id: string): Promise<number> {
+  return (await fetch(`${baseUrl}/recurring-items/${id}`, { method: "DELETE" })).status;
 }
 
 async function post(path: string, body: unknown): Promise<{ status: number; json: Record<string, unknown> }> {
@@ -220,6 +227,14 @@ async function paidRoof(): Promise<{ id: string; txn: string }> {
   const id = await oneTime("2026-09-20");
   const txn = await row("2026-09-19", "-300.00");
   await resolve("matched", id, "2026-09-20", { txnId: txn });
+  return { id, txn };
+}
+
+/** A $300 one-time bill on 9/20 partly paid ($200) by the row dated 9/19. */
+async function partRoof(): Promise<{ id: string; txn: string }> {
+  const id = await oneTime("2026-09-20");
+  const txn = await row("2026-09-19", "-200.00");
+  await resolve("partial", id, "2026-09-20", { txnId: txn });
   return { id, txn };
 }
 
@@ -392,10 +407,34 @@ describe("review H1 — amount and kind are revalidated with the date", () => {
     expect(balanceOn(sig, "2026-09-24")).toBe("2000.00");
     expect(balanceOn(sig, "2026-09-25")).toBe("2300.00");
   });
+});
 
-  it("control: $320 on 9/25 stays within max($25, 25%) and stays matched", async () => {
+describe("round 3 (2) — a match whose bill's amount changed stays paid only when its row pays the new amount in full", () => {
+  it("raised to $376 on the same date: the $300 row no longer covers it — needs review, $376 on the curve", async () => {
     const { id, txn } = await paidRoof();
-    await patch(id, { anchorDate: "2026-09-25", amount: "320" });
+    await patch(id, { anchorDate: "2026-09-20", amount: "376" });
+    expect(await stored(id)).toEqual([`needs_review@2026-09-20#${txn}`]);
+    expect(planOf(await signal(), id)).toEqual([["2026-09-20", "-376.00", null]]);
+    expect(await reviewCount()).toBe(1);
+  });
+
+  it("lowered to $270: the $300 row overpays by more than max($25, 10%) — needs review", async () => {
+    const { id, txn } = await paidRoof();
+    await patch(id, { anchorDate: "2026-09-20", amount: "270" });
+    expect(await stored(id)).toEqual([`needs_review@2026-09-20#${txn}`]);
+  });
+
+  it("control: $303 on 9/25 — the $300 row is short by no more than max($1, 1%) — stays matched", async () => {
+    const { id, txn } = await paidRoof();
+    await patch(id, { anchorDate: "2026-09-25", amount: "303" });
+    expect(await stored(id)).toEqual([`matched@2026-09-25#${txn}`]);
+  });
+
+  it("control: a date-only move keeps a match the user accepted at $250 for the $300 bill", async () => {
+    const id = await oneTime("2026-09-20");
+    const txn = await row("2026-09-19", "-250.00");
+    await resolve("matched", id, "2026-09-20", { txnId: txn });
+    await patch(id, { anchorDate: "2026-09-25" });
     expect(await stored(id)).toEqual([`matched@2026-09-25#${txn}`]);
   });
 });
@@ -480,18 +519,14 @@ describe("review M2 — every needs-review answer can be answered", () => {
 
 describe("review M3 — a partial that needs review stays a partial", () => {
   it("inside the window it stays partial (the $100 remainder moves with it)", async () => {
-    const id = await oneTime("2026-09-20");
-    const txn = await row("2026-09-19", "-200.00");
-    await resolve("partial", id, "2026-09-20", { txnId: txn });
+    const { id, txn } = await partRoof();
     await patch(id, { anchorDate: "2026-09-22" });
     expect(await stored(id)).toEqual([`partial@2026-09-22#${txn}`]);
     expect(planOf(await signal(), id)).toEqual([["2026-09-22", "-100.00", null]]);
   });
 
   it("outside it: needs_review_partial, in Review, whole bill on the curve; answering Partial leaves $100 (10/20 balance 1,900.00)", async () => {
-    const id = await oneTime("2026-09-20");
-    const txn = await row("2026-09-19", "-200.00");
-    await resolve("partial", id, "2026-09-20", { txnId: txn });
+    const { id, txn } = await partRoof();
     await patch(id, { anchorDate: "2026-10-20" });
     expect(await stored(id)).toEqual([`needs_review_partial@2026-10-20#${txn}`]);
     expect(planOf(await signal(), id)).toEqual([["2026-10-20", "-300.00", null]]);
@@ -506,21 +541,46 @@ describe("review M3 — a partial that needs review stays a partial", () => {
   });
 
   it("Not this replaces a needs_review_partial", async () => {
-    const id = await oneTime("2026-09-20");
-    const txn = await row("2026-09-19", "-200.00");
-    await resolve("partial", id, "2026-09-20", { txnId: txn });
+    const { id, txn } = await partRoof();
     await patch(id, { anchorDate: "2026-10-20" });
     await post("/forecast/resolutions", { recurringItemId: id, occurrenceDate: "2026-10-20", status: "not_match", matchedTxnId: txn });
     expect(await stored(id)).toEqual([`not_match@2026-10-20#${txn}`]);
   });
 
   it("a partial whose new amount the row now covers needs review rather than turning paid", async () => {
-    const id = await oneTime("2026-09-20");
-    const txn = await row("2026-09-19", "-200.00");
-    await resolve("partial", id, "2026-09-20", { txnId: txn });
+    const { id, txn } = await partRoof();
     await patch(id, { anchorDate: "2026-09-22", amount: "200" });
     expect(await stored(id)).toEqual([`needs_review_partial@2026-09-22#${txn}`]);
     expect(planOf(await signal(), id)).toEqual([["2026-09-22", "-200.00", null]]);
+  });
+
+  it("(round 3, 1) a Forecast Move keeps a needs_review_partial beside it", async () => {
+    const { id, txn } = await partRoof();
+    await patch(id, { anchorDate: "2026-10-20" });
+    const res = await post("/forecast/resolutions", {
+      recurringItemId: id,
+      occurrenceDate: "2026-10-20",
+      status: "rescheduled",
+      rescheduledTo: "2026-10-22",
+    });
+    expect(res.status).toBe(200);
+    expect(await stored(id)).toEqual([`needs_review_partial@2026-10-20#${txn}`, "rescheduled@2026-10-20#-→2026-10-22"].sort());
+    expect(planOf(await signal(), id)).toEqual([["2026-10-22", "-300.00", null]]);
+    expect(await reviewCount()).toBe(1);
+  });
+
+  it("(round 3, 5) a $200 partial on a bill re-amounted to $10,000 — a different bill — needs review", async () => {
+    const { id, txn } = await partRoof();
+    await patch(id, { anchorDate: "2026-09-20", amount: "10000" });
+    expect(await stored(id)).toEqual([`needs_review_partial@2026-09-20#${txn}`]);
+    expect(planOf(await signal(), id)).toEqual([["2026-09-20", "-10000.00", null]]);
+  });
+
+  it("(round 3, 5) control: a $200 partial on a bill raised to $320 (within max($25, 25%) of $300) stays partial, $120 left", async () => {
+    const { id, txn } = await partRoof();
+    await patch(id, { anchorDate: "2026-09-20", amount: "320" });
+    expect(await stored(id)).toEqual([`partial@2026-09-20#${txn}`]);
+    expect(planOf(await signal(), id)).toEqual([["2026-09-20", "-120.00", null]]);
   });
 });
 
@@ -531,5 +591,51 @@ describe("review L1 — a match on a deleted row is not carried", () => {
     await patch(id, { anchorDate: "2026-09-25" });
     expect(await stored(id)).toEqual([]);
     expect(planOf(await signal(), id)).toEqual([["2026-09-25", "-300.00", null]]);
+  });
+});
+
+describe("round 3 (3) — a bill that can no longer be answered releases its pending review", () => {
+  it("pausing the bill clears it: the row is no longer claimed", async () => {
+    const { id, txn } = await paidRoof();
+    await patch(id, { anchorDate: "2026-10-20" });
+    expect(await stored(id)).toEqual([`needs_review@2026-10-20#${txn}`]);
+    await patch(id, { anchorDate: "2026-10-20", active: "false" });
+    expect(await stored(id)).toEqual([]);
+  });
+
+  it("deleting the bill clears it: another Roof repair due 9/18 is paid by the freed row, not dragged to 9/21", async () => {
+    const { id } = await paidRoof();
+    await patch(id, { anchorDate: "2026-10-20" });
+    expect(await remove(id)).toBe(204);
+    expect(await stored(id)).toEqual([]);
+    const other = await oneTime("2026-09-18");
+    const sig = await signal();
+    expect(planOf(sig, other)).toEqual([]);
+    expect(listedOf(sig, other)).toEqual([["assumed_paid", "2026-09-18", "-300.00"]]);
+    expect(balanceOn(sig, "2026-09-21")).toBe("2000.00");
+  });
+
+  it("archiving the bill clears a review Review can no longer show", async () => {
+    const id = await oneTime("2026-07-01");
+    const txn = await row("2026-09-19", "-300.00");
+    await resolve("needs_review", id, "2026-07-01", { txnId: txn });
+    await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
+    expect(await activeOf(id)).toBe("false");
+    expect(await stored(id)).toEqual([]);
+  });
+});
+
+describe("round 3 (4) — the PATCH says what happened to the bill's answers", () => {
+  it("carried, put in question, cleared — and no summary when no answer was re-checked", async () => {
+    const a = await paidRoof();
+    expect((await patchJson(a.id, { anchorDate: "2026-09-25" })).json.moveResult).toEqual({ carried: 1, needsReview: 0, cleared: 0 });
+    expect((await patchJson(a.id, { anchorDate: "2026-10-20" })).json.moveResult).toEqual({ carried: 0, needsReview: 1, cleared: 0 });
+    expect((await patchJson(a.id, { anchorDate: "2026-10-20", name: "Roof repair, front" })).json.moveResult).toBeUndefined();
+    expect((await patchJson(a.id, { anchorDate: "2026-10-20", active: "false" })).json.moveResult).toEqual({ carried: 0, needsReview: 0, cleared: 1 });
+
+    const b = await paidRoof();
+    const res = await patchJson(b.id, { anchorDate: "2026-07-01" });
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ id: b.id, anchorDate: "2026-07-01", moveResult: { carried: 0, needsReview: 0, cleared: 1 } });
   });
 });

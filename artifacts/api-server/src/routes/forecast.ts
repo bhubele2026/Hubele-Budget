@@ -1159,10 +1159,15 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
             // (PR5 review) A partial confirmation and a reschedule of the same
             // plan coexist: the remainder is due on the date the user moved it to.
             ...(status === "partial" ? [ne(forecastResolutionsTable.status, "rescheduled")] : []),
-            // (One-time bill move) A move is not an answer: a `needs_review` pair
-            // stays open beside it, like a partial, until Confirm / Not this.
+            // (One-time bill move) A move is not an answer: a pending review
+            // (`needs_review`, `needs_review_partial`) stays open beside it, like a
+            // partial, until it is answered.
             ...(status === "rescheduled"
-              ? [ne(forecastResolutionsTable.status, "partial"), ne(forecastResolutionsTable.status, "needs_review")]
+              ? [
+                  ne(forecastResolutionsTable.status, "partial"),
+                  ne(forecastResolutionsTable.status, "needs_review"),
+                  ne(forecastResolutionsTable.status, "needs_review_partial"),
+                ]
               : []),
           ),
         );

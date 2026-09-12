@@ -421,6 +421,8 @@ export function buildLineRegister(opts: {
     // (One-time bill move) The stored `needs_review` pair, when the plan is still
     // open and its row is not decided elsewhere. The row's own fields come from
     // the register when it is in the window, else from the bundle's join.
+    // ⚠️ MERGE COUPLING: this is the ONE place a review `ProbablyPaid` is built.
+    // A field added to `ProbablyPaid` (PR-B adds a required `tier`) is added here.
     const review = reviewByKey.get(origKey);
     if (review?.matchedTxnId && (status === "pending_plan" || status === "future")) {
       const bank = bankById.get(review.matchedTxnId);
