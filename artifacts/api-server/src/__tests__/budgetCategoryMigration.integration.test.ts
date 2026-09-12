@@ -91,7 +91,7 @@ async function insertLine(categoryId: string, planned: string, monthStart = MONT
 }
 
 describe("budget category v2 migration", () => {
-  it("merges old categories into new ones, summing planned amounts and re-pointing references", async () => {
+  it("merges old categories into new ones, summing planned amounts and re-pointing references; a category a mapping rule points at is kept", async () => {
     // Seed legacy state: three old utility categories + one transaction + one rule.
     const mge = await insertCat("Electric & Gas (MGE)", "Essential — Housing");
     const water = await insertCat("Water/Sewer (City of Madison)", "Essential — Housing");
@@ -136,7 +136,9 @@ describe("budget category v2 migration", () => {
       }>;
     };
 
-    // Old categories should be gone.
+    // MGE and Phone are merged away. Water/Sewer has a mapping rule pointing at
+    // it, and since owner decision 3 (review L1) a legacy category a rule points
+    // at is never merged or deleted, so it stays with its rule and its line.
     const remaining = await db
       .select()
       .from(budgetCategoriesTable)
@@ -150,7 +152,8 @@ describe("budget category v2 migration", () => {
           ]),
         ),
       );
-    expect(remaining).toHaveLength(0);
+    expect(remaining.map((c) => c.name)).toEqual(["Water/Sewer (City of Madison)"]);
+    expect(remaining[0]!.id).toBe(water.id);
 
     // New "Utilities" category should exist with summed planned amount.
     const utilitiesGroup = body.groups.find(
@@ -163,12 +166,11 @@ describe("budget category v2 migration", () => {
     );
     expect(utilitiesLine).toBeTruthy();
     if (!utilitiesLine) throw new Error("utilitiesLine missing");
-    // After the v2 migration sums the legacy lines (241 + 101.02 + 342 =
-    // 684.02), the May 2026 canonical reconciliation (task #106) overrides
-    // Utilities to the user's source-of-truth value of 774.24. The merged
-    // category still exists with re-pointed references — that's what this
-    // test cares about.
-    expect(parseFloat(utilitiesLine.plannedAmount)).toBeCloseTo(774.24, 2);
+    // The v2 migration sums the merged legacy lines: MGE 241 + Phone 342 =
+    // 583.00 (Water/Sewer's 101.02 stays on the kept category). The May 2026
+    // reset (task #106) used to overwrite this with 774.24; since owner
+    // decision 3 it changes no budget data, so the summed amount stands.
+    expect(parseFloat(utilitiesLine.plannedAmount)).toBeCloseTo(583.0, 2);
     expect(parseFloat(utilitiesLine.actualAmount)).toBeCloseTo(150.0, 2);
 
     // Mapping rule should now point at the new Utilities category.
@@ -187,7 +189,9 @@ describe("budget category v2 migration", () => {
       .from(mappingRulesTable)
       .where(eq(mappingRulesTable.userId, TEST_USER));
     expect(rules).toHaveLength(1);
-    expect(rules[0]!.categoryId).toBe(utilCatRow[0]!.id);
+    // The rule still points at the kept Water/Sewer category.
+    expect(rules[0]!.categoryId).toBe(water.id);
+    expect(utilCatRow[0]!.id).not.toBe(water.id);
 
     // Flag should be set so subsequent runs are no-ops.
     const [s] = await db
