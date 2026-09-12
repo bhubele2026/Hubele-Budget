@@ -143,7 +143,15 @@ top of `origin/main` `1a0c1f71` (PR-A, merged in).
 - `pnpm run typecheck`: green.
 - Web: `TZ=UTC` 137 files, 1123 passed / 3 skipped. `TZ=America/Chicago` 137 files,
   1124 passed / 2 skipped.
-- API, full suite: 144 files, 1351 passed / 7 todo (before merging PR-A2).
+- API, full suite: 144 files, 1351 passed / 7 todo before merging PR-A2. After
+  merging `origin/main` `6b355065` (PR-A2), the merge ran clean:
+  `SERVER_OWNED_PREFERENCE_KEYS` keeps `amexAnchor` and gains `defaultsSeededAt`;
+  there were no schema or spec changes.
+  - On the merged tree: 145 files, 1363 passed / 7 todo.
+  - The settings / amex / debts files (11) pass, 107 tests.
+  - Web on the merged tree is unchanged: 137 files, UTC 1123 / 3 skipped, Chicago
+    1124 / 2 skipped.
+  - Build is OK at 574.8 KB.
 - Build + entry graph: OK, landing 574.8 KB against the 580 KB cap.
 - Codegen: spec changed (`failureCount`, `firstFailedAt`); generated `src` and `dist`
   are committed and a re-run leaves the tree clean.
