@@ -3535,7 +3535,7 @@ components:
         linesPinned: { type: integer }
     BudgetMonthDetail:
       type: object
-      required: [monthStart, monthPinned, lines, groups, summary, planBySource, allowance]
+      required: [monthStart, monthPinned, lines, groups, summary, planBySource, allowance, replacedPendingIds]
       properties:
         monthStart: { type: string }
         note: { type: ["string", "null"] }
@@ -3554,15 +3554,39 @@ components:
         summary: { $ref: "#/components/schemas/BudgetSummary" }
         planBySource: { $ref: "#/components/schemas/BudgetPlanBySource" }
         allowance: { $ref: "#/components/schemas/BudgetAllowanceRollup" }
+        replacedPendingIds:
+          type: array
+          description: |
+            (PR-D) Pending rows dated in this month that a posted row replaced
+            (loadSupersededPendingIds, PR4c pairing over the whole ledger). They
+            count in no figure on this response - not a category actual, not
+            the allowance - exactly as on Spending. Listed so the page's actuals
+            drill can leave them out and still tie to its row.
+          items: { type: string }
     BudgetLineWithActual:
       type: object
-      required: [categoryId, categoryName, plannedAmount, actualAmount, groupName, sourceKind, sortOrder, kind, pinned, planSource]
+      required: [categoryId, categoryName, plannedAmount, actualAmount, postedAmount, pendingAmount, combinedAmount, groupName, sourceKind, sortOrder, kind, pinned, planSource]
       properties:
         id: { type: ["string", "null"] }
         categoryId: { type: string }
         categoryName: { type: string }
         plannedAmount: { type: string }
-        actualAmount: { type: string }
+        actualAmount:
+          type: string
+          description: |
+            Spending (income: money in) so far this month = postedAmount +
+            pendingAmount. A pending purchase counts once: while pending it is
+            in pendingAmount; once its posted row replaces it, only the posted
+            row counts, at its final amount (owner decision 6).
+        postedAmount:
+          type: string
+          description: "(PR-D) The part of actualAmount from posted rows."
+        pendingAmount:
+          type: string
+          description: "(PR-D) The part of actualAmount from pending rows no posted row has replaced."
+        combinedAmount:
+          type: string
+          description: "(PR-D) postedAmount + pendingAmount. Always equal to actualAmount."
         note: { type: ["string", "null"] }
         groupName: { type: string }
         sourceKind: { type: string, enum: [manual, auto_bills, auto_debts] }
@@ -3709,7 +3733,7 @@ components:
         count: { type: integer }
     BudgetAllowanceLine:
       type: object
-      required: [bucket, planned, actual, count, subBuckets]
+      required: [bucket, planned, actual, posted, pending, combined, count, subBuckets]
       properties:
         bucket: { type: string, enum: [weekly, monthly, unplanned] }
         planned:
@@ -3718,7 +3742,20 @@ components:
             The cap for the whole month. The weekly cap is stored per week and
             scaled by daysInMonth / 7. Per-week overrides in
             settings.preferences.weeklyAllowanceOverrides are NOT applied.
-        actual: { type: string }
+        actual:
+          type: string
+          description: |
+            Filed spend so far = posted + pending. A pending row a posted row
+            replaced counts nowhere (see BudgetMonthDetail.replacedPendingIds).
+        posted:
+          type: string
+          description: "(PR-D) The part of actual from posted rows."
+        pending:
+          type: string
+          description: "(PR-D) The part of actual from pending rows no posted row has replaced."
+        combined:
+          type: string
+          description: "(PR-D) posted + pending. Always equal to actual."
         count: { type: integer }
         subBuckets:
           type: array
@@ -3730,7 +3767,7 @@ components:
           items: { $ref: "#/components/schemas/BudgetAllowanceSubBucket" }
     BudgetAllowanceRollup:
       type: object
-      required: [lines, planned, actual, weeksInMonth]
+      required: [lines, planned, actual, posted, pending, combined, weeksInMonth]
       description: |
         Allowance spend for the month, aggregated server-side.
         TRACKED, NOT PLANNED. This money is already in planBySource.bills as the
@@ -3741,7 +3778,18 @@ components:
           type: array
           items: { $ref: "#/components/schemas/BudgetAllowanceLine" }
         planned: { type: string }
-        actual: { type: string }
+        actual:
+          type: string
+          description: "posted + pending, across the three buckets."
+        posted:
+          type: string
+          description: "(PR-D) The part of actual from posted rows."
+        pending:
+          type: string
+          description: "(PR-D) The part of actual from pending rows no posted row has replaced."
+        combined:
+          type: string
+          description: "(PR-D) posted + pending. Always equal to actual."
         weeksInMonth: { type: string }
     SeedDefaultBudgetResult:
       type: object

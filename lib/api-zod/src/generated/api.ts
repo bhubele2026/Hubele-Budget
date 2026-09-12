@@ -2132,7 +2132,24 @@ export const GetBudgetMonthResponse = zod.object({
       categoryId: zod.string(),
       categoryName: zod.string(),
       plannedAmount: zod.string(),
-      actualAmount: zod.string(),
+      actualAmount: zod
+        .string()
+        .describe(
+          "Spending (income: money in) so far this month = postedAmount +\npendingAmount. A pending purchase counts once: while pending it is\nin pendingAmount; once its posted row replaces it, only the posted\nrow counts, at its final amount (owner decision 6).\n",
+        ),
+      postedAmount: zod
+        .string()
+        .describe("(PR-D) The part of actualAmount from posted rows."),
+      pendingAmount: zod
+        .string()
+        .describe(
+          "(PR-D) The part of actualAmount from pending rows no posted row has replaced.",
+        ),
+      combinedAmount: zod
+        .string()
+        .describe(
+          "(PR-D) postedAmount + pendingAmount. Always equal to actualAmount.",
+        ),
       note: zod.string().nullish(),
       groupName: zod.string(),
       sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
@@ -2194,7 +2211,24 @@ export const GetBudgetMonthResponse = zod.object({
           categoryId: zod.string(),
           categoryName: zod.string(),
           plannedAmount: zod.string(),
-          actualAmount: zod.string(),
+          actualAmount: zod
+            .string()
+            .describe(
+              "Spending (income: money in) so far this month = postedAmount +\npendingAmount. A pending purchase counts once: while pending it is\nin pendingAmount; once its posted row replaces it, only the posted\nrow counts, at its final amount (owner decision 6).\n",
+            ),
+          postedAmount: zod
+            .string()
+            .describe("(PR-D) The part of actualAmount from posted rows."),
+          pendingAmount: zod
+            .string()
+            .describe(
+              "(PR-D) The part of actualAmount from pending rows no posted row has replaced.",
+            ),
+          combinedAmount: zod
+            .string()
+            .describe(
+              "(PR-D) postedAmount + pendingAmount. Always equal to actualAmount.",
+            ),
           note: zod.string().nullish(),
           groupName: zod.string(),
           sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
@@ -2306,7 +2340,22 @@ export const GetBudgetMonthResponse = zod.object({
             .describe(
               "The cap for the whole month. The weekly cap is stored per week and\nscaled by daysInMonth \/ 7. Per-week overrides in\nsettings.preferences.weeklyAllowanceOverrides are NOT applied.\n",
             ),
-          actual: zod.string(),
+          actual: zod
+            .string()
+            .describe(
+              "Filed spend so far = posted + pending. A pending row a posted row\nreplaced counts nowhere (see BudgetMonthDetail.replacedPendingIds).\n",
+            ),
+          posted: zod
+            .string()
+            .describe("(PR-D) The part of actual from posted rows."),
+          pending: zod
+            .string()
+            .describe(
+              "(PR-D) The part of actual from pending rows no posted row has replaced.",
+            ),
+          combined: zod
+            .string()
+            .describe("(PR-D) posted + pending. Always equal to actual."),
           count: zod.number(),
           subBuckets: zod
             .array(
@@ -2328,11 +2377,29 @@ export const GetBudgetMonthResponse = zod.object({
         }),
       ),
       planned: zod.string(),
-      actual: zod.string(),
+      actual: zod
+        .string()
+        .describe("posted + pending, across the three buckets."),
+      posted: zod
+        .string()
+        .describe("(PR-D) The part of actual from posted rows."),
+      pending: zod
+        .string()
+        .describe(
+          "(PR-D) The part of actual from pending rows no posted row has replaced.",
+        ),
+      combined: zod
+        .string()
+        .describe("(PR-D) posted + pending. Always equal to actual."),
       weeksInMonth: zod.string(),
     })
     .describe(
       "Allowance spend for the month, aggregated server-side.\nTRACKED, NOT PLANNED. This money is already in planBySource.bills as the\nrecurring items that fund it, so these figures are never added to the\nplan.\n",
+    ),
+  replacedPendingIds: zod
+    .array(zod.string())
+    .describe(
+      "(PR-D) Pending rows dated in this month that a posted row replaced\n(loadSupersededPendingIds, PR4c pairing over the whole ledger). They\ncount in no figure on this response - not a category actual, not\nthe allowance - exactly as on Spending. Listed so the page's actuals\ndrill can leave them out and still tie to its row.\n",
     ),
 });
 

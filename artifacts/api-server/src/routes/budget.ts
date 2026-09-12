@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq, sql, asc, desc, lt, inArray, isNull, notInArray } from "drizzle-orm";
+import { loadSupersededPendingIds } from "../lib/supersededPending";
 import {
   db,
   avalancheSettingsTable,
@@ -1609,6 +1610,7 @@ router.get(
         // still be the shape — the page reads these unconditionally.
         planBySource: rollUpPlanBySource([]),
         allowance: buildAllowanceRollup([], { weekly: "0", monthly: "0", unplanned: "0" }, 30),
+        replacedPendingIds: [],
       });
       return;
     }
@@ -1886,17 +1888,54 @@ router.get(
 
     const monthEndStr = monthEndExclusive(monthStart);
 
+    // ⭐ (PR-D, owner decision 6) A PENDING PURCHASE COUNTS ONCE — Spending's
+    // rule. "When they post, replace the pending version and adjust for the
+    // final amount": a $40 pending charge that posts at $48 is $48, not $88.
+    //
+    // A pending row a posted row replaced counts in NO figure below (not a
+    // category actual, not a source badge, not the allowance). The set is
+    // `loadSupersededPendingIds` — PR4c's pairing over the WHOLE ledger, the
+    // same set Spending, the spine, Habits and the Amex payoff read — so the
+    // answer does not depend on which month is on screen. A pending row still
+    // waiting to post counts, in the `pending` half of the split.
+    //
+    // Bounded: the pairing runs at most once per request, and only when the
+    // month holds a pending row; only this month's replaced rows reach the SQL.
+    const monthPendingIds = (
+      await db
+        .select({ id: transactionsTable.id })
+        .from(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.householdId, householdId),
+            sql`${transactionsTable.occurredOn} >= ${monthStart}`,
+            sql`${transactionsTable.occurredOn} < ${monthEndStr}`,
+            eq(transactionsTable.pending, true),
+          ),
+        )
+    ).map((r) => r.id);
+    const replacedPendingIds =
+      monthPendingIds.length > 0
+        ? await loadSupersededPendingIds(householdId)
+        : new Set<string>();
+    const replacedInMonth = monthPendingIds
+      .filter((id) => replacedPendingIds.has(id))
+      .sort();
+    const notReplacedPending = notInArray(transactionsTable.id, replacedInMonth);
+
     // Spend / inflow aggregation. Bank-style sources (Plaid bank, manual,
     // import) follow the standard convention: NEGATIVE amounts are spend,
     // POSITIVE amounts are inflow. Amex (`source='amex'`) uses the canonical
     // Amex convention (Task #93/#130): POSITIVE amounts are charges (spend),
     // NEGATIVE amounts are payments / credits (inflow). Transfers are
     // excluded from both totals. We also break down by source so the budget
-    // row can show "Bank" / "Amex" counts.
+    // row can show "Bank" / "Amex" counts, and by posting state (PR-D) so it
+    // can say how much of the figure is still pending.
     const actuals = await db
       .select({
         categoryId: transactionsTable.categoryId,
         source: transactionsTable.source,
+        pending: transactionsTable.pending,
         spend: sql<string>`coalesce(sum(case
           when ${transactionsTable.source} = 'amex' and ${transactionsTable.amount} > 0 then ${transactionsTable.amount}
           when ${transactionsTable.source} <> 'amex' and ${transactionsTable.amount} < 0 then -${transactionsTable.amount}
@@ -1914,40 +1953,79 @@ router.get(
           sql`${transactionsTable.occurredOn} >= ${monthStart}`,
           sql`${transactionsTable.occurredOn} < ${monthEndStr}`,
           eq(transactionsTable.isTransfer, false),
+          notReplacedPending,
         ),
       )
-      .groupBy(transactionsTable.categoryId, transactionsTable.source);
+      .groupBy(
+        transactionsTable.categoryId,
+        transactionsTable.source,
+        transactionsTable.pending,
+      );
 
+    // Whole cents, so posted + pending is exactly the combined figure.
+    const centsOf = (v: string): number => Math.round((parseFloat(v) || 0) * 100);
     type SourceBucket = { source: string; count: number; amount: number };
-    const spendByCat = new Map<string, number>();
-    const inflowByCat = new Map<string, number>();
-    const breakdownByCat = new Map<string, SourceBucket[]>();
+    type PostingSplit = { posted: number; pending: number };
+    const spendByCat = new Map<string, PostingSplit>();
+    const inflowByCat = new Map<string, PostingSplit>();
+    const addTo = (
+      m: Map<string, PostingSplit>,
+      categoryId: string,
+      pending: boolean,
+      cents: number,
+    ) => {
+      const s = m.get(categoryId) ?? { posted: 0, pending: 0 };
+      if (pending) s.pending += cents;
+      else s.posted += cents;
+      m.set(categoryId, s);
+    };
+    // A source's badge describes the source, not its posting state, so both
+    // halves merge per (category, source) before the spend-else-inflow pick —
+    // the same pick, over the same rows, as before the split.
+    const sourcesByCat = new Map<
+      string,
+      Map<string, { count: number; spend: number; inflow: number }>
+    >();
     for (const a of actuals) {
       if (!a.categoryId) continue;
-      const spend = parseFloat(a.spend) || 0;
-      const inflow = parseFloat(a.inflow) || 0;
-      spendByCat.set(a.categoryId, (spendByCat.get(a.categoryId) ?? 0) + spend);
-      inflowByCat.set(
-        a.categoryId,
-        (inflowByCat.get(a.categoryId) ?? 0) + inflow,
+      const spend = centsOf(a.spend);
+      const inflow = centsOf(a.inflow);
+      const pending = a.pending === true;
+      addTo(spendByCat, a.categoryId, pending, spend);
+      addTo(inflowByCat, a.categoryId, pending, inflow);
+      const sources = sourcesByCat.get(a.categoryId) ?? new Map();
+      const s = sources.get(a.source) ?? { count: 0, spend: 0, inflow: 0 };
+      s.count += parseInt(a.cnt, 10) || 0;
+      s.spend += spend;
+      s.inflow += inflow;
+      sources.set(a.source, s);
+      sourcesByCat.set(a.categoryId, sources);
+    }
+    const breakdownByCat = new Map<string, SourceBucket[]>();
+    for (const [categoryId, sources] of sourcesByCat) {
+      breakdownByCat.set(
+        categoryId,
+        Array.from(sources.entries()).map(([source, s]) => ({
+          source,
+          count: s.count,
+          amount: (s.spend > 0 ? s.spend : s.inflow) / 100,
+        })),
       );
-      const arr = breakdownByCat.get(a.categoryId) ?? [];
-      arr.push({
-        source: a.source,
-        count: parseInt(a.cnt, 10) || 0,
-        amount: spend > 0 ? spend : inflow,
-      });
-      breakdownByCat.set(a.categoryId, arr);
     }
     const linesByCat = new Map(lines.map((l) => [l.categoryId, l]));
 
     const monthPinned = month?.pinned === true;
     const responseLines = cats.map((c) => {
       const line = linesByCat.get(c.id);
-      const actualNum =
-        c.kind === "income"
-          ? inflowByCat.get(c.id) ?? 0
-          : spendByCat.get(c.id) ?? 0;
+      // (PR-D) posted + still-pending, in cents. A replaced pending row is in
+      // neither half: the query above never saw it.
+      const actualSplit = (c.kind === "income" ? inflowByCat : spendByCat).get(
+        c.id,
+      ) ?? { posted: 0, pending: 0 };
+      const actualAmount = (
+        (actualSplit.posted + actualSplit.pending) /
+        100
+      ).toFixed(2);
       const derived = autoPlannedByCat.get(c.id);
       // For auto-pulled categories, the user can "pin" a month — or an
       // individual line — so the persisted budget_lines value is preferred
@@ -2028,7 +2106,10 @@ router.get(
         categoryId: c.id,
         categoryName: c.name,
         plannedAmount,
-        actualAmount: actualNum.toFixed(2),
+        actualAmount,
+        postedAmount: (actualSplit.posted / 100).toFixed(2),
+        pendingAmount: (actualSplit.pending / 100).toFixed(2),
+        combinedAmount: actualAmount,
         note: line?.note ?? null,
         groupName: c.groupName,
         sourceKind: c.sourceKind,
@@ -2137,9 +2218,16 @@ router.get(
     // discretionary dollar appear three times on the old page.
     //
     // The filters mirror `isCountableSpend` + `effectiveBucket` on the client
-    // (h2budget/src/lib/bucketSpend.ts, weeklyBuckets.ts) exactly, INCLUDING
-    // the bucket precedence unplanned > monthly > weekly, so the Budget page
-    // and the Allowances page cannot report different spend for one month.
+    // (h2budget/src/lib/bucketSpend.ts, weeklyBuckets.ts), INCLUDING the bucket
+    // precedence unplanned > monthly > weekly.
+    //
+    // ⚠️ (PR-D) EXCEPT A REPLACED PENDING ROW. Owner decision 6 counts a pending
+    // purchase once, so this card leaves out a pending row a posted row
+    // replaced (`notReplacedPending`, above). The Allowances page and the
+    // Banking strip still sum raw `/transactions` rows in the browser, so where
+    // a replaced pair is filed in a bucket they read higher than this card by
+    // the replaced pending amount until they adopt the same rule (listed in
+    // docs/reviews/2026-09-11-budget-pending-once.md).
     const allowanceRows = await db
       .select({
         bucket: sql<string | null>`case
@@ -2148,6 +2236,7 @@ router.get(
           when ${transactionsTable.weeklyAllowance} then 'weekly'
           else null end`,
         subBucket: transactionsTable.weeklyBucket,
+        pending: transactionsTable.pending,
         spend: sql<string>`coalesce(sum(case
           when ${transactionsTable.source} = 'amex' and ${transactionsTable.amount} > 0 then ${transactionsTable.amount}
           when ${transactionsTable.source} <> 'amex' and ${transactionsTable.amount} < 0 then -${transactionsTable.amount}
@@ -2164,6 +2253,7 @@ router.get(
           eq(transactionsTable.isExternalCardPayment, false),
           eq(transactionsTable.reimbursable, false),
           isNull(transactionsTable.debtId),
+          notReplacedPending,
         ),
       )
       .groupBy(
@@ -2173,6 +2263,7 @@ router.get(
           when ${transactionsTable.weeklyAllowance} then 'weekly'
           else null end`,
         transactionsTable.weeklyBucket,
+        transactionsTable.pending,
       );
 
     const [allowanceSettings] = await db
@@ -2205,6 +2296,7 @@ router.get(
       summary,
       planBySource,
       allowance,
+      replacedPendingIds: replacedInMonth,
     });
   },
 );

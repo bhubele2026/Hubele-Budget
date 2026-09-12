@@ -24,5 +24,12 @@ export interface BudgetMonthDetail {
     summary: BudgetSummary;
     planBySource: BudgetPlanBySource;
     allowance: BudgetAllowanceRollup;
+    /** (PR-D) Pending rows dated in this month that a posted row replaced
+  (loadSupersededPendingIds, PR4c pairing over the whole ledger). They
+  count in no figure on this response - not a category actual, not
+  the allowance - exactly as on Spending. Listed so the page's actuals
+  drill can leave them out and still tie to its row.
+   */
+    replacedPendingIds: string[];
 }
 //# sourceMappingURL=budgetMonthDetail.d.ts.map

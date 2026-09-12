@@ -15,7 +15,16 @@ scaled by daysInMonth / 7. Per-week overrides in
 settings.preferences.weeklyAllowanceOverrides are NOT applied.
  */
   planned: string;
+  /** Filed spend so far = posted + pending. A pending row a posted row
+replaced counts nowhere (see BudgetMonthDetail.replacedPendingIds).
+ */
   actual: string;
+  /** (PR-D) The part of actual from posted rows. */
+  posted: string;
+  /** (PR-D) The part of actual from pending rows no posted row has replaced. */
+  pending: string;
+  /** (PR-D) posted + pending. Always equal to actual. */
+  combined: string;
   count: number;
   /** Weekly only - the five slices of the weekly envelope, which
 partition it rather than adding to it. Weekly spend with no slice
