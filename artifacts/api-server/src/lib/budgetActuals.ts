@@ -12,21 +12,22 @@
 //   - category actuals skip transfers only (a row with no category has no line);
 //   - the allowance skips transfers, card payments, reimbursables and debt
 //     payments (`isCountableSpend`), and buckets by unplanned > monthly > weekly.
-// Whole cents throughout.
+// The transfer flag, reimbursable and debt tag read are the EFFECTIVE ones: a
+// posted row inherits them from its pending row (round 3 L2). Whole cents.
 //
 // Pure: the route reads the rows and the pairs (one snapshot), this arranges.
 
 import type { AllowanceAggregateRow } from "./budgetAllowance";
-import { effectiveFiling, type Filing } from "./pendingFiling";
+import { effectiveFiling, type Filing, type FilingContext } from "./pendingFiling";
 import type { SupersededPending } from "./supersededPending";
 
 /** One ledger row, as the Budget month reads it. */
 export interface BudgetMonthRow extends Filing {
   id: string;
+  description: string;
   source: string;
   amount: string;
   pending: boolean;
-  isTransfer: boolean;
   isExternalCardPayment: boolean;
 }
 
@@ -65,7 +66,7 @@ export function inflowCents(source: string, cents: number): number {
 export function aggregateBudgetMonth(
   rows: readonly BudgetMonthRow[],
   supersede: Pick<SupersededPending, "replacedIds" | "replacedBy">,
-  uncategorizedIds: ReadonlySet<string>,
+  ctx: FilingContext,
 ): BudgetMonthSpend {
   const byCategory = new Map<string, CategoryActual>();
   const allowanceRows: AllowanceAggregateRow[] = [];
@@ -79,7 +80,7 @@ export function aggregateBudgetMonth(
       replacedPendingIds.push(row.id);
       continue;
     }
-    const t = effectiveFiling(row, supersede.replacedBy.get(row.id)?.filing, uncategorizedIds);
+    const t = effectiveFiling(row, supersede.replacedBy.get(row.id), ctx);
     if (t.categoryId && t.categoryId !== row.categoryId) {
       inheritedCategories.push({ transactionId: row.id, categoryId: t.categoryId });
     }
@@ -88,7 +89,7 @@ export function aggregateBudgetMonth(
     const spend = spendCents(row.source, cents);
     const inflow = inflowCents(row.source, cents);
 
-    if (!row.isTransfer && t.categoryId) {
+    if (!t.isTransfer && t.categoryId) {
       const a = byCategory.get(t.categoryId) ?? {
         spend: { posted: 0, pending: 0 },
         inflow: { posted: 0, pending: 0 },
@@ -109,7 +110,7 @@ export function aggregateBudgetMonth(
       byCategory.set(t.categoryId, a);
     }
 
-    if (!row.isTransfer && !row.isExternalCardPayment && !t.reimbursable && !t.debtId) {
+    if (!t.isTransfer && !row.isExternalCardPayment && !t.reimbursable && !t.debtId) {
       const bucket = t.unplannedAllowance
         ? "unplanned"
         : t.monthlyAllowance

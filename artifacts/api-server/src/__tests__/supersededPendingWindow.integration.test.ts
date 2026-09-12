@@ -238,6 +238,7 @@ describe("findSupersededPendingForRange — the whole-ledger answer inside the r
     expect(r.replacedBy.get(postedId!)).toEqual({
       id: pendingId,
       occurredOn: "2026-12-10",
+      description: "OLIVE GARDEN 1234",
       filing: {
         categoryId: catId,
         weeklyAllowance: true,
@@ -246,6 +247,7 @@ describe("findSupersededPendingForRange — the whole-ledger answer inside the r
         weeklyBucket: "dining",
         reimbursable: false,
         debtId: null,
+        isTransfer: false,
       },
     });
   });

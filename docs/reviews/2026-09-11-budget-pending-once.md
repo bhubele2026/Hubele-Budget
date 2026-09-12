@@ -245,6 +245,43 @@ June is measured with a median of 7 or 9 runs. "Stale" means straight after the 
 - **NIT6 (not one snapshot):** pending check, pairing and month rows run in one REPEATABLE READ read-only transaction.
   The plan side (categories, lines, bills) is read outside it, as before.
 
+## Review round 3
+
+- **M1 (a rule's category on the posted row beat a hand filing on the pending row):** fixed.
+  - **The rule:** the posted row's category counts as its own only when it differs from its rule category. When it
+    equals its rule category and the pending row's category is not that row's rule category (a hand filing), the
+    pending row's category wins.
+  - **Cost:** the rules (`loadRuleCategoryCheck` = `loadUserRules` + `findMatchedRuleId`) are read only when a pair
+    carries two real, different categories — at most once per Budget month read.
+  - **For PR-I:** the full rule is written out in `lib/pendingFiling.ts`.
+  - **Costco repro:** Auto 0 / Groceries 45 → **Auto 45 / Groceries 0**, on Budget and Spending (`df2adda`: Auto 40 +
+    Groceries 45). A posted row filed by hand away from its rule keeps its own; with no rules the behaviour is
+    unchanged.
+- **L2 (transfer flag):** inherited — `isTransfer` is true when either row's is, as in `mergeStatePatch` (which carries
+  no override flag).
+  - **Zelle repro:** Spending Uncategorized 48 → **0**, `excluded.transfersTotal` +48, and the weekly allowance drops
+    the row.
+- **NIT3 (debt tag):** an inherited `debtId` fires rule 2 before the card-payment rules. A card payment therefore moves
+  from `excluded.cardPayments` to `excluded.debtPaymentsTotal`. Real spend is 0 either way, and that bucket move is its
+  only effect on Spending. The allowance card already skipped debt-tagged rows, and debt payoff reads stored tags, not
+  this.
+- **NIT4 (slice):** a posted row with its own weekly flag and no slice takes the pending row's slice when the pending
+  row was weekly too. $40 pending weekly/dining → $48 posted weekly with no slice: misc 48 → **dining 48**.
+- **Spine:** it reads its two spend windows through `buildSpendingFacts`, so when a pair needs them the rules are read
+  once per window.
+
+**Fails-before, round 3 (on `8f79df4e`):**
+- **`budgetPendingOnce.integration.test.ts`:** 3 of 4 new tests fail on a figure:
+  - M1 Costco (Auto 0.00);
+  - L2 (Uncategorized 48);
+  - NIT4 (misc 48, no dining).
+
+  "A posted row filed by hand away from its rule keeps its own" passes on `8f79df4e`: it is a pin.
+- **`pendingFiling.test.ts`:** 14 of 17 fail.
+  - Most fail on the new context signature (`uncategorizedIds.has is not a function`), not on a figure.
+  - The L2 and NIT4 cases fail on their assertions.
+  - The figure-level proof for M1 is the integration test.
+
 ## Residuals
 
 1. **The Allowances page and the Banking strip still sum raw rows** in the browser (`bucketSpend.ts`): no pairing and no

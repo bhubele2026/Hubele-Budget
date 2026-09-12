@@ -21,7 +21,13 @@ import {
   findSupersededPendingForRange,
   type SupersededPending,
 } from "./supersededPending";
-import { effectiveFiling, uncategorizedCategoryIds } from "./pendingFiling";
+import {
+  effectiveFiling,
+  needsRuleCheck,
+  uncategorizedCategoryIds,
+  type FilingContext,
+} from "./pendingFiling";
+import { loadRuleCategoryCheck } from "./autoCategorize";
 import { addDaysISO, householdTodayISO } from "./householdClock";
 
 // The household only started tracking transactions on this date; ranges that
@@ -210,8 +216,17 @@ export async function buildSpendingFacts(
   // for this range (`findSupersededPendingForRange`), exact for every row in it.
   const supersede =
     opts.supersede ?? (await findSupersededPendingForRange(householdId, start, end));
-  // (PR-D review H1) Which categories count as "no category" for inheritance.
+  // (PR-D review H1; round 3 M1) What a posted row inherits from the pending row
+  // it replaced (`effectiveFiling`). The household's mapping rules are read only
+  // when a pair has two real, different categories — the one case where "filed
+  // by hand or by a rule?" decides.
   const uncategorizedIds = uncategorizedCategoryIds(cats);
+  const filingCtx: FilingContext = {
+    uncategorizedIds,
+    isRuleCategory: needsRuleCheck(txns, supersede.replacedBy, uncategorizedIds)
+      ? await loadRuleCategoryCheck(householdId)
+      : undefined,
+  };
 
   // --- Accumulators -------------------------------------------------------
   let householdTotal = 0;
@@ -269,7 +284,7 @@ export async function buildSpendingFacts(
     // (PR-D review H1) …and the filing the household put on the pending row,
     // wherever the posted row (inserted bare by sync) lacks its own. The same
     // helper the Budget month uses, so both pages file the row alike.
-    const t = effectiveFiling(row, supersede.replacedBy.get(row.id)?.filing, uncategorizedIds);
+    const t = effectiveFiling(row, supersede.replacedBy.get(row.id), filingCtx);
     const tx: SpendTxn = t;
     const spend = spendAmount(tx);
 

@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { and, eq, sql, asc, desc, lt, gte, inArray, isNull, notInArray } from "drizzle-orm";
 import { findSupersededPendingForRange } from "../lib/supersededPending";
-import { uncategorizedCategoryIds } from "../lib/pendingFiling";
+import { needsRuleCheck, uncategorizedCategoryIds } from "../lib/pendingFiling";
+import { loadRuleCategoryCheck } from "../lib/autoCategorize";
 import { aggregateBudgetMonth } from "../lib/budgetActuals";
 import {
   db,
@@ -1963,8 +1964,7 @@ router.get(
     // Bank-style sources (Plaid bank, manual, import): NEGATIVE amounts are
     // spend, POSITIVE are inflow. Amex (`source='amex'`, Task #93/#130): the
     // reverse. Transfers are excluded from both. Arithmetic: `budgetActuals.ts`.
-    const uncategorizedIds = uncategorizedCategoryIds(allCats);
-    const monthSpend = await db.transaction(
+    const snapshot = await db.transaction(
       async (tx) => {
         const supersede = await findSupersededPendingForRange(
           householdId,
@@ -1975,6 +1975,7 @@ router.get(
         const monthRows = await tx
           .select({
             id: transactionsTable.id,
+            description: transactionsTable.description,
             source: transactionsTable.source,
             amount: transactionsTable.amount,
             pending: transactionsTable.pending,
@@ -1996,10 +1997,25 @@ router.get(
               sql`${transactionsTable.occurredOn} < ${monthEndStr}`,
             ),
           );
-        return aggregateBudgetMonth(monthRows, supersede, uncategorizedIds);
+        return { supersede, monthRows };
       },
       { isolationLevel: "repeatable read", accessMode: "read only" },
     );
+    // (round 3 M1) A hand filing on a pending row beats a rule's category on its
+    // posted row. The rules are read only when a pair carries two real,
+    // different categories (`needsRuleCheck`) — at most once per request.
+    const uncategorizedIds = uncategorizedCategoryIds(allCats);
+    const isRuleCategory = needsRuleCheck(
+      snapshot.monthRows,
+      snapshot.supersede.replacedBy,
+      uncategorizedIds,
+    )
+      ? await loadRuleCategoryCheck(householdId)
+      : undefined;
+    const monthSpend = aggregateBudgetMonth(snapshot.monthRows, snapshot.supersede, {
+      uncategorizedIds,
+      isRuleCategory,
+    });
     const replacedInMonth = monthSpend.replacedPendingIds;
 
     type SourceBucket = { source: string; count: number; amount: number };

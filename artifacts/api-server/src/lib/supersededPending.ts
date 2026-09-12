@@ -30,6 +30,8 @@ export type DbReader = Pick<typeof db, "select">;
 export interface ReplacedPending {
   id: string;
   occurredOn: string;
+  /** (round 3 M1) The rules match on it: was the pending row's category a hand filing? */
+  description: string;
   filing: Filing;
 }
 
@@ -258,6 +260,8 @@ export function supersedeCandidatesQuery(
       pWeeklyBucket: pendingRow.weeklyBucket,
       pReimbursable: pendingRow.reimbursable,
       pDebtId: pendingRow.debtId,
+      // (round 3 L2) dedupe's mergeStatePatch carries the transfer flag too.
+      pIsTransfer: pendingRow.isTransfer,
       qId: postedRow.id,
       qAccount: postedRow.plaidAccountId,
       qOn: postedRow.occurredOn,
@@ -347,6 +351,7 @@ function pairCandidates(
         weeklyBucket: c.pWeeklyBucket,
         reimbursable: c.pReimbursable,
         debtId: c.pDebtId,
+        isTransfer: c.pIsTransfer,
       });
     }
     rowOf(postedRowOf(c));
@@ -369,6 +374,8 @@ function pairCandidates(
       replacedBy.set(postedId, {
         id: pending.id,
         occurredOn: pending.occurredOn,
+        // No description matches no rule: its category then counts as a hand filing.
+        description: pending.description ?? "",
         filing: filingById.get(pending.id)!,
       });
     }

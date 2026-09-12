@@ -430,6 +430,71 @@ describe("(PR-D review H1) the posted row arrives bare — it carries the pendin
   });
 });
 
+describe("(PR-D round 3 M1) a hand filing on the pending row beats a rule's automatic category on the posted row", () => {
+  it("⭐ rule COSTCO GAS → Groceries; the $40 pending re-filed by hand to Auto posts at $45 with the rule's Groceries → Auto 45, Groceries 0, on Budget and Spending", async () => {
+    const auto = await addCategory("Auto PR-D M1");
+    const groceries = await addCategory("Groceries PR-D M1");
+    await db.insert(mappingRulesTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      pattern: "COSTCO GAS",
+      matchType: "contains",
+      categoryId: groceries,
+      priority: 100,
+    });
+    const card = acct("m1-costco");
+    await addTxn({ occurredOn: "2027-04-06", description: "COSTCO GAS #0123", amount: "-40.00", plaidAccountId: card, categoryId: auto, pending: true });
+    // Sync inserts the posted row with the rule's category.
+    const postedId = await addTxn({ occurredOn: "2027-04-07", description: "COSTCO GAS #0123", amount: "-45.00", plaidAccountId: card, categoryId: groceries });
+
+    const d = await month("2027-04-01");
+    expect(split(lineFor(d, auto))).toEqual({ posted: "45.00", pending: "0.00", combined: "45.00", actual: "45.00" });
+    expect(split(lineFor(d, groceries))).toMatchObject({ actual: "0.00" });
+    expect(d.inheritedCategories).toContainEqual({ transactionId: postedId, categoryId: auto });
+    expect(await spendingTotal("2027-04-01", "2027-04-30", auto)).toBe(45);
+    expect(await spendingTotal("2027-04-01", "2027-04-30", groceries)).toBe(0);
+  });
+
+  it("a posted row filed by hand away from its rule keeps its own category", async () => {
+    // The COSTCO GAS → Groceries rule from the test above still applies.
+    const autoB = await addCategory("Auto PR-D M1-B");
+    const dining = await addCategory("Dining PR-D M1-B");
+    const card = acct("m1-own");
+    await addTxn({ occurredOn: "2027-04-13", description: "COSTCO GAS #0456", amount: "-40.00", plaidAccountId: card, categoryId: autoB, pending: true });
+    await addTxn({ occurredOn: "2027-04-14", description: "COSTCO GAS #0456", amount: "-48.00", plaidAccountId: card, categoryId: dining });
+
+    const d = await month("2027-04-01");
+    expect(split(lineFor(d, autoB))).toMatchObject({ actual: "0.00" });
+    expect(split(lineFor(d, dining))).toMatchObject({ actual: "48.00" });
+    expect(await spendingTotal("2027-04-01", "2027-04-30", dining)).toBe(48);
+  });
+});
+
+describe("(PR-D round 3 L2, NIT4) the transfer flag and the weekly slice carry over", () => {
+  it("L2: a pending $40 Zelle marked transfer, posted bare at $48 → a transfer on Spending, not Uncategorized spend; out of the allowance", async () => {
+    const checking = acct("l2-transfer");
+    await addTxn({ occurredOn: "2027-05-10", description: "ZELLE TO JOHN SMITH", amount: "-40.00", plaidAccountId: checking, categoryId: null, pending: true, extra: { isTransfer: true, weeklyAllowance: true } });
+    await addTxn({ occurredOn: "2027-05-11", description: "ZELLE TO JOHN SMITH", amount: "-48.00", plaidAccountId: checking, categoryId: null });
+
+    const f = await facts("2027-05-09", "2027-05-15");
+    expect(f.uncategorized).toMatchObject({ total: 0, transactionCount: 0 });
+    expect(f.householdSpend.total).toBe(0);
+    expect(f.excluded).toMatchObject({ transfersTotal: 48, replacedPending: 40 });
+    const d = await month("2027-05-01");
+    expect(bucket(d, "weekly")).toMatchObject({ actual: "0.00", count: 0 });
+  });
+
+  it("NIT4: a posted row with its own weekly flag but no slice takes the weekly pending row's slice", async () => {
+    const card = acct("nit4");
+    await addTxn({ occurredOn: "2027-06-08", description: "PANERA BREAD 601", amount: "-40.00", plaidAccountId: card, categoryId: null, pending: true, extra: { weeklyAllowance: true, weeklyBucket: "dining" } });
+    await addTxn({ occurredOn: "2027-06-09", description: "PANERA BREAD 601", amount: "-48.00", plaidAccountId: card, categoryId: null, extra: { weeklyAllowance: true } });
+
+    const weekly = bucket(await month("2027-06-01"), "weekly");
+    expect(weekly.subBuckets.find((s) => s.bucket === "dining")).toEqual({ bucket: "dining", actual: "48.00", count: 1 });
+    expect(weekly.subBuckets.find((s) => s.bucket === "misc")).toEqual({ bucket: "misc", actual: "0.00", count: 0 });
+  });
+});
+
 describe("(PR-D review M3) pairing runs at most once per month read, and not at all without a pending row in reach", () => {
   it("a month with no pending row in it or in the 7 days before: no pairing", async () => {
     const card = acct("no-pending");
