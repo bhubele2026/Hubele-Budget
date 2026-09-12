@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, sql, asc, desc, lt, inArray, isNull, notInArray } from "drizzle-orm";
+import { and, eq, sql, asc, desc, lt, gte, inArray, isNull, notInArray } from "drizzle-orm";
 import {
   db,
   avalancheSettingsTable,
@@ -45,6 +45,7 @@ import {
 } from "../lib/mappingSeed";
 import { expandItem, parseISO, addDays, isPastOneTime } from "../lib/cashSignal";
 import { householdTodayISO } from "../lib/householdClock";
+import { logger } from "../lib/logger";
 import { planSourceOf, rollUpPlanBySource } from "../lib/budgetPlanSource";
 import { buildAllowanceRollup } from "../lib/budgetAllowance";
 import { monthEndExclusive, daysInMonth } from "../lib/monthBounds";
@@ -246,13 +247,13 @@ const RECURRING_AUTO_BASE_SORT = 9000;
 // and the Budget page rolls those amounts up into the linked category.
 // This avoids the duplicate-row problem where every bill spawned its own
 // "Recurring Bills" entry alongside the user's existing envelopes.
-// One-time, idempotent data heal for users whose recurring expense bills
-// were previously linked to per-bill `auto_bills` expense categories
-// (the old "Recurring Bills" group). Re-points each known bill name to
-// the appropriate manual category, then deletes any auto_bills EXPENSE
-// category that no longer has an active recurring item linked to it.
-// Safe to run on every request: each step short-circuits when there is
-// nothing to do.
+// Idempotent data heal for users whose recurring expense bills were
+// previously linked to per-bill `auto_bills` expense categories (the old
+// "Recurring Bills" group). Re-points each known bill name to the
+// appropriate manual category, then removes an auto_bills EXPENSE category
+// with no active recurring item linked ONLY when nothing else references it
+// (see step 2). It has no gate and runs once per process, so after every
+// deploy: it must never delete data a user can see.
 const BILL_NAME_TO_MANUAL_CATEGORY: Readonly<Record<string, string>> = {
   "Water/Sewer": "Utilities",
   "MGE Electric & Gas": "Utilities",
@@ -355,47 +356,54 @@ async function healLegacyRecurringBillLinks(householdId: string): Promise<void> 
     if (r.active === "true" && !isPastOneTime(r, householdTodayISO()) && r.categoryId) stillLinked.add(r.categoryId);
   }
 
-  const orphans = autoExpenseCats
-    .filter((c) => !stillLinked.has(c.id))
-    .map((c) => c.id);
+  const orphans = autoExpenseCats.filter((c) => !stillLinked.has(c.id));
   if (orphans.length === 0) {
     HEAL_BILL_LINKS_DONE.add(householdId);
     return;
   }
 
-  await db
-    .delete(budgetLinesTable)
-    .where(
-      and(
-        eq(budgetLinesTable.householdId, householdId),
-        inArray(budgetLinesTable.categoryId, orphans),
-      ),
-    );
-  await db
-    .update(transactionsTable)
-    .set({ categoryId: null })
-    .where(
-      and(
-        eq(transactionsTable.householdId, householdId),
-        inArray(transactionsTable.categoryId, orphans),
-      ),
-    );
-  await db
-    .delete(mappingRulesTable)
-    .where(
-      and(
-        eq(mappingRulesTable.householdId, householdId),
-        inArray(mappingRulesTable.categoryId, orphans),
-      ),
-    );
-  await db
+  // ⚠️ Deploy safety (owner decision 3). This step used to delete each such
+  // category's budget lines and mapping rules, set its transactions'
+  // category to NULL and delete the category, after every deploy, including
+  // the category of a one-time bill whose date had simply passed. Now a
+  // category is removed only when nothing points at it: no transaction,
+  // mapping rule, budget line, recurring item (active or not) or Avalanche
+  // extra category. Nothing is nulled and nothing cascades. The reference
+  // check sits inside the DELETE, so it is made by the statement that deletes.
+  const removed = await db
     .delete(budgetCategoriesTable)
     .where(
       and(
         eq(budgetCategoriesTable.householdId, householdId),
-        inArray(budgetCategoriesTable.id, orphans),
+        inArray(
+          budgetCategoriesTable.id,
+          orphans.map((c) => c.id),
+        ),
+        sql`not exists (select 1 from transactions t where t.category_id = budget_categories.id)`,
+        sql`not exists (select 1 from mapping_rules r where r.category_id = budget_categories.id)`,
+        sql`not exists (select 1 from budget_lines l where l.category_id = budget_categories.id)`,
+        sql`not exists (select 1 from recurring_items i where i.category_id = budget_categories.id)`,
+        sql`not exists (select 1 from avalanche_settings a where a.extra_budget_category_id = budget_categories.id)`,
       ),
+    )
+    .returning({ id: budgetCategoriesTable.id });
+  const removedIds = new Set(removed.map((r) => r.id));
+  const kept = orphans.filter((c) => !removedIds.has(c.id));
+  if (kept.length > 0) {
+    logger.info(
+      { householdId, keptStillReferenced: kept.map((c) => c.name) },
+      "[budget] legacy bill-category heal kept unlinked auto_bills categories that are still referenced",
     );
+  }
+  if (removedIds.size > 0) {
+    logger.info(
+      {
+        householdId,
+        removedUnreferenced: orphans.filter((c) => removedIds.has(c.id)).map((c) => c.name),
+      },
+      "[budget] legacy bill-category heal removed unlinked auto_bills categories nothing references",
+    );
+  }
   HEAL_BILL_LINKS_DONE.add(householdId);
 }
 
@@ -513,38 +521,151 @@ async function syncAutoBillsFromRecurring(
   }
 }
 
-// One-time per-user consolidation of the legacy ~45-category budget seed
-// into the new ~22-category list (task #65). Idempotent: gated by a flag in
-// `settings.preferences.budgetCategoriesV2`. Re-runs are safe — the mapping
-// is applied only when an old category still exists.
+type BudgetTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Lock the household owner's settings row for the rest of `tx` and return its
+// preferences, creating the row when there is none. The one-time passes below
+// take this lock BEFORE they read their gate: the same SELECT … FOR UPDATE that
+// PUT /settings takes (routes/settings.ts), so a pass and a settings save queue
+// instead of one writing the other's keys away. The gate is then written with
+// jsonb_set, which touches that one key and nothing else. A null (or non-object)
+// column becomes {} first, because jsonb_set cannot set a key inside null.
+async function lockOwnerPreferences(
+  tx: BudgetTx,
+  householdOwnerId: string,
+  householdId: string,
+): Promise<Record<string, unknown>> {
+  await tx
+    .insert(settingsTable)
+    .values({ userId: householdOwnerId, householdId, preferences: {} })
+    .onConflictDoNothing({ target: settingsTable.userId });
+  const [row] = await tx
+    .select({ preferences: settingsTable.preferences })
+    .from(settingsTable)
+    .where(eq(settingsTable.userId, householdOwnerId))
+    .for("update");
+  const prefs = row?.preferences;
+  if (prefs && typeof prefs === "object" && !Array.isArray(prefs)) {
+    return prefs as Record<string, unknown>;
+  }
+  await tx
+    .update(settingsTable)
+    .set({ preferences: {} })
+    .where(eq(settingsTable.userId, householdOwnerId));
+  return {};
+}
+
+// Names the legacy (pre-#65) seed already had and the V2 seed kept unchanged,
+// read from budgetSeed.ts at 4676c214^. They say nothing about which list a
+// household is on: "Misc / Buffer" is both a legacy seed row and a target.
+const LEGACY_SEED_NAMES_KEPT_BY_V2: ReadonlySet<string> = new Set([
+  "Brad's paycheck (KFI)",
+  "Hannah's paycheck (Exact)",
+  "HELOC (Figure)",
+  "Kids' Savings / 529",
+  "Misc / Buffer",
+  "Mortgage (Lakeview)",
+  "Tax Sinking Fund",
+]);
+
+// Targets only the V2 list ever created (17 names: "Utilities", "Groceries",
+// "Subscriptions", …). A household holding any of them has been migrated or was
+// seeded on V2; the legacy seed had none of them.
+const V2_ONLY_TARGET_NAMES: ReadonlySet<string> = new Set(
+  Object.values(BUDGET_CATEGORY_MIGRATION_MAP).filter(
+    (n) =>
+      !LEGACY_SEED_NAMES_KEPT_BY_V2.has(n) &&
+      !Object.prototype.hasOwnProperty.call(BUDGET_CATEGORY_MIGRATION_MAP, n),
+  ),
+);
+
+// First month after the consolidation shipped (4676c214, 2026-05-03). A legacy
+// category with a budget line or a transaction in or after this month has been
+// used since the V2 era began, so the migration leaves it alone (as it does any
+// legacy category a mapping rule points at).
+const V2_POST_ERA_MONTH = "2026-06-01";
+
+// One-time consolidation of the legacy ~45-category budget seed into the
+// ~22-category list (task #65), gated by `settings.preferences.budgetCategoriesV2`.
 //
-// For each old → new mapping:
+// ⚠️ Deploy safety (owner decision 3). The gate alone is not trusted: it has
+// been lost before (a PUT /settings stripped it), and the in-process set resets
+// on every deploy. "Already migrated" is decided from the DATA:
+//   - any V2-only target category exists, or no legacy source name exists
+//     → write the gate and change NOTHING else (no merge, no delete, no
+//       group/order reset). A legacy-named category in such a household was
+//       made by the user after the migration ("Gaming subs" is a legacy name).
+//   - otherwise the household is treated as pre-migration and is migrated as
+//     before, except that a legacy category is left in place (never merged or
+//     deleted) when a mapping rule points at it, or it has a budget line or a
+//     transaction dated in or after V2_POST_ERA_MONTH.
+//
+// The migration, for each old → new mapping:
 //   - Find/create the new target category (matching the new SEED metadata)
 //   - Sum old budget_lines.planned_amount into the new line per month
 //   - Re-point transactions.category_id, recurring_items.category_id,
 //     mapping_rules.category_id, and avalanche_settings.extra_budget_category_id
 //   - Delete the old category
-// For categories that stay (same name), we also refresh group_name and
+// For categories that stay (same name), it also refreshes group_name and
 // sort_order to match the new seed so the UI groups them correctly.
 async function migrateBudgetCategoriesV2(
   householdId: string,
   householdOwnerId: string,
   userId: string,
 ): Promise<void> {
-  // Check the flag first.
+  // Cheap unlocked read first: the common case is a set gate.
   const [s] = await db
-    .select()
+    .select({ preferences: settingsTable.preferences })
     .from(settingsTable)
     .where(eq(settingsTable.userId, householdOwnerId));
-  const prefs = (s?.preferences as Record<string, unknown> | null) ?? null;
-  if (prefs && prefs.budgetCategoriesV2 === true) return;
+  const gate = (s?.preferences as Record<string, unknown> | null) ?? null;
+  if (gate && gate.budgetCategoriesV2 === true) return;
 
   await db.transaction(async (tx) => {
+    const prefs = await lockOwnerPreferences(tx, householdOwnerId, householdId);
+    // Another process may have finished the pass while this one waited.
+    if (prefs.budgetCategoriesV2 === true) return;
+    const writeGate = () =>
+      tx
+        .update(settingsTable)
+        .set({
+          preferences: sql`jsonb_set(${settingsTable.preferences}, '{budgetCategoriesV2}', 'true'::jsonb, true)`,
+        })
+        .where(eq(settingsTable.userId, householdOwnerId));
+
     const cats = await tx
       .select()
       .from(budgetCategoriesTable)
       .where(eq(budgetCategoriesTable.householdId, householdId));
+
+    const v2TargetsPresent = cats.filter((c) => V2_ONLY_TARGET_NAMES.has(c.name));
+    const legacyNamesPresent = cats
+      .filter(
+        (c) =>
+          Object.prototype.hasOwnProperty.call(BUDGET_CATEGORY_MIGRATION_MAP, c.name) &&
+          BUDGET_CATEGORY_MIGRATION_MAP[c.name] !== c.name,
+      )
+      .map((c) => c.name);
+    if (v2TargetsPresent.length > 0 || legacyNamesPresent.length === 0) {
+      logger.info(
+        {
+          householdId,
+          v2TargetCategories: v2TargetsPresent.length,
+          legacyNamedCategoriesLeftAlone: legacyNamesPresent,
+        },
+        "[budget] category consolidation gate was missing; household is already on the V2 list, so only the gate was written",
+      );
+      await writeGate();
+      return;
+    }
+
     const byName = new Map(cats.map((c) => [c.name, c]));
+    const leftInPlace: Array<{
+      name: string;
+      budgetLineSinceV2: boolean;
+      transactionSinceV2: boolean;
+      mappingRule: boolean;
+    }> = [];
 
     // Build sortOrder lookup from the new seed.
     const sortOrderByGroup = new Map<string, number>();
@@ -589,6 +710,43 @@ async function migrateBudgetCategoriesV2(
       const oldCat = byName.get(oldName);
       if (!oldCat) continue;
       if (oldName === newName) continue;
+      // Never merge or delete a legacy category the household has used since
+      // the V2 era began: a budget line or a transaction dated in or after
+      // V2_POST_ERA_MONTH, or any mapping rule pointing at it.
+      const [postEraLine] = await tx
+        .select({ id: budgetLinesTable.id })
+        .from(budgetLinesTable)
+        .where(
+          and(
+            eq(budgetLinesTable.categoryId, oldCat.id),
+            gte(budgetLinesTable.monthStart, V2_POST_ERA_MONTH),
+          ),
+        )
+        .limit(1);
+      const [postEraTxn] = await tx
+        .select({ id: transactionsTable.id })
+        .from(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.categoryId, oldCat.id),
+            gte(transactionsTable.occurredOn, V2_POST_ERA_MONTH),
+          ),
+        )
+        .limit(1);
+      const [rule] = await tx
+        .select({ id: mappingRulesTable.id })
+        .from(mappingRulesTable)
+        .where(eq(mappingRulesTable.categoryId, oldCat.id))
+        .limit(1);
+      if (postEraLine || postEraTxn || rule) {
+        leftInPlace.push({
+          name: oldName,
+          budgetLineSinceV2: Boolean(postEraLine),
+          transactionSinceV2: Boolean(postEraTxn),
+          mappingRule: Boolean(rule),
+        });
+        continue;
+      }
       const newCat = await ensureCategory(newName);
       if (!newCat || newCat.id === oldCat.id) continue;
 
@@ -705,177 +863,57 @@ async function migrateBudgetCategoriesV2(
       }
     }
 
-    // 3. Set the flag so this only runs once per household.
-    const nextPrefs = { ...(prefs ?? {}), budgetCategoriesV2: true };
-    if (s) {
-      await tx
-        .update(settingsTable)
-        .set({ preferences: nextPrefs })
-        .where(eq(settingsTable.userId, householdOwnerId));
-    } else {
-      await tx
-        .insert(settingsTable)
-        .values({ userId: householdOwnerId, householdId, preferences: nextPrefs })
-        .onConflictDoUpdate({
-          target: settingsTable.userId,
-          set: { preferences: nextPrefs },
-        });
+    if (leftInPlace.length > 0) {
+      logger.info(
+        { householdId, legacyCategoriesLeftAlone: leftInPlace },
+        `[budget] category consolidation left in place legacy categories with a mapping rule, or a budget line or transaction in or after ${V2_POST_ERA_MONTH}`,
+      );
     }
+
+    // 3. Set the gate (one key, under the row lock) so this runs once.
+    await writeGate();
   });
 }
 
-// One-time per-user reconciliation of the May 2026 budget planned amounts to
-// the user's canonical source-of-truth values (task #106). Idempotent: gated
-// by `settings.preferences.budgetMay2026AmountsV1`.
+// The retired one-time May 2026 reset (task #106), gate
+// `settings.preferences.budgetMay2026AmountsV1`.
 //
-// For each consolidated category in the table, upsert the budget_lines row
-// for 2026-05-01 with the listed planned amount. Auto-pulled rows
-// (paychecks via Bills, debt minimums via the Debt Tracker) are only written
-// when the existing planned amount differs from canonical, so we don't fight
-// the auto-sync logic. Also sets avalanche_settings.manualExtra = 6225.00 and
-// re-syncs the managed Avalanche payment line.
-const MAY_2026_CANONICAL_PLANNED: Record<string, string> = {
-  "Hannah's paycheck (Exact)": "4499.99",
-  "Brad's paycheck (KFI)": "8100.00",
-  "Other Income": "88.00",
-  "Mortgage (Lakeview)": "1989.81",
-  "HELOC (Figure)": "677.40",
-  "Utilities": "774.24",
-  "Home Maintenance & Warranty": "53.85",
-  "Health": "0",
-  "Insurance": "345.13",
-  "Groceries": "460.00",
-  "Dining & Coffee": "460.00",
-  "Car Payments": "1324.35",
-  "Gas, Maintenance & Parking": "250.00",
-  "Childcare & Activities": "0",
-  "Pets": "0",
-  "Subscriptions": "315.62",
-  "Shopping": "0",
-  "Entertainment": "0",
-  "Charitable Giving & Education": "0",
-  "Misc / Buffer": "237.58",
-  "Emergency Fund": "0",
-  "Investments & Retirement": "0",
-  "Kids' Savings / 529": "0",
-  "Tax Sinking Fund": "0",
-};
+// ⚠️ Deploy safety (owner decision 3). It used to overwrite 24 May 2026 planned
+// lines with hard-coded amounts and pin May (undoing #777). It now changes NO
+// budget data: when the gate is missing it only writes the gate. budget_lines
+// has no updated_at, history or "set by" column, so an edit cannot be detected,
+// and seeding already writes the same May amounts. An insert-only variant was
+// also dropped: with only a September line, reading May stored the canonical
+// amount and later months carried it forward.
 const MAY_2026_MONTH = "2026-05-01";
-const MAY_2026_AVALANCHE_MANUAL_EXTRA = "6225.00";
 
 async function reconcileMay2026Amounts(
   householdId: string,
   householdOwnerId: string,
-  userId: string,
 ): Promise<void> {
+  // Cheap unlocked read first: the common case is a set gate.
   const [s] = await db
-    .select()
+    .select({ preferences: settingsTable.preferences })
     .from(settingsTable)
     .where(eq(settingsTable.userId, householdOwnerId));
-  const prefs = (s?.preferences as Record<string, unknown> | null) ?? null;
-  if (prefs && prefs.budgetMay2026AmountsV1 === true) return;
+  const gate = (s?.preferences as Record<string, unknown> | null) ?? null;
+  if (gate && gate.budgetMay2026AmountsV1 === true) return;
 
   await db.transaction(async (tx) => {
-    const cats = await tx
-      .select()
-      .from(budgetCategoriesTable)
-      .where(eq(budgetCategoriesTable.householdId, householdId));
-    const byName = new Map(cats.map((c) => [c.name, c]));
-
+    const prefs = await lockOwnerPreferences(tx, householdOwnerId, householdId);
+    // Another process may have written the gate while this one waited.
+    if (prefs.budgetMay2026AmountsV1 === true) return;
+    logger.info(
+      { householdId },
+      "[budget] May 2026 amounts gate was missing; only the gate was written, no budget data changed",
+    );
     await tx
-      .insert(budgetMonthsTable)
-      .values({ userId, householdId, monthStart: MAY_2026_MONTH })
-      .onConflictDoNothing();
-
-    for (const [catName, canonical] of Object.entries(
-      MAY_2026_CANONICAL_PLANNED,
-    )) {
-      const cat = byName.get(catName);
-      if (!cat) continue;
-      const isAuto = cat.sourceKind === "auto_bills" || cat.sourceKind === "auto_debts";
-
-      const [existing] = await tx
-        .select()
-        .from(budgetLinesTable)
-        .where(
-          and(
-            eq(budgetLinesTable.householdId, householdId),
-            eq(budgetLinesTable.monthStart, MAY_2026_MONTH),
-            eq(budgetLinesTable.categoryId, cat.id),
-          ),
-        );
-
-      // For auto-pulled rows, leave alone if already canonical so we don't
-      // fight the auto-sync that will re-write these on the next request.
-      if (
-        isAuto &&
-        existing &&
-        parseFloat(existing.plannedAmount) === parseFloat(canonical)
-      ) {
-        continue;
-      }
-
-      await tx
-        .insert(budgetLinesTable)
-        .values({
-          userId,
-          householdId,
-          monthStart: MAY_2026_MONTH,
-          categoryId: cat.id,
-          plannedAmount: canonical,
-          pinned: isAuto,
-        })
-        .onConflictDoUpdate({
-          target: [
-            budgetLinesTable.householdId,
-            budgetLinesTable.monthStart,
-            budgetLinesTable.categoryId,
-          ],
-          set: isAuto
-            ? { plannedAmount: canonical, pinned: true }
-            : { plannedAmount: canonical },
-        });
-    }
-
-    // Mark May 2026 as a pinned month so the per-line pinned flag is
-    // unambiguous — the response builder uses either signal to prefer the
-    // persisted budget_lines value over the live derivation. (task #115)
-    await tx
-      .update(budgetMonthsTable)
-      .set({ pinned: true })
-      .where(
-        and(
-          eq(budgetMonthsTable.householdId, householdId),
-          eq(budgetMonthsTable.monthStart, MAY_2026_MONTH),
-        ),
-      );
-
-    // NOTE: This seed used to force avalancheSettings.manualExtra to a
-    // hardcoded $6,225.00, which silently clobbered the user's own avalanche
-    // "extra payment" amount (e.g. their $2k) every time the May-2026 budget
-    // reconcile ran — and surfaced as a giant "Avalanche extra payment" row on
-    // the Forecast. The user controls that number via the Avalanche slider, so
-    // the seed must NOT touch it. Override removed intentionally.
-
-    const nextPrefs = { ...(prefs ?? {}), budgetMay2026AmountsV1: true };
-    if (s) {
-      await tx
-        .update(settingsTable)
-        .set({ preferences: nextPrefs })
-        .where(eq(settingsTable.userId, householdOwnerId));
-    } else {
-      await tx
-        .insert(settingsTable)
-        .values({ userId: householdOwnerId, householdId, preferences: nextPrefs })
-        .onConflictDoUpdate({
-          target: settingsTable.userId,
-          set: { preferences: nextPrefs },
-        });
-    }
+      .update(settingsTable)
+      .set({
+        preferences: sql`jsonb_set(${settingsTable.preferences}, '{budgetMay2026AmountsV1}', 'true'::jsonb, true)`,
+      })
+      .where(eq(settingsTable.userId, householdOwnerId));
   });
-
-  // Re-sync the managed Avalanche payment line to reflect the new manualExtra.
-  await syncAvalanchePaymentCategory(householdId, householdOwnerId, MAY_2026_MONTH);
 }
 
 // (#474) Idempotently ensure the system-managed "Uncategorized" category
@@ -1197,6 +1235,19 @@ const ENSURE_SEEDED_DEFAULTS_DONE = new Set<string>();
 const ENSURE_SEEDED_DEFAULTS_INFLIGHT = new Map<string, Promise<void>>();
 const ENSURE_SEEDED_DEFAULTS_FAILED_AT = new Map<string, number>();
 const ENSURE_SEEDED_DEFAULTS_FAILURE_COOLDOWN_MS = 60_000;
+
+// Test hook: forget every once-per-process gate in this file, which is what a
+// deploy does, so a test can run the one-time passes again in one process.
+export function _resetBudgetOneTimePassGatesForTests(): void {
+  HEAL_BILL_LINKS_DONE.clear();
+  oneTimeEnsuresDone.clear();
+  ENSURE_UNCATEGORIZED_DONE.clear();
+  ENSURE_TRANSFER_DONE.clear();
+  ENSURE_IGNORE_DONE.clear();
+  ENSURE_SEEDED_DEFAULTS_DONE.clear();
+  ENSURE_SEEDED_DEFAULTS_INFLIGHT.clear();
+  ENSURE_SEEDED_DEFAULTS_FAILED_AT.clear();
+}
 
 async function seedDefaultsForUser(
   householdId: string,
@@ -1639,10 +1690,10 @@ router.get(
     }
 
     // One-time reconciliation of May 2026 planned amounts to the household's
-    // canonical source-of-truth values (task #106). Only runs when this
-    // request is for May 2026; gated by a per-household flag thereafter.
+    // canonical source-of-truth values (task #106), now retired: with its gate
+    // missing it only writes the gate and changes no budget data.
     if (monthStart === MAY_2026_MONTH) {
-      await reconcileMay2026Amounts(householdId, householdOwnerId, userId);
+      await reconcileMay2026Amounts(householdId, householdOwnerId);
     }
 
     // Pull the live Debts tracker into auto_debts categories/lines for this
