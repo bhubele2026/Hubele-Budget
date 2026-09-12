@@ -2284,18 +2284,33 @@ export const UpdateRecurringItemBody = zod.object({
   debtId: zod.string().nullish(),
 });
 
-export const UpdateRecurringItemResponse = zod.object({
-  id: zod.string(),
-  name: zod.string(),
-  kind: zod.string(),
-  amount: zod.string(),
-  frequency: zod.string(),
-  dayOfMonth: zod.number().nullish(),
-  anchorDate: zod.string().nullish(),
-  active: zod.string(),
-  categoryId: zod.string().nullish(),
-  debtId: zod.string().nullish(),
-});
+export const UpdateRecurringItemResponse = zod
+  .object({
+    id: zod.string(),
+    name: zod.string(),
+    kind: zod.string(),
+    amount: zod.string(),
+    frequency: zod.string(),
+    dayOfMonth: zod.number().nullish(),
+    anchorDate: zod.string().nullish(),
+    active: zod.string(),
+    categoryId: zod.string().nullish(),
+    debtId: zod.string().nullish(),
+  })
+  .and(
+    zod.object({
+      moveResult: zod
+        .object({
+          carried: zod.number(),
+          needsReview: zod.number(),
+          cleared: zod.number(),
+        })
+        .optional()
+        .describe(
+          "(One-time bill move) What an edit of a one-time bill's date, amount or kind did to its answers. `carried`: answers kept on the bill (a match still paying it, a skip, a rejection). `needsReview`: bank-row pairs that now wait for Confirm \/ Partial \/ Not this in Forecast Review. `cleared`: matches removed because Review could not show them or their bank row is gone, plus pending reviews dropped when the bill was edited while paused or stopped being one-time — the bill shows unpaid. A pause alone keeps a pending review and returns no summary.",
+        ),
+    }),
+  );
 
 export const DeleteRecurringItemParams = zod.object({
   id: zod.coerce.string(),

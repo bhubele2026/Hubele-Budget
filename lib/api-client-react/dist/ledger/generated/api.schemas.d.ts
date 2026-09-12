@@ -1502,6 +1502,17 @@ export interface RecurringItem {
     /** @nullable */
     debtId?: string | null;
 }
+/**
+ * (One-time bill move) What an edit of a one-time bill's date, amount or kind did to its answers. `carried`: answers kept on the bill (a match still paying it, a skip, a rejection). `needsReview`: bank-row pairs that now wait for Confirm / Partial / Not this in Forecast Review. `cleared`: matches removed because Review could not show them or their bank row is gone, plus pending reviews dropped when the bill was edited while paused or stopped being one-time — the bill shows unpaid. A pause alone keeps a pending review and returns no summary.
+ */
+export interface RecurringItemMoveResult {
+    carried: number;
+    needsReview: number;
+    cleared: number;
+}
+export type UpdateRecurringItemResponse = RecurringItem & {
+    moveResult?: RecurringItemMoveResult;
+};
 export interface RecurringItemInput {
     name: string;
     kind?: string;

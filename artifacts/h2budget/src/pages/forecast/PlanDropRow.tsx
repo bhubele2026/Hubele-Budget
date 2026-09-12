@@ -222,7 +222,15 @@ export function PlanDropRow({
         </div>
       </div>
       <div className="flex w-full items-center justify-end gap-3 sm:w-auto sm:gap-4">
-        {statusBadge(pp ? "suggested" : row.status)}
+        {statusBadge(
+          pp
+            ? pp.needsReview === "partial"
+              ? "needs_review_partial"
+              : pp.needsReview
+                ? "needs_review"
+                : "suggested"
+            : row.status,
+        )}
         <span
           className={`font-mono text-label tabular-nums ${
             row.amount < 0 ? "text-bad" : "text-brand-navy"
@@ -230,39 +238,47 @@ export function PlanDropRow({
         >
           {formatCurrency(row.amount)}
         </span>
-        {suggested && pp && (
-          <>
+        {suggested && pp && (() => {
+          // (One-time bill move, review M3) A partial that needs review answers
+          // Partial first; confirming it as paid in full stays available.
+          const canPartial = canRecordPartial(row, pp);
+          const partialFirst = pp.needsReview === "partial" && canPartial;
+          const partialButton = (
             <button
               type="button"
               className={`${btnLink} whitespace-nowrap`}
               disabled={answerDisabled}
-              onClick={(e) => answer(e, "matched")}
-              data-testid={`plan-confirm-${testKey}`}
+              onClick={(e) => answer(e, "partial")}
+              data-testid={`plan-partial-${testKey}`}
             >
-              Confirm
+              Partial
             </button>
-            <button
-              type="button"
-              className={`${btnLink} whitespace-nowrap`}
-              disabled={answerDisabled}
-              onClick={(e) => answer(e, "not_match")}
-              data-testid={`plan-not-this-${testKey}`}
-            >
-              Not this
-            </button>
-            {canRecordPartial(row, pp) && (
+          );
+          return (
+            <>
+              {partialFirst && partialButton}
               <button
                 type="button"
                 className={`${btnLink} whitespace-nowrap`}
                 disabled={answerDisabled}
-                onClick={(e) => answer(e, "partial")}
-                data-testid={`plan-partial-${testKey}`}
+                onClick={(e) => answer(e, "matched")}
+                data-testid={`plan-confirm-${testKey}`}
               >
-                Partial
+                {partialFirst ? "Confirm full" : "Confirm"}
               </button>
-            )}
-          </>
-        )}
+              <button
+                type="button"
+                className={`${btnLink} whitespace-nowrap`}
+                disabled={answerDisabled}
+                onClick={(e) => answer(e, "not_match")}
+                data-testid={`plan-not-this-${testKey}`}
+              >
+                Not this
+              </button>
+              {canPartial && !partialFirst && partialButton}
+            </>
+          );
+        })()}
         {canMove && (
           <button
             type="button"
