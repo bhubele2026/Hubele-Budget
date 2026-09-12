@@ -132,8 +132,9 @@ router.patch(
     // ⭐ (One-time bill move) The item update and the re-check of its answers are
     // one transaction. A one-time bill whose date, amount or kind changed keeps its
     // answers on its date; a pair the edit puts in question needs review (or is
-    // cleared when Review could not show it). A bill that is paused or stops being
-    // one-time drops its pending reviews (round 3). The response carries what
+    // cleared when Review could not show it). A bill that stops being one-time, or
+    // is edited while paused, drops its pending reviews; a pause alone keeps them
+    // (round 4). The response carries what
     // happened as `moveResult`, so the Bills page can say it. Bank rows are never
     // written. See `lib/oneTimeBillMove.ts`.
     const householdId = req.householdId!;
@@ -160,7 +161,11 @@ router.patch(
       const edit = oneTimeEdit(before, updated);
       if (edit) moveResult = await moveOneTimeResolutions(tx, { householdId, ownerUserId }, updated.id, edit);
       const leftOneTime = before.frequency === "onetime" && updated.frequency !== "onetime";
-      if (leftOneTime || updated.active !== "true") {
+      // (Round 4) Pausing alone KEEPS a pending review: while the bill is paused
+      // every reader takes it as the user's last answer (`readPausedReview`), and
+      // resuming brings the question back unchanged. An edit saved on a paused bill
+      // drops it, and the save's toast reports that through `moveResult`.
+      if (leftOneTime || (updated.active !== "true" && edit)) {
         const dropped = await clearPendingReviews(tx, householdId, updated.id);
         if (moveResult) moveResult = { carried: moveResult.carried, needsReview: 0, cleared: moveResult.cleared + dropped };
         else if (dropped > 0) moveResult = { carried: 0, needsReview: 0, cleared: dropped };

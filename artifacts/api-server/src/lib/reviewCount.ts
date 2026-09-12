@@ -1,13 +1,15 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, lte, ne } from "drizzle-orm";
 import {
   db,
   forecastSettingsTable,
   forecastResolutionsTable,
+  recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdTodayISO, monthBounds } from "./householdClock";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
+import { readPausedReview } from "./oneTimeBillMove";
 
 /**
  * The Review-inbox count: unresolved BANK txns in the current calendar month
@@ -68,13 +70,23 @@ export async function computeReviewCount(
       ),
     );
 
-  const resolutions = await db
+  const stored = await db
     .select({
       matchedTxnId: forecastResolutionsTable.matchedTxnId,
       status: forecastResolutionsTable.status,
+      recurringItemId: forecastResolutionsTable.recurringItemId,
     })
     .from(forecastResolutionsTable)
     .where(eq(forecastResolutionsTable.householdId, householdId));
+  // (One-time bill move, round 4) A pending review on a PAUSED bill reads as the
+  // user's last answer: nothing can show the question while the bill is paused,
+  // and resuming it brings the review — and this count — back.
+  const paused = await db
+    .select({ id: recurringItemsTable.id })
+    .from(recurringItemsTable)
+    .where(and(eq(recurringItemsTable.householdId, householdId), ne(recurringItemsTable.active, "true")));
+  const pausedItemIds = new Set(paused.map((p) => p.id));
+  const resolutions = stored.map((r) => readPausedReview(r, pausedItemIds));
   // (PR5) A "Not this" (`not_match`) answer rejects one suggested plan for the
   // row; the row itself is still unreviewed.
   // (One-time bill move) Neither does a pair an edit put in question

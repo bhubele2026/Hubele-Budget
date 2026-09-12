@@ -13,6 +13,7 @@ import { ledgerActualRowsWhere, toCashRow } from "./ledgerCashRows";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdDayOf, householdTodayDate } from "./householdClock";
 import { remapOrphanResolutions, type ResolutionSchedule } from "./resolutionRemap";
+import { readPausedReview } from "./oneTimeBillMove";
 import {
   addDaysISO,
   classifyCashRows,
@@ -543,10 +544,15 @@ export async function buildForecastLedger(
   // `matchedTxnIds` is consulted when iterating Chase bank
   // transactions, and a non-Chase txn id never appears there anyway.
   // Keep the `matchedTxnBankSet` lookup for that narrower purpose.
-  const resolutionsRead = await db
+  const resolutionsStored = await db
     .select()
     .from(forecastResolutionsTable)
     .where(eq(forecastResolutionsTable.householdId, householdId));
+  // (One-time bill move, round 4) A pending review on a paused bill reads as the
+  // user's last answer: it holds its row exactly as that answer did, and the
+  // paused bill is off the curve. Resuming the bill brings the question back.
+  const pausedItemIds = new Set(recurring.filter((r) => r.active !== "true").map((r) => r.id));
+  const resolutionsRead = resolutionsStored.map((r) => readPausedReview(r, pausedItemIds));
   // (PR6) A resolution a schedule edit orphaned follows its bill to the item's
   // occurrence in the same period. Read-only; the web register maps the same way.
   const resolutionsAll = remapOrphanResolutions(resolutionsRead, scheduleOf);

@@ -149,17 +149,21 @@ export async function archiveExpiredOneTime(householdId: string): Promise<void> 
         inArray(recurringItemsTable.id, archive),
       ),
     );
-  // (One-time bill move, round 3) An archived bill has no event, so a pending
-  // review left on it could never be answered and would keep claiming its row.
-  await db
-    .delete(forecastResolutionsTable)
-    .where(
-      and(
-        eq(forecastResolutionsTable.householdId, householdId),
-        inArray(forecastResolutionsTable.recurringItemId, archive),
-        inArray(forecastResolutionsTable.status, ["needs_review", "needs_review_partial"]),
-      ),
+  // ⭐ (One-time bill move, round 4) ARCHIVING NEVER DELETES A REVIEW. An archived
+  // bill has no event, so a pending review on it could never be answered — and
+  // this runs on every load of Forecast, Bills and the bill list, so deleting it
+  // would erase the user's match just by opening a page. Restore the user's last
+  // answer instead, deterministically, keeping its bank row: `needs_review` →
+  // `matched`, `needs_review_partial` → `partial`. The bill is inactive and past,
+  // so the curve cannot change; its month's actual reads what the user answered.
+  const reviewOnArchived = (status: string) =>
+    and(
+      eq(forecastResolutionsTable.householdId, householdId),
+      inArray(forecastResolutionsTable.recurringItemId, archive),
+      eq(forecastResolutionsTable.status, status),
     );
+  await db.update(forecastResolutionsTable).set({ status: "matched" }).where(reviewOnArchived("needs_review"));
+  await db.update(forecastResolutionsTable).set({ status: "partial" }).where(reviewOnArchived("needs_review_partial"));
 }
 
 function nextOccurrenceISO(item: RecurringRow): string | null {

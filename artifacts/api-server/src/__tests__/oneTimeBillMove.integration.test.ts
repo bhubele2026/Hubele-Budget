@@ -8,13 +8,14 @@
 // and left its answers on the old date (`resolutionRemap` never maps one-time
 // bills), so a paid $300 bill moved from 9/20 to 9/25 came back unpaid.
 //
-// Today is pinned to Sat 2026-09-19 (noon Chicago). The bank snapshot reads
-// $2,000 at 10:00 CT and already holds the −$300 "ROOF CO" row dated 9/19.
-// The matcher's candidate window is 10 days before to 14 days after the plan.
-// A match whose bill's amount changed stays paid only when its row pays the new
-// amount in full: short by at most max($1, 1%), over by at most max($25, 10%).
-// The Forecast Review register reaches back to the first of last month (8/01)
-// and ahead 90 days (12/18).
+// Today is pinned to Sat 2026-09-19 (noon Chicago) unless a test moves the clock.
+// The bank snapshot reads $2,000 at 10:00 CT and already holds the −$300
+// "ROOF CO" row dated 9/19. The matcher's candidate window is 10 days before to
+// 14 days after the plan; a match the user accepted outside it keeps its match
+// when an edit does not move the date further from its row. A match whose bill's
+// amount changed stays paid only when its row pays the new amount in full: short
+// by at most max($1, 1%), over by at most max($25, 10%). The Forecast Review
+// register reaches back to the first of last month (8/01) and ahead 90 days.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -208,6 +209,12 @@ async function bankRow(id: string) {
   return { occurredOn: t!.occurredOn, amount: t!.amount, description: t!.description };
 }
 
+/** What the Forecast bundle (the web register) says about an item's answers. */
+async function bundleStatuses(itemId: string): Promise<string[]> {
+  const bundle = await fetch(`${baseUrl}/forecast`).then((r) => r.json() as Promise<{ resolutions: Array<Record<string, unknown>> }>);
+  return bundle.resolutions.filter((r) => r.recurringItemId === itemId).map((r) => String(r.status)).sort();
+}
+
 const signal = () => computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 90 });
 const planOf = (sig: CashSignal, itemId: string) =>
   (sig.events ?? []).filter((e) => e.itemId === itemId).map((e) => [e.date, e.amount, e.assumption]);
@@ -235,6 +242,14 @@ async function partRoof(): Promise<{ id: string; txn: string }> {
   const id = await oneTime("2026-09-20");
   const txn = await row("2026-09-19", "-200.00");
   await resolve("partial", id, "2026-09-20", { txnId: txn });
+  return { id, txn };
+}
+
+/** A $300 bill due 8/10 that the user matched to a LATE payment on 9/19 (40 days after). */
+async function latePaidRoof(): Promise<{ id: string; txn: string }> {
+  const id = await oneTime("2026-08-10");
+  const txn = await row("2026-09-19", "-300.00");
+  await resolve("matched", id, "2026-08-10", { txnId: txn });
   return { id, txn };
 }
 
@@ -439,6 +454,22 @@ describe("round 3 (2) — a match whose bill's amount changed stays paid only wh
   });
 });
 
+describe("round 4 (1) — a match the user accepted outside the window keeps it unless the move goes further from its row", () => {
+  it("due 8/10, paid 9/19 (40 days late), corrected to 8/12 (38 days): still matched", async () => {
+    const { id, txn } = await latePaidRoof();
+    const res = await patchJson(id, { anchorDate: "2026-08-12" });
+    expect(res.status).toBe(200);
+    expect(await stored(id)).toEqual([`matched@2026-08-12#${txn}`]);
+    expect(res.json.moveResult).toEqual({ carried: 1, needsReview: 0, cleared: 0 });
+  });
+
+  it("control: corrected to 8/05 instead (45 days from the row): needs review", async () => {
+    const { id, txn } = await latePaidRoof();
+    await patch(id, { anchorDate: "2026-08-05" });
+    expect(await stored(id)).toEqual([`needs_review@2026-08-05#${txn}`]);
+  });
+});
+
 describe("review M1 — one decision per key when the new date already holds a stranded answer", () => {
   it("neither passes: the live match needs review, the stranded one is dropped, the bill is on the curve", async () => {
     const id = await oneTime("2026-09-20");
@@ -594,12 +625,90 @@ describe("review L1 — a match on a deleted row is not carried", () => {
   });
 });
 
-describe("round 3 (3) — a bill that can no longer be answered releases its pending review", () => {
-  it("pausing the bill clears it: the row is no longer claimed", async () => {
+describe("round 4 (2) — archiving never deletes a review: it restores the user's last answer", () => {
+  it("due 8/10, paid 9/19, moved to 8/05: on 10/12 loading Bills archives it, the match is back and August reads 300.00", async () => {
+    const { id, txn } = await latePaidRoof();
+    await patch(id, { anchorDate: "2026-08-05" });
+    expect(await stored(id)).toEqual([`needs_review@2026-08-05#${txn}`]);
+
+    vi.setSystemTime(new Date("2026-10-12T17:00:00Z"));
+    await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
+    expect(await activeOf(id)).toBe("false");
+    expect(await stored(id)).toEqual([`matched@2026-08-05#${txn}`]);
+    expect((await billRow(id, "2026-08-01"))?.actualAmount).toBe("300.00");
+  });
+
+  it("edge: on 9/30 a paid bill moved to 8/01 needs review (still shown); loading Forecast on 10/01 restores the match", async () => {
+    vi.setSystemTime(new Date("2026-09-30T17:00:00Z"));
+    const { id, txn } = await paidRoof();
+    await patch(id, { anchorDate: "2026-08-01" });
+    expect(await stored(id)).toEqual([`needs_review@2026-08-01#${txn}`]);
+
+    vi.setSystemTime(new Date("2026-10-01T17:00:00Z"));
+    expect((await fetch(`${baseUrl}/forecast`)).status).toBe(200);
+    expect(await activeOf(id)).toBe("false");
+    expect(await stored(id)).toEqual([`matched@2026-08-01#${txn}`]);
+    expect((await billRow(id, "2026-08-01"))?.actualAmount).toBe("300.00");
+  });
+
+  it("a partial that needed review is restored as a partial", async () => {
+    vi.setSystemTime(new Date("2026-09-30T17:00:00Z"));
+    const { id, txn } = await partRoof();
+    await patch(id, { anchorDate: "2026-08-01" });
+    expect(await stored(id)).toEqual([`needs_review_partial@2026-08-01#${txn}`]);
+    vi.setSystemTime(new Date("2026-10-01T17:00:00Z"));
+    await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
+    expect(await stored(id)).toEqual([`partial@2026-08-01#${txn}`]);
+  });
+
+  it("a review Review can no longer show is restored when the bill is archived", async () => {
+    const id = await oneTime("2026-07-01");
+    const txn = await row("2026-09-19", "-300.00");
+    await resolve("needs_review", id, "2026-07-01", { txnId: txn });
+    await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
+    expect(await activeOf(id)).toBe("false");
+    expect(await stored(id)).toEqual([`matched@2026-07-01#${txn}`]);
+  });
+});
+
+describe("round 4 (3) — pausing keeps a review; while paused it reads as the user's last answer", () => {
+  it("pause: stored unchanged, Review count 0, off the curve, the bundle reads it matched; resume: the review is back", async () => {
     const { id, txn } = await paidRoof();
     await patch(id, { anchorDate: "2026-10-20" });
+    expect(await reviewCount()).toBe(1);
+
+    const paused = await patchJson(id, { anchorDate: "2026-10-20", active: "false" });
+    expect(paused.json.moveResult).toBeUndefined();
     expect(await stored(id)).toEqual([`needs_review@2026-10-20#${txn}`]);
+    expect(await reviewCount()).toBe(0);
+    const whilePaused = await signal();
+    expect(planOf(whilePaused, id)).toEqual([]);
+    expect(balanceOn(whilePaused, "2026-10-20")).toBe("2000.00");
+    expect(whilePaused.matches ?? []).toEqual([]);
+    expect(await bundleStatuses(id)).toEqual(["matched"]);
+
+    await patch(id, { anchorDate: "2026-10-20", active: "true" });
+    expect(await stored(id)).toEqual([`needs_review@2026-10-20#${txn}`]);
+    expect(await reviewCount()).toBe(1);
+    expect(planOf(await signal(), id)).toEqual([["2026-10-20", "-300.00", null]]);
+    expect(await bundleStatuses(id)).toEqual(["needs_review"]);
+  });
+
+  it("a paused partial review reads as the partial", async () => {
+    const { id, txn } = await partRoof();
+    await patch(id, { anchorDate: "2026-10-20" });
     await patch(id, { anchorDate: "2026-10-20", active: "false" });
+    expect(await stored(id)).toEqual([`needs_review_partial@2026-10-20#${txn}`]);
+    expect(await reviewCount()).toBe(0);
+    expect(await bundleStatuses(id)).toEqual(["partial"]);
+  });
+
+  it("control: an edit saved on a paused bill still drops its review, and says so", async () => {
+    const { id } = await paidRoof();
+    await patch(id, { anchorDate: "2026-10-20" });
+    await patch(id, { anchorDate: "2026-10-20", active: "false" });
+    const edited = await patchJson(id, { anchorDate: "2026-11-01", active: "false" });
+    expect(edited.json.moveResult).toEqual({ carried: 0, needsReview: 0, cleared: 1 });
     expect(await stored(id)).toEqual([]);
   });
 
@@ -614,15 +723,6 @@ describe("round 3 (3) — a bill that can no longer be answered releases its pen
     expect(listedOf(sig, other)).toEqual([["assumed_paid", "2026-09-18", "-300.00"]]);
     expect(balanceOn(sig, "2026-09-21")).toBe("2000.00");
   });
-
-  it("archiving the bill clears a review Review can no longer show", async () => {
-    const id = await oneTime("2026-07-01");
-    const txn = await row("2026-09-19", "-300.00");
-    await resolve("needs_review", id, "2026-07-01", { txnId: txn });
-    await archiveExpiredOneTime(TEST_HOUSEHOLD_ID);
-    expect(await activeOf(id)).toBe("false");
-    expect(await stored(id)).toEqual([]);
-  });
 });
 
 describe("round 3 (4) — the PATCH says what happened to the bill's answers", () => {
@@ -631,7 +731,6 @@ describe("round 3 (4) — the PATCH says what happened to the bill's answers", (
     expect((await patchJson(a.id, { anchorDate: "2026-09-25" })).json.moveResult).toEqual({ carried: 1, needsReview: 0, cleared: 0 });
     expect((await patchJson(a.id, { anchorDate: "2026-10-20" })).json.moveResult).toEqual({ carried: 0, needsReview: 1, cleared: 0 });
     expect((await patchJson(a.id, { anchorDate: "2026-10-20", name: "Roof repair, front" })).json.moveResult).toBeUndefined();
-    expect((await patchJson(a.id, { anchorDate: "2026-10-20", active: "false" })).json.moveResult).toEqual({ carried: 0, needsReview: 0, cleared: 1 });
 
     const b = await paidRoof();
     const res = await patchJson(b.id, { anchorDate: "2026-07-01" });

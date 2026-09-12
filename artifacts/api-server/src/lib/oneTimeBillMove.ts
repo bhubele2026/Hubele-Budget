@@ -12,8 +12,8 @@ import { householdTodayISO } from "./householdClock";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 
 /**
- * ⭐ EDITING A ONE-TIME BILL KEEPS ITS ANSWERS — AND NEVER MARKS IT PAID SILENTLY
- * (owner decision 9).
+ * ⭐ EDITING A ONE-TIME BILL KEEPS ITS ANSWERS — AND NEVER MARKS IT PAID OR
+ * UNPAID SILENTLY (owner decision 9).
  *
  * Resolutions are keyed on `<itemId>|<occurrenceDate>`, and a one-time bill has
  * exactly one occurrence: its `anchor_date`. `PATCH /recurring-items/:id` used to
@@ -31,7 +31,10 @@ import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
  *     date — is DELETED: the edit now carries the date;
  *   - a `matched` / `partial` pair is re-checked around the new due date:
  *       · its row must sit inside the matcher's CANDIDATE date window
- *         (`rowInMatchWindow`: 10 days before to 14 after) and have the plan's sign;
+ *         (`rowInMatchWindow`: 10 days before to 14 after) and have the plan's
+ *         sign — (round 4) unless the user accepted it OUTSIDE that window before
+ *         the edit and the edit does not move the date further from the row: a
+ *         confirmed decision is respected for dates as it is for amounts;
  *       · (round 3) when the signed amount changed, a MATCH stays paid only if its
  *         row pays the new amount in full (`rowPaysPlanInFull`: short by at most
  *         max($1, 1%), over by at most max($25, 10%) — the proof that takes a plan
@@ -49,18 +52,29 @@ import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
  *       · a pair whose bank row no longer exists is cleared;
  *       · a pending review never turns paid on its own, wherever the bill moves;
  *   - ONE DECISION PER KEY. An answer already stranded on the new date (an older
- *     edit, or a frequency change) is re-checked the same way; a live answer that
+ *     edit, or a frequency change) is re-checked the same way, without the
+ *     round-4 allowance (it was not the bill's live answer); a live answer that
  *     still holds wins, then a stranded pair that still pays, then the live
  *     pending review, then a stranded pending review Review can show. The rest
  *     are deleted (a stranded skip or miss is never adopted).
  * The result (`carried`, `needsReview`, `cleared`) goes back in the PATCH
  * response, and the Bills page says it in its toast (round 3).
- * Every reader treats both review statuses as UNRESOLVED: the plan is on the
- * curve (or overdue by the usual rules), the row counts in Review, Bills does not
- * count it paid. Forecast Review answers them with Confirm (→ `matched`), Not
- * this (→ `not_match`) and, for a partial first, Partial (→ `partial`).
- * A bill paused, archived, deleted or no longer one-time drops its pending
- * reviews (`clearPendingReviews`): nothing could show them any more.
+ *
+ * Every reader treats both review statuses as UNRESOLVED on an active bill: the
+ * plan is on the curve (or overdue by the usual rules), the row counts in Review,
+ * Bills does not count it paid. Forecast Review answers them with Confirm
+ * (→ `matched`), Not this (→ `not_match`) and, for a partial first, Partial
+ * (→ `partial`).
+ *
+ * (Round 4) A pending review is never deleted by time passing or by a pause:
+ *   - on a PAUSED bill every reader takes it as the user's last answer
+ *     (`readPausedReview`) — nothing can show the question, and resuming the bill
+ *     brings it back unchanged;
+ *   - ARCHIVING a past bill restores that answer in storage (`needs_review` →
+ *     `matched`, `needs_review_partial` → `partial`, same row): the bill is
+ *     inactive and past, so the curve cannot change.
+ * It is dropped (`clearPendingReviews`) only when the bill stops being one-time,
+ * is deleted, or is edited while paused (the save's toast reports it).
  * Bank transaction rows are only read, never written. Recurring (non-one-time)
  * bills are not re-checked here: `resolutionRemap` maps their answers at read time.
  */
@@ -70,6 +84,27 @@ export const NEEDS_REVIEW_PARTIAL_STATUS = "needs_review_partial";
 
 export function isNeedsReviewStatus(status: string): boolean {
   return status === NEEDS_REVIEW_STATUS || status === NEEDS_REVIEW_PARTIAL_STATUS;
+}
+
+/** (Round 4) The user's answer behind a pending review: `needs_review` → `matched`, `needs_review_partial` → `partial`. */
+export function answerBehindReview(status: string): string {
+  if (status === NEEDS_REVIEW_STATUS) return "matched";
+  if (status === NEEDS_REVIEW_PARTIAL_STATUS) return "partial";
+  return status;
+}
+
+/**
+ * (Round 4) How a READER sees a resolution: a pending review on a paused bill
+ * (`pausedItemIds`: items that exist and are not active) reads as the user's last
+ * answer. Stored rows are unchanged, so resuming the bill shows the review again.
+ * Used by the ledger, the review count and the `/forecast` bundle.
+ */
+export function readPausedReview<R extends { status: string; recurringItemId: string | null }>(
+  r: R,
+  pausedItemIds: ReadonlySet<string>,
+): R {
+  if (!isNeedsReviewStatus(r.status) || !r.recurringItemId || !pausedItemIds.has(r.recurringItemId)) return r;
+  return { ...r, status: answerBehindReview(r.status) };
 }
 
 /** Statuses that decide a plan occurrence. At most one survives on a key. */
@@ -109,9 +144,11 @@ export function oneTimeEdit(before: ItemFields, after: ItemFields): OneTimeEdit 
 
 /**
  * Drops an item's pending reviews (`needs_review`, `needs_review_partial`) when
- * nothing can show them any more — the bill stopped being one-time (review M2c),
- * was paused or archived, or was deleted (round 3). Each would otherwise keep
- * claiming its bank row. The row goes back to Review unclaimed.
+ * nothing can show them any more and no answer can be restored: the bill stopped
+ * being one-time (review M2c), was deleted (round 3), or was edited while paused
+ * (round 4; the save's toast reports it). Each would otherwise keep claiming its
+ * bank row. The row goes back to Review unclaimed. A pause alone and archiving
+ * never drop a review (round 4).
  */
 export async function clearPendingReviews(
   tx: Tx | typeof db,
@@ -162,6 +199,11 @@ function firstOfLastMonthISO(todayISO: string): string {
   const [y, m] = todayISO.split("-").map(Number);
   const d = new Date(y!, m! - 2, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/** Whole days between two YYYY-MM-DD dates, either order. */
+function daysApart(a: string, b: string): number {
+  return Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
 }
 
 /**
@@ -238,9 +280,11 @@ export async function moveOneTimeResolutions(
 
   const reschedules = own.filter((r) => r.status === "rescheduled" && r.occurrenceDate === from);
   const movedTo = new Set(reschedules.map((r) => r.rescheduledTo).filter((d): d is string => !!d));
+  // The date the bill was due before the edit: its date, or where a Forecast Move put it.
+  const previousDueISO = reschedules.find((r) => r.rescheduledTo)?.rescheduledTo ?? from;
   // The date the bill is due after the edit: the new date, or — when only the
-  // amount or kind changed — where a Forecast Move put it.
-  const dueISO = dateMoved ? to : (reschedules.find((r) => r.rescheduledTo)?.rescheduledTo ?? to);
+  // amount or kind changed — where it was due already.
+  const dueISO = dateMoved ? to : previousDueISO;
   const onLiveDate = (d: string | null) => d != null && (d === from || movedTo.has(d));
   const live = own.filter((r) => r.status !== "rescheduled" && onLiveDate(r.occurrenceDate));
   const stranded = dateMoved
@@ -289,9 +333,20 @@ export async function moveOneTimeResolutions(
       isBankRow(row.source, row.plaidAccountId, review.checkingExternalId)
     );
   };
-  const stillPays = (status: string, row: PaidRow): boolean => {
+  // The row's date still supports the pair: inside the candidate window around the
+  // new due date — or (round 4, a LIVE answer only) the user accepted it outside the
+  // window before the edit, and the edit did not move the date further from the row.
+  const dateHolds = (row: PaidRow, isLive: boolean): boolean => {
+    if (rowInMatchWindow(dueISO, row.occurredOn)) return true;
+    return (
+      isLive &&
+      !rowInMatchWindow(previousDueISO, row.occurredOn) &&
+      daysApart(dueISO, row.occurredOn) <= daysApart(previousDueISO, row.occurredOn)
+    );
+  };
+  const stillPays = (status: string, row: PaidRow, isLive: boolean): boolean => {
     if (status !== "matched" && status !== "partial") return false;
-    if (!rowInMatchWindow(dueISO, row.occurredOn)) return false;
+    if (!dateHolds(row, isLive)) return false;
     if (Math.sign(row.amount) !== Math.sign(planAmount)) return false;
     if (status === "matched") return !amountChanged || rowPaysPlanInFull(planAmount, row.amount);
     return (
@@ -313,7 +368,7 @@ export async function moveOneTimeResolutions(
       continue;
     }
     const row = r.matchedTxnId ? rows.get(r.matchedTxnId) : undefined;
-    if (row && stillPays(r.status, row)) keep(r, r.status, 0);
+    if (row && stillPays(r.status, row, true)) keep(r, r.status, 0);
     else if (row && (await reviewCanShow(row))) keep(r, toReviewStatus(r.status), 2);
     else {
       // (Review L1) its bank row is gone; (M2a/b) Review could never show the question.
@@ -324,7 +379,7 @@ export async function moveOneTimeResolutions(
   for (const r of stranded) {
     if (!DECISION_STATUSES.has(r.status)) continue;
     const row = r.matchedTxnId ? rows.get(r.matchedTxnId) : undefined;
-    if (row && stillPays(r.status, row)) keep(r, r.status, 1);
+    if (row && stillPays(r.status, row, false)) keep(r, r.status, 1);
     else if (row && isNeedsReviewStatus(r.status) && (await reviewCanShow(row))) keep(r, r.status, 3);
     else deletes.push(r.id);
   }

@@ -29,6 +29,7 @@ import {
   resolutionScheduleLookup,
 } from "../lib/debtMinSchedule";
 import { remapOrphanResolutions } from "../lib/resolutionRemap";
+import { readPausedReview } from "../lib/oneTimeBillMove";
 import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
 import { computeReviewCount } from "../lib/reviewCount";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
@@ -449,8 +450,12 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // (PR6) A resolution a schedule edit orphaned follows its bill to the item's
   // occurrence in the same period — the mapping the cash signal applies — so the
   // register and the curve agree. Read-only: the stored rows keep their dates.
+  // (One-time bill move, round 4) A pending review on a paused bill reads as the
+  // user's last answer — the ledger and the review count read it the same way —
+  // so the register never shows a question the paused bill cannot answer.
+  const pausedItemIds = new Set(recurring.filter((r) => r.active !== "true").map((r) => r.id));
   const resolutions = remapOrphanResolutions(
-    resolutionRows,
+    resolutionRows.map((r) => readPausedReview(r, pausedItemIds)),
     resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt),
   )
     .filter(
