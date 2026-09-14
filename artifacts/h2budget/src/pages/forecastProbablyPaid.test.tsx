@@ -523,8 +523,9 @@ describe("Forecast — probably paid (PR5b)", () => {
     // still appears, as the ORIGINAL plan, not the outstanding face amount.
     expect(screen.getByTestId("plan-row-insurance-2026-05-10").textContent).toContain("$15.00");
     const caption = screen.getByTestId("plan-remainder-paid-insurance-2026-05-10");
-    expect(caption.textContent).toContain("$165.00");
-    expect(caption.textContent).toContain("$180.00");
+    // Exact text, not a substring: both figures are unsigned (an expense's
+    // negative amount and remainder must not leak a "-" into "Paid X of Y").
+    expect(caption.textContent).toBe("Paid $165.00 of $180.00");
   });
 
   it("(round 3, LOW) the bank-side strip shows the same remainder note", () => {
