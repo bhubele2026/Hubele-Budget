@@ -694,6 +694,22 @@ describe("round 4 (3) — pausing keeps a review; while paused it reads as the u
     expect(await bundleStatuses(id)).toEqual(["needs_review"]);
   });
 
+  it("(review followup PR-C) Bills reads a paused review like the bundle does: actual 300.00 while paused, 0.00 unresolved before and after", async () => {
+    const { id, txn } = await paidRoof();
+    await patch(id, { anchorDate: "2026-10-20" });
+    // Still active, still unresolved (needs_review) — Bills does not count it paid.
+    expect((await billRow(id, "2026-10-01"))?.actualAmount).toBe("0.00");
+
+    await patch(id, { anchorDate: "2026-10-20", active: "false" });
+    expect(await stored(id)).toEqual([`needs_review@2026-10-20#${txn}`]);
+    expect((await billRow(id, "2026-10-01"))?.actualAmount).toBe("300.00");
+
+    // Resume: the review is unresolved again, so the figure returns to what it
+    // was before the pause — the paused reading never sticks.
+    await patch(id, { anchorDate: "2026-10-20", active: "true" });
+    expect((await billRow(id, "2026-10-01"))?.actualAmount).toBe("0.00");
+  });
+
   it("a paused partial review reads as the partial", async () => {
     const { id, txn } = await partRoof();
     await patch(id, { anchorDate: "2026-10-20" });

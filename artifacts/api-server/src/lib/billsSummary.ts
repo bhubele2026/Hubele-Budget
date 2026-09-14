@@ -14,6 +14,11 @@ import {
   buildAvalancheExtraRow,
   type DebtMinRow,
 } from "./debtMinSchedule";
+import {
+  NEEDS_REVIEW_PARTIAL_STATUS,
+  NEEDS_REVIEW_STATUS,
+  readPausedReview,
+} from "./oneTimeBillMove";
 
 /**
  * The Bills-summary builder.
@@ -224,23 +229,39 @@ export async function buildBillsSummary(
   // month. We pull resolutions whose occurrence_date falls in the current
   // month, then sum the absolute amount of each matched bank/card txn,
   // grouped by recurringItemId.
+  // (Review followup PR-C) Also pull a pending review (`needs_review` /
+  // `needs_review_partial`) so a PAUSED bill's review — which every other
+  // reader (the ledger, review count, the /forecast bundle) reads as the
+  // user's last answer via `readPausedReview` — still counts here instead of
+  // silently reporting 0.00 while paused.
   const matchedRows = await db
     .select({
       recurringItemId: forecastResolutionsTable.recurringItemId,
       matchedTxnId: forecastResolutionsTable.matchedTxnId,
+      status: forecastResolutionsTable.status,
     })
     .from(forecastResolutionsTable)
     .where(
       and(
         eq(forecastResolutionsTable.householdId, householdId),
-        eq(forecastResolutionsTable.status, "matched"),
+        inArray(forecastResolutionsTable.status, [
+          "matched",
+          NEEDS_REVIEW_STATUS,
+          NEEDS_REVIEW_PARTIAL_STATUS,
+        ]),
         gte(forecastResolutionsTable.occurrenceDate, monthStartISO),
         lte(forecastResolutionsTable.occurrenceDate, monthEndISO),
       ),
     );
+  const pausedItemIds = new Set(
+    items.filter((i) => i.active !== "true").map((i) => i.id),
+  );
+  const matchedResolved = matchedRows
+    .map((r) => readPausedReview(r, pausedItemIds))
+    .filter((r) => r.status === "matched");
   const txnIds = Array.from(
     new Set(
-      matchedRows.map((r) => r.matchedTxnId).filter((x): x is string => !!x),
+      matchedResolved.map((r) => r.matchedTxnId).filter((x): x is string => !!x),
     ),
   );
   const txnAmountById = new Map<string, number>();
@@ -262,7 +283,7 @@ export async function buildBillsSummary(
     }
   }
   const actualByItem = new Map<string, number>();
-  for (const r of matchedRows) {
+  for (const r of matchedResolved) {
     if (!r.recurringItemId || !r.matchedTxnId) continue;
     const amt = txnAmountById.get(r.matchedTxnId);
     if (amt === undefined) continue;
