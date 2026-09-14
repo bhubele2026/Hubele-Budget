@@ -22,7 +22,7 @@ import { APP_VERSION } from "@/lib/version";
  * Everything else is words. Numbers are what the AREAS are for; a door tells
  * you which room to walk into.
  *
- * ⚠️ THE FUTURE GOAL TILE SHOWS A PERCENTAGE AND NEVER AN AMOUNT OWED. That is
+ * ⚠️ THE DEBT TILE SHOWS A PERCENTAGE AND NEVER AN AMOUNT OWED. That is
  * a standing rule, and it is enforced upstream too: `/api/spine` carries
  * `debt.payoffPct` and no balance at all, so there is no owed figure on this
  * page to leak even by accident.
@@ -43,24 +43,21 @@ type TileDef = {
 };
 
 /**
+ * ⭐ R0 — the six tiles are now the five destinations plus Settings (owner-
+ * approved redesign; Banking/Bills/Budget no longer get their own tile — they
+ * live a click deeper, inside the Forecast and Spending ribbons).
+ *
  * ⚠️ SIX TILES, THREE ACROSS, TWO DOWN — a filled rectangle. Five would leave a
  * hole in the grid, and a hole reads as something missing rather than as
  * space. The order is daily-use frequency, left to right and top to bottom.
  */
 const TILES: TileDef[] = [
   {
-    testid: "banking",
+    testid: "home",
     href: "/banking",
-    title: "Banking",
-    blurb: "Accounts, ledgers, spending.",
-    caption: "Open banking",
-  },
-  {
-    testid: "bills",
-    href: "/bills",
-    title: "Bills",
-    blurb: "What's due, what changed.",
-    caption: "See what's due",
+    title: "Home",
+    blurb: "Cash today and what's next.",
+    caption: "Open home",
   },
   {
     testid: "forecast",
@@ -70,18 +67,25 @@ const TILES: TileDef[] = [
     caption: "See the curve",
   },
   {
-    testid: "avalanche",
-    href: "/avalanche",
-    title: "Future Goal",
-    blurb: "The payoff plan.",
-    caption: "Work the plan",
+    testid: "spending",
+    href: "/reports/spending",
+    title: "Spending",
+    blurb: "Where the money's going.",
+    caption: "See spending",
   },
   {
-    testid: "budget",
-    href: "/budget",
-    title: "Budget",
-    blurb: "Envelopes by month.",
-    caption: "Open budget",
+    testid: "review",
+    href: "/review",
+    title: "Review",
+    blurb: "What's waiting on a decision.",
+    caption: "Open review",
+  },
+  {
+    testid: "debt",
+    href: "/avalanche",
+    title: "Debt",
+    blurb: "The payoff plan.",
+    caption: "Work the plan",
   },
   {
     testid: "settings",
@@ -266,7 +270,7 @@ export default function LandingPage() {
               index={i}
               badge={
                 // ⚠️ % PAID ONLY. Never an amount owed — not here, not ever.
-                def.testid === "avalanche" && payoffPct != null ? (
+                def.testid === "debt" && payoffPct != null ? (
                   <span
                     data-testid="landing-payoff-pct"
                     className="font-mono text-label font-semibold tabular-nums text-brand-navy"

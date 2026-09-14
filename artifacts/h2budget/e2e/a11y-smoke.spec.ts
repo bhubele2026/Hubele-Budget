@@ -36,6 +36,9 @@ const PAGES = [
   "/budget",
   "/bills",
   "/debts",
+  // (R0) Review is now one of the five primary destinations, not just a
+  // Forecast sub-tab — cover its own a11y surface directly.
+  "/review",
 ];
 
 async function scan(page: Page): Promise<void> {

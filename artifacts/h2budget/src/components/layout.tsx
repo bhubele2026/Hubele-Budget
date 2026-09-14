@@ -45,67 +45,86 @@ import { TabRibbon, type RibbonTab } from "@/components/tab-ribbon";
  */
 type NavItem = { name: string; href: string };
 
-// One primary row — Home (the landing) plus the four areas. Everything
-// else is one click away in the More overflow, so nothing is lost.
+// ⭐ R0 — FIVE DESTINATIONS (owner-approved redesign). The primary row is no
+// longer "Home (the landing) plus the four areas" — the landing (/home) is
+// reached only via the wordmark now. These five ARE the app: Home (still the
+// Banking page, redesigned later in R3), Forecast, Spending, Review, Debt.
+// Settings is secondary — demoted to the end of More, same as every unmapped
+// page.
 const PRIMARY_NAV: NavItem[] = [
-  { name: "Home", href: "/home" },
-  { name: "Banking", href: "/banking" },
-  { name: "Bills", href: "/bills" },
+  // "Home" is a LABEL change only — the route is still /banking (Home gets
+  // its own redesign in R3; this PR is nav-only).
+  { name: "Home", href: "/banking" },
   // Forecast primary link lands on the section's Overview tab (Bills precedent).
   { name: "Forecast", href: "/forecast/overview" },
-  // Route + testids stay /avalanche; only the display label is "Future Goal".
-  { name: "Future Goal", href: "/avalanche" },
+  // Spending borrows the Reports → Spending page until R2 builds one of its own.
+  { name: "Spending", href: "/reports/spending" },
+  { name: "Review", href: "/review" },
+  // Route + testids stay /avalanche; only the display label is "Debt".
+  { name: "Debt", href: "/avalanche" },
 ];
 
-// Secondary destinations, demoted into the More dropdown. Every route stays
-// reachable — just one extra click. (Chase/Amex/Allowance live inside Banking;
-// Budget inside Forecast; these entries are the direct shortcuts.)
+// Secondary destinations, demoted into the More dropdown. Everything else
+// (Chase, Amex, Allowance, Budget, Reports, Debts, Bills, Debt report) now
+// lives inside one of the five areas' own ribbons below — the only things
+// left with no area to call home are Mapping rules and Settings.
 const MORE_NAV: NavItem[] = [
-  { name: "Chase", href: "/transactions" },
-  { name: "Amex", href: "/amex" },
-  { name: "Allowance", href: "/allowances" },
-  { name: "Budget", href: "/budget" },
-  { name: "Reports", href: "/reports" },
-  { name: "Debts", href: "/debts" },
-  // Review now lives in the Forecast ribbon (FORECAST_SUBNAV), not here.
+  { name: "Mapping rules", href: "/mapping-rules" },
   { name: "Settings", href: "/settings" },
 ];
 
-// Inside the Banking area, the top ribbon becomes Banking's own sub-nav — and
-// ONLY that. No "More" here: while you're in Banking you stay in Banking; the
-// way out is the wordmark → the /home landing. First tab is Overview, back to
-// the Banking dashboard itself.
-const BANKING_SUBNAV: NavItem[] = [
+// Inside the Home area, the top ribbon is still the existing Banking tabs,
+// UNCHANGED by this redesign — Home is Banking today and gets its own pass in
+// R3. No "More" here: while you're in Home you stay in Home; the way out is
+// the wordmark → the /home landing. First tab is Overview, back to the
+// Banking dashboard itself.
+const HOME_SUBNAV: NavItem[] = [
   { name: "Overview", href: "/banking" },
   { name: "Chase", href: "/transactions" },
   { name: "Amex", href: "/amex" },
   { name: "Budget", href: "/budget" },
   { name: "Allowance", href: "/allowances" },
 ];
-const BANKING_ROUTES = ["/banking", "/transactions", "/amex", "/budget", "/allowances"];
+// ⚠️ Only /banking itself is the Home AREA now. Chase, Amex, Budget and
+// Allowance are still one click away from Home's own ribbon above, but
+// visiting those routes DIRECTLY now shows the ribbon of the area that owns
+// them (Review, Spending) — see below.
+const HOME_ROUTES = ["/banking"];
 
-// Inside the Bills area, the top ribbon becomes just two tabs — Overview and
-// Bills — and ONLY those (owner's explicit ask). Same pattern as Banking: no
-// "More" here; the way out is the wordmark → /home. Overview (/bills) is the
-// default landing; Bills (/bills/all) is the recurring/income line editor.
-const BILLS_SUBNAV: NavItem[] = [
-  { name: "Overview", href: "/bills" },
-  { name: "Bills", href: "/bills/all" },
-];
-
-// The Avalanche area is a single page — its ribbon is just the one Avalanche
-// tab (owner's ask: "one tab, no other"). Same pattern as Banking/Bills: no
-// "More", the way out is the wordmark → /home.
-const AVALANCHE_SUBNAV: NavItem[] = [{ name: "Future Goal", href: "/avalanche" }];
-
-// The Forecast area ribbon — Overview (the section landing) · Review · Forecast
-// (the cash-flow curve). Review is pulled OUT of "More" and lives here as a
-// forecast tab. Same pattern as Banking/Bills/Avalanche: no "More", escape via
-// the wordmark → /home.
+// Inside the Forecast area: Overview, the cash-flow curve itself, and Bills —
+// bills and income now live inside Forecast (owner's ask). One "Bills" tab
+// covers both /bills (Overview) and /bills/all (the full list): the
+// boundary-aware longest-match in AppLayout already lights it for both, so
+// there is no separate ribbon entry for /bills/all.
 const FORECAST_SUBNAV: NavItem[] = [
   { name: "Overview", href: "/forecast/overview" },
-  { name: "Review", href: "/review" },
   { name: "Forecast", href: "/forecast" },
+  { name: "Bills", href: "/bills" },
+];
+
+// Inside the Spending area: the new Spending destination (Reports → Spending,
+// until R2 builds its own page), Budget, Allowances, and the Reports hub
+// itself.
+const SPENDING_SUBNAV: NavItem[] = [
+  { name: "Spending", href: "/reports/spending" },
+  { name: "Budget", href: "/budget" },
+  { name: "Allowances", href: "/allowances" },
+  { name: "Reports", href: "/reports" },
+];
+
+// Inside the Review area: the review queue plus the two account ledgers where
+// review work actually happens.
+const REVIEW_SUBNAV: NavItem[] = [
+  { name: "Review", href: "/review" },
+  { name: "Chase", href: "/transactions" },
+  { name: "Amex", href: "/amex" },
+];
+
+// Inside the Debt area: the payoff plan, the debts list, and the debt report.
+const DEBT_SUBNAV: NavItem[] = [
+  { name: "Debt", href: "/avalanche" },
+  { name: "Debts", href: "/debts" },
+  { name: "Debt report", href: "/reports/debt" },
 ];
 
 const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
@@ -141,7 +160,7 @@ function MobileNav({
   railBadge: (href: string) => number | null;
   onPrefetch: (href: string) => void;
 }) {
-  // Groups say what they are: the four areas, then everything else.
+  // Groups say what they are: the five destinations, then everything else.
   const groups: { label: string; items: NavItem[] }[] = [
     { label: "Areas", items: PRIMARY_NAV },
     { label: "More", items: MORE_NAV },
@@ -207,30 +226,59 @@ function MobileNav({
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  // Inside the Banking area, show Banking's sub-nav in the top ribbon.
-  const inBanking = BANKING_ROUTES.some(
+  // Inside the Home area, show the existing Banking tabs in the top ribbon.
+  // Only /banking itself — Chase/Amex/Budget/Allowance are owned by Review /
+  // Spending below now, so visiting them directly shows THAT area's ribbon.
+  const inHome = HOME_ROUTES.some(
     (r) => location === r || location.startsWith(r + "/"),
   );
-  // Bills area = /bills (Overview) or /bills/... (the Bills list). Its ribbon is
-  // just the two tabs.
-  const inBills = location === "/bills" || location.startsWith("/bills/");
-  const inAvalanche =
-    location === "/avalanche" || location.startsWith("/avalanche/");
-  // Forecast area = the cash-flow curve + its moved-in Review tab.
+  // Forecast area = the cash-flow curve, its Overview, and Bills (bills +
+  // income moved in here). /bills/all falls under the same "/bills/" prefix.
   const inForecast =
     location === "/forecast" ||
     location.startsWith("/forecast/") ||
+    location === "/bills" ||
+    location.startsWith("/bills/");
+  // Spending area = the new Spending destination, Budget, Allowances, and the
+  // Reports hub itself. The hub is an EXACT match only — its own subpages
+  // (/reports/debt, /reports/spending, /reports/cashflow, …) are each owned
+  // individually (by Spending, by Debt, or left unmapped) below.
+  const inSpending =
+    location === "/reports/spending" ||
+    location.startsWith("/reports/spending/") ||
+    location === "/budget" ||
+    location.startsWith("/budget/") ||
+    location === "/allowances" ||
+    location.startsWith("/allowances/") ||
+    location === "/reports";
+  // Review area = the review queue plus the two ledgers where review work
+  // happens.
+  const inReview =
     location === "/review" ||
-    location.startsWith("/review/");
-  const areaNav = inBanking
-    ? BANKING_SUBNAV
-    : inBills
-      ? BILLS_SUBNAV
-      : inAvalanche
-        ? AVALANCHE_SUBNAV
-        : inForecast
-          ? FORECAST_SUBNAV
-          : PRIMARY_NAV;
+    location.startsWith("/review/") ||
+    location === "/transactions" ||
+    location.startsWith("/transactions/") ||
+    location === "/amex" ||
+    location.startsWith("/amex/");
+  // Debt area = the payoff plan, the debts list, and the debt report.
+  const inDebt =
+    location === "/avalanche" ||
+    location.startsWith("/avalanche/") ||
+    location === "/debts" ||
+    location.startsWith("/debts/") ||
+    location === "/reports/debt" ||
+    location.startsWith("/reports/debt/");
+  const areaNav = inHome
+    ? HOME_SUBNAV
+    : inForecast
+      ? FORECAST_SUBNAV
+      : inSpending
+        ? SPENDING_SUBNAV
+        : inReview
+          ? REVIEW_SUBNAV
+          : inDebt
+            ? DEBT_SUBNAV
+            : PRIMARY_NAV;
   // Boundary-aware, longest-match active href — so /bills (Overview) and
   // /bills/all (Bills) never both light up (raw startsWith would).
   const activeNavHref =
@@ -238,6 +286,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       .map((a) => a.href)
       .filter((h) => location === h || location.startsWith(h + "/"))
       .sort((a, b) => b.length - a.length)[0] ?? null;
+  // The active tab's own label makes the best mobile page title — it covers
+  // every mapped route, area sub-pages included, not just the five primary
+  // destinations and More.
+  const activeTabLabel = areaNav.find((a) => a.href === activeNavHref)?.name;
   // More lists everything NOT already in the current ribbon — no duplicates,
   // and it carries the other areas so you can jump between them from here too.
   const ribbonHrefs = new Set(areaNav.map((a) => a.href));
@@ -274,7 +326,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         queryKey: getGetBillsSummaryQueryKey(),
         queryFn: () => getBillsSummary(),
       });
-    } else if (href === "/forecast/overview" || href === "/forecast") {
+    } else if (
+      href === "/forecast/overview" ||
+      href === "/forecast" ||
+      // Review renders the same ForecastPage in a different mode, reading
+      // the identical bundle — so it warms the same way.
+      href === "/review"
+    ) {
       qc.prefetchQuery({
         queryKey: getGetForecastQueryKey({ days: 90 }),
         queryFn: () => getForecast({ days: 90 }),
@@ -318,12 +376,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // (#perf) After first paint, warm the primary destinations' chunks on idle so
+  // (#perf) After first paint, warm the five destinations' chunks on idle so
   // the very first click into each area is instant even without a prior hover.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const warm = () => {
-      for (const href of ["/banking", "/bills", "/forecast/overview", "/avalanche"]) {
+      for (const href of [
+        "/banking",
+        "/forecast/overview",
+        "/reports/spending",
+        "/review",
+        "/avalanche",
+      ]) {
         prefetchRoute(href);
       }
     };
@@ -359,15 +423,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   );
 
   const currentTitle =
-    ALL_NAV.find((n) => location.startsWith(n.href))?.name ?? "H2 Budget";
+    activeTabLabel ??
+    ALL_NAV.find((n) => location.startsWith(n.href))?.name ??
+    "H2 Budget";
 
   // More is hidden inside an area: there the ribbon is that section's tabs
   // only, and you leave via the wordmark → Home.
-  const showMore = !inBanking && !inBills && !inAvalanche && !inForecast;
+  const showMore = !inHome && !inForecast && !inSpending && !inReview && !inDebt;
 
   // ⚠️ THE COUNT SHOWS ONCE. When the live ribbon already carries the Review
-  // tab (the Forecast area), a second copy on the right would be the same
-  // finding claimed twice — and two badges reading "3" look like six things.
+  // tab (its own area, or the five-destination primary row), a second copy on
+  // the right would be the same finding claimed twice — and two badges
+  // reading "3" look like six things.
   const showReviewPill =
     reviewCount != null && reviewCount > 0 && !ribbonHrefs.has("/review");
 
