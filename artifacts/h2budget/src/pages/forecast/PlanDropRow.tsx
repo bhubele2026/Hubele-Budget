@@ -228,13 +228,16 @@ export function PlanDropRow({
               className="text-micro text-neutral-500"
               data-testid={`plan-partial-paid-${testKey}`}
             >
+              {/* Unsigned, like the remainder caption below: an expense's
+                  negative paid and planned amounts must not print as
+                  "Paid -$1,000.00 of -$1,500.00". */}
               Paid{" "}
               <span className="font-mono tabular-nums">
-                {row.paidAmount != null ? formatCurrency(row.paidAmount) : "—"}
+                {row.paidAmount != null ? formatCurrency(Math.abs(row.paidAmount)) : "—"}
               </span>{" "}
               of{" "}
               <span className="font-mono tabular-nums">
-                {formatCurrency(row.plannedAmount)}
+                {formatCurrency(Math.abs(row.plannedAmount))}
               </span>
             </div>
           )}

@@ -2425,6 +2425,36 @@ export type CashSignalMatchesItem = {
    */
     remainderAmount?: string;
 };
+export type CashSignalAccountVia = (typeof CashSignalAccountVia)[keyof typeof CashSignalAccountVia];
+export declare const CashSignalAccountVia: {
+    readonly pointer: "pointer";
+    readonly snapshot_mask: "snapshot mask";
+    readonly sole_checking: "sole checking";
+    readonly sole_depository: "sole depository";
+    readonly unresolved: "unresolved";
+};
+/**
+ * (Decision 16, PR-K round 2) The bank account this signal's figures roll
+forward on, as `resolveSnapshotAccount` resolved it: the stored pointer,
+else the snapshot's mask, else the household's sole checking account,
+else its sole depository account. A screen that names the account reads
+this, so its label and its numbers come from one response. `name`,
+`mask` and `subtype` are the resolved Plaid account's own; all null when
+`via` is `unresolved`, where the balance stays at the raw snapshot.
+
+ */
+export interface CashSignalAccount {
+    /** @nullable */
+    name: string | null;
+    /** @nullable */
+    mask: string | null;
+    /**
+     * Plaid subtype, e.g. checking or savings.
+     * @nullable
+     */
+    subtype: string | null;
+    via: CashSignalAccountVia;
+}
 /**
  * (PR6) An unresolved plan occurrence kept off the forecast curve.
  */
@@ -2476,6 +2506,7 @@ export interface CashSignal {
     snapshotAt?: string | null;
     /** @nullable */
     snapshotSource?: string | null;
+    account: CashSignalAccount;
     horizonDays?: number;
     fromDate?: string;
     toDate?: string;

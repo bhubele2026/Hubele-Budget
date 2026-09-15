@@ -2256,3 +2256,93 @@ describe("rescheduled bills outside the original expansion window", () => {
     expect(sig.projectedExpenses).toBe("125.00");
   });
 });
+
+// (Decision 16, PR-K round 2, L1) A screen that names "the bank account" must
+// name the one these figures rolled forward on. `account` is that resolution,
+// read from the resolved row, never the label the snapshot remembers.
+// Names and masks are synthetic.
+describe("computeCashSignal.account — the account the figures roll forward on", () => {
+  async function seedAccount(opts: {
+    externalId: string;
+    name: string | null;
+    mask: string | null;
+    subtype: string | null;
+    type: string | null;
+  }): Promise<string> {
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: `item-${randomUUID()}`,
+        accessToken: "test-token",
+        institutionSlug: "test-bank",
+      })
+      .returning();
+    const [acct] = await db
+      .insert(plaidAccountsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: opts.externalId,
+        name: opts.name,
+        mask: opts.mask,
+        subtype: opts.subtype,
+        type: opts.type,
+      })
+      .returning();
+    return acct!.id;
+  }
+
+  it("names the pointed-at account from its own row, not the snapshot's remembered label", async () => {
+    await setSettings({ balance: "1000.00", at: new Date("2026-05-10T12:00:00Z") });
+    const rowId = await seedAccount({
+      externalId: `acct-${randomUUID()}`,
+      name: "Test Checking",
+      mask: "0001",
+      subtype: "checking",
+      type: "depository",
+    });
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotAccountId: rowId, bankSnapshotName: "Old Label", bankSnapshotMask: "9999" })
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.account).toEqual({ name: "Test Checking", mask: "0001", subtype: "checking", via: "pointer" });
+  });
+
+  it("a manual snapshot with no pointer or mask names the sole checking account, and that account's row is what moved the balance", async () => {
+    await setSettings({ balance: "1000.00", at: new Date("2026-05-10T12:00:00Z") });
+    const externalId = `acct-${randomUUID()}`;
+    await seedAccount({ externalId, name: "Test Checking", mask: "0002", subtype: "checking", type: "depository" });
+    await addBankRow({ externalId, occurredOn: "2026-05-12", amount: "-25.00", description: "Test row" });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.account).toEqual({ name: "Test Checking", mask: "0002", subtype: "checking", via: "sole checking" });
+    // The label and the figure name ONE account: its row rolled the snapshot forward.
+    expect(sig.bankToday).toBe("975.00");
+  });
+
+  it("a savings account resolved as the sole depository account keeps its own subtype", async () => {
+    await setSettings({ balance: "1000.00", at: new Date("2026-05-10T12:00:00Z") });
+    await seedAccount({
+      externalId: `acct-${randomUUID()}`,
+      name: "Test Savings",
+      mask: "0003",
+      subtype: "savings",
+      type: "depository",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.account).toEqual({ name: "Test Savings", mask: "0003", subtype: "savings", via: "sole depository" });
+  });
+
+  it("nothing resolvable: via 'unresolved', with no name, mask or subtype to show", async () => {
+    await setSettings({ balance: "1000.00", at: new Date("2026-05-10T12:00:00Z") });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 30 });
+    expect(sig.account).toEqual({ name: null, mask: null, subtype: null, via: "unresolved" });
+  });
+});

@@ -321,8 +321,9 @@ describe("Forecast — Missed bucket actions (#480)", () => {
     // The row carries the $500 remainder still planned.
     expect(row.textContent).toContain("$500.00");
     const paid = screen.getByTestId("plan-partial-paid-rent-2026-05-30");
-    expect(paid.textContent).toContain("$1,000.00");
-    expect(paid.textContent).toContain("$1,500.00");
+    // Exact text, not a substring: an expense's paid and planned amounts are
+    // negative, and the caption must not print "Paid -$1,000.00 of -$1,500.00".
+    expect(paid.textContent).toBe("Paid $1,000.00 of $1,500.00");
     expect(screen.queryByTestId("mark-missed-rent-2026-05-30")).toBeNull();
     fireEvent.click(row);
     expect(upsertMutate).not.toHaveBeenCalled();

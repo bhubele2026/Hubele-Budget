@@ -314,10 +314,19 @@ export default function ForecastPage({
   }, []);
 
   const { data, isLoading, isError: forecastError, refetch: refetchForecast } = useGetForecast({ days: deferredHorizonDays });
-  const cashProjectionQuery = useGetForecastCashSignal({
-    horizonDays: deferredHorizonDays,
-    fromDate: deferredForecastFromDate,
-  });
+  // (Decision 16, PR-K round 2) ONE CACHE ENTRY PER HORIZON. With look-back
+  // closed the chart starts today, so the request leaves `fromDate` out and
+  // the server uses the household day. The 90-day tab therefore reads the same
+  // `{ horizonDays: 90 }` entry as Forecast Overview, the nav/landing prefetch
+  // and the Reports → Cash flow forecast card. A background bank sync can't
+  // leave two copies of one day's balance disagreeing for the 5-minute
+  // staleTime, and a browser outside Chicago no longer asks for its own
+  // calendar day. Only an open look-back sends a date.
+  const cashProjectionQuery = useGetForecastCashSignal(
+    lookbackOpen
+      ? { horizonDays: deferredHorizonDays, fromDate: deferredForecastFromDate }
+      : { horizonDays: deferredHorizonDays },
+  );
   const { data: cashProjection, isLoading: cashProjectionLoading, isError: projectionError, refetch: refetchProjection } =
     cashProjectionQuery;
   // The spine carries the server's freshness verdict for the bank card's
@@ -2097,7 +2106,11 @@ export default function ForecastPage({
         <Foot>
           <span className="flex flex-wrap items-center gap-x-5 gap-y-1">
             <span>
-              Bank before {formatDate(forecastFromDate)}{" "}
+              {/* The date the figure beside it was computed for. With look-back
+                  closed the request carries no date (the server's household
+                  day), so the browser's own calendar day could name the wrong
+                  day here. */}
+              Bank before {formatDate(proj?.fromDate ?? forecastFromDate)}{" "}
               <span className="font-mono tabular-nums text-neutral-600">
                 {moneyFace(projReady ? proj?.startingBalance : null)}
               </span>

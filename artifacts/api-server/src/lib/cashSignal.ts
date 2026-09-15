@@ -1,5 +1,6 @@
 import { recurringItemsTable } from "@workspace/db";
 import { buildForecastLedger } from "./forecastLedger";
+import type { SnapshotAccountResolution } from "./resolveSnapshotAccount";
 
 type Cadence =
   | "weekly"
@@ -204,6 +205,13 @@ export type CashSignal = {
   maxSafeExtra: string;
   snapshotAt: string | null;
   snapshotSource: string | null;
+  /**
+   * (Decision 16, PR-K round 2) The account these figures roll forward on:
+   * `resolveSnapshotAccount`'s answer, with that account's own name, mask and
+   * subtype. Everything but `via` is null when it is `unresolved`. A screen
+   * that names the account reads this, never a second source.
+   */
+  account: Pick<SnapshotAccountResolution, "name" | "mask" | "subtype" | "via">;
   horizonDays?: number;
   fromDate?: string;
   toDate?: string;
@@ -438,6 +446,12 @@ export async function computeCashSignal(
     maxSafeExtra: r2(headroom),
     snapshotAt: ledger.snapshotAt ? ledger.snapshotAt.toISOString() : null,
     snapshotSource: ledger.snapshotSource,
+    account: {
+      name: ledger.snapshotAccount.name,
+      mask: ledger.snapshotAccount.mask,
+      subtype: ledger.snapshotAccount.subtype,
+      via: ledger.snapshotAccount.via,
+    },
     horizonDays: ledger.daysAhead,
     fromDate: fromISO,
     toDate: toISO,
