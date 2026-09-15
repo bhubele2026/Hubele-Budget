@@ -11,6 +11,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { monthEndExclusive } from "../lib/monthBounds";
 import { householdTodayISO, monthBounds } from "../lib/householdClock";
+import { notBankRemovedSql } from "../lib/bankRemoved";
 import { UpdateAvalancheSettingsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();

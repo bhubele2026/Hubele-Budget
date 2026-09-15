@@ -165,22 +165,141 @@ Generated output is committed, and a second codegen run is byte-identical.
   - The carry is non-fatal, because the rows are already stored and PR-D's read-time filing still applies.
 - **Inserted rows.** `xmax = 0` detects them on the cursor path. The backfill uses its existing "not on file before" check.
 
-## Deferred and open
+## Deferred and open (as of round 2)
+
+Round 1's items 3 (a match on a removed row), 4 (debt readers) and 5 (re-mint split across two syncs) are fixed in round 2, below.
 
 1. **Look-alike suggestion → R1.** "A posted look-alike 8–30 days later becomes a Review suggestion" does not exist on main.
    - It needs a read-time pairing beyond `SUPERSEDE_MAX_DAYS`, a ledger field, spec, codegen and a Review surface. R1 rebuilds that surface, so it is pinned there.
    - **Until then**, a stale pending row whose posting lands 8–30 days later counts beside it. Decision 5 forbids zeroing it automatically; the label is the only signal. Within 7 days pairing already counts the charge once (tested).
 2. **Vanished-pending sweep does not mark.** A worked-on pending row that `/transactions/get` stops listing is kept, unmarked, and still counts (labelled after 14 days). Marking it would be a new rule, so it is left open.
-3. **A match on a removed row still closes its bill.** The marker is not "paid", but a `matched` resolution the household made on that row still closes the bill. This is the same as before PR-I for a removed row nobody worked on (deleted, resolution kept). It is a financial rule for Brad.
-4. **Debt readers outside the spec still count a removed row:**
-   - pending-payment netting (`lib/debtPending.ts`, used by "% paid");
-   - avalanche actuals (`routes/avalanche.ts`);
-   - the legacy `/api/dashboard` aggregates (Reports hub).
-   Each is one predicate; not changed here.
-5. **Re-mint split across two syncs.** If Plaid adds a new id in one sync and removes the old id in a later one, the first sync's dedupe merges the new row into the older worked-on row. The later removal then marks it.
-   - The charge reads as removed until `/transactions/get` lists the new id again. The new row then returns, and the next dedupe keeps it and takes the old row's work.
-   - Same-sync re-mints (the usual case) are adopted in place (PR4d) and never reach this.
-6. **Pre-existing fault found, not changed.** `refreshAmexAnchor`'s debt lookup (`plaid_account_id::text = ANY(($2))`) fails with Postgres 22P02 whenever an Amex row carries a `plaid_account_id`. The sync calls it inside a catch, so the auto-anchor never refreshes for Plaid Amex rows.
+3. **Pre-existing fault found, not changed.** `refreshAmexAnchor`'s debt lookup (`plaid_account_id::text = ANY(($2))`) fails with Postgres 22P02 whenever an Amex row carries a `plaid_account_id`. The sync calls it inside a catch, so the auto-anchor never refreshes for Plaid Amex rows.
    - Fixing it would start writing debt balances, so it needs its own change.
    - The test here uses workbook-style rows.
-7. **Transparency panel.** Spending's `excluded` panel has no "removed by bank" bucket; the row is simply absent.
+4. **Transparency panel.** Spending's `excluded` panel has no "removed by bank" bucket; the row is simply absent.
+5. **Pending deposits: pre-existing, owned by PR-J** (both already on main, both read high).
+   - **C:** a worked-on pending deposit that vanishes stays +$100.
+   - **E:** a stale pending deposit whose posting lands 10 days later counts twice.
+6. **Review work split across two syncs (review R6).** If the posted row arrives in one sync while Plaid still lists the pending row, and the pending id is removed only in the next, nothing carries. The posted row was not inserted by the sync that marked the pending row, and after HIGH-1 the carry needs both.
+   - Budget and Spending still read the pending row's filing onto it (PR-D `effectiveFiling`); only `reviewed` and the stored filing are missed.
+   - Carrying at removal time would write onto a row the household may already have touched, which this PR never does.
+7. **Carry failures are not retried.** The carry is non-fatal and runs once, for rows the same sync inserted. A later sync never retries, because those rows are then updates, not inserts. PR-D's read-time filing still covers Budget and Spending.
+8. **`includeBankRemoved=false` reads as true.** Like the route's other boolean filters (`uncategorized`, `excludeTransfers`, `reimbursable`), the generated schema is `zod.coerce.boolean()`, so any non-empty value is true. The web only ever sends `true` (`pages/amex.tsx`). Left as is.
+9. **Merge hazard with PR-E.** The held PR-E (`b00748d`) rewrites `refreshAmexAnchor`. Its merge must re-apply PR-I's `notBankRemovedSql()` in that sum. `bankRemovedSpendOwed` ("refreshAmexAnchor") fails if it is lost.
+
+## Round 2: review of `0e23d1f` (2 HIGH, 2 MEDIUM, 3 LOW, 3 NIT)
+
+Base: main `59cbbda`. Round 2 merged main three times:
+- **PR-H `f96afb1`:** clean; both removed-charge skips in `amexAnchor.ts` intact.
+- **PR-B2 `bce4bf7`:** `forecastLedger.ts` keeps its hold-back and PR-I's filters side by side.
+- **Follow-ups batch 2 `59cbbda`:** `forecast.tsx` keeps both sides.
+
+Fails-before: the round-2 tests were run with every non-test source file round 2 changed put back to `f3e59bf0^` (round 1 on the same main). Kept as they were: the new `bankRemovedPayments.ts`, main's `forecast.tsx`, spec and generated code.
+
+- **API:** 8 of 23 tests in the two touched files fail.
+- **Web:** 4 of 30 tests fail.
+- **After:** every test passes.
+
+### HIGH-1: the carry gave a different charge another charge's review, permanently
+
+**Change.** `carryReviewToReplacements` now needs the bank's word that the replaced pending row is gone. `lib/reviewCarry.ts` takes a `pendingGone` test:
+- **Cursor sync:** the pending row carries a `bank_removed` marker (marking runs just before the carry).
+- **Gap backfill:** it is marked, or it is absent from a complete (`fetchedComplete`) `/transactions/get` listing of its window.
+
+| Test | Before | After |
+|---|---|---|
+| ⭐ R1: a second purchase at the same shop ($5.75), posted while the first ($5.00) is still pending, then the first posts through `pending_transaction_id` | Second charge `reviewed:true`, Dining, weekly + "dining", override true | Unreviewed, no category, no flags; the first charge keeps its work |
+| Gap backfill with the pending row still listed | Posted row reviewed, filed, monthly | Nothing carried |
+| M4b: a later backfill leaves a choice on an existing posted row alone | Passes (guard) | Passes; kills mutation M4b, which survived round 1 |
+
+Round 1's carry acceptance tests still pass: the cursor case marks the pending row; the backfill case lists only the posting.
+
+### HIGH-2: a match on a removed row kept the bill closed while cash added the payment back
+
+This read high. **Owner rule:** the forecast reads low, never high.
+
+**Change.** `lib/bankRemovedPayments.ts`:
+- `loadRemovedPaymentIds` returns the bank-removed rows, except a pending row a live posted row replaced (whole-ledger `findSupersededPending`).
+- `answersRemovedPayment(r)` is true for a `matched`, `partial`, `needs_review` or `needs_review_partial` answer on one of those rows.
+
+The same filter runs in three readers:
+- **The ledger:** the bill returns to the curve, and the answer claims no row.
+- **The GET /forecast bundle:** the answer is left out, and the bill's key is listed in the new optional `paymentRemovedByBank` field (spec and codegen).
+- **`computeReviewCount`:** keeps the three readers one rule. The removed row is already out of the count, so it cannot move.
+
+On the web, `buildLineRegister` flags the open plan and `PlanDropRow` shows "Its payment was removed by the bank".
+
+| Test (clock 5/14, $1,000 snapshot, City Water $150 due the 12th) | Before | After |
+|---|---|---|
+| ⭐ R2: a matched, filed payment row the bank removed | Bill off the curve (0 occurrences). The review measured cash 1,000 and ending **550** | Cash 1,000.00; bill on the curve (1); ending **400**, equal to the truth, lowest point equal too. Control: the same match on a live row reads 850.00, bill paid, 400 |
+| GET /forecast bundle | The removed row's match is in `resolutions` | Left out; `paymentRemovedByBank: ["<water>|2026-05-12"]`; review count 0 |
+| Exception: a removed PENDING row a live posted row replaced | Money already right (850.00, bill paid). Failed only on the new field (`paymentRemovedByBank` undefined) | 850.00, bill paid, no key: the posted row carries the payment |
+| Web register (open plan flagged, a matched plan never) and plan row label | Flag and label absent | Present |
+
+### MEDIUM-1: a re-mint split across two syncs read high
+
+**Change.** Per-account dedupe keeps the Plaid id issued last when copies carry different ids.
+- The newest `created_at` among the rows the bank still has wins; never a bank-removed row's id.
+- The survivor keeps its own `created_at`, which the snapshot and pairing rules read.
+- The pending→posted re-key runs before dedupe and is unaffected. A re-listed id still clears its marker: the acceptance re-add tests pass.
+- The cross-account dedupe is unchanged.
+
+| Test | Before | After |
+|---|---|---|
+| ⭐ R3: worked −$25 row on id OLD; sync N adds NEW; sync N+1 removes OLD | Survivor kept `OLD-RM`, so removing OLD would mark the worked row and add its $25 back (round 1's open item 5) | One row on `NEW-RM`, `created_at` unchanged, work kept; after the removal no marker, cash unchanged |
+| A live survivor beside a newer, bank-removed twin | Passes (guard) | Keeps its own id, takes the twin's review |
+
+### MEDIUM-2: removed payments still counted toward "% paid"
+
+**Change.** `notBankRemovedSql()` is added to four readers:
+- `loadPendingPayments`, the debt netting behind "% paid" (`/debts`, and `/spine` and `/dashboard` through `withPendingPayments`);
+- the three `/dashboard` aggregates (debt paid, month income and spend, top categories);
+- both avalanche actual queries.
+
+| Test | Before | After |
+|---|---|---|
+| ⭐ R4: a $200 tagged payment, then marked removed | Nets `{ total: 200, count: 1 }` | Nets nothing |
+| GET /dashboard: live −$20 plus removed −$30 this month | Monthly spend 50 | 20; the top category line is 20 |
+
+The avalanche predicates have no test (see mutation R2-15).
+
+### LOW
+
+- **Amex totals.** The day-group header total and `buildBalanceWindow` (weekly and today points) skip removed charges.
+
+  | Test | Before | After |
+  |---|---|---|
+  | Removed charge's day total | $40.00 | $0.00 |
+  | Balance window points | 1,060 | 1,020 |
+
+- **M19.** Round 1's `monthTotals` skip is reverted rather than tested: nothing reads `monthTotals` (grep), so no test can observe it.
+- **M21.** The Chase "Removed by bank" label now has a direct test (key, words, title).
+- **Carry failures** are not retried: open item 7.
+
+### NIT
+
+- **`markBankRemoved`** is one `INSERT … SELECT … WHERE NOT EXISTS` per chunk. Test: repeated ids and calls leave one marker, on the household owner (guard; kills R2-16).
+- **`includeBankRemoved=false`:** open item 8.
+- **PR-E merge hazard:** open item 9.
+
+### Mutations (`mutate-pri.zsh`, from the review's script; restores from backups)
+
+**The review's 21 (plus variants M4b, M5b, M5c, M7b):**
+- M1–M18, M20 and M21 are killed, variants included. M4b and M21 were survivors in round 1.
+- M19 no longer applies (the edit is reverted).
+
+**Round 2's 18:** 16 are killed and 2 survive:
+- **R2-14** removes the review-count answer filter. It is equivalent: the removed row is already out of the count.
+- **R2-15** removes the avalanche actuals skip. No API test calls the avalanche routes.
+
+### Gates (merged tree, main `59cbbda`)
+
+| Gate | Result |
+|---|---|
+| `pnpm run typecheck` | passes |
+| Web, UTC | 146 files, 1,261 passed, 3 skipped |
+| Web, America/Chicago | 146 files, 1,262 passed, 2 skipped |
+| Full API suite (`h2budget_test_pri`, `caffeinate -i`) | 155 files, 1,648 passed, 7 todo |
+| `pnpm run build` + `check-entry-graph` (final tree) | passes; 575.7 KB of 580 (173.4 KB gzipped), no recharts on open |
+| Codegen | regenerated for `paymentRemovedByBank`; a second run is identical |
+| Golden and household-scenario files | unchanged |
