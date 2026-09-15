@@ -104,6 +104,7 @@ export {
   MOVEMENT_COVERAGES,
   classifyMovement,
   everydayPlan,
+  isHouseholdWeekStart,
   type AllowanceAmountSettings,
   type EverydayPlan,
   type MovementClassification,

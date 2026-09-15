@@ -14,10 +14,10 @@
 //
 // ⚠️ THIS MODULE CHANGES NO DISPLAYED FIGURE ON ITS OWN. It is exported and
 // tested here, and `artifacts/api-server/src/lib/moneyContext.ts` loads what
-// it needs, but nothing today reads a UI number from it — see
-// `docs/reviews/2026-09-14-household-money-core.md` for the wiring plan and
-// the rows where `classifyMovement`'s answer already differs from what today
-// displays (a confirmed bill match, moved in PR8r/PR10).
+// it needs, but nothing in production reads a figure from it yet (PR8r/PR10
+// switch figures onto it) — see `docs/reviews/2026-09-14-household-money-core.md`
+// for the parity proof and every class of row where its answer differs from
+// what is displayed today.
 //
 // coverage — precedence, first match wins:
 //   1. the core spending rule (`classifyOutflow`, called with
@@ -30,21 +30,28 @@
 //   2. a CONFIRMED bill match (`ctx.matchedTxnIds`) → bill_matched. A weekly or
 //      monthly allowance flag on a matched row is IGNORED, not silently
 //      dropped: `conflict: "flag_ignored_matched"`. An unplanned flag on a
-//      matched row: `conflict: "unplanned_on_matched"`;
+//      matched row: `conflict: "unplanned_on_matched"`.
+//      Or a TIER-2 PAIR (`ctx.tier2PairedTxnIds`) on a row with NO allowance
+//      flag → bill_matched. A flagged row keeps its flag: a suggested pair
+//      never overrides a user flag (plan section A, decision 12). The set is
+//      injected; PR8r supplies it from the match tiers, and it defaults to
+//      empty. (`reimbursable` is not an allowance flag, so an unflagged
+//      reimbursable row on a tier-2 pair reads bill_matched, the same as it
+//      does on a confirmed match.)
 //   3. `unplanned_allowance` → unplanned;
 //   4. `monthly_allowance`   → allowance_monthly;
 //   5. `weekly_allowance`    → allowance_weekly;
 //   6. `reimbursable`        → reimbursable;
 //   7. otherwise             → needs_classification.
 //
-// ⚠️ Steps 3-5 outrank step 6 ON PURPOSE: a row that is BOTH `reimbursable`
-// and flagged reads as its flag's coverage, never `reimbursable`. Today's
-// `classifyOutflow`-based rules (`spendingFacts.ts`, `budgetActuals.ts`) do
-// the opposite — a reimbursable row is excluded before any flag is even
-// looked at — so this is a real, already-documented difference from what is
-// displayed today (`artifacts/api-server/src/lib/spendingFacts.ts`'s and
-// `budgetActuals.ts`'s "documented difference #2" tests), independent of the
-// bill-match difference above.
+// ⚠️ Steps 3-5 outrank step 6 ON PURPOSE (plan section A): a row that is BOTH
+// `reimbursable` and flagged reads as its flag's coverage, never
+// `reimbursable`. Today's `classifyOutflow`-based rules (`spendingFacts.ts`,
+// `budgetActuals.ts`) exclude a reimbursable row before any flag is looked at.
+// The parity helpers' "today" mode reproduces that; their "forward" mode shows
+// the difference. The owner's 2026-09-15 rule ("a reimbursable charge shows as
+// its own row") sides with today here — PR8r decides before it switches a
+// figure (see the review note).
 //
 // An inflow (`classifyOutflow`'s "not_outflow": the row is not an outflow at
 // all) is not covered by the outflow rule, so it is decided on its own
@@ -56,7 +63,10 @@
 //   - `checking`: the row is on the household's tracked checking account —
 //     the SAME bank-row identity `classifyCashRows`/`isBankRow` use (this
 //     module calls `isBankRow` directly), so a row this calls "checking" and
-//     a row the cash ledger counts are always the same set;
+//     a row the cash ledger counts are always the same set. With no resolved
+//     checking account no PLAID row is checking, but a manual row (no Plaid
+//     account, source not a card) still is — exactly as the cash rule counts
+//     it ("cash moves only through checking rows");
 //   - `card`: the row is on the Amex ledger itself (`CARD_LEDGER_SOURCES`,
 //     mirrored from `AMEX_TXN_SOURCES` in
 //     `artifacts/api-server/src/lib/amexAnchor.ts` — avalanche-core cannot
@@ -64,8 +74,14 @@
 //     `artifacts/api-server/src/lib/moneyContext.test.ts`). It never moves
 //     cash; it sizes a future Amex payoff plan;
 //   - `none`: neither.
+//
+// ⚠️ NOT YET: section A's third timing, "via an Amex payoff on date Y" (a card
+// row tied to the payoff that settles it), needs the payoff hooks
+// (`everydayHooks`), which ship with PR8r. Until then a card row's timing is
+// `card` with its own date.
 
 import { isBankRow } from "./cashRows";
+import { weekBounds } from "./householdTime";
 import {
   classifyOutflow,
   isRealIncome,
@@ -90,8 +106,8 @@ export type MovementCoverage = (typeof MOVEMENT_COVERAGES)[number];
 
 /**
  * A precedence conflict this row had, reported rather than hidden. Both only
- * ever accompany `coverage: "bill_matched"`: a flag the confirmed match
- * outranked.
+ * ever accompany `coverage: "bill_matched"` from a CONFIRMED match: a flag the
+ * match outranked. (A tier-2 pair never outranks a flag, so it never conflicts.)
  */
 export type MovementConflict = "flag_ignored_matched" | "unplanned_on_matched";
 
@@ -130,13 +146,24 @@ export interface MovementRow extends SpendTxn {
 }
 
 export interface MovementContext extends SpendContext {
-  /** The household's tracked checking account: `isBankRow`'s third argument. Null with no bank account resolved. */
+  /**
+   * The household's tracked checking account: `isBankRow`'s third argument.
+   * Null with no bank account resolved — then no Plaid row is checking, while a
+   * manual row still is (see the file header).
+   */
   checkingAccountExternalId: string | null;
   /**
    * Transaction ids with a CONFIRMED bill match: a `forecast_resolutions` row
-   * with status `matched` or `partial` whose `matched_txn_id` is this row.
+   * with status `matched` or `partial` whose `matched_txn_id` is this row — or
+   * the pending row this posted row replaced (the loader carries it across).
    */
   matchedTxnIds: ReadonlySet<string>;
+  /**
+   * Transaction ids a tier-2 match pairs with a bill (step 2's second half),
+   * honoured only on a row with no allowance flag. Injected: PR8r supplies it
+   * from the match tiers. Omitted = empty.
+   */
+  tier2PairedTxnIds?: ReadonlySet<string>;
 }
 
 function timingOf(row: MovementRow, ctx: MovementContext): MovementTiming {
@@ -186,6 +213,7 @@ export function classifyMovement(
       break;
   }
 
+  // Step 2: a confirmed match beats every flag, and says which one it beat.
   if (ctx.matchedTxnIds.has(row.id)) {
     if (row.unplannedAllowance) {
       return { coverage: "bill_matched", timing, conflict: "unplanned_on_matched" };
@@ -193,6 +221,11 @@ export function classifyMovement(
     if (row.monthlyAllowance || row.weeklyAllowance) {
       return { coverage: "bill_matched", timing, conflict: "flag_ignored_matched" };
     }
+    return { coverage: "bill_matched", timing };
+  }
+  // …a tier-2 pair only where the household put no flag.
+  const flagged = row.unplannedAllowance || row.monthlyAllowance || row.weeklyAllowance;
+  if (!flagged && ctx.tier2PairedTxnIds?.has(row.id)) {
     return { coverage: "bill_matched", timing };
   }
   if (row.unplannedAllowance) return { coverage: "unplanned", timing };
@@ -216,9 +249,22 @@ export interface EverydayPlan {
   monthlyCents: number;
 }
 
-function toCents(v: string | number | null | undefined): number {
-  const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+/** Dollars as the web reads them: `Number(v)`, and a value that is not a finite number is absent. */
+function finiteDollars(v: string | number | null | undefined): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+const toCents = (dollars: number): number => Math.round(dollars * 100);
+
+/**
+ * Is `iso` a week start on the household clock — a real `YYYY-MM-DD` date that
+ * is the Sunday of its own Sunday–Saturday week (`weekBounds`)? An impossible
+ * date ("2026-02-30") never equals the week start `weekBounds` computes for it.
+ */
+export function isHouseholdWeekStart(iso: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) && weekBounds(iso).start === iso;
 }
 
 /**
@@ -228,20 +274,31 @@ function toCents(v: string | number | null | undefined): number {
  * is no per-period monthly override yet, so `monthlyCents` is always the
  * standing `monthlyAllowanceAmount`.
  *
- * Moved verbatim from the client's own computation (`command-center.tsx`'s
- * `weekView`, `allowances.tsx`): `override != null ? Number(override) :
- * Number(settings?.weeklyAllowanceAmount) || 0`. Today only the web app reads
- * `weeklyAllowanceOverrides`; this is the first server-side reader
- * (`moneyContext.ts`), so the client and server cannot compute two different
- * caps for the same week.
+ * Parsed the way the Allowances page parses it (`allowances.tsx`: the
+ * `weeklyOverrides` memo and the `planned` memo), so the server and that page
+ * quote the same cap for the same week:
+ *   - an override counts only when `Number(value)` is finite — "12abc", which
+ *     the settings PUT schema accepts as a string, falls back to the standing
+ *     amount instead of reading as $12;
+ *   - the standing amounts are `Number(value)`, and 0 when that is not finite;
+ *   - only a key that is a week start on the household clock
+ *     (`isHouseholdWeekStart`) is an override. The web only ever looks a week
+ *     up by its Sunday, so a key that is not one is never read there either;
+ *     here, a `periodStartSunday` that is not a Sunday gets the standing amount.
+ * ⚠️ `command-center.tsx`'s `weekView` reads an override with `Number(override)`
+ * and no finite check, so for an unparsable override it shows NaN where
+ * Allowances shows the standing amount. That page is not changed here.
  */
 export function everydayPlan(
   periodStartSunday: string,
   settings: AllowanceAmountSettings,
   overrides?: Readonly<Record<string, string | number>> | null,
 ): EverydayPlan {
-  const override = overrides ? overrides[periodStartSunday] : undefined;
-  const weeklyCents =
-    override != null ? toCents(override) : toCents(settings.weeklyAllowanceAmount);
-  return { weeklyCents, monthlyCents: toCents(settings.monthlyAllowanceAmount) };
+  const override =
+    overrides && isHouseholdWeekStart(periodStartSunday)
+      ? finiteDollars(overrides[periodStartSunday])
+      : null;
+  const weeklyDollars = override ?? finiteDollars(settings.weeklyAllowanceAmount) ?? 0;
+  const monthlyDollars = finiteDollars(settings.monthlyAllowanceAmount) ?? 0;
+  return { weeklyCents: toCents(weeklyDollars), monthlyCents: toCents(monthlyDollars) };
 }

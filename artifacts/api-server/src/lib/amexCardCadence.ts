@@ -4,12 +4,15 @@
 // the SAME per-card cadence — never two copies quietly drifting apart the way
 // the rest of this codebase's "one implementation" rule exists to prevent.
 //
-// ⚠️ THIS IS A MOVE, NOT A NEW CALCULATION. Every line of `discoverAmexCards`
-// is `computeWeeklyPayoff`'s own card-discovery block, unchanged; its callers'
-// outputs (`computeWeeklyPayoff`'s cards/combinedWeekCharges/
-// combinedStatementBalance, and `classifyAmexBrand`) stay byte-identical —
-// pinned by the existing Amex integration tests, which exercise the real
-// `/api/amex/weekly-payoff` route end to end.
+// ⚠️ THIS IS A MOVE, NOT A NEW CALCULATION. `discoverAmexCards` is
+// `computeWeeklyPayoff`'s own card-discovery block; its callers' outputs
+// (`computeWeeklyPayoff`'s cards/combinedWeekCharges/combinedStatementBalance,
+// and `classifyAmexBrand`) stay byte-identical — pinned by the existing Amex
+// integration tests, which exercise the real `/api/amex/weekly-payoff` route
+// end to end, and by `amexCardCadence.integration.test.ts`, which pins the
+// discovery filters, the brand defaults and the owner's overrides directly.
+// The one addition (round 2, review L1): a caller that has already read the
+// owner's settings row passes its `preferences` in, so the row is read once.
 
 import { and, eq, sql } from "drizzle-orm";
 import { db, plaidAccountsTable, plaidItemsTable, settingsTable } from "@workspace/db";
@@ -59,6 +62,17 @@ export interface AmexCardCadence {
   cadenceFor: (accountId: string) => "weekly" | "monthly";
 }
 
+export interface DiscoverAmexCardsOptions {
+  /**
+   * (PR-H round 2, review L1) The owner's `settings.preferences`, when the
+   * caller has already read that row — `loadMoneyContext` reads it for the
+   * allowance amounts. PRESENT, even as `null` or `undefined`, means "use
+   * these; do not read settings again". Omitted, they are read here for
+   * `ownerUserId` (what `computeWeeklyPayoff` does).
+   */
+  preferences?: unknown;
+}
+
 /**
  * ⭐ Amex card discovery + cadence, read once. `computeWeeklyPayoff` and
  * `moneyContext.ts`'s `loadMoneyContext` both call this instead of each
@@ -68,24 +82,25 @@ export interface AmexCardCadence {
 export async function discoverAmexCards(
   householdId: string,
   ownerUserId?: string,
+  opts: DiscoverAmexCardsOptions = {},
 ): Promise<AmexCardCadence> {
   // Per-card config (cadence + display name) from the owner's settings.
-  // Grouping/display metadata only — never changes a charge amount.
-  let cadenceMap: Record<string, string> = {};
-  let nameMap: Record<string, string> = {};
-  // Charges the user marked "not mine" (reimbursements) — excluded from the
-  // payoff sum so the per-card "to pay" reflects only household-owed money.
-  let excludedTxnIds = new Set<string>();
-  if (ownerUserId) {
+  // Grouping/display metadata only — never changes a charge amount. With no
+  // owner and nothing handed in, there is no config: every map is empty.
+  let preferences: unknown = opts.preferences;
+  if (!("preferences" in opts) && ownerUserId) {
     const [s] = await db
       .select({ preferences: settingsTable.preferences })
       .from(settingsTable)
       .where(eq(settingsTable.userId, ownerUserId));
-    const prefs = (s?.preferences as Record<string, unknown> | null | undefined) ?? {};
-    cadenceMap = (prefs.amexCardCadence as Record<string, string>) ?? {};
-    nameMap = (prefs.amexCardNames as Record<string, string>) ?? {};
-    excludedTxnIds = new Set((prefs.amexExcludedTxnIds as string[]) ?? []);
+    preferences = s?.preferences;
   }
+  const prefs = (preferences as Record<string, unknown> | null | undefined) ?? {};
+  const cadenceMap = (prefs.amexCardCadence as Record<string, string>) ?? {};
+  const nameMap = (prefs.amexCardNames as Record<string, string>) ?? {};
+  // Charges the user marked "not mine" (reimbursements) — excluded from the
+  // payoff sum so the per-card "to pay" reflects only household-owed money.
+  const excludedTxnIds = new Set((prefs.amexExcludedTxnIds as string[]) ?? []);
 
   // --- Discover the physical Amex credit cards -----------------------------
   // One Amex Plaid item = up to three physical cards (#748). Restrict to

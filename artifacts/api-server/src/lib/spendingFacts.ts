@@ -539,8 +539,8 @@ export async function buildSpendingFacts(
 // ── PR-H: the classifier's view of the same figure (parity only) ───────────
 
 /**
- * ⭐ (PR-H, owner decisions 7 and 12) `householdSpend.total` above, computed
- * from `classifyMovement` instead of `classifyOutflow` directly — the two
+ * ⭐ (PR-H, owner decisions 7 and 12) `householdSpend` above, computed from
+ * `classifyMovement` coverage instead of `classifyOutflow` directly — the two
  * cannot silently diverge on what counts as household spend once a caller
  * switches to this.
  *
@@ -549,18 +549,27 @@ export async function buildSpendingFacts(
  * read) and a second full pass over the range's rows for a number nothing
  * displays — exactly what this performance-conscious codebase's entry-graph
  * and query-shape rules exist to keep out. This is the switch PR8r/PR10 will
- * flip; `spendingFactsClassifierParity.integration.test.ts` proves it agrees
- * with `buildSpendingFacts` today (`billMatchedCounts: true`, the default)
- * and pins the TWO documented places they diverge — see
- * docs/reviews/2026-09-14-household-money-core.md:
- *   1. a confirmed bill match (`billMatchedCounts: false` previews decision
- *      12's forward rule: a matched row stops counting);
- *   2. a row that is BOTH `reimbursable` and carries an allowance flag —
- *      today's `classifyOutflow` excludes any reimbursable row outright
- *      (before it ever looks at a flag); this module's own precedence, as
- *      specified, lets an allowance flag (steps 3-5) outrank `reimbursable`
- *      (step 6), so such a row counts under the classifier always, not only
- *      in the forward mode.
+ * flip. See docs/reviews/2026-09-14-household-money-core.md.
+ *
+ * mode "today" (the default) IS `buildSpendingFacts().householdSpend`, total
+ * and count, on any ledger — checked on a seeded randomized ledger
+ * (`spendingFactsClassifierParity.integration.test.ts`) and over the spine's
+ * own month and week windows (`spineParity.integration.test.ts`). Two
+ * coverages need today's rule spelled out, because `classifyMovement` places
+ * them differently from `classifyOutflow`:
+ *   - a confirmed bill match counts like any other purchase (today's rule has
+ *     no idea of a match);
+ *   - (review M1) a reimbursable row never counts, whatever flag or match it
+ *     carries: today's rule 7 fires before either is looked at, while
+ *     `classifyMovement` lets a match (step 2) or a flag (steps 3-5) outrank
+ *     `reimbursable` (step 6).
+ * mode "forward" is coverage alone — what switching the figure onto
+ * `classifyMovement`, as section A specifies it, would do:
+ *   1. a confirmed match (carried to its posted row) stops counting —
+ *      decision 12: the bill is already in the plan;
+ *   2. a reimbursable row that carries an allowance flag counts under its
+ *      flag. The owner's 2026-09-15 rule ("a reimbursable charge shows as its
+ *      own row") says it should not; PR8r settles it before switching.
  *
  * `rows` must already be in EFFECTIVE-FILING form (`effectiveFiling`) with
  * replaced-pending rows left out — the same preparation `buildSpendingFacts`
@@ -570,9 +579,9 @@ export async function buildSpendingFacts(
 export function classifierHouseholdSpend(
   rows: readonly MovementRow[],
   ctx: MovementContext,
-  opts: { billMatchedCounts?: boolean } = {},
+  opts: { mode?: "today" | "forward" } = {},
 ): { total: number; transactionCount: number } {
-  const billMatchedCounts = opts.billMatchedCounts ?? true;
+  const mode = opts.mode ?? "today";
   let total = 0;
   let count = 0;
   for (const row of rows) {
@@ -582,8 +591,9 @@ export function classifierHouseholdSpend(
       coverage === "allowance_monthly" ||
       coverage === "allowance_weekly" ||
       coverage === "needs_classification" ||
-      (coverage === "bill_matched" && billMatchedCounts);
-    if (counts) {
+      (coverage === "bill_matched" && mode === "today");
+    // Today's rule 7: reimbursable is out before any flag or match counts.
+    if (counts && !(mode === "today" && row.reimbursable)) {
       total += spendAmount(row);
       count += 1;
     }

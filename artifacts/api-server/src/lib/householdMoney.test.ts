@@ -3,16 +3,23 @@
 // exercises `classifyCashRows` — no DB, but run inside the api-server suite so
 // they gate every push alongside the rest of the household-money foundation.
 
+import { writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   classifyMovement,
+  classifyOutflow,
   everydayPlan,
   isBankRow,
+  isHouseholdWeekStart,
+  isRealIncome,
   MOVEMENT_COVERAGES,
-  spendAmount,
+  PFC_CARD_PAYMENT,
+  type MovementClassification,
   type MovementContext,
   type MovementCoverage,
   type MovementRow,
+  type MovementTiming,
+  type OutflowKind,
 } from "@workspace/avalanche-core";
 
 const CHECKING = "chase-ext";
@@ -158,6 +165,76 @@ describe("classifyMovement — precedence", () => {
   });
 });
 
+describe("classifyMovement — targeted pins (review round 1, L4)", () => {
+  // Mutation M4: dropping `reimbursableIsSpend` lets `classifyOutflow`'s rule 7
+  // answer "reimbursable" BEFORE its card-payment rules, so a reimbursable card
+  // payment would fall through to steps 2-7 instead of stopping at step 1.
+  it("a reimbursable row that is a card payment is still a card payment (rules 8 and 9 run)", () => {
+    const byPattern = row({ reimbursable: true, description: "CRCARDPMT REF 42", weeklyAllowance: true });
+    expect(classifyMovement(byPattern, ctx()).coverage).toBe("card_payment");
+    const byPfc = row({ reimbursable: true, pfcDetailed: PFC_CARD_PAYMENT });
+    expect(classifyMovement(byPfc, ctx({ matchedTxnIds: new Set(["t1"]) })).coverage).toBe(
+      "card_payment",
+    );
+  });
+
+  it("a reimbursable bank-noise row is still folded into transfer", () => {
+    const r = row({ reimbursable: true, description: "PLANET FITNESS AUTOPAY" });
+    expect(classifyMovement(r, ctx()).coverage).toBe("transfer");
+  });
+
+  // Mutation M8: the unplanned conflict is checked first, so a matched row
+  // flagged BOTH unplanned and weekly/monthly reports the unplanned conflict.
+  it("a confirmed match on a row flagged unplanned AND weekly/monthly reports unplanned_on_matched", () => {
+    const matched = ctx({ matchedTxnIds: new Set(["t1"]) });
+    for (const extra of [{ weeklyAllowance: true }, { monthlyAllowance: true }]) {
+      const c = classifyMovement(row({ unplannedAllowance: true, ...extra }), matched);
+      expect(c).toMatchObject({ coverage: "bill_matched", conflict: "unplanned_on_matched" });
+    }
+  });
+});
+
+describe("classifyMovement — tier-2 pairs (injected; honoured only on a row with no flag)", () => {
+  const tier2 = (ids: string[]) => ctx({ tier2PairedTxnIds: new Set(ids) });
+
+  it("a tier-2 pair on an unflagged row reads bill_matched, with no conflict", () => {
+    const c = classifyMovement(row(), tier2(["t1"]));
+    expect(c.coverage).toBe("bill_matched");
+    expect(c.conflict).toBeUndefined();
+  });
+
+  it("a tier-2 pair never overrides an allowance flag: the row keeps its flag", () => {
+    expect(classifyMovement(row({ unplannedAllowance: true }), tier2(["t1"])).coverage).toBe("unplanned");
+    expect(classifyMovement(row({ monthlyAllowance: true }), tier2(["t1"])).coverage).toBe("allowance_monthly");
+    const weekly = classifyMovement(row({ weeklyAllowance: true }), tier2(["t1"]));
+    expect(weekly.coverage).toBe("allowance_weekly");
+    expect(weekly.conflict).toBeUndefined();
+  });
+
+  it("a tier-2 pair cannot pre-empt the core rule", () => {
+    expect(classifyMovement(row({ isTransfer: true }), tier2(["t1"])).coverage).toBe("transfer");
+    expect(classifyMovement(row({ debtId: "debt-1" }), tier2(["t1"])).coverage).toBe("debt_payment");
+  });
+
+  it("an unflagged reimbursable row on a tier-2 pair reads bill_matched (reimbursable is not an allowance flag)", () => {
+    expect(classifyMovement(row({ reimbursable: true }), tier2(["t1"])).coverage).toBe("bill_matched");
+  });
+
+  it("omitted, empty, or naming another row: no effect", () => {
+    expect(classifyMovement(row(), ctx()).coverage).toBe("needs_classification");
+    expect(classifyMovement(row(), tier2([])).coverage).toBe("needs_classification");
+    expect(classifyMovement(row(), tier2(["t2"])).coverage).toBe("needs_classification");
+  });
+
+  it("a confirmed match still wins on a flagged row, and still reports the flag it beat", () => {
+    const both = ctx({ matchedTxnIds: new Set(["t1"]), tier2PairedTxnIds: new Set(["t1"]) });
+    expect(classifyMovement(row({ weeklyAllowance: true }), both)).toMatchObject({
+      coverage: "bill_matched",
+      conflict: "flag_ignored_matched",
+    });
+  });
+});
+
 describe("classifyMovement — timing", () => {
   it("a row on the tracked checking account is 'checking'", () => {
     const c = classifyMovement(row(), ctx());
@@ -188,12 +265,25 @@ describe("classifyMovement — timing", () => {
     expect(isBankRow(r.source, r.plaidAccountId, CHECKING)).toBe(false);
     expect(c.timing.kind).not.toBe("checking");
   });
+
+  // (review N2) With no resolved checking account the cash rule still counts a
+  // manual row as the account's own, so the money model must too.
+  it("no resolved checking account: a manual row is still 'checking', a Plaid row never is", () => {
+    const noAccount = ctx({ checkingAccountExternalId: null });
+    const manual = row({ source: "manual", plaidAccountId: null });
+    expect(classifyMovement(manual, noAccount).timing).toEqual({ kind: "checking", date: "2026-09-01" });
+    expect(isBankRow("manual", null, null)).toBe(true);
+    const plaid = row({ source: "plaid:chase", plaidAccountId: CHECKING });
+    expect(classifyMovement(plaid, noAccount).timing).toEqual({ kind: "none" });
+  });
 });
 
-// ── Property test: every row gets exactly one coverage, precedence holds,
-// conflicts are reported — over a large randomized space. Deterministic
-// (seeded), no external dependency: this repo does not carry a property-test
-// library, so a small mulberry32 PRNG stands in for one.
+// ── Property test (review N3): every row gets exactly one coverage and one
+// timing, and the answer is the one plan section A specifies — checked against
+// an independent model of the spec over seeded rows built so that EVERY
+// precedence path, conflict and tier-2 branch is actually reached. The hit
+// counts are asserted, so a generator that stops reaching a path fails.
+// Deterministic (seeded mulberry32), no external dependency.
 function mulberry32(seed: number): () => number {
   let a = seed;
   return () => {
@@ -205,99 +295,199 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-const SOURCES = ["plaid:chase", "amex", "plaid:amex", "manual", "plaid:othercard"];
-const DESCRIPTIONS = ["CORNER BISTRO", "ONLINE TRANSFER TO CHK", "CRCARDPMT REF 991", "PAYCHECK DEPOSIT"];
+/** Plan section A, written out as its own model — not a copy of the implementation's control flow. */
+function specClassification(r: MovementRow, c: MovementContext): MovementClassification {
+  const onCardLedger = ["amex", "plaid:amex"].includes(r.source.toLowerCase());
+  const timing: MovementTiming = isBankRow(r.source, r.plaidAccountId, c.checkingAccountExternalId)
+    ? { kind: "checking", date: r.occurredOn }
+    : onCardLedger
+      ? { kind: "card", accountId: r.plaidAccountId ?? r.source, date: r.occurredOn }
+      : { kind: "none" };
 
-describe("classifyMovement — property: exactly one coverage, precedence holds", () => {
-  const rnd = mulberry32(20260914);
-  const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length)]!;
-  const bool = (p = 0.5) => rnd() < p;
+  // 1. The core rule decides transfer / debt / card payment / income / excluded.
+  const core = classifyOutflow(r, c, { reimbursableIsSpend: true });
+  if (core.kind === "not_outflow") {
+    return { coverage: isRealIncome(r, c) ? "income" : "excluded", timing };
+  }
+  const step1: Partial<Record<OutflowKind, MovementCoverage>> = {
+    transfer: "transfer",
+    bank_noise: "transfer",
+    debt_payment: "debt_payment",
+    card_payment: "card_payment",
+    excluded_category: "excluded",
+    income: "income",
+  };
+  const decided = step1[core.kind];
+  if (decided) return { coverage: decided, timing };
 
+  const flags = { unplanned: r.unplannedAllowance, monthly: r.monthlyAllowance, weekly: r.weeklyAllowance };
+  const anyFlag = flags.unplanned || flags.monthly || flags.weekly;
+  // 2. A confirmed match (conflicts reported), or a tier-2 pair with no flag.
+  if (c.matchedTxnIds.has(r.id)) {
+    const conflict = flags.unplanned
+      ? "unplanned_on_matched"
+      : anyFlag
+        ? "flag_ignored_matched"
+        : undefined;
+    return conflict ? { coverage: "bill_matched", timing, conflict } : { coverage: "bill_matched", timing };
+  }
+  if (!anyFlag && (c.tier2PairedTxnIds ?? new Set()).has(r.id)) return { coverage: "bill_matched", timing };
+  // 3-7.
+  const ladder: [boolean, MovementCoverage][] = [
+    [flags.unplanned, "unplanned"],
+    [flags.monthly, "allowance_monthly"],
+    [flags.weekly, "allowance_weekly"],
+    [r.reimbursable, "reimbursable"],
+  ];
+  for (const [on, coverage] of ladder) if (on) return { coverage, timing };
+  return { coverage: "needs_classification", timing };
+}
+
+describe("classifyMovement — property: exactly one coverage, the spec's precedence, every path hit", () => {
+  const N = 6000;
+  const MIN_HITS = 25;
   const categoriesById = new Map<string, { name: string; debtId: string | null; kind: string }>([
     ["cat-plain", { name: "Groceries", debtId: null, kind: "expense" }],
+    ["cat-uncat", { name: "Uncategorized", debtId: null, kind: "expense" }],
     ["cat-debt", { name: "Card Payoff", debtId: "debt-1", kind: "expense" }],
-    ["cat-excluded", { name: "Transfer", debtId: null, kind: "expense" }],
+    ["cat-ignore", { name: "Ignore", debtId: null, kind: "expense" }],
+    ["cat-transfer", { name: "Transfer", debtId: null, kind: "expense" }],
     ["cat-income", { name: "Paycheck", debtId: null, kind: "income" }],
   ]);
   const debtCategoryIds = new Set(["cat-debt"]);
-  const categoryIds = [null, "cat-plain", "cat-debt", "cat-excluded", "cat-income"];
+  const MERCHANTS = ["CORNER BISTRO", "GREEN GROCER", "HARDWARE DEPOT", "CITY PHARMACY"];
+  const ACCOUNTS: { source: string; plaidAccountId: string | null }[] = [
+    { source: "plaid:chase", plaidAccountId: CHECKING },
+    { source: "plaid:chase", plaidAccountId: "savings-ext" },
+    { source: "plaid:amex", plaidAccountId: "amex-ext" },
+    { source: "amex", plaidAccountId: null },
+    { source: "manual", plaidAccountId: null },
+  ];
+  // One trigger for the core rule (step 1) on 40% of rows; the rest reach step 2.
+  type Trigger = (r: MovementRow) => void;
+  const TRIGGERS: Trigger[] = [
+    (r) => (r.isTransfer = true),
+    (r) => (r.debtId = "debt-2"),
+    (r) => (r.isExternalCardPayment = true),
+    (r) => (r.categoryId = "cat-debt"),
+    (r) => (r.categoryId = "cat-ignore"),
+    (r) => (r.categoryId = "cat-transfer"),
+    (r) => (r.categoryId = "cat-income"),
+    (r) => (r.pfcDetailed = PFC_CARD_PAYMENT),
+    (r) => (r.description = "CRCARDPMT REF 991"),
+    (r) => (r.description = "ONLINE TRANSFER TO CHK"),
+    (r) => (r.amount = -Number(r.amount)), // an inflow
+    (r) => {
+      r.amount = -Number(r.amount); // an inflow in an income category: real income
+      r.categoryId = "cat-income";
+    },
+    (r) => (r.amount = 0),
+  ];
 
-  for (let i = 0; i < 500; i += 1) {
-    it(`random row #${i}`, () => {
-      const amountSign = bool() ? -1 : 1;
-      const source = pick(SOURCES);
-      const amount = (amountSign * Math.round(rnd() * 30000)) / 100;
+  it(`${N} seeded rows: each equals the spec model, and every precedence path is reached at least ${MIN_HITS} times`, () => {
+    const rnd = mulberry32(20260915);
+    const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length)]!;
+    const bool = (p: number) => rnd() < p;
+    const hits = new Map<string, number>();
+    const hit = (k: string) => hits.set(k, (hits.get(k) ?? 0) + 1);
+
+    for (let i = 0; i < N; i += 1) {
+      const account = pick(ACCOUNTS);
+      const magnitude = Math.round(1 + rnd() * 29999) / 100;
       const r: MovementRow = {
         id: `row-${i}`,
         occurredOn: "2026-09-01",
-        amount,
-        source,
-        isTransfer: bool(0.1),
-        categoryId: pick(categoryIds),
-        description: pick(DESCRIPTIONS),
-        debtId: bool(0.1) ? "debt-2" : null,
-        isExternalCardPayment: bool(0.05),
-        reimbursable: bool(0.15),
-        pfcDetailed: bool(0.05) ? "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" : null,
-        plaidAccountId: bool(0.7) ? CHECKING : "some-other-acct",
-        unplannedAllowance: bool(0.15),
-        monthlyAllowance: bool(0.15),
-        weeklyAllowance: bool(0.15),
+        amount: account.source === "amex" ? magnitude : -magnitude,
+        source: account.source,
+        isTransfer: false,
+        categoryId: pick([null, "cat-plain", "cat-uncat", "cat-deleted"]),
+        description: pick(MERCHANTS),
+        debtId: null,
+        isExternalCardPayment: false,
+        reimbursable: bool(0.3),
+        pfcDetailed: null,
+        plaidAccountId: account.plaidAccountId,
+        unplannedAllowance: bool(0.35),
+        monthlyAllowance: bool(0.35),
+        weeklyAllowance: bool(0.35),
       };
-      const matched = bool(0.2);
-      const c = classifyMovement(
-        r,
-        ctx({
-          categoriesById,
-          debtCategoryIds,
-          matchedTxnIds: matched ? new Set([r.id]) : new Set(),
-        }),
-      );
+      if (bool(0.4)) pick(TRIGGERS)(r);
+      const matched = bool(0.25);
+      const tier2 = bool(0.3);
+      const c = ctx({
+        categoriesById,
+        debtCategoryIds,
+        checkingAccountExternalId: bool(0.8) ? CHECKING : null,
+        matchedTxnIds: matched ? new Set([r.id]) : new Set(),
+        tier2PairedTxnIds: tier2 ? new Set([r.id]) : bool(0.5) ? new Set(["someone-else"]) : undefined,
+      });
 
-      // Exactly one coverage, and it is a real one.
-      expect(MOVEMENT_COVERAGES).toContain(c.coverage);
+      const got = classifyMovement(r, c);
+      expect(MOVEMENT_COVERAGES).toContain(got.coverage);
+      expect(got, `row ${i}`).toEqual(specClassification(r, c));
 
-      // Exactly one timing, and it agrees with isBankRow's own verdict.
-      const isChecking = isBankRow(r.source, r.plaidAccountId, CHECKING);
-      expect(c.timing.kind === "checking").toBe(isChecking);
-
-      // Precedence: isTransfer/debtId only decide an actual OUTFLOW — like
-      // `classifyOutflow`, an inflow (or a zero amount) is "not_outflow"
-      // regardless of either flag, so these two only apply when the row is
-      // one (`spendAmount(r) > 0`).
-      const isOutflow = spendAmount(r) > 0;
-      if (isOutflow && r.isTransfer) expect(c.coverage).toBe("transfer");
-      if (isOutflow && !r.isTransfer && r.debtId) expect(c.coverage).toBe("debt_payment");
-
-      // A confirmed match, once it reaches step 2 (nothing in the core rule
-      // fired first), always reads as bill_matched — never left at a flag or
-      // reimbursable or needs_classification coverage instead.
-      const coreDecided: MovementCoverage[] = [
-        "transfer",
-        "debt_payment",
-        "card_payment",
-        "income",
-        "excluded",
-      ];
-      if (matched && !coreDecided.includes(c.coverage)) {
-        expect(c.coverage).toBe("bill_matched");
+      // Tally which branch of the spec this row took.
+      const core = classifyOutflow(r, c, { reimbursableIsSpend: true });
+      const anyFlag = r.unplannedAllowance || r.monthlyAllowance || r.weeklyAllowance;
+      hit(`timing:${got.timing.kind}`);
+      if (got.timing.kind === "checking" && c.checkingAccountExternalId === null) hit("timing:checking-with-no-account");
+      if (core.kind === "not_outflow") hit(`step1:inflow->${got.coverage}`);
+      else if (core.kind !== "spend") {
+        hit(`step1:${core.kind}`);
+        if (r.reimbursable && core.kind === "card_payment") hit("step1:card_payment-over-reimbursable");
+      } else if (matched) {
+        hit(got.conflict ? `step2:confirmed+${got.conflict}` : "step2:confirmed");
+        if (r.unplannedAllowance && (r.weeklyAllowance || r.monthlyAllowance)) hit("step2:confirmed+unplanned+other-flag");
+        if (tier2) hit("step2:confirmed-and-tier2");
+      } else if (tier2 && !anyFlag) {
+        hit("step2:tier2");
+      } else {
+        if (tier2) hit("tier2-ignored:flagged");
+        hit(`step3-7:${got.coverage}`);
+        if (r.reimbursable && anyFlag) hit("step3-5:flag-over-reimbursable");
+        if (r.unplannedAllowance && (r.monthlyAllowance || r.weeklyAllowance)) hit("step3:unplanned-over-other-flag");
+        if (!r.unplannedAllowance && r.monthlyAllowance && r.weeklyAllowance) hit("step4:monthly-over-weekly");
       }
+    }
 
-      // Conflicts are reported ONLY alongside bill_matched, and only for the
-      // flag combination that produces them.
-      if (c.conflict) {
-        expect(c.coverage).toBe("bill_matched");
-        if (c.conflict === "unplanned_on_matched") expect(r.unplannedAllowance).toBe(true);
-        if (c.conflict === "flag_ignored_matched") {
-          expect(r.unplannedAllowance).toBe(false);
-          expect(r.monthlyAllowance || r.weeklyAllowance).toBe(true);
-        }
-      } else if (c.coverage === "bill_matched") {
-        // No flag at all: a clean match, no conflict to report.
-        expect(r.unplannedAllowance || r.monthlyAllowance || r.weeklyAllowance).toBe(false);
-      }
-    });
-  }
+    const required = [
+      "timing:checking",
+      "timing:card",
+      "timing:none",
+      "timing:checking-with-no-account",
+      "step1:transfer",
+      "step1:bank_noise",
+      "step1:debt_payment",
+      "step1:card_payment",
+      "step1:card_payment-over-reimbursable",
+      "step1:excluded_category",
+      "step1:income",
+      "step1:inflow->income",
+      "step1:inflow->excluded",
+      "step2:confirmed",
+      "step2:confirmed+flag_ignored_matched",
+      "step2:confirmed+unplanned_on_matched",
+      "step2:confirmed+unplanned+other-flag",
+      "step2:confirmed-and-tier2",
+      "step2:tier2",
+      "tier2-ignored:flagged",
+      "step3-7:unplanned",
+      "step3:unplanned-over-other-flag",
+      "step3-7:allowance_monthly",
+      "step4:monthly-over-weekly",
+      "step3-7:allowance_weekly",
+      "step3-5:flag-over-reimbursable",
+      "step3-7:reimbursable",
+      "step3-7:needs_classification",
+    ];
+    // For the review note: PRH_PRINT_HITS=<file> writes the tally there.
+    if (process.env.PRH_PRINT_HITS) {
+      writeFileSync(process.env.PRH_PRINT_HITS, JSON.stringify(Object.fromEntries([...hits].sort()), null, 2));
+    }
+    for (const key of required) {
+      expect(hits.get(key) ?? 0, key).toBeGreaterThanOrEqual(MIN_HITS);
+    }
+  });
 });
 
 describe("everydayPlan", () => {
@@ -334,8 +524,55 @@ describe("everydayPlan", () => {
     expect(everydayPlan("2026-09-06", settings, { "2026-09-06": 175 }).weeklyCents).toBe(17500);
   });
 
-  it("an unparsable amount is treated as zero, never NaN", () => {
+  it("an unparsable standing amount is treated as zero, never NaN", () => {
     const bad = { weeklyAllowanceAmount: "not-a-number", monthlyAllowanceAmount: null };
     expect(everydayPlan("2026-09-06", bad)).toEqual({ weeklyCents: 0, monthlyCents: 0 });
+  });
+
+  // (review L3) The PUT schema accepts any string. `parseFloat("12abc")` is 12;
+  // the Allowances page reads `Number("12abc")` (NaN) as no override.
+  it("an override that is not a finite number falls back to the standing amount", () => {
+    for (const bad of ["12abc", "abc", "Infinity", "NaN", "1,200"]) {
+      expect(everydayPlan("2026-09-06", settings, { "2026-09-06": bad }).weeklyCents, bad).toBe(15000);
+    }
+  });
+
+  it("an override parses like Number(): padding and exponent forms read as the web reads them", () => {
+    expect(everydayPlan("2026-09-06", settings, { "2026-09-06": " 175.50 " }).weeklyCents).toBe(17550);
+    expect(everydayPlan("2026-09-06", settings, { "2026-09-06": "1e2" }).weeklyCents).toBe(10000);
+    expect(everydayPlan("2026-09-06", settings, { "2026-09-06": "0" }).weeklyCents).toBe(0);
+  });
+
+  it("a key that is not a week start on the household clock is ignored", () => {
+    // Monday 2026-09-07; an impossible date; a non-ISO spelling.
+    expect(everydayPlan("2026-09-07", settings, { "2026-09-07": "999.00" }).weeklyCents).toBe(15000);
+    expect(everydayPlan("2026-02-29", settings, { "2026-02-29": "999.00" }).weeklyCents).toBe(15000);
+    expect(everydayPlan("2026-9-6", settings, { "2026-9-6": "999.00" }).weeklyCents).toBe(15000);
+  });
+
+  it("isHouseholdWeekStart: a real Sunday only", () => {
+    expect(isHouseholdWeekStart("2026-09-06")).toBe(true);
+    expect(isHouseholdWeekStart("2026-01-04")).toBe(true);
+    expect(isHouseholdWeekStart("2026-11-01")).toBe(true); // the DST-change Sunday
+    expect(isHouseholdWeekStart("2026-09-07")).toBe(false);
+    expect(isHouseholdWeekStart("2026-09-12")).toBe(false);
+    expect(isHouseholdWeekStart("2026-02-30")).toBe(false);
+    expect(isHouseholdWeekStart("2026-9-6")).toBe(false);
+    expect(isHouseholdWeekStart("")).toBe(false);
+  });
+
+  it("agrees with the Allowances page's own formula, value by value", () => {
+    // allowances.tsx: the `weeklyOverrides` memo keeps an entry only when
+    // Number(v) is finite; the `planned` memo uses it, else
+    // Number(settings.weeklyAllowanceAmount) || 0.
+    const webWeeklyDollars = (raw: string | number, standing: string) => {
+      const n = Number(raw);
+      const override = Number.isFinite(n) ? n : undefined;
+      return override != null ? override : Number(standing) || 0;
+    };
+    for (const raw of ["200.00", "12abc", "", " 99.5", "1e3", "-5", "0", 175, "NaN", "Infinity", "7.005"]) {
+      const server = everydayPlan("2026-09-06", settings, { "2026-09-06": raw }).weeklyCents;
+      expect(server, String(raw)).toBe(Math.round(webWeeklyDollars(raw, settings.weeklyAllowanceAmount) * 100));
+    }
   });
 });

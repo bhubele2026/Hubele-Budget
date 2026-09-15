@@ -150,37 +150,41 @@ export interface ClassifierBudgetMonthRow
 
 /**
  * ⭐ (PR-H, owner decisions 6, 14, and 7/12) The allowance card's bucket rows,
- * computed from `classifyMovement` instead of this file's own flag-only
- * bucket rule (`unplanned > monthly > weekly`, no bill-match awareness).
+ * computed from `classifyMovement` instead of this file's own bucket rule
+ * (`unplanned > monthly > weekly` after four screens: transfer, external card
+ * payment, reimbursable, debt tag).
  *
  * ⚠️ NOT CALLED BY `aggregateBudgetMonth` YET — see `spendingFacts.ts`'s
  * `classifierHouseholdSpend` for why (no query, no second pass, for a number
  * nothing displays), and docs/reviews/2026-09-14-household-money-core.md for
  * the wiring plan.
  *
- * `billMatchedCounts: true` (the default) reproduces TODAY's rule exactly: a
- * confirmed bill match has no say in the bucket, so a matched row still
- * buckets by its own flag. `billMatchedCounts: false` previews decision 12's
- * forward rule (PR8r/PR10): a confirmed match wins over any flag, so a
- * matched row buckets NOWHERE — the bill is already counted in the plan, and
- * must not also count against an allowance envelope. That is the FIRST
- * documented difference (`budgetActuals.test.ts`).
+ * mode "today" (the default) keeps today's handling of the two things
+ * `classifyMovement` places differently: a confirmed match buckets by its own
+ * flag, and a reimbursable row buckets nowhere.
  *
- * ⚠️ A SECOND, independent difference is always live here, in both modes: a
- * row that is BOTH `reimbursable` and flagged. Today's `aggregateBudgetMonth`
- * gates on `!reimbursable` before ever looking at a flag, so such a row
- * buckets nowhere. `classifyMovement`'s precedence, as specified, lets the
- * flag (steps 3-5) outrank `reimbursable` (step 6), so the classifier always
- * buckets it — see `budgetActuals.test.ts`'s dedicated test.
+ * ⚠️ EVEN SO IT IS NOT ROW FOR ROW `aggregateBudgetMonth` (review H1). Today's
+ * rule screens only the four things above; the classifier also drops every
+ * flagged row the one spending rule (`classifyOutflow`) excludes — a refund
+ * or other non-outflow, a debt-linked / excluded / income category, a Plaid
+ * card payment, a card-payment or bank-noise description. Those classes are
+ * enumerated, and pinned exactly, by `budgetActuals.test.ts`'s randomized
+ * comparison; the review note lists each for the owner.
+ *
+ * mode "forward" is coverage alone (PR8r/PR10): on top of the classes above, a
+ * confirmed match buckets NOWHERE — the bill is already counted in the plan
+ * (decision 12) — and a reimbursable row buckets under its flag, which the
+ * owner's 2026-09-15 rule ("a reimbursable charge shows as its own row") says
+ * it should not; PR8r settles that before switching.
  */
 export function classifierAllowanceRows(
   rows: readonly ClassifierBudgetMonthRow[],
   supersede: Pick<SupersededPending, "replacedIds" | "replacedBy">,
   ctx: FilingContext,
   movement: MovementContext,
-  opts: { billMatchedCounts?: boolean } = {},
+  opts: { mode?: "today" | "forward" } = {},
 ): AllowanceAggregateRow[] {
-  const billMatchedCounts = opts.billMatchedCounts ?? true;
+  const mode = opts.mode ?? "today";
   const out: AllowanceAggregateRow[] = [];
 
   for (const row of rows) {
@@ -198,7 +202,7 @@ export function classifierAllowanceRows(
     if (coverage === "unplanned") bucket = "unplanned";
     else if (coverage === "allowance_monthly") bucket = "monthly";
     else if (coverage === "allowance_weekly") bucket = "weekly";
-    else if (coverage === "bill_matched" && billMatchedCounts) {
+    else if (coverage === "bill_matched" && mode === "today") {
       // Reproduce today's rule verbatim: a matched row is not special-cased,
       // so it still buckets by whichever flag it carries.
       bucket = t.unplannedAllowance
@@ -210,6 +214,8 @@ export function classifierAllowanceRows(
             : null;
     }
     if (!bucket) continue;
+    // Today's rule screens reimbursable before any flag or match.
+    if (mode === "today" && t.reimbursable) continue;
 
     const cents = centsOf(row.amount);
     const spend = spendCents(row.source, cents);
