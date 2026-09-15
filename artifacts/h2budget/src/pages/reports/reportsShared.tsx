@@ -147,6 +147,7 @@ export function ChartCard({
   height = 320,
   right,
   testId,
+  banner,
 }: {
   title: string;
   /** The disclosure — what this counts, or which basis it uses. */
@@ -158,6 +159,14 @@ export function ChartCard({
   /** Optional control rendered at the right of the card head. */
   right?: ReactNode;
   testId?: string;
+  /**
+   * A notice between the head and the body, such as a refresh-failed
+   * `RefreshBanner`. ⚠️ It sits OUTSIDE the fixed-height chart box and grows
+   * the card instead. Inside the box it took its height from the chart and
+   * pushed the chart's bottom, date labels included, past the card's clipped
+   * edge. It shows over the empty state too.
+   */
+  banner?: ReactNode;
 }) {
   if (empty && hideWhenEmpty) return null;
   return (
@@ -167,6 +176,9 @@ export function ChartCard({
         {help && <Help>{help}</Help>}
         {right}
       </div>
+      {/* The banner keeps its own bottom margin; -mb-3 takes back the body's
+          top padding so the gap under it isn't doubled. */}
+      {banner ? <div className="-mb-3 px-4 pt-3">{banner}</div> : null}
       {empty ? (
         <div className={emptyNote} style={{ height }}>
           <span className="flex h-full items-center justify-center">{empty}</span>

@@ -3,12 +3,9 @@ import {
   useListTransactions,
   useListCategories,
   useListRecurringItems,
-  useGetForecast,
   useGetForecastCashSignal,
   type Transaction,
   type RecurringItem,
-  type ForecastBundle,
-  type BankSnapshot,
   type CashSignal,
   type CashSignalDailyItem,
 } from "@workspace/api-client-react";
@@ -113,49 +110,89 @@ const SERIES = {
 // is told matches the number that was asked for.
 const TXN_FETCH_LIMIT = 2000;
 
-// (Owner decision 16) The "Forecast balance" card shares the Forecast page's
-// own signal: same account scope, same balance anchor, same treatment of
-// pending activity, same daily calculation. Both call `computeCashSignal`
-// (`GET /forecast/cash-signal`) — this page never rolls its own balance
-// forward from `settings.startingBalance` again.
+// (Owner decision 16) The forecast card shares the Forecast page's own signal:
+// same account scope, same balance anchor, same treatment of pending activity,
+// same daily calculation. Both call `computeCashSignal`
+// (`GET /forecast/cash-signal`), so this page never rolls a balance forward
+// from the settings row's starting balance again.
 export const CASHFLOW_FORECAST_HORIZON_DAYS = 90;
 
 /**
- * The card's balance series is the cash signal's own `daily[]` — nothing
- * recomputed. `daily[0]` is the anchor day (today, since this page never
- * overrides `fromDate`); `daily[90]` is the 90th day out.
+ * The card's balance series is the cash signal's own `daily[]`, nothing
+ * recomputed. `daily[0]` is the anchor day (the household's today: this page
+ * sends no `fromDate`); `daily[90]` is the 90th day out.
+ *
+ * A missing or blank balance is dropped, never plotted: `Number("")` and
+ * `Number(null)` are both 0, which would draw a $0 point that isn't there.
+ * A real "0.00" still plots.
  */
 export function cashFlowForecastSeries(
   daily: ReadonlyArray<CashSignalDailyItem> | null | undefined,
 ): Array<{ date: string; balance: number }> {
   if (!daily) return [];
-  return daily
-    .map((d) => ({ date: d.date, balance: Number(d.balance) }))
-    .filter((d) => Number.isFinite(d.balance));
+  const out: Array<{ date: string; balance: number }> = [];
+  for (const d of daily) {
+    const raw: unknown = d.balance;
+    const balance =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string" && raw.trim() !== ""
+          ? Number(raw)
+          : NaN;
+    if (Number.isFinite(balance)) out.push({ date: d.date, balance });
+  }
+  return out;
+}
+
+type CardAccount = Pick<CashSignal["account"], "name" | "mask" | "subtype" | "via">;
+
+/**
+ * "Test Bank ••0001 checking": the account's own name and mask, then its Plaid
+ * subtype when the name doesn't already say it. The kind word is the account's
+ * own subtype, never an assumed "checking", so a savings account never reads
+ * as checking.
+ */
+export function cashFlowAccountLabel(account: CardAccount): string {
+  const name = (account.name ?? "").trim();
+  const mask = (account.mask ?? "").trim();
+  const kind = (account.subtype ?? "").trim().toLowerCase();
+  const parts = [
+    name,
+    mask ? `••${mask}` : "",
+    kind && !name.toLowerCase().includes(kind) ? kind : "",
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : "bank account";
 }
 
 /**
- * (Owner decision 16) The card's title names its scope from the SAME source
- * the Forecast page's bank card reads (`bankSnapshot.name`/`.mask`) — never a
- * figure built from `settings.startingBalance`.
+ * (Owner decision 16; PR-K round 2, L1) The card's title names its scope from
+ * the SAME response as its figures: `cashSignal.account`, the account
+ * `resolveSnapshotAccount` resolved and the curve rolled forward on. It always
+ * says "Forecast" and always gives the horizon. The scope comes before the
+ * horizon, so a narrow screen truncates the horizon rather than the account.
  *
- *   - No bank snapshot has ever been set: say so plainly.
- *   - A snapshot exists: name it, e.g. "Chase ••1234 checking" — the word
- *     "checking" only when the account's own name doesn't already say it, so
- *     the title never reads "Checking checking".
- *   - The forecast bundle hasn't answered yet (`undefined`): a neutral
- *     placeholder, never a premature "no bank balance set" claim.
+ *   - no signal yet (loading or failed): "Forecast balance · next 90 days"
+ *   - no bank snapshot (`no_data`): "Forecast · no bank balance set · next 90 days"
+ *   - no account resolved (the balance stays at the raw snapshot):
+ *     "Forecast · bank account not identified · next 90 days"
+ *   - otherwise: "Forecast · Test Bank ••0001 checking · next 90 days"
  */
 export function cashFlowCardTitle(
-  bankSnapshot: Pick<BankSnapshot, "name" | "mask"> | null | undefined,
+  signal:
+    | (Pick<CashSignal, "status"> & { account?: CardAccount | null })
+    | null
+    | undefined,
   horizonDays: number,
 ): string {
-  if (bankSnapshot === null) return "Checking (no bank balance set)";
-  const base = (bankSnapshot?.name ?? "").trim() || "Checking";
-  const maskSuffix = bankSnapshot?.mask ? ` ••${bankSnapshot.mask}` : "";
-  const needsCheckingWord = !/checking/i.test(base);
-  const label = `${base}${maskSuffix}${needsCheckingWord ? " checking" : ""}`;
-  return `${label} · next ${horizonDays} days`;
+  const horizon = `next ${horizonDays} days`;
+  if (!signal) return `Forecast balance · ${horizon}`;
+  if (signal.status === "no_data") return `Forecast · no bank balance set · ${horizon}`;
+  const account = signal.account;
+  if (!account) return `Forecast balance · ${horizon}`;
+  if (account.via === "unresolved") {
+    return `Forecast · bank account not identified · ${horizon}`;
+  }
+  return `Forecast · ${cashFlowAccountLabel(account)} · ${horizon}`;
 }
 
 export default function CashFlowPage() {
@@ -200,13 +237,13 @@ export default function CashFlowPage() {
   const clipped = (txns?.length ?? 0) >= TXN_FETCH_LIMIT;
   const { data: categories } = useListCategories();
   const { data: recurringItems } = useListRecurringItems();
-  // Bank-snapshot metadata only (name/mask for the forecast card's title) —
-  // the balance itself comes from the cash signal below, never from this
-  // bundle's `settings.startingBalance`.
-  const { data: forecast } = useGetForecast({ days: CASHFLOW_FORECAST_HORIZON_DAYS });
-  // (Owner decision 16) Same endpoint, same horizon and default `fromDate`
-  // (today — this page never opens a look-back) as the Forecast page's own
-  // 90-day tab, so the two can never disagree for the same date and scope.
+  // (Owner decision 16; PR-K round 2, M1) Exactly `{ horizonDays: 90 }`, with
+  // no `fromDate`. That is the query key Forecast Overview, the nav/landing
+  // prefetch (`layout.tsx`, `useLandingWarmup.ts`) and the Forecast page's
+  // 90-day tab with look-back closed all use, so they read ONE cache entry and
+  // can't show two balances for one day. The Forecast page's other tabs are
+  // other horizons with their own entries. The title's account comes from this
+  // same response (L1), so the page no longer fetches the `/forecast` bundle.
   const cashSignalQuery = useGetForecastCashSignal({
     horizonDays: CASHFLOW_FORECAST_HORIZON_DAYS,
   });
@@ -269,7 +306,6 @@ export default function CashFlowPage() {
         catNameById={catNameById}
         excludedCategoryIds={excludedCategoryIds}
         recurringItems={recurringItems ?? []}
-        forecast={forecast ?? null}
         cashSignal={cashSignalQuery.data ?? null}
         cashSignalState={cashSignalState}
         cashSignalUpdatedAt={
@@ -299,7 +335,6 @@ function CashFlowSection({
   catNameById,
   excludedCategoryIds,
   recurringItems,
-  forecast,
   cashSignal,
   cashSignalState,
   cashSignalUpdatedAt,
@@ -313,8 +348,7 @@ function CashFlowSection({
   catNameById: Map<string, string>;
   excludedCategoryIds: ReadonlySet<string>;
   recurringItems: RecurringItem[];
-  /** Bank-snapshot metadata only (name/mask) — see the field comment above. */
-  forecast: ForecastBundle | null;
+  /** The forecast card's figures AND its title's account, from one response. */
   cashSignal: CashSignal | null;
   cashSignalState: DataState;
   cashSignalUpdatedAt: string | null;
@@ -397,7 +431,7 @@ function CashFlowSection({
   const forecastHasData =
     forecastSeries.length > 0 && cashSignal?.status !== "no_data";
   const forecastCardTitle = cashFlowCardTitle(
-    forecast?.bankSnapshot,
+    cashSignal,
     CASHFLOW_FORECAST_HORIZON_DAYS,
   );
   const forecastCardHelp =
@@ -632,6 +666,22 @@ function CashFlowSection({
           title={forecastCardTitle}
           help={forecastCardHelp}
           testId="cashflow-forecast-card"
+          // (PR-K round 2, L3) A failed refresh keeps the last good curve and
+          // says so ABOVE the chart box, never inside it. Inside, the banner
+          // took its height from the fixed 320px box and pushed the chart's
+          // bottom, date labels included, past the card's clipped edge. The
+          // slot also shows the banner over the no-data empty state.
+          banner={
+            cashSignalState === "refresh-failed" ? (
+              <RefreshBanner
+                state={cashSignalState}
+                updatedAt={cashSignalUpdatedAt}
+                onRetry={onRetryCashSignal}
+                refreshing={cashSignalRefreshing}
+                data-testid="cashflow-forecast-refresh-banner"
+              />
+            ) : null
+          }
           // Cold/failed states render their own content below (skeleton /
           // retry banner) instead of the kit's plain empty text — only the
           // genuine "no bank balance to project" case uses `empty`.
@@ -651,47 +701,39 @@ function CashFlowSection({
             />
           ) : cashSignalState === "failed" ? (
             <div className="flex h-full items-center justify-center">
+              {/* `refreshing`: a Retry in flight says so instead of offering
+                  another Retry. */}
               <RefreshBanner
                 state={cashSignalState}
                 updatedAt={cashSignalUpdatedAt}
                 onRetry={onRetryCashSignal}
+                refreshing={cashSignalRefreshing}
                 data-testid="cashflow-forecast-refresh-banner"
               />
             </div>
           ) : !forecastHasData ? null : (
-            <>
-              {cashSignalState === "refresh-failed" && (
-                <RefreshBanner
-                  state={cashSignalState}
-                  updatedAt={cashSignalUpdatedAt}
-                  onRetry={onRetryCashSignal}
-                  refreshing={cashSignalRefreshing}
-                  data-testid="cashflow-forecast-refresh-banner"
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={forecastSeries} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
+                <defs>
+                  <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={SERIES.forecast} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={SERIES.forecast} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+                <XAxis dataKey="date" tick={AXIS_TICK} angle={-25} textAnchor="end" height={50} />
+                <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
+                <ReferenceLine y={0} stroke={GRID_STROKE} />
+                <Area {...ANIM_AREA} animationBegin={animBegin(0)} type="monotone"
+                  dataKey="balance"
+                  stroke={SERIES.forecast}
+                  strokeWidth={2}
+                  fill="url(#forecastGrad)"
+                  name="Projected balance"
                 />
-              )}
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={forecastSeries} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
-                  <defs>
-                    <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={SERIES.forecast} stopOpacity={0.35} />
-                      <stop offset="100%" stopColor={SERIES.forecast} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
-                  <XAxis dataKey="date" tick={AXIS_TICK} angle={-25} textAnchor="end" height={50} />
-                  <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
-                  <ReferenceLine y={0} stroke={GRID_STROKE} />
-                  <Area {...ANIM_AREA} animationBegin={animBegin(0)} type="monotone"
-                    dataKey="balance"
-                    stroke={SERIES.forecast}
-                    strokeWidth={2}
-                    fill="url(#forecastGrad)"
-                    name="Projected balance"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </>
+              </AreaChart>
+            </ResponsiveContainer>
           )}
         </ChartCard>
       </div>
