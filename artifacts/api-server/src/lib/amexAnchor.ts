@@ -4,8 +4,6 @@ import {
   debtsTable,
   transactionsTable,
   settingsTable,
-  plaidAccountsTable,
-  plaidItemsTable,
   budgetCategoriesTable,
 } from "@workspace/db";
 import {
@@ -17,6 +15,14 @@ import { loadSupersededPendingIds } from "./supersededPending";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
+import {
+  classifyAmexBrand,
+  discoverAmexCards,
+  type AmexBrand,
+} from "./amexCardCadence";
+
+// Re-exported for backward compatibility: both used to be defined here.
+export { classifyAmexBrand, type AmexBrand };
 
 /**
  * Source values that count as Amex when computing the anchor. The legacy
@@ -195,24 +201,6 @@ export async function refreshAmexAnchor(
 // Amex card (Blue / Silver / Gold), for one Sun–Sat week.
 // ---------------------------------------------------------------------------
 
-export type AmexBrand = "blue" | "silver";
-
-/**
- * Classify a physical Amex card into its brand identity from its display name
- * (and mask, defensively). Mirrors the name-regex matching style used by the
- * anchor resolution above (#748).
- */
-export function classifyAmexBrand(
-  name: string | null | undefined,
-  mask: string | null | undefined,
-): AmexBrand {
-  const s = `${name ?? ""} ${mask ?? ""}`;
-  if (/blue/i.test(s)) return "blue";
-  // Platinum, Gold (retired tier), and unmatched cards all resolve to silver
-  // (Platinum-style) rather than dropping out of the stack entirely.
-  return "silver";
-}
-
 export interface AmexWeeklyPayoffCard {
   accountId: string; // external Plaid account_id
   plaidAccountId: string | null; // internal plaid_accounts.id UUID
@@ -270,61 +258,17 @@ export async function computeWeeklyPayoff(
   const queryStart = monthStart < weekStart ? monthStart : weekStart;
   const queryEnd = monthEnd > weekEnd ? monthEnd : weekEnd;
 
-  // Per-card config (cadence + display name) from the owner's settings.
-  // Grouping/display metadata only — never changes a charge amount.
-  let cadenceMap: Record<string, string> = {};
-  let nameMap: Record<string, string> = {};
-  // Charges the user marked "not mine" (reimbursements) — excluded from the
-  // payoff sum so the per-card "to pay" reflects only household-owed money.
-  let excludedTxnIds = new Set<string>();
-  if (ownerUserId) {
-    const [s] = await db
-      .select({ preferences: settingsTable.preferences })
-      .from(settingsTable)
-      .where(eq(settingsTable.userId, ownerUserId));
-    const prefs = (s?.preferences as Record<string, unknown> | null | undefined) ?? {};
-    cadenceMap = (prefs.amexCardCadence as Record<string, string>) ?? {};
-    nameMap = (prefs.amexCardNames as Record<string, string>) ?? {};
-    excludedTxnIds = new Set((prefs.amexExcludedTxnIds as string[]) ?? []);
-  }
-  // Brand per external account_id (filled once cardRows is discovered below).
-  // Drives the DEFAULT cadence when the owner hasn't set one explicitly:
-  // Blue Cash bills monthly, Platinum (silver) bills weekly.
-  const brandByAccountId = new Map<string, AmexBrand>();
-  const cadenceFor = (accountId: string): "weekly" | "monthly" => {
-    const explicit = cadenceMap[accountId];
-    if (explicit === "monthly") return "monthly";
-    if (explicit === "weekly") return "weekly";
-    return brandByAccountId.get(accountId) === "blue" ? "monthly" : "weekly";
-  };
+  // Card discovery + cadence (`amexCardCadence.ts`) — moved verbatim, and
+  // shared with `moneyContext.ts`'s cadence map so the two can never disagree
+  // on which cards exist or how they bill.
+  const { cardRows, nameMap, excludedTxnIds, cadenceFor } = await discoverAmexCards(
+    householdId,
+    ownerUserId,
+  );
   const windowFor = (accountId: string) =>
     cadenceFor(accountId) === "monthly"
       ? { start: monthStart, end: monthEnd }
       : { start: weekStart, end: weekEnd };
-
-  // --- Discover the physical Amex credit cards -----------------------------
-  // One Amex Plaid item = up to three physical cards (#748). Restrict to
-  // credit-card sub-accounts so Membership Rewards / savings / loan
-  // sub-accounts on the same login never enter the stack (mirrors the
-  // anchor route's #651/#689 filter).
-  const cardRows = await db
-    .select({
-      accountId: plaidAccountsTable.accountId,
-      internalId: plaidAccountsTable.id,
-      name: plaidAccountsTable.name,
-      mask: plaidAccountsTable.mask,
-      liabilityBalance: plaidAccountsTable.liabilityBalance,
-    })
-    .from(plaidAccountsTable)
-    .innerJoin(plaidItemsTable, eq(plaidAccountsTable.itemId, plaidItemsTable.id))
-    .where(
-      and(
-        eq(plaidAccountsTable.householdId, householdId),
-        sql`${plaidItemsTable.institutionSlug} ~* '(amex|american[-_\\s]*express)'`,
-        sql`${plaidAccountsTable.type} = 'credit'`,
-        sql`(${plaidAccountsTable.liabilityKind} is null or ${plaidAccountsTable.liabilityKind} = 'credit')`,
-      ),
-    );
 
   if (cardRows.length === 0) {
     return {
@@ -338,12 +282,6 @@ export async function computeWeeklyPayoff(
 
   const externalIds = cardRows.map((c) => c.accountId).filter((v): v is string => !!v);
   const internalIds = cardRows.map((c) => c.internalId);
-
-  // Populate the brand map so cadenceFor()/windowFor() can default Blue→monthly,
-  // Platinum→weekly without the owner having to configure amexCardCadence.
-  for (const c of cardRows) {
-    if (c.accountId) brandByAccountId.set(c.accountId, classifyAmexBrand(c.name, c.mask));
-  }
 
   // --- SpendContext (categories + debt linkage), same shape as the reports
   //     pipeline so isRealSpend behaves identically. ---------------------

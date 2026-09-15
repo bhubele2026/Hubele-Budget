@@ -99,6 +99,21 @@ export {
   weekBounds,
   monthBounds,
 } from "./householdTime";
+export {
+  CARD_LEDGER_SOURCES,
+  MOVEMENT_COVERAGES,
+  classifyMovement,
+  everydayPlan,
+  isHouseholdWeekStart,
+  type AllowanceAmountSettings,
+  type EverydayPlan,
+  type MovementClassification,
+  type MovementConflict,
+  type MovementContext,
+  type MovementCoverage,
+  type MovementRow,
+  type MovementTiming,
+} from "./householdMoney";
 
 export type Strategy = "avalanche" | "snowball";
 
