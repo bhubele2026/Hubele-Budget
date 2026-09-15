@@ -761,8 +761,9 @@ export async function buildForecastLedger(
   //     other pair (tier 3) is a suggestion: the plan still counts, so an
   //     unconfirmed guess never overstates projected cash. A later
   //     occurrence also stays on the curve when an earlier occurrence of the same
-  //     item that no named pair paid is due on or before the row: the row may be
-  //     that earlier bill, paid late.
+  //     item that no tier-1/2 pair paid is due on or before the row: the row may
+  //     be that earlier bill, paid late (PR-B2: for an outflow a tier-3 pair,
+  //     named or not, is not proof; income keeps its arrival rule).
   const notMatchPairs = new Set<string>();
   const partialTxnByKey = new Map<string, string>();
   const claimedTxnIds = new Set<string>();
@@ -933,27 +934,37 @@ export async function buildForecastLedger(
     //
     // (PR5 review) A later occurrence never leaves the curve on a row dated on or
     // after an earlier occurrence of the same item that no row paid.
-    // ⭐ (Decision 13, fix 3; round 3) An earlier occurrence is NOT unpaid when its
-    // own pair is tier 1 or 2, or carries the payee's name (confidence not "low")
-    // without being ambiguous. Holding the later pair back put an exact payment on
-    // the curve twice (a July paid late by a named tier-3 row held back August's
-    // exact $672.80 Toyota payment). A NAMELESS tier-3 pair is not enough (the PR5
-    // second review's guard, restored): April's water "paid" by an unrelated HOME
-    // DEPOT −150 must not let "CITY WATER" −150 — April paid late — take May off.
-    // A pair whose row is tagged to another debt pays nothing, so it doesn't count.
+    // ⭐ (Decision 13) EVIDENCE THAT A PLAN WAS PAID (`isEvidence`): for an outflow, a
+    // tier-1 or tier-2 pair (a tier-3 pair is a suggestion; its plan drags); for income,
+    // PR6's arrival rule — a non-ambiguous deposit paired with the paycheck arrived,
+    // name or not — or (PR-B2 round 4) a deposit the user tagged to the item's debt
+    // (tier 1), even when a second tagged deposit makes the pair ambiguous, as a tier-1
+    // outflow pair already is. It decides overdue evidence and `incomeNotArrived`
+    // (below) and, since PR-B2 round 3, the hold-back here — one definition, so they can
+    // never disagree.
+    const isEvidence = (m: PlanRowMatch): boolean =>
+      m.planAmount > 0 ? m.tier === 1 || !m.ambiguous : m.tier <= 2;
+    // ⭐ (Owner decision 2026-09-15, PR-B2) "THE FORECAST MAY READ LOW, NEVER HIGH."
+    // An earlier occurrence counts as paid for the hold-back exactly when its own pair
+    // is evidence it was paid (`isEvidence`):
+    //   - OUTFLOWS (bills, debt minimums, the Avalanche extra): tier 1 or 2 only. A
+    //     tier-3 pair is a suggestion, named or not. Decision 13 round 3's "named and
+    //     not ambiguous" branch read HIGH: an unrelated "CITY WATER METER FEE" −140
+    //     cleared April, so April's real $150, paid late, took May off the curve while
+    //     May was unpaid. The owner accepted the cost: a real but imperfect earlier
+    //     payment (July's Toyota paid $685.00 on a $672.80 bill, tier 3) holds back
+    //     August's exact payment, and August drags until July is confirmed in Review.
+    //   - INCOME (rounds 2–3): holding a paycheck back keeps it ON the curve while its
+    //     deposit is already in cash, which reads HIGH. So an earlier income occurrence
+    //     counts as received exactly when it counts as arrived: its pair is not
+    //     ambiguous, named or not. That can only read lower. The accepted cost: a
+    //     nameless coincidental deposit on an unpaid paycheck's date clears it, and
+    //     the next paycheck reads one paycheck low until the owner answers "Not this".
+    // A matched or partial answer is tier 1, and an answered occurrence never reaches
+    // the matcher, so it never holds anything back. A tier ≤ 2 pair is never on a row
+    // tagged to another debt (`tierOf`), and the arrival rule has no tag check either.
     const planByKey = new Map(matchPlans.map((p) => [p.key, p] as const));
-    const rowDebtById = new Map(matchRows.map((r) => [r.txnId, r.debtId ?? null] as const));
-    const pairedKeys = new Set(
-      matches
-        .filter((m) => {
-          if (m.tier <= 2) return true;
-          if (m.ambiguous || m.confidence === "low") return false;
-          const rowDebt = rowDebtById.get(m.txnId) ?? null;
-          const planDebt = planByKey.get(m.planKey)?.debtId ?? null;
-          return !(rowDebt && planDebt && rowDebt !== planDebt);
-        })
-        .map((m) => m.planKey),
-    );
+    const pairedKeys = new Set(matches.filter(isEvidence).map((m) => m.planKey));
     const unpaidByItem = new Map<string, string[]>();
     for (const p of matchPlans) {
       if (pairedKeys.has(p.key)) continue;
@@ -966,6 +977,8 @@ export async function buildForecastLedger(
     // cutoff, or a weekly-cadence expense (`keepsPreSnapshotRule`) — and a pair it
     // holds back drops to tier 3, so `offCurve` stays `tier ≤ 2`. A plan already due
     // is paid on its evidence instead (the plans loop), as before.
+    // (PR-B2 round 4) The rows of the pairs it holds back, kept for `usedRows` below.
+    const heldBackTxnIds = new Set<string>();
     matches = matches.map((m) => {
       if (m.tier > 2) return m;
       const plan = planByKey.get(m.planKey);
@@ -977,19 +990,22 @@ export async function buildForecastLedger(
       const earlierUnpaid = (unpaidByItem.get(m.planItemId) ?? []).some(
         (d) => d < m.planDate && d <= rowDate,
       );
-      return earlierUnpaid ? { ...m, tier: 3 as const, evidence: null, offCurve: false } : m;
+      if (!earlierUnpaid) return m;
+      heldBackTxnIds.add(m.txnId);
+      return { ...m, tier: 3 as const, evidence: null, offCurve: false };
     });
-    // ⭐ (Decision 13) OVERDUE EVIDENCE: a tier-1 or tier-2 pair. A tier-3 pair is a
-    // suggestion; its plan drags. Income keeps PR6's rule (a non-ambiguous deposit
-    // paired with the paycheck arrived, name or not): income already due is never
-    // on the curve, so for income this decides only `incomeNotArrived`.
-    const isEvidence = (m: PlanRowMatch): boolean => (m.planAmount > 0 ? !m.ambiguous : m.tier <= 2);
     // (Debt tag, review M1) One row pays at most once: a row whose pair takes its
     // plan off the curve (`offCurve`) or counts as overdue evidence is used up.
     // (PR6 review, M2) The older overdue occurrences pair with the rows the pass
     // above left unpaired — for the lists only (listing pairs never leave the curve,
     // so only their evidence uses a row).
+    // ⭐ (PR-B2 round 4, review HIGH) A HELD-BACK ROW IS USED UP TOO. The hold-back keeps
+    // its pair on the curve because the row may be the earlier occurrence's late payment;
+    // leaving it free let the card-payment rule (`plansPaidInFullByName`, below) spend the
+    // same row on ANOTHER card's overdue minimum: one "CAPITAL ONE MOBILE PYMT" −300 was
+    // held for Platinum's April and also paid Quicksilver's $40, reading high by $40.
     const usedRows = new Set(matches.filter((m) => m.offCurve || isEvidence(m)).map((m) => m.txnId));
+    for (const txnId of heldBackTxnIds) usedRows.add(txnId);
     if (listingPlans.length > 0) {
       listingMatches = matchPlansToRows(
         listingPlans,
