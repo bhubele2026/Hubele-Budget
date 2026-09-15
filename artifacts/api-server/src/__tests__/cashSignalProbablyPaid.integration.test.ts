@@ -348,12 +348,12 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
   // non-ambiguous pair of ANY tier" as evidence let a nameless coincidence clear
   // April, so "CITY WATER" on 05-11 (April paid late) was free to pair with May
   // instead and take it fully off the curve — a bill counted paid that wasn't.
-  // (round 3) An earlier occurrence now counts as paid for the hold-back only when
-  // its own pair is tier 1/2, or named and not ambiguous (`confidence !== "low"`).
-  // HOME DEPOT is nameless (`confidence: "low"`), so April stays unpaid, May's
-  // pairing is held back, and May keeps dragging (back to the PR5-second-review
-  // figure, 700.00 — the July/August Toyota case below is why "any tier" was tried
-  // and is now proven wrong instead: a NAMED late pair is what should rescue it).
+  // (round 3) An earlier occurrence counted as paid for the hold-back only when
+  // its own pair was tier 1/2, or named and not ambiguous (`confidence !== "low"`).
+  // (PR-B2, owner decision 2026-09-15) Only tier 1/2 counts now; the named branch
+  // is gone (see the meter-fee case below). HOME DEPOT is nameless and tier 3, so
+  // this case reads the same under both rules: April stays unpaid, May's pairing
+  // is held back, and May keeps dragging (the PR5-second-review figure, 700.00).
   it("(round 3) a nameless earlier pair never marks last month paid: April 'paid' by HOME DEPOT, its late payment can't take May off (700, not 850)", async () => {
     await snapshotOnChase();
     const water = await plan("City Water", "150");
@@ -513,32 +513,61 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
     });
   });
 
-  // ⭐ (Round 4, MEDIUM — disclosed, NOT fixed) The hold-back's "named, not
-  // ambiguous" branch (round 3, HIGH) accepts a coincidental same-payee named
-  // charge as proof an earlier occurrence was paid, even when it plainly
-  // isn't the bill (wrong amount, wrong day) — because it is NAMED and not
-  // ambiguous, tightening this to tier ≤ 2 only would revive the exact
-  // understatement the first review measured (a named, late tier-3 July
-  // paying $672.80 held back August's exact Toyota payment). This is a known
-  // trade-off, not fixed this round; see docs/reviews for the owner question.
-  it("(round 4, residual, known — not fixed) a coincidental same-payee named charge clears an earlier occurrence for the hold-back", async () => {
+  // ⭐ (PR-B2, owner decision 2026-09-15) THE HOLD-BACK NEEDS PROOF. An earlier
+  // occurrence counts as paid for the hold-back only on tier-1/2 evidence; the
+  // "named and not ambiguous" branch is gone. REPLACES round 4's residual pin,
+  // which asserted the bug: May off the curve at 850.00, reading HIGH by $150.
+  // An unrelated "CITY WATER METER FEE" −140, five days before April's due date,
+  // is named ("water") and not ambiguous, but it is tier 3 ($10 short): a
+  // suggestion, not proof April was paid. So April stays unpaid for the
+  // hold-back. April's real $150 posts late on 05-12 — 22 days after April's due
+  // date, outside April's pairing window, so it can only pair with May — and that
+  // pair is held back: the row is read as April's late payment (it left the bank
+  // once), and May stays on the curve until the owner answers in Review.
+  it("(PR-B2) a coincidental same-payee named charge no longer clears April: the late $150 is April's, May stays on the curve (700, not 850)", async () => {
     await snapshotOnChase();
     const water = await plan("City Water", "150");
-    // An unrelated fee, 5 days before April's due date: $10 short of the
-    // bill (medium confidence), not itself paying April — but named ("water")
-    // and not ambiguous is enough for the hold-back to treat April as
-    // accounted for.
-    await row("2026-04-15", "-140", "CITY WATER METER FEE");
-    // April's REAL payment, paid late.
-    const mayRow = await row("2026-05-12", "-150", "CITY WATER");
+    const fee = await row("2026-04-15", "-140", "CITY WATER METER FEE");
+    const late = await row("2026-05-12", "-150", "CITY WATER");
 
     const sig = await signal();
 
-    expect(matchFor(sig, `${water}|2026-04-20`)).toMatchObject({ confidence: "medium", tier: 3, offCurve: false });
-    // Wrong attribution (the residual): May reads as paid and off the curve
-    // — full name, exact amount — though this row is really April's late
-    // payment, and May hasn't been paid.
-    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ txnId: mayRow, tier: 2, offCurve: true });
+    // April: the fee is still offered as a suggestion (the close call to confirm or reject).
+    expect(matchFor(sig, `${water}|2026-04-20`)).toMatchObject({
+      txnId: fee,
+      confidence: "medium",
+      ambiguous: false,
+      tier: 3,
+      offCurve: false,
+    });
+    // April stays unpaid: listed overdue, never assumed paid.
+    expect(sig.overdueAssumedPaid?.find((p) => p.planKey === `${water}|2026-04-20`)).toBeUndefined();
+    expect(sig.overdueOutsideForecast?.find((p) => p.planKey === `${water}|2026-04-20`)).toBeDefined();
+    // May: the late row's pair is held back for April — a suggestion, not proof.
+    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ txnId: late, tier: 3, offCurve: false });
+    // The late $150 left the bank once; May's own $150 still drags.
+    expect(sig.bankToday).toBe("850.00");
+    expect(balanceOn(sig, "2026-05-20")).toBe("700.00");
+  });
+
+  // (PR-B2, unchanged) A TIER-2 earlier pair is still proof, with or without a
+  // name. The same meter fee posts, but April is paid on its due date by a
+  // nameless autopay row in the bill's own category (the only bill in it: tier 2,
+  // rule a). April pairs with that row — a pair that proves ranks ahead of the
+  // fee, which is left unpaired — so April is paid, and May's own exact payment
+  // takes May off the curve.
+  it("(PR-B2, unchanged) a tier-2 earlier pair still frees the later row: April paid by a nameless autopay in its own category beside the meter fee, May's payment clears May (850)", async () => {
+    await snapshotOnChase();
+    const CAT = randomUUID();
+    const water = await plan("City Water", "150", 20, { categoryId: CAT });
+    await row("2026-04-15", "-140", "CITY WATER METER FEE");
+    const april = await row("2026-04-20", "-150", "ACH AUTOPAY 0420", { categoryId: CAT });
+    const may = await row("2026-05-12", "-150", "CITY WATER");
+
+    const sig = await signal();
+
+    expect(matchFor(sig, `${water}|2026-04-20`)).toMatchObject({ txnId: april, confidence: "low", tier: 2, offCurve: true });
+    expect(matchFor(sig, `${water}|2026-05-20`)).toMatchObject({ txnId: may, tier: 2, offCurve: true });
     expect(sig.bankToday).toBe("850.00");
     expect(balanceOn(sig, "2026-05-20")).toBe("850.00");
   });

@@ -193,6 +193,18 @@ async function confirmed(key: Key, occurrenceDate: string, amount: string): Prom
   });
 }
 
+/** The owner's `matched` answer for an occurrence, on a row already in the ledger. */
+async function answerMatched(key: Key, occurrenceDate: string, txnId: string): Promise<void> {
+  await db.insert(forecastResolutionsTable).values({
+    userId: TEST_USER,
+    householdId: HOUSEHOLD,
+    recurringItemId: ids[key],
+    occurrenceDate,
+    status: "matched",
+    matchedTxnId: txnId,
+  });
+}
+
 const signal = (horizonDays: number) => computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays });
 const figures = (sig: CashSignal) => ({ lowest: sig.lowestProjected, maxSafeExtra: sig.maxSafeExtra });
 const pairOf = (sig: CashSignal, key: Key, occurrenceDate: string) =>
@@ -295,7 +307,8 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
   //   08-06: 10,000 − 200 − 440.45 − 180.00 − 651.55 = 8,528.00 → max safe 8,028.00.
   //   08-07: Brad's paycheck +8,100 lands and Toyota is off the curve → 16,628.00 (the
   //   ending balance). Held back by July, Toyota would take 672.80 more that day.
-  async function earlyAugust(julyToyota: string): Promise<void> {
+  /** Returns July's Toyota row. */
+  async function earlyAugust(julyToyota: string): Promise<string> {
     await household("2026-08-05");
     await confirmed("water", "2026-06-24", "-101.02");
     await confirmed("sf", "2026-07-03", "-121.54");
@@ -307,8 +320,9 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
     await paid("sfIns", "2026-08-03", "-165.00");
     await paid("heloc", "2026-08-03", "-677.40");
     await paid("psn5", "2026-08-04", "-18.98");
-    await paid("toyota", "2026-07-13", julyToyota);
+    const july = await paid("toyota", "2026-07-13", julyToyota);
     await paid("toyota", "2026-08-04", "-672.80");
+    return july;
   }
 
   it("D 08-05, July Toyota +6, State Farm renewed at $165, Water exact: (round 3) the $165 renewal is outside its confirmed range — the whole $180 drags (8,528.00 / 8,028.00)", async () => {
@@ -322,12 +336,38 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
     expect(sig.overdueAssumedPaid?.find((p) => p.planKey === `${ids.sfIns}|2026-08-03`)).toBeUndefined();
   });
 
-  it("D2 08-05, July Toyota paid $685.00 (a late fee: tier 3): (fix 3) July's own pair means July is not unpaid, so August's early exact payment stays off the curve (8,528.00 / 8,028.00)", async () => {
+  // ⭐ (PR-B2, owner decision 2026-09-15 — the stricter direction) REPLACES round 3's
+  // D2 assertion (August off the curve, ending 16,628.00). July's $685.00 pair is
+  // named and not ambiguous, but it is tier 3 ($12.20 over): a suggestion, not proof
+  // July was paid. So July stays unpaid for the hold-back, August's exact $672.80 on
+  // 08-04 is held back (it may be July's bill, paid late), and August's Toyota stays
+  // on the curve until the owner confirms July (D3). The forecast may read low, never
+  // high.
+  //   08-06 is unchanged: 8,528.00 / 8,028.00 (Toyota is due 08-07, the paycheck's day).
+  //   08-07: 8,528.00 + 8,100.00 − 672.80 = 15,955.20 (was 16,628.00).
+  it("D2 08-05, July Toyota paid $685.00 (a late fee: tier 3): (PR-B2) a tier-3 July is not proof, so August's early exact payment is held back and drags until July is confirmed (8,528.00 / 8,028.00, ending 15,955.20)", async () => {
     await earlyAugust("-685.00");
     const sig = await signal(2);
-    expect({ ...figures(sig), ending: sig.endingBalance }).toEqual({ lowest: "8528.00", maxSafeExtra: "8028.00", ending: "16628.00" });
-    expect(pairOf(sig, "toyota", "2026-07-07")).toMatchObject({ difference: "12.20", ambiguous: false, tier: 3 });
-    expect(pairOf(sig, "toyota", "2026-08-07")).toMatchObject({ dayDelta: -3, tier: 2, offCurve: true });
+    expect({ ...figures(sig), ending: sig.endingBalance }).toEqual({ lowest: "8528.00", maxSafeExtra: "8028.00", ending: "15955.20" });
+    expect(pairOf(sig, "toyota", "2026-07-07")).toMatchObject({ difference: "12.20", ambiguous: false, tier: 3, offCurve: false });
+    expect(pairOf(sig, "toyota", "2026-08-07")).toMatchObject({ dayDelta: -3, tier: 3, offCurve: false });
+  });
+
+  // (PR-B2) The way out of D2: the owner confirms July. A `matched` answer is tier-1
+  // evidence, and an answered occurrence never reaches the matcher, so July no longer
+  // holds anything back. August's exact payment is free again and clears August —
+  // back to D's figures. Read twice on one household so the answer is the only change.
+  it("D3 08-05, the D2 household, then July's $685.00 confirmed as matched (tier 1): August drags before the answer and clears after it (ending 15,955.20 → 16,628.00)", async () => {
+    const julyRow = await earlyAugust("-685.00");
+    const before = await signal(2);
+    expect(before.endingBalance).toBe("15955.20");
+    expect(pairOf(before, "toyota", "2026-08-07")).toMatchObject({ tier: 3, offCurve: false });
+
+    await answerMatched("toyota", "2026-07-07", julyRow);
+    const after = await signal(2);
+    expect({ ...figures(after), ending: after.endingBalance }).toEqual({ lowest: "8528.00", maxSafeExtra: "8028.00", ending: "16628.00" });
+    expect(pairOf(after, "toyota", "2026-07-07")).toBeUndefined();
+    expect(pairOf(after, "toyota", "2026-08-07")).toMatchObject({ dayDelta: -3, tier: 2, offCurve: true });
   });
 
   it("E 08-10, both State Farm policies +6 (July confirmed), HELOC +6, UW car +4: 9,359.55 / 8,859.55", async () => {

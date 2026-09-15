@@ -464,6 +464,9 @@ With round 4's future remainder drag (`remainder_assumed_unpaid`, review followu
 misattribution can now carry a wrong DOLLAR remainder on a future plan, not only a wrong on/off-curve state — the
 drag amount is computed from the same misattributed pair's `txnAmount`.
 
+**Closed by PR-B2 (owner decision 2026-09-15, the stricter direction):** the hold-back now needs tier-1/2 proof; the
+named branch is removed, and D2 drags until July is confirmed. See `2026-09-15-holdback-proof-only.md`.
+
 ### Golden
 
 No entries changed this round. The full-household golden fixture (`forecastLedger.golden.integration.test.ts`) has no
