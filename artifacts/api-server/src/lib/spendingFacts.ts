@@ -10,10 +10,13 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import { db, transactionsTable, budgetCategoriesTable } from "@workspace/db";
 import { cleanMerchant } from "./merchantNameExtract";
 import {
+  classifyMovement,
   classifyOutflow,
   isRealIncome,
   incomeAmount,
   spendAmount,
+  type MovementContext,
+  type MovementRow,
   type SpendContext,
   type SpendTxn,
 } from "./spendingFilter";
@@ -202,6 +205,10 @@ export async function buildSpendingFacts(
       // (round 4, review H1/H2) THE signal `effectiveFiling` decides hand-vs-
       // automatic and transfer inheritance from.
       isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
+      // (PR-H) Read alongside everything above so a row here can also be run
+      // through `classifyMovement` (`classifierHouseholdSpend`, below) —
+      // never added to any total in this function.
+      plaidAccountId: transactionsTable.plaidAccountId,
     })
     .from(transactionsTable)
     .where(
@@ -527,4 +534,59 @@ export async function buildSpendingFacts(
       outstandingReimbursableTotal: round2(outstandingReimbursableTotal),
     },
   };
+}
+
+// ── PR-H: the classifier's view of the same figure (parity only) ───────────
+
+/**
+ * ⭐ (PR-H, owner decisions 7 and 12) `householdSpend.total` above, computed
+ * from `classifyMovement` instead of `classifyOutflow` directly — the two
+ * cannot silently diverge on what counts as household spend once a caller
+ * switches to this.
+ *
+ * ⚠️ NOT CALLED BY `buildSpendingFacts` YET, ON PURPOSE. Wiring it into the
+ * live request path would add a query (`loadMoneyContext`'s confirmed-match
+ * read) and a second full pass over the range's rows for a number nothing
+ * displays — exactly what this performance-conscious codebase's entry-graph
+ * and query-shape rules exist to keep out. This is the switch PR8r/PR10 will
+ * flip; `spendingFactsClassifierParity.integration.test.ts` proves it agrees
+ * with `buildSpendingFacts` today (`billMatchedCounts: true`, the default)
+ * and pins the TWO documented places they diverge — see
+ * docs/reviews/2026-09-14-household-money-core.md:
+ *   1. a confirmed bill match (`billMatchedCounts: false` previews decision
+ *      12's forward rule: a matched row stops counting);
+ *   2. a row that is BOTH `reimbursable` and carries an allowance flag —
+ *      today's `classifyOutflow` excludes any reimbursable row outright
+ *      (before it ever looks at a flag); this module's own precedence, as
+ *      specified, lets an allowance flag (steps 3-5) outrank `reimbursable`
+ *      (step 6), so such a row counts under the classifier always, not only
+ *      in the forward mode.
+ *
+ * `rows` must already be in EFFECTIVE-FILING form (`effectiveFiling`) with
+ * replaced-pending rows left out — the same preparation `buildSpendingFacts`
+ * does before it calls `classifyOutflow`. This function does not re-pair or
+ * re-file; it only classifies and sums.
+ */
+export function classifierHouseholdSpend(
+  rows: readonly MovementRow[],
+  ctx: MovementContext,
+  opts: { billMatchedCounts?: boolean } = {},
+): { total: number; transactionCount: number } {
+  const billMatchedCounts = opts.billMatchedCounts ?? true;
+  let total = 0;
+  let count = 0;
+  for (const row of rows) {
+    const { coverage } = classifyMovement(row, ctx);
+    const counts =
+      coverage === "unplanned" ||
+      coverage === "allowance_monthly" ||
+      coverage === "allowance_weekly" ||
+      coverage === "needs_classification" ||
+      (coverage === "bill_matched" && billMatchedCounts);
+    if (counts) {
+      total += spendAmount(row);
+      count += 1;
+    }
+  }
+  return { total: round2(total), transactionCount: count };
 }

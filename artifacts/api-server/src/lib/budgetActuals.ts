@@ -20,6 +20,7 @@
 import type { AllowanceAggregateRow } from "./budgetAllowance";
 import { effectiveFiling, type Filing, type FilingContext } from "./pendingFiling";
 import type { SupersededPending } from "./supersededPending";
+import { classifyMovement, type MovementContext, type MovementRow } from "./spendingFilter";
 
 /** One ledger row, as the Budget month reads it. */
 export interface BudgetMonthRow extends Filing {
@@ -133,4 +134,92 @@ export function aggregateBudgetMonth(
   replacedPendingIds.sort();
   inheritedCategories.sort((a, b) => a.transactionId.localeCompare(b.transactionId));
   return { byCategory, allowanceRows, replacedPendingIds, inheritedCategories };
+}
+
+// ── PR-H: the classifier's view of the allowance bucket (parity only) ──────
+
+/**
+ * `BudgetMonthRow` plus the identity fields `classifyMovement` needs
+ * (`occurredOn`, `plaidAccountId`, `pfcDetailed`) that this file's own query
+ * (`routes/budget.ts`) does not select today — its flag-only bucket rule
+ * never needed them.
+ */
+export interface ClassifierBudgetMonthRow
+  extends BudgetMonthRow,
+    Pick<MovementRow, "occurredOn" | "plaidAccountId" | "pfcDetailed"> {}
+
+/**
+ * ⭐ (PR-H, owner decisions 6, 14, and 7/12) The allowance card's bucket rows,
+ * computed from `classifyMovement` instead of this file's own flag-only
+ * bucket rule (`unplanned > monthly > weekly`, no bill-match awareness).
+ *
+ * ⚠️ NOT CALLED BY `aggregateBudgetMonth` YET — see `spendingFacts.ts`'s
+ * `classifierHouseholdSpend` for why (no query, no second pass, for a number
+ * nothing displays), and docs/reviews/2026-09-14-household-money-core.md for
+ * the wiring plan.
+ *
+ * `billMatchedCounts: true` (the default) reproduces TODAY's rule exactly: a
+ * confirmed bill match has no say in the bucket, so a matched row still
+ * buckets by its own flag. `billMatchedCounts: false` previews decision 12's
+ * forward rule (PR8r/PR10): a confirmed match wins over any flag, so a
+ * matched row buckets NOWHERE — the bill is already counted in the plan, and
+ * must not also count against an allowance envelope. That is the FIRST
+ * documented difference (`budgetActuals.test.ts`).
+ *
+ * ⚠️ A SECOND, independent difference is always live here, in both modes: a
+ * row that is BOTH `reimbursable` and flagged. Today's `aggregateBudgetMonth`
+ * gates on `!reimbursable` before ever looking at a flag, so such a row
+ * buckets nowhere. `classifyMovement`'s precedence, as specified, lets the
+ * flag (steps 3-5) outrank `reimbursable` (step 6), so the classifier always
+ * buckets it — see `budgetActuals.test.ts`'s dedicated test.
+ */
+export function classifierAllowanceRows(
+  rows: readonly ClassifierBudgetMonthRow[],
+  supersede: Pick<SupersededPending, "replacedIds" | "replacedBy">,
+  ctx: FilingContext,
+  movement: MovementContext,
+  opts: { billMatchedCounts?: boolean } = {},
+): AllowanceAggregateRow[] {
+  const billMatchedCounts = opts.billMatchedCounts ?? true;
+  const out: AllowanceAggregateRow[] = [];
+
+  for (const row of rows) {
+    if (supersede.replacedIds.has(row.id)) continue;
+    const t = effectiveFiling(row, supersede.replacedBy.get(row.id), ctx);
+    const movementRow: MovementRow = {
+      ...t,
+      occurredOn: row.occurredOn,
+      plaidAccountId: row.plaidAccountId,
+      pfcDetailed: row.pfcDetailed,
+    };
+    const { coverage } = classifyMovement(movementRow, movement);
+
+    let bucket: "unplanned" | "monthly" | "weekly" | null = null;
+    if (coverage === "unplanned") bucket = "unplanned";
+    else if (coverage === "allowance_monthly") bucket = "monthly";
+    else if (coverage === "allowance_weekly") bucket = "weekly";
+    else if (coverage === "bill_matched" && billMatchedCounts) {
+      // Reproduce today's rule verbatim: a matched row is not special-cased,
+      // so it still buckets by whichever flag it carries.
+      bucket = t.unplannedAllowance
+        ? "unplanned"
+        : t.monthlyAllowance
+          ? "monthly"
+          : t.weeklyAllowance
+            ? "weekly"
+            : null;
+    }
+    if (!bucket) continue;
+
+    const cents = centsOf(row.amount);
+    const spend = spendCents(row.source, cents);
+    out.push({
+      bucket,
+      subBucket: t.weeklyBucket,
+      pending: row.pending,
+      spend: (spend / 100).toFixed(2),
+      cnt: "1",
+    });
+  }
+  return out;
 }
