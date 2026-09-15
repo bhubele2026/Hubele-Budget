@@ -129,6 +129,16 @@ Such a household already has data, so the seed never runs there. Same fixture as
   | May groups | Income 33,387.98 · Housing & Utilities 3,405.08 · Insurance & Health 345.13 · Food 920.00 · Transportation 1,724.35 · Kids & Pets 80.00 · Lifestyle & Shopping 2,965.99 · others 0.00 |
 
   The two seeded states are identical to each other.
+
+  To regenerate both base snapshots (only if the seed's own output is meant to change), from the worktree root:
+
+  ```sh
+  DATABASE_URL=postgres://bhubele@localhost:5432/<test-db> ALLOW_TEST_DB=1 TZ=UTC CI=true \
+    (cd artifacts/api-server && ./node_modules/.bin/vitest run src/__tests__/seedDefaultsOnce.integration.test.ts -u)
+  ```
+
+  `-u` is vitest's standard snapshot-update flag; `toMatchFileSnapshot` writes both files under
+  `src/__tests__/__snapshots__/` in place. Diff them before committing — a change here means the seed result moved.
 - **A new household is still seeded when a month read runs first**, with the three system rows, Avalanche payment and a
   debt's `auto_debts` row already there.
 - **The three system categories** keep their own ensure passes, unchanged.
@@ -150,6 +160,7 @@ Worktree `/private/tmp/claude-501/build-pra2`, own database `h2budget_test_pra2`
 | Web suite `TZ=America/Chicago` | 135 files passed; 1113 passed, 2 skipped (1115) |
 | `pnpm run build` + `check-entry-graph` | build exit 0; guard OK; landing **574.4 KB** of 580 KB (unchanged: no web change) |
 | Codegen | not run: `lib/api-spec` unchanged |
+| e2e (Playwright) | **not run** — opt-in behind the `E2E_ENABLED` repo variable (see `docs/tdd.md`), off in this session as in CI. Read, not run: five `bills-*` specs (`bills-actual-vs-planned-indicator`, `bills-avalanche-locked-row`, `bills-month-picker-summary`, `bills-month-picker`, `bills-debt-payoff-celebratory-row`) and `forecast-probably-paid` insert a recurring item (or, for `forecast-probably-paid`, POST one) before the browser's first navigation to a categories-fetching page, so `seedDefaultsOnce` finds existing data and writes the marker only — those households are no longer seeded under this branch, where the base always seeded them. None of the six asserts a seeded category name (checked by grep for the seed's names), so none is expected to fail; not exercised here. |
 
 **Fails-before on `96773647`:**
 - deleted Entertainment and Weekly Spend: round 1, Entertainment back in the category list;
@@ -171,8 +182,17 @@ Worktree `/private/tmp/claude-501/build-pra2`, own database `h2budget_test_pra2`
    - The web's POST `/budget/seed-defaults` call is skipped too once the list holds a non-excluded category (the bill's
      `auto_bills` envelope).
    - There is no button to seed later. See question 2.
+   - Reproducing this against the running app needs an API-only client (`curl`/Postman against `POST
+     /recurring-items`), or a page that never calls `useListCategories` (e.g. `/banking`, `/debts`, `/reports`), to add
+     the bill through. The Bills page itself is a category-fetching page (`bills.tsx` calls `useListCategories` on
+     mount, same as `budget.tsx`), so adding a bill through its own UI seeds the household first, same as opening
+     Budget — the residual only shows up when the bill lands before any category-fetching page has loaded once.
 4. **A household with no categories, bills or rules and no marker still gets the full seed once.** This includes one
    that deleted everything before this deploy. Transactions and debts alone do not count as data, as on the base.
+   Verified: a household with only a transaction and a debt (its `auto_debts` category does not count either) still
+   gets the full seed from its first category read — **29 categories** (the seed's 27 plus `Uncategorized` and the
+   debt's own `auto_debts` category, both added by the month read the same page load also makes), **21 bills**, **52
+   rules** — exactly as an empty household's.
 5. **Rows earlier deploys already re-created stay.** A category or bill the household deleted and a deploy brought back
    is still there. Read-only production check (not run; no production access):
 

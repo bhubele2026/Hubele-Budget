@@ -80,7 +80,7 @@ export type LedgerPlan = {
    * - `overdue_remainder_assumed_unpaid` (PR6 review): overdue, a bank row paid
    *   part of it (see `overdueAssumedPaid`), and only the unpaid remainder (over
    *   $1) lands on the next business day;
-   * - `remainder_assumed_unpaid` (decision 13, round 4): due TODAY OR LATER, a
+   * - `remainder_assumed_unpaid` (decision 13, round 4): due AFTER TODAY, a
    *   tier-1/2 pair paid part of it (offCurve is false for an underpayment), and
    *   only the unpaid remainder lands — on the plan's OWN date, never dragged to
    *   a business day like the overdue sibling above;
@@ -1015,8 +1015,11 @@ export async function buildForecastLedger(
   // or tier-2 pair (`isEvidence`; never a row tagged to another debt), or, for a
   // debt minimum, a card payment naming the card (decision 13's tier-2 "payment
   // reference") or a checking row tagged to that debt (tier 1).
-  // Read only for plans due on or before today (the plans loop); a plan due later
-  // still needs `offCurve` (never set on a pair whose row is tagged to another debt).
+  // Read for plans due on or before today (the plans loop), and — since decision
+  // 13 round 4 — for plans due AFTER today too (the `remainder_assumed_unpaid`
+  // block below drags only an underpaid future plan's remainder); a future plan
+  // paid in full still needs `offCurve` (never set on a pair whose row is tagged
+  // to another debt) to leave the curve.
   const paidByKey = new Map<string, { txnId: string; txnAmount: number; confidence: string }>();
   for (const m of evidencePairs) {
     // (Decision 13) A tier-1 tag pair reads as the tag, as `plansPaidInFullByName`'s does.
@@ -1186,7 +1189,7 @@ export async function buildForecastLedger(
       // as a day-0 dip rather than silently shrinking startingBalance.
       effectiveDate = fromISO;
     }
-    // ⭐ (Decision 13, round 4 — candidate C) A FUTURE OR NOT-YET-DUE EXPENSE with
+    // ⭐ (Decision 13, round 4 — candidate C) AN EXPENSE DUE AFTER TODAY with
     // a tier ≤ 2 pair that UNDERPAID (offCurve already excluded a fully-paid pair
     // above): the plan leaves the curve, and only the unpaid remainder drags, on
     // the plan's own date — never dragged to a business day like an overdue

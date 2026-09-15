@@ -245,11 +245,11 @@ export function PlanDropRow({
             >
               Paid{" "}
               <span className="font-mono tabular-nums">
-                {formatCurrency(paidSoFar)}
+                {formatCurrency(Math.abs(paidSoFar))}
               </span>{" "}
               of{" "}
               <span className="font-mono tabular-nums">
-                {formatCurrency(row.amount)}
+                {formatCurrency(Math.abs(row.amount))}
               </span>
             </div>
           )}
