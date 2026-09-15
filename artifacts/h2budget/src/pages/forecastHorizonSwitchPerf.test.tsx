@@ -194,6 +194,9 @@ beforeEach(() => {
   // today and the May plan rows fall out of the visible window. Open it so
   // the stored 2026-05-01 anchor is respected.
   sessionStorage.setItem("h2budget:forecastLookbackOpen", "true");
+  // (PR-K follow-up round 2, L1) A stored from-date alone no longer proves it
+  // was picked — this flag says it genuinely was.
+  sessionStorage.setItem("h2budget:forecastFromDatePicked", "true");
   // Seed the saved horizon preference to 90. The cold-load default is now
   // 30 DAYS (intentional, commit bd293339), but the stored-preference
   // branch in ForecastPage is still honored, so this puts the page on the

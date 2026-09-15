@@ -288,6 +288,9 @@ beforeEach(() => {
   // so the May-1 plan row stays in the active window.
   sessionStorage.setItem("h2budget:forecastFromDate", "2026-05-01");
   sessionStorage.setItem("h2budget:forecastLookbackOpen", "true");
+  // (PR-K follow-up round 2, L1) A stored from-date alone no longer proves it
+  // was picked — this flag says it genuinely was.
+  sessionStorage.setItem("h2budget:forecastFromDatePicked", "true");
   scrollIntoViewMock.mockClear();
   // Anchor "today" inside May 2026 so the page's default monthFilter
   // (derived from `useMemo(() => new Date(), [])`) lines up with the
