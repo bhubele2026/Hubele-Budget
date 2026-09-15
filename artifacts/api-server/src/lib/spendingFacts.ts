@@ -10,10 +10,13 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import { db, transactionsTable, budgetCategoriesTable } from "@workspace/db";
 import { cleanMerchant } from "./merchantNameExtract";
 import {
+  classifyMovement,
   classifyOutflow,
   isRealIncome,
   incomeAmount,
   spendAmount,
+  type MovementContext,
+  type MovementRow,
   type SpendContext,
   type SpendTxn,
 } from "./spendingFilter";
@@ -202,6 +205,10 @@ export async function buildSpendingFacts(
       // (round 4, review H1/H2) THE signal `effectiveFiling` decides hand-vs-
       // automatic and transfer inheritance from.
       isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
+      // (PR-H) Read alongside everything above so a row here can also be run
+      // through `classifyMovement` (`classifierHouseholdSpend`, below) —
+      // never added to any total in this function.
+      plaidAccountId: transactionsTable.plaidAccountId,
     })
     .from(transactionsTable)
     .where(
@@ -527,4 +534,69 @@ export async function buildSpendingFacts(
       outstandingReimbursableTotal: round2(outstandingReimbursableTotal),
     },
   };
+}
+
+// ── PR-H: the classifier's view of the same figure (parity only) ───────────
+
+/**
+ * ⭐ (PR-H, owner decisions 7 and 12) `householdSpend` above, computed from
+ * `classifyMovement` coverage instead of `classifyOutflow` directly — the two
+ * cannot silently diverge on what counts as household spend once a caller
+ * switches to this.
+ *
+ * ⚠️ NOT CALLED BY `buildSpendingFacts` YET, ON PURPOSE. Wiring it into the
+ * live request path would add a query (`loadMoneyContext`'s confirmed-match
+ * read) and a second full pass over the range's rows for a number nothing
+ * displays — exactly what this performance-conscious codebase's entry-graph
+ * and query-shape rules exist to keep out. This is the switch PR8r/PR10 will
+ * flip. See docs/reviews/2026-09-14-household-money-core.md.
+ *
+ * mode "today" (the default) IS `buildSpendingFacts().householdSpend`, total
+ * and count, on any ledger — checked on a seeded randomized ledger
+ * (`spendingFactsClassifierParity.integration.test.ts`) and over the spine's
+ * own month and week windows (`spineParity.integration.test.ts`). Two
+ * coverages need today's rule spelled out, because `classifyMovement` places
+ * them differently from `classifyOutflow`:
+ *   - a confirmed bill match counts like any other purchase (today's rule has
+ *     no idea of a match);
+ *   - (review M1) a reimbursable row never counts, whatever flag or match it
+ *     carries: today's rule 7 fires before either is looked at, while
+ *     `classifyMovement` lets a match (step 2) or a flag (steps 3-5) outrank
+ *     `reimbursable` (step 6).
+ * mode "forward" is coverage alone — what switching the figure onto
+ * `classifyMovement`, as section A specifies it, would do:
+ *   1. a confirmed match (carried to its posted row) stops counting —
+ *      decision 12: the bill is already in the plan;
+ *   2. a reimbursable row that carries an allowance flag counts under its
+ *      flag. The owner's 2026-09-15 rule ("a reimbursable charge shows as its
+ *      own row") says it should not; PR8r settles it before switching.
+ *
+ * `rows` must already be in EFFECTIVE-FILING form (`effectiveFiling`) with
+ * replaced-pending rows left out — the same preparation `buildSpendingFacts`
+ * does before it calls `classifyOutflow`. This function does not re-pair or
+ * re-file; it only classifies and sums.
+ */
+export function classifierHouseholdSpend(
+  rows: readonly MovementRow[],
+  ctx: MovementContext,
+  opts: { mode?: "today" | "forward" } = {},
+): { total: number; transactionCount: number } {
+  const mode = opts.mode ?? "today";
+  let total = 0;
+  let count = 0;
+  for (const row of rows) {
+    const { coverage } = classifyMovement(row, ctx);
+    const counts =
+      coverage === "unplanned" ||
+      coverage === "allowance_monthly" ||
+      coverage === "allowance_weekly" ||
+      coverage === "needs_classification" ||
+      (coverage === "bill_matched" && mode === "today");
+    // Today's rule 7: reimbursable is out before any flag or match counts.
+    if (counts && !(mode === "today" && row.reimbursable)) {
+      total += spendAmount(row);
+      count += 1;
+    }
+  }
+  return { total: round2(total), transactionCount: count };
 }
