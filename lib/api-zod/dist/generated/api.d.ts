@@ -5844,6 +5844,22 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: zod.ZodString;
         snapshotAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         snapshotSource: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        account: zod.ZodObject<{
+            name: zod.ZodNullable<zod.ZodString>;
+            mask: zod.ZodNullable<zod.ZodString>;
+            subtype: zod.ZodNullable<zod.ZodString>;
+            via: zod.ZodEnum<["pointer", "snapshot mask", "sole checking", "sole depository", "unresolved"]>;
+        }, "strip", zod.ZodTypeAny, {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+        }, {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+        }>;
         horizonDays: zod.ZodOptional<zod.ZodNumber>;
         fromDate: zod.ZodOptional<zod.ZodString>;
         toDate: zod.ZodOptional<zod.ZodString>;
@@ -6023,6 +6039,12 @@ export declare const GetForecastResponse: zod.ZodObject<{
         }>, "many">>;
     }, "strip", zod.ZodTypeAny, {
         status: "ready" | "tight" | "not_yet" | "no_data";
+        account: {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+        };
         cashBuffer: string;
         bankToday: string;
         lowestProjected: string;
@@ -6101,6 +6123,12 @@ export declare const GetForecastResponse: zod.ZodObject<{
         }[] | undefined;
     }, {
         status: "ready" | "tight" | "not_yet" | "no_data";
+        account: {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+        };
         cashBuffer: string;
         bankToday: string;
         lowestProjected: string;
@@ -6329,6 +6357,12 @@ export declare const GetForecastResponse: zod.ZodObject<{
     } | null | undefined;
     cashSignal?: {
         status: "ready" | "tight" | "not_yet" | "no_data";
+        account: {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+        };
         cashBuffer: string;
         bankToday: string;
         lowestProjected: string;
@@ -6504,6 +6538,12 @@ export declare const GetForecastResponse: zod.ZodObject<{
     } | null | undefined;
     cashSignal?: {
         status: "ready" | "tight" | "not_yet" | "no_data";
+        account: {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+        };
         cashBuffer: string;
         bankToday: string;
         lowestProjected: string;
@@ -6812,6 +6852,22 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     maxSafeExtra: zod.ZodString;
     snapshotAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     snapshotSource: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    account: zod.ZodObject<{
+        name: zod.ZodNullable<zod.ZodString>;
+        mask: zod.ZodNullable<zod.ZodString>;
+        subtype: zod.ZodNullable<zod.ZodString>;
+        via: zod.ZodEnum<["pointer", "snapshot mask", "sole checking", "sole depository", "unresolved"]>;
+    }, "strip", zod.ZodTypeAny, {
+        name: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+        mask: string | null;
+        subtype: string | null;
+    }, {
+        name: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+        mask: string | null;
+        subtype: string | null;
+    }>;
     horizonDays: zod.ZodOptional<zod.ZodNumber>;
     fromDate: zod.ZodOptional<zod.ZodString>;
     toDate: zod.ZodOptional<zod.ZodString>;
@@ -6991,6 +7047,12 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     status: "ready" | "tight" | "not_yet" | "no_data";
+    account: {
+        name: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+        mask: string | null;
+        subtype: string | null;
+    };
     cashBuffer: string;
     bankToday: string;
     lowestProjected: string;
@@ -7069,6 +7131,12 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     }[] | undefined;
 }, {
     status: "ready" | "tight" | "not_yet" | "no_data";
+    account: {
+        name: string | null;
+        via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+        mask: string | null;
+        subtype: string | null;
+    };
     cashBuffer: string;
     bankToday: string;
     lowestProjected: string;

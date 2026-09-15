@@ -4,6 +4,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot ti
 {
   "balanceOnly": {
     "acceptedImpact": "0.00",
+    "account": {
+      "mask": null,
+      "name": null,
+      "subtype": null,
+      "via": "unresolved",
+    },
     "bankToday": "900.00",
     "cashBuffer": "100.00",
     "daily": [
@@ -115,6 +121,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot ti
   },
   "timeOnly": {
     "acceptedImpact": "0.00",
+    "account": {
+      "mask": null,
+      "name": null,
+      "subtype": null,
+      "via": "unresolved",
+    },
     "bankToday": "690.00",
     "cashBuffer": "100.00",
     "daily": [
@@ -230,6 +242,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot ti
 exports[`PR4a golden — computeCashSignal output, byte for byte > full household, a fromDate window after the anchor 1`] = `
 {
   "acceptedImpact": "-15.00",
+  "account": {
+    "mask": "1111",
+    "name": "Chase Checking",
+    "subtype": "checking",
+    "via": "pointer",
+  },
   "bankToday": "2785.00",
   "cashBuffer": "500.00",
   "daily": [
@@ -549,6 +567,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 exports[`PR4a golden — computeCashSignal output, byte for byte > full household, a window that ends before today 1`] = `
 {
   "acceptedImpact": "0.00",
+  "account": {
+    "mask": "1111",
+    "name": "Chase Checking",
+    "subtype": "checking",
+    "via": "pointer",
+  },
   "bankToday": "2785.00",
   "cashBuffer": "500.00",
   "daily": [
@@ -717,6 +741,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 exports[`PR4a golden — computeCashSignal output, byte for byte > full household, a window that starts after today 1`] = `
 {
   "acceptedImpact": "0.00",
+  "account": {
+    "mask": "1111",
+    "name": "Chase Checking",
+    "subtype": "checking",
+    "via": "pointer",
+  },
   "bankToday": "2785.00",
   "cashBuffer": "500.00",
   "daily": [
@@ -966,6 +996,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 exports[`PR4a golden — computeCashSignal output, byte for byte > full household, default window from today 1`] = `
 {
   "acceptedImpact": "0.00",
+  "account": {
+    "mask": "1111",
+    "name": "Chase Checking",
+    "subtype": "checking",
+    "via": "pointer",
+  },
   "bankToday": "2785.00",
   "cashBuffer": "500.00",
   "daily": [
@@ -1405,6 +1441,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 exports[`PR4a golden — computeCashSignal output, byte for byte > full household, snapshot dated after today 1`] = `
 {
   "acceptedImpact": "0.00",
+  "account": {
+    "mask": "1111",
+    "name": "Chase Checking",
+    "subtype": "checking",
+    "via": "pointer",
+  },
   "bankToday": "3000.00",
   "cashBuffer": "500.00",
   "daily": [
@@ -1844,6 +1886,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot, a window that starts after today: a plan before the window lands on its first day 1`] = `
 {
   "acceptedImpact": "0.00",
+  "account": {
+    "mask": null,
+    "name": null,
+    "subtype": null,
+    "via": "unresolved",
+  },
   "bankToday": "1800.00",
   "cashBuffer": "200.00",
   "daily": [
@@ -1978,6 +2026,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot, 
 exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot: the starting-balance fallback with flagged and unflagged rows 1`] = `
 {
   "acceptedImpact": "0.00",
+  "account": {
+    "mask": null,
+    "name": null,
+    "subtype": null,
+    "via": "unresolved",
+  },
   "bankToday": "2500.00",
   "cashBuffer": "300.00",
   "daily": [
@@ -2212,6 +2266,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot: 
 exports[`PR4a golden — computeCashSignal output, byte for byte > snapshot with no account pointer: manual rows count, Plaid rows do not 1`] = `
 {
   "acceptedImpact": "0.00",
+  "account": {
+    "mask": null,
+    "name": null,
+    "subtype": null,
+    "via": "unresolved",
+  },
   "bankToday": "1475.00",
   "cashBuffer": "0.00",
   "daily": [
@@ -2346,6 +2406,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > snapshot with
 exports[`PR4a golden — computeCashSignal output, byte for byte > ties and edge paths: same-day bills with a dragged plan, the day-before-snapshot bill, a recovered moved bill 1`] = `
 {
   "acceptedImpact": "0.00",
+  "account": {
+    "mask": "1111",
+    "name": "Chase Checking",
+    "subtype": "checking",
+    "via": "pointer",
+  },
   "bankToday": "1880.00",
   "cashBuffer": "200.00",
   "daily": [
@@ -2607,6 +2673,12 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > ties and edge
 exports[`PR4b golden — the snapshot rule > counts rows shown to happen after the read, holds rows the balance already had 1`] = `
 {
   "acceptedImpact": "0.00",
+  "account": {
+    "mask": "1111",
+    "name": "Chase Checking",
+    "subtype": "checking",
+    "via": "pointer",
+  },
   "bankToday": "3130.00",
   "cashBuffer": "500.00",
   "daily": [

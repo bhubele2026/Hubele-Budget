@@ -4345,7 +4345,7 @@ components:
         institutionName: { type: ["string", "null"] }
     CashSignal:
       type: object
-      required: [bankToday, lowestProjected, lowestDate, cashBuffer, status, maxSafeExtra]
+      required: [bankToday, lowestProjected, lowestDate, cashBuffer, status, maxSafeExtra, account]
       properties:
         bankToday: { type: string }
         lowestProjected: { type: string }
@@ -4355,6 +4355,7 @@ components:
         maxSafeExtra: { type: string }
         snapshotAt: { type: ["string", "null"] }
         snapshotSource: { type: ["string", "null"] }
+        account: { $ref: "#/components/schemas/CashSignalAccount" }
         horizonDays: { type: integer }
         fromDate: { type: string }
         toDate: { type: string }
@@ -4496,6 +4497,24 @@ components:
                   `overdueAssumedPaid`): the amount still assumed unpaid, signed
                   like the plan ("0.00" when paid in full). Only that remainder
                   stays on the curve.
+    CashSignalAccount:
+      type: object
+      description: |
+        (Decision 16, PR-K round 2) The bank account this signal's figures roll
+        forward on, as `resolveSnapshotAccount` resolved it: the stored pointer,
+        else the snapshot's mask, else the household's sole checking account,
+        else its sole depository account. A screen that names the account reads
+        this, so its label and its numbers come from one response. `name`,
+        `mask` and `subtype` are the resolved Plaid account's own; all null when
+        `via` is `unresolved`, where the balance stays at the raw snapshot.
+      required: [name, mask, subtype, via]
+      properties:
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+        subtype: { type: ["string", "null"], description: "Plaid subtype, e.g. checking or savings." }
+        via:
+          type: string
+          enum: ["pointer", "snapshot mask", "sole checking", "sole depository", "unresolved"]
     CashSignalAssumedPaidPlan:
       type: object
       description: (PR6 review) An overdue plan occurrence the forecast treats as paid by a bank row.
