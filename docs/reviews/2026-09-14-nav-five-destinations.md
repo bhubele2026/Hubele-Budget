@@ -137,10 +137,12 @@ nothing for them to move in lockstep with. `/review`'s importer and `/reports/sp
 
 ## Round 2 — review fixes (2026-09-15)
 
-The independent review of round 1 returned **REQUEST CHANGES**: 2 HIGH, 2 MEDIUM, 2 LOW, 1 NIT. The branch now also
-carries merge `67b5518` (`origin/main` `2731077` into `5f2d2df`), and `origin/main` had not moved when this round was
-pushed. Still web-only and navigation-only, apart from the rename the owner asked for. No route, query, stored value or
-calculation changed.
+The independent review of round 1 returned **REQUEST CHANGES**: 2 HIGH, 2 MEDIUM, 2 LOW, 1 NIT. The branch carries
+merge `67b5518` (`origin/main` `2731077` into `5f2d2df`). `origin/main` then moved to `2e1949f3` while this round was
+in progress. That change removed the seed-bills tool and touched only the API server, scripts and docs, none of the R0
+files. The round-2 commit is `dd3ea92b`, the new main is merged on top as `f1947554` without conflicts, and every gate
+below was re-run on that merged tree. This round is still web-only and navigation-only, apart from the rename the owner
+asked for. No route, query, stored value or calculation changed.
 
 ### 1. HIGH — pages that live only in a ribbon were unreachable on a phone
 
@@ -289,6 +291,9 @@ only existing tokens: navy ground, white alphas, the orange active bar and badge
 pill were introduced.
 
 ### Gates (round 2)
+
+All gates ran on the merged tree `f1947554`, which is the round-2 commit `dd3ea92b` plus `origin/main` `2e1949f3`. A
+run on `dd3ea92b` before the merge gave identical numbers. The only commit after `f1947554` updates this note.
 
 - **`pnpm run typecheck`:** exit 0, including `typecheck:e2e`.
 - **Web tests, `TZ=UTC`:** 140 files, 1212 passed, 3 skipped.
