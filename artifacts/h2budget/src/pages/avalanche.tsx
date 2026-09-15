@@ -646,7 +646,7 @@ export default function AvalanchePage() {
   });
 
   return (
-    <Page title="Future Goal">
+    <Page title="Debt">
       <DebtReauthBanner debts={debts} />
 
       {killedBanner && (

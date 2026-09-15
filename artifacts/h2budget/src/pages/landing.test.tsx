@@ -71,14 +71,14 @@ beforeEach(() => {
 });
 
 describe("landing — the six-tile door", () => {
-  it("renders all six area tiles", () => {
+  it("renders all six destination tiles", () => {
     mount();
     for (const id of [
-      "banking",
-      "bills",
+      "home",
       "forecast",
-      "avalanche",
-      "budget",
+      "spending",
+      "review",
+      "debt",
       "settings",
     ]) {
       expect(screen.getByTestId(`landing-tile-${id}`)).toBeTruthy();
@@ -89,11 +89,11 @@ describe("landing — the six-tile door", () => {
     mount();
     const href = (id: string) =>
       screen.getByTestId(`landing-tile-${id}`).getAttribute("href");
-    expect(href("banking")).toBe("/banking");
-    expect(href("bills")).toBe("/bills");
+    expect(href("home")).toBe("/banking");
     expect(href("forecast")).toBe("/forecast/overview");
-    expect(href("avalanche")).toBe("/avalanche");
-    expect(href("budget")).toBe("/budget");
+    expect(href("spending")).toBe("/reports/spending");
+    expect(href("review")).toBe("/review");
+    expect(href("debt")).toBe("/avalanche");
     expect(href("settings")).toBe("/settings");
   });
 
@@ -113,7 +113,7 @@ describe("landing — exactly two numbers, both from the spine", () => {
     expect(screen.getByTestId("landing-bell-count").textContent).toBe("4");
   });
 
-  it("shows % paid on Future Goal", () => {
+  it("shows % paid on the Debt tile", () => {
     mount();
     expect(screen.getByTestId("landing-payoff-pct").textContent).toBe("40% paid");
   });

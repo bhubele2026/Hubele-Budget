@@ -50,7 +50,7 @@ test.describe("Bills → Avalanche navigation (#76)", () => {
     expect(url.searchParams.get("focus")).toBe(debt.id);
 
     await expect(
-      page.getByRole("heading", { name: /^future goal$/i }),
+      page.getByRole("heading", { name: /^debt$/i }),
     ).toBeVisible({ timeout: 15_000 });
   });
 });
