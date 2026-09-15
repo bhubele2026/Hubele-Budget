@@ -927,39 +927,33 @@ export async function buildForecastLedger(
     //
     // (PR5 review) A later occurrence never leaves the curve on a row dated on or
     // after an earlier occurrence of the same item that no row paid.
+    // ⭐ (Decision 13) EVIDENCE THAT A PLAN WAS PAID (`isEvidence`): for an outflow, a
+    // tier-1 or tier-2 pair (a tier-3 pair is a suggestion; its plan drags); for income,
+    // PR6's arrival rule — a non-ambiguous deposit paired with the paycheck arrived,
+    // name or not. It decides overdue evidence and `incomeNotArrived` (below) and, since
+    // PR-B2 round 3, the hold-back here — one definition, so they can never disagree.
+    const isEvidence = (m: PlanRowMatch): boolean => (m.planAmount > 0 ? !m.ambiguous : m.tier <= 2);
     // ⭐ (Owner decision 2026-09-15, PR-B2) "THE FORECAST MAY READ LOW, NEVER HIGH."
-    //   - OUTFLOWS (bills, debt minimums, the Avalanche extra): an earlier occurrence
-    //     counts as paid only when its own pair is tier 1 or 2. A tier-3 pair is a
-    //     suggestion, named or not. Decision 13 round 3's "named and not ambiguous"
-    //     branch read HIGH: an unrelated "CITY WATER METER FEE" −140 cleared April,
-    //     so April's real $150, paid late, took May off the curve while May was
-    //     unpaid. The owner accepted the cost: a real but imperfect earlier payment
-    //     (July's Toyota paid $685.00 on a $672.80 bill, tier 3) holds back August's
-    //     exact payment, and August drags until July is confirmed in Review.
-    //   - INCOME (round 2): holding a paycheck back keeps it ON the curve while its
-    //     deposit is already in cash, which reads HIGH. So an earlier income
-    //     occurrence keeps the rule main used before PR-B2: tier 1 or 2, or a named
-    //     (confidence not "low"), non-ambiguous deposit — which agrees with the
-    //     income-arrival rule (`isEvidence` below) for a named deposit.
-    // A pair whose row is tagged to another debt pays nothing, so it doesn't count.
-    // A matched or partial answer is tier 1, and an answered occurrence never
-    // reaches the matcher, so it never holds anything back.
+    // An earlier occurrence counts as paid for the hold-back exactly when its own pair
+    // is evidence it was paid (`isEvidence`):
+    //   - OUTFLOWS (bills, debt minimums, the Avalanche extra): tier 1 or 2 only. A
+    //     tier-3 pair is a suggestion, named or not. Decision 13 round 3's "named and
+    //     not ambiguous" branch read HIGH: an unrelated "CITY WATER METER FEE" −140
+    //     cleared April, so April's real $150, paid late, took May off the curve while
+    //     May was unpaid. The owner accepted the cost: a real but imperfect earlier
+    //     payment (July's Toyota paid $685.00 on a $672.80 bill, tier 3) holds back
+    //     August's exact payment, and August drags until July is confirmed in Review.
+    //   - INCOME (rounds 2–3): holding a paycheck back keeps it ON the curve while its
+    //     deposit is already in cash, which reads HIGH. So an earlier income occurrence
+    //     counts as received exactly when it counts as arrived: its pair is not
+    //     ambiguous, named or not. That can only read lower. The accepted cost: a
+    //     nameless coincidental deposit on an unpaid paycheck's date clears it, and
+    //     the next paycheck reads one paycheck low until the owner answers "Not this".
+    // A matched or partial answer is tier 1, and an answered occurrence never reaches
+    // the matcher, so it never holds anything back. A tier ≤ 2 pair is never on a row
+    // tagged to another debt (`tierOf`), and the arrival rule has no tag check either.
     const planByKey = new Map(matchPlans.map((p) => [p.key, p] as const));
-    const rowDebtById = new Map(matchRows.map((r) => [r.txnId, r.debtId ?? null] as const));
-    const pairedKeys = new Set(
-      matches
-        .filter((m) => {
-          if (m.tier <= 2) return true;
-          // An outflow needs tier-1/2 proof.
-          if (m.planAmount < 0) return false;
-          // Income: the arrival rule, as before PR-B2.
-          if (m.ambiguous || m.confidence === "low") return false;
-          const rowDebt = rowDebtById.get(m.txnId) ?? null;
-          const planDebt = planByKey.get(m.planKey)?.debtId ?? null;
-          return !(rowDebt && planDebt && rowDebt !== planDebt);
-        })
-        .map((m) => m.planKey),
-    );
+    const pairedKeys = new Set(matches.filter(isEvidence).map((m) => m.planKey));
     const unpaidByItem = new Map<string, string[]>();
     for (const p of matchPlans) {
       if (pairedKeys.has(p.key)) continue;
@@ -985,11 +979,6 @@ export async function buildForecastLedger(
       );
       return earlierUnpaid ? { ...m, tier: 3 as const, evidence: null, offCurve: false } : m;
     });
-    // ⭐ (Decision 13) OVERDUE EVIDENCE: a tier-1 or tier-2 pair. A tier-3 pair is a
-    // suggestion; its plan drags. Income keeps PR6's rule (a non-ambiguous deposit
-    // paired with the paycheck arrived, name or not): income already due is never
-    // on the curve, so for income this decides only `incomeNotArrived`.
-    const isEvidence = (m: PlanRowMatch): boolean => (m.planAmount > 0 ? !m.ambiguous : m.tier <= 2);
     // (Debt tag, review M1) One row pays at most once: a row whose pair takes its
     // plan off the curve (`offCurve`) or counts as overdue evidence is used up.
     // (PR6 review, M2) The older overdue occurrences pair with the rows the pass

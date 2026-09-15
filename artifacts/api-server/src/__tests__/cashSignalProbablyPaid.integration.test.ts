@@ -592,15 +592,15 @@ async function paycheck(frequency: "monthly" | "biweekly", anchorDate: string, a
   return r!.id;
 }
 
-// ⭐ (PR-B2 round 2) OUTFLOWS NEED PROOF; INCOME KEEPS ITS ARRIVAL RULE. The owner's
+// ⭐ (PR-B2 rounds 2–3) OUTFLOWS NEED PROOF; INCOME USES ITS ARRIVAL RULE. The owner's
 // principle is "the forecast may read low, never high". For a bill, holding a later
 // row back keeps the bill on the curve, which can only read low. For income it runs
 // the other way: a held-back paycheck stays on the curve while its deposit is
 // already in cash, so the paycheck counts twice. So the tier ≤ 2 requirement applies
-// to outflows only; an earlier INCOME occurrence counts as received for the hold-back
-// on the rule main `2731077` used (tier ≤ 2, or named and not ambiguous), which agrees
-// with the income-arrival rule for a named deposit.
-describe("(PR-B2 round 2) the hold-back reads income by its arrival rule, so a paycheck is never counted twice", () => {
+// to outflows only. An earlier INCOME occurrence counts as received for the hold-back
+// exactly when it counts as arrived (`isEvidence`: its pair is not ambiguous, named or
+// not). Round 3; round 2 used main's narrower named condition.
+describe("(PR-B2 rounds 2–3) the hold-back reads income by its arrival rule, so a paycheck is never counted twice", () => {
   it("(round 2) April's $2,000 paycheck arrived $100 short (named, tier 3): May's exact deposit a day early counts once (05-15: 3,000, not 5,000)", async () => {
     await snapshotOnChase();
     const pay = await paycheck("monthly", "2026-01-15");
@@ -630,9 +630,12 @@ describe("(PR-B2 round 2) the hold-back reads income by its arrival rule, so a p
   //     short), so it ranks below the 05-14 candidate — and a pair is marked
   //     `ambiguous` whenever a same-or-better-ranked candidate for its plan scores
   //     better, even though that candidate's row already went to 05-15;
-  //   - ambiguous means not arrived (`incomeNotArrived` lists 05-01) and not received
-  //     for the hold-back, so 05-15's pair is held back: +$2,000 stays on the curve
-  //     while the deposit is already in cash.
+  //   - ambiguous means not arrived (`incomeNotArrived` lists 05-01) and — round 3, the
+  //     same `isEvidence` rule — not received for the hold-back, so 05-15's pair is held
+  //     back: +$2,000 stays on the curve while the deposit is already in cash.
+  // The fix belongs in the matcher's ambiguity flag: a better-scoring candidate whose row
+  // is already taken must not make a pair ambiguous. That fix must not let any bill pair
+  // leave the curve (an un-flagged bill pair can become tier 2 and read high).
   it("(KNOWN ISSUE, PR9) biweekly: 05-01 arrived $100 short, 05-15 deposited a day early — pinned at today's value, counted twice (05-15: 5,000.00; right answer 3,000.00)", async () => {
     await snapshotOnChase();
     const pay = await paycheck("biweekly", "2026-04-17");
@@ -664,12 +667,11 @@ describe("(PR-B2 round 2) the hold-back reads income by its arrival rule, so a p
     expect(balanceOn(sig, "2026-05-15")).toBe("3000.00");
   });
 
-  // ⚠️ KNOWN ISSUE — pre-existing on main `2731077`, NOT fixed in PR-B2 (open for the lead).
-  // Round 2 gives income main's hold-back rule back, and that rule leaves out a NAMELESS
-  // earlier deposit (`confidence: "low"`). The income-arrival rule (`isEvidence`: not
-  // ambiguous, any confidence) counts April received; the hold-back does not, so May's
-  // early deposit is held back and May's paycheck counts twice. Pins today's wrong value.
-  it("(KNOWN ISSUE, open) April's $2,000 paycheck arrived exactly but nameless ('DIRECT DEP 7781'), May deposited a day early by name — counted twice (05-15: 5,000.00; right answer 3,000.00)", async () => {
+  // (PR-B2 round 3) REPLACES round 2's known-issue pin, which asserted 05-15 at 5,000.00
+  // (May's paycheck counted twice). The hold-back now reads income by the arrival rule
+  // itself (`isEvidence`: not ambiguous, named or not), so April's exact but nameless
+  // deposit counts as arrived AND as received, and May's early deposit is not held back.
+  it("(round 3) April's $2,000 paycheck arrived exactly but nameless ('DIRECT DEP 7781'), May deposited a day early by name — counted once (05-15: 3,000.00, not 5,000.00)", async () => {
     await snapshotOnChase();
     const pay = await paycheck("monthly", "2026-01-15");
     const april = await row("2026-04-15", "2000", "DIRECT DEP 7781");
@@ -678,11 +680,42 @@ describe("(PR-B2 round 2) the hold-back reads income by its arrival rule, so a p
     const sig = await signal();
 
     expect(matchFor(sig, `${pay}|2026-04-15`)).toMatchObject({ txnId: april, confidence: "low", ambiguous: false, tier: 3 });
-    // Arrived, by the arrival rule…
+    // Arrived, by the arrival rule, and received for the hold-back: the two agree.
     expect(sig.incomeNotArrived?.find((p) => p.planKey === `${pay}|2026-04-15`)).toBeUndefined();
-    // …but not received for the hold-back.
-    expect(matchFor(sig, `${pay}|2026-05-15`)).toMatchObject({ txnId: may, tier: 3, offCurve: false });
+    expect(matchFor(sig, `${pay}|2026-05-15`)).toMatchObject({ txnId: may, tier: 2, offCurve: true });
     expect(sig.bankToday).toBe("3000.00");
-    expect(balanceOn(sig, "2026-05-15")).toBe("5000.00");
+    expect(balanceOn(sig, "2026-05-15")).toBe("3000.00");
+  });
+
+  // (PR-B2 round 3) THE STATED COST, in the allowed direction. The ledger can't tell a
+  // nameless deposit that IS the paycheck (the case above) from one that isn't: the rows
+  // have the same shape. Here April's paycheck did NOT arrive on time. An unrelated
+  // nameless $2,000 check deposit lands on its date, and April's real paycheck arrives
+  // late on 05-14, past April's +14-day window, so it can only pair with May. The
+  // arrival rule counts April received on the check, May's pair isn't held back, and May
+  // leaves the curve: 05-15 reads 3,000.00 where the truth is 5,000.00 (May's paycheck
+  // is still coming) — one paycheck LOW, never high. Answering April's suggestion
+  // "Not this" puts it right; the answered read is the truth, never above it.
+  it("(round 3, the cost) a nameless coincidental $2,000 on April's paycheck date: 05-15 reads one paycheck low (3,000.00; truth 5,000.00) until April's suggestion is answered 'Not this'", async () => {
+    await snapshotOnChase();
+    const pay = await paycheck("monthly", "2026-01-15");
+    const check = await row("2026-04-15", "2000", "MOBILE CHECK DEP 0415");
+    const late = await row("2026-05-14", "2000", "ACME PAYROLL");
+
+    const before = await signal();
+
+    expect(matchFor(before, `${pay}|2026-04-15`)).toMatchObject({ txnId: check, confidence: "low", ambiguous: false, tier: 3 });
+    expect(matchFor(before, `${pay}|2026-05-15`)).toMatchObject({ txnId: late, tier: 2, offCurve: true });
+    expect(before.bankToday).toBe("3000.00");
+    // One paycheck low: the truth is 5,000.00.
+    expect(balanceOn(before, "2026-05-15")).toBe("3000.00");
+
+    await resolve("not_match", pay, "2026-04-15", { txnId: check });
+    const after = await signal();
+
+    expect(matchFor(after, `${pay}|2026-04-15`)).toBeUndefined();
+    expect(matchFor(after, `${pay}|2026-05-15`)).toMatchObject({ txnId: late, tier: 3, offCurve: false });
+    expect(after.bankToday).toBe("3000.00");
+    expect(balanceOn(after, "2026-05-15")).toBe("5000.00");
   });
 });
