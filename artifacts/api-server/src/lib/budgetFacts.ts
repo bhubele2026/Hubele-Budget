@@ -16,6 +16,7 @@
 import { and, eq, gte, lt } from "drizzle-orm";
 import { householdTodayISO } from "./householdClock";
 import { sql } from "drizzle-orm";
+import { notBankRemovedSql } from "./bankRemoved";
 import {
   db,
   transactionsTable,
@@ -251,6 +252,8 @@ async function loadMonth(
         gte(transactionsTable.occurredOn, monthStart),
         lt(transactionsTable.occurredOn, bounds.nextMonthStart),
         eq(transactionsTable.isTransfer, false),
+        // (PR-I) A row the bank removed is no actual.
+        notBankRemovedSql(),
       ),
     )
     .groupBy(transactionsTable.categoryId);
@@ -425,6 +428,8 @@ export async function buildBudgetFacts(
           gte(transactionsTable.occurredOn, monthStart),
           lt(transactionsTable.occurredOn, bounds.nextMonthStart),
           eq(transactionsTable.isTransfer, false),
+          // (PR-I) The burndown ties to the actuals above.
+          notBankRemovedSql(),
         ),
       )
       .groupBy(transactionsTable.occurredOn, transactionsTable.categoryId);

@@ -3,6 +3,7 @@ import { and, eq, ne, sql, asc, desc, lt, gte, inArray, isNull, notInArray } fro
 import { findSupersededPendingForRange } from "../lib/supersededPending";
 import { uncategorizedCategoryIds } from "../lib/pendingFiling";
 import { aggregateBudgetMonth } from "../lib/budgetActuals";
+import { notBankRemovedSql } from "../lib/bankRemoved";
 import {
   db,
   avalancheSettingsTable,
@@ -2006,6 +2007,10 @@ router.get(
               eq(transactionsTable.householdId, householdId),
               sql`${transactionsTable.occurredOn} >= ${monthStart}`,
               sql`${transactionsTable.occurredOn} < ${monthEndStr}`,
+              // (PR-I) A row the bank removed counts in no figure. The pairing
+              // above still sees a removed pending row as the row its posted row
+              // replaced, so that posted row keeps the filing.
+              notBankRemovedSql(),
             ),
           );
         return { supersede, monthRows };

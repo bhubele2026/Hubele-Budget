@@ -122,5 +122,12 @@ export interface Transaction {
   response — never persisted.
    */
     merchantSignature?: string;
+    /** (PR-I) The bank removed this transaction after someone worked on
+  it. It stays listed, with its review work, and counts in no balance,
+  spending, Amex owed or budget total. Plaid listing it again clears
+  it. Sent by GET /transactions (true only with includeBankRemoved)
+  and GET /transactions/ledger; absent elsewhere.
+   */
+    bankRemoved?: boolean;
 }
 //# sourceMappingURL=transaction.d.ts.map

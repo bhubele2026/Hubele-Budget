@@ -442,6 +442,13 @@ stable signature can be derived. Computed server-side per list
 response — never persisted.
  */
   merchantSignature?: string;
+  /** (PR-I) The bank removed this transaction after someone worked on
+it. It stays listed, with its review work, and counts in no balance,
+spending, Amex owed or budget total. Plaid listing it again clears
+it. Sent by GET /transactions (true only with includeBankRemoved)
+and GET /transactions/ledger; absent elsewhere.
+ */
+  bankRemoved?: boolean;
 }
 
 export type LedgerRow = Transaction & {
@@ -467,7 +474,8 @@ other than the snapshot's, which has no register; there
   /** counted (moves the balance by its amount); superseded (a pending
 row its posted row replaced); duplicate (a second row with the
 same Plaid transaction id); not_bank (a mask-twin row, which the
-bank balance does not read).
+bank balance does not read); removed_by_bank (PR-I: the bank
+removed the row after someone worked on it; it moves nothing).
  */
   balanceReason: string;
   /**
@@ -3875,6 +3883,13 @@ export type ListTransactionsParams = {
   minAmount?: string;
   maxAmount?: string;
   categoryId?: string;
+  /**
+ * (PR-I) true lists rows the bank removed after someone worked on
+them, each with `bankRemoved: true`. Left out otherwise: they count
+in no total, so a list a page sums never carries one.
+
+ */
+  includeBankRemoved?: boolean;
 };
 
 export type DeleteMerchantAliasParams = {

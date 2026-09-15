@@ -31,6 +31,8 @@ import { householdDayOfAt } from "./householdDay";
 export type AmexTxnInput = {
   occurredOn: string;
   amount: string | number;
+  /** (PR-I) The bank removed this row: it moves no balance. */
+  bankRemoved?: boolean;
 };
 
 export type AmexAnchor = {
@@ -300,8 +302,10 @@ export function makeAmexBalanceAtEndOf(args: {
     ? monthKeyFromISO(householdDayOfAt(anchor.asOf))
     : (fallbackMonth ?? monthKeyOf(new Date()));
 
+  // (PR-I) A charge the bank removed moves no balance, in any month.
+  const counted = amexTransactions.filter((t) => !t.bankRemoved);
   const netChangeByMonth = new Map<string, number>();
-  for (const t of amexTransactions) {
+  for (const t of counted) {
     const mk = monthKeyFromISO(t.occurredOn);
     const k = `${mk.year}-${mk.month}`;
     netChangeByMonth.set(
@@ -310,7 +314,7 @@ export function makeAmexBalanceAtEndOf(args: {
     );
   }
 
-  const anchorMonthTxns = amexTransactions.filter(
+  const anchorMonthTxns = counted.filter(
     (t) => compareMonth(monthKeyFromISO(t.occurredOn), anchorMonth) === 0,
   );
 

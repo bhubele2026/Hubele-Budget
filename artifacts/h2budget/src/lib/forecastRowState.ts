@@ -1,3 +1,5 @@
+import { BANK_REMOVED_STATUS } from "@workspace/avalanche-core";
+
 /**
  * (PR5b) The one forecast decision a bank row carries, for pages that read
  * resolutions per row (the Chase / Transactions page).
@@ -13,6 +15,10 @@
  *
  * (One-time bill move) A `needs_review` is not a decision: a move put the match
  * in question and the row is back in Review until the user answers.
+ *
+ * (PR-I) Nor is a bank-removed marker: it says the bank removed the row, not
+ * what the row paid. The `/forecast` bundle leaves markers out; this read
+ * ignores one all the same.
  */
 export type RowResolution = {
   status: string;
@@ -28,7 +34,8 @@ export function rowDecisionsByTxn(
       !r.matchedTxnId ||
       r.status === "not_match" ||
       r.status === "needs_review" ||
-      r.status === "needs_review_partial"
+      r.status === "needs_review_partial" ||
+      r.status === BANK_REMOVED_STATUS
     )
       continue;
     out.set(r.matchedTxnId, { status: r.status });

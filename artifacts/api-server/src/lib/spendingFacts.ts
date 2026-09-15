@@ -27,6 +27,7 @@ import {
   type FilingContext,
 } from "./pendingFiling";
 import { addDaysISO, householdTodayISO } from "./householdClock";
+import { notBankRemovedSql } from "./bankRemoved";
 
 // The household only started tracking transactions on this date; ranges that
 // reach further back are clamped so day/total math is not diluted by empty
@@ -209,6 +210,10 @@ export async function buildSpendingFacts(
         eq(transactionsTable.householdId, householdId),
         gte(transactionsTable.occurredOn, start),
         lte(transactionsTable.occurredOn, end),
+        // (PR-I) A row the bank removed counts nowhere: not spend, income or
+        // any excluded bucket. The pairing still sees a removed pending row as
+        // the row its posted row replaced, so that posted row keeps its filing.
+        notBankRemovedSql(),
       ),
     );
 

@@ -173,10 +173,11 @@ export function ledgerRowLabels(
     });
   }
   if (row.stalePending) {
+    // (PR-I, owner decision 5) A label only: the row still counts, never as $0.
     out.push({
       key: "stale-pending",
-      label: "Pending 14+ days",
-      title: "Still pending after 14 days. It may have posted as another row.",
+      label: "Pending unusually long",
+      title: "Still pending after 14 days. It still counts. It may have posted as another row.",
     });
   }
   if (row.heldAhead) {
@@ -186,7 +187,14 @@ export function ledgerRowLabels(
       title: "The bank balance already includes this row, though it is dated after that balance was read.",
     });
   }
-  if (!row.countsInBalance) {
+  if (!row.countsInBalance && row.balanceReason === "removed_by_bank") {
+    // (PR-I, owner decision 14) The bank removed a row someone worked on.
+    out.push({
+      key: "removed-by-bank",
+      label: "Removed by bank",
+      title: "The bank removed this transaction. It counts in no balance, spending or budget total. Your review work stays on it.",
+    });
+  } else if (!row.countsInBalance) {
     const why =
       row.balanceReason === "superseded"
         ? "Replaced by its posted row."

@@ -12,6 +12,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { AMEX_TXN_SOURCES, computeWeeklyPayoff } from "../lib/amexAnchor";
 import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
 import { householdTodayISO } from "../lib/householdClock";
+import { notBankRemovedSql } from "../lib/bankRemoved";
 
 const router: IRouter = Router();
 
@@ -439,6 +440,8 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       and(
         eq(transactionsTable.householdId, householdId),
         inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
+        // (PR-I) A charge the bank removed is not owed.
+        notBankRemovedSql(),
         ...(scopedAccountId
           ? [eq(transactionsTable.plaidAccountId, scopedAccountId)]
           : []),

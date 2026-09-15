@@ -347,6 +347,9 @@ export default function AmexPage() {
       from: monthFirstISO(selectedMonth),
       to: monthLastISO(selectedMonth),
       source: sourceParam,
+      // (PR-I) The month's list shows a charge the bank removed, labelled; no
+      // balance on this page counts it. The trend query leaves it out.
+      includeBankRemoved: true,
     }),
     [sourceParam, selectedMonth],
   );
@@ -649,6 +652,8 @@ export default function AmexPage() {
     let charges = 0;
     let paymentsAndCredits = 0;
     for (const t of filtered) {
+      // (PR-I) A charge the bank removed is in no total.
+      if (t.bankRemoved) continue;
       const a = parseSigned(t.amount);
       if (a >= 0) charges += a;
       else paymentsAndCredits += a; // negative
@@ -1012,10 +1017,10 @@ export default function AmexPage() {
     // rows so the per-row "bal $X" matches the card-scoped ending
     // balance shown in the tile. Falls through to all rows when
     // cardFilter === "all" (current behavior).
-    const series =
-      cardFilter === "all"
-        ? monthScoped
-        : monthScoped.filter((t) => (t.plaidAccountId ?? "") === cardFilter);
+    // (PR-I) A charge the bank removed moves no balance, so it gets no "bal $X".
+    const series = monthScoped.filter(
+      (t) => !t.bankRemoved && (cardFilter === "all" || (t.plaidAccountId ?? "") === cardFilter),
+    );
     return computeRunningBalances(sortNewestFirst(series), endingBalance.value);
   }, [monthScoped, endingBalance.value, cardFilter]);
 
@@ -2105,6 +2110,15 @@ export default function AmexPage() {
                             bal {formatCurrency(runningBalanceMap.get(t.id)!)}
                           </span>
                         )}
+                        {t.bankRemoved && (
+                          <span
+                            className="chip gray whitespace-nowrap"
+                            title="The bank removed this charge. It counts in no balance, spending or budget total. Your review work stays on it."
+                            data-testid={`badge-bank-removed-mobile-${t.id}`}
+                          >
+                            Removed by bank
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pl-7">
@@ -2323,6 +2337,15 @@ export default function AmexPage() {
                                 data-testid={`text-running-balance-${t.id}`}
                               >
                                 bal {formatCurrency(runningBalanceMap.get(t.id)!)}
+                              </span>
+                            )}
+                            {t.bankRemoved && (
+                              <span
+                                className="chip gray whitespace-nowrap"
+                                title="The bank removed this charge. It counts in no balance, spending or budget total. Your review work stays on it."
+                                data-testid={`badge-bank-removed-${t.id}`}
+                              >
+                                Removed by bank
                               </span>
                             )}
                           </div>

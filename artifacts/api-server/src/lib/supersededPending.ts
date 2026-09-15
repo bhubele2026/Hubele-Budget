@@ -22,6 +22,7 @@ import {
 } from "@workspace/avalanche-core";
 import { addDaysISO } from "./householdClock";
 import type { Filing } from "./pendingFiling";
+import { notBankRemovedSql } from "./bankRemoved";
 
 /** `db` or a transaction on it: everything here only reads. */
 export type DbReader = Pick<typeof db, "select">;
@@ -285,6 +286,11 @@ export function supersedeCandidatesQuery(
           sql`(${pendingRow.occurredOn} + ${SUPERSEDE_MAX_DAYS}::int)`,
         ),
         gt(postedRow.createdAt, pendingRow.createdAt),
+        // (PR-I) A posted row the bank removed replaces nothing: the pending row
+        // the bank still reports keeps counting. A removed PENDING row stays a
+        // candidate, so the posted row that replaced it never counts it twice —
+        // the cash rule pairs the same way (`classifyCashRows`).
+        notBankRemovedSql(postedRow.id),
         sql`sign(${postedRow.amount}) = sign(${pendingRow.amount})`,
         sql`abs(${postedRow.amount}) >= abs(${pendingRow.amount})`,
         sql`abs(${postedRow.amount}) <= abs(${pendingRow.amount}) * 1.3 + 1.01`,

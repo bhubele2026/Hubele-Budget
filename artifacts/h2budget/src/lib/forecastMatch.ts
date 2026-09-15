@@ -1,4 +1,4 @@
-import { inForecast } from "@workspace/avalanche-core";
+import { BANK_REMOVED_STATUS, inForecast } from "@workspace/avalanche-core";
 import type { CashEvent } from "./forecast";
 
 export type Transaction = {
@@ -338,6 +338,9 @@ export function buildLineRegister(opts: {
   const reviewByKey = new Map<string, Resolution>();
   const reviewTxnIds = new Set<string>();
   for (const r of resolutions) {
+    // (PR-I) A bank-removed marker is not a resolution. The server leaves it out
+    // of the bundle; the register ignores one all the same.
+    if (r.status === BANK_REMOVED_STATUS) continue;
     if (r.status === "not_match") {
       if (r.recurringItemId && r.occurrenceDate && r.matchedTxnId) {
         rejectedPairs.add(`${r.recurringItemId}|${r.occurrenceDate}#${r.matchedTxnId}`);

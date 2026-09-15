@@ -23,6 +23,7 @@ import {
 } from "./resolveSnapshotAccount";
 import { findMatchedRuleId, loadUserRules } from "./autoCategorize";
 import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
+import { loadBankRemovedIds } from "./bankRemoved";
 
 /**
  * ⭐ THE BANK LEDGER, PAGED ON THE SERVER (PR13).
@@ -452,9 +453,10 @@ export async function resolveLedgerScope(
  * - `counted`: by its amount;
  * - `superseded`: 0 — a pending row its posted row replaced (PR4c);
  * - `duplicate`: 0 — a second row with the same Plaid transaction id;
- * - `not_bank`: 0 — a mask-twin row; the bank balance reads only the snapshot's account.
+ * - `not_bank`: 0 — a mask-twin row; the bank balance reads only the snapshot's account;
+ * - `removed_by_bank`: 0 — the bank removed it after someone worked on it (PR-I).
  */
-export type BalanceReason = "counted" | "superseded" | "duplicate" | "not_bank";
+export type BalanceReason = "counted" | "superseded" | "duplicate" | "not_bank" | "removed_by_bank";
 
 export type RegisterRow = {
   id: string;
@@ -484,14 +486,15 @@ export type Register = {
  * so no row is `held` and none is `adjusted`: every row the cash rule counts
  * moves the register by its full amount, and every other row by 0.
  *
- * ⚠️ OPEN — Brad's decisions (CLAUDE.md §1), two of them:
- *   - a manual "Payment — <debt>" row logged beside the bank's own debit for
- *     that payment. Both count today, here and in the bank balance;
- *   - a leftover pending row its posted row cannot replace (`stalePending`
- *     after STALE_PENDING_DAYS). Both count here; the proposal is to count a
- *     stale one as 0.
- * A rule for either belongs here, as one more reason that moves a row by 0, and
- * in the bank balance's rule at the same time.
+ * ⚠️ OPEN — Brad's decision (CLAUDE.md §1): a manual "Payment — <debt>" row
+ * logged beside the bank's own debit for that payment. Both count today, here
+ * and in the bank balance. A rule for it belongs here, as one more reason that
+ * moves a row by 0, and in the bank balance's rule at the same time.
+ *
+ * DECIDED (owner decision 5, PR-I): a leftover pending row its posted row cannot
+ * replace (`stalePending` after STALE_PENDING_DAYS) is labelled, never counted
+ * as 0. DECIDED (owner decision 14, PR-I): a row the bank removed after someone
+ * worked on it moves the register by 0 (`removed_by_bank`), as it adds 0 to cash.
  */
 function registerAmount(
   outcome: CashRowOutcome,
@@ -503,6 +506,7 @@ function registerAmount(
     case "superseded":
     case "duplicate":
     case "not_bank":
+    case "removed_by_bank":
       return { cents: 0, counts: false, reason: outcome.reason };
     case "held":
     case "adjusted":
@@ -535,6 +539,8 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
     .where(and(eq(t.householdId, scope.householdId), bankRowWhere(scope.plaidAccountIds, scope.snapshotAccount)))
     .orderBy(asc(t.occurredOn), sql`${t.occurredAt} asc nulls first`, asc(t.id));
 
+  // (PR-I) A row the bank removed moves the register by 0 (`removed_by_bank`).
+  const bankRemoved = await loadBankRemovedIds(scope.householdId);
   // The fields `toCashRow` (lib/ledgerCashRows.ts) maps, read from the columns selected above.
   const cashRows: CashRow[] = rows.map((r) => ({
     id: r.id,
@@ -547,6 +553,7 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
     source: r.source ?? null,
     plaidAccountId: r.plaidAccountId ?? null,
     plaidTransactionId: r.plaidTransactionId ?? null,
+    bankRemoved: bankRemoved.has(r.id),
   }));
   const today = scope.anchor.today;
 
@@ -888,6 +895,7 @@ async function loadAnnotatedRows(
       .where(eq(merchantAliasesTable.householdId, householdId)),
   ]);
   const aliasBySignature = new Map(aliasRows.map((a) => [a.signature, a.alias]));
+  const bankRemoved = await loadBankRemovedIds(householdId);
   for (const r of rows) {
     const sig = merchantSignature(r.description);
     const alias = sig ? aliasBySignature.get(sig) : undefined;
@@ -896,6 +904,8 @@ async function loadAnnotatedRows(
       matchedRuleId: findMatchedRuleId(r.description, r.categoryId, userRules),
       merchantSignature: sig,
       displayName: alias ?? cleanMerchant(r.description),
+      // (PR-I) The row stays listed; `balanceReason` says it moves nothing.
+      bankRemoved: bankRemoved.has(r.id),
     });
   }
   return out;

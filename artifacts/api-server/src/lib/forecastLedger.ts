@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { resolveSnapshotAccount, type SnapshotAccountResolution } from "./resolveSnapshotAccount";
 import { ledgerActualRowsWhere, toCashRow } from "./ledgerCashRows";
+import { isResolutionRow, loadBankRemovedIds } from "./bankRemoved";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdDayOf, householdTodayDate } from "./householdClock";
 import { remapOrphanResolutions, type ResolutionSchedule } from "./resolutionRemap";
@@ -546,7 +547,10 @@ export async function buildForecastLedger(
   //   - a repeated plaid transaction id → 0 (defensive only: the id is unique).
   // Rows that count are summed into `bankToday` and become actuals in the order
   // the query returned them, as before the move.
-  const cash = classifyCashRows(actualRowsAll.map(toCashRow), {
+  // (PR-I) A row the bank removed after someone worked on it adds nothing
+  // (`removed_by_bank`). The same ids serve the match candidates below.
+  const bankRemoved = await loadBankRemovedIds(householdId);
+  const cash = classifyCashRows(actualRowsAll.map((t) => toCashRow(t, bankRemoved)), {
     anchor: snapshotISO && snapshotAt ? { at: snapshotAt, day: snapshotISO } : null,
     accountExternalId: configuredCheckingExternalId,
     todayISO,
@@ -575,10 +579,13 @@ export async function buildForecastLedger(
   // `matchedTxnIds` is consulted when iterating Chase bank
   // transactions, and a non-Chase txn id never appears there anyway.
   // Keep the `matchedTxnBankSet` lookup for that narrower purpose.
+  // (PR-I) A bank-removed marker is not a resolution: it closes no plan, claims
+  // no row — so the posted row that replaced a removed pending row still pays
+  // its bill — and never means paid.
   const resolutionsStored = await db
     .select()
     .from(forecastResolutionsTable)
-    .where(eq(forecastResolutionsTable.householdId, householdId));
+    .where(and(eq(forecastResolutionsTable.householdId, householdId), isResolutionRow()));
   // (One-time bill move, round 4) A pending review on a paused bill reads as the
   // user's last answer: it holds its row exactly as that answer did, and the
   // paused bill is off the curve. Resuming the bill brings the question back.
@@ -869,7 +876,8 @@ export async function buildForecastLedger(
           lte(transactionsTable.occurredOn, addDaysISO(todayISO, SUPERSEDE_MAX_DAYS)),
         ),
       );
-    const candidateCashRows = candidateRowsAll.map(toCashRow);
+    // (PR-I) A row the bank removed does not count, so it is never evidence a bill was paid.
+    const candidateCashRows = candidateRowsAll.map((t) => toCashRow(t, bankRemoved));
     const classified = classifyCashRows(candidateCashRows, {
       anchor: null,
       accountExternalId: configuredCheckingExternalId,

@@ -18,4 +18,11 @@ export type ListTransactionsParams = {
   minAmount?: string;
   maxAmount?: string;
   categoryId?: string;
+  /**
+ * (PR-I) true lists rows the bank removed after someone worked on
+them, each with `bankRemoved: true`. Left out otherwise: they count
+in no total, so a list a page sums never carries one.
+
+ */
+  includeBankRemoved?: boolean;
 };

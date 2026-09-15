@@ -159,7 +159,8 @@ describe("ledgerRowLabels: the words carry the state", () => {
     expect(ledgerRowLabels(base)).toEqual([]);
   });
   it("names each special row", () => {
-    expect(ledgerRowLabels({ ...base, stalePending: true }).map((l) => l.label)).toEqual(["Pending 14+ days"]);
+    // (PR-I) Renamed from "Pending 14+ days" to the owner's wording; same row, same single label.
+    expect(ledgerRowLabels({ ...base, stalePending: true }).map((l) => l.label)).toEqual(["Pending unusually long"]);
     expect(ledgerRowLabels({ ...base, heldAhead: true }).map((l) => l.label)).toEqual(["Already in balance"]);
     expect(ledgerRowLabels({ ...base, afterToday: true }).map((l) => l.label)).toEqual(["After today"]);
     const twin = ledgerRowLabels({ ...base, countsInBalance: false, balanceReason: "superseded" });

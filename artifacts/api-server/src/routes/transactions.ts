@@ -20,6 +20,7 @@ import {
 } from "../lib/autoCategorize";
 import { selectPatternCandidates } from "../lib/patternCandidates";
 import { forecastTodayISO } from "../lib/forecastInclusion";
+import { isResolutionRow, loadBankRemovedIds, notBankRemovedSql } from "../lib/bankRemoved";
 import { cleanMerchant, merchantSignature } from "../lib/merchantNameExtract";
 import {
   EXCLUDED_CATEGORY_RULE_ERROR,
@@ -111,12 +112,20 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
       sql`abs(${transactionsTable.amount}) <= ${q.data.maxAmount}`,
     );
   }
-  const rows = await db
-    .select()
-    .from(transactionsTable)
-    .where(and(...conds))
-    .orderBy(desc(transactionsTable.occurredOn))
-    .limit(q.data.limit ?? 500);
+  // (PR-I) A row the bank removed counts in no total, so a list a page sums
+  // (the Budget and Spending drills, Allowances, Bills, Cash flow) leaves it
+  // out. A page that shows it, labelled, asks for it (`includeBankRemoved`).
+  const includeBankRemoved = q.data.includeBankRemoved === true;
+  if (!includeBankRemoved) conds.push(notBankRemovedSql());
+  const [rows, bankRemovedIds] = await Promise.all([
+    db
+      .select()
+      .from(transactionsTable)
+      .where(and(...conds))
+      .orderBy(desc(transactionsTable.occurredOn))
+      .limit(q.data.limit ?? 500),
+    includeBankRemoved ? loadBankRemovedIds(req.householdId!) : Promise.resolve(new Set<string>()),
+  ]);
   // Annotate each row with the mapping rule that auto-categorize would
   // currently attribute, so the Transactions / Amex pages can show a
   // "matched by rule X" affordance and let the user jump to the rule on
@@ -148,6 +157,8 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
       // tell the user how many transactions a rename will affect.
       merchantSignature: sig,
       displayName: alias ?? cleanMerchant(r.description),
+      // (PR-I) Only ever true when the request asked for removed rows.
+      bankRemoved: bankRemovedIds.has(r.id),
     };
   });
   res.json(annotated);
@@ -811,6 +822,9 @@ router.patch(
           and(
             eq(forecastResolutionsTable.householdId, req.householdId!),
             eq(forecastResolutionsTable.matchedTxnId, params.data.id),
+            // (PR-I) Never the bank-removed marker: without it the removed
+            // row would count again in every total.
+            isResolutionRow(),
           ),
         );
     }
@@ -1165,6 +1179,8 @@ router.post(
           and(
             eq(forecastResolutionsTable.householdId, req.householdId!),
             inArray(forecastResolutionsTable.matchedTxnId, futureFlaggedOffIds),
+            // (PR-I) Never a bank-removed marker (see PATCH above).
+            isResolutionRow(),
           ),
         );
     }
@@ -1313,6 +1329,8 @@ router.post(
           and(
             eq(forecastResolutionsTable.householdId, req.householdId!),
             inArray(forecastResolutionsTable.matchedTxnId, futureFlaggedOffIds),
+            // (PR-I) Never a bank-removed marker (see PATCH above).
+            isResolutionRow(),
           ),
         );
     }

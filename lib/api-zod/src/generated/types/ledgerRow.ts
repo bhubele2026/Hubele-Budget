@@ -30,7 +30,8 @@ other than the snapshot's, which has no register; there
   /** counted (moves the balance by its amount); superseded (a pending
 row its posted row replaced); duplicate (a second row with the
 same Plaid transaction id); not_bank (a mask-twin row, which the
-bank balance does not read).
+bank balance does not read); removed_by_bank (PR-I: the bank
+removed the row after someone worked on it; it moves nothing).
  */
   balanceReason: string;
   /**

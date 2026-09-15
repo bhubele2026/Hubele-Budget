@@ -24,6 +24,7 @@ function row(id: string, occurredOn: string, amount: number, extra: Partial<Cash
     source: "plaid:chase",
     plaidAccountId: CHASE,
     plaidTransactionId: null,
+    bankRemoved: false,
     ...extra,
   };
 }
@@ -205,5 +206,46 @@ describe("classifyCashRows", () => {
     expect(byId(r).old!.reason).toBe("counted");
     expect(byId(r).p!.reason).toBe("superseded");
     expect(r.throughToday).toEqual({ rowCount: 2, net: -65 });
+  });
+});
+
+describe("(PR-I, owner decision 14) a row the bank removed", () => {
+  it("adds 0 and is labelled removed_by_bank, after the read or held by it", () => {
+    const r = classify([
+      row("gone", "2026-05-03", -40, { bankRemoved: true }),
+      row("goneHeld", "2026-04-30", -10, { bankRemoved: true }),
+      row("kept", "2026-05-03", -25, { description: "HILLTOP HARDWARE" }),
+    ]);
+    expect(byId(r).gone).toMatchObject({ reason: "removed_by_bank", counts: false, contribution: 0 });
+    expect(byId(r).goneHeld).toMatchObject({ reason: "removed_by_bank", counts: false, contribution: 0 });
+    expect(byId(r).kept).toMatchObject({ reason: "counted", contribution: -25 });
+    expect(r.throughToday).toEqual({ rowCount: 1, net: -25 });
+  });
+
+  it("a removed PENDING row still pairs: its posted row adds only what the snapshot did not hold", () => {
+    const r = classify([
+      row("p", "2026-05-01", -48.2, {
+        pending: true,
+        bankRemoved: true,
+        description: "TST* CORNER BISTRO",
+        createdAt: new Date("2026-05-01T14:00:00Z"),
+      }),
+      row("q", "2026-05-02", -55),
+    ]);
+    expect(byId(r).p).toMatchObject({ reason: "removed_by_bank", contribution: 0 });
+    expect(byId(r).q).toMatchObject({ reason: "adjusted", counts: true, replacedId: "p" });
+    expect(byId(r).q!.contribution).toBeCloseTo(-6.8, 10);
+  });
+
+  it("a removed POSTED row replaces nothing: the pending row the bank still reports counts", () => {
+    const r = classify([
+      row("p", "2026-05-03", -48.2, { pending: true }),
+      row("q", "2026-05-04", -55, { bankRemoved: true }),
+    ]);
+    expect(byId(r).p).toMatchObject({ reason: "counted", counts: true });
+    expect(byId(r).p!.contribution).toBeCloseTo(-48.2, 10);
+    expect(byId(r).q).toMatchObject({ reason: "removed_by_bank", contribution: 0, replacedId: null });
+    expect(r.throughToday.rowCount).toBe(1);
+    expect(r.throughToday.net).toBeCloseTo(-48.2, 10);
   });
 });

@@ -31,6 +31,8 @@ import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "./householdClock";
 import { classifyLedgerRowsThroughToday } from "./ledgerCashRows";
+import { clearBankRemovedForPlaidIds, isResolutionRow, markBankRemoved } from "./bankRemoved";
+import { carryReviewToReplacements } from "./reviewCarry";
 import { laterRowIsNearer, pickRemintCandidate, type RemintBatchEntry } from "./remintMatch";
 import {
   anchorIsReconcilable,
@@ -1291,6 +1293,9 @@ export async function syncPlaidItem(
 
     // Upsert added/modified
     const insertedCheckingTxns: { id: string; amount: number; date: string }[] = [];
+    // (PR-I) Rows this sync INSERTED, not updated: the only rows the review
+    // carry may write onto (`carryReviewToReplacements`).
+    const insertedTxnIds: string[] = [];
     // Set of `transaction_id`s Plaid considers brand-new this batch — used
     // below to credit per-rule attribution counts to first-sight rows only,
     // even though we walk added+modified together for the upsert.
@@ -1823,7 +1828,13 @@ export async function syncPlaidItem(
               : {}),
           },
         })
-        .returning({ id: transactionsTable.id });
+        .returning({
+          id: transactionsTable.id,
+          // (PR-I) True only when this statement inserted the row: a row the
+          // ON CONFLICT update touched carries a non-zero xmax.
+          inserted: sql<boolean>`(xmax = 0)`,
+        });
+      if (row?.inserted) insertedTxnIds.push(row.id);
       if (isChecking && row) {
         insertedCheckingTxns.push({
           id: row.id,
@@ -1832,6 +1843,11 @@ export async function syncPlaidItem(
         });
       }
     }
+
+    // (PR-I) Every id Plaid sent as added or modified is on the bank's books
+    // again: a row an earlier sync marked removed counts again. Before dedupe,
+    // so a re-listed row is never taken for a removed one.
+    await clearBankRemovedForPlaidIds(householdId, [...liveIds]);
 
     // (#452) Row-level dedupe pass over every Plaid account this
     // sync touched. The `transactions_plaid_txn_uq` unique index
@@ -1912,10 +1928,11 @@ export async function syncPlaidItem(
       const to = addDays(parseISO(maxDate), 7);
       const events = recurring.flatMap((r) => expandItem(r, from, to));
 
+      // (PR-I) A bank-removed marker is not a resolution: it uses no plan and no row.
       const existingResolutions = await db
         .select()
         .from(forecastResolutionsTable)
-        .where(eq(forecastResolutionsTable.householdId, householdId));
+        .where(and(eq(forecastResolutionsTable.householdId, householdId), isResolutionRow()));
       const usedPlanKeys = new Set(
         existingResolutions
           .filter((r) => r.recurringItemId && r.occurrenceDate)
@@ -1995,6 +2012,40 @@ export async function syncPlaidItem(
             eq(transactionsTable.occurredOnUserOverridden, false),
           ),
         );
+    }
+    // ⭐ (PR-I, owner decision 14) THE BANK DECIDES WHETHER MONEY MOVED. A removed
+    // row the delete above kept — someone worked on it — stays visible with its
+    // review work, marked `bank_removed` (lib/bankRemoved.ts). Until Plaid lists
+    // the id again it counts in no cash, spending, Amex owed or Budget figure.
+    if (removed.length > 0) {
+      const removedPlaidIds = [...new Set(removed.map((r) => r.transaction_id))];
+      const kept: { id: string }[] = [];
+      for (let i = 0; i < removedPlaidIds.length; i += 1000) {
+        kept.push(
+          ...(await db
+            .select({ id: transactionsTable.id })
+            .from(transactionsTable)
+            .where(
+              and(
+                eq(transactionsTable.householdId, householdId),
+                inArray(transactionsTable.plaidTransactionId, removedPlaidIds.slice(i, i + 1000)),
+              ),
+            )),
+        );
+      }
+      await markBankRemoved(householdId, ownerUserId, kept.map((k) => k.id));
+    }
+
+    // (PR-I, owner decision 14) A posted row this sync inserted under a new id
+    // takes the review work on the pending row it replaced. Non-fatal: the rows
+    // are already stored, and the read-time filing (PR-D) still applies.
+    try {
+      await carryReviewToReplacements(householdId, insertedTxnIds);
+    } catch (e) {
+      logger.warn(
+        { userId, householdId, itemRowId, err: e },
+        "[plaid-sync] (PR-I) carrying review work to replacement rows failed (non-fatal)",
+      );
     }
 
     // (#732) NOTE: vanished-pending reconciliation deliberately does
@@ -3524,6 +3575,9 @@ export async function runGapBackfillForItem(
     }
 
     let acctAdded = 0;
+    // (PR-I) Rows this backfill inserted for the account: the only rows the
+    // review carry may write onto (`carryReviewToReplacements`).
+    const acctInsertedIds: string[] = [];
     try {
       const all: PlaidTxn[] = [];
       let offset = 0;
@@ -3873,8 +3927,19 @@ export async function runGapBackfillForItem(
           acctAdded++;
           if (minDate === null || t.date < minDate) minDate = t.date;
           if (maxDate === null || t.date > maxDate) maxDate = t.date;
+          // (PR-I) A row this backfill inserted: the review carry may write onto it.
+          const [inserted] = await db
+            .select({ id: transactionsTable.id })
+            .from(transactionsTable)
+            .where(eq(transactionsTable.plaidTransactionId, t.transaction_id))
+            .limit(1);
+          if (inserted) acctInsertedIds.push(inserted.id);
         }
       }
+
+      // (PR-I) Every id /transactions/get listed is on the bank's books: a row an
+      // earlier sync marked removed counts again.
+      await clearBankRemovedForPlaidIds(householdId, all.map((x) => x.transaction_id));
 
       // (#732) Vanished-pending sweep, scoped to the
       // [startStr, todayStr] window we just fetched. Diff Plaid's
@@ -3902,6 +3967,17 @@ export async function runGapBackfillForItem(
         logger.warn(
           { userId, itemRowId, externalAcctId, err: sweepErr },
           "[plaid-backfill] (#732) vanished-pending sweep failed (non-fatal)",
+        );
+      }
+      // (PR-I, owner decision 14) A posted row this backfill inserted under a new
+      // id takes the review work on the pending row it replaced. Non-fatal, as on
+      // the cursor path.
+      try {
+        await carryReviewToReplacements(householdId, acctInsertedIds);
+      } catch (carryErr) {
+        logger.warn(
+          { userId, itemRowId, externalAcctId, err: carryErr },
+          "[plaid-backfill] (PR-I) carrying review work to replacement rows failed (non-fatal)",
         );
       }
     } catch (e) {

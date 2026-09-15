@@ -58,6 +58,7 @@ export {
   type SupersedeRow,
 } from "./pendingSupersede";
 export {
+  BANK_REMOVED_STATUS,
   classifyCashRows,
   isBankRow,
   type CashAnchor,

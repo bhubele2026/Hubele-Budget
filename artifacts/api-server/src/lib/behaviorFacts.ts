@@ -23,6 +23,7 @@ import {
   recurringItemsTable,
 } from "@workspace/db";
 import { cleanMerchant } from "./merchantNameExtract";
+import { notBankRemovedSql } from "./bankRemoved";
 import {
   isRealSpend,
   matchesTransferPattern,
@@ -528,6 +529,8 @@ export async function buildBehaviorFacts(
         eq(transactionsTable.householdId, householdId),
         gte(transactionsTable.occurredOn, start),
         lte(transactionsTable.occurredOn, end),
+        // (PR-I) A row the bank removed is no visit, splurge or streak day.
+        notBankRemovedSql(),
       ),
     )) as BehaviorTxnRow[];
   // (#reimbursable) Reimbursable charges (e.g. a work expense you'll be paid
@@ -561,6 +564,7 @@ export async function buildBehaviorFacts(
         eq(transactionsTable.householdId, householdId),
         gte(transactionsTable.occurredOn, TRACKING_START),
         lte(transactionsTable.occurredOn, todayIso),
+        notBankRemovedSql(),
       ),
     )) as BehaviorTxnRow[];
   const streakTxns = streakTxnsAll.filter(

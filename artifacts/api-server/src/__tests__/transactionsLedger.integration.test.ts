@@ -619,7 +619,7 @@ async function heldAheadTheOldWay(page: LedgerBody, rows: Row[]): Promise<Map<st
     .from(transactionsTable)
     .where(inArray(transactionsTable.id, rows.map((r) => r.id)));
   const byId = new Map(dbRows.map((r) => [r.id, r]));
-  const oldestFirst = [...rows].reverse().map((r) => toCashRow(byId.get(r.id)!));
+  const oldestFirst = [...rows].reverse().map((r) => toCashRow(byId.get(r.id)!, new Set()));
   const result = classifyCashRows(oldestFirst, {
     anchor: { at: new Date(page.anchor.snapshotAt!), day },
     accountExternalId: page.account.plaidAccountIds[0] ?? null,
@@ -1369,7 +1369,7 @@ describe("second review (R1–R3)", () => {
       // Not vacuous: the snapshot rule holds the posted Target row on its own,
       // but its pending half is not held, so it is not held ahead.
       const [posted] = await db.select().from(transactionsTable).where(eq(transactionsTable.id, staleIds.get("targetPosted")!));
-      expect(isInSnapshot(toCashRow(posted!), SNAPSHOT_AT, "2026-05-15")).toBe(true);
+      expect(isInSnapshot(toCashRow(posted!, new Set()), SNAPSHOT_AT, "2026-05-15")).toBe(true);
       expect(row("targetPosted")).toMatchObject({ heldAhead: false, replacedPendingId: staleIds.get("targetPending"), balanceAmount: "-20.00" });
     } finally {
       actingUser = MAIN_USER;

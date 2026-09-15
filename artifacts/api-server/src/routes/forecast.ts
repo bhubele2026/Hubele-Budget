@@ -33,6 +33,7 @@ import { readPausedReview } from "../lib/oneTimeBillMove";
 import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
 import { computeReviewCount } from "../lib/reviewCount";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
+import { BANK_REMOVED_STATUS, isResolutionRow, notBankRemovedSql } from "../lib/bankRemoved";
 import {
   forecastTodayISO,
   inForecast,
@@ -411,10 +412,16 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
         // Review until a second click, and got repeatedly patched
         // around (#812 backlog clear, "Chase txns not appearing in
         // review queues"). Send to Forecast = in Review = on the curve.
+        // (PR-I) Except a row the bank removed: it is not on the curve and
+        // pays no bill, so it asks for no answer here — the review badge
+        // leaves it out the same way. The Chase and Amex tabs list it,
+        // labelled "Removed by bank".
+        notBankRemovedSql(),
       ),
     );
   const txns = txnsAll.filter((t) => isBankRow(t.source, t.plaidAccountId));
 
+  // (PR-I) A bank-removed marker is not a resolution: the web register never sees one.
   const resolutionRows = await db
     .select({
       id: forecastResolutionsTable.id,
@@ -435,7 +442,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       transactionsTable,
       eq(forecastResolutionsTable.matchedTxnId, transactionsTable.id),
     )
-    .where(eq(forecastResolutionsTable.householdId, householdId));
+    .where(and(eq(forecastResolutionsTable.householdId, householdId), isResolutionRow()));
 
   // Drop resolutions whose matched transaction is out of the forecast (a
   // future row taken out of it) or isn't bank-checking, so legacy Amex
@@ -1088,6 +1095,11 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
     res.status(400).json({ error: "status required" });
     return;
   }
+  // (PR-I) Only the bank sync writes a bank-removed marker: the bank decides it.
+  if (status === BANK_REMOVED_STATUS) {
+    res.status(400).json({ error: "bank_removed is written by the bank sync, not by a request" });
+    return;
+  }
   if (rescheduledTo != null) {
     if (typeof rescheduledTo !== "string" || !ISO_DATE_RE.test(rescheduledTo)) {
       res.status(400).json({ error: "invalid rescheduledTo (YYYY-MM-DD)" });
@@ -1185,6 +1197,8 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
             eq(forecastResolutionsTable.householdId, householdId),
             eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
             ne(forecastResolutionsTable.status, "not_match"),
+            // (PR-I) An answer about a row never wipes the bank's word on it.
+            isResolutionRow(),
           ),
         );
     }
@@ -1228,6 +1242,9 @@ router.delete(
         and(
           eq(forecastResolutionsTable.id, String(req.params.id)),
           eq(forecastResolutionsTable.householdId, req.householdId!),
+          // (PR-I) A bank-removed marker is the bank's word, not an answer to
+          // undo: only Plaid listing the row again clears it.
+          isResolutionRow(),
         ),
       );
     res.sendStatus(204);

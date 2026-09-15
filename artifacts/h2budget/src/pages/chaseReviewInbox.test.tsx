@@ -509,7 +509,8 @@ describe("rows the balance treats specially", () => {
     // The stale pending row is dated before the week: the pinned Pending group
     // lists every pending row whatever the range.
     await waitFor(() => expect(screen.getByTestId("row-tx-stale")).toBeTruthy());
-    expect(screen.getByTestId("label-stale-pending-stale").textContent).toBe("Pending 14+ days");
+    // (PR-I) The owner's wording; the test id is unchanged.
+    expect(screen.getByTestId("label-stale-pending-stale").textContent).toBe("Pending unusually long");
     expect(screen.getByTestId("label-held-ahead-held").textContent).toBe("Already in balance");
     expect(screen.getByTestId("label-held-ahead-held").getAttribute("title")).toMatch(/already includes/);
     expect(screen.getByTestId("label-not-counted-twin").textContent).toBe("Not counted");

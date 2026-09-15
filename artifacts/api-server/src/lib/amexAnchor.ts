@@ -14,6 +14,7 @@ import {
   type SpendContext,
 } from "./spendingFilter";
 import { loadSupersededPendingIds } from "./supersededPending";
+import { notBankRemovedSql } from "./bankRemoved";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
@@ -78,6 +79,8 @@ export async function refreshAmexAnchor(
       and(
         eq(transactionsTable.userId, userId),
         inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
+        // (PR-I) A charge the bank removed is not owed.
+        notBankRemovedSql(),
       ),
     );
   const txnCount = Number(agg?.cnt ?? 0);
@@ -416,6 +419,8 @@ export async function computeWeeklyPayoff(
               inArray(transactionsTable.plaidAccountId, externalIds),
               gte(transactionsTable.occurredOn, queryStart),
               lte(transactionsTable.occurredOn, queryEnd),
+              // (PR-I) A charge the bank removed is not owed.
+              notBankRemovedSql(),
             ),
           )
       : [];

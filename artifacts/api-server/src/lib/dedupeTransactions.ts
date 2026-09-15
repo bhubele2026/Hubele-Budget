@@ -6,6 +6,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { descriptionsFuzzyEqual } from "@workspace/avalanche-core";
+import { BANK_REMOVED_STATUS, isResolutionRow } from "./bankRemoved";
 
 export type DedupeTxnReport = {
   groupsScanned: number;
@@ -114,6 +115,9 @@ function mergeStatePatch(
   if (!survivor.weeklyBucket && loser.weeklyBucket) patch.weeklyBucket = loser.weeklyBucket;
   if (!survivor.member && loser.member) patch.member = loser.member;
   if (!survivor.owedBy && loser.owedBy) patch.owedBy = loser.owedBy;
+  // (PR-I, owner decision 14) Review work carries: the household reviewed
+  // this charge, whichever copy it marked.
+  if (!survivor.reviewed && loser.reviewed) patch.reviewed = true;
   const transferCarried = !survivor.isTransfer && !!loser.isTransfer;
   if (transferCarried) patch.isTransfer = true;
   // (round 5, review M; round 6, review d) The signal effectiveFiling
@@ -219,6 +223,7 @@ export async function dedupeTransactionsForAccount(
           .select({
             id: forecastResolutionsTable.id,
             matchedTxnId: forecastResolutionsTable.matchedTxnId,
+            status: forecastResolutionsTable.status,
           })
           .from(forecastResolutionsTable)
           .where(
@@ -229,8 +234,15 @@ export async function dedupeTransactionsForAccount(
           )
       : [];
     const resolutionsByTxn = new Map<string, string[]>();
+    // (PR-I) A bank-removed marker is not a resolution: it earns its row no
+    // survivor points and never moves onto the survivor.
+    const bankRemovedTxnIds = new Set<string>();
     for (const r of resolutions) {
       if (!r.matchedTxnId) continue;
+      if (r.status === BANK_REMOVED_STATUS) {
+        bankRemovedTxnIds.add(r.matchedTxnId);
+        continue;
+      }
       const arr = resolutionsByTxn.get(r.matchedTxnId) ?? [];
       arr.push(r.id);
       resolutionsByTxn.set(r.matchedTxnId, arr);
@@ -238,14 +250,18 @@ export async function dedupeTransactionsForAccount(
 
     for (const group of dupGroups) {
       report.groupsScanned += 1;
-      // Sort: highest score first, then oldest createdAt first.
+      // Sort: (PR-I) a row the bank removed never survives a live twin — the
+      // live row survives and takes its review work — then highest score
+      // first, then oldest createdAt first.
       const scored = group
         .map((row) => ({
           row,
+          removed: bankRemovedTxnIds.has(row.id),
           score: userStateScore(row, resolutionsByTxn.has(row.id)),
           createdAt: row.createdAt?.getTime() ?? 0,
         }))
         .sort((a, b) => {
+          if (a.removed !== b.removed) return a.removed ? 1 : -1;
           if (b.score !== a.score) return b.score - a.score;
           return a.createdAt - b.createdAt;
         });
@@ -277,10 +293,25 @@ export async function dedupeTransactionsForAccount(
             and(
               eq(forecastResolutionsTable.userId, userId),
               inArray(forecastResolutionsTable.matchedTxnId, repointable),
+              // (PR-I) A marker never moves: it would mark the live survivor removed.
+              isResolutionRow(),
             ),
           )
           .returning({ id: forecastResolutionsTable.id });
         report.resolutionsRepointed += updated.length;
+      }
+      // (PR-I) A loser the bank removed takes its marker with it.
+      const removedLosers = loserIds.filter((id) => bankRemovedTxnIds.has(id));
+      if (removedLosers.length > 0) {
+        await tx
+          .delete(forecastResolutionsTable)
+          .where(
+            and(
+              eq(forecastResolutionsTable.userId, userId),
+              eq(forecastResolutionsTable.status, BANK_REMOVED_STATUS),
+              inArray(forecastResolutionsTable.matchedTxnId, removedLosers),
+            ),
+          );
       }
 
       // Drop the loser rows BEFORE applying the patch — the patch
@@ -500,6 +531,7 @@ export async function dedupeTransactionsAcrossAccountsForUser(
           .select({
             id: forecastResolutionsTable.id,
             matchedTxnId: forecastResolutionsTable.matchedTxnId,
+            status: forecastResolutionsTable.status,
           })
           .from(forecastResolutionsTable)
           .where(
@@ -510,8 +542,14 @@ export async function dedupeTransactionsAcrossAccountsForUser(
           )
       : [];
     const resolutionsByTxn = new Map<string, string[]>();
+    // (PR-I) As in `dedupeTransactionsForAccount`: a bank-removed marker is not a resolution.
+    const bankRemovedTxnIds = new Set<string>();
     for (const r of resolutions) {
       if (!r.matchedTxnId) continue;
+      if (r.status === BANK_REMOVED_STATUS) {
+        bankRemovedTxnIds.add(r.matchedTxnId);
+        continue;
+      }
       const arr = resolutionsByTxn.get(r.matchedTxnId) ?? [];
       arr.push(r.id);
       resolutionsByTxn.set(r.matchedTxnId, arr);
@@ -522,6 +560,7 @@ export async function dedupeTransactionsAcrossAccountsForUser(
       const scored = group
         .map((row) => ({
           row,
+          removed: bankRemovedTxnIds.has(row.id),
           score: userStateScore(row, resolutionsByTxn.has(row.id))
             // Bonus point for being on the currently-linked account so
             // an active row beats an orphan-account twin at score-tie.
@@ -531,6 +570,8 @@ export async function dedupeTransactionsAcrossAccountsForUser(
           createdAt: row.createdAt?.getTime() ?? 0,
         }))
         .sort((a, b) => {
+          // (PR-I) A row the bank removed never survives a live twin.
+          if (a.removed !== b.removed) return a.removed ? 1 : -1;
           if (b.score !== a.score) return b.score - a.score;
           return a.createdAt - b.createdAt;
         });
@@ -568,10 +609,25 @@ export async function dedupeTransactionsAcrossAccountsForUser(
             and(
               eq(forecastResolutionsTable.userId, userId),
               inArray(forecastResolutionsTable.matchedTxnId, repointable),
+              // (PR-I) A marker never moves onto the survivor.
+              isResolutionRow(),
             ),
           )
           .returning({ id: forecastResolutionsTable.id });
         report.resolutionsRepointed += updated.length;
+      }
+      // (PR-I) A loser the bank removed takes its marker with it.
+      const removedLosers = loserIds.filter((id) => bankRemovedTxnIds.has(id));
+      if (removedLosers.length > 0) {
+        await tx
+          .delete(forecastResolutionsTable)
+          .where(
+            and(
+              eq(forecastResolutionsTable.userId, userId),
+              eq(forecastResolutionsTable.status, BANK_REMOVED_STATUS),
+              inArray(forecastResolutionsTable.matchedTxnId, removedLosers),
+            ),
+          );
       }
 
       await tx

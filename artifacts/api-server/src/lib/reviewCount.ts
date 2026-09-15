@@ -6,6 +6,7 @@ import {
   recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
+import { isResolutionRow, notBankRemovedSql } from "./bankRemoved";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdTodayISO, monthBounds } from "./householdClock";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
@@ -33,6 +34,11 @@ import { readPausedReview } from "./oneTimeBillMove";
  * the badge while the curve keeps moving. "Today" and "this month" are the
  * household's (America/Chicago), so the badge doesn't jump to next month on
  * the last evening of a month on a UTC server.
+ *
+ * (PR-I) A row the bank removed is not counted: it is not cash and cannot pay a
+ * bill, and the `/forecast` bundle leaves it out the same way (the Chase and
+ * Amex tabs list it, labelled "Removed by bank"). Its marker is not a
+ * resolution, so it resolves nothing either.
  */
 export async function computeReviewCount(
   householdId: string,
@@ -67,6 +73,7 @@ export async function computeReviewCount(
         inForecastWhere(today),
         gte(transactionsTable.occurredOn, monthStart),
         lte(transactionsTable.occurredOn, monthEnd),
+        notBankRemovedSql(),
       ),
     );
 
@@ -77,7 +84,7 @@ export async function computeReviewCount(
       recurringItemId: forecastResolutionsTable.recurringItemId,
     })
     .from(forecastResolutionsTable)
-    .where(eq(forecastResolutionsTable.householdId, householdId));
+    .where(and(eq(forecastResolutionsTable.householdId, householdId), isResolutionRow()));
   // (One-time bill move, round 4) A pending review on a PAUSED bill reads as the
   // user's last answer: nothing can show the question while the bill is paused,
   // and resuming it brings the review — and this count — back.

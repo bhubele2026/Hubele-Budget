@@ -30,4 +30,12 @@ describe("rowDecisionsByTxn", () => {
       ]).get("t1"),
     ).toEqual({ status: "partial" });
   });
+
+  it("(PR-I) a bank-removed marker is no decision, and never hides the row's real one, in either order", () => {
+    const marker = { matchedTxnId: "t1", status: "bank_removed" };
+    const matched = { matchedTxnId: "t1", status: "matched" };
+    expect(rowDecisionsByTxn([marker]).has("t1")).toBe(false);
+    expect(rowDecisionsByTxn([marker, matched]).get("t1")).toEqual({ status: "matched" });
+    expect(rowDecisionsByTxn([matched, marker]).get("t1")).toEqual({ status: "matched" });
+  });
 });

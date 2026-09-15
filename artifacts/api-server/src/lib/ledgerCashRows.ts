@@ -8,6 +8,7 @@ import {
   type CashRow,
   type CashRowsResult,
 } from "@workspace/avalanche-core";
+import { loadBankRemovedIds } from "./bankRemoved";
 import { inForecastWhere } from "./forecastInclusion";
 
 type TransactionRow = typeof transactionsTable.$inferSelect;
@@ -46,8 +47,12 @@ export function ledgerActualRowsWhere(opts: {
   );
 }
 
-/** A transactions row as the cash rule reads it. */
-export function toCashRow(t: TransactionRow): CashRow {
+/**
+ * A transactions row as the cash rule reads it. `bankRemoved` is the household's
+ * bank-removed row ids (`loadBankRemovedIds`). It is required so that no caller
+ * can forget a removed row adds nothing (PR-I).
+ */
+export function toCashRow(t: TransactionRow, bankRemoved: ReadonlySet<string>): CashRow {
   return {
     id: t.id,
     occurredOn: t.occurredOn,
@@ -60,6 +65,7 @@ export function toCashRow(t: TransactionRow): CashRow {
     source: t.source ?? null,
     plaidAccountId: t.plaidAccountId ?? null,
     plaidTransactionId: t.plaidTransactionId ?? null,
+    bankRemoved: bankRemoved.has(t.id),
   };
 }
 
@@ -92,18 +98,21 @@ export async function classifyLedgerRowsThroughToday(opts: {
   todayISO: string;
 }): Promise<LedgerCashRows> {
   const { householdId, anchor, accountExternalId, todayISO } = opts;
-  const rows = await db
-    .select()
-    .from(transactionsTable)
-    .where(
-      ledgerActualRowsWhere({
-        householdId,
-        snapshotDay: anchor.day,
-        todayISO,
-        upperISO: addDaysISO(todayISO, SUPERSEDE_MAX_DAYS),
-      }),
-    );
-  const cashRows = rows.map(toCashRow);
+  const [rows, bankRemoved] = await Promise.all([
+    db
+      .select()
+      .from(transactionsTable)
+      .where(
+        ledgerActualRowsWhere({
+          householdId,
+          snapshotDay: anchor.day,
+          todayISO,
+          upperISO: addDaysISO(todayISO, SUPERSEDE_MAX_DAYS),
+        }),
+      ),
+    loadBankRemovedIds(householdId),
+  ]);
+  const cashRows = rows.map((r) => toCashRow(r, bankRemoved));
   const result = classifyCashRows(cashRows, { anchor, accountExternalId, todayISO });
   // Outcomes come back in input order. A manual row never pairs and never shares
   // a Plaid id, so leaving it out moves no other row's outcome.

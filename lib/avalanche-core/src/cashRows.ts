@@ -1,6 +1,13 @@
 import { isInSnapshot, pendingChargeWasInBalance, type SnapshotLedgerRow } from "./snapshotInclusion";
 import { pairPendingWithPosted } from "./pendingSupersede";
 
+/**
+ * (PR-I, owner decision 14) `forecast_resolutions.status` of the marker a sync
+ * writes on a row the bank removed after someone worked on it. Not a resolution:
+ * it names the row (`matched_txn_id`) and no plan (`recurring_item_id` NULL).
+ */
+export const BANK_REMOVED_STATUS = "bank_removed";
+
 /** A ledger row, as the cash rule reads it. */
 export type CashRow = {
   id: string;
@@ -16,6 +23,11 @@ export type CashRow = {
   source: string | null;
   plaidAccountId: string | null;
   plaidTransactionId: string | null;
+  /**
+   * (PR-I) The bank removed this row after someone worked on it: a
+   * `BANK_REMOVED_STATUS` marker names it. It stays listed and adds nothing.
+   */
+  bankRemoved: boolean;
 };
 
 /** The bank balance the rows roll forward from: the instant it was read and its household day. */
@@ -23,6 +35,7 @@ export type CashAnchor = { at: Date; day: string };
 
 /**
  * Why a row adds what it adds:
+ * - `removed_by_bank`: the bank removed it after someone worked on it (PR-I) — adds 0;
  * - `held`: the snapshot already holds it (`isInSnapshot`) — adds 0. A posted
  *   row is held only when its pending half is held too;
  * - `not_bank`: not on the snapshot's account — adds 0;
@@ -32,7 +45,14 @@ export type CashAnchor = { at: Date; day: string };
  *   balance (`pendingChargeWasInBalance`) — adds posted − pending;
  * - `counted`: adds its amount.
  */
-export type CashRowReason = "held" | "not_bank" | "superseded" | "duplicate" | "adjusted" | "counted";
+export type CashRowReason =
+  | "removed_by_bank"
+  | "held"
+  | "not_bank"
+  | "superseded"
+  | "duplicate"
+  | "adjusted"
+  | "counted";
 
 export type CashRowOutcome = {
   id: string;
@@ -86,6 +106,11 @@ export function isBankRow(
  * replaced. Moved verbatim from `buildForecastLedger` (PR4b, PR4c).
  *
  * In order, a row:
+ *   0. (PR-I) adds 0 when the bank removed it (`bankRemoved`), whatever else is
+ *      true of it: the bank decides whether money moved. A removed PENDING row
+ *      still pairs, so the posted row that replaced it counts only what the
+ *      snapshot did not already hold; a removed POSTED row replaces nothing, so
+ *      the pending row the bank still reports keeps counting;
  *   1. adds 0 when the anchor holds it (`isInSnapshot`; never without an anchor)
  *      — and, for the posted half of a pair, its pending half as well. A held
  *      posted row whose pending half is not held still counts: it reached the
@@ -131,7 +156,9 @@ export function classifyCashRows(
 
   const supersededBy = pairPendingWithPosted(
     rows
-      .filter((r) => isBankRow(r.source, r.plaidAccountId, accountExternalId))
+      // (PR-I) A posted row the bank removed replaces nothing. A removed pending
+      // row stays in: the posted row that replaced it must not count it twice.
+      .filter((r) => isBankRow(r.source, r.plaidAccountId, accountExternalId) && !(r.bankRemoved && !r.pending))
       .map((r) => ({
         id: r.id,
         plaidAccountId: r.plaidAccountId,
@@ -155,7 +182,9 @@ export function classifyCashRows(
     const base = { id: r.id, occurredOn: r.occurredOn, replacedId: replaced?.id ?? null };
     let reason: CashRowReason;
     let contribution = 0;
-    if (held(r) && (!replacedRow || held(replacedRow))) {
+    if (r.bankRemoved) {
+      reason = "removed_by_bank";
+    } else if (held(r) && (!replacedRow || held(replacedRow))) {
       reason = "held";
     } else if (!isBankRow(r.source, r.plaidAccountId, accountExternalId)) {
       reason = "not_bank";

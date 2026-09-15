@@ -104,6 +104,13 @@ paths:
         - in: query
           name: categoryId
           schema: { type: string }
+        - in: query
+          name: includeBankRemoved
+          description: |
+            (PR-I) true lists rows the bank removed after someone worked on
+            them, each with `bankRemoved: true`. Left out otherwise: they count
+            in no total, so a list a page sums never carries one.
+          schema: { type: boolean }
       responses:
         "200":
           description: OK
@@ -2413,6 +2420,14 @@ components:
             to count how many rows a rename will affect. Empty string when no
             stable signature can be derived. Computed server-side per list
             response — never persisted.
+        bankRemoved:
+          type: boolean
+          description: |
+            (PR-I) The bank removed this transaction after someone worked on
+            it. It stays listed, with its review work, and counts in no balance,
+            spending, Amex owed or budget total. Plaid listing it again clears
+            it. Sent by GET /transactions (true only with includeBankRemoved)
+            and GET /transactions/ledger; absent elsewhere.
     LedgerRow:
       allOf:
         - $ref: "#/components/schemas/Transaction"
@@ -2441,7 +2456,8 @@ components:
                 counted (moves the balance by its amount); superseded (a pending
                 row its posted row replaced); duplicate (a second row with the
                 same Plaid transaction id); not_bank (a mask-twin row, which the
-                bank balance does not read).
+                bank balance does not read); removed_by_bank (PR-I: the bank
+                removed the row after someone worked on it; it moves nothing).
             replacedPendingId:
               type: ["string", "null"]
               description: For a posted row that replaced a pending row, that pending row's id.

@@ -125,6 +125,12 @@ export const GetDashboardResponse = zod.object({
         .describe(
           "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
         ),
+      bankRemoved: zod
+        .boolean()
+        .optional()
+        .describe(
+          "(PR-I) The bank removed this transaction after someone worked on\nit. It stays listed, with its review work, and counts in no balance,\nspending, Amex owed or budget total. Plaid listing it again clears\nit. Sent by GET \/transactions (true only with includeBankRemoved)\nand GET \/transactions\/ledger; absent elsewhere.\n",
+        ),
     }),
   ),
   topCategories: zod.array(
@@ -161,6 +167,12 @@ export const ListTransactionsQueryParams = zod.object({
   minAmount: zod.coerce.string().optional(),
   maxAmount: zod.coerce.string().optional(),
   categoryId: zod.coerce.string().optional(),
+  includeBankRemoved: zod.coerce
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-I) true lists rows the bank removed after someone worked on\nthem, each with `bankRemoved: true`. Left out otherwise: they count\nin no total, so a list a page sums never carries one.\n",
+    ),
 });
 
 export const ListTransactionsResponseItem = zod.object({
@@ -244,6 +256,12 @@ export const ListTransactionsResponseItem = zod.object({
     .optional()
     .describe(
       "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
+    ),
+  bankRemoved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-I) The bank removed this transaction after someone worked on\nit. It stays listed, with its review work, and counts in no balance,\nspending, Amex owed or budget total. Plaid listing it again clears\nit. Sent by GET \/transactions (true only with includeBankRemoved)\nand GET \/transactions\/ledger; absent elsewhere.\n",
     ),
 });
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
@@ -406,6 +424,12 @@ export const UpdateTransactionResponse = zod
       .optional()
       .describe(
         "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
+      ),
+    bankRemoved: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(PR-I) The bank removed this transaction after someone worked on\nit. It stays listed, with its review work, and counts in no balance,\nspending, Amex owed or budget total. Plaid listing it again clears\nit. Sent by GET \/transactions (true only with includeBankRemoved)\nand GET \/transactions\/ledger; absent elsewhere.\n",
       ),
   })
   .and(
@@ -610,6 +634,12 @@ export const ClearTransferOverrideResponse = zod.object({
     .optional()
     .describe(
       "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
+    ),
+  bankRemoved: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-I) The bank removed this transaction after someone worked on\nit. It stays listed, with its review work, and counts in no balance,\nspending, Amex owed or budget total. Plaid listing it again clears\nit. Sent by GET \/transactions (true only with includeBankRemoved)\nand GET \/transactions\/ledger; absent elsewhere.\n",
     ),
 });
 
@@ -1133,6 +1163,12 @@ export const GetTransactionsLedgerResponse = zod.object({
           .describe(
             "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
           ),
+        bankRemoved: zod
+          .boolean()
+          .optional()
+          .describe(
+            "(PR-I) The bank removed this transaction after someone worked on\nit. It stays listed, with its review work, and counts in no balance,\nspending, Amex owed or budget total. Plaid listing it again clears\nit. Sent by GET \/transactions (true only with includeBankRemoved)\nand GET \/transactions\/ledger; absent elsewhere.\n",
+          ),
       })
       .and(
         zod.object({
@@ -1154,7 +1190,7 @@ export const GetTransactionsLedgerResponse = zod.object({
           balanceReason: zod
             .string()
             .describe(
-              "counted (moves the balance by its amount); superseded (a pending\nrow its posted row replaced); duplicate (a second row with the\nsame Plaid transaction id); not_bank (a mask-twin row, which the\nbank balance does not read).\n",
+              "counted (moves the balance by its amount); superseded (a pending\nrow its posted row replaced); duplicate (a second row with the\nsame Plaid transaction id); not_bank (a mask-twin row, which the\nbank balance does not read); removed_by_bank (PR-I: the bank\nremoved the row after someone worked on it; it moves nothing).\n",
             ),
           replacedPendingId: zod
             .string()
@@ -3087,6 +3123,12 @@ export const GetForecastResponse = zod.object({
         .optional()
         .describe(
           "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
+        ),
+      bankRemoved: zod
+        .boolean()
+        .optional()
+        .describe(
+          "(PR-I) The bank removed this transaction after someone worked on\nit. It stays listed, with its review work, and counts in no balance,\nspending, Amex owed or budget total. Plaid listing it again clears\nit. Sent by GET \/transactions (true only with includeBankRemoved)\nand GET \/transactions\/ledger; absent elsewhere.\n",
         ),
     }),
   ),
