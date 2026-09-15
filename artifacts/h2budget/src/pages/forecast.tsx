@@ -254,6 +254,26 @@ export default function ForecastPage({
       return todayISO();
     }
   });
+  // (PR-K follow-up, NIT) Opening the look-back panel pre-fills the date
+  // input with `forecastFromDate` (today, the very first time) so the field
+  // is never blank — but that is NOT a date the user chose, and sending it as
+  // `fromDate` on the very next request creates a SECOND cache entry keyed on
+  // the browser's own calendar day, right back into the M1 bug this same
+  // panel already fixed once (a browser outside the household's timezone
+  // asking for its own day instead of leaving `fromDate` out). This flag is
+  // the difference between "the field shows today" and "the user picked
+  // today": only a real edit (the input's `onChange`), or a date restored
+  // from a PRIOR session where one was genuinely persisted, sets it. Closing
+  // the panel discards it along with the date itself.
+  const [fromDatePicked, setFromDatePicked] = useState<boolean>(() => {
+    try {
+      const stored = sessionStorage.getItem(FORECAST_FROM_KEY);
+      const wasOpen = sessionStorage.getItem(FORECAST_LOOKBACK_OPEN_KEY) === "true";
+      return wasOpen && !!stored;
+    } catch {
+      return false;
+    }
+  });
   useEffect(() => {
     try {
       sessionStorage.setItem(
@@ -321,9 +341,12 @@ export default function ForecastPage({
   // and the Reports → Cash flow forecast card. A background bank sync can't
   // leave two copies of one day's balance disagreeing for the 5-minute
   // staleTime, and a browser outside Chicago no longer asks for its own
-  // calendar day. Only an open look-back sends a date.
+  // calendar day. Only an open look-back with an ACTUALLY PICKED date sends
+  // one (PR-K follow-up, NIT) — opening the panel alone still shares this key,
+  // so the moment between opening it and picking a date creates no second
+  // cache entry either.
   const cashProjectionQuery = useGetForecastCashSignal(
-    lookbackOpen
+    lookbackOpen && fromDatePicked
       ? { horizonDays: deferredHorizonDays, fromDate: deferredForecastFromDate }
       : { horizonDays: deferredHorizonDays },
   );
@@ -1856,6 +1879,22 @@ export default function ForecastPage({
     : null;
 
   const proj = cashProjection;
+  // (PR-K follow-up, NIT) The "Bank balance" card names the account the
+  // balance actually rolled forward on — `resolveSnapshotAccount`'s answer,
+  // read off the SAME cash-signal response the Cash flow card's title reads
+  // (`cashFlowCardTitle`, `reports/CashFlowPage.tsx`) — never the label the
+  // settings row stored when the snapshot was last set. Those can name
+  // different accounts once a broken pointer is recovered via a mask match or
+  // "sole checking" (`resolveSnapshotAccount.ts`): the number is already
+  // right (it comes from the resolved account), but the stored label used to
+  // keep naming the old one. Only when nothing resolves (`via: "unresolved"`)
+  // is there nothing better to show than the stored label.
+  const resolvedBankAccount =
+    proj?.account && proj.account.via !== "unresolved" ? proj.account : null;
+  const bankAccountName =
+    resolvedBankAccount?.name ?? data.bankSnapshot?.name ?? null;
+  const bankAccountMask =
+    resolvedBankAccount?.mask ?? data.bankSnapshot?.mask ?? null;
   const endingNum = proj?.endingBalance ? Number(proj.endingBalance) : NaN;
   // ⚠️ `no_data` STILL CARRIES BALANCES. With no bank balance the server rolls
   // forward from a $0 start, so those figures are not a projection. The hero and
@@ -2022,8 +2061,12 @@ export default function ForecastPage({
             const next = !lookbackOpen;
             setLookbackOpen(next);
             // Closing the panel snaps the chart back to today so the
-            // forecast keeps moving forward.
-            if (!next) setForecastFromDate(todayISO());
+            // forecast keeps moving forward, and discards any picked date —
+            // reopening starts from "not yet picked" again (PR-K follow-up).
+            if (!next) {
+              setForecastFromDate(todayISO());
+              setFromDatePicked(false);
+            }
           }}
           className={`press inline-flex items-center gap-1.5 rounded-control px-2.5 py-1 text-micro font-semibold tracking-wide ring-1 ${
             lookbackOpen
@@ -2055,7 +2098,10 @@ export default function ForecastPage({
               value={forecastFromDate}
               min={FORECAST_MIN_FROM_DATE}
               max={todayISO()}
-              onChange={(e) => setForecastFromDate(clampForecastFrom(e.target.value))}
+              onChange={(e) => {
+                setForecastFromDate(clampForecastFrom(e.target.value));
+                setFromDatePicked(true);
+              }}
               className="h-7 w-[150px] font-mono text-micro tabular-nums"
               data-testid="input-forecast-from"
               data-pending={fromDateSwitchPending ? "true" : undefined}
@@ -2436,8 +2482,8 @@ export default function ForecastPage({
               {data.bankSnapshot ? (
                 <>
                   {data.bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
-                  {data.bankSnapshot.name ?? "Checking"}
-                  {data.bankSnapshot.mask ? ` ••${data.bankSnapshot.mask}` : ""} ·{" "}
+                  {bankAccountName ?? "Checking"}
+                  {bankAccountMask ? ` ••${bankAccountMask}` : ""} ·{" "}
                   {formatDate(householdDayOfAt(data.bankSnapshot.at))}
                   {/* The server's verdict when the spine describes this same
                       snapshot. Until it answers, or if the two ever disagree on

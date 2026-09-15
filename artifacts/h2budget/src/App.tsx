@@ -26,6 +26,7 @@ import { AppLayout } from "./components/layout";
 import { PageErrorBoundary } from "@/components/page-error-boundary";
 import { askForSpineAgainIfFailed } from "@/lib/spineRecovery";
 import { onWriteSuccess } from "@/lib/mutationInvalidation";
+import { watchCashSignalFamily } from "@/lib/cashSignalFamilyInvalidation";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -183,6 +184,12 @@ const FORECAST_CACHE = {
 } as const;
 queryClient.setQueryDefaults(["/api/forecast"], FORECAST_CACHE);
 queryClient.setQueryDefaults(["/api/forecast/cash-signal"], FORECAST_CACHE);
+// (PR-K follow-up, LOW) One horizon family, one answer: within that 5-minute
+// staleTime, a bank sync a page happens to see first can no longer leave a
+// SIBLING horizon/from-date entry showing a stale balance for the same day —
+// see `lib/cashSignalFamilyInvalidation.ts` for the rule and its no-loop proof.
+// One subscription, set up once, exactly like the mutation-cache rule above.
+watchCashSignalFamily(queryClient);
 // Transaction lists powering Chase / Amex / Dashboard. These used
 // to be ALWAYS_FRESH (refetch up to 5,000 rows on EVERY page mount) so live
 // Plaid syncs showed without a manual refresh. With background auto-sync now

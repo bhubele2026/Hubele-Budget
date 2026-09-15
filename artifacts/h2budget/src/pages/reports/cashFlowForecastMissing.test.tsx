@@ -29,6 +29,12 @@ const q = vi.hoisted(() => ({
   cashSignalUpdatedAt: 0,
   /** Every params object the page passed to `useGetForecastCashSignal`. */
   cashSignalParams: [] as unknown[],
+  /**
+   * (PR-K follow-up, NIT) The ACTUAL resolved query key for each call — see
+   * the mock below. `cashSignalParams` alone can't catch a future call site
+   * that forks the cache through the hook's second `options` argument.
+   */
+  cashSignalKeys: [] as unknown[],
   /** How many times the page asked for the `/forecast` bundle. */
   forecastBundleCalls: 0,
   refetch: vi.fn(),
@@ -56,30 +62,47 @@ vi.mock("@/hooks/useSpine", () => ({
   }),
 }));
 
-vi.mock("@workspace/api-client-react", () => ({
-  useListTransactions: () => ({ data: [], isLoading: false }),
-  useListCategories: () => ({ data: [] }),
-  useListRecurringItems: () => ({ data: [] }),
-  useGetForecast: () => {
-    q.forecastBundleCalls += 1;
-    return { data: undefined };
-  },
-  useGetForecastCashSignal: (params: unknown) => {
-    q.cashSignalParams.push(params);
-    return {
-      data: q.cashSignal,
-      isFetching: q.cashSignalFetching,
-      isLoadingError: q.cashSignalLoadingError,
-      isRefetchError: q.cashSignalRefetchError,
-      isPlaceholderData: q.cashSignalPlaceholder,
-      dataUpdatedAt: q.cashSignalUpdatedAt,
-      refetch: q.refetch,
-    };
-  },
-  useGetDashboard: () => ({ data: undefined }),
-  useListDebts: () => ({ data: [] }),
-  useListPlaidLiabilityAccounts: () => ({ data: [] }),
-}));
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  // The REAL key builder — not a fake literal — so `q.cashSignalKeys` records
+  // what the app would actually cache under.
+  const actual =
+    await importOriginal<typeof import("@workspace/api-client-react")>();
+  return {
+    useListTransactions: () => ({ data: [], isLoading: false }),
+    useListCategories: () => ({ data: [] }),
+    useListRecurringItems: () => ({ data: [] }),
+    useGetForecast: () => {
+      q.forecastBundleCalls += 1;
+      return { data: undefined };
+    },
+    useGetForecastCashSignal: (
+      params: unknown,
+      options?: { query?: { queryKey?: unknown } },
+    ) => {
+      q.cashSignalParams.push(params);
+      // Mirrors `getGetForecastCashSignalQueryOptions`'s own precedence
+      // exactly: an explicit `options.query.queryKey` always wins.
+      q.cashSignalKeys.push(
+        options?.query?.queryKey ??
+          actual.getGetForecastCashSignalQueryKey(
+            params as Parameters<typeof actual.getGetForecastCashSignalQueryKey>[0],
+          ),
+      );
+      return {
+        data: q.cashSignal,
+        isFetching: q.cashSignalFetching,
+        isLoadingError: q.cashSignalLoadingError,
+        isRefetchError: q.cashSignalRefetchError,
+        isPlaceholderData: q.cashSignalPlaceholder,
+        dataUpdatedAt: q.cashSignalUpdatedAt,
+        refetch: q.refetch,
+      };
+    },
+    useGetDashboard: () => ({ data: undefined }),
+    useListDebts: () => ({ data: [] }),
+    useListPlaidLiabilityAccounts: () => ({ data: [] }),
+  };
+});
 
 import CashFlowPage, {
   cashFlowForecastSeries,
@@ -179,6 +202,7 @@ beforeEach(() => {
   q.cashSignalPlaceholder = false;
   q.cashSignalUpdatedAt = 0;
   q.cashSignalParams = [];
+  q.cashSignalKeys = [];
   q.forecastBundleCalls = 0;
   q.refetch = vi.fn();
 });
@@ -218,15 +242,19 @@ describe("cashFlowForecastSeries — the card's series is the cash signal's dail
 
 describe("cashFlowCardTitle — the scope comes from the cash signal's own account (round 2, L1)", () => {
   it("names the account, its mask and its own subtype", () => {
-    expect(cashFlowCardTitle({ status: "ready", account: CHECKING }, HORIZON)).toBe(
-      "Forecast · Test Bank ••0001 checking · next 90 days",
-    );
+    expect(
+      cashFlowCardTitle({ status: "ready", snapshotSource: "plaid", account: CHECKING }, HORIZON),
+    ).toBe("Forecast · Test Bank ••0001 checking · next 90 days");
   });
 
   it("doesn't double the kind word when the account's name already says it", () => {
     expect(
       cashFlowCardTitle(
-        { status: "ready", account: { ...CHECKING, name: "Everyday Checking" } },
+        {
+          status: "ready",
+          snapshotSource: "plaid",
+          account: { ...CHECKING, name: "Everyday Checking" },
+        },
         HORIZON,
       ),
     ).toBe("Forecast · Everyday Checking ••0001 · next 90 days");
@@ -236,6 +264,7 @@ describe("cashFlowCardTitle — the scope comes from the cash signal's own accou
     const title = cashFlowCardTitle(
       {
         status: "ready",
+        snapshotSource: "plaid",
         account: { name: "Test Bank", mask: "0002", subtype: "savings", via: "sole depository" },
       },
       HORIZON,
@@ -249,6 +278,7 @@ describe("cashFlowCardTitle — the scope comes from the cash signal's own accou
       cashFlowCardTitle(
         {
           status: "ready",
+          snapshotSource: "plaid",
           account: { name: "Test Bank", mask: "0003", subtype: null, via: "sole depository" },
         },
         HORIZON,
@@ -256,11 +286,12 @@ describe("cashFlowCardTitle — the scope comes from the cash signal's own accou
     ).toBe("Forecast · Test Bank ••0003 · next 90 days");
   });
 
-  it("names no account when none was resolved (the balance stays at the raw snapshot)", () => {
+  it("names no account when none was resolved and the snapshot isn't manual (a genuine gap, not a household's choice)", () => {
     expect(
       cashFlowCardTitle(
         {
           status: "ready",
+          snapshotSource: "plaid",
           account: { name: null, mask: null, subtype: null, via: "unresolved" },
         },
         HORIZON,
@@ -268,10 +299,26 @@ describe("cashFlowCardTitle — the scope comes from the cash signal's own accou
     ).toBe("Forecast · bank account not identified · next 90 days");
   });
 
+  it("(PR-K follow-up, NIT) for a manually tracked household, names the balance as entered by hand — manual rows still move the curve, so this isn't an error", () => {
+    expect(
+      cashFlowCardTitle(
+        {
+          status: "ready",
+          snapshotSource: "manual",
+          account: { name: null, mask: null, subtype: null, via: "unresolved" },
+        },
+        HORIZON,
+      ),
+    ).toBe("Forecast · balance entered by hand · next 90 days");
+  });
+
   it("says plainly when no bank balance is set, and keeps the horizon", () => {
-    expect(cashFlowCardTitle({ status: "no_data", account: CHECKING }, HORIZON)).toBe(
-      "Forecast · no bank balance set · next 90 days",
-    );
+    expect(
+      cashFlowCardTitle(
+        { status: "no_data", snapshotSource: null, account: CHECKING },
+        HORIZON,
+      ),
+    ).toBe("Forecast · no bank balance set · next 90 days");
   });
 
   it("before the signal answers: a neutral title that claims no scope", () => {
@@ -288,6 +335,21 @@ describe("Cash flow — the forecast-balance card (owner decision 16)", () => {
     for (const params of q.cashSignalParams) {
       // toStrictEqual: a `fromDate: undefined` key would fail too.
       expect(params).toStrictEqual({ horizonDays: 90 });
+    }
+  });
+
+  it("(PR-K follow-up, NIT) the ACTUAL resolved query key is exactly [\"/api/forecast/cash-signal\", { horizonDays: 90 }] — not just the params object passed in", () => {
+    // `cashSignalParams` (above) only proves what the card handed the hook as
+    // its FIRST argument. A hook-options override (`{ query: { queryKey } }`,
+    // the generated hook's second argument) would win over that and fork the
+    // cache silently — invisible to a test that only inspects `params`.
+    // `cashSignalKeys` mirrors the hook's own precedence with the REAL key
+    // builder, so it can't miss that.
+    q.cashSignal = readySignal();
+    renderPage();
+    expect(q.cashSignalKeys.length).toBeGreaterThan(0);
+    for (const key of q.cashSignalKeys) {
+      expect(key).toStrictEqual(["/api/forecast/cash-signal", { horizonDays: 90 }]);
     }
   });
 

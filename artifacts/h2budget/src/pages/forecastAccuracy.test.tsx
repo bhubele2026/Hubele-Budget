@@ -517,6 +517,71 @@ describe("Forecast — the bank card's snapshot line takes the server's freshnes
   });
 });
 
+describe("Forecast — the bank card names the resolved account, not the stored snapshot label (PR-K follow-up, NIT)", () => {
+  // The label `data.bankSnapshot.name`/`.mask` carries is whatever the
+  // settings row stored when the snapshot was last SET. Once a broken pointer
+  // is recovered onto a different account (a mask match, or "the household's
+  // only checking account"), the FIGURES are already right — they come from
+  // the resolved account's rows — but the stored label kept naming the old
+  // one. The card must read `cashProjection.account`, the same resolved
+  // account `reports/CashFlowPage.tsx`'s title reads, not the stored label.
+  const withMismatchedLabels = (via: string) => {
+    forecastData = {
+      ...FORECAST_BASE,
+      bankSnapshot: {
+        balance: "5000",
+        at: "2026-05-15T10:00:00.000Z",
+        source: "plaid",
+        accountId: "acct-1",
+        name: "Old Checking",
+        mask: "9999",
+      },
+    } as unknown as typeof FORECAST_BASE;
+    cashSignal = {
+      ...CASH_SIGNAL,
+      account: { name: "New Checking", mask: "1234", subtype: "checking", via },
+    } as unknown as typeof CASH_SIGNAL;
+  };
+
+  it("resolved as the household's sole checking account: names that account, not the stored label", () => {
+    withMismatchedLabels("sole checking");
+    renderPage();
+    const meta = screen.getByTestId("text-bank-snapshot-meta");
+    expect(meta.textContent).toContain("New Checking ••1234");
+    expect(meta.textContent).not.toContain("Old Checking");
+    expect(meta.textContent).not.toContain("9999");
+  });
+
+  it("resolved by the snapshot's own mask: names that account, not the stored label", () => {
+    withMismatchedLabels("snapshot mask");
+    renderPage();
+    const meta = screen.getByTestId("text-bank-snapshot-meta");
+    expect(meta.textContent).toContain("New Checking ••1234");
+    expect(meta.textContent).not.toContain("Old Checking");
+  });
+
+  it("falls back to the stored label only when nothing resolves", () => {
+    forecastData = {
+      ...FORECAST_BASE,
+      bankSnapshot: {
+        balance: "5000",
+        at: "2026-05-15T10:00:00.000Z",
+        source: "manual",
+        accountId: null,
+        name: "Household Checking",
+        mask: "5555",
+      },
+    } as unknown as typeof FORECAST_BASE;
+    cashSignal = {
+      ...CASH_SIGNAL,
+      account: { name: null, mask: null, subtype: null, via: "unresolved" },
+    } as unknown as typeof CASH_SIGNAL;
+    renderPage();
+    const meta = screen.getByTestId("text-bank-snapshot-meta");
+    expect(meta.textContent).toContain("Household Checking ••5555");
+  });
+});
+
 describe("Forecast — the bank line's verdict: the main path, and one instant written two ways", () => {
   const withSnapshotAt = (at: string) => {
     forecastData = {

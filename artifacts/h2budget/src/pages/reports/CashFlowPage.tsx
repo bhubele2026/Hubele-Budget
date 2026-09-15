@@ -173,13 +173,18 @@ export function cashFlowAccountLabel(account: CardAccount): string {
  *
  *   - no signal yet (loading or failed): "Forecast balance · next 90 days"
  *   - no bank snapshot (`no_data`): "Forecast · no bank balance set · next 90 days"
- *   - no account resolved (the balance stays at the raw snapshot):
- *     "Forecast · bank account not identified · next 90 days"
+ *   - no account resolved, snapshot entered by hand (a manually tracked
+ *     household — manual rows still move the curve, see `isBankRow` in
+ *     `lib/avalanche-core/src/cashRows.ts`; only Plaid rows would be excluded,
+ *     and there are none to exclude):
+ *     "Forecast · balance entered by hand · next 90 days"
+ *   - no account resolved, any other snapshot source (a genuine gap, not a
+ *     household's choice): "Forecast · bank account not identified · next 90 days"
  *   - otherwise: "Forecast · Test Bank ••0001 checking · next 90 days"
  */
 export function cashFlowCardTitle(
   signal:
-    | (Pick<CashSignal, "status"> & { account?: CardAccount | null })
+    | (Pick<CashSignal, "status" | "snapshotSource"> & { account?: CardAccount | null })
     | null
     | undefined,
   horizonDays: number,
@@ -190,7 +195,9 @@ export function cashFlowCardTitle(
   const account = signal.account;
   if (!account) return `Forecast balance · ${horizon}`;
   if (account.via === "unresolved") {
-    return `Forecast · bank account not identified · ${horizon}`;
+    return signal.snapshotSource === "manual"
+      ? `Forecast · balance entered by hand · ${horizon}`
+      : `Forecast · bank account not identified · ${horizon}`;
   }
   return `Forecast · ${cashFlowAccountLabel(account)} · ${horizon}`;
 }
