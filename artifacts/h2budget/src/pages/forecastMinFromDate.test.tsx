@@ -194,6 +194,12 @@ function renderPage() {
 
 const FORECAST_FROM_KEY = "h2budget:forecastFromDate";
 const FORECAST_LOOKBACK_OPEN_KEY = "h2budget:forecastLookbackOpen";
+// (PR-K follow-up round 2, L1) A stored `FORECAST_FROM_KEY` alone no longer
+// proves a date was picked — the page writes SOME value there on every
+// mount regardless. A test simulating "a prior session picked and persisted
+// a date" must set this too, or the page correctly (now) ignores the stored
+// value and defaults to today instead.
+const FORECAST_FROM_PICKED_KEY = "h2budget:forecastFromDatePicked";
 const MIN_FROM = "2026-05-01";
 
 beforeEach(() => {
@@ -233,6 +239,7 @@ describe("Forecast — 'Forecast from' anchored at 2026-05-01 (#418)", () => {
 
   it("clamps a stored sessionStorage value earlier than 2026-05-01 up to 2026-05-01", () => {
     sessionStorage.setItem(FORECAST_FROM_KEY, "2026-04-15");
+    sessionStorage.setItem(FORECAST_FROM_PICKED_KEY, "true");
     renderPage();
     const input = screen.getByTestId(
       "input-forecast-from",
@@ -259,6 +266,7 @@ describe("Forecast — 'Forecast from' anchored at 2026-05-01 (#418)", () => {
 
   it("preserves a stored date on or after 2026-05-01", () => {
     sessionStorage.setItem(FORECAST_FROM_KEY, "2026-06-12");
+    sessionStorage.setItem(FORECAST_FROM_PICKED_KEY, "true");
     renderPage();
     const input = screen.getByTestId(
       "input-forecast-from",

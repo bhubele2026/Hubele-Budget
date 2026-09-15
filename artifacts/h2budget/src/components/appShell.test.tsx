@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -105,6 +105,28 @@ function mount(path: string) {
       </Router>
     </QueryClientProvider>,
   );
+}
+
+/**
+ * Same as `mount`, but with `record: true` so the underlying wouter
+ * `history` array can be read back to prove a click actually navigated —
+ * `mount`'s plain `memoryLocation()` throws its history away.
+ */
+function mountRecording(path: string) {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  const { hook, history } = memoryLocation({ path, record: true });
+  render(
+    <QueryClientProvider client={qc}>
+      <Router hook={hook}>
+        <AppLayout>
+          <div data-testid="page-body" />
+        </AppLayout>
+      </Router>
+    </QueryClientProvider>,
+  );
+  return { history };
 }
 
 /** The href of whichever tab is currently lit, or null. */
@@ -415,6 +437,35 @@ describe("the phone drawer reaches every page a ribbon reaches", () => {
     const drawer = openDrawer();
     const review = drawer.querySelector('[data-testid="mobilenav-review"]')!;
     expect(review.textContent).toContain("4");
+  });
+});
+
+describe("R0 follow-up — the phone drawer closes after you navigate", () => {
+  // ⚠️ `DrawerLink`'s `onClick={onNavigate}` (`layout.tsx`) is the ONLY thing
+  // that sets `mobileOpen` back to false — wouter's own `<Link>` handles the
+  // route change regardless (it attaches its own onClick unconditionally), so
+  // removing that wiring leaves navigation working but the drawer stuck open
+  // over the new page. Nothing else in this suite opens the drawer, clicks a
+  // page link inside it, and checks the drawer afterwards, so that regression
+  // passed review once already.
+  it("clicking a page link inside the drawer closes it and changes the route", () => {
+    const { history } = mountRecording("/banking");
+    const drawer = openDrawer();
+
+    fireEvent.click(within(drawer).getByTestId("mobilenav-budget"));
+
+    expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
+    expect(history[history.length - 1]).toBe("/budget");
+  });
+
+  it("clicking a destination row itself (not a nested page) also closes the drawer", () => {
+    const { history } = mountRecording("/banking");
+    const drawer = openDrawer();
+
+    fireEvent.click(within(drawer).getByTestId("mobilenav-forecast/overview"));
+
+    expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
+    expect(history[history.length - 1]).toBe("/forecast/overview");
   });
 });
 

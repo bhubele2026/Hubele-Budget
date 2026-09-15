@@ -81,7 +81,7 @@ import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { FreshnessLine, moneyFace } from "@/components/data-state";
 import { dataState } from "@/lib/queryState";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { householdDayOfAt } from "@/lib/householdDay";
+import { householdDayOfAt, householdToday } from "@/lib/householdDay";
 import {
   buildLineRegister,
   filterForecastTxns,
@@ -192,6 +192,13 @@ const HORIZON_OPTS: HorizonOpt[] = [
 const FORECAST_FROM_KEY = "h2budget:forecastFromDate";
 const FORECAST_HORIZON_KEY = "h2budget:forecastHorizonDays";
 const FORECAST_LOOKBACK_OPEN_KEY = "h2budget:forecastLookbackOpen";
+// (PR-K follow-up round 2, L1) `FORECAST_FROM_KEY` gets written on EVERY
+// mount regardless of whether a date was picked (see the effect below), so
+// its mere presence proves nothing about intent. Whether a date was actually
+// chosen lives in its own key, set only by the input's `onChange` (or
+// restored from a prior session that itself set it) — never inferred from
+// "there happens to be a stored date".
+const FORECAST_FROM_PICKED_KEY = "h2budget:forecastFromDatePicked";
 const FORECAST_MIN_FROM_DATE = "2026-05-01";
 
 function todayISO(): string {
@@ -211,6 +218,25 @@ function shortDate(iso: string): string {
   if (!iso) return "";
   const [, m, d] = iso.split("-");
   return `${m}-${d}`;
+}
+
+/**
+ * (PR-K follow-up round 2, L2) Reads name+mask from exactly ONE source —
+ * never one field from the resolved account and the other from the stored
+ * snapshot, which is how a sole-checking account with no mask on file ended
+ * up wearing the old account's mask, and a resolved account with no name on
+ * file ended up wearing the old account's name. `account` (when given) always
+ * wins as a pair; `fallback` (the stored snapshot's own name/mask) is used
+ * only when nothing resolved. A null mask on the winning source means no
+ * mask is shown — never the other source's mask. A null name on a RESOLVED
+ * account reads a neutral label, never the stored snapshot's name.
+ */
+function pairedAccountLabel(
+  account: { name: string | null; mask: string | null } | null,
+  fallback: { name: string | null; mask: string | null },
+): { name: string; mask: string | null } {
+  if (account) return { name: account.name ?? "bank account", mask: account.mask };
+  return { name: fallback.name ?? "Checking", mask: fallback.mask };
 }
 
 export default function ForecastPage({
@@ -241,17 +267,47 @@ export default function ForecastPage({
       return false;
     }
   });
+  // (PR-K follow-up, NIT; round 2, L1) Opening the look-back panel pre-fills
+  // the date input with `forecastFromDate` (today, the very first time) so
+  // the field is never blank — but that is NOT a date the user chose, and
+  // sending it as `fromDate` on the very next request creates a SECOND cache
+  // entry keyed on the browser's own calendar day, right back into the M1 bug
+  // this same panel already fixed once (a browser outside the household's
+  // timezone asking for its own day instead of leaving `fromDate` out). This
+  // flag is the difference between "the field shows today" and "the user
+  // picked today": only a real edit (the input's `onChange`) sets it, and it
+  // is restored across a remount/reload from ITS OWN sessionStorage key
+  // (`FORECAST_FROM_PICKED_KEY`) — never inferred from "there happens to be a
+  // stored from-date", because the effect below writes SOME value to that key
+  // on every mount regardless of whether anything was picked. (Round 1 used
+  // that presence as the signal, so opening the panel, not picking anything,
+  // and simply navigating away and back made the NEXT mount believe a date
+  // had been chosen.) Closing the panel discards it along with the date
+  // itself.
+  const [fromDatePicked, setFromDatePicked] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem(FORECAST_FROM_PICKED_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
   const [forecastFromDate, setForecastFromDate] = useState<string>(() => {
     try {
       const stored = sessionStorage.getItem(FORECAST_FROM_KEY);
-      const wasOpen = sessionStorage.getItem(FORECAST_LOOKBACK_OPEN_KEY) === "true";
-      // Honor a stored past date only if the user previously opened
-      // the look-back panel; otherwise snap to today on every fresh
-      // visit so the forecast keeps moving forward.
-      if (wasOpen && stored) return clampForecastFrom(stored);
-      return todayISO();
+      const wasPicked = sessionStorage.getItem(FORECAST_FROM_PICKED_KEY) === "true";
+      // Honor a stored past date only if the user genuinely PICKED it in a
+      // prior session (see `fromDatePicked` above for why "there is a stored
+      // value" alone doesn't mean that); otherwise snap to today on every
+      // fresh visit so the forecast keeps moving forward.
+      if (wasPicked && stored) return clampForecastFrom(stored);
+      // (PR-K follow-up round 2, NIT) The household's today, not the
+      // browser's — the same calendar the server and the min/max bounds on
+      // this same picker use. (The register's OWN "already happened" cutoff,
+      // `todayIso` below, is a separate, already-flagged residual and is left
+      // as is.)
+      return householdToday();
     } catch {
-      return todayISO();
+      return householdToday();
     }
   });
   useEffect(() => {
@@ -264,6 +320,16 @@ export default function ForecastPage({
       /* no-op */
     }
   }, [lookbackOpen]);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        FORECAST_FROM_PICKED_KEY,
+        fromDatePicked ? "true" : "false",
+      );
+    } catch {
+      /* no-op */
+    }
+  }, [fromDatePicked]);
   useEffect(() => {
     try {
       sessionStorage.setItem(FORECAST_HORIZON_KEY, String(horizonDays));
@@ -321,9 +387,12 @@ export default function ForecastPage({
   // and the Reports → Cash flow forecast card. A background bank sync can't
   // leave two copies of one day's balance disagreeing for the 5-minute
   // staleTime, and a browser outside Chicago no longer asks for its own
-  // calendar day. Only an open look-back sends a date.
+  // calendar day. Only an open look-back with an ACTUALLY PICKED date sends
+  // one (PR-K follow-up, NIT) — opening the panel alone still shares this key,
+  // so the moment between opening it and picking a date creates no second
+  // cache entry either.
   const cashProjectionQuery = useGetForecastCashSignal(
-    lookbackOpen
+    lookbackOpen && fromDatePicked
       ? { horizonDays: deferredHorizonDays, fromDate: deferredForecastFromDate }
       : { horizonDays: deferredHorizonDays },
   );
@@ -1858,6 +1927,33 @@ export default function ForecastPage({
     : null;
 
   const proj = cashProjection;
+  // (PR-K follow-up, NIT; round 2, L2) The "Bank balance" card names the
+  // account the balance actually rolled forward on — `resolveSnapshotAccount`'s
+  // answer, read off the SAME cash-signal response the Cash flow card's title
+  // reads (`cashFlowCardTitle`, `reports/CashFlowPage.tsx`) — never the label
+  // the settings row stored when the snapshot was last set. Those can name
+  // different accounts once a broken pointer is recovered via a mask match or
+  // "sole checking" (`resolveSnapshotAccount.ts`): the number is already
+  // right (it comes from the resolved account), but the stored label used to
+  // keep naming the old one. Only when nothing resolves (`via: "unresolved"`)
+  // is there nothing better to show than the stored label.
+  //
+  // ⚠️ Both `plaid_accounts.name` and `.mask` are nullable, so name and mask
+  // must be read from ONE account, never independently: falling back
+  // field-by-field (name from the resolved account, mask from the stored
+  // snapshot, or vice versa) mints a label that names no real account at all
+  // — a sole-checking account with no mask on file rendered the OLD account's
+  // mask, and a resolved account with no name on file rendered the OLD
+  // account's name. `pairedAccountLabel` reads exactly one source's name+mask
+  // together: a null mask on the winning source means no mask is shown; a
+  // null name on a RESOLVED account uses a neutral label, never the stored
+  // snapshot's name.
+  const resolvedBankAccount =
+    proj?.account && proj.account.via !== "unresolved" ? proj.account : null;
+  const { name: bankAccountName, mask: bankAccountMask } = pairedAccountLabel(
+    resolvedBankAccount,
+    { name: data.bankSnapshot?.name ?? null, mask: data.bankSnapshot?.mask ?? null },
+  );
   const endingNum = proj?.endingBalance ? Number(proj.endingBalance) : NaN;
   // ⚠️ `no_data` STILL CARRIES BALANCES. With no bank balance the server rolls
   // forward from a $0 start, so those figures are not a projection. The hero and
@@ -2024,8 +2120,12 @@ export default function ForecastPage({
             const next = !lookbackOpen;
             setLookbackOpen(next);
             // Closing the panel snaps the chart back to today so the
-            // forecast keeps moving forward.
-            if (!next) setForecastFromDate(todayISO());
+            // forecast keeps moving forward, and discards any picked date —
+            // reopening starts from "not yet picked" again (PR-K follow-up).
+            if (!next) {
+              setForecastFromDate(householdToday());
+              setFromDatePicked(false);
+            }
           }}
           className={`press inline-flex items-center gap-1.5 rounded-control px-2.5 py-1 text-micro font-semibold tracking-wide ring-1 ${
             lookbackOpen
@@ -2056,8 +2156,14 @@ export default function ForecastPage({
               type="date"
               value={forecastFromDate}
               min={FORECAST_MIN_FROM_DATE}
-              max={todayISO()}
-              onChange={(e) => setForecastFromDate(clampForecastFrom(e.target.value))}
+              // (PR-K follow-up round 2, NIT) The household's day, not the
+              // browser's, so the cap agrees with the value this same field
+              // defaults to when nothing has been picked yet.
+              max={householdToday()}
+              onChange={(e) => {
+                setForecastFromDate(clampForecastFrom(e.target.value));
+                setFromDatePicked(true);
+              }}
               className="h-7 w-[150px] font-mono text-micro tabular-nums"
               data-testid="input-forecast-from"
               data-pending={fromDateSwitchPending ? "true" : undefined}
@@ -2438,8 +2544,8 @@ export default function ForecastPage({
               {data.bankSnapshot ? (
                 <>
                   {data.bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
-                  {data.bankSnapshot.name ?? "Checking"}
-                  {data.bankSnapshot.mask ? ` ••${data.bankSnapshot.mask}` : ""} ·{" "}
+                  {bankAccountName}
+                  {bankAccountMask ? ` ••${bankAccountMask}` : ""} ·{" "}
                   {formatDate(householdDayOfAt(data.bankSnapshot.at))}
                   {/* The server's verdict when the spine describes this same
                       snapshot. Until it answers, or if the two ever disagree on

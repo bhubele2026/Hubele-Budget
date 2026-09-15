@@ -29,6 +29,12 @@ const q = vi.hoisted(() => ({
   cashSignalUpdatedAt: 0,
   /** Every params object the page passed to `useGetForecastCashSignal`. */
   cashSignalParams: [] as unknown[],
+  /**
+   * (PR-K follow-up, NIT) The ACTUAL resolved query key for each call — see
+   * the mock below. `cashSignalParams` alone can't catch a future call site
+   * that forks the cache through the hook's second `options` argument.
+   */
+  cashSignalKeys: [] as unknown[],
   /** How many times the page asked for the `/forecast` bundle. */
   forecastBundleCalls: 0,
   refetch: vi.fn(),
@@ -56,30 +62,47 @@ vi.mock("@/hooks/useSpine", () => ({
   }),
 }));
 
-vi.mock("@workspace/api-client-react", () => ({
-  useListTransactions: () => ({ data: [], isLoading: false }),
-  useListCategories: () => ({ data: [] }),
-  useListRecurringItems: () => ({ data: [] }),
-  useGetForecast: () => {
-    q.forecastBundleCalls += 1;
-    return { data: undefined };
-  },
-  useGetForecastCashSignal: (params: unknown) => {
-    q.cashSignalParams.push(params);
-    return {
-      data: q.cashSignal,
-      isFetching: q.cashSignalFetching,
-      isLoadingError: q.cashSignalLoadingError,
-      isRefetchError: q.cashSignalRefetchError,
-      isPlaceholderData: q.cashSignalPlaceholder,
-      dataUpdatedAt: q.cashSignalUpdatedAt,
-      refetch: q.refetch,
-    };
-  },
-  useGetDashboard: () => ({ data: undefined }),
-  useListDebts: () => ({ data: [] }),
-  useListPlaidLiabilityAccounts: () => ({ data: [] }),
-}));
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  // The REAL key builder — not a fake literal — so `q.cashSignalKeys` records
+  // what the app would actually cache under.
+  const actual =
+    await importOriginal<typeof import("@workspace/api-client-react")>();
+  return {
+    useListTransactions: () => ({ data: [], isLoading: false }),
+    useListCategories: () => ({ data: [] }),
+    useListRecurringItems: () => ({ data: [] }),
+    useGetForecast: () => {
+      q.forecastBundleCalls += 1;
+      return { data: undefined };
+    },
+    useGetForecastCashSignal: (
+      params: unknown,
+      options?: { query?: { queryKey?: unknown } },
+    ) => {
+      q.cashSignalParams.push(params);
+      // Mirrors `getGetForecastCashSignalQueryOptions`'s own precedence
+      // exactly: an explicit `options.query.queryKey` always wins.
+      q.cashSignalKeys.push(
+        options?.query?.queryKey ??
+          actual.getGetForecastCashSignalQueryKey(
+            params as Parameters<typeof actual.getGetForecastCashSignalQueryKey>[0],
+          ),
+      );
+      return {
+        data: q.cashSignal,
+        isFetching: q.cashSignalFetching,
+        isLoadingError: q.cashSignalLoadingError,
+        isRefetchError: q.cashSignalRefetchError,
+        isPlaceholderData: q.cashSignalPlaceholder,
+        dataUpdatedAt: q.cashSignalUpdatedAt,
+        refetch: q.refetch,
+      };
+    },
+    useGetDashboard: () => ({ data: undefined }),
+    useListDebts: () => ({ data: [] }),
+    useListPlaidLiabilityAccounts: () => ({ data: [] }),
+  };
+});
 
 import CashFlowPage, {
   cashFlowForecastSeries,
@@ -179,6 +202,7 @@ beforeEach(() => {
   q.cashSignalPlaceholder = false;
   q.cashSignalUpdatedAt = 0;
   q.cashSignalParams = [];
+  q.cashSignalKeys = [];
   q.forecastBundleCalls = 0;
   q.refetch = vi.fn();
 });
@@ -256,7 +280,15 @@ describe("cashFlowCardTitle — the scope comes from the cash signal's own accou
     ).toBe("Forecast · Test Bank ••0003 · next 90 days");
   });
 
-  it("names no account when none was resolved (the balance stays at the raw snapshot)", () => {
+  // (PR-K follow-up round 2, NIT) Renamed: this does NOT mean "the balance
+  // stays at the raw snapshot" — manual rows still move the curve regardless
+  // (`isBankRow`). A calmer "entered by hand" wording was tried for this case
+  // and reverted, because this page can't reliably tell a fully-manual
+  // household apart from a Plaid-linked one `resolveSnapshotAccount` simply
+  // can't pick an account for (e.g. two checking accounts + a manual
+  // snapshot) — it doesn't fetch a list of linked accounts (L2 removed that
+  // fetch). See the round 2 review note.
+  it("names no account when none was resolved (a gap this page can't attribute to a cause)", () => {
     expect(
       cashFlowCardTitle(
         {
@@ -288,6 +320,21 @@ describe("Cash flow — the forecast-balance card (owner decision 16)", () => {
     for (const params of q.cashSignalParams) {
       // toStrictEqual: a `fromDate: undefined` key would fail too.
       expect(params).toStrictEqual({ horizonDays: 90 });
+    }
+  });
+
+  it("(PR-K follow-up, NIT) the ACTUAL resolved query key is exactly [\"/api/forecast/cash-signal\", { horizonDays: 90 }] — not just the params object passed in", () => {
+    // `cashSignalParams` (above) only proves what the card handed the hook as
+    // its FIRST argument. A hook-options override (`{ query: { queryKey } }`,
+    // the generated hook's second argument) would win over that and fork the
+    // cache silently — invisible to a test that only inspects `params`.
+    // `cashSignalKeys` mirrors the hook's own precedence with the REAL key
+    // builder, so it can't miss that.
+    q.cashSignal = readySignal();
+    renderPage();
+    expect(q.cashSignalKeys.length).toBeGreaterThan(0);
+    for (const key of q.cashSignalKeys) {
+      expect(key).toStrictEqual(["/api/forecast/cash-signal", { horizonDays: 90 }]);
     }
   });
 
