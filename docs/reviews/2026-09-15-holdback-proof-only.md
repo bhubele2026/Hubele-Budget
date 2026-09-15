@@ -1,15 +1,18 @@
 # PR-B2: the hold-back needs proof (owner decision, 2026-09-15)
 
-Branch `fix/holdback-proof-only`, cut from main `2731077`. It merges main `2e1949f` (round 1) and `b939039` (round 2). One
-money rule changes: the forecast's hold-back. There is no UI, API spec, schema or codegen change. All figures are
-synthetic test fixtures.
+Branch `fix/holdback-proof-only`, cut from main `2731077`. It merges main `2e1949f` (round 1), `b939039` (round 2) and
+`9aad763` (round 3). One money rule changes: the forecast's hold-back. There is no UI, API spec, schema or codegen change
+in this PR. All figures are synthetic test fixtures.
 
-**Status after round 2:**
+**Status after round 3:**
 
-- Outflows (bills, debt minimums, the Avalanche extra) need tier-1/2 proof for the hold-back.
-- Income keeps its arrival rule, exactly as on main.
-- Two pre-existing income double counts are pinned as known issues, not fixed: a biweekly early paycheck (for PR9), and
-  a nameless earlier deposit (open for the lead). See Round 2.
+- **Outflows** (bills, debt minimums, the Avalanche extra) need tier-1/2 proof for the hold-back.
+- **Income** uses the arrival rule itself. An earlier paycheck counts as received for the hold-back exactly when it counts
+  as arrived (`isEvidence`: its pair is not ambiguous, named or not). The two share one definition, so they cannot
+  disagree.
+- **Round 2's nameless-paycheck known issue** is fixed in round 3.
+- **One pre-existing income double count stays pinned for PR9:** a biweekly early paycheck after an off-amount one. Its
+  cause is the matcher's ambiguity flag.
 
 ## The owner's decision, in plain words
 
@@ -25,8 +28,8 @@ the owner answers the close call in Review.
 The owner's principle: **the forecast may read low, never high.**
 
 - For a bill, holding a row back keeps the bill on the curve, which can only read low.
-- For income, it would keep a paycheck on the curve while its deposit is already in cash, which reads high. So income
-  keeps its arrival rule (round 2).
+- For income, holding a row back would keep a paycheck on the curve while its deposit is already in cash, which reads
+  high. So income counts an earlier paycheck as received whenever it counts as arrived (rounds 2 and 3).
 
 ## The model rule (plan section B, hold-back)
 
@@ -40,11 +43,11 @@ Section B grades every pair:
 PR-B applied the tiers to overdue evidence and to `offCurve`. This PR applies them to the hold-back:
 
 > A later occurrence of an item never leaves the curve on a row dated on or after an earlier, unpaid occurrence of the
-> same item.
+> same item. An earlier occurrence counts as paid exactly when its own pair is evidence it was paid (`isEvidence`):
 >
-> - **Outflow** (`planAmount < 0`): the earlier occurrence counts as paid **only** when its own pair is tier 1 or 2.
-> - **Income** (`planAmount > 0`): the earlier occurrence counts as received on main's rule. That means a tier 1 or 2
->   pair, or a named (confidence not "low"), non-ambiguous deposit, on a row not tagged to another debt.
+> - **Outflow** (`planAmount < 0`): the pair is tier 1 or 2.
+> - **Income** (`planAmount > 0`): the pair is not ambiguous, named or not. That is PR6's arrival rule, the same test
+>   that keeps a paycheck out of `incomeNotArrived`.
 
 An answered occurrence (matched, partial, missed, skipped) never enters the matcher, so it never holds anything back.
 
@@ -56,19 +59,22 @@ the income-arrival rule, the card-payment rule, and both remainder drags.
 
 | File | What it holds | Changed? |
 |---|---|---|
-| `artifacts/api-server/src/lib/forecastLedger.ts`, the `pairedKeys` filter (~line 945) | **The only executable copy.** On main it was: `tier ≤ 2`, OR (not ambiguous AND confidence ≠ "low" AND the row not tagged to another debt), for every plan. Now: `tier ≤ 2` → paid; otherwise an outflow (`planAmount < 0`) is unpaid; otherwise (income) main's condition. The two comments that describe the rule (~line 756 and ~line 930) are rewritten. | **Yes** |
-| `lib/avalanche-core/src/planMatch.ts` | It grades pairs (`tier`, `confidence`, `ambiguous`, `offCurve`) and holds no earlier-occurrence logic. `matchPlansToRows` has one caller, the ledger. | No: nothing to change |
+| `artifacts/api-server/src/lib/forecastLedger.ts`, the hold-back (~line 930) | **The only executable copy.** On main the `pairedKeys` filter was: `tier ≤ 2`, OR (not ambiguous AND confidence ≠ "low" AND the row not tagged to another debt), for every plan. Now it is `matches.filter(isEvidence)`. `isEvidence` (income: `!m.ambiguous`; outflow: `tier ≤ 2`) moved up from below the hold-back, so overdue evidence, `incomeNotArrived` and the hold-back use one definition. The comments that describe the rule (~line 756 and ~line 930) are rewritten. | **Yes** |
+| `lib/avalanche-core/src/planMatch.ts` | It grades pairs (`tier`, `confidence`, `ambiguous`, `offCurve`) and holds no earlier-occurrence logic. `matchPlansToRows` has one caller, the ledger. | No: nothing to change (PR9's biweekly fix belongs here) |
 | `artifacts/h2budget/src/lib/forecastMatch.ts` | `buildLineRegister` copies the server's `matches` into `probablyPaid` (`tier`, `offCurve`, `remainderAmount`) and reads `offCurve` for the no-bank running balance. It has no hold-back of its own. | No |
 | `artifacts/h2budget/src/lib/forecastReconcile.ts` | `computeBankReconcile` reads `offCurve` and `remainderAmount`. It has no hold-back of its own. | No |
 
+**No debt-tag check.** The arrival rule has none: for income, `paidByKey` is built only from `isEvidence` pairs, and the
+card-payment rule covers debt minimums only. A tier ≤ 2 pair is never on a row tagged to another debt (`tierOf`), so the
+outflow side needs none either.
+
 **Parity.** The ledger demotes a held-back pair before it leaves the server (`tier: 3`, `evidence: null`,
-`offCurve: false`). Both web files only read that result, so server and web cannot disagree, whether the plan is an
-outflow or income.
+`offCurve: false`). Both web files only read that result, so server and web cannot disagree.
 
 **Search.** I also searched the whole repo for `confidence === "low"`, `confidence !== "low"` and `ambiguous ||`. The
 only other hit is `scripts/src/detectSubscriptions.ts`, which detects subscriptions and is unrelated.
-`lib/api-spec/openapi.yaml` has no hold-back wording. Its "any confidence, not ambiguous" line is the income-arrival rule
-(`isEvidence`), which is unchanged.
+`lib/api-spec/openapi.yaml` has no hold-back wording. Its "any confidence, not ambiguous" line is the income-arrival rule,
+which this PR now shares.
 
 **Other text touched:**
 
@@ -122,7 +128,8 @@ City Water is in its own category, the only bill there.
   (tier 2 by rule a, with `confidence: "low"`). May's "CITY WATER" −150 is on 05-12.
 - **Results.** April pairs with the autopay at `tier: 2`: a pair that proves something ranks ahead of the fee. May is
   `tier: 2, offCurve: true`. The 05-20 balance is **850.00**.
-- **Why nameless.** The earlier pair is deliberately nameless, because the rule reads the tier, not the name.
+- **Why nameless.** The earlier pair is deliberately nameless, because for outflows the rule reads the tier, not the
+  name.
 
 #### D2: updated to the owner's decision
 
@@ -173,13 +180,14 @@ mutations of the round-1 filter, each reverted afterwards:
 
 ### Golden and household scenario
 
-No entry changed in either round, so nothing was re-recorded. `forecastLedger.golden.integration.test.ts` and
-`householdScenario.integration.test.ts` pass under `CI=true` as committed (2 files: 21 passed, 7 todo), and the snapshot
-file is untouched.
+No entry changed in any round, so nothing was re-recorded. `forecastLedger.golden.integration.test.ts` and
+`householdScenario.integration.test.ts` pass under `CI=true` as committed; the snapshot file is main's (PR-K added
+`account` to it).
 
-Neither fixture has a named tier-3 earlier pair, so the removed outflow branch never decided anything there:
+Neither fixture has a tier-3 earlier pair whose treatment changed:
 
-- **Golden:** the rows are nameless ("golden <date> <amount>"), and the only pair is the Golden Card minimum (tier 2).
+- **Golden:** the rows are nameless ("golden <date> <amount>"), the only pair is the Golden Card minimum (tier 2), and no
+  deposit pairs with its paychecks.
 - **Household scenario:** it has no such pair either.
 
 ### Review still shows the close call (step 5)
@@ -219,16 +227,16 @@ No UI was added. What I checked:
   goes round 4's follow-on note for this shape: the later pair is now tier 3, so it no longer drives
   `remainder_assumed_unpaid` either.
 
-### Round 1's OPEN finding: income read HIGH (resolved in round 2)
+### Round 1's OPEN finding: income read HIGH (resolved in rounds 2–3)
 
-Round 1 applied the stricter rule to every plan. A temporary probe showed that for income it reads high. The same fixture
-is now a committed test (Round 2, test R2-1).
+Round 1 applied the stricter rule to every plan. A temporary probe showed that for income it reads high.
 
-- **Setup:** a $2,000 monthly paycheck with no category. April's deposit arrived $100 short (named, tier 3). May's exact
-  deposit arrived a day early.
+- **Setup:** a $2,000 monthly paycheck. April's deposit arrived $100 short (named, tier 3). May's exact deposit arrived a
+  day early.
 - **Result:** the 05-15 balance read 3,000.00 on `2731077` and **5,000.00** on round 1, because May was held back and
   counted twice.
-- **The two rules disagreed:** the income-arrival rule still said April arrived; the hold-back said it had not.
+
+That fixture is now committed as R2-1.
 
 ---
 
@@ -241,89 +249,117 @@ out the owner's stated principle ("the forecast may read low, never high"); it i
 holding a later row back can only read low. For income, it reads high: a held-back paycheck stays on the curve while its
 deposit is already in cash.
 
+### What round 2 built (the income condition is superseded by round 3)
+
+- **Outflows:** round 1's rule.
+- **Income:** round 2 used main's named condition (tier ≤ 2, or confidence ≠ "low" and not ambiguous, plus main's
+  debt-tag check). Round 3 replaced it with the arrival rule itself.
+- **Recovery before the commit.** During round 2, a local probe command overwrote `forecastLedger.ts` with `2731077`'s
+  version. A zsh glob matched nothing and aborted the backup step, but the file swap still ran. Nothing had been
+  committed. I restored the file from `24b9d0fe`, re-applied the round-2 edits, and checked `git diff` against HEAD
+  (round-2 change only). The two hold-back files were re-run before the commit and before the gates.
+
+### Tests added in round 2
+
+These tests are in `cashSignalProbablyPaid.integration.test.ts`, in the describe now titled "(PR-B2 rounds 2–3)".
+
+- **Fixture:** balance 1,000.00 read on 05-01; today is 05-14.
+- **Paycheck:** "Acme Payroll", +$2,000.
+
+| Test | `2731077` | Round 1 (`24b9d0fe`) | Round 2 (`3d56068c`) |
+|---|---|---|---|
+| **R2-1** monthly: April $1,900 (named, tier 3), May's $2,000 a day early | passes (05-15: 3,000.00) | **fails**: May's pair `tier: 3, offCurve: false`; 05-15 reads 5,000.00 | passes: May `tier: 2, offCurve: true`; 05-15 **3,000.00** |
+| **R2-2** (KNOWN ISSUE, PR9) biweekly: 05-01 $1,900, 05-15's $2,000 a day early | 5,000.00 | 5,000.00 | pinned at 5,000.00 (right answer 3,000.00) |
+| **R2-3** (control) the same biweekly household, 05-01 exact | 3,000.00 | 3,000.00 | 3,000.00 |
+| R2-4 (KNOWN ISSUE, open) monthly: April exact but nameless, May a day early | 5,000.00 | 5,000.00 | pinned at 5,000.00; **replaced in round 3 by R3-1** |
+
+**Fails before, passes after (round 2).**
+
+- **On the round-1 ledger:** 1 failed (R2-1), 34 passed.
+- **On `2731077`'s ledger** (probably-paid file only): R2-1, R2-2 and R2-3 passed. The one failure was (a), round 1's own
+  fix. So R2-2's 5,000.00 predates PR-B2.
+- **On the round-2 ledger:** 35 passed.
+
+R2-4 was added afterwards from a probe that read 5,000.00 on both the `2731077` and round-2 ledgers.
+
+---
+
+## Round 3: income uses the arrival rule itself
+
+### Why
+
+The lead's direction: for income, the hold-back uses the arrival rule itself (`!m.ambiguous`), not main's named
+condition. Round 2's wording ("as on main") was imprecise; this is the intent. **It carries out the owner's principle;
+it is not a new money decision:**
+
+- For income, counting more earlier paychecks as received only takes later paychecks off the curve, so it can only read
+  lower.
+- It makes the hold-back and the arrival rule agree fully. That removes round 2's nameless-paycheck double count
+  (5,000.00 → 3,000.00).
+
 ### The change
 
-`forecastLedger.ts`, the `pairedKeys` filter only:
+`forecastLedger.ts` only:
 
 ```ts
-if (m.tier <= 2) return true;
-if (m.planAmount < 0) return false;                    // an outflow needs tier-1/2 proof
-if (m.ambiguous || m.confidence === "low") return false; // income: main's rule
-return !(rowDebt && planDebt && rowDebt !== planDebt);   // (main's tag check, kept for income)
+const isEvidence = (m: PlanRowMatch): boolean => (m.planAmount > 0 ? !m.ambiguous : m.tier <= 2); // moved up
+const pairedKeys = new Set(matches.filter(isEvidence).map((m) => m.planKey));
 ```
 
-- **Outflows:** round 1, unchanged.
-- **Income:** byte-for-byte main's `2731077` condition, including its debt-tag check (the `rowDebtById` map comes back).
-  It agrees with the income-arrival rule (`isEvidence`: not ambiguous) for any **named** deposit. For a nameless one
-  they still disagree, as on main; see "Still open" below.
-- **Other copies:** `planMatch.ts`, `forecastMatch.ts` and `forecastReconcile.ts` still have no copy of the rule.
+- **Income:** `!m.ambiguous`, character for character the arrival rule, because it is the same function.
+- **Outflows:** `tier ≤ 2`, unchanged.
+- **Removed:** round 2's named condition, and its debt-tag check with the `rowDebtById` map. The arrival rule has no tag
+  check, and the two must match exactly.
+- **Nothing else moves:** `isEvidence` itself is unchanged, and its other readers (used rows, listing pairs, due debt
+  minimums, `paidByKey`) run after the hold-back exactly as before.
 
-### Tests: before and after
+### Every test whose expected value changed in round 3
 
-New tests (`cashSignalProbablyPaid.integration.test.ts`, describe "(PR-B2 round 2) the hold-back reads income by its
-arrival rule"). Fixture: balance 1,000.00 read 05-01, today 05-14. "Acme Payroll" is +$2,000.
-
-| Test | `2731077` | Round 1 (`24b9d0fe`) | Round 2 |
-|---|---|---|---|
-| **R2-1** monthly paycheck: April $1,900 (named, tier 3), May's $2,000 a day early | passes (05-15: 3,000.00) | **fails**: May's pair `tier: 3, offCurve: false`; 05-15 reads 5,000.00 | passes: May `tier: 2, offCurve: true`; 05-15 **3,000.00** |
-| **R2-2** (KNOWN ISSUE, PR9) biweekly: 05-01 $1,900, 05-15's $2,000 a day early | passes, pinned at 5,000.00 | passes, 5,000.00 | passes, 5,000.00 (right answer 3,000.00) |
-| **R2-3** (control) the same biweekly household, 05-01 exact | passes, 3,000.00 | passes | passes |
-| **R2-4** (KNOWN ISSUE, open) monthly: April exact but nameless, May a day early by name | 5,000.00 (probe) | 5,000.00 | passes, pinned at 5,000.00 (right answer 3,000.00) |
-
-R2-1 also asserts:
-
-- April's pair is `confidence: "medium"`, not ambiguous, tier 3;
-- April is absent from `incomeNotArrived`;
-- bankToday is 3,000.00.
-
-Tests round 2 leaves unchanged, re-run on the final tree. All are outflow plans, which keep round 1's rule:
-
-| Test | Round 1 | Round 2 |
+| Test | Round 2 (`3d56068c`) | Round 3 |
 |---|---|---|
-| (a) City Water meter fee | May `tier 3, offCurve false`; 05-20 700.00 | same |
-| (c) tier-2 earlier pair | May `tier 2, offCurve true`; 05-20 850.00 | same |
-| D2 | August `tier 3, offCurve false`; 8,528.00 / 8,028.00, ending 15,955.20 | same |
-| D3 | ending 15,955.20 → 16,628.00 after July's `matched` answer | same |
-| HOME DEPOT cases (round 3) | 05-20 700.00 / 2,850.00 | same |
+| **R3-1** (was R2-4): April's $2,000 exact but nameless ("DIRECT DEP 7781"), May's a day early by name | KNOWN ISSUE pin: May `tier: 3, offCurve: false`; 05-15 **5,000.00** | a normal passing test: May `tier: 2, offCurve: true`; 05-15 **3,000.00**. April's pair is still `confidence: "low"`, not ambiguous, tier 3; April is absent from `incomeNotArrived` |
+| **R3-2** (new, the cost): a nameless $2,000 "MOBILE CHECK DEP 0415" on April's date; April's real paycheck arrives late on 05-14 | not present (on `3d56068c` it reads May `tier: 3`, 05-15 5,000.00) | before an answer: May `tier: 2, offCurve: true`, 05-15 **3,000.00**, where the truth is 5,000.00 (one paycheck low). After "Not this" on April's pair: April has no pair, May is `tier: 3, offCurve: false`, 05-15 **5,000.00**, the truth |
 
-### Fails before, passes after (round 2)
+Comment-only edits in round 3: the describe title and header ("rounds 2–3") and R2-2's comment (the round-3 note, the
+PR9 fix direction and its constraint).
 
-These runs used the round-2 tests.
+Unchanged in round 3, re-run on the final tree:
 
-| Source | The two hold-back files |
+- R2-1 (3,000.00), R2-2 (pinned at 5,000.00), R2-3 (3,000.00).
+- (a) (700.00), (c) (850.00).
+- D2 (8,528.00 / 8,028.00, ending 15,955.20), D3 (15,955.20 → 16,628.00).
+- The HOME DEPOT cases (700.00 / 2,850.00).
+- The golden and household-scenario files.
+
+**Fails before, passes after (round 3).** The two hold-back files, with the round-3 tests in place:
+
+| Source | Result |
 |---|---|
-| Round 1 ledger (`24b9d0fe`) | 1 failed (R2-1), 34 passed |
-| `2731077` ledger (`cashSignalProbablyPaid` file only) | 1 failed ((a), round 1's own fix), 24 passed. R2-1, R2-2 and R2-3 pass, which shows R2-2's 5,000.00 predates PR-B2 |
-| Round 2 ledger | 35 passed |
+| Round 2 ledger (`3d56068c`) | 2 failed, 35 passed. R3-1 failed with May's pair `tier: 3, offCurve: false`; R3-2 failed at its before-answer step, same pair |
+| Round 3 ledger (`83c915d`) | 37 passed |
 
-R2-4 was added after those runs, from a temporary probe that read 5,000.00 on both the `2731077` and round-2 ledgers.
-With it, the file has 36 tests on the final tree.
+### The stated cost: one paycheck low, never high
+
+**Why it happens.** The ledger cannot tell a nameless deposit that *is* the paycheck (R3-1) from one that isn't (R3-2):
+the rows have the same shape. A nameless deposit pairs with a paycheck only within max($1, 1%) of it and within 3 days of
+its date. When such a coincidence lands on an unpaid paycheck's date, and the real paycheck then arrives late inside the
+next paycheck's window, the next paycheck leaves the curve early.
+
+**Size.** The forecast reads one paycheck low (R3-2: 3,000.00 against 5,000.00) until the owner answers "Not this" on the
+earlier suggestion. The answered read is exactly the truth, and no read is above it.
 
 ### The biweekly double count: pinned for PR9, not fixed
 
 **Repro (R2-2).**
 
-- A $2,000 paycheck every 14 days (04-17, 05-01, 05-15); the deposit on 04-17 is exact.
-- 05-01's deposit is $1,900 (named, $100 short).
+- A $2,000 paycheck every 14 days (04-17, 05-01, 05-15). 04-17's deposit is exact.
+- 05-01's deposit is $1,900: named, $100 short.
 - 05-15's $2,000 arrives a day early, on 05-14.
+- R2-3 is the control: the same household with 05-01 exact.
 
-**Mechanism: the matcher's `ambiguous` flag in `matchPlansToRows` (`planMatch.ts`), not the hold-back.**
-
-1. The 05-14 deposit is 13 days after the 05-01 occurrence, inside its +14-day window, so it is a candidate for both 05-01
-   and 05-15. It pairs with 05-15, the better score.
-2. 05-01 then pairs with its own $1,900 deposit. That pair cannot be tier 2 ($100 short), so it ranks below the 05-14
-   candidate for the same plan.
-3. A pair is marked `ambiguous` whenever a same-or-better-ranked candidate for its plan (or row) scores within the margin
-   **or better**. That candidate still counts even though its row already went to 05-15. So 05-01's pair is ambiguous.
-4. The income-arrival rule and the hold-back both read that flag correctly. 05-01 is listed in `incomeNotArrived`, and it
-   is not received for the hold-back. So 05-15's pair is held back, and +$2,000 stays on the curve while the deposit is
-   already in cash.
-
-R2-3 is the control: with 05-01 paid exactly, no pair is ambiguous and 05-15 counts once (3,000.00).
-
-**Dollar effect on the fixture.** The forecast reads high by **$2,000**, one paycheck, from 05-15 to the end of the
-horizon: 05-15 reads 5,000.00 instead of 3,000.00. Any low point, max safe extra or ending balance read after 05-15 can
-read high by up to $2,000. `incomeNotArrived` also wrongly lists the 05-01 paycheck.
+**Dollar effect.** The forecast reads high by **$2,000**, one paycheck, from 05-15 to the end of the horizon: 05-15
+reads 5,000.00, right answer 3,000.00. Any low point, max safe extra or ending balance read after 05-15 can read high by
+up to $2,000. `incomeNotArrived` also wrongly lists the 05-01 paycheck.
 
 **When it happens:** all three of these together:
 
@@ -332,93 +368,73 @@ read high by up to $2,000. `incomeNotArrived` also wrongly lists the 05-01 paych
   own);
 - the next deposit arrives before its due date.
 
-For a bill the same ambiguity only holds a later row back, which reads low.
+**Exact mechanism, for PR9: `matchPlansToRows` in `lib/avalanche-core/src/planMatch.ts`.**
 
-**Workaround today.** Confirming the earlier paycheck in Review should clear it. That is the same path D3 proves for
-bills (an answered occurrence never reaches the matcher); it is not separately tested for income.
+1. **Candidates.** Every plan × row combination inside the pairing window becomes a candidate with a `rank` and a
+   `score`.
+   - `rank` = 0 if the pair could be tier 1/2 (ignoring ambiguity), else 2, plus 1 for a manual row.
+   - `score` = |amount gap in cents| + 100 × |days apart| − 5,000 when named.
+2. **The greedy pass.** Candidates are sorted by rank, then score, and taken greedily when both the plan and the row
+   are still free.
+3. **The flag.** For each pair taken, `ambiguous` is true when any other candidate for the same plan or row has
+   `rank ≤` this pair's rank and `score − this score ≤ max(100, 10% of |this score|)`. **A candidate that scored better
+   always passes that test, even when its row was already taken by another plan earlier in the pass.**
+4. **The fixture, by that formula:**
 
-**Why not fixed here.** The lead's bar was "the same hold-back or arrival mechanism, a small fix, and it reads lower".
-This case misses it:
+   | Candidate | Rank | Score | What happens |
+   |---|---|---|---|
+   | 05-15 plan ↔ 05-14 row | 0 | −4,900 | taken first |
+   | 05-01 plan ↔ 05-14 row (13 days late, inside the +14 window) | 0 | −3,700 | skipped: its row is gone |
+   | 05-01 plan ↔ $1,900 row ($100 short, not tier-2-capable) | 2 | 5,000 | taken |
 
-1. **The cause is the matcher's ambiguity flag, which bills share.** Ignoring a better candidate whose row another plan
-   took would also un-flag bill pairs. An un-flagged bill pair can become tier 2 and leave the curve, so the forecast
-   could read **higher**. That is a matcher rule change, not a small lower-only fix.
-2. **A hold-back-only patch would read lower, but it breaks this round's rule.** Counting an ambiguous income pair as
-   received would override the income rule round 2 restores. It would also leave `incomeNotArrived` listing a paycheck
-   that arrived, so the two rules would disagree again. That would be a second money rule this round's direction didn't
-   include.
+   The skipped candidate has rank 0 ≤ 2 and scores better, so it marks the 05-01 pair `ambiguous: true`.
+5. **What reads the flag.** Ambiguous means `isEvidence` is false. So 05-01 is listed in `incomeNotArrived`, it is not
+   received for the hold-back, and 05-15's pair is held back: +$2,000 stays on the curve while the deposit is already in
+   cash.
 
-**For PR9 (income states).** R2-2 pins today's wrong value and should flip to 3,000.00 there. One candidate for PR9 to
-weigh, not decided here: for income pairs only, a better candidate whose row a higher-ranked pair already took should not
-make a pair ambiguous.
+**The fix PR9 should make.** In the matcher's ambiguity flag: a better-scoring candidate whose row (or plan) a
+higher-ranked pair already took must not make a pair ambiguous.
 
-### Still open: a nameless earlier paycheck (pinned; the lead's call)
+**⚠️ The fix must not let any bill pair leave the curve.** `tierOf` returns a suggestion for an ambiguous pair, so
+un-flagging a bill pair can make it tier 2. Tier 2 sets `offCurve` and takes the bill off the curve, which reads high.
+PR9 must either limit the change to income pairs, or show with tests that no outflow pair's tier or `offCurve` changes.
+R2-2 should then flip to 3,000.00.
 
-**Repro (R2-4).**
+**Why not fixed here.** The cause is in the shared matcher, and a hold-back-only patch would make the hold-back and the
+arrival rule disagree. **Workaround today:** confirming the earlier paycheck in Review should clear it. That is the same
+path D3 proves for bills; it is not separately tested for income.
 
-- April's $2,000 arrives exactly on 04-15, as "DIRECT DEP 7781": nameless, so `confidence: "low"`, not ambiguous, tier 3.
-- May's $2,000 arrives a day early, by name.
+### Gates (round 3, merged tree)
 
-**Result.**
+**Tree.** Round 3 is committed as `83c915d` and merged with origin/main `9aad763` as `7325a9e`. main `9aad763` is PR-K:
+the Cash flow card uses the cash signal, and `CashSignal.account` is added, with its spec and codegen.
 
-- The income-arrival rule (`isEvidence`: not ambiguous) counts April received, so `incomeNotArrived` is empty.
-- Main's hold-back rule, which round 2 gives income back, leaves out low-confidence pairs. So May is held back and counts
-  twice: 05-15 reads **5,000.00**, right answer 3,000.00, high by $2,000.
-- This is the same on `2731077` and on round 2.
+- PR-K touches `forecastLedger.ts` only at the import, the `ForecastLedger` type and the return. That is away from the
+  hold-back.
+- The merge had no conflicts. The merged tree differs from `9aad763` only in this PR's five files.
 
-**Not changed.** Round 2's direction named main's condition for income. One option for the lead: use the arrival rule
-itself (`!m.ambiguous`) for income in the hold-back.
+Every gate was run on the merge commit:
 
-- For income it can only read lower.
-- The hold-back and the arrival rule would then agree for every deposit.
-- The cost: a nameless coincidental deposit could count an unpaid paycheck as received, reading low by one paycheck.
-
-### Gates (round 2, merged tree)
-
-**Tree.** Round 2 is committed as `82e1633` and merged with origin/main `b939039` (R0, the five-destination navigation,
-web only) as `c6d6166`. There were no conflicts and no overlap: the merged tree differs from `b939039` only in this PR's
-five files. Every gate was run on the merge commit:
-
-- `pnpm build` (runs `pnpm run typecheck` first): pass.
-- **Web tests** (the counts are R0's; this PR adds no web code):
-  - `TZ=UTC CI=true`: 140 files, 1,212 passed, 3 skipped.
-  - `TZ=America/Chicago CI=true`: 140 files, 1,213 passed, 2 skipped.
-- **Full API suite** (`CI=true`, own DB `h2budget_test_prb2`, `caffeinate -i`, serial): **145 files, 1,481 passed,
-  7 todo.** That is round 1's merged 1,477 plus R2-1 through R2-4.
-- `node scripts/check-entry-graph.mjs`: OK, 575.7 KB of 580.0 KB. The rise from 574.4 KB is R0's layout change; this PR
-  changes no web file.
-- **Codegen:** not needed. No file under `lib/api-spec`, `lib/api-zod`, `lib/api-client-react` or `lib/db` differs from
-  origin/main.
+- `pnpm --filter @workspace/api-spec run codegen`: no drift (the tree was clean afterwards). This PR touches no spec
+  file.
+- `pnpm build` (runs `pnpm run typecheck` first): pass. The tree was clean afterwards.
+- **Web tests** (the counts include R0's and PR-K's tests; this PR adds no web code):
+  - `TZ=UTC CI=true`: 141 files, 1,235 passed, 3 skipped.
+  - `TZ=America/Chicago CI=true`: 141 files, 1,236 passed, 2 skipped.
+- **Full API suite** (`CI=true`, own DB `h2budget_test_prb2`, `caffeinate -i`, serial): **145 files, 1,486 passed,
+  7 todo.**
+  - That is `9aad763`'s 1,479 (PR-K added 4) plus this branch's net 7 tests.
+  - This branch added 9 `it(` blocks: (a), (c), the new D2, D3, R2-1, R2-2, R2-3, R3-1 and R3-2.
+  - It removed 2: round 4's residual pin and the old D2.
+- `node scripts/check-entry-graph.mjs`: OK, 575.7 KB of 580.0 KB. This PR changes no web file.
 - **e2e:** not run (no UI change in this PR).
-- **Golden and household scenario:** part of the full suite above, unchanged, not re-recorded.
 
-**A recovery before the commit.** During round 2, a local probe command overwrote `forecastLedger.ts` with `2731077`'s
-version. A zsh glob matched nothing and aborted the backup step, but the file swap still ran. Nothing had been committed.
-I restored the file from `24b9d0fe`, re-applied the two round-2 edits, and checked `git diff` against HEAD: it shows only
-the round-2 change. Then I re-ran the two hold-back files, before this commit and before the gates above.
+### Earlier rounds' gates (for the record)
 
----
+| Round | Merge commit | Main merged in | API suite | Web (UTC / Chicago) | Entry graph |
+|---|---|---|---|---|---|
+| Round 2 | `c6d6166` | `b939039` | 145 files, 1,481 passed, 7 todo | 1,212 / 1,213 | 575.7 KB |
+| Round 1 | `0b4015c` | `2e1949f` | 145 files, 1,477 passed, 7 todo | 1,148 / 1,149 | 574.4 KB |
+| Round 1, pre-merge | `dea25f7` on `2731077` | none | 145 files, 1,476 passed, 7 todo | same as round 1 | 574.4 KB |
 
-## Round 1 gates
-
-### On the merged tree (`0b4015c`: round 1 plus main `2e1949f`, the seed-bills tool removal)
-
-The branch was built on `2731077`, then origin/main `2e1949f` was merged in, with no conflicts and no overlap. Every gate
-was re-run on the merge commit:
-
-- `pnpm build` (runs `pnpm run typecheck` first): pass.
-- Web tests: `TZ=UTC CI=true` 139 files, 1,148 passed, 3 skipped. `TZ=America/Chicago CI=true` 139 files, 1,149 passed,
-  2 skipped.
-- Full API suite (`CI=true`, own DB `h2budget_test_prb2`, `caffeinate -i`, serial): 145 files, 1,477 passed, 7 todo.
-  The count is one higher than before the merge, because main's change adds a test to
-  `seedDefaultsOnce.integration.test.ts`.
-- `node scripts/check-entry-graph.mjs`: OK. The landing bundle is 574.4 KB of 580.0 KB (unchanged).
-- Codegen: not needed; neither side touches `lib/api-spec`, `lib/api-zod` or `lib/api-client-react`.
-- e2e: not run (no UI change).
-
-### Before the merge (`dea25f7` on `2731077`)
-
-- `pnpm run typecheck`: pass. Web: the same counts as above.
-- Full API suite: 145 files, 1,476 passed, 7 todo. That is main's 1,474, minus the replaced residual pin, plus (a), (c)
-  and D3. It was re-run on the exact committed tree after the temporary probes were deleted.
-- `pnpm build` + `check-entry-graph`: OK, 574.4 KB.
+Build and typecheck passed at every round.
