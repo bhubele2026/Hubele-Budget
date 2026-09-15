@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Debt } from "@workspace/api-client-react";
 
 /**
- * The Future Goal hero is the app's north star: ONE number, the share of the
+ * The Debt hero is the app's north star: ONE number, the share of the
  * debt that is gone. Two rules are pinned here.
  *
  * 1. **It is the spine's number, not this page's.** `/api/spine` computes
@@ -126,7 +126,7 @@ beforeEach(() => {
   spineData.current = { reviewCount: 0, debt: { payoffPct: 39.7 } };
 });
 
-describe("Future Goal hero — the one big number", () => {
+describe("Debt hero — the one big number", () => {
   it("shows the spine's payoffPct, not a percentage recomputed from the debt list", () => {
     renderPage();
     const spine = spineData.current as { debt: { payoffPct: number } };
