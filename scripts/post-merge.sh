@@ -56,9 +56,10 @@ pnpm --filter @workspace/api-spec run codegen
 # rebuilds them on demand. It is a no-op when post-merge has already
 # run, so the redundancy is free.
 
-# Task #63 — seed the user's 18 recurring bills (idempotent; safe to re-run).
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f "$(dirname "$0")/seed_bills_user_3DBrWZkCKIzrkYoLS6N9tIMcdso.sql"
+# Task #63's per-user bill seed USED to run from here. It was removed on
+# 2026-09-15 (owner decision), together with its SQL file and
+# POST /budget/seed-bills: it re-added, by name, bills the household had
+# deleted. Starter bills come only from seedDefaultsOnce, once per household.
 
 # Migrate any legacy percentage-form APRs to decimal form
 # (idempotent; skips rows already < 1.0).

@@ -425,6 +425,29 @@ describe("a deleted seed category or bill after a deploy", () => {
       expect(p.amexAnchor).toEqual(ANCHOR);
     }
   });
+
+  it("POST /budget/seed-bills is gone: it answers 404 and adds no deleted bill back (owner decision 2026-09-15)", async () => {
+    await newHousehold("seed-bills-gone");
+    // Seeded the way the app seeds: the first category read.
+    await getCategories();
+    const [weekly] = await db
+      .select({ id: recurringItemsTable.id })
+      .from(recurringItemsTable)
+      .where(
+        and(
+          eq(recurringItemsTable.householdId, CURRENT_HOUSEHOLD),
+          eq(recurringItemsTable.name, "Weekly Spend"),
+        ),
+      );
+    expect((await request("DELETE", `/recurring-items/${weekly!.id}`)).status).toBe(204);
+    const before = await householdState();
+
+    expect((await request("POST", "/budget/seed-bills")).status).toBe(404);
+
+    const after = await householdState();
+    expect(after.recurring.map((r) => r.name)).not.toContain("Weekly Spend");
+    expect(after).toEqual(before);
+  });
 });
 
 describe("a household with its own data and no marker", () => {
