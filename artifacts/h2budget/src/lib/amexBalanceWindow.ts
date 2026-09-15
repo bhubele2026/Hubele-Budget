@@ -41,6 +41,8 @@ export const MAY_2026: MonthKey = { year: 2026, month: 4 };
 export type BalanceWindowTxn = {
   occurredOn: string;
   amount: string | number;
+  /** (PR-I) The bank removed this charge: it moves no balance. */
+  bankRemoved?: boolean;
 };
 
 export type BuildBalanceWindowArgs = {
@@ -67,9 +69,11 @@ export function buildBalanceWindow(
     anchorPresent,
     currentMonth,
     balanceAtEndOf,
-    transactions,
     now = new Date(),
   } = args;
+  // (PR-I round 2, review LOW) A charge the bank removed moves no point on the
+  // chart — the same skip as the month-end closure (`makeAmexBalanceAtEndOf`).
+  const transactions = args.transactions.filter((t) => !t.bankRemoved);
 
   if (!anchorPresent) return null;
 

@@ -733,6 +733,8 @@ export default function ForecastPage({
       // (PR5) Plans a bank row probably paid. They show as "Suggested" until
       // the user answers; only `offCurve` pairs are off the server's curve.
       matches: cashProjection?.matches ?? null,
+      // (PR-I round 2) Bills open again because the bank removed their payment row.
+      paymentRemovedByBank: data.paymentRemovedByBank ?? null,
     });
   }, [
     data,

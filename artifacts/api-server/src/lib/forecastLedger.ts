@@ -11,6 +11,7 @@ import {
 import { resolveSnapshotAccount, type SnapshotAccountResolution } from "./resolveSnapshotAccount";
 import { ledgerActualRowsWhere, toCashRow } from "./ledgerCashRows";
 import { isResolutionRow, loadBankRemovedIds } from "./bankRemoved";
+import { answersRemovedPayment, loadRemovedPaymentIds } from "./bankRemovedPayments";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdDayOf, householdTodayDate } from "./householdClock";
 import { remapOrphanResolutions, type ResolutionSchedule } from "./resolutionRemap";
@@ -582,10 +583,18 @@ export async function buildForecastLedger(
   // (PR-I) A bank-removed marker is not a resolution: it closes no plan, claims
   // no row — so the posted row that replaced a removed pending row still pays
   // its bill — and never means paid.
-  const resolutionsStored = await db
-    .select()
-    .from(forecastResolutionsTable)
-    .where(and(eq(forecastResolutionsTable.householdId, householdId), isResolutionRow()));
+  // ⭐ (PR-I round 2, review HIGH-2) Nor does an answer about a payment the bank
+  // took back: a matched / partial pair (or one in review) on a bank-removed row
+  // closes nothing, so the bill returns to the curve while cash adds the payment
+  // back — never high. Except a removed pending row a live posted row replaced:
+  // that posted row carries the payment (`loadRemovedPaymentIds`).
+  const removedPaymentIds = await loadRemovedPaymentIds(householdId, { bankRemoved });
+  const resolutionsStored = (
+    await db
+      .select()
+      .from(forecastResolutionsTable)
+      .where(and(eq(forecastResolutionsTable.householdId, householdId), isResolutionRow()))
+  ).filter((r) => !answersRemovedPayment(r, removedPaymentIds));
   // (One-time bill move, round 4) A pending review on a paused bill reads as the
   // user's last answer: it holds its row exactly as that answer did, and the
   // paused bill is off the curve. Resuming the bill brings the question back.

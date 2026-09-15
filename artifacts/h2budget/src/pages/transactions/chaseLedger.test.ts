@@ -166,6 +166,11 @@ describe("ledgerRowLabels: the words carry the state", () => {
     const twin = ledgerRowLabels({ ...base, countsInBalance: false, balanceReason: "superseded" });
     expect(twin.map((l) => l.label)).toEqual(["Not counted"]);
     expect(twin[0]!.title).toBe("Replaced by its posted row.");
+    // (PR-I round 2, review M21) The bank's word, in place of "Not counted".
+    const removed = ledgerRowLabels({ ...base, countsInBalance: false, balanceReason: "removed_by_bank" });
+    expect(removed.map((l) => l.label)).toEqual(["Removed by bank"]);
+    expect(removed[0]!.key).toBe("removed-by-bank");
+    expect(removed[0]!.title).toMatch(/bank removed/);
   });
 });
 

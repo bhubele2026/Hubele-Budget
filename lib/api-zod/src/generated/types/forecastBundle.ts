@@ -26,6 +26,12 @@ export interface ForecastBundle {
   bankSnapshot?: BankSnapshot | null;
   cashSignal?: CashSignal | null;
   plaidCheckingAccounts: PlaidCheckingAccount[];
+  /** (PR-I) Plan occurrences, as `<itemId>|<occurrenceDate>`, whose matched,
+partial or in-review payment row the bank removed. Such an answer closes
+nothing: the bill is back on the curve and in Review, where it is
+labelled. Its resolution is left out of `resolutions`.
+ */
+  paymentRemovedByBank?: string[];
   /**
    * Plaid account_id the forecast treats as the bank account, resolved the same way the balance roll-forward resolves it. Null when no account can be identified uniquely.
    * @nullable

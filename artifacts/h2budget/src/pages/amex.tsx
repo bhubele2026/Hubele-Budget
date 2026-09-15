@@ -652,8 +652,6 @@ export default function AmexPage() {
     let charges = 0;
     let paymentsAndCredits = 0;
     for (const t of filtered) {
-      // (PR-I) A charge the bank removed is in no total.
-      if (t.bankRemoved) continue;
       const a = parseSigned(t.amount);
       if (a >= 0) charges += a;
       else paymentsAndCredits += a; // negative
@@ -2027,7 +2025,8 @@ export default function AmexPage() {
       <DayGroupsList
         groups={groups}
         renderGroup={([dayKey, items], groupIndex) => {
-        const dayTotal = items.reduce((s, t) => s + parseAbs(t.amount), 0);
+        // (PR-I round 2, review LOW) A charge the bank removed is listed, in no total.
+        const dayTotal = items.reduce((s, t) => (t.bankRemoved ? s : s + parseAbs(t.amount)), 0);
         const ids = items.map((t) => t.id);
         const allSelected = ids.every((id) => selected.has(id));
         const someSelected = !allSelected && ids.some((id) => selected.has(id));

@@ -184,6 +184,9 @@ export type PlanLine = {
   plannedAmount?: number;
   /** (PR5) `partial` lines: the paying row's amount, when known. */
   paidAmount?: number | null;
+  /** (PR-I round 2) An open plan whose matched payment row the bank removed
+   *  (`ForecastBundle.paymentRemovedByBank`): it is open again because of that. */
+  paymentRemovedByBank?: boolean;
 };
 
 export type BankLine = {
@@ -304,6 +307,10 @@ export function buildLineRegister(opts: {
    *  client already knows is decided (plan or row resolved, pair rejected) is
    *  ignored, so a cash signal older than the bundle can't resurrect it. */
   matches?: ReadonlyArray<CashSignalMatch> | null;
+  /** (PR-I round 2) `ForecastBundle.paymentRemovedByBank`: `<itemId>|<occurrenceDate>`
+   *  keys of bills whose matched payment row the bank removed. An open plan
+   *  with one of these keys carries `paymentRemovedByBank`. */
+  paymentRemovedByBank?: ReadonlyArray<string> | null;
 }): {
   rows: LineRow[];
   allPlan: PlanLine[];
@@ -313,6 +320,7 @@ export function buildLineRegister(opts: {
   rejectedPairs: ReadonlySet<string>;
 } {
   const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO, visibleFromISO, lingerPastDuePlans, matches } = opts;
+  const paymentRemovedKeys = new Set(opts.paymentRemovedByBank ?? []);
   const today = opts.today ?? new Date();
   const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const fromMs = parseISO(fromISO);
@@ -494,6 +502,10 @@ export function buildLineRegister(opts: {
       originalDate: date !== ev.date ? ev.date : undefined,
       ...(probablyPaid ? { probablyPaid } : {}),
       ...(status === "partial" ? { plannedAmount, paidAmount: paidAmount ?? null } : {}),
+      // (PR-I round 2) Open again because the bank removed the row that paid it.
+      ...(paymentRemovedKeys.has(origKey) && (status === "pending_plan" || status === "future")
+        ? { paymentRemovedByBank: true }
+        : {}),
     }];
   });
   for (const p of allPlan) {

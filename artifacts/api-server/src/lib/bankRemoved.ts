@@ -7,11 +7,13 @@
 // schema change: both columns are nullable.
 //
 //   - The row counts nowhere: `classifyCashRows` gives it `removed_by_bank` (0),
-//     and Spending, Amex owed and Budget read `notBankRemovedSql()`.
+//     and Spending, Amex owed, Budget, debt pending payments, the Reports hub
+//     totals and the avalanche actuals read `notBankRemovedSql()`.
 //   - It stays visible: the Chase ledger lists it labelled "Removed by bank",
 //     and GET /transactions lists it flagged when asked (`includeBankRemoved`).
 //   - Plaid listing the id again (the cursor's `added`/`modified`, or the gap
 //     backfill's /transactions/get) deletes the marker, and the row counts again.
+//   - (round 2) A bill answer on the row closes nothing: `bankRemovedPayments.ts`.
 //
 // ⚠️ THE MARKER IS NOT A RESOLUTION. It resolves no bill, matches no row and
 // never means "paid". Every reader of `forecast_resolutions` filters it out
@@ -73,29 +75,35 @@ function chunked<T>(items: readonly T[]): T[][] {
 /**
  * Marks rows the bank removed that sync kept because someone worked on them.
  * At most one marker per row. Returns how many markers were written.
+ *
+ * (round 2, review NIT) One `INSERT … SELECT … WHERE NOT EXISTS` statement per
+ * chunk: a read followed by an insert could let a second marker in between.
+ * With no unique index (no DDL) a truly simultaneous second sync still could;
+ * every reader treats the markers as a set, so a duplicate changes nothing.
  */
 export async function markBankRemoved(
   householdId: string,
   ownerUserId: string,
   txnIds: readonly string[],
 ): Promise<number> {
-  if (txnIds.length === 0) return 0;
-  const already = await loadBankRemovedIds(householdId);
-  const fresh = [...new Set(txnIds)].filter((id) => !already.has(id));
-  for (const part of chunked(fresh)) {
-    await db.insert(forecastResolutionsTable).values(
-      part.map((matchedTxnId) => ({
-        // The household owner owns the data, as every sync write does (#623).
-        userId: ownerUserId,
-        householdId,
-        recurringItemId: null,
-        occurrenceDate: null,
-        status: BANK_REMOVED_STATUS,
-        matchedTxnId,
-      })),
-    );
+  const ids = [...new Set(txnIds)];
+  let written = 0;
+  for (const part of chunked(ids)) {
+    const result = await db.execute(sql`
+      insert into ${forecastResolutionsTable} (user_id, household_id, status, matched_txn_id)
+      select ${ownerUserId}, ${householdId}::uuid, ${BANK_REMOVED_STATUS}, t.id
+      from unnest(array[${sql.join(
+        part.map((id) => sql`${id}`),
+        sql`, `,
+      )}]::uuid[]) as t(id)
+      where not exists (
+        select 1 from ${forecastResolutionsTable} existing
+        where existing.matched_txn_id = t.id and existing.status = ${BANK_REMOVED_STATUS}
+      )
+    `);
+    written += (result as { rowCount?: number | null }).rowCount ?? 0;
   }
-  return fresh.length;
+  return written;
 }
 
 /** Deletes the markers on the household's rows carrying one of `plaidTransactionIds`: Plaid lists them again. */

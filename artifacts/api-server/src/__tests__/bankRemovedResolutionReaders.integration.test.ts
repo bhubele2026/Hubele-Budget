@@ -376,3 +376,100 @@ describe("deletes by matched_txn_id when the forecast flag is turned off (routes
     expect(await resolutions()).toEqual([`bank_removed:-#${id}`]);
   });
 });
+
+describe("(PR-I round 2, review HIGH-2) a bill answer on a payment the bank removed closes nothing", () => {
+  // $1,000 snapshot on 5/01; City Water $150 due the 12th; its payment row on 5/12.
+  async function waterScenario(opts: { match: boolean; marker: boolean }) {
+    await cleanup();
+    await snapshotOnChase();
+    const water = await plan("City Water", "150", { dayOfMonth: 12, anchorDate: "2026-01-12" });
+    const pay = await row("2026-05-12", "-150.00", "CITY WATER UTIL", {
+      plaidTransactionId: `W-${randomUUID()}`,
+      categoryId: CAT,
+      forecastFlag: true,
+    });
+    if (opts.match) {
+      await db.insert(forecastResolutionsTable).values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        recurringItemId: water,
+        occurrenceDate: "2026-05-12",
+        status: "matched",
+        matchedTxnId: pay,
+      });
+    }
+    if (opts.marker) await markRemoved(pay);
+    const sig = await signal();
+    const mayOnCurve = (sig.events ?? []).filter((e) => {
+      const ev = e as { itemId?: string; occurrenceDate?: string };
+      return ev.itemId === water && ev.occurrenceDate === "2026-05-12";
+    }).length;
+    return { water, pay, sig, mayOnCurve };
+  }
+
+  it("⭐ cash adds the payment back AND the bill returns to the curve: the forecast ends at the truth (400), never high (550)", async () => {
+    const truth = await waterScenario({ match: false, marker: true });
+    const removed = await waterScenario({ match: true, marker: true });
+    expect(removed.sig.bankToday).toBe("1000.00");
+    expect(removed.mayOnCurve).toBe(1);
+    expect(Number(removed.sig.endingBalance)).toBeCloseTo(Number(truth.sig.endingBalance), 2);
+    expect(Number(removed.sig.lowestProjected)).toBeCloseTo(Number(truth.sig.lowestProjected), 2);
+    expect(Number(removed.sig.endingBalance)).toBeCloseTo(400, 2);
+    // Not vacuous: the same match on a row the bank still has keeps the bill paid.
+    const live = await waterScenario({ match: true, marker: false });
+    expect(live.sig.bankToday).toBe("850.00");
+    expect(live.mayOnCurve).toBe(0);
+    expect(Number(live.sig.endingBalance)).toBeCloseTo(400, 2);
+  });
+
+  it("GET /forecast leaves that answer out and names the bill for Review; the review count reads the same rule", async () => {
+    const { water, pay } = await waterScenario({ match: true, marker: true });
+    const r = await request("GET", "/forecast");
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    const bundle = r.json as { resolutions: { matchedTxnId: string | null }[]; paymentRemovedByBank?: string[] };
+    expect(bundle.resolutions.some((x) => x.matchedTxnId === pay)).toBe(false);
+    expect(bundle.paymentRemovedByBank).toEqual([`${water}|2026-05-12`]);
+    expect(await computeReviewCount(TEST_HOUSEHOLD_ID, TEST_USER)).toBe(0);
+  });
+
+  it("except a removed PENDING row a live posted row replaced: the posted row carries the payment, the bill stays paid", async () => {
+    await snapshotOnChase();
+    const water = await plan("City Water", "150", { dayOfMonth: 12, anchorDate: "2026-01-12" });
+    const pending = await row("2026-05-11", "-150.00", "CITY WATER UTIL", { pending: true, categoryId: CAT });
+    await db.insert(forecastResolutionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      recurringItemId: water,
+      occurrenceDate: "2026-05-12",
+      status: "matched",
+      matchedTxnId: pending,
+    });
+    await markRemoved(pending);
+    await row("2026-05-12", "-150.00", "CITY WATER UTIL", { categoryId: CAT });
+
+    const sig = await signal();
+    expect(sig.bankToday).toBe("850.00");
+    const mayOnCurve = (sig.events ?? []).filter((e) => {
+      const ev = e as { itemId?: string; occurrenceDate?: string };
+      return ev.itemId === water && ev.occurrenceDate === "2026-05-12";
+    }).length;
+    expect(mayOnCurve).toBe(0);
+    const r = await request("GET", "/forecast");
+    expect((r.json as { paymentRemovedByBank?: string[] }).paymentRemovedByBank).toEqual([]);
+  });
+});
+
+describe("moneyContext (PR-H) reads only real answers", () => {
+  it("a bank-removed marker is no confirmed bill match", async () => {
+    await snapshotOnChase();
+    const removed = await row("2026-05-12", "-60.00", "RIVER GAS CO");
+    await markRemoved(removed);
+    const { loadConfirmedBillMatches } = await import("../lib/moneyContext");
+    const ids = await loadConfirmedBillMatches(
+      TEST_HOUSEHOLD_ID,
+      { start: "2026-05-01", end: "2026-05-31" },
+      { replacedBy: new Map() },
+    );
+    expect(ids.has(removed)).toBe(false);
+  });
+});

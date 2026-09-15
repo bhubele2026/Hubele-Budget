@@ -7,6 +7,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { isResolutionRow, notBankRemovedSql } from "./bankRemoved";
+import { answersRemovedPayment, loadRemovedPaymentIds } from "./bankRemovedPayments";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdTodayISO, monthBounds } from "./householdClock";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
@@ -38,7 +39,10 @@ import { readPausedReview } from "./oneTimeBillMove";
  * (PR-I) A row the bank removed is not counted: it is not cash and cannot pay a
  * bill, and the `/forecast` bundle leaves it out the same way (the Chase and
  * Amex tabs list it, labelled "Removed by bank"). Its marker is not a
- * resolution, so it resolves nothing either.
+ * resolution, so it resolves nothing either. (Round 2, HIGH-2) Nor does an
+ * answer about a payment the bank took back — the filter the ledger and the
+ * bundle apply. Its row is already left out above, so the count cannot move
+ * because of it; the filter keeps the three readers one rule.
  */
 export async function computeReviewCount(
   householdId: string,
@@ -93,7 +97,10 @@ export async function computeReviewCount(
     .from(recurringItemsTable)
     .where(and(eq(recurringItemsTable.householdId, householdId), ne(recurringItemsTable.active, "true")));
   const pausedItemIds = new Set(paused.map((p) => p.id));
-  const resolutions = stored.map((r) => readPausedReview(r, pausedItemIds));
+  const removedPaymentIds = await loadRemovedPaymentIds(householdId);
+  const resolutions = stored
+    .map((r) => readPausedReview(r, pausedItemIds))
+    .filter((r) => !answersRemovedPayment(r, removedPaymentIds));
   // (PR5) A "Not this" (`not_match`) answer rejects one suggested plan for the
   // row; the row itself is still unreviewed.
   // (One-time bill move) Neither does a pair an edit put in question

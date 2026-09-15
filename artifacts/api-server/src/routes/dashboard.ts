@@ -10,6 +10,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { findMatchedRuleId, loadUserRules } from "../lib/autoCategorize";
 import { withPendingPayments } from "../lib/debtPending";
+import { notBankRemovedSql } from "../lib/bankRemoved";
 import { householdTodayISO, monthBounds } from "../lib/householdClock";
 import { effectiveDebtBalance } from "@workspace/avalanche-core";
 
@@ -122,6 +123,8 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
           or ${budgetCategoriesTable.sourceKind} = 'auto_debts'
           or ${transactionsTable.description} like 'Payment — %'
         )`,
+        // (PR-I round 2, review MEDIUM-2) A payment the bank removed paid nothing.
+        notBankRemovedSql(),
       ),
     );
 
@@ -137,6 +140,8 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
         eq(transactionsTable.householdId, householdId),
         sql`${transactionsTable.occurredOn} >= ${monthStart}`,
         sql`${transactionsTable.occurredOn} < ${monthEnd}`,
+        // (PR-I round 2) A row the bank removed is in no total.
+        notBankRemovedSql(),
       ),
     );
 
@@ -177,6 +182,8 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
         sql`${transactionsTable.occurredOn} >= ${monthStart}`,
         sql`${transactionsTable.occurredOn} < ${monthEnd}`,
         sql`${transactionsTable.amount} < 0`,
+        // (PR-I round 2) Ties to `monthlySpend` above.
+        notBankRemovedSql(),
       ),
     )
     .groupBy(transactionsTable.categoryId, budgetCategoriesTable.name)

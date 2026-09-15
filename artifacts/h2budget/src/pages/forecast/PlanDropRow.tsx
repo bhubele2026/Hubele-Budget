@@ -195,6 +195,17 @@ export function PlanDropRow({
           <div className="whitespace-nowrap font-mono text-micro tabular-nums text-neutral-400">
             {formatDate(row.date)}
           </div>
+          {row.paymentRemovedByBank && (
+            // (PR-I round 2, review HIGH-2) Why a bill the household matched is open again.
+            <div className="text-micro" data-testid={`plan-payment-removed-${testKey}`}>
+              <span
+                className="chip warn"
+                title="The bank removed the transaction this bill was matched to, so the bill counts as unpaid again."
+              >
+                Its payment was removed by the bank
+              </span>
+            </div>
+          )}
           {pp && (
             <div
               className="flex flex-wrap items-center gap-x-2 text-micro text-neutral-500"

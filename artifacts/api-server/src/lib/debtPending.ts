@@ -1,5 +1,6 @@
 import { and, eq, gt, inArray, isNotNull } from "drizzle-orm";
 import { db, debtsTable, transactionsTable } from "@workspace/db";
+import { notBankRemovedSql } from "./bankRemoved";
 
 /**
  * ⭐ THE SERVER'S ONE VIEW OF "PAID BUT NOT YET POSTED".
@@ -63,6 +64,9 @@ export async function loadPendingPayments(
         inArray(transactionsTable.debtId, ids),
         // payment-direction (positive amount): pays down the debt
         gt(transactionsTable.amount, "0"),
+        // (PR-I round 2, review MEDIUM-2) A payment the bank removed paid nothing:
+        // it never nets against the balance, so "% paid" cannot read high.
+        notBankRemovedSql(),
       ),
     );
   const cutoffByDebt = new Map<string, Date | null>();

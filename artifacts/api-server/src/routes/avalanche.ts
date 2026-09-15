@@ -324,6 +324,8 @@ export async function resolveExtraForUser(
           // external card) — are excluded from avalanche actuals so
           // they never inflate the "extra" available for debt payoff.
           eq(transactionsTable.isExternalCardPayment, false),
+          // (PR-I round 2, review MEDIUM-2) A row the bank removed moved no money.
+          notBankRemovedSql(),
         ),
       );
 
@@ -401,6 +403,8 @@ export async function resolveExtraForUser(
           sql`${transactionsTable.occurredOn} < ${monthEnd}`,
           // (#632 follow-up) See per-category actual query above.
           eq(transactionsTable.isExternalCardPayment, false),
+          // (PR-I round 2) See per-category actual query above.
+          notBankRemovedSql(),
         ),
       )
       .groupBy(budgetCategoriesTable.kind);

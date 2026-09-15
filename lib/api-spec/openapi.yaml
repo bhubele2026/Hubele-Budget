@@ -5143,6 +5143,14 @@ components:
         plaidCheckingAccounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidCheckingAccount" }
+        paymentRemovedByBank:
+          description: |
+            (PR-I) Plan occurrences, as `<itemId>|<occurrenceDate>`, whose matched,
+            partial or in-review payment row the bank removed. Such an answer closes
+            nothing: the bill is back on the curve and in Review, where it is
+            labelled. Its resolution is left out of `resolutions`.
+          type: array
+          items: { type: string }
         checkingAccountExternalId:
           description: >-
             Plaid account_id the forecast treats as the bank account, resolved

@@ -3397,6 +3397,12 @@ export const GetForecastResponse = zod.object({
       institutionName: zod.string().nullish(),
     }),
   ),
+  paymentRemovedByBank: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "(PR-I) Plan occurrences, as `<itemId>|<occurrenceDate>`, whose matched,\npartial or in-review payment row the bank removed. Such an answer closes\nnothing: the bill is back on the curve and in Review, where it is\nlabelled. Its resolution is left out of `resolutions`.\n",
+    ),
   checkingAccountExternalId: zod
     .string()
     .nullish()

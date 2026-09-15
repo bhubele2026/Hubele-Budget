@@ -2037,8 +2037,10 @@ export async function syncPlaidItem(
     }
 
     // (PR-I, owner decision 14) A posted row this sync inserted under a new id
-    // takes the review work on the pending row it replaced. Non-fatal: the rows
-    // are already stored, and the read-time filing (PR-D) still applies.
+    // takes the review work on the pending row it replaced — (round 2, review
+    // HIGH-1) only when the bank removed that pending row, marked just above.
+    // Non-fatal: the rows are already stored, and the read-time filing (PR-D)
+    // still applies.
     try {
       await carryReviewToReplacements(householdId, insertedTxnIds);
     } catch (e) {
@@ -3973,7 +3975,17 @@ export async function runGapBackfillForItem(
       // id takes the review work on the pending row it replaced. Non-fatal, as on
       // the cursor path.
       try {
-        await carryReviewToReplacements(householdId, acctInsertedIds);
+        // (round 2, review HIGH-1) Only for a pending row the bank no longer has:
+        // marked removed, or absent from this complete listing of its window.
+        await carryReviewToReplacements(householdId, acctInsertedIds, {
+          pendingGone: (p) =>
+            p.bankRemoved ||
+            (fetchedComplete &&
+              !!p.plaidTransactionId &&
+              !fetchedIds.has(p.plaidTransactionId) &&
+              p.occurredOn >= windowStart &&
+              p.occurredOn <= todayStr),
+        });
       } catch (carryErr) {
         logger.warn(
           { userId, itemRowId, externalAcctId, err: carryErr },

@@ -34,6 +34,7 @@ import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
 import { computeReviewCount } from "../lib/reviewCount";
 import { resolveSnapshotAccount } from "../lib/resolveSnapshotAccount";
 import { BANK_REMOVED_STATUS, isResolutionRow, notBankRemovedSql } from "../lib/bankRemoved";
+import { answersRemovedPayment, loadRemovedPaymentIds } from "../lib/bankRemovedPayments";
 import {
   forecastTodayISO,
   inForecast,
@@ -461,10 +462,23 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   // user's last answer — the ledger and the review count read it the same way —
   // so the register never shows a question the paused bill cannot answer.
   const pausedItemIds = new Set(recurring.filter((r) => r.active !== "true").map((r) => r.id));
-  const resolutions = remapOrphanResolutions(
+  const remappedResolutions = remapOrphanResolutions(
     resolutionRows.map((r) => readPausedReview(r, pausedItemIds)),
     resolutionScheduleLookup(recurring, debtsList, linkedRecurringByDebt),
-  )
+  );
+  // ⭐ (PR-I round 2, review HIGH-2) An answer about a payment the bank took back
+  // closes nothing — the ledger and the review count read it the same way — so
+  // it is left out, and its bill is named so Review can say why it is open again.
+  const removedPaymentIds = await loadRemovedPaymentIds(householdId);
+  const paymentRemovedByBank = [
+    ...new Set(
+      remappedResolutions
+        .filter((r) => answersRemovedPayment(r, removedPaymentIds) && r.recurringItemId && r.occurrenceDate)
+        .map((r) => `${r.recurringItemId}|${r.occurrenceDate}`),
+    ),
+  ];
+  const resolutions = remappedResolutions
+    .filter((r) => !answersRemovedPayment(r, removedPaymentIds))
     .filter(
       (r) =>
         !r.matchedTxnId ||
@@ -498,6 +512,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     events,
     transactions: txns,
     resolutions,
+    paymentRemovedByBank,
     closedMonths: closedRows.map((c) => c.monthKey),
     settings: presentSettings(settings),
     bankSnapshot: presentSnapshot(settings),

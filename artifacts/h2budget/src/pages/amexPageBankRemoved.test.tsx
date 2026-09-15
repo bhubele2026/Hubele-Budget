@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
 // (PR-I, owner decision 14) The Amex page lists a charge the bank removed,
-// labelled "Removed by bank" in both layouts, and no balance on the page counts
-// it: the running "bal $X" walks past it. The month list asks the server for
+// labelled "Removed by bank" in both layouts, and no balance or total on the
+// page counts it: the running "bal $X" walks past it, and (round 2, review LOW)
+// its day's header total leaves it out. The month list asks the server for
 // removed rows; the 12-month trend (the ending-balance roll-forward) does not.
 // Synthetic merchants and amounts.
 
@@ -132,6 +133,7 @@ vi.mock("@workspace/api-client-react", () => {
 });
 
 import AmexPage from "./amex";
+import { formatDayHeader } from "@/components/account-page/day-group";
 
 function renderPage() {
   const qc = new QueryClient({
@@ -143,6 +145,13 @@ function renderPage() {
     </QueryClientProvider>,
   );
 }
+
+/** The sticky header bar of one day's group. */
+const dayBar = (day: string): HTMLElement => {
+  const bar = screen.getByText(formatDayHeader(day)).closest("div.sticky");
+  if (!bar) throw new Error(`no day header for ${day}`);
+  return bar as HTMLElement;
+};
 
 afterEach(() => cleanup());
 
@@ -162,5 +171,12 @@ describe("(PR-I) Amex page — a charge the bank removed", () => {
 
     expect(listCalls.some((p) => (p.limit ?? 0) < 5000 && p.includeBankRemoved === true)).toBe(true);
     expect(listCalls.some((p) => (p.limit ?? 0) >= 5000 && p.includeBankRemoved === undefined)).toBe(true);
+  });
+
+  it("(round 2, review LOW) its day's header total leaves it out", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getAllByText(/ORCHARD PRODUCE/).length).toBeGreaterThan(0));
+    expect(within(dayBar("2026-06-12")).getByText("$0.00")).toBeTruthy();
+    expect(within(dayBar("2026-06-10")).getByText("$12.34")).toBeTruthy();
   });
 });

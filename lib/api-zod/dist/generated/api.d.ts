@@ -6256,6 +6256,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         subtype?: string | null | undefined;
         institutionName?: string | null | undefined;
     }>, "many">;
+    paymentRemovedByBank: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
     checkingAccountExternalId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     today: zod.ZodOptional<zod.ZodString>;
     monthSnapshots: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodObject<{
@@ -6469,6 +6470,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             unpaidRemainder: string;
         }[] | undefined;
     } | null | undefined;
+    paymentRemovedByBank?: string[] | undefined;
     checkingAccountExternalId?: string | null | undefined;
     monthSnapshots?: Record<string, {
         at: string;
@@ -6651,6 +6653,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             unpaidRemainder: string;
         }[] | undefined;
     } | null | undefined;
+    paymentRemovedByBank?: string[] | undefined;
     checkingAccountExternalId?: string | null | undefined;
     monthSnapshots?: Record<string, {
         at: string;

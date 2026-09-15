@@ -276,6 +276,26 @@ export async function dedupeTransactionsForAccount(
         const p = mergeStatePatch({ ...survivor, ...patch } as TxnRow, loser);
         patch = { ...patch, ...p };
       }
+      // ⭐ (PR-I round 2, review MEDIUM-1) Copies carrying DIFFERENT Plaid ids:
+      // keep the id Plaid issued last (the newest row's), so a re-mint split
+      // across two syncs — the new id added in one, the old id removed in the
+      // next — leaves the surviving row on the id the bank still reports, and the
+      // later removal finds no row to mark. Never an id the bank already removed.
+      // The survivor keeps its own `created_at`: the snapshot and pairing rules
+      // read it.
+      if (survivor.plaidTransactionId) {
+        const live = [survivor, ...losers].filter(
+          (r) => r.plaidTransactionId && !bankRemovedTxnIds.has(r.id),
+        );
+        if (live.length > 0) {
+          const newest = live.reduce((a, b) =>
+            (b.createdAt?.getTime() ?? 0) > (a.createdAt?.getTime() ?? 0) ? b : a,
+          );
+          if (newest.plaidTransactionId !== survivor.plaidTransactionId) {
+            patch.plaidTransactionId = newest.plaidTransactionId;
+          }
+        }
+      }
       // Repoint forecast_resolutions matched_txn_id from each loser
       // onto the survivor BEFORE deleting the loser rows (matched_txn_id
       // is only a soft FK so the delete wouldn't cascade, but losing
