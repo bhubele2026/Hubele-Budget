@@ -8,7 +8,7 @@ import {
   forecastSettingsTable,
   avalancheSettingsTable,
 } from "@workspace/db";
-import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
+import { resolveSnapshotAccount, type SnapshotAccountResolution } from "./resolveSnapshotAccount";
 import { ledgerActualRowsWhere, toCashRow } from "./ledgerCashRows";
 import { inForecastWhere } from "./forecastInclusion";
 import { householdDayOf, householdTodayDate } from "./householdClock";
@@ -160,6 +160,13 @@ export type ForecastLedger = {
   snapshotAt: Date | null;
   snapshotSource: string | null;
   snapshotBalance: number | null;
+  /**
+   * (Decision 16, PR-K round 2) The account `isBankRow` treated as the bank:
+   * the one resolution this whole ledger ran on, with that account's own name,
+   * mask and subtype, so a caller can label the figures with the account that
+   * actually produced them.
+   */
+  snapshotAccount: SnapshotAccountResolution;
   /** The snapshot balance, or the starting balance when there is no snapshot. */
   startBalanceAtAnchor: number;
   /**
@@ -1270,6 +1277,7 @@ export async function buildForecastLedger(
     snapshotAt,
     snapshotSource: settings?.bankSnapshotSource ?? null,
     snapshotBalance,
+    snapshotAccount,
     startBalanceAtAnchor,
     bankToday,
     items,

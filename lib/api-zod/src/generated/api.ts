@@ -3134,6 +3134,25 @@ export const GetForecastResponse = zod.object({
         maxSafeExtra: zod.string(),
         snapshotAt: zod.string().nullish(),
         snapshotSource: zod.string().nullish(),
+        account: zod
+          .object({
+            name: zod.string().nullable(),
+            mask: zod.string().nullable(),
+            subtype: zod
+              .string()
+              .nullable()
+              .describe("Plaid subtype, e.g. checking or savings."),
+            via: zod.enum([
+              "pointer",
+              "snapshot mask",
+              "sole checking",
+              "sole depository",
+              "unresolved",
+            ]),
+          })
+          .describe(
+            "(Decision 16, PR-K round 2) The bank account this signal's figures roll\nforward on, as `resolveSnapshotAccount` resolved it: the stored pointer,\nelse the snapshot's mask, else the household's sole checking account,\nelse its sole depository account. A screen that names the account reads\nthis, so its label and its numbers come from one response. `name`,\n`mask` and `subtype` are the resolved Plaid account's own; all null when\n`via` is `unresolved`, where the balance stays at the raw snapshot.\n",
+          ),
         horizonDays: zod.number().optional(),
         fromDate: zod.string().optional(),
         toDate: zod.string().optional(),
@@ -3479,6 +3498,25 @@ export const GetForecastCashSignalResponse = zod.object({
   maxSafeExtra: zod.string(),
   snapshotAt: zod.string().nullish(),
   snapshotSource: zod.string().nullish(),
+  account: zod
+    .object({
+      name: zod.string().nullable(),
+      mask: zod.string().nullable(),
+      subtype: zod
+        .string()
+        .nullable()
+        .describe("Plaid subtype, e.g. checking or savings."),
+      via: zod.enum([
+        "pointer",
+        "snapshot mask",
+        "sole checking",
+        "sole depository",
+        "unresolved",
+      ]),
+    })
+    .describe(
+      "(Decision 16, PR-K round 2) The bank account this signal's figures roll\nforward on, as `resolveSnapshotAccount` resolved it: the stored pointer,\nelse the snapshot's mask, else the household's sole checking account,\nelse its sole depository account. A screen that names the account reads\nthis, so its label and its numbers come from one response. `name`,\n`mask` and `subtype` are the resolved Plaid account's own; all null when\n`via` is `unresolved`, where the balance stays at the raw snapshot.\n",
+    ),
   horizonDays: zod.number().optional(),
   fromDate: zod.string().optional(),
   toDate: zod.string().optional(),

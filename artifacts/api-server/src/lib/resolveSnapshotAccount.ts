@@ -33,6 +33,23 @@ export interface SnapshotAccountResolution {
   rowId: string | null;
   /** How we got there. `pointer` means the stored pointer was fine. */
   via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+  /**
+   * (Decision 16, PR-K round 2) The resolved account's own `name`, `mask` and
+   * `subtype`, read from the same row. A screen that names "the bank account"
+   * names the one whose rows actually roll the balance forward, not whatever
+   * label the snapshot remembers. All null when `unresolved`.
+   */
+  name: string | null;
+  mask: string | null;
+  subtype: string | null;
+}
+
+function identityOf(row: {
+  name: string | null;
+  mask: string | null;
+  subtype: string | null;
+}): Pick<SnapshotAccountResolution, "name" | "mask" | "subtype"> {
+  return { name: row.name ?? null, mask: row.mask ?? null, subtype: row.subtype ?? null };
 }
 
 function uniqueRow<T extends { accountId: string | null; id: string }>(
@@ -52,11 +69,17 @@ export async function resolveSnapshotAccount(args: {
 
   if (bankSnapshotAccountId) {
     const [acct] = await db
-      .select({ id: plaidAccountsTable.id, accountId: plaidAccountsTable.accountId })
+      .select({
+        id: plaidAccountsTable.id,
+        accountId: plaidAccountsTable.accountId,
+        name: plaidAccountsTable.name,
+        mask: plaidAccountsTable.mask,
+        subtype: plaidAccountsTable.subtype,
+      })
       .from(plaidAccountsTable)
       .where(eq(plaidAccountsTable.id, bankSnapshotAccountId));
     if (acct?.accountId) {
-      return { externalId: acct.accountId, rowId: acct.id, via: "pointer" };
+      return { externalId: acct.accountId, rowId: acct.id, via: "pointer", ...identityOf(acct) };
     }
   }
 
@@ -64,6 +87,7 @@ export async function resolveSnapshotAccount(args: {
     .select({
       id: plaidAccountsTable.id,
       accountId: plaidAccountsTable.accountId,
+      name: plaidAccountsTable.name,
       mask: plaidAccountsTable.mask,
       subtype: plaidAccountsTable.subtype,
       type: plaidAccountsTable.type,
@@ -79,7 +103,12 @@ export async function resolveSnapshotAccount(args: {
     );
     if (byMask) {
       logResolution(householdId, bankSnapshotAccountId, byMask.accountId, "snapshot mask");
-      return { externalId: byMask.accountId, rowId: byMask.id, via: "snapshot mask" };
+      return {
+        externalId: byMask.accountId,
+        rowId: byMask.id,
+        via: "snapshot mask",
+        ...identityOf(byMask),
+      };
     }
   }
 
@@ -90,7 +119,12 @@ export async function resolveSnapshotAccount(args: {
   );
   if (byChecking) {
     logResolution(householdId, bankSnapshotAccountId, byChecking.accountId, "sole checking");
-    return { externalId: byChecking.accountId, rowId: byChecking.id, via: "sole checking" };
+    return {
+      externalId: byChecking.accountId,
+      rowId: byChecking.id,
+      via: "sole checking",
+      ...identityOf(byChecking),
+    };
   }
 
   // 3. Its single depository account (older links can arrive with a type but
@@ -104,6 +138,7 @@ export async function resolveSnapshotAccount(args: {
       externalId: byDepository.accountId,
       rowId: byDepository.id,
       via: "sole depository",
+      ...identityOf(byDepository),
     };
   }
 
@@ -116,7 +151,14 @@ export async function resolveSnapshotAccount(args: {
     },
     "[snapshot-account] no resolvable Plaid account for the bank snapshot — the balance cannot roll forward and Sync cannot re-anchor it",
   );
-  return { externalId: null, rowId: null, via: "unresolved" };
+  return {
+    externalId: null,
+    rowId: null,
+    via: "unresolved",
+    name: null,
+    mask: null,
+    subtype: null,
+  };
 }
 
 function logResolution(

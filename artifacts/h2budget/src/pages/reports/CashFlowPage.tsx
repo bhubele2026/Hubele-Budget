@@ -3,12 +3,16 @@ import {
   useListTransactions,
   useListCategories,
   useListRecurringItems,
-  useGetForecast,
+  useGetForecastCashSignal,
   type Transaction,
   type RecurringItem,
-  type ForecastBundle,
+  type CashSignal,
+  type CashSignalDailyItem,
 } from "@workspace/api-client-react";
 import { PageSkeleton } from "@/components/page-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
+import { RefreshBanner } from "@/components/data-state";
+import { dataState, type DataState } from "@/lib/queryState";
 import { formatCurrency } from "@/lib/utils";
 import { type RangeMode } from "@/lib/timeRange";
 import { householdToday } from "@/lib/householdDay";
@@ -106,6 +110,91 @@ const SERIES = {
 // is told matches the number that was asked for.
 const TXN_FETCH_LIMIT = 2000;
 
+// (Owner decision 16) The forecast card shares the Forecast page's own signal:
+// same account scope, same balance anchor, same treatment of pending activity,
+// same daily calculation. Both call `computeCashSignal`
+// (`GET /forecast/cash-signal`), so this page never rolls a balance forward
+// from the settings row's starting balance again.
+export const CASHFLOW_FORECAST_HORIZON_DAYS = 90;
+
+/**
+ * The card's balance series is the cash signal's own `daily[]`, nothing
+ * recomputed. `daily[0]` is the anchor day (the household's today: this page
+ * sends no `fromDate`); `daily[90]` is the 90th day out.
+ *
+ * A missing or blank balance is dropped, never plotted: `Number("")` and
+ * `Number(null)` are both 0, which would draw a $0 point that isn't there.
+ * A real "0.00" still plots.
+ */
+export function cashFlowForecastSeries(
+  daily: ReadonlyArray<CashSignalDailyItem> | null | undefined,
+): Array<{ date: string; balance: number }> {
+  if (!daily) return [];
+  const out: Array<{ date: string; balance: number }> = [];
+  for (const d of daily) {
+    const raw: unknown = d.balance;
+    const balance =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string" && raw.trim() !== ""
+          ? Number(raw)
+          : NaN;
+    if (Number.isFinite(balance)) out.push({ date: d.date, balance });
+  }
+  return out;
+}
+
+type CardAccount = Pick<CashSignal["account"], "name" | "mask" | "subtype" | "via">;
+
+/**
+ * "Test Bank ••0001 checking": the account's own name and mask, then its Plaid
+ * subtype when the name doesn't already say it. The kind word is the account's
+ * own subtype, never an assumed "checking", so a savings account never reads
+ * as checking.
+ */
+export function cashFlowAccountLabel(account: CardAccount): string {
+  const name = (account.name ?? "").trim();
+  const mask = (account.mask ?? "").trim();
+  const kind = (account.subtype ?? "").trim().toLowerCase();
+  const parts = [
+    name,
+    mask ? `••${mask}` : "",
+    kind && !name.toLowerCase().includes(kind) ? kind : "",
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : "bank account";
+}
+
+/**
+ * (Owner decision 16; PR-K round 2, L1) The card's title names its scope from
+ * the SAME response as its figures: `cashSignal.account`, the account
+ * `resolveSnapshotAccount` resolved and the curve rolled forward on. It always
+ * says "Forecast" and always gives the horizon. The scope comes before the
+ * horizon, so a narrow screen truncates the horizon rather than the account.
+ *
+ *   - no signal yet (loading or failed): "Forecast balance · next 90 days"
+ *   - no bank snapshot (`no_data`): "Forecast · no bank balance set · next 90 days"
+ *   - no account resolved (the balance stays at the raw snapshot):
+ *     "Forecast · bank account not identified · next 90 days"
+ *   - otherwise: "Forecast · Test Bank ••0001 checking · next 90 days"
+ */
+export function cashFlowCardTitle(
+  signal:
+    | (Pick<CashSignal, "status"> & { account?: CardAccount | null })
+    | null
+    | undefined,
+  horizonDays: number,
+): string {
+  const horizon = `next ${horizonDays} days`;
+  if (!signal) return `Forecast balance · ${horizon}`;
+  if (signal.status === "no_data") return `Forecast · no bank balance set · ${horizon}`;
+  const account = signal.account;
+  if (!account) return `Forecast balance · ${horizon}`;
+  if (account.via === "unresolved") {
+    return `Forecast · bank account not identified · ${horizon}`;
+  }
+  return `Forecast · ${cashFlowAccountLabel(account)} · ${horizon}`;
+}
+
 export default function CashFlowPage() {
   // Weekly-first: opens on the current week; Mo/Yr are opt-in.
   const [mode, setMode] = useState<RangeMode>("wk");
@@ -148,7 +237,17 @@ export default function CashFlowPage() {
   const clipped = (txns?.length ?? 0) >= TXN_FETCH_LIMIT;
   const { data: categories } = useListCategories();
   const { data: recurringItems } = useListRecurringItems();
-  const { data: forecast } = useGetForecast({ days: 90 });
+  // (Owner decision 16; PR-K round 2, M1) Exactly `{ horizonDays: 90 }`, with
+  // no `fromDate`. That is the query key Forecast Overview, the nav/landing
+  // prefetch (`layout.tsx`, `useLandingWarmup.ts`) and the Forecast page's
+  // 90-day tab with look-back closed all use, so they read ONE cache entry and
+  // can't show two balances for one day. The Forecast page's other tabs are
+  // other horizons with their own entries. The title's account comes from this
+  // same response (L1), so the page no longer fetches the `/forecast` bundle.
+  const cashSignalQuery = useGetForecastCashSignal({
+    horizonDays: CASHFLOW_FORECAST_HORIZON_DAYS,
+  });
+  const cashSignalState = dataState(cashSignalQuery);
 
   const catNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -207,7 +306,15 @@ export default function CashFlowPage() {
         catNameById={catNameById}
         excludedCategoryIds={excludedCategoryIds}
         recurringItems={recurringItems ?? []}
-        forecast={forecast ?? null}
+        cashSignal={cashSignalQuery.data ?? null}
+        cashSignalState={cashSignalState}
+        cashSignalUpdatedAt={
+          cashSignalQuery.dataUpdatedAt
+            ? new Date(cashSignalQuery.dataUpdatedAt).toISOString()
+            : null
+        }
+        cashSignalRefreshing={cashSignalQuery.isFetching}
+        onRetryCashSignal={() => void cashSignalQuery.refetch()}
       />
     </ReportShell>
   );
@@ -228,7 +335,11 @@ function CashFlowSection({
   catNameById,
   excludedCategoryIds,
   recurringItems,
-  forecast,
+  cashSignal,
+  cashSignalState,
+  cashSignalUpdatedAt,
+  cashSignalRefreshing,
+  onRetryCashSignal,
 }: {
   txns: Transaction[];
   prevTxns: Transaction[];
@@ -237,7 +348,12 @@ function CashFlowSection({
   catNameById: Map<string, string>;
   excludedCategoryIds: ReadonlySet<string>;
   recurringItems: RecurringItem[];
-  forecast: ForecastBundle | null;
+  /** The forecast card's figures AND its title's account, from one response. */
+  cashSignal: CashSignal | null;
+  cashSignalState: DataState;
+  cashSignalUpdatedAt: string | null;
+  cashSignalRefreshing: boolean;
+  onRetryCashSignal: () => void;
 }) {
   const period: "day" | "week" | "month" =
     rangeDays <= 60 ? "day" : rangeDays <= 180 ? "week" : "month";
@@ -299,35 +415,27 @@ function CashFlowSection({
     return { income, expense };
   }, [recurringItems]);
 
-  // (PR3) NO STARTING BALANCE, NO PROJECTION. A missing starting balance used
-  // to fall back to $0 and draw the whole 90-day curve from zero, which reads
-  // as a real (and alarming) forecast. A real 0 is a balance and still draws.
-  const startingBalanceRaw = forecast?.settings?.startingBalance;
-  const startingBalanceMissing =
-    forecast != null &&
-    (startingBalanceRaw == null ||
-      String(startingBalanceRaw).trim() === "" ||
-      !Number.isFinite(Number(startingBalanceRaw)));
-
-  // Build a 90-day projected balance from forecast events + starting balance.
-  const forecastSeries = useMemo(() => {
-    if (!forecast || startingBalanceMissing) return [];
-    const startBal = Number(forecast.settings.startingBalance);
-    const sorted = [...(forecast.events ?? [])].sort((a, b) =>
-      a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
-    );
-    let bal = startBal;
-    const byDate = new Map<string, number>();
-    for (const e of sorted) {
-      bal += Number(e.amount) || 0;
-      byDate.set(e.date, bal);
-    }
-    if (byDate.size === 0) return [];
-    return Array.from(byDate.entries()).map(([date, balance]) => ({
-      date,
-      balance: Math.round(balance * 100) / 100,
-    }));
-  }, [forecast, startingBalanceMissing]);
+  // (Owner decision 16) The card's series IS the Forecast page's own signal —
+  // `computeCashSignal`'s `daily[]`, read as-is. No local roll-forward, no
+  // `settings.startingBalance`: that read a different (unanchored) number
+  // than the bank-snapshot-anchored curve the Forecast page and the spine
+  // show, which is exactly the kind of two-tiles-disagree bug this endpoint
+  // exists to make impossible.
+  const forecastSeries = useMemo(
+    () => cashFlowForecastSeries(cashSignal?.daily),
+    [cashSignal?.daily],
+  );
+  // `no_data` still carries balances rolled forward from an implicit $0 (see
+  // the cash signal's own warning on this) — never draw those as a real
+  // projection, and never caption them with a starting-balance figure.
+  const forecastHasData =
+    forecastSeries.length > 0 && cashSignal?.status !== "no_data";
+  const forecastCardTitle = cashFlowCardTitle(
+    cashSignal,
+    CASHFLOW_FORECAST_HORIZON_DAYS,
+  );
+  const forecastCardHelp =
+    "The same account, balance anchor and daily calculation the Forecast page uses — bank balance rolled forward through every planned bill and income event.";
   const burn = useMemo(() => rolling30DayBurn(dailyCurr), [dailyCurr]);
   const kpis = useMemo(() => cashFlowKpis(dailyCurr), [dailyCurr]);
   const prevKpis = useMemo(
@@ -555,42 +663,78 @@ function CashFlowSection({
         </PanelCard>
 
         <ChartCard
-          title="Forecast balance · next 90 days"
-          help="Projected checking balance from the forecast's starting balance and its scheduled events."
+          title={forecastCardTitle}
+          help={forecastCardHelp}
           testId="cashflow-forecast-card"
-          // A missing starting balance keeps the card and says so — the kit's
-          // empty state — rather than vanishing like an empty forecast does.
+          // (PR-K round 2, L3) A failed refresh keeps the last good curve and
+          // says so ABOVE the chart box, never inside it. Inside, the banner
+          // took its height from the fixed 320px box and pushed the chart's
+          // bottom, date labels included, past the card's clipped edge. The
+          // slot also shows the banner over the no-data empty state.
+          banner={
+            cashSignalState === "refresh-failed" ? (
+              <RefreshBanner
+                state={cashSignalState}
+                updatedAt={cashSignalUpdatedAt}
+                onRetry={onRetryCashSignal}
+                refreshing={cashSignalRefreshing}
+                data-testid="cashflow-forecast-refresh-banner"
+              />
+            ) : null
+          }
+          // Cold/failed states render their own content below (skeleton /
+          // retry banner) instead of the kit's plain empty text — only the
+          // genuine "no bank balance to project" case uses `empty`.
           empty={
-            startingBalanceMissing
-              ? "No starting balance set on Forecast"
-              : forecastSeries.length === 0
-                ? "No forecast data yet"
+            cashSignalState === "cold" || cashSignalState === "failed"
+              ? null
+              : !forecastHasData
+                ? "Set a bank balance on Forecast to draw this chart"
                 : null
           }
-          hideWhenEmpty={!startingBalanceMissing}
+          hideWhenEmpty={false}
         >
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={forecastSeries} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
-              <defs>
-                <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={SERIES.forecast} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={SERIES.forecast} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
-              <XAxis dataKey="date" tick={AXIS_TICK} angle={-25} textAnchor="end" height={50} />
-              <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
-              <ReferenceLine y={0} stroke={GRID_STROKE} />
-              <Area {...ANIM_AREA} animationBegin={animBegin(0)} type="monotone"
-                dataKey="balance"
-                stroke={SERIES.forecast}
-                strokeWidth={2}
-                fill="url(#forecastGrad)"
-                name="Projected balance"
+          {cashSignalState === "cold" ? (
+            <Skeleton
+              className="h-full w-full"
+              data-testid="cashflow-forecast-loading"
+            />
+          ) : cashSignalState === "failed" ? (
+            <div className="flex h-full items-center justify-center">
+              {/* `refreshing`: a Retry in flight says so instead of offering
+                  another Retry. */}
+              <RefreshBanner
+                state={cashSignalState}
+                updatedAt={cashSignalUpdatedAt}
+                onRetry={onRetryCashSignal}
+                refreshing={cashSignalRefreshing}
+                data-testid="cashflow-forecast-refresh-banner"
               />
-            </AreaChart>
-          </ResponsiveContainer>
+            </div>
+          ) : !forecastHasData ? null : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={forecastSeries} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
+                <defs>
+                  <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={SERIES.forecast} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={SERIES.forecast} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+                <XAxis dataKey="date" tick={AXIS_TICK} angle={-25} textAnchor="end" height={50} />
+                <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
+                <ReferenceLine y={0} stroke={GRID_STROKE} />
+                <Area {...ANIM_AREA} animationBegin={animBegin(0)} type="monotone"
+                  dataKey="balance"
+                  stroke={SERIES.forecast}
+                  strokeWidth={2}
+                  fill="url(#forecastGrad)"
+                  name="Projected balance"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </ChartCard>
       </div>
 
