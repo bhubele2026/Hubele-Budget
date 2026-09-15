@@ -253,11 +253,24 @@ This section covers bills and debt minimums. For income, see the OPEN section ab
 
 ## Gates
 
-- `pnpm run typecheck`: pass.
+### On the merged tree (`0b4015c`: this branch plus main `2e1949f`, the seed-bills tool removal)
+
+The branch was built on `2731077`, then origin/main `2e1949f` was merged in. There were no conflicts and no overlap: the
+merged tree differs from `2e1949f` only in this PR's five files. Every gate was re-run on the merge commit:
+
+- `pnpm build` (runs `pnpm run typecheck` first): pass.
 - Web tests: `TZ=UTC CI=true` 139 files, 1,148 passed, 3 skipped. `TZ=America/Chicago CI=true` 139 files, 1,149 passed,
   2 skipped.
-- Full API suite (`CI=true`, own DB `h2budget_test_prb2`, `caffeinate -i`, serial): **145 files, 1,476 passed, 7 todo.**
-  That is main's 1,474, minus the replaced residual pin, plus (a), (c) and D3.
-- `pnpm build` then `node scripts/check-entry-graph.mjs`: OK. The landing bundle is 574.4 KB of 580.0 KB (unchanged).
-- Codegen: not run; `lib/api-spec` is untouched.
+- Full API suite (`CI=true`, own DB `h2budget_test_prb2`, `caffeinate -i`, serial): **145 files, 1,477 passed, 7 todo.**
+  The count is one higher than before the merge, because main's change adds a test to
+  `seedDefaultsOnce.integration.test.ts`.
+- `node scripts/check-entry-graph.mjs`: OK. The landing bundle is 574.4 KB of 580.0 KB (unchanged).
+- Codegen: not needed; neither side touches `lib/api-spec`, `lib/api-zod` or `lib/api-client-react`.
 - e2e: not run (no UI change).
+
+### Before the merge (`dea25f7` on `2731077`)
+
+- `pnpm run typecheck`: pass. Web: the same counts as above.
+- Full API suite: 145 files, 1,476 passed, 7 todo. That is main's 1,474, minus the replaced residual pin, plus (a), (c)
+  and D3. It was re-run on the exact committed tree after the temporary probes were deleted.
+- `pnpm build` + `check-entry-graph`: OK, 574.4 KB.
