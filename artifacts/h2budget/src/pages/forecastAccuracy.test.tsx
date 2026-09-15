@@ -560,6 +560,58 @@ describe("Forecast — the bank card names the resolved account, not the stored 
     expect(meta.textContent).not.toContain("Old Checking");
   });
 
+  // (PR-K follow-up round 2, L2) `plaid_accounts.name` and `.mask` are both
+  // nullable. Falling back to the stored snapshot FIELD BY FIELD — name from
+  // the resolved account, mask from the stored snapshot, or vice versa —
+  // mints a label that names no real account: a sole-checking account with
+  // no mask on file rendered the OLD account's mask, and a resolved account
+  // with no name on file rendered the OLD account's name. Once an account
+  // resolves, its name and mask must be read together, as a pair.
+
+  it("(round 2, L2, R4a) a resolved account with no mask on file shows no mask at all — never the OLD account's mask", () => {
+    forecastData = {
+      ...FORECAST_BASE,
+      bankSnapshot: {
+        balance: "5000",
+        at: "2026-05-15T10:00:00.000Z",
+        source: "plaid",
+        accountId: "acct-1",
+        name: "Old Checking",
+        mask: "9999",
+      },
+    } as unknown as typeof FORECAST_BASE;
+    cashSignal = {
+      ...CASH_SIGNAL,
+      account: { name: "New Checking", mask: null, subtype: "checking", via: "sole checking" },
+    } as unknown as typeof CASH_SIGNAL;
+    renderPage();
+    const meta = screen.getByTestId("text-bank-snapshot-meta");
+    expect(meta.textContent).toContain("New Checking");
+    expect(meta.textContent).not.toContain("9999");
+  });
+
+  it("(round 2, L2, R4b) a resolved account with no name on file uses a neutral label — never the OLD account's name", () => {
+    forecastData = {
+      ...FORECAST_BASE,
+      bankSnapshot: {
+        balance: "5000",
+        at: "2026-05-15T10:00:00.000Z",
+        source: "plaid",
+        accountId: "acct-1",
+        name: "Old Checking",
+        mask: "9999",
+      },
+    } as unknown as typeof FORECAST_BASE;
+    cashSignal = {
+      ...CASH_SIGNAL,
+      account: { name: null, mask: "1234", subtype: "checking", via: "snapshot mask" },
+    } as unknown as typeof CASH_SIGNAL;
+    renderPage();
+    const meta = screen.getByTestId("text-bank-snapshot-meta");
+    expect(meta.textContent).not.toContain("Old Checking");
+    expect(meta.textContent).toContain("••1234");
+  });
+
   it("falls back to the stored label only when nothing resolves", () => {
     forecastData = {
       ...FORECAST_BASE,

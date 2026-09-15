@@ -251,6 +251,11 @@ describe("Forecast page — its cash-signal request shares the one cache key (de
     sessionStorage.setItem("h2budget:forecastHorizonDays", "90");
     sessionStorage.setItem("h2budget:forecastLookbackOpen", "true");
     sessionStorage.setItem("h2budget:forecastFromDate", "2026-05-01");
+    // (PR-K follow-up round 2, L1) A genuinely PICKED date, from a prior
+    // session — its own persisted flag, not just "there happens to be a
+    // stored date" (see the remount test below for why that distinction
+    // exists).
+    sessionStorage.setItem("h2budget:forecastFromDatePicked", "true");
     renderPage();
     expect(lastParams()).toStrictEqual({ horizonDays: 90, fromDate: "2026-05-01" });
   });
@@ -259,6 +264,7 @@ describe("Forecast page — its cash-signal request shares the one cache key (de
     sessionStorage.setItem("h2budget:forecastHorizonDays", "90");
     sessionStorage.setItem("h2budget:forecastLookbackOpen", "true");
     sessionStorage.setItem("h2budget:forecastFromDate", "2026-05-01");
+    sessionStorage.setItem("h2budget:forecastFromDatePicked", "true");
     renderPage();
     fireEvent.click(screen.getByTestId("toggle-forecast-lookback"));
     expect(lastParams()).toStrictEqual({ horizonDays: 90 });
@@ -272,6 +278,24 @@ describe("Forecast page — its cash-signal request shares the one cache key (de
     // fork a second cache entry keyed on the browser's own calendar day,
     // exactly the M1 bug this same panel already fixed once for the closed
     // state.
+    expect(lastParams()).toStrictEqual({ horizonDays: 90 });
+  });
+
+  it("(PR-K follow-up round 2, L1) opening look-back WITHOUT picking a date, then remounting (nav away and back, or a reload), still sends no date", () => {
+    // Round 1's `fromDatePicked` init read `wasOpen && !!stored` — but the
+    // effect that persists `forecastFromDate` writes SOME value (today, the
+    // unpicked default) to that same sessionStorage key on every mount
+    // regardless of whether anything was picked. So after just opening the
+    // panel once (never touching the input) and remounting, the next mount
+    // saw `wasOpen: true` + a truthy stored value and wrongly concluded a
+    // date HAD been picked, sending it again. The picked flag now lives in
+    // its own key, set only by the input's own `onChange`.
+    sessionStorage.setItem("h2budget:forecastHorizonDays", "90");
+    renderPage();
+    fireEvent.click(screen.getByTestId("toggle-forecast-lookback"));
+    expect(lastParams()).toStrictEqual({ horizonDays: 90 });
+    cleanup(); // simulate navigating away (unmount; sessionStorage survives)
+    renderPage(); // simulate navigating back, or a reload
     expect(lastParams()).toStrictEqual({ horizonDays: 90 });
   });
 

@@ -242,19 +242,15 @@ describe("cashFlowForecastSeries — the card's series is the cash signal's dail
 
 describe("cashFlowCardTitle — the scope comes from the cash signal's own account (round 2, L1)", () => {
   it("names the account, its mask and its own subtype", () => {
-    expect(
-      cashFlowCardTitle({ status: "ready", snapshotSource: "plaid", account: CHECKING }, HORIZON),
-    ).toBe("Forecast · Test Bank ••0001 checking · next 90 days");
+    expect(cashFlowCardTitle({ status: "ready", account: CHECKING }, HORIZON)).toBe(
+      "Forecast · Test Bank ••0001 checking · next 90 days",
+    );
   });
 
   it("doesn't double the kind word when the account's name already says it", () => {
     expect(
       cashFlowCardTitle(
-        {
-          status: "ready",
-          snapshotSource: "plaid",
-          account: { ...CHECKING, name: "Everyday Checking" },
-        },
+        { status: "ready", account: { ...CHECKING, name: "Everyday Checking" } },
         HORIZON,
       ),
     ).toBe("Forecast · Everyday Checking ••0001 · next 90 days");
@@ -264,7 +260,6 @@ describe("cashFlowCardTitle — the scope comes from the cash signal's own accou
     const title = cashFlowCardTitle(
       {
         status: "ready",
-        snapshotSource: "plaid",
         account: { name: "Test Bank", mask: "0002", subtype: "savings", via: "sole depository" },
       },
       HORIZON,
@@ -278,7 +273,6 @@ describe("cashFlowCardTitle — the scope comes from the cash signal's own accou
       cashFlowCardTitle(
         {
           status: "ready",
-          snapshotSource: "plaid",
           account: { name: "Test Bank", mask: "0003", subtype: null, via: "sole depository" },
         },
         HORIZON,
@@ -286,12 +280,19 @@ describe("cashFlowCardTitle — the scope comes from the cash signal's own accou
     ).toBe("Forecast · Test Bank ••0003 · next 90 days");
   });
 
-  it("names no account when none was resolved and the snapshot isn't manual (a genuine gap, not a household's choice)", () => {
+  // (PR-K follow-up round 2, NIT) Renamed: this does NOT mean "the balance
+  // stays at the raw snapshot" — manual rows still move the curve regardless
+  // (`isBankRow`). A calmer "entered by hand" wording was tried for this case
+  // and reverted, because this page can't reliably tell a fully-manual
+  // household apart from a Plaid-linked one `resolveSnapshotAccount` simply
+  // can't pick an account for (e.g. two checking accounts + a manual
+  // snapshot) — it doesn't fetch a list of linked accounts (L2 removed that
+  // fetch). See the round 2 review note.
+  it("names no account when none was resolved (a gap this page can't attribute to a cause)", () => {
     expect(
       cashFlowCardTitle(
         {
           status: "ready",
-          snapshotSource: "plaid",
           account: { name: null, mask: null, subtype: null, via: "unresolved" },
         },
         HORIZON,
@@ -299,26 +300,10 @@ describe("cashFlowCardTitle — the scope comes from the cash signal's own accou
     ).toBe("Forecast · bank account not identified · next 90 days");
   });
 
-  it("(PR-K follow-up, NIT) for a manually tracked household, names the balance as entered by hand — manual rows still move the curve, so this isn't an error", () => {
-    expect(
-      cashFlowCardTitle(
-        {
-          status: "ready",
-          snapshotSource: "manual",
-          account: { name: null, mask: null, subtype: null, via: "unresolved" },
-        },
-        HORIZON,
-      ),
-    ).toBe("Forecast · balance entered by hand · next 90 days");
-  });
-
   it("says plainly when no bank balance is set, and keeps the horizon", () => {
-    expect(
-      cashFlowCardTitle(
-        { status: "no_data", snapshotSource: null, account: CHECKING },
-        HORIZON,
-      ),
-    ).toBe("Forecast · no bank balance set · next 90 days");
+    expect(cashFlowCardTitle({ status: "no_data", account: CHECKING }, HORIZON)).toBe(
+      "Forecast · no bank balance set · next 90 days",
+    );
   });
 
   it("before the signal answers: a neutral title that claims no scope", () => {

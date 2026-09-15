@@ -251,6 +251,9 @@ beforeEach(() => {
   // the stored 2026-05-01 anchor (which keeps the May plan rows visible) is
   // respected instead of snapping forward to today.
   sessionStorage.setItem("h2budget:forecastLookbackOpen", "true");
+  // (PR-K follow-up round 2, L1) A stored from-date alone no longer proves it
+  // was picked — this flag says it genuinely was.
+  sessionStorage.setItem("h2budget:forecastFromDatePicked", "true");
   lastCashSignalFromDate.value = "";
 });
 

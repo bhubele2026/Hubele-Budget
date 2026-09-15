@@ -173,20 +173,21 @@ export function cashFlowAccountLabel(account: CardAccount): string {
  *
  *   - no signal yet (loading or failed): "Forecast balance · next 90 days"
  *   - no bank snapshot (`no_data`): "Forecast · no bank balance set · next 90 days"
- *   - no account resolved, snapshot entered by hand (a manually tracked
- *     household — manual rows still move the curve, see `isBankRow` in
- *     `lib/avalanche-core/src/cashRows.ts`; only Plaid rows would be excluded,
- *     and there are none to exclude):
- *     "Forecast · balance entered by hand · next 90 days"
- *   - no account resolved, any other snapshot source (a genuine gap, not a
- *     household's choice): "Forecast · bank account not identified · next 90 days"
+ *   - no account resolved: "Forecast · bank account not identified · next 90 days".
+ *     (PR-K follow-up round 2, NIT) This does NOT mean the balance stays at the
+ *     raw snapshot — manual rows still move the curve regardless of whether an
+ *     account resolved (`isBankRow`, `lib/avalanche-core/src/cashRows.ts:66-77`
+ *     excludes only Plaid-sourced rows). It also covers two different
+ *     households with this same title: one tracking entirely by hand, and one
+ *     with linked Plaid accounts that `resolveSnapshotAccount` can't pick
+ *     between (e.g. two checking accounts and a manual snapshot). This page
+ *     doesn't fetch a list of linked accounts (L2 removed that fetch), so it
+ *     can't tell those two apart — a calmer "entered by hand" wording was
+ *     tried and reverted for exactly that reason; see the round 2 review note.
  *   - otherwise: "Forecast · Test Bank ••0001 checking · next 90 days"
  */
 export function cashFlowCardTitle(
-  signal:
-    | (Pick<CashSignal, "status" | "snapshotSource"> & { account?: CardAccount | null })
-    | null
-    | undefined,
+  signal: (Pick<CashSignal, "status"> & { account?: CardAccount | null }) | null | undefined,
   horizonDays: number,
 ): string {
   const horizon = `next ${horizonDays} days`;
@@ -195,9 +196,7 @@ export function cashFlowCardTitle(
   const account = signal.account;
   if (!account) return `Forecast balance · ${horizon}`;
   if (account.via === "unresolved") {
-    return signal.snapshotSource === "manual"
-      ? `Forecast · balance entered by hand · ${horizon}`
-      : `Forecast · bank account not identified · ${horizon}`;
+    return `Forecast · bank account not identified · ${horizon}`;
   }
   return `Forecast · ${cashFlowAccountLabel(account)} · ${horizon}`;
 }
