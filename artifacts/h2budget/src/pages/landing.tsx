@@ -18,7 +18,7 @@ import { APP_VERSION } from "@/lib/version";
  *
  * ⭐ EXACTLY TWO NUMBERS LIVE HERE, AND BOTH COME FROM THE SPINE:
  *   1. the Review count on the bell, and
- *   2. **% paid** on Future Goal.
+ *   2. **% paid** on Debt.
  * Everything else is words. Numbers are what the AREAS are for; a door tells
  * you which room to walk into.
  *

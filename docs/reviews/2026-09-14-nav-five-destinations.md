@@ -132,3 +132,179 @@ nothing for them to move in lockstep with. `/review`'s importer and `/reports/sp
 3. **Spending borrows Reports → Spending** (`/reports/spending`) as its destination, but the Spending ribbon *also*
    carries a separate "Reports" tab pointing at the `/reports` hub, which itself links back into Spending. Confirm
    that's the intended nesting until R2 ships a dedicated Spending page.
+
+---
+
+## Round 2 — review fixes (2026-09-15)
+
+The independent review of round 1 returned **REQUEST CHANGES**: 2 HIGH, 2 MEDIUM, 2 LOW, 1 NIT. The branch now also
+carries merge `67b5518` (`origin/main` `2731077` into `5f2d2df`), and `origin/main` had not moved when this round was
+pushed. Still web-only and navigation-only, apart from the rename the owner asked for. No route, query, stored value or
+calculation changed.
+
+### 1. HIGH — pages that live only in a ribbon were unreachable on a phone
+
+**What changed.** `layout.tsx` now has one `DESTINATIONS` config. Each destination holds its primary link, its ribbon
+`tabs`, and the routes it `owns`. Everything else is derived from that one list: `PRIMARY_NAV`, the desktop ribbon, area
+membership, and the phone drawer. Area membership replaces the five hand-written `inHome`/`inForecast`/… booleans and
+covers the same routes. The drawer lists the five destinations in order, each with its ribbon pages beneath it, and then
+More:
+
+| Drawer row | Pages beneath it |
+|---|---|
+| Home (`/banking`) | none (see the rule below) |
+| Forecast (`/forecast/overview`) | Forecast `/forecast` · Bills `/bills` |
+| Spending (`/reports/spending`) | Budget `/budget` · Allowances `/allowances` · Reports `/reports` |
+| Review (`/review`) | Chase `/transactions` · Amex `/amex` |
+| Debt (`/avalanche`) | Debts `/debts` · Debt report `/reports/debt` |
+| More | Mapping rules · Settings |
+
+The rule is that each ribbon page is listed once, under the destination that owns it. The tab that shares the
+destination's own href folds into the destination row. Home's ribbon shortcuts (Chase, Amex, Budget, Allowance) appear
+under Review and Spending, because those areas own them. Listing them under Home as well would put two "Chase" rows in
+the drawer, and both would light up on `/transactions`. A ribbon tab whose route no area owns stays under the ribbon
+that carries it, so nothing on a ribbon can fall out of the drawer.
+
+The drawer is a Radix Dialog and had no accessible name. It now has a screen-reader-only title, "Navigation".
+
+**Proof** is in `appShell.test.tsx`, block "the phone drawer reaches every page a ribbon reaches":
+- The block starts from a hand-typed list of all 14 ribbon routes. That list is itself checked against the ribbons that
+  actually render on one route in each area, so it can't go stale.
+- The drawer is opened for real, with a click, from `/settings`, `/bills/all`, `/banking` and `/transactions`. Each time
+  it links to every one of the 14 routes.
+- The exact tree above is asserted, and no href appears twice.
+
+These tests were also run against the round-1 `layout.tsx`, with only the dialog title added so the drawer could be
+found. They fail, for example: `expected [ '/home', '/banking', …(6) ] to include '/transactions'`.
+
+### 2. HIGH — the review count was hidden on a phone at `/transactions` and `/amex`
+
+**What changed.** The header pill is no longer removed when the ribbon carries the Review tab. It gets `md:hidden`
+instead. A desktop still shows the count once, on the ribbon's Review tab. A phone, which never sees the ribbon, always
+shows the pill.
+
+**Proof.** jsdom applies no CSS, so a new `countsShown(width)` helper reads the Tailwind display classes on an element
+and its ancestors. A test pins the helper itself: the ribbon is desktop-only and the drawer trigger is phone-only.
+
+| Route | Count visible on a phone | Count visible on a desktop |
+|---|---|---|
+| `/review`, `/transactions`, `/amex`, `/settings` | pill | ribbon |
+| `/banking`, `/bills/all` | pill | pill |
+
+A further test checks that the phone pill is a real link to `/review` with its aria-label. Against the round-1 layout,
+all four of the first row's routes fail with `expected [] to deeply equal [ 'pill' ]`.
+
+### 3. MEDIUM — `routes.test.tsx` checked nothing independent
+
+**What changed.** The file is rewritten.
+- It mounts the real `App.tsx`, with its real `<Switch>`, `<Route>` and `<Redirect>` elements, inside the real
+  `AppLayout`.
+- Only leaves are mocked: Clerk (always signed in), the API client, and each lazy page, which becomes a stub that names
+  itself.
+- A hand-typed table lists all 27 old routes. For each route it records where you land (the route itself or its
+  redirect target), which page renders there, and which destination's ribbon the shell shows. The ribbons are hand-typed
+  too.
+- A NotFound control proves the catch-all is reachable.
+- A final check requires a table row for every `path="…"` that `App.tsx` declares.
+
+**Proof.** All 29 tests pass. Changing `App.tsx`'s `/recurring` redirect to `/bills` makes the test fail:
+`'/recurring' → '/bills/all' renders 'bills'` reports `Unable to find … [data-testid="page-bills"]`. The file was
+restored afterwards and verified byte-identical with `cmp`.
+
+### 4. MEDIUM — e2e was not run
+
+**Still not run. No Playwright spec executed in either round.** This is what was attempted:
+
+```
+CI=true PORT=5199 pnpm --filter h2budget exec playwright test e2e/a11y-smoke.spec.ts e2e/perf-open.spec.ts \
+  e2e/bills-avalanche-nav.spec.ts e2e/bills-avalanche-locked-row.spec.ts e2e/bills-debt-payoff-celebratory-row.spec.ts
+```
+
+It exited 1 in `e2e/global-setup.ts`: `CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY must be set for Playwright tests.`
+
+What is missing:
+- **The keys.** `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` are not in the shell environment. There is also no
+  `.env`, the untracked file that `.env.example` says to create for local work, in the worktree or in the main checkout.
+  No other location was searched.
+- **A dev server would not help without them.** `App.tsx` throws "Missing VITE_CLERK_PUBLISHABLE_KEY" before it
+  renders, so starting one with `PORT` would not have got further.
+- **Other prerequisites, not checked because setup stopped at the key check.** The specs also need `DATABASE_URL` (the
+  Clerk helper writes household rows through `@workspace/db`), a running app (API and web) at `PLAYWRIGHT_BASE_URL`, and
+  installed Playwright browsers.
+
+**e2e edits made, typechecked by `typecheck:e2e` but not run.** Three specs asserted the `/avalanche` heading
+`/^future goal$/i` and now assert `/^debt$/i`: `bills-avalanche-locked-row`, `bills-avalanche-nav` and
+`bills-debt-payoff-celebratory-row`. Elsewhere in `src`, the only text that reads exactly "Debt" is table `<th>` cells.
+Those are column headers, not headings, so the heading locator stays unambiguous.
+
+### 5. Owner decision — rename "Future Goal" to "Debt"
+
+**What changed.**
+- `avalanche.tsx` now renders `<Page title="Debt">`.
+- The doc comment in `landing.tsx` is updated.
+- `bills.tsx` has two body-copy pointers that named a page that no longer exists. They now read "manage on the Debt
+  page" and "edited on the Debt page".
+- The describe label and comment in `avalancheHeroPayoff.test.tsx` are updated, along with the three e2e locators
+  above.
+
+**Proof.** `grep -rni "future goal"` over the web `src` and `e2e` folders finds nothing. `landing.test.tsx` passes
+unchanged: `/home` shows no `$`, no amount owed, and no digits beyond the bell count and % paid. This resolves round-1
+open question 1. One historical comment in `lib/avalanche-core` still says "Future Goal". It was left alone because
+this PR touches no lib code.
+
+### 6. NIT — `MobileNav` lit rows with a raw `startsWith`
+
+**What changed.** The ribbon, the drawer, More's active state and the phone page title all now use the same two
+helpers: `isAtOrUnder` (matches whole path segments) and `longestMatch`. The drawer lights what the ribbon lights. Only
+rows in the current area can light up (or More's rows when you're in no area), and only the longest match among them.
+
+**Proof** is a table test:
+- `/bills` and `/bills/all` light Bills.
+- `/billsx` lights nothing.
+- `/forecast/overview` lights only its destination row.
+- `/reports/debt` lights Debt report, not Reports.
+- `/reports/cashflow` and `/settingsx` light nothing.
+- The phone title at `/settingsx` is "H2 Budget".
+
+Changing `isAtOrUnder` to a raw `startsWith` fails the `/billsx`, `/settingsx` and title cases. The file was restored
+afterwards and verified with `cmp`.
+
+### Files touched in round 2
+
+- `src/components/layout.tsx`, `src/components/appShell.test.tsx`, `src/routes.test.tsx`
+- `src/pages/avalanche.tsx` (the title), `src/pages/bills.tsx` (2 strings), `src/pages/landing.tsx` (a comment),
+  `src/pages/avalancheHeroPayoff.test.tsx` (labels)
+- `e2e/bills-avalanche-locked-row.spec.ts`, `e2e/bills-avalanche-nav.spec.ts`,
+  `e2e/bills-debt-payoff-celebratory-row.spec.ts`
+
+Checked and deliberately left unchanged:
+- `e2e/a11y-smoke.spec.ts`: it scans at desktop width, never opens the drawer, and the phone-only pill is
+  `display:none` at that width.
+- `lib/routePrefetch.ts`: no route was added or removed, and drawer rows reuse the existing `prefetch` →
+  `prefetchRoute` path. A test covers warming from the drawer.
+- `hooks/useLandingWarmup.ts`: the landing tiles are unchanged.
+
+`AppLayout`'s idle chunk warm-up now loops over `DESTINATIONS`. It warms the same five hrefs as before. The drawer uses
+only existing tokens: navy ground, white alphas, the orange active bar and badge. No new colors, fonts or classes of
+pill were introduced.
+
+### Gates (round 2)
+
+- **`pnpm run typecheck`:** exit 0, including `typecheck:e2e`.
+- **Web tests, `TZ=UTC`:** 140 files, 1212 passed, 3 skipped.
+- **Web tests, `TZ=America/Chicago`:** 140 files, 1213 passed, 2 skipped.
+  - Against round 1, that is +8 net: `appShell.test.tsx` went from 26 to 51 tests and `routes.test.tsx` from 46 to 29.
+- **`pnpm run build`:** exit 0.
+- **`node scripts/check-entry-graph.mjs`** (run from the repo root): **575.7 KB raw / 173.4 KB gz**, against a budget
+  of 580.0 KB.
+  - That is +0.9 KB over round 1's 574.8 KB, from the shared config and the nested drawer in the eager `layout.tsx`.
+  - 4.3 KB of headroom remains.
+  - No recharts on the open path, and react-dom stays confined to `vendor-react-*`.
+
+### Still open
+
+- **e2e.** It needs Clerk test keys, a database, and a running app (see finding 4).
+- **The phone drawer has not been checked visually in a browser.** The app cannot boot without the Clerk publishable
+  key. The drawer's structure, reachability and active states are covered only in jsdom.
+- **Round-1 open questions 2 and 3** (Home is both a tab and the door; Spending's Reports nesting) are unchanged. Both
+  are the owner's call.

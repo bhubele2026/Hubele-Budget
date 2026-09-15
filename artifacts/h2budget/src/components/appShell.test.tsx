@@ -22,6 +22,13 @@ import React from "react";
  * to the end of More. The wordmark still points at the /home door; the area
  * model itself (boundary-aware longest-match, per-area ribbons, More hidden
  * inside an area) is UNCHANGED by the reshuffle.
+ *
+ * ⚠️ R0 round 2 — THE PHONE. The ribbon is `hidden md:flex`, so anything that
+ * lives only in a ribbon, and any count only a ribbon tab carries, is invisible
+ * on a phone. jsdom applies no CSS, so `shownAt` below reads the Tailwind
+ * display classes on an element and its ancestors to say what each screen size
+ * would actually show — the tests assert what a phone sees, not just what is in
+ * the DOM.
  */
 
 let reviewCount = 0;
@@ -68,7 +75,8 @@ vi.mock("@/lib/routePrefetch", () => ({ prefetchRoute: (h: string) => prefetchRo
 // once the trigger is opened — jsdom's pointer-capture model makes that
 // awkward to drive from a test. Swap in a render-everything shim (same
 // pattern as debtPlaidReconnect.test.tsx) so the in-menu items are always in
-// the DOM to assert against.
+// the DOM to assert against. (The phone drawer is a Radix Dialog, which opens
+// on a plain click, so it is driven for real below.)
 vi.mock("@/components/ui/dropdown-menu", () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => (
     <>{children}</>
@@ -112,6 +120,52 @@ function tabLabels(): string[] {
   );
 }
 
+// Display classes that bring a base-`hidden` element back at desktop width
+// (a desktop is past both the `sm` and `md` breakpoints).
+const SHOWN_FROM_SM_OR_MD = /^(sm|md):(flex|block|inline|inline-flex|grid)$/;
+
+/**
+ * Would a phone (below `sm`) or a desktop (`md` and up) show this element?
+ * Base `hidden` hides it on a phone; at desktop it stays hidden unless an
+ * `sm:`/`md:` display class brings it back; `md:hidden` hides it at desktop.
+ */
+function shownAt(el: Element, width: "phone" | "desktop"): boolean {
+  for (let n: Element | null = el; n; n = n.parentElement) {
+    const classes = Array.from(n.classList);
+    if (width === "phone" && classes.includes("hidden")) return false;
+    if (width === "desktop") {
+      if (classes.includes("md:hidden")) return false;
+      if (classes.includes("hidden") && !classes.some((c) => SHOWN_FROM_SM_OR_MD.test(c))) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/** Which header surfaces show the review count at this width: the pill, the ribbon's Review tab. */
+function countsShown(width: "phone" | "desktop"): string[] {
+  const out: string[] = [];
+  const pill = screen.queryByTestId("topnav-review-badge");
+  if (pill && /\d/.test(pill.textContent ?? "") && shownAt(pill, width)) out.push("pill");
+  const tab = screen.queryByTestId("topnav-review");
+  if (tab && /\d/.test(tab.textContent ?? "") && shownAt(tab, width)) out.push("ribbon");
+  return out;
+}
+
+/** Open the phone drawer the way a thumb does, and return the dialog. */
+function openDrawer(): HTMLElement {
+  fireEvent.click(screen.getByTestId("button-mobile-menu"));
+  return screen.getByRole("dialog", { name: "Navigation" });
+}
+
+/** "Label href" for every link inside an element, in order. */
+function linksIn(el: Element): string[] {
+  return Array.from(el.querySelectorAll("a[href]")).map(
+    (a) => `${a.textContent?.replace(/\d+$/, "").trim()} ${a.getAttribute("href")}`,
+  );
+}
+
 beforeEach(() => {
   reviewCount = 0;
   prefetchRoute.mockClear();
@@ -136,6 +190,14 @@ describe("app shell chrome", () => {
   it("renders the page keyed on location so every navigation re-runs .page-in", () => {
     mount("/banking");
     expect(document.querySelector(".page-in")).toBeTruthy();
+  });
+
+  it("the ribbon is desktop-only and the drawer trigger phone-only — what the phone tests below rely on", () => {
+    mount("/settings");
+    expect(shownAt(screen.getByTestId("topnav-review"), "phone")).toBe(false);
+    expect(shownAt(screen.getByTestId("topnav-review"), "desktop")).toBe(true);
+    expect(shownAt(screen.getByTestId("button-mobile-menu"), "phone")).toBe(true);
+    expect(shownAt(screen.getByTestId("button-mobile-menu"), "desktop")).toBe(false);
   });
 });
 
@@ -260,6 +322,138 @@ describe("the area model", () => {
   });
 });
 
+describe("the phone drawer reaches every page a ribbon reaches", () => {
+  // Every route any desktop ribbon links to, typed out by hand — NOT read from
+  // layout.tsx — so a page dropped from the drawer's config fails here.
+  const RIBBON_ROUTES = [
+    "/banking",
+    "/transactions",
+    "/amex",
+    "/budget",
+    "/allowances",
+    "/forecast/overview",
+    "/forecast",
+    "/bills",
+    "/reports/spending",
+    "/reports",
+    "/review",
+    "/avalanche",
+    "/debts",
+    "/reports/debt",
+  ];
+
+  it("the list above is exactly what the desktop ribbons link to", () => {
+    // Walk one route inside each area (plus the no-area primary row) and read
+    // the ribbons off the rendered DOM — so the hand-typed list can't go stale
+    // either.
+    const seen = new Set<string>();
+    for (const path of [
+      "/banking",
+      "/forecast/overview",
+      "/reports/spending",
+      "/review",
+      "/avalanche",
+      "/settings",
+    ]) {
+      mount(path);
+      for (const n of Array.from(document.querySelectorAll("[data-tabhref]"))) {
+        seen.add(n.getAttribute("data-tabhref")!);
+      }
+      cleanup();
+    }
+    expect([...seen].sort()).toEqual([...RIBBON_ROUTES].sort());
+  });
+
+  it.each(["/settings", "/bills/all", "/banking", "/transactions"])(
+    "opened on %s, the drawer links to every ribbon route",
+    (from) => {
+      mount(from);
+      const drawer = openDrawer();
+      const hrefs = Array.from(drawer.querySelectorAll("a[href]")).map((a) =>
+        a.getAttribute("href"),
+      );
+      for (const route of RIBBON_ROUTES) expect(hrefs).toContain(route);
+    },
+  );
+
+  it("lists the five destinations, each with its ribbon pages beneath it", () => {
+    mount("/settings");
+    const drawer = openDrawer();
+    const tree = Array.from(
+      drawer.querySelectorAll('[data-testid^="mobilenav-area-"]'),
+    ).map(linksIn);
+    // Each page appears once, under the destination that owns it. Home's
+    // ribbon shortcuts (Chase, Amex, Budget, Allowance) sit under Review and
+    // Spending — the areas whose ribbon shows when you open them.
+    expect(tree).toEqual([
+      ["Home /banking"],
+      ["Forecast /forecast/overview", "Forecast /forecast", "Bills /bills"],
+      [
+        "Spending /reports/spending",
+        "Budget /budget",
+        "Allowances /allowances",
+        "Reports /reports",
+      ],
+      ["Review /review", "Chase /transactions", "Amex /amex"],
+      ["Debt /avalanche", "Debts /debts", "Debt report /reports/debt"],
+    ]);
+  });
+
+  it("keeps Mapping rules and Settings under More, and lists no page twice", () => {
+    mount("/settings");
+    const drawer = openDrawer();
+    const nav = drawer.querySelector("nav")!;
+    const links = linksIn(nav);
+    expect(links.slice(-2)).toEqual(["Mapping rules /mapping-rules", "Settings /settings"]);
+    const hrefs = links.map((l) => l.split(" ").pop());
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+  });
+
+  it("puts the review count on the drawer's Review row", () => {
+    reviewCount = 4;
+    mount("/banking");
+    const drawer = openDrawer();
+    const review = drawer.querySelector('[data-testid="mobilenav-review"]')!;
+    expect(review.textContent).toContain("4");
+  });
+});
+
+describe("the drawer lights whole path segments only", () => {
+  const lit = () =>
+    Array.from(openDrawer().querySelectorAll('[aria-current="page"]')).map((a) =>
+      a.getAttribute("href"),
+    );
+
+  it.each<[string, string[]]>([
+    ["/bills", ["/bills"]],
+    // A parent lights for its own child route…
+    ["/bills/all", ["/bills"]],
+    // …never for a path that only shares its first letters.
+    ["/billsx", []],
+    // The longest match wins: the Overview destination, not also /forecast.
+    ["/forecast/overview", ["/forecast/overview"]],
+    ["/forecast", ["/forecast"]],
+    // Debt's report, not Spending's /reports hub.
+    ["/reports/debt", ["/reports/debt"]],
+    // No area on desktop, so nothing lights in the drawer either.
+    ["/reports/cashflow", []],
+    ["/transactions", ["/transactions"]],
+    ["/settings", ["/settings"]],
+    ["/settingsx", []],
+  ])("on %s lights %j", (path, expected) => {
+    mount(path);
+    expect(lit()).toEqual(expected);
+  });
+
+  it("names the page on a phone by whole segments too", () => {
+    mount("/bills/all");
+    expect(screen.getByTestId("mobile-page-title").textContent).toBe("Bills");
+    cleanup();
+    mount("/settingsx");
+    expect(screen.getByTestId("mobile-page-title").textContent).toBe("H2 Budget");
+  });
+});
+
 describe("the review count is a finding or it is nothing", () => {
   it("shows no badge at all when the queue is empty", () => {
     reviewCount = 0;
@@ -269,25 +463,33 @@ describe("the review count is a finding or it is nothing", () => {
     expect(screen.getByTestId("topnav-review").textContent).toBe("Review");
   });
 
-  it("puts the count on the Review tab when the Review ribbon is showing", () => {
+  // ⚠️ ONCE AT EACH WIDTH. On a desktop the ribbon's Review tab carries the
+  // count whenever the ribbon has one, and the header pill only fills in where
+  // it doesn't. A phone never sees the ribbon, so there the pill always shows.
+  it.each<[string, string[], string[]]>([
+    // Review's own ribbon.
+    ["/review", ["pill"], ["ribbon"]],
+    // Chase and Amex live in Review's ribbon now — the phone must still see it.
+    ["/transactions", ["pill"], ["ribbon"]],
+    ["/amex", ["pill"], ["ribbon"]],
+    // The five-destination primary row carries Review too.
+    ["/settings", ["pill"], ["ribbon"]],
+    // No Review tab in the ribbon (Home, Forecast): the pill at both widths.
+    ["/banking", ["pill"], ["pill"]],
+    ["/bills/all", ["pill"], ["pill"]],
+  ])("on %s the count shows once: phone %j, desktop %j", (path, phone, desktop) => {
     reviewCount = 4;
-    mount("/review");
-    expect(screen.getByTestId("topnav-review").textContent).toContain("4");
-    // ⚠️ NOT TWICE. Two badges reading "4" look like eight things.
-    expect(screen.queryByTestId("topnav-review-badge")).toBeNull();
+    mount(path);
+    expect(countsShown("phone")).toEqual(phone);
+    expect(countsShown("desktop")).toEqual(desktop);
   });
 
-  it("puts the count on the Review tab when the five-destination primary row is showing", () => {
+  it("the phone pill is a real way into Review", () => {
     reviewCount = 4;
-    mount("/settings");
-    expect(screen.getByTestId("topnav-review").textContent).toContain("4");
-    expect(screen.queryByTestId("topnav-review-badge")).toBeNull();
-  });
-
-  it("falls back to the header pill when the ribbon has no Review tab (Home area)", () => {
-    reviewCount = 4;
-    mount("/banking");
-    expect(screen.getByTestId("topnav-review-badge").textContent).toContain("4");
+    mount("/transactions");
+    const pill = screen.getByTestId("topnav-review-badge");
+    expect(pill.getAttribute("href")).toBe("/review");
+    expect(pill.getAttribute("aria-label")).toBe("4 items to review");
   });
 
   it("shows no badge anywhere while the count is unknown, not a zero pill", () => {
@@ -298,6 +500,7 @@ describe("the review count is a finding or it is nothing", () => {
       cleanup();
       mount("/review");
       expect(screen.getByTestId("topnav-review").textContent).toBe("Review");
+      expect(screen.queryByTestId("topnav-review-badge")).toBeNull();
     } finally {
       spineMissing = false;
     }
@@ -315,5 +518,12 @@ describe("prefetch machinery survives the rewrite", () => {
     mount("/banking");
     fireEvent.focus(screen.getByTestId("topnav-transactions"));
     expect(prefetchRoute).toHaveBeenCalledWith("/transactions");
+  });
+
+  it("warms from the phone drawer too", () => {
+    mount("/settings");
+    const drawer = openDrawer();
+    fireEvent.mouseEnter(drawer.querySelector('[data-testid="mobilenav-budget"]')!);
+    expect(prefetchRoute).toHaveBeenCalledWith("/budget");
   });
 });
