@@ -460,6 +460,10 @@ reads `tier: 2, offCurve: true` and the curve shows May paid ($850.00, same as b
 paid. This test is a residual pin, not a new fix — it passes on both the round-3 and round-4 source unchanged, and is
 included here so the trade-off has a concrete, checked repro rather than only prose.
 
+With round 4's future remainder drag (`remainder_assumed_unpaid`, review followups item 2) added on top, the same
+misattribution can now carry a wrong DOLLAR remainder on a future plan, not only a wrong on/off-curve state — the
+drag amount is computed from the same misattributed pair's `txnAmount`.
+
 ### Golden
 
 No entries changed this round. The full-household golden fixture (`forecastLedger.golden.integration.test.ts`) has no
