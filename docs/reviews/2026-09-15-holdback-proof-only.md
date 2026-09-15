@@ -1,16 +1,17 @@
 # PR-B2: the hold-back needs proof (owner decision, 2026-09-15)
 
-Branch `fix/holdback-proof-only`, cut from main `2731077`. It merges main `2e1949f` (round 1), `b939039` (round 2) and
-`9aad763` (round 3). One money rule changes: the forecast's hold-back. There is no UI, API spec, schema or codegen change
-in this PR. All figures are synthetic test fixtures.
+Branch `fix/holdback-proof-only`, cut from main `2731077`. It merges main `2e1949f` (round 1), `b939039` (round 2),
+`9aad763` (round 3) and `f96afb1` (round 4). Round 4 adds the review's fixes. One money rule changes, the forecast's hold-back, plus a guard so a
+held-back row pays nothing else. There is no UI, API spec, schema or codegen change in this PR. All figures are synthetic
+test fixtures.
 
-**Status after round 3:**
+**Status after round 4:**
 
 - **Outflows** (bills, debt minimums, the Avalanche extra) need tier-1/2 proof for the hold-back.
 - **Income** uses the arrival rule itself. An earlier paycheck counts as received for the hold-back exactly when it counts
-  as arrived (`isEvidence`: its pair is not ambiguous, named or not). The two share one definition, so they cannot
-  disagree.
-- **Round 2's nameless-paycheck known issue** is fixed in round 3.
+  as arrived (`isEvidence`: a tier-1 tagged deposit, or a pair that is not ambiguous). One definition serves both.
+- **A held-back row is used up.** It can no longer pay another plan through the listing pass or the card-payment rule
+  (round 4, review HIGH).
 - **One pre-existing income double count stays pinned for PR9:** a biweekly early paycheck after an off-amount one. Its
   cause is the matcher's ambiguity flag.
 
@@ -27,9 +28,10 @@ the owner answers the close call in Review.
 
 The owner's principle: **the forecast may read low, never high.**
 
-- For a bill, holding a row back keeps the bill on the curve, which can only read low.
+- For a bill, holding a row back keeps the bill on the curve, which can only read low, as long as the held-back row pays
+  nothing else (round 4).
 - For income, holding a row back would keep a paycheck on the curve while its deposit is already in cash, which reads
-  high. So income counts an earlier paycheck as received whenever it counts as arrived (rounds 2 and 3).
+  high. So income counts an earlier paycheck as received whenever it counts as arrived (rounds 2 to 4).
 
 ## The model rule (plan section B, hold-back)
 
@@ -46,35 +48,46 @@ PR-B applied the tiers to overdue evidence and to `offCurve`. This PR applies th
 > same item. An earlier occurrence counts as paid exactly when its own pair is evidence it was paid (`isEvidence`):
 >
 > - **Outflow** (`planAmount < 0`): the pair is tier 1 or 2.
-> - **Income** (`planAmount > 0`): the pair is not ambiguous, named or not. That is PR6's arrival rule, the same test
->   that keeps a paycheck out of `incomeNotArrived`.
+> - **Income** (`planAmount > 0`): the pair is tier 1 (a deposit tagged to the item's debt), or it is not ambiguous,
+>   named or not. That is PR6's arrival rule, the same test that keeps a paycheck out of `incomeNotArrived`.
+>
+> A held-back pair's row is used up: it pays no other plan.
 
 An answered occurrence (matched, partial, missed, skipped) never enters the matcher, so it never holds anything back.
 
-Unchanged: where the hold-back applies (a later plan due after the drag cutoff, or a weekly-cadence expense), the windows
-(only earlier occurrences dated today − 45 days or later can hold anything back), the tiers themselves, overdue evidence,
-the income-arrival rule, the card-payment rule, and both remainder drags.
+**Unchanged:**
+
+- where the hold-back applies (a later plan due after the drag cutoff, or a weekly-cadence expense);
+- the windows (only earlier occurrences dated today − 45 days or later can hold anything back);
+- the tiers themselves, overdue evidence, and both remainder drags;
+- the income-arrival rule, except that a tier-1 tagged deposit now counts even when ambiguous (round 4).
+
+**The card-payment rule itself is unchanged, but it no longer reads a held-back row.** Before round 4 it could, and did:
+see Round 4, HIGH.
 
 ## Every copy of the rule
 
 | File | What it holds | Changed? |
 |---|---|---|
-| `artifacts/api-server/src/lib/forecastLedger.ts`, the hold-back (~line 930) | **The only executable copy.** On main the `pairedKeys` filter was: `tier ≤ 2`, OR (not ambiguous AND confidence ≠ "low" AND the row not tagged to another debt), for every plan. Now it is `matches.filter(isEvidence)`. `isEvidence` (income: `!m.ambiguous`; outflow: `tier ≤ 2`) moved up from below the hold-back, so overdue evidence, `incomeNotArrived` and the hold-back use one definition. The comments that describe the rule (~line 756 and ~line 930) are rewritten. | **Yes** |
-| `lib/avalanche-core/src/planMatch.ts` | It grades pairs (`tier`, `confidence`, `ambiguous`, `offCurve`) and holds no earlier-occurrence logic. `matchPlansToRows` has one caller, the ledger. | No: nothing to change (PR9's biweekly fix belongs here) |
+| `artifacts/api-server/src/lib/forecastLedger.ts`, the hold-back (~line 930) | **The only executable copy.** On main the `pairedKeys` filter was: `tier ≤ 2`, OR (not ambiguous AND confidence ≠ "low" AND the row not tagged to another debt), for every plan. Now it is `matches.filter(isEvidence)`. `isEvidence` moved up from below the hold-back and reads income `tier === 1 \|\| !ambiguous`, outflow `tier ≤ 2`. The rows the hold-back demotes (`heldBackTxnIds`) join `usedRows` before the listing pass and the card-payment rule. The comments that describe the rule (~line 756 and ~line 930) are rewritten. | **Yes** |
+| `lib/avalanche-core/src/planMatch.ts` | It grades pairs (`tier`, `confidence`, `ambiguous`, `offCurve`) and runs the card-payment rule (`plansPaidInFullByName`) on the rows the ledger passes in. It holds no earlier-occurrence logic. | No: nothing to change (PR9's biweekly fix belongs here) |
 | `artifacts/h2budget/src/lib/forecastMatch.ts` | `buildLineRegister` copies the server's `matches` into `probablyPaid` (`tier`, `offCurve`, `remainderAmount`) and reads `offCurve` for the no-bank running balance. It has no hold-back of its own. | No |
 | `artifacts/h2budget/src/lib/forecastReconcile.ts` | `computeBankReconcile` reads `offCurve` and `remainderAmount`. It has no hold-back of its own. | No |
 
-**No debt-tag check.** The arrival rule has none: for income, `paidByKey` is built only from `isEvidence` pairs, and the
-card-payment rule covers debt minimums only. A tier ≤ 2 pair is never on a row tagged to another debt (`tierOf`), so the
-outflow side needs none either.
+**No debt-tag guard.** `isEvidence` has no check for a row tagged to another debt.
+
+- **Outflows don't need one.** `tierOf` grades such a pair tier 3, so it is never evidence.
+- **Income:** a non-ambiguous deposit on a row tagged to another debt still counts as arrived, exactly as main's arrival
+  rule already counted it. Since round 3 it also counts as received for the hold-back. For income that can only read
+  lower.
+- **Tier 1** is by definition a row tagged to the plan's own debt.
 
 **Parity.** The ledger demotes a held-back pair before it leaves the server (`tier: 3`, `evidence: null`,
 `offCurve: false`). Both web files only read that result, so server and web cannot disagree.
 
 **Search.** I also searched the whole repo for `confidence === "low"`, `confidence !== "low"` and `ambiguous ||`. The
 only other hit is `scripts/src/detectSubscriptions.ts`, which detects subscriptions and is unrelated.
-`lib/api-spec/openapi.yaml` has no hold-back wording. Its "any confidence, not ambiguous" line is the income-arrival rule,
-which this PR now shares.
+`lib/api-spec/openapi.yaml` has no hold-back wording.
 
 **Other text touched:**
 
@@ -184,7 +197,7 @@ No entry changed in any round, so nothing was re-recorded. `forecastLedger.golde
 `householdScenario.integration.test.ts` pass under `CI=true` as committed; the snapshot file is main's (PR-K added
 `account` to it).
 
-Neither fixture has a tier-3 earlier pair whose treatment changed:
+Neither fixture has a pair whose treatment changed:
 
 - **Golden:** the rows are nameless ("golden <date> <amount>"), the only pair is the Golden Card minimum (tier 2), and no
   deposit pairs with its paychecks.
@@ -225,9 +238,10 @@ No UI was added. What I checked:
   plans the curve reads by `offCurve`: plans due after the drag cutoff, and weekly-cadence expenses.
 - **What is closed.** The opposite failure (round 4's MEDIUM residual, reading high by a whole bill) is closed. With it
   goes round 4's follow-on note for this shape: the later pair is now tier 3, so it no longer drives
-  `remainder_assumed_unpaid` either.
+  `remainder_assumed_unpaid` either. Round 1 left a second path to reading high, through the card-payment rule, which
+  round 4 of this PR closes.
 
-### Round 1's OPEN finding: income read HIGH (resolved in rounds 2–3)
+### Round 1's OPEN finding: income read HIGH (resolved in rounds 2–4)
 
 Round 1 applied the stricter rule to every plan. A temporary probe showed that for income it reads high.
 
@@ -249,15 +263,16 @@ out the owner's stated principle ("the forecast may read low, never high"); it i
 holding a later row back can only read low. For income, it reads high: a held-back paycheck stays on the curve while its
 deposit is already in cash.
 
-### What round 2 built (the income condition is superseded by round 3)
+### What round 2 built (the income condition is superseded by rounds 3 and 4)
 
 - **Outflows:** round 1's rule.
 - **Income:** round 2 used main's named condition (tier ≤ 2, or confidence ≠ "low" and not ambiguous, plus main's
-  debt-tag check). Round 3 replaced it with the arrival rule itself.
+  debt-tag check). Round 3 replaced it with the arrival rule itself; round 4 added tier 1 to that rule.
 - **Recovery before the commit.** During round 2, a local probe command overwrote `forecastLedger.ts` with `2731077`'s
   version. A zsh glob matched nothing and aborted the backup step, but the file swap still ran. Nothing had been
   committed. I restored the file from `24b9d0fe`, re-applied the round-2 edits, and checked `git diff` against HEAD
-  (round-2 change only). The two hold-back files were re-run before the commit and before the gates.
+  (round-2 change only). The two hold-back files were re-run before the commit and before the gates. Since then, every
+  file swap has used a commit as its backup and been verified clean with `git diff --quiet` afterwards.
 
 ### Tests added in round 2
 
@@ -302,16 +317,15 @@ it is not a new money decision:**
 `forecastLedger.ts` only:
 
 ```ts
-const isEvidence = (m: PlanRowMatch): boolean => (m.planAmount > 0 ? !m.ambiguous : m.tier <= 2); // moved up
+const isEvidence = (m: PlanRowMatch): boolean => (m.planAmount > 0 ? !m.ambiguous : m.tier <= 2); // moved up (round 4 adds tier 1)
 const pairedKeys = new Set(matches.filter(isEvidence).map((m) => m.planKey));
 ```
 
-- **Income:** `!m.ambiguous`, character for character the arrival rule, because it is the same function.
+- **Income:** character for character the arrival rule, because it is the same function.
 - **Outflows:** `tier ≤ 2`, unchanged.
-- **Removed:** round 2's named condition, and its debt-tag check with the `rowDebtById` map. The arrival rule has no tag
-  check, and the two must match exactly.
-- **Nothing else moves:** `isEvidence` itself is unchanged, and its other readers (used rows, listing pairs, due debt
-  minimums, `paidByKey`) run after the hold-back exactly as before.
+- **Removed:** round 2's named condition, and its debt-tag check with the `rowDebtById` map.
+- **Nothing else moves:** `isEvidence`'s other readers (used rows, listing pairs, due debt minimums, `paidByKey`) run
+  after the hold-back exactly as before.
 
 ### Every test whose expected value changed in round 3
 
@@ -322,14 +336,6 @@ const pairedKeys = new Set(matches.filter(isEvidence).map((m) => m.planKey));
 
 Comment-only edits in round 3: the describe title and header ("rounds 2–3") and R2-2's comment (the round-3 note, the
 PR9 fix direction and its constraint).
-
-Unchanged in round 3, re-run on the final tree:
-
-- R2-1 (3,000.00), R2-2 (pinned at 5,000.00), R2-3 (3,000.00).
-- (a) (700.00), (c) (850.00).
-- D2 (8,528.00 / 8,028.00, ending 15,955.20), D3 (15,955.20 → 16,628.00).
-- The HOME DEPOT cases (700.00 / 2,850.00).
-- The golden and household-scenario files.
 
 **Fails before, passes after (round 3).** The two hold-back files, with the round-3 tests in place:
 
@@ -388,9 +394,9 @@ up to $2,000. `incomeNotArrived` also wrongly lists the 05-01 paycheck.
    | 05-01 plan ↔ $1,900 row ($100 short, not tier-2-capable) | 2 | 5,000 | taken |
 
    The skipped candidate has rank 0 ≤ 2 and scores better, so it marks the 05-01 pair `ambiguous: true`.
-5. **What reads the flag.** Ambiguous means `isEvidence` is false. So 05-01 is listed in `incomeNotArrived`, it is not
-   received for the hold-back, and 05-15's pair is held back: +$2,000 stays on the curve while the deposit is already in
-   cash.
+5. **What reads the flag.** The pair is ambiguous and tier 3, so `isEvidence` is false. 05-01 is therefore listed in
+   `incomeNotArrived` and not received for the hold-back. 05-15's pair is held back, and +$2,000 stays on the curve while
+   the deposit is already in cash.
 
 **The fix PR9 should make.** In the matcher's ambiguity flag: a better-scoring candidate whose row (or plan) a
 higher-ranked pair already took must not make a pair ambiguous.
@@ -398,43 +404,167 @@ higher-ranked pair already took must not make a pair ambiguous.
 **⚠️ The fix must not let any bill pair leave the curve.** `tierOf` returns a suggestion for an ambiguous pair, so
 un-flagging a bill pair can make it tier 2. Tier 2 sets `offCurve` and takes the bill off the curve, which reads high.
 PR9 must either limit the change to income pairs, or show with tests that no outflow pair's tier or `offCurve` changes.
-R2-2 should then flip to 3,000.00.
+R2-2 should then flip to 3,000.00; the round-4 guard (below) keeps checking the rule after it does.
 
 **Why not fixed here.** The cause is in the shared matcher, and a hold-back-only patch would make the hold-back and the
 arrival rule disagree. **Workaround today:** confirming the earlier paycheck in Review should clear it. That is the same
 path D3 proves for bills; it is not separately tested for income.
 
-### Gates (round 3, merged tree)
+---
 
-**Tree.** Round 3 is committed as `83c915d` and merged with origin/main `9aad763` as `7325a9e`. main `9aad763` is PR-K:
-the Cash flow card uses the cash signal, and `CashSignal.account` is added, with its spec and codegen.
+## Round 4: the review's fixes (1 HIGH, 2 LOW)
 
-- PR-K touches `forecastLedger.ts` only at the import, the `ForecastLedger` type and the return. That is away from the
-  hold-back.
-- The merge had no conflicts. The merged tree differs from `9aad763` only in this PR's five files.
+The reviewer returned REQUEST CHANGES on `3d56068` and `319f8d9`. The reviewer's throwaway patch and probes guided the
+fix; the change and the tests here are written for this branch. The fix was committed on main `9aad763` as `b70801c`.
+Main then moved to `f96afb1` (PR-H) and was merged in as `18cf0f7` before the final gates.
+
+### HIGH: a held-back row paid a different card's overdue minimum, reading high
+
+**Mechanism.** The hold-back demotes a later pair to tier 3 but, before round 4, left its row out of `usedRows`. The
+listing pass and the card-payment rule (`plansPaidInFullByName`) read only rows not in `usedRows`. So the card-payment
+rule could spend a row that was being held for one card's earlier minimum on another card's overdue minimum. PR-B2 made
+this reachable for every tier-3 earlier outflow pair. With a nameless earlier pair it already existed on main.
+
+**Fix.** The hold-back records the transaction ids it demotes (`heldBackTxnIds`), and they join `usedRows` before the
+listing pass and the card-payment rule run.
+
+**Other reach of the fix.** A held-back row can no longer serve as listing evidence for an occurrence older than
+today − 45 days. Such occurrences are never on the curve, so only which list they appear in can change, never a balance.
+
+**Repro (R4-1 named, R4-2 nameless).**
+
+- Today is 05-14; balance 1,000.00 read 05-01; buffer 0.
+- "Capital One Platinum": minimum $300 due the 17th. "Capital One Quicksilver": minimum $40 due the 8th.
+- A +$2,000 paycheck on the 16th.
+- April's Platinum row: "CAPITAL ONE MOBILE PYMT" −280 on 04-25 (R4-1, named, tier 3), or "ACH DEBIT 7781" −300 on 04-18
+  (R4-2, nameless, tier 3).
+- The row both tests share: "CAPITAL ONE MOBILE PYMT" −300 on 05-12.
+
+| Test | `2731077` (reviewer's measurement) | Round 3 `319f8d9` | Round 4 |
+|---|---|---|---|
+| **R4-1** named | 660.00 | **fails**: 05-15 came back **700.00**. The 05-12 row is held for Platinum's April and also paid Quicksilver's 05-08 minimum | 05-15 **660.00**; 05-17 2,360.00; low point and max safe extra 660.00; no `overdueAssumedPaid` entry uses the 05-12 row |
+| **R4-2** nameless | 700.00 (the same bug, already on main) | **fails**: 05-15 came back **700.00** | 05-15 **660.00**; low point and max safe extra 660.00 |
+
+Hand-worked figures (both forms):
+
+- 05-14: bankToday 700.00 (the $300 on 05-12).
+- 05-15: Quicksilver's $40 is 6 days overdue and unpaid, so it drags: 660.00.
+- 05-16: +$2,000: 2,660.00.
+- 05-17: Platinum's $300 is held back, so it stays on the curve: 2,360.00.
+
+### LOW (round 3): an ambiguous tier-1 income pair no longer counted as received, reading high
+
+**Reachable.** `routes/recurring.ts` accepts any owned `debtId` on an item of any kind, on create and on update.
+
+**Mechanism.** Round 3 set income `isEvidence` to `!ambiguous`. A deposit tagged to the item's debt is tier 1 even when
+a second tagged deposit makes the pair ambiguous: `tierOf` checks explicit evidence before ambiguity. Round 3 didn't
+count that pair. April stayed "not arrived" and unpaid for the hold-back, so May's tagged deposit was held back and May's
+$50 counted twice.
+
+**Fix, one definition.** For income, `isEvidence = tier === 1 || !ambiguous`. It applies to the arrival rule and the
+hold-back alike. A tier-1 outflow pair already ignored ambiguity.
+
+**The one expected value outside the hold-back.** A tagged but ambiguous April deposit now leaves `incomeNotArrived`.
+Main listed it, because main's `isEvidence` was the same `!ambiguous`. That list is not on the curve.
+
+**Repro (R4-3).**
+
+- "Sapphire Rewards" is +$50 monthly on the 15th, linked to a debt with a $0 minimum (so the debt adds no minimum plans).
+- The Plaid checking rows tagged to that debt: +50 on 04-15, +50 on 04-16, +50 on 05-12.
+- Balance 1,000.00 read 05-01; horizon 20 days.
+
+| Test | `2731077` / `3d56068` (reviewer's measurement) | Round 3 `319f8d9` | Round 4 |
+|---|---|---|---|
+| **R4-3** tagged income | 1,050.00 | **fails**: 05-15 came back **1,100.00**; April listed in `incomeNotArrived`; May `tier: 3, offCurve: false` | 05-15 and ending **1,050.00**; April `tier: 1, ambiguous: true` and not listed; May `tier: 1, offCurve: true` |
+
+### LOW: test gaps, the direct guard and the mutants
+
+**Guard (R4-G, five tests).** For income, April is listed in `incomeNotArrived` exactly when May's early deposit is held
+back. The guard checks this across five shapes of April's deposit:
+
+| Shape of April's deposit | Arrived / May held back | On `319f8d9` | Round 4 |
+|---|---|---|---|
+| named, exact (tier 2) | arrived / not held back | passes | passes |
+| named, $100 short (tier 3) | arrived / not held back | passes | passes |
+| nameless, exact (tier 3, low) | arrived / not held back | passes | passes |
+| two nameless exact deposits a day apart (ambiguous, tier 3) | not arrived / held back | passes | passes |
+| two tagged deposits a day apart (tier 1, ambiguous) | arrived / not held back | **fails** (listed as not arrived) | passes |
+
+The ambiguous shape is a real ambiguity (two equally plausible deposits), not the matcher quirk PR9 fixes. So it keeps
+guarding the rule after PR9 flips the biweekly pin.
+
+**Mutants.** Each mutant of the round-4 ledger (`b70801c`) was written from `git show HEAD:` and swapped in. It was run
+against the two hold-back files (45 tests), then restored with `git checkout HEAD --` and verified clean.
+
+| Mutant | Tests failing |
+|---|---|
+| **A:** the reviewer's `tier <= 2 \|\| isEvidence(m)` | **none.** It is equivalent on round 4; see below |
+| **B:** the hold-back keeps round 3's income rule (`!ambiguous`) while arrival includes tier 1 | R4-3; guard: tagged shape |
+| **C:** income always counted as received (the reviewer's R3-M7) | guard: ambiguous shape; also the PR9 pin |
+| **D:** held-back rows not reserved | R4-1, R4-2 |
+| **E:** `isEvidence` without the tier-1 clause | R4-3; guard: tagged shape |
+| **The reviewer's R3-M6 file:** round 3's ledger with `tier <= 2 \|\| isEvidence(m)` | R4-3; guard: tagged shape (both non-pin tests); also R4-1 and R4-2, because round 3 has no reservation |
+
+**Why mutant A cannot fail on round 4.** `tierOf` returns a suggestion for an ambiguous pair unless it is tier-1
+explicit, so no raw pair is both tier 2 and ambiguous. With income `isEvidence` now `tier === 1 || !ambiguous`,
+`tier <= 2 || isEvidence(m)` selects exactly the pairs `isEvidence(m)` selects, for income and outflows alike.
+
+On round 3's `isEvidence` the mutant was not equivalent: it differed on ambiguous tier-1 income pairs. The new non-pin
+tests (R4-3 and the guard's tagged shape) kill it there (last row). The reviewer's requirement holds where the mutant can
+be told apart, and on round 4 the two rules share one definition by construction.
+
+**Reviewer's own verification (not re-run here):** their combined patch never read higher than main or round 3 across
+2,200 fuzzed households.
+
+### Every expected value that changed in round 4
+
+- **New tests only:** R4-1, R4-2, R4-3 and the five guard tests. No existing test's expected value changed.
+- **The only behaviour change outside the hold-back:** a tagged, ambiguous income deposit no longer appears in
+  `incomeNotArrived` (asserted in R4-3).
+
+### Fails before, passes after (round 4)
+
+The two hold-back files, with the round-4 tests in place:
+
+| Source | Result |
+|---|---|
+| Round 3 ledger (`319f8d9`, unchanged in the tree, no file swap) | 4 failed, 41 passed. R4-1: 05-15 700.00, expected 660.00. R4-2: 700.00, expected 660.00. R4-3: 05-15 1,100.00, expected 1,050.00. Guard, tagged shape: not arrived, expected arrived |
+| Round 4 ledger (`b70801c`) | 45 passed |
+
+### Gates (round 4, merged tree)
+
+**Tree.** Round 4 is committed as `b70801c` and merged with origin/main `f96afb1` (PR-H, the household money model) as
+`18cf0f7`. There were no conflicts and no overlap: the merged tree differs from `f96afb1` only in this PR's five files.
+
+**PR-H holds no copy of the rule.** None of its files (`householdMoney.ts`, `moneyContext.ts`, `amexCardCadence.ts`,
+`spendingFacts.ts`, `budgetActuals.ts`) mentions `ambiguous`, `offCurve`, `isEvidence`, `usedRows`, `matchPlansToRows` or
+`plansPaidInFullByName`. `householdMoney.ts` and `moneyContext.ts` don't read the ledger or the cash signal.
 
 Every gate was run on the merge commit:
 
-- `pnpm --filter @workspace/api-spec run codegen`: no drift (the tree was clean afterwards). This PR touches no spec
-  file.
-- `pnpm build` (runs `pnpm run typecheck` first): pass. The tree was clean afterwards.
-- **Web tests** (the counts include R0's and PR-K's tests; this PR adds no web code):
+- `pnpm build` (runs `pnpm run typecheck` first): pass.
+- **Web tests** (this PR changes no web file):
   - `TZ=UTC CI=true`: 141 files, 1,235 passed, 3 skipped.
   - `TZ=America/Chicago CI=true`: 141 files, 1,236 passed, 2 skipped.
-- **Full API suite** (`CI=true`, own DB `h2budget_test_prb2`, `caffeinate -i`, serial): **145 files, 1,486 passed,
-  7 todo.**
-  - That is `9aad763`'s 1,479 (PR-K added 4) plus this branch's net 7 tests.
-  - This branch added 9 `it(` blocks: (a), (c), the new D2, D3, R2-1, R2-2, R2-3, R3-1 and R3-2.
-  - It removed 2: round 4's residual pin and the old D2.
-- `node scripts/check-entry-graph.mjs`: OK, 575.7 KB of 580.0 KB. This PR changes no web file.
+- **Full API suite** (`CI=true`, own DB `h2budget_test_prb2`, `caffeinate -i`, serial): **151 files, 1,606 passed,
+  7 todo.** That is 1,494 on round 4 before the merge (round 3's 1,486 plus the 8 round-4 tests), plus PR-H's 112 tests in
+  6 new files.
+- `node scripts/check-entry-graph.mjs`: OK, 575.7 KB of 580.0 KB.
+- **Codegen:** not needed. No file under `lib/api-spec`, `lib/api-zod`, `lib/api-client-react` or `lib/db` differs from
+  origin/main.
 - **e2e:** not run (no UI change in this PR).
+- **Golden and household scenario:** part of the full suite above, unchanged, not re-recorded.
+
+**Before the merge** (`b70801c`, on `9aad763`): build and typecheck passed; web 1,235 / 1,236; API 145 files, 1,494
+passed, 7 todo; entry graph 575.7 KB.
 
 ### Earlier rounds' gates (for the record)
 
-| Round | Merge commit | Main merged in | API suite | Web (UTC / Chicago) | Entry graph |
+| Round | Tree | Main merged in | API suite | Web (UTC / Chicago) | Entry graph |
 |---|---|---|---|---|---|
+| Round 3 | `7325a9e` | `9aad763` | 145 files, 1,486 passed, 7 todo | 1,235 / 1,236 | 575.7 KB |
 | Round 2 | `c6d6166` | `b939039` | 145 files, 1,481 passed, 7 todo | 1,212 / 1,213 | 575.7 KB |
 | Round 1 | `0b4015c` | `2e1949f` | 145 files, 1,477 passed, 7 todo | 1,148 / 1,149 | 574.4 KB |
 | Round 1, pre-merge | `dea25f7` on `2731077` | none | 145 files, 1,476 passed, 7 todo | same as round 1 | 574.4 KB |
 
-Build and typecheck passed at every round.
+Build and typecheck passed at every round. Round 3 also ran codegen after merging PR-K's spec change: no drift.
