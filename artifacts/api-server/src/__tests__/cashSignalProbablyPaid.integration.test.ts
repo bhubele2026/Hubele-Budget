@@ -572,3 +572,117 @@ describe("(PR5 review) an unconfirmed guess never overstates projected cash", ()
     expect(balanceOn(sig, "2026-05-20")).toBe("850.00");
   });
 });
+
+/** An "Acme Payroll" paycheck (income). A monthly one lands on its anchor's day of the month. */
+async function paycheck(frequency: "monthly" | "biweekly", anchorDate: string, amount = "2000"): Promise<string> {
+  const [r] = await db
+    .insert(recurringItemsTable)
+    .values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      name: "Acme Payroll",
+      kind: "income",
+      amount,
+      frequency,
+      dayOfMonth: frequency === "monthly" ? Number(anchorDate.slice(8, 10)) : null,
+      anchorDate,
+      active: "true",
+    })
+    .returning();
+  return r!.id;
+}
+
+// ⭐ (PR-B2 round 2) OUTFLOWS NEED PROOF; INCOME KEEPS ITS ARRIVAL RULE. The owner's
+// principle is "the forecast may read low, never high". For a bill, holding a later
+// row back keeps the bill on the curve, which can only read low. For income it runs
+// the other way: a held-back paycheck stays on the curve while its deposit is
+// already in cash, so the paycheck counts twice. So the tier ≤ 2 requirement applies
+// to outflows only; an earlier INCOME occurrence counts as received for the hold-back
+// on the rule main `2731077` used (tier ≤ 2, or named and not ambiguous), which agrees
+// with the income-arrival rule for a named deposit.
+describe("(PR-B2 round 2) the hold-back reads income by its arrival rule, so a paycheck is never counted twice", () => {
+  it("(round 2) April's $2,000 paycheck arrived $100 short (named, tier 3): May's exact deposit a day early counts once (05-15: 3,000, not 5,000)", async () => {
+    await snapshotOnChase();
+    const pay = await paycheck("monthly", "2026-01-15");
+    const april = await row("2026-04-15", "1900", "ACME PAYROLL");
+    const may = await row("2026-05-14", "2000", "ACME PAYROLL");
+
+    const sig = await signal();
+
+    expect(matchFor(sig, `${pay}|2026-04-15`)).toMatchObject({ txnId: april, confidence: "medium", ambiguous: false, tier: 3 });
+    // The arrival rule counts April received, and the hold-back agrees.
+    expect(sig.incomeNotArrived?.find((p) => p.planKey === `${pay}|2026-04-15`)).toBeUndefined();
+    expect(matchFor(sig, `${pay}|2026-05-15`)).toMatchObject({ txnId: may, tier: 2, offCurve: true });
+    expect(sig.bankToday).toBe("3000.00");
+    // May's paycheck counts once: in cash, off the curve (round 1 read 5,000.00 — counted twice).
+    expect(balanceOn(sig, "2026-05-15")).toBe("3000.00");
+  });
+
+  // ⚠️ KNOWN ISSUE — pre-existing on main `2731077`, NOT fixed in PR-B2; for PR9 (income
+  // states). This test pins TODAY'S WRONG VALUE so the repro stays checked; PR9 should
+  // flip it to 3,000.00.
+  // A BIWEEKLY paycheck deposited early counts twice when the previous paycheck arrived
+  // off-amount. Mechanism, in `matchPlansToRows` (planMatch.ts), not in the hold-back:
+  //   - the 05-14 deposit is 13 days after the 05-01 occurrence, inside its +14-day
+  //     window, so it is a candidate for BOTH 05-01 and 05-15; it pairs with 05-15
+  //     (the better score);
+  //   - 05-01 then pairs with its own $1,900 deposit, which cannot be tier 2 ($100
+  //     short), so it ranks below the 05-14 candidate — and a pair is marked
+  //     `ambiguous` whenever a same-or-better-ranked candidate for its plan scores
+  //     better, even though that candidate's row already went to 05-15;
+  //   - ambiguous means not arrived (`incomeNotArrived` lists 05-01) and not received
+  //     for the hold-back, so 05-15's pair is held back: +$2,000 stays on the curve
+  //     while the deposit is already in cash.
+  it("(KNOWN ISSUE, PR9) biweekly: 05-01 arrived $100 short, 05-15 deposited a day early — pinned at today's value, counted twice (05-15: 5,000.00; right answer 3,000.00)", async () => {
+    await snapshotOnChase();
+    const pay = await paycheck("biweekly", "2026-04-17");
+    await row("2026-04-17", "2000", "ACME PAYROLL");
+    const short = await row("2026-05-01", "1900", "ACME PAYROLL");
+    const early = await row("2026-05-14", "2000", "ACME PAYROLL");
+
+    const sig = await signal();
+
+    expect(matchFor(sig, `${pay}|2026-05-01`)).toMatchObject({ txnId: short, confidence: "medium", ambiguous: true, tier: 3 });
+    expect(sig.incomeNotArrived?.find((p) => p.planKey === `${pay}|2026-05-01`)).toBeDefined();
+    expect(matchFor(sig, `${pay}|2026-05-15`)).toMatchObject({ txnId: early, tier: 3, offCurve: false });
+    expect(sig.bankToday).toBe("3000.00");
+    expect(balanceOn(sig, "2026-05-15")).toBe("5000.00");
+  });
+
+  it("(control for the known issue) the same biweekly household with 05-01 paid exactly: no pair is ambiguous, and 05-15 counts once (3,000.00)", async () => {
+    await snapshotOnChase();
+    const pay = await paycheck("biweekly", "2026-04-17");
+    await row("2026-04-17", "2000", "ACME PAYROLL");
+    const exact = await row("2026-05-01", "2000", "ACME PAYROLL");
+    const early = await row("2026-05-14", "2000", "ACME PAYROLL");
+
+    const sig = await signal();
+
+    expect(matchFor(sig, `${pay}|2026-05-01`)).toMatchObject({ txnId: exact, ambiguous: false, tier: 2 });
+    expect(sig.incomeNotArrived?.find((p) => p.planKey === `${pay}|2026-05-01`)).toBeUndefined();
+    expect(matchFor(sig, `${pay}|2026-05-15`)).toMatchObject({ txnId: early, tier: 2, offCurve: true });
+    expect(balanceOn(sig, "2026-05-15")).toBe("3000.00");
+  });
+
+  // ⚠️ KNOWN ISSUE — pre-existing on main `2731077`, NOT fixed in PR-B2 (open for the lead).
+  // Round 2 gives income main's hold-back rule back, and that rule leaves out a NAMELESS
+  // earlier deposit (`confidence: "low"`). The income-arrival rule (`isEvidence`: not
+  // ambiguous, any confidence) counts April received; the hold-back does not, so May's
+  // early deposit is held back and May's paycheck counts twice. Pins today's wrong value.
+  it("(KNOWN ISSUE, open) April's $2,000 paycheck arrived exactly but nameless ('DIRECT DEP 7781'), May deposited a day early by name — counted twice (05-15: 5,000.00; right answer 3,000.00)", async () => {
+    await snapshotOnChase();
+    const pay = await paycheck("monthly", "2026-01-15");
+    const april = await row("2026-04-15", "2000", "DIRECT DEP 7781");
+    const may = await row("2026-05-14", "2000", "ACME PAYROLL");
+
+    const sig = await signal();
+
+    expect(matchFor(sig, `${pay}|2026-04-15`)).toMatchObject({ txnId: april, confidence: "low", ambiguous: false, tier: 3 });
+    // Arrived, by the arrival rule…
+    expect(sig.incomeNotArrived?.find((p) => p.planKey === `${pay}|2026-04-15`)).toBeUndefined();
+    // …but not received for the hold-back.
+    expect(matchFor(sig, `${pay}|2026-05-15`)).toMatchObject({ txnId: may, tier: 3, offCurve: false });
+    expect(sig.bankToday).toBe("3000.00");
+    expect(balanceOn(sig, "2026-05-15")).toBe("5000.00");
+  });
+});

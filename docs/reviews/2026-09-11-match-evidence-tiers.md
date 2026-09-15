@@ -464,8 +464,9 @@ With round 4's future remainder drag (`remainder_assumed_unpaid`, review followu
 misattribution can now carry a wrong DOLLAR remainder on a future plan, not only a wrong on/off-curve state — the
 drag amount is computed from the same misattributed pair's `txnAmount`.
 
-**Closed by PR-B2 (owner decision 2026-09-15, the stricter direction):** the hold-back now needs tier-1/2 proof; the
-named branch is removed, and D2 drags until July is confirmed. See `2026-09-15-holdback-proof-only.md`.
+**Closed by PR-B2 (owner decision 2026-09-15, the stricter direction):** for outflows the hold-back now needs tier-1/2
+proof; the named branch is removed for them, and D2 drags until July is confirmed. Income keeps its arrival rule, so a
+paycheck is never counted twice. See `2026-09-15-holdback-proof-only.md`.
 
 ### Golden
 

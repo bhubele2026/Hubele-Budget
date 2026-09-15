@@ -755,8 +755,8 @@ export async function buildForecastLedger(
   //     unconfirmed guess never overstates projected cash. A later
   //     occurrence also stays on the curve when an earlier occurrence of the same
   //     item that no tier-1/2 pair paid is due on or before the row: the row may
-  //     be that earlier bill, paid late (PR-B2: a tier-3 pair, named or not, is
-  //     not proof).
+  //     be that earlier bill, paid late (PR-B2: for an outflow a tier-3 pair,
+  //     named or not, is not proof; income keeps its arrival rule).
   const notMatchPairs = new Set<string>();
   const partialTxnByKey = new Map<string, string>();
   const claimedTxnIds = new Set<string>();
@@ -927,20 +927,39 @@ export async function buildForecastLedger(
     //
     // (PR5 review) A later occurrence never leaves the curve on a row dated on or
     // after an earlier occurrence of the same item that no row paid.
-    // ⭐ (Owner decision 2026-09-15, PR-B2) THE HOLD-BACK NEEDS PROOF. An earlier
-    // occurrence counts as paid only when its own pair is tier 1 or 2. A tier-3
-    // pair is a suggestion, named or not — decision 13 round 3's "named and not
-    // ambiguous" branch is gone, because a named coincidence read HIGH: an
-    // unrelated "CITY WATER METER FEE" −140 cleared April, so April's real $150,
-    // paid late, took May off the curve while May was unpaid. The owner accepted
-    // the cost: a real but imperfect earlier payment (July's Toyota paid $685.00
-    // on a $672.80 bill, tier 3) holds back August's exact payment, and August
-    // drags until July is confirmed in Review. The forecast may read low, never
-    // high. A matched or partial answer is tier 1, and an answered occurrence
-    // never reaches the matcher, so it never holds anything back. A tier ≤ 2 pair
-    // is never on a row tagged to another debt (`tierOf`), so no tag check is needed.
+    // ⭐ (Owner decision 2026-09-15, PR-B2) "THE FORECAST MAY READ LOW, NEVER HIGH."
+    //   - OUTFLOWS (bills, debt minimums, the Avalanche extra): an earlier occurrence
+    //     counts as paid only when its own pair is tier 1 or 2. A tier-3 pair is a
+    //     suggestion, named or not. Decision 13 round 3's "named and not ambiguous"
+    //     branch read HIGH: an unrelated "CITY WATER METER FEE" −140 cleared April,
+    //     so April's real $150, paid late, took May off the curve while May was
+    //     unpaid. The owner accepted the cost: a real but imperfect earlier payment
+    //     (July's Toyota paid $685.00 on a $672.80 bill, tier 3) holds back August's
+    //     exact payment, and August drags until July is confirmed in Review.
+    //   - INCOME (round 2): holding a paycheck back keeps it ON the curve while its
+    //     deposit is already in cash, which reads HIGH. So an earlier income
+    //     occurrence keeps the rule main used before PR-B2: tier 1 or 2, or a named
+    //     (confidence not "low"), non-ambiguous deposit — which agrees with the
+    //     income-arrival rule (`isEvidence` below) for a named deposit.
+    // A pair whose row is tagged to another debt pays nothing, so it doesn't count.
+    // A matched or partial answer is tier 1, and an answered occurrence never
+    // reaches the matcher, so it never holds anything back.
     const planByKey = new Map(matchPlans.map((p) => [p.key, p] as const));
-    const pairedKeys = new Set(matches.filter((m) => m.tier <= 2).map((m) => m.planKey));
+    const rowDebtById = new Map(matchRows.map((r) => [r.txnId, r.debtId ?? null] as const));
+    const pairedKeys = new Set(
+      matches
+        .filter((m) => {
+          if (m.tier <= 2) return true;
+          // An outflow needs tier-1/2 proof.
+          if (m.planAmount < 0) return false;
+          // Income: the arrival rule, as before PR-B2.
+          if (m.ambiguous || m.confidence === "low") return false;
+          const rowDebt = rowDebtById.get(m.txnId) ?? null;
+          const planDebt = planByKey.get(m.planKey)?.debtId ?? null;
+          return !(rowDebt && planDebt && rowDebt !== planDebt);
+        })
+        .map((m) => m.planKey),
+    );
     const unpaidByItem = new Map<string, string[]>();
     for (const p of matchPlans) {
       if (pairedKeys.has(p.key)) continue;
