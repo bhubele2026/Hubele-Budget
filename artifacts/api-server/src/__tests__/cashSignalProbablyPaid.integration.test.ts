@@ -719,3 +719,224 @@ describe("(PR-B2 rounds 2–3) the hold-back reads income by its arrival rule, s
     expect(balanceOn(after, "2026-05-15")).toBe("5000.00");
   });
 });
+
+/** A credit card with a monthly minimum (the ledger expands it as `debt:<id>` plans). */
+async function cardDebt(name: string, minPayment: string, dueDay: number): Promise<string> {
+  const [d] = await db
+    .insert(debtsTable)
+    .values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      name,
+      type: "credit_card",
+      balance: "5000",
+      minPayment,
+      dueDay,
+      status: "active",
+      // Pinned: a minimum is never due before its debt existed.
+      createdAt: new Date("2026-01-01T12:00:00Z"),
+    })
+    .returning({ id: debtsTable.id });
+  return d!.id;
+}
+
+/** A Plaid checking row the user tagged to a debt (the ledger reads the tag only on these). */
+async function taggedRow(occurredOn: string, amount: string, description: string, debtId: string): Promise<string> {
+  const [t] = await db
+    .insert(transactionsTable)
+    .values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn,
+      description,
+      amount,
+      plaidAccountId: CHASE,
+      source: "plaid:chase",
+      pending: false,
+      debtId,
+      createdAt: createdAtStartOfHouseholdDay(occurredOn),
+    })
+    .returning({ id: transactionsTable.id });
+  return t!.id;
+}
+
+/** "Sapphire Rewards" +$50 monthly on the 15th, linked to a debt with no minimum (so no minimum plans). */
+async function rewardsLinkedToDebt(): Promise<{ rewards: string; sapphire: string }> {
+  const sapphire = await cardDebt("Chase Sapphire", "0", 20);
+  const [r] = await db
+    .insert(recurringItemsTable)
+    .values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      name: "Sapphire Rewards",
+      kind: "income",
+      amount: "50",
+      frequency: "monthly",
+      dayOfMonth: 15,
+      anchorDate: "2026-01-15",
+      active: "true",
+      debtId: sapphire,
+    })
+    .returning();
+  return { rewards: r!.id, sapphire };
+}
+
+// ⭐ (PR-B2 round 4, review HIGH) A HELD-BACK ROW IS SPOKEN FOR. The hold-back keeps a
+// later pair off the curve because its row may be the earlier occurrence's late payment.
+// Until round 4 that row stayed free, and the card-payment rule (`plansPaidInFullByName`)
+// could spend it on ANOTHER card's overdue minimum: one $300 row was both held for
+// Platinum's April and paid Quicksilver's $40, reading high by $40. Round 4 reserves every
+// held-back row in `usedRows` before the listing pass and the card-payment rule run.
+//   Today 05-14; balance 1,000.00 read 05-01; buffer 0. Platinum $300 due the 17th,
+//   Quicksilver $40 due the 8th, a +$2,000 paycheck on the 16th.
+//   05-14 bankToday 700.00 (the $300 on 05-12). 05-15: Quicksilver's $40, 6 days overdue
+//   and unpaid, drags → 660.00. 05-16 +2,000 → 2,660.00. 05-17 Platinum, held back,
+//   −300 → 2,360.00. (Main `2731077` also reads 660.00 for the named case: its named
+//   branch counted April paid, so it never held May back.)
+describe("(PR-B2 round 4) a held-back row never pays another card's minimum", () => {
+  it("(round 4, named) April Platinum paid $280 by name (tier 3); May's exact $300 on 05-12 is held back and never pays Quicksilver's overdue $40 (05-15: 660.00, not 700.00)", async () => {
+    await snapshotOnChase();
+    const platinum = await cardDebt("Capital One Platinum", "300", 17);
+    await cardDebt("Capital One Quicksilver", "40", 8);
+    await paycheck("monthly", "2026-01-16");
+    const april = await row("2026-04-25", "-280", "CAPITAL ONE MOBILE PYMT");
+    const may = await row("2026-05-12", "-300", "CAPITAL ONE MOBILE PYMT");
+
+    const sig = await signal();
+
+    expect(sig.bankToday).toBe("700.00");
+    expect(balanceOn(sig, "2026-05-15")).toBe("660.00");
+    expect(balanceOn(sig, "2026-05-17")).toBe("2360.00");
+    expect(sig.lowestProjected).toBe("660.00");
+    expect(sig.maxSafeExtra).toBe("660.00");
+    expect(matchFor(sig, `debt:${platinum}|2026-04-17`)).toMatchObject({ txnId: april, tier: 3, offCurve: false });
+    expect(matchFor(sig, `debt:${platinum}|2026-05-17`)).toMatchObject({ txnId: may, tier: 3, offCurve: false });
+    // The held-back row pays nothing else.
+    expect(sig.overdueAssumedPaid?.find((p) => p.txnId === may)).toBeUndefined();
+  });
+
+  it("(round 4, nameless) April Platinum 'paid' by a nameless exact $300 (tier 3); the same May row is held back and never pays Quicksilver's overdue $40 (05-15: 660.00, not 700.00)", async () => {
+    await snapshotOnChase();
+    const platinum = await cardDebt("Capital One Platinum", "300", 17);
+    await cardDebt("Capital One Quicksilver", "40", 8);
+    await paycheck("monthly", "2026-01-16");
+    const april = await row("2026-04-18", "-300", "ACH DEBIT 7781");
+    const may = await row("2026-05-12", "-300", "CAPITAL ONE MOBILE PYMT");
+
+    const sig = await signal();
+
+    expect(sig.bankToday).toBe("700.00");
+    expect(balanceOn(sig, "2026-05-15")).toBe("660.00");
+    expect(sig.lowestProjected).toBe("660.00");
+    expect(sig.maxSafeExtra).toBe("660.00");
+    expect(matchFor(sig, `debt:${platinum}|2026-04-17`)).toMatchObject({ txnId: april, tier: 3, offCurve: false });
+    expect(matchFor(sig, `debt:${platinum}|2026-05-17`)).toMatchObject({ txnId: may, tier: 3, offCurve: false });
+    expect(sig.overdueAssumedPaid?.find((p) => p.txnId === may)).toBeUndefined();
+  });
+});
+
+// ⭐ (PR-B2 round 4, review LOW) A TAGGED DEPOSIT IS PROOF. `isEvidence` for income is
+// now `tier === 1 || !ambiguous`: a deposit the user tagged to the item's debt (tier 1)
+// counts even when a second tagged deposit makes the pair ambiguous — for the arrival
+// rule AND the hold-back, which share the definition. Round 3 (`!ambiguous` only) held
+// May's tagged deposit back and counted May's $50 twice (1,100.00), and listed April as
+// not arrived. An item of any kind may carry a `debtId` (`routes/recurring.ts`).
+//   Balance 1,000.00 read 05-01; the tagged +50 on 05-12 → bankToday 1,050.00.
+describe("(PR-B2 round 4) a tagged income deposit counts as received even when ambiguous", () => {
+  it("(round 4) Sapphire Rewards +$50 linked to a debt: April has two tagged deposits (tier 1, ambiguous), May's tagged deposit arrives 05-12 — counted once (05-15 and ending: 1,050.00, not 1,100.00)", async () => {
+    await snapshotOnChase();
+    const { rewards, sapphire } = await rewardsLinkedToDebt();
+    const april = await taggedRow("2026-04-15", "50", "SAPPHIRE REWARDS", sapphire);
+    await taggedRow("2026-04-16", "50", "SAPPHIRE REWARDS", sapphire);
+    const may = await taggedRow("2026-05-12", "50", "SAPPHIRE REWARDS", sapphire);
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, { horizonDays: 20 });
+
+    expect(sig.bankToday).toBe("1050.00");
+    expect(balanceOn(sig, "2026-05-15")).toBe("1050.00");
+    expect(sig.endingBalance).toBe("1050.00");
+    expect(matchFor(sig, `${rewards}|2026-04-15`)).toMatchObject({ txnId: april, tier: 1, ambiguous: true });
+    // Arrived (tier 1), and received for the hold-back: the two rules agree.
+    expect(sig.incomeNotArrived?.find((p) => p.planKey === `${rewards}|2026-04-15`)).toBeUndefined();
+    expect(matchFor(sig, `${rewards}|2026-05-15`)).toMatchObject({ txnId: may, tier: 1, offCurve: true });
+  });
+});
+
+// ⭐ (PR-B2 round 4, review LOW) THE INCOME HOLD-BACK IS THE ARRIVAL RULE — a direct guard,
+// independent of the PR9 known-issue pin. For each shape of April's deposit, April is
+// listed in `incomeNotArrived` exactly when May's early deposit is held back (its pair
+// demoted to tier 3 and kept on the curve). If PR9 flips the biweekly pin, the ambiguous
+// shape below still guards the rule.
+describe("(PR-B2 round 4) for income, held back ⇔ not arrived", () => {
+  type Shape = { name: string; notArrived: boolean; setup: () => Promise<{ item: string }> };
+  const payroll = async (): Promise<{ item: string }> => {
+    const item = await paycheck("monthly", "2026-01-15");
+    await row("2026-05-14", "2000", "ACME PAYROLL");
+    return { item };
+  };
+  const shapes: Shape[] = [
+    {
+      name: "named, exact (tier 2)",
+      notArrived: false,
+      setup: async () => {
+        const p = await payroll();
+        await row("2026-04-15", "2000", "ACME PAYROLL");
+        return p;
+      },
+    },
+    {
+      name: "named, $100 short (tier 3)",
+      notArrived: false,
+      setup: async () => {
+        const p = await payroll();
+        await row("2026-04-15", "1900", "ACME PAYROLL");
+        return p;
+      },
+    },
+    {
+      name: "nameless, exact (tier 3, low)",
+      notArrived: false,
+      setup: async () => {
+        const p = await payroll();
+        await row("2026-04-15", "2000", "DIRECT DEP 1111");
+        return p;
+      },
+    },
+    {
+      name: "two nameless exact deposits a day apart (ambiguous, tier 3)",
+      notArrived: true,
+      setup: async () => {
+        const p = await payroll();
+        await row("2026-04-15", "2000", "DIRECT DEP 1111");
+        await row("2026-04-16", "2000", "DIRECT DEP 2222");
+        return p;
+      },
+    },
+    {
+      name: "two tagged deposits a day apart (tier 1, ambiguous)",
+      notArrived: false,
+      setup: async () => {
+        const { rewards, sapphire } = await rewardsLinkedToDebt();
+        await taggedRow("2026-04-15", "50", "SAPPHIRE REWARDS", sapphire);
+        await taggedRow("2026-04-16", "50", "SAPPHIRE REWARDS", sapphire);
+        await taggedRow("2026-05-12", "50", "SAPPHIRE REWARDS", sapphire);
+        return { item: rewards };
+      },
+    },
+  ];
+  for (const shape of shapes) {
+    it(`(round 4 guard) April ${shape.name}: ${shape.notArrived ? "not arrived, so May is held back" : "arrived, so May is not held back"}`, async () => {
+      await snapshotOnChase();
+      const { item } = await shape.setup();
+
+      const sig = await signal();
+
+      const notArrived = !!sig.incomeNotArrived?.find((p) => p.planKey === `${item}|2026-04-15`);
+      const may = matchFor(sig, `${item}|2026-05-15`);
+      expect(may).toBeDefined();
+      const heldBack = may!.tier === 3 && may!.offCurve === false;
+      expect(notArrived).toBe(shape.notArrived);
+      expect(heldBack).toBe(notArrived);
+    });
+  }
+});

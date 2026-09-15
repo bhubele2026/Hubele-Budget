@@ -937,9 +937,13 @@ export async function buildForecastLedger(
     // ⭐ (Decision 13) EVIDENCE THAT A PLAN WAS PAID (`isEvidence`): for an outflow, a
     // tier-1 or tier-2 pair (a tier-3 pair is a suggestion; its plan drags); for income,
     // PR6's arrival rule — a non-ambiguous deposit paired with the paycheck arrived,
-    // name or not. It decides overdue evidence and `incomeNotArrived` (below) and, since
-    // PR-B2 round 3, the hold-back here — one definition, so they can never disagree.
-    const isEvidence = (m: PlanRowMatch): boolean => (m.planAmount > 0 ? !m.ambiguous : m.tier <= 2);
+    // name or not — or (PR-B2 round 4) a deposit the user tagged to the item's debt
+    // (tier 1), even when a second tagged deposit makes the pair ambiguous, as a tier-1
+    // outflow pair already is. It decides overdue evidence and `incomeNotArrived`
+    // (below) and, since PR-B2 round 3, the hold-back here — one definition, so they can
+    // never disagree.
+    const isEvidence = (m: PlanRowMatch): boolean =>
+      m.planAmount > 0 ? m.tier === 1 || !m.ambiguous : m.tier <= 2;
     // ⭐ (Owner decision 2026-09-15, PR-B2) "THE FORECAST MAY READ LOW, NEVER HIGH."
     // An earlier occurrence counts as paid for the hold-back exactly when its own pair
     // is evidence it was paid (`isEvidence`):
@@ -973,6 +977,8 @@ export async function buildForecastLedger(
     // cutoff, or a weekly-cadence expense (`keepsPreSnapshotRule`) — and a pair it
     // holds back drops to tier 3, so `offCurve` stays `tier ≤ 2`. A plan already due
     // is paid on its evidence instead (the plans loop), as before.
+    // (PR-B2 round 4) The rows of the pairs it holds back, kept for `usedRows` below.
+    const heldBackTxnIds = new Set<string>();
     matches = matches.map((m) => {
       if (m.tier > 2) return m;
       const plan = planByKey.get(m.planKey);
@@ -984,14 +990,22 @@ export async function buildForecastLedger(
       const earlierUnpaid = (unpaidByItem.get(m.planItemId) ?? []).some(
         (d) => d < m.planDate && d <= rowDate,
       );
-      return earlierUnpaid ? { ...m, tier: 3 as const, evidence: null, offCurve: false } : m;
+      if (!earlierUnpaid) return m;
+      heldBackTxnIds.add(m.txnId);
+      return { ...m, tier: 3 as const, evidence: null, offCurve: false };
     });
     // (Debt tag, review M1) One row pays at most once: a row whose pair takes its
     // plan off the curve (`offCurve`) or counts as overdue evidence is used up.
     // (PR6 review, M2) The older overdue occurrences pair with the rows the pass
     // above left unpaired — for the lists only (listing pairs never leave the curve,
     // so only their evidence uses a row).
+    // ⭐ (PR-B2 round 4, review HIGH) A HELD-BACK ROW IS USED UP TOO. The hold-back keeps
+    // its pair on the curve because the row may be the earlier occurrence's late payment;
+    // leaving it free let the card-payment rule (`plansPaidInFullByName`, below) spend the
+    // same row on ANOTHER card's overdue minimum: one "CAPITAL ONE MOBILE PYMT" −300 was
+    // held for Platinum's April and also paid Quicksilver's $40, reading high by $40.
     const usedRows = new Set(matches.filter((m) => m.offCurve || isEvidence(m)).map((m) => m.txnId));
+    for (const txnId of heldBackTxnIds) usedRows.add(txnId);
     if (listingPlans.length > 0) {
       listingMatches = matchPlansToRows(
         listingPlans,
