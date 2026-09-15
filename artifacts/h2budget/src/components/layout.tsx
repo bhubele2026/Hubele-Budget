@@ -25,7 +25,7 @@ import {
 } from "@workspace/api-client-react";
 import { prefetchRoute } from "@/lib/routePrefetch";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -45,70 +45,180 @@ import { TabRibbon, type RibbonTab } from "@/components/tab-ribbon";
  */
 type NavItem = { name: string; href: string };
 
-// One primary row — Home (the landing) plus the four areas. Everything
-// else is one click away in the More overflow, so nothing is lost.
-const PRIMARY_NAV: NavItem[] = [
-  { name: "Home", href: "/home" },
-  { name: "Banking", href: "/banking" },
-  { name: "Bills", href: "/bills" },
-  // Forecast primary link lands on the section's Overview tab (Bills precedent).
-  { name: "Forecast", href: "/forecast/overview" },
-  // Route + testids stay /avalanche; only the display label is "Future Goal".
-  { name: "Future Goal", href: "/avalanche" },
+/**
+ * A route an area owns: the path itself AND its own child routes (`/bills`
+ * owns `/bills/all`, never `/billsx`). `exact` stops at the path itself.
+ */
+type OwnedRoute = { path: string; exact?: boolean };
+
+/**
+ * ⭐ ONE CONFIG, BOTH SURFACES. A destination is its primary link, the ribbon
+ * that shows while you are inside it, and the routes that count as inside it.
+ * The desktop ribbon AND the phone drawer are both drawn from `DESTINATIONS`,
+ * so a page added to an area's ribbon lands in the drawer in the same edit —
+ * the two cannot drift.
+ *
+ * ⚠️ WHY THIS MATTERS: the ribbon is desktop-only (`hidden md:flex`). When the
+ * drawer carried only the primary row and More, every page that lived only in
+ * a ribbon (Budget, Bills, Debts, …) had no way in on a phone.
+ */
+type Destination = NavItem & {
+  /** The ribbon across the top while you are inside this area, left to right. */
+  tabs: NavItem[];
+  /** The routes that ARE this area: visiting one shows this area's ribbon. */
+  owns: OwnedRoute[];
+};
+
+// ⭐ R0 — FIVE DESTINATIONS (owner-approved redesign). The primary row is no
+// longer "Home (the landing) plus the four areas" — the landing (/home) is
+// reached only via the wordmark now. These five ARE the app: Home (still the
+// Banking page, redesigned later in R3), Forecast, Spending, Review, Debt.
+// Settings is secondary — demoted to the end of More, same as every unmapped
+// page. Order here is the primary row's order and the drawer's order.
+const DESTINATIONS: Destination[] = [
+  {
+    // "Home" is a LABEL change only — the route is still /banking (Home gets
+    // its own redesign in R3; R0 is nav-only).
+    name: "Home",
+    href: "/banking",
+    // The existing Banking tabs, UNCHANGED by this redesign. No "More" inside
+    // an area: while you're in Home you stay in Home; the way out is the
+    // wordmark → the /home landing.
+    tabs: [
+      { name: "Overview", href: "/banking" },
+      { name: "Chase", href: "/transactions" },
+      { name: "Amex", href: "/amex" },
+      { name: "Budget", href: "/budget" },
+      { name: "Allowance", href: "/allowances" },
+    ],
+    // ⚠️ Only /banking itself is the Home AREA. Chase, Amex, Budget and
+    // Allowance are one click away from Home's ribbon, but visiting those
+    // routes directly shows the ribbon of the area that owns them (Review,
+    // Spending).
+    owns: [{ path: "/banking" }],
+  },
+  {
+    // The primary link lands on the section's Overview tab (Bills precedent).
+    name: "Forecast",
+    href: "/forecast/overview",
+    // Overview, the cash-flow curve itself, and Bills — bills and income live
+    // inside Forecast now (owner's ask). One "Bills" tab covers both /bills
+    // (Overview) and /bills/all (the full list): the longest-match below
+    // lights it for both, so there is no separate entry for /bills/all.
+    tabs: [
+      { name: "Overview", href: "/forecast/overview" },
+      { name: "Forecast", href: "/forecast" },
+      { name: "Bills", href: "/bills" },
+    ],
+    owns: [{ path: "/forecast" }, { path: "/bills" }],
+  },
+  {
+    // Spending borrows the Reports → Spending page until R2 builds its own.
+    name: "Spending",
+    href: "/reports/spending",
+    tabs: [
+      { name: "Spending", href: "/reports/spending" },
+      { name: "Budget", href: "/budget" },
+      { name: "Allowances", href: "/allowances" },
+      { name: "Reports", href: "/reports" },
+    ],
+    // The Reports hub is an EXACT match only — its own subpages
+    // (/reports/debt, /reports/spending, /reports/cashflow, …) are each owned
+    // individually (by Debt, by Spending, or left unmapped).
+    owns: [
+      { path: "/reports/spending" },
+      { path: "/budget" },
+      { path: "/allowances" },
+      { path: "/reports", exact: true },
+    ],
+  },
+  {
+    // The review queue plus the two account ledgers where review work
+    // actually happens.
+    name: "Review",
+    href: "/review",
+    tabs: [
+      { name: "Review", href: "/review" },
+      { name: "Chase", href: "/transactions" },
+      { name: "Amex", href: "/amex" },
+    ],
+    owns: [{ path: "/review" }, { path: "/transactions" }, { path: "/amex" }],
+  },
+  {
+    // Route + testids stay /avalanche; the label is "Debt". The payoff plan,
+    // the debts list, and the debt report.
+    name: "Debt",
+    href: "/avalanche",
+    tabs: [
+      { name: "Debt", href: "/avalanche" },
+      { name: "Debts", href: "/debts" },
+      { name: "Debt report", href: "/reports/debt" },
+    ],
+    owns: [{ path: "/avalanche" }, { path: "/debts" }, { path: "/reports/debt" }],
+  },
 ];
 
-// Secondary destinations, demoted into the More dropdown. Every route stays
-// reachable — just one extra click. (Chase/Amex/Allowance live inside Banking;
-// Budget inside Forecast; these entries are the direct shortcuts.)
+const PRIMARY_NAV: NavItem[] = DESTINATIONS.map(({ name, href }) => ({ name, href }));
+
+// Secondary destinations, demoted into the More dropdown — the only pages
+// left with no area to call home.
 const MORE_NAV: NavItem[] = [
-  { name: "Chase", href: "/transactions" },
-  { name: "Amex", href: "/amex" },
-  { name: "Allowance", href: "/allowances" },
-  { name: "Budget", href: "/budget" },
-  { name: "Reports", href: "/reports" },
-  { name: "Debts", href: "/debts" },
-  // Review now lives in the Forecast ribbon (FORECAST_SUBNAV), not here.
+  { name: "Mapping rules", href: "/mapping-rules" },
   { name: "Settings", href: "/settings" },
 ];
 
-// Inside the Banking area, the top ribbon becomes Banking's own sub-nav — and
-// ONLY that. No "More" here: while you're in Banking you stay in Banking; the
-// way out is the wordmark → the /home landing. First tab is Overview, back to
-// the Banking dashboard itself.
-const BANKING_SUBNAV: NavItem[] = [
-  { name: "Overview", href: "/banking" },
-  { name: "Chase", href: "/transactions" },
-  { name: "Amex", href: "/amex" },
-  { name: "Budget", href: "/budget" },
-  { name: "Allowance", href: "/allowances" },
-];
-const BANKING_ROUTES = ["/banking", "/transactions", "/amex", "/budget", "/allowances"];
-
-// Inside the Bills area, the top ribbon becomes just two tabs — Overview and
-// Bills — and ONLY those (owner's explicit ask). Same pattern as Banking: no
-// "More" here; the way out is the wordmark → /home. Overview (/bills) is the
-// default landing; Bills (/bills/all) is the recurring/income line editor.
-const BILLS_SUBNAV: NavItem[] = [
-  { name: "Overview", href: "/bills" },
-  { name: "Bills", href: "/bills/all" },
-];
-
-// The Avalanche area is a single page — its ribbon is just the one Avalanche
-// tab (owner's ask: "one tab, no other"). Same pattern as Banking/Bills: no
-// "More", the way out is the wordmark → /home.
-const AVALANCHE_SUBNAV: NavItem[] = [{ name: "Future Goal", href: "/avalanche" }];
-
-// The Forecast area ribbon — Overview (the section landing) · Review · Forecast
-// (the cash-flow curve). Review is pulled OUT of "More" and lives here as a
-// forecast tab. Same pattern as Banking/Bills/Avalanche: no "More", escape via
-// the wordmark → /home.
-const FORECAST_SUBNAV: NavItem[] = [
-  { name: "Overview", href: "/forecast/overview" },
-  { name: "Review", href: "/review" },
-  { name: "Forecast", href: "/forecast" },
-];
-
 const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
+
+/**
+ * Whole path segments only: `/bills` covers `/bills` and its own child routes
+ * (`/bills/all`), never a path that merely starts with the same letters
+ * (`/billsx`).
+ */
+function isAtOrUnder(location: string, path: string): boolean {
+  return location === path || location.startsWith(path + "/");
+}
+
+/**
+ * Boundary-aware, longest-match active href — so /bills and /bills/all never
+ * light two rows, and /forecast/overview never also lights /forecast (a raw
+ * startsWith would do both).
+ */
+function longestMatch(location: string, hrefs: readonly string[]): string | null {
+  return (
+    hrefs
+      .filter((h) => isAtOrUnder(location, h))
+      .sort((a, b) => b.length - a.length)[0] ?? null
+  );
+}
+
+/**
+ * The destination whose area `location` is inside, or null (Settings, Mapping
+ * rules, the unmapped reports, the landing).
+ */
+function destinationFor(location: string): Destination | null {
+  return (
+    DESTINATIONS.find((d) =>
+      d.owns.some((r) => (r.exact ? location === r.path : isAtOrUnder(location, r.path))),
+    ) ?? null
+  );
+}
+
+/**
+ * The pages the phone drawer lists beneath a destination: its ribbon tabs,
+ * minus the tab that IS the destination (the destination's own row already
+ * goes there) and minus shortcuts into another area. Home's ribbon carries
+ * Chase, Amex, Budget and Allowance; they are listed once, under Review and
+ * Spending, the areas that own them — so the same page never lights twice. A
+ * tab whose route no area owns stays with the ribbon that carries it, so
+ * nothing on a ribbon can fall out of the drawer.
+ */
+function drawerPages(d: Destination): NavItem[] {
+  return d.tabs.filter((t) => {
+    if (t.href === d.href) return false;
+    const owner = destinationFor(t.href);
+    return owner === null || owner === d;
+  });
+}
 
 /**
  * ⭐ THE WORDMARK IS THE WAY HOME — the dashboard/Housing shell rule. There is
@@ -130,6 +240,61 @@ function HomeMark({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+function DrawerLink({
+  item,
+  nested = false,
+  active,
+  inArea = false,
+  badge,
+  onNavigate,
+  onPrefetch,
+}: {
+  item: NavItem;
+  /** A page beneath a destination, not a destination row. */
+  nested?: boolean;
+  active: boolean;
+  /** The destination you are inside while one of its pages is the lit row. */
+  inArea?: boolean;
+  badge: number | null;
+  onNavigate: () => void;
+  onPrefetch: (href: string) => void;
+}) {
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      onMouseEnter={() => onPrefetch(item.href)}
+      onFocus={() => onPrefetch(item.href)}
+      aria-current={active ? "page" : undefined}
+      data-testid={`mobilenav-${item.href.slice(1)}`}
+      className={cn(
+        "press relative flex items-center gap-3 rounded-control",
+        nested ? "py-1.5 pl-7 pr-3 text-label" : "px-3 py-2 text-body",
+        active
+          ? "bg-white/10 font-semibold text-white"
+          : inArea
+            ? "font-semibold text-white hover:bg-white/5"
+            : "text-white/60 hover:bg-white/5 hover:text-white",
+      )}
+    >
+      {/* The vertical analogue of the ribbon's underline — same accent, same
+          meaning: this is where you are. */}
+      {active && (
+        <span
+          aria-hidden
+          className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-brand-orange"
+        />
+      )}
+      <span className="flex-1">{item.name}</span>
+      {badge !== null && (
+        <span className="rounded-full bg-brand-orange/20 px-1.5 py-0.5 font-mono text-micro leading-none tabular-nums text-brand-orange">
+          {badge}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 function MobileNav({
   location,
   onNavigate,
@@ -141,61 +306,78 @@ function MobileNav({
   railBadge: (href: string) => number | null;
   onPrefetch: (href: string) => void;
 }) {
-  // Groups say what they are: the four areas, then everything else.
-  const groups: { label: string; items: NavItem[] }[] = [
-    { label: "Areas", items: PRIMARY_NAV },
-    { label: "More", items: MORE_NAV },
-  ];
+  const area = destinationFor(location);
+  // ⚠️ THE DRAWER LIGHTS WHAT THE RIBBON LIGHTS. Only rows inside the area you
+  // are in can be lit (More's rows, when you are in no area), and of those only
+  // the longest whole-segment match. So /bills/all lights Bills, /billsx lights
+  // nothing, and /reports/cashflow (no area on desktop either) does not light
+  // Spending's Reports hub.
+  const activeHref = longestMatch(
+    location,
+    area
+      ? [area.href, ...drawerPages(area).map((p) => p.href)]
+      : MORE_NAV.map((m) => m.href),
+  );
+  const row = { onNavigate, onPrefetch };
+  const groupLabel =
+    "px-2 pb-1.5 text-micro font-semibold uppercase tracking-wide text-white/40";
   return (
     <div className="flex h-full flex-col bg-brand-navy text-white">
       <div className="flex h-14 items-center border-b border-white/10 px-3">
         <HomeMark onNavigate={onNavigate} />
       </div>
-      <nav className="flex-1 space-y-5 overflow-y-auto p-3">
-        {groups.map((g) => (
-          <div key={g.label}>
-            <div className="px-2 pb-1.5 text-micro font-semibold uppercase tracking-wide text-white/40">
-              {g.label}
-            </div>
-            <div className="space-y-0.5">
-              {g.items.map((item) => {
-                const active = location.startsWith(item.href);
-                const badge = railBadge(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onNavigate}
-                    onMouseEnter={() => onPrefetch(item.href)}
-                    onFocus={() => onPrefetch(item.href)}
-                    data-testid={`mobilenav-${item.href.slice(1)}`}
-                    className={cn(
-                      "press relative flex items-center gap-3 rounded-control px-3 py-2 text-body",
-                      active
-                        ? "bg-white/10 font-semibold text-white"
-                        : "text-white/60 hover:bg-white/5 hover:text-white",
-                    )}
-                  >
-                    {/* The vertical analogue of the ribbon's underline — same
-                        accent, same meaning: this is where you are. */}
-                    {active && (
-                      <span
-                        aria-hidden
-                        className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-brand-orange"
-                      />
-                    )}
-                    <span className="flex-1">{item.name}</span>
-                    {badge !== null && (
-                      <span className="rounded-full bg-brand-orange/20 px-1.5 py-0.5 font-mono text-micro leading-none tabular-nums text-brand-orange">
-                        {badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      <nav aria-label="Sections" className="flex-1 space-y-5 overflow-y-auto p-3">
+        {/* The five destinations, each with its ribbon pages beneath it —
+            every page a desktop ribbon reaches is reachable here too. */}
+        <div>
+          <div className={groupLabel}>Areas</div>
+          <ul className="space-y-1">
+            {DESTINATIONS.map((d) => {
+              const pages = drawerPages(d);
+              return (
+                <li key={d.href} data-testid={`mobilenav-area-${d.name.toLowerCase()}`}>
+                  <DrawerLink
+                    item={d}
+                    active={activeHref === d.href}
+                    inArea={area === d}
+                    badge={railBadge(d.href)}
+                    {...row}
+                  />
+                  {pages.length > 0 && (
+                    <ul className="mt-0.5 space-y-0.5">
+                      {pages.map((p) => (
+                        <li key={p.href}>
+                          <DrawerLink
+                            item={p}
+                            nested
+                            active={activeHref === p.href}
+                            badge={railBadge(p.href)}
+                            {...row}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+        <div>
+          <div className={groupLabel}>More</div>
+          <ul className="space-y-0.5">
+            {MORE_NAV.map((m) => (
+              <li key={m.href}>
+                <DrawerLink
+                  item={m}
+                  active={activeHref === m.href}
+                  badge={railBadge(m.href)}
+                  {...row}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
       </nav>
       <div className="flex items-center justify-between border-t border-white/10 p-4">
         <span className="text-label font-medium text-white/70">Account</span>
@@ -207,37 +389,19 @@ function MobileNav({
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  // Inside the Banking area, show Banking's sub-nav in the top ribbon.
-  const inBanking = BANKING_ROUTES.some(
-    (r) => location === r || location.startsWith(r + "/"),
+  // Which of the five areas this route is inside — its ribbon shows across the
+  // top. Outside every area (Settings, Mapping rules, the unmapped reports) the
+  // ribbon is the five destinations themselves.
+  const area = destinationFor(location);
+  const areaNav = area ? area.tabs : PRIMARY_NAV;
+  const activeNavHref = longestMatch(
+    location,
+    areaNav.map((a) => a.href),
   );
-  // Bills area = /bills (Overview) or /bills/... (the Bills list). Its ribbon is
-  // just the two tabs.
-  const inBills = location === "/bills" || location.startsWith("/bills/");
-  const inAvalanche =
-    location === "/avalanche" || location.startsWith("/avalanche/");
-  // Forecast area = the cash-flow curve + its moved-in Review tab.
-  const inForecast =
-    location === "/forecast" ||
-    location.startsWith("/forecast/") ||
-    location === "/review" ||
-    location.startsWith("/review/");
-  const areaNav = inBanking
-    ? BANKING_SUBNAV
-    : inBills
-      ? BILLS_SUBNAV
-      : inAvalanche
-        ? AVALANCHE_SUBNAV
-        : inForecast
-          ? FORECAST_SUBNAV
-          : PRIMARY_NAV;
-  // Boundary-aware, longest-match active href — so /bills (Overview) and
-  // /bills/all (Bills) never both light up (raw startsWith would).
-  const activeNavHref =
-    areaNav
-      .map((a) => a.href)
-      .filter((h) => location === h || location.startsWith(h + "/"))
-      .sort((a, b) => b.length - a.length)[0] ?? null;
+  // The active tab's own label makes the best mobile page title — it covers
+  // every mapped route, area sub-pages included, not just the five primary
+  // destinations and More.
+  const activeTabLabel = areaNav.find((a) => a.href === activeNavHref)?.name;
   // More lists everything NOT already in the current ribbon — no duplicates,
   // and it carries the other areas so you can jump between them from here too.
   const ribbonHrefs = new Set(areaNav.map((a) => a.href));
@@ -274,7 +438,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         queryKey: getGetBillsSummaryQueryKey(),
         queryFn: () => getBillsSummary(),
       });
-    } else if (href === "/forecast/overview" || href === "/forecast") {
+    } else if (
+      href === "/forecast/overview" ||
+      href === "/forecast" ||
+      // Review renders the same ForecastPage in a different mode, reading
+      // the identical bundle — so it warms the same way.
+      href === "/review"
+    ) {
       qc.prefetchQuery({
         queryKey: getGetForecastQueryKey({ days: 90 }),
         queryFn: () => getForecast({ days: 90 }),
@@ -318,12 +488,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // (#perf) After first paint, warm the primary destinations' chunks on idle so
+  // (#perf) After first paint, warm the five destinations' chunks on idle so
   // the very first click into each area is instant even without a prior hover.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const warm = () => {
-      for (const href of ["/banking", "/bills", "/forecast/overview", "/avalanche"]) {
+      for (const { href } of DESTINATIONS) {
         prefetchRoute(href);
       }
     };
@@ -352,24 +522,30 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   // Is any secondary (More) destination the current page, and do any of them
   // carry a pending badge — so the collapsed More trigger can signal both.
-  const moreActive = moreNav.some((n) => location.startsWith(n.href));
+  const moreActive = moreNav.some((n) => isAtOrUnder(location, n.href));
   const moreBadgeTotal = moreNav.reduce(
     (sum, n) => sum + (railBadge(n.href) ?? 0),
     0,
   );
 
   const currentTitle =
-    ALL_NAV.find((n) => location.startsWith(n.href))?.name ?? "H2 Budget";
+    activeTabLabel ??
+    ALL_NAV.find((n) => isAtOrUnder(location, n.href))?.name ??
+    "H2 Budget";
 
   // More is hidden inside an area: there the ribbon is that section's tabs
   // only, and you leave via the wordmark → Home.
-  const showMore = !inBanking && !inBills && !inAvalanche && !inForecast;
+  const showMore = area === null;
 
-  // ⚠️ THE COUNT SHOWS ONCE. When the live ribbon already carries the Review
-  // tab (the Forecast area), a second copy on the right would be the same
-  // finding claimed twice — and two badges reading "3" look like six things.
-  const showReviewPill =
-    reviewCount != null && reviewCount > 0 && !ribbonHrefs.has("/review");
+  // ⚠️ THE COUNT SHOWS ONCE — AT EACH SCREEN SIZE. When the ribbon carries the
+  // Review tab (the Review area, or the five-destination primary row), that
+  // tab's badge IS the count on a desktop, and a second copy on the right would
+  // be the same finding claimed twice — two badges reading "3" look like six
+  // things. But the ribbon is desktop-only (`hidden md:flex`): on a phone this
+  // pill is the only count in the header, so it stays there (`md:hidden`)
+  // rather than disappearing with the ribbon it was deferring to.
+  const hasReviewCount = reviewCount != null && reviewCount > 0;
+  const reviewPillPhoneOnly = ribbonHrefs.has("/review");
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -396,7 +572,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="flex w-72 flex-col border-0 p-0">
+                <SheetContent
+                  side="left"
+                  className="flex w-72 flex-col border-0 p-0"
+                  aria-describedby={undefined}
+                >
+                  {/* The dialog's accessible name; the drawer's own chrome is
+                      the wordmark, so the title is for screen readers only. */}
+                  <SheetTitle className="sr-only">Navigation</SheetTitle>
                   <MobileNav
                     location={location}
                     onNavigate={() => setMobileOpen(false)}
@@ -478,17 +661,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="ml-auto flex flex-none items-center gap-1.5">
               {/* Mobile shows the current page name between the mark and the
                   account button. */}
-              <span className="mr-1 max-w-[34vw] truncate text-label font-semibold md:hidden">
+              <span
+                data-testid="mobile-page-title"
+                className="mr-1 max-w-[34vw] truncate text-label font-semibold md:hidden"
+              >
                 {currentTitle}
               </span>
-              {showReviewPill && (
+              {hasReviewCount && (
                 <Link
                   href="/review"
                   onMouseEnter={() => prefetch("/review")}
                   onFocus={() => prefetch("/review")}
                   aria-label={`${reviewCount} items to review`}
                   data-testid="topnav-review-badge"
-                  className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-white/70 hover:bg-white/10 hover:text-white"
+                  className={cn(
+                    "press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-white/70 hover:bg-white/10 hover:text-white",
+                    reviewPillPhoneOnly && "md:hidden",
+                  )}
                 >
                   <span className="hidden sm:inline">Review</span>
                   <span className="rounded-full bg-brand-orange/20 px-1.5 py-0.5 font-mono leading-none tabular-nums text-brand-orange">

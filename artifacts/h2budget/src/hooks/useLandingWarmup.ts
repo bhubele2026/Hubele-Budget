@@ -7,14 +7,8 @@ import {
   getGetForecastQueryKey,
   getForecastCashSignal,
   getGetForecastCashSignalQueryKey,
-  getBillsSummary,
-  getGetBillsSummaryQueryKey,
   listDebts,
   getListDebtsQueryKey,
-  getBudgetMonth,
-  getGetBudgetMonthQueryKey,
-  listCategories,
-  getListCategoriesQueryKey,
 } from "@workspace/api-client-react";
 import { prefetchRoute } from "@/lib/routePrefetch";
 
@@ -39,6 +33,11 @@ import { prefetchRoute } from "@/lib/routePrefetch";
 
 type WarmStage = { href: string; warm: (qc: ReturnType<typeof useQueryClient>) => void };
 
+// ⭐ R0 — one stage per landing tile that isn't Settings, in tile order. Bills
+// and Budget lost their dedicated warm-up here because they are no longer
+// landing tiles (they moved a click deeper, into the Forecast and Spending
+// ribbons) — their JS chunks still warm on nav hover once the owner is inside
+// that area.
 const STAGES: WarmStage[] = [
   {
     href: "/banking",
@@ -46,18 +45,6 @@ const STAGES: WarmStage[] = [
       void qc.prefetchQuery({
         queryKey: getGetDashboardQueryKey(),
         queryFn: () => getDashboard(),
-      });
-    },
-  },
-  {
-    href: "/bills",
-    warm: (qc) => {
-      // No `month` param — the param-less key is the one the Bills page and the
-      // nav hover-prefetch share. An explicit current-month param forks a
-      // duplicate cache entry for identical data.
-      void qc.prefetchQuery({
-        queryKey: getGetBillsSummaryQueryKey(),
-        queryFn: () => getBillsSummary(),
       });
     },
   },
@@ -75,26 +62,34 @@ const STAGES: WarmStage[] = [
     },
   },
   {
+    href: "/reports/spending",
+    // No data warm: the Spending page's primary query takes a caller-chosen
+    // date range with no single default key safe to assume here — see the
+    // module doc above (a mismatched key is worse than no warm-up). The
+    // route's JS chunk still warms via `prefetchRoute` below.
+    warm: () => {},
+  },
+  {
+    href: "/review",
+    // Review renders the same ForecastPage in a different mode, reading the
+    // identical bundle Forecast just warmed — so it warms the same way.
+    warm: (qc) => {
+      void qc.prefetchQuery({
+        queryKey: getGetForecastQueryKey({ days: 90 }),
+        queryFn: () => getForecast({ days: 90 }),
+      });
+      void qc.prefetchQuery({
+        queryKey: getGetForecastCashSignalQueryKey({ horizonDays: 90 }),
+        queryFn: () => getForecastCashSignal({ horizonDays: 90 }),
+      });
+    },
+  },
+  {
     href: "/avalanche",
     warm: (qc) => {
       void qc.prefetchQuery({
         queryKey: getListDebtsQueryKey(),
         queryFn: () => listDebts(),
-      });
-    },
-  },
-  {
-    href: "/budget",
-    warm: (qc) => {
-      const now = new Date();
-      const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      void qc.prefetchQuery({
-        queryKey: getGetBudgetMonthQueryKey(month),
-        queryFn: () => getBudgetMonth(month),
-      });
-      void qc.prefetchQuery({
-        queryKey: getListCategoriesQueryKey(),
-        queryFn: () => listCategories(),
       });
     },
   },
