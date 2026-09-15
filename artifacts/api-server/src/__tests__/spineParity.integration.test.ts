@@ -71,6 +71,11 @@ import bankBalanceExplainRouter from "../routes/bankBalanceExplain";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 import { householdTodayDate } from "../lib/householdClock";
+// (PR-H round 2) The classifier's view of the spine's spend windows — test-only
+// until PR8r/PR10 switch a figure onto it.
+import { findSupersededPendingForRange } from "../lib/supersededPending";
+import { classifyMovement } from "../lib/spendingFilter";
+import { classifierSpendForRange } from "./_helpers/classifierSpend";
 
 const app = express();
 app.use(express.json());
@@ -550,6 +555,37 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     // Not vacuous, and internally coherent: a week cannot outspend its month.
     expect(spine.spentMonth).toBeGreaterThan(0);
     expect(spine.spentMonth).toBeGreaterThanOrEqual(spine.spentWeek);
+  });
+
+  it("(PR-H) spentMonth + spentWeek equal the household money classifier (mode 'today') over the spine's own windows", async () => {
+    const spine = await get<Spine>("/spine");
+    const { weekStartFor, weekEndFor } = await import("../lib/cashSignal");
+    const weekStart = weekStartFor(TODAY);
+    const weekEnd = weekEndFor(TODAY);
+
+    // The spine reads the pending pairs once, for the span covering both
+    // windows, and hands them to both — so does this.
+    const supersede = await findSupersededPendingForRange(
+      TEST_HOUSEHOLD_ID,
+      MONTH_START_ISO < weekStart ? MONTH_START_ISO : weekStart,
+      TODAY_ISO > weekEnd ? TODAY_ISO : weekEnd,
+    );
+    const month = await classifierSpendForRange(TEST_HOUSEHOLD_ID, MONTH_START_ISO, TODAY_ISO, { mode: "today", supersede });
+    const week = await classifierSpendForRange(TEST_HOUSEHOLD_ID, weekStart, weekEnd, { mode: "today", supersede });
+    expect(month.spend.total).toBe(spine.spentMonth);
+    expect(week.spend.total).toBe(spine.spentWeek);
+
+    // And with each window's pairs read on their own.
+    expect((await classifierSpendForRange(TEST_HOUSEHOLD_ID, MONTH_START_ISO, TODAY_ISO)).spend.total).toBe(spine.spentMonth);
+    expect((await classifierSpendForRange(TEST_HOUSEHOLD_ID, weekStart, weekEnd)).spend.total).toBe(spine.spentWeek);
+
+    // Not vacuous: the loader resolved the fixture's checking account, and the
+    // counted rows move through both checking and a card.
+    expect(month.money.checkingAccountExternalId).not.toBeNull();
+    expect(month.spend.total).toBeGreaterThan(0);
+    const timings = new Set(month.rows.map((r) => classifyMovement(r, month.money).timing.kind));
+    expect(timings.has("checking")).toBe(true);
+    expect(timings.has("card")).toBe(true);
   });
 
   it("nextBill + billsDueCount match /bills/summary", async () => {

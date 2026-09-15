@@ -20,6 +20,7 @@
 import type { AllowanceAggregateRow } from "./budgetAllowance";
 import { effectiveFiling, type Filing, type FilingContext } from "./pendingFiling";
 import type { SupersededPending } from "./supersededPending";
+import { classifyMovement, type MovementContext, type MovementRow } from "./spendingFilter";
 
 /** One ledger row, as the Budget month reads it. */
 export interface BudgetMonthRow extends Filing {
@@ -133,4 +134,98 @@ export function aggregateBudgetMonth(
   replacedPendingIds.sort();
   inheritedCategories.sort((a, b) => a.transactionId.localeCompare(b.transactionId));
   return { byCategory, allowanceRows, replacedPendingIds, inheritedCategories };
+}
+
+// ── PR-H: the classifier's view of the allowance bucket (parity only) ──────
+
+/**
+ * `BudgetMonthRow` plus the identity fields `classifyMovement` needs
+ * (`occurredOn`, `plaidAccountId`, `pfcDetailed`) that this file's own query
+ * (`routes/budget.ts`) does not select today — its flag-only bucket rule
+ * never needed them.
+ */
+export interface ClassifierBudgetMonthRow
+  extends BudgetMonthRow,
+    Pick<MovementRow, "occurredOn" | "plaidAccountId" | "pfcDetailed"> {}
+
+/**
+ * ⭐ (PR-H, owner decisions 6, 14, and 7/12) The allowance card's bucket rows,
+ * computed from `classifyMovement` instead of this file's own bucket rule
+ * (`unplanned > monthly > weekly` after four screens: transfer, external card
+ * payment, reimbursable, debt tag).
+ *
+ * ⚠️ NOT CALLED BY `aggregateBudgetMonth` YET — see `spendingFacts.ts`'s
+ * `classifierHouseholdSpend` for why (no query, no second pass, for a number
+ * nothing displays), and docs/reviews/2026-09-14-household-money-core.md for
+ * the wiring plan.
+ *
+ * mode "today" (the default) keeps today's handling of the two things
+ * `classifyMovement` places differently: a confirmed match buckets by its own
+ * flag, and a reimbursable row buckets nowhere.
+ *
+ * ⚠️ EVEN SO IT IS NOT ROW FOR ROW `aggregateBudgetMonth` (review H1). Today's
+ * rule screens only the four things above; the classifier also drops every
+ * flagged row the one spending rule (`classifyOutflow`) excludes — a refund
+ * or other non-outflow, a debt-linked / excluded / income category, a Plaid
+ * card payment, a card-payment or bank-noise description. Those classes are
+ * enumerated, and pinned exactly, by `budgetActuals.test.ts`'s randomized
+ * comparison; the review note lists each for the owner.
+ *
+ * mode "forward" is coverage alone (PR8r/PR10): on top of the classes above, a
+ * confirmed match buckets NOWHERE — the bill is already counted in the plan
+ * (decision 12) — and a reimbursable row buckets under its flag, which the
+ * owner's 2026-09-15 rule ("a reimbursable charge shows as its own row") says
+ * it should not; PR8r settles that before switching.
+ */
+export function classifierAllowanceRows(
+  rows: readonly ClassifierBudgetMonthRow[],
+  supersede: Pick<SupersededPending, "replacedIds" | "replacedBy">,
+  ctx: FilingContext,
+  movement: MovementContext,
+  opts: { mode?: "today" | "forward" } = {},
+): AllowanceAggregateRow[] {
+  const mode = opts.mode ?? "today";
+  const out: AllowanceAggregateRow[] = [];
+
+  for (const row of rows) {
+    if (supersede.replacedIds.has(row.id)) continue;
+    const t = effectiveFiling(row, supersede.replacedBy.get(row.id), ctx);
+    const movementRow: MovementRow = {
+      ...t,
+      occurredOn: row.occurredOn,
+      plaidAccountId: row.plaidAccountId,
+      pfcDetailed: row.pfcDetailed,
+    };
+    const { coverage } = classifyMovement(movementRow, movement);
+
+    let bucket: "unplanned" | "monthly" | "weekly" | null = null;
+    if (coverage === "unplanned") bucket = "unplanned";
+    else if (coverage === "allowance_monthly") bucket = "monthly";
+    else if (coverage === "allowance_weekly") bucket = "weekly";
+    else if (coverage === "bill_matched" && mode === "today") {
+      // Reproduce today's rule verbatim: a matched row is not special-cased,
+      // so it still buckets by whichever flag it carries.
+      bucket = t.unplannedAllowance
+        ? "unplanned"
+        : t.monthlyAllowance
+          ? "monthly"
+          : t.weeklyAllowance
+            ? "weekly"
+            : null;
+    }
+    if (!bucket) continue;
+    // Today's rule screens reimbursable before any flag or match.
+    if (mode === "today" && t.reimbursable) continue;
+
+    const cents = centsOf(row.amount);
+    const spend = spendCents(row.source, cents);
+    out.push({
+      bucket,
+      subBucket: t.weeklyBucket,
+      pending: row.pending,
+      spend: (spend / 100).toFixed(2),
+      cnt: "1",
+    });
+  }
+  return out;
 }
