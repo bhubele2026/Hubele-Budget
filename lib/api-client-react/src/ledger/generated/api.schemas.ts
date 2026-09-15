@@ -2368,6 +2368,16 @@ export type SettingsPreferencesWeeklyAllowanceOverrides = {
 };
 
 /**
+ * (PR8r, owner decision 7) The recurring items linked as the everyday Amex payoff DATE hooks: the weekly hook pays the weekly cards on each Saturday, the monthly hook pays the monthly card on the 1st. Once linked, the bill's own amount is ignored: the payoff is the owed charges plus what is left of the Allowances plan. An id the request sets or changes must be one of this household's active recurring items (PUT /settings answers 400 otherwise); an id already stored is not re-checked; null unlinks. The forecast reads an id that is no longer an active item as unlinked.
+ */
+export type SettingsPreferencesEverydayHooks = {
+  /** @nullable */
+  weeklyItemId?: string | null;
+  /** @nullable */
+  monthlyItemId?: string | null;
+};
+
+/**
  * Per-card Amex tier override, keyed by the external Plaid account_id -> "blue" | "silver" | "gold". User-assigned so the Kill Stack / per-card UI label each physical card correctly even when Plaid's card name doesn't contain the tier word. Display metadata only — does not change any financial math.
  */
 export type SettingsPreferencesAmexCardBrands = {
@@ -2398,6 +2408,8 @@ export interface SettingsPreferences {
   daysSinceTrackers?: DaysSinceTracker[];
   /** Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit. */
   weeklyAllowanceOverrides?: SettingsPreferencesWeeklyAllowanceOverrides;
+  /** (PR8r, owner decision 7) The recurring items linked as the everyday Amex payoff DATE hooks: the weekly hook pays the weekly cards on each Saturday, the monthly hook pays the monthly card on the 1st. Once linked, the bill's own amount is ignored: the payoff is the owed charges plus what is left of the Allowances plan. An id the request sets or changes must be one of this household's active recurring items (PUT /settings answers 400 otherwise); an id already stored is not re-checked; null unlinks. The forecast reads an id that is no longer an active item as unlinked. */
+  everydayHooks?: SettingsPreferencesEverydayHooks;
   /** Per-card Amex tier override, keyed by the external Plaid account_id -> "blue" | "silver" | "gold". User-assigned so the Kill Stack / per-card UI label each physical card correctly even when Plaid's card name doesn't contain the tier word. Display metadata only — does not change any financial math. */
   amexCardBrands?: SettingsPreferencesAmexCardBrands;
   /** Per-card billing cadence, keyed by external Plaid account_id -> "weekly" | "monthly" (default weekly). A monthly card's charges accumulate over the calendar month and are paid at month-end; weekly cards reset each Sun–Sat week. Grouping metadata only — amounts are still the same server-computed real-charge sums, just over a different window. */
@@ -2627,6 +2639,19 @@ export const CashSignalStatus = {
 export type CashSignalDailyItem = {
   date: string;
   balance: string;
+  /** (PR8r, /forecast/cash-signal only) Every plan on its own due
+date: a bill overdue before today is listed (in `events`, with
+its assumption), not dragged; a bill due today stays on today;
+income due today that has not arrived (`incomeExpectedToday`)
+counts today. The everyday payoffs are the same as `expected`.
+ */
+  scheduled?: string;
+  /** (PR8r, /forecast/cash-signal only) Always equal to `balance`. */
+  expected?: string;
+  /** (PR8r, /forecast/cash-signal only) `expected` with every planned
+income one business day later. The everyday payoffs are the same.
+ */
+  conservative?: string;
 };
 
 export type CashSignalEventsItem = {
@@ -2660,6 +2685,10 @@ today, a tier-1/2 pair paid part of it (`offCurve` stays
 false for an underpayment), and only the unpaid remainder
 lands — on the plan's OWN date, never dragged to a business
 day like the overdue sibling above.
+`amex_payoff_not_posted` (PR8r): an everyday payoff (the hook
+item's event; `occurrenceDate` is the period's payoff date)
+whose period closed with no Amex payment settling it — the
+owed charges only, on the next business day.
 
    * @nullable
    */
@@ -2776,6 +2805,141 @@ export interface CashSignalAssumedPaidPlan {
   unpaidRemainder: string;
 }
 
+/**
+ * `linked`: `preferences.everydayHooks` names an active item of this
+household — its payoffs replace the bill on the curve. `unlinked`:
+nothing is named; the bill (if any) is a bill. `invalid`: the named
+item is paused or gone; read as unlinked.
+
+ */
+export type CashSignalEverydayHookStatus =
+  (typeof CashSignalEverydayHookStatus)[keyof typeof CashSignalEverydayHookStatus];
+
+export const CashSignalEverydayHookStatus = {
+  linked: "linked",
+  unlinked: "unlinked",
+  invalid: "invalid",
+} as const;
+
+/**
+ * The Amex payment on checking that settled the period's owed charges (within max($1, 1%)).
+ */
+export interface CashSignalEverydayPayment {
+  txnId: string;
+  date: string;
+  /** Signed like the row. */
+  amount: string;
+}
+
+/**
+ * One hook, for the period containing today. The weekly period is the
+Sunday–Saturday week, paid on its Saturday; the monthly period the
+calendar month, paid on the 1st of the next month. Amounts are strings.
+
+ */
+export interface CashSignalEverydayHook {
+  /** `linked`: `preferences.everydayHooks` names an active item of this
+household — its payoffs replace the bill on the curve. `unlinked`:
+nothing is named; the bill (if any) is a bill. `invalid`: the named
+item is paused or gone; read as unlinked.
+ */
+  status: CashSignalEverydayHookStatus;
+  /**
+   * The linked item; unlinked, the household's one active bill named
+"Weekly Spend" / "Monthly Spend" (the discrepancy flag's bill), if
+exactly one; invalid, the stored id.
+
+   * @nullable
+   */
+  itemId: string | null;
+  /**
+   * That bill's own amount.
+   * @nullable
+   */
+  billAmount: string | null;
+  /** The Allowances standing amount. */
+  allowanceAmount: string;
+  /** The bill's amount and the Allowances amount differ (PR8r-web's banner). */
+  discrepancy: boolean;
+  periodStart: string;
+  periodEnd: string;
+  payoffDate: string;
+  /** This period's plan — the standing amount */
+  plan: string;
+  /** Everyday spend against the plan, from any account: weekly-flagged
+spend and unflagged spend that needs classification for the week;
+monthly-flagged spend for the month. A flagged row keeps today's
+allowance screens (transfer, card-payment flag, reimbursable, debt
+tag); a confirmed bill match uses up no plan.
+ */
+  spent: string;
+  remaining: string;
+  overage: string;
+  /** Unplanned spend dated in the period (on top of the plan). */
+  unplanned: string;
+  /** Unflagged spend dated in the period. */
+  needsClassification: string;
+  /**
+   * Linked only: the owed charges on the hook's cards in the period (the Amex weekly payoff's own figure).
+   * @nullable
+   */
+  owed: string | null;
+  /**
+   * Linked only: what is on the curve for the period — owed + max(0, plan − covered spend) while open — or null when nothing is.
+   * @nullable
+   */
+  payoff: string | null;
+  payment: CashSignalEverydayPayment | null;
+}
+
+export interface CashSignalEverydayBillMatch {
+  txnId: string;
+  date: string;
+  /** Signed like the row. */
+  txnAmount: string;
+  /**
+   * `<itemId>|<occurrenceDate>` of the confirmed match.
+   * @nullable
+   */
+  planKey: string | null;
+  /** @nullable */
+  planLabel: string | null;
+  /**
+   * Signed like the plan.
+   * @nullable
+   */
+  planAmount: string | null;
+  /**
+   * How much more the row paid than the plan; "0.00" when not more.
+   * @nullable
+   */
+  overage: string | null;
+  /**
+   * `flag_ignored_matched`: a weekly or monthly flag the match outranked
+(shown with a note). `unplanned_on_matched`: an unplanned flag on a
+confirmed match (a conflict for Review). Null when unflagged.
+
+   * @nullable
+   */
+  conflict: string | null;
+}
+
+/**
+ * (PR8r, plan section A; owner decisions 7 and 12) The everyday Amex payoff
+hooks, for the week and the month containing today. /forecast/cash-signal
+only; no owed or payoff figure ever goes on /spine.
+
+ */
+export interface CashSignalEveryday {
+  weekly: CashSignalEverydayHook;
+  monthly: CashSignalEverydayHook;
+  /** Spending rows dated this week or this month that a CONFIRMED bill
+match keeps out of every allowance (decision 12), with how much more
+than the plan each row paid.
+ */
+  billMatched: CashSignalEverydayBillMatch[];
+}
+
 export interface CashSignal {
   bankToday: string;
   lowestProjected: string;
@@ -2846,6 +3010,13 @@ only an unpaid remainder over $1 stays on the curve; a tier 3 pair
 pays nothing and every other plan still counts.
  */
   matches?: CashSignalMatchesItem[];
+  everyday?: CashSignalEveryday;
+  /** (PR8r, /forecast/cash-signal only) Income due today that no deposit
+has arrived for (the arrival rule `incomeNotArrived` uses): "Expected
+today". Off `balance` and `expected`, as before PR8r; `scheduled`
+counts it today. Sorted by due date.
+ */
+  incomeExpectedToday?: CashSignalListedPlan[];
 }
 
 export type SpendingFactsRange = {

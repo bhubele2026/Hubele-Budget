@@ -8,5 +8,18 @@
 export type CashSignalDailyItem = {
     date: string;
     balance: string;
+    /** (PR8r, /forecast/cash-signal only) Every plan on its own due
+  date: a bill overdue before today is listed (in `events`, with
+  its assumption), not dragged; a bill due today stays on today;
+  income due today that has not arrived (`incomeExpectedToday`)
+  counts today. The everyday payoffs are the same as `expected`.
+   */
+    scheduled?: string;
+    /** (PR8r, /forecast/cash-signal only) Always equal to `balance`. */
+    expected?: string;
+    /** (PR8r, /forecast/cash-signal only) `expected` with every planned
+  income one business day later. The everyday payoffs are the same.
+   */
+    conservative?: string;
 };
 //# sourceMappingURL=cashSignalDailyItem.d.ts.map

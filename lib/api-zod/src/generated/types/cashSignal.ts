@@ -9,6 +9,7 @@ import type { CashSignalAccount } from "./cashSignalAccount";
 import type { CashSignalAssumedPaidPlan } from "./cashSignalAssumedPaidPlan";
 import type { CashSignalDailyItem } from "./cashSignalDailyItem";
 import type { CashSignalEventsItem } from "./cashSignalEventsItem";
+import type { CashSignalEveryday } from "./cashSignalEveryday";
 import type { CashSignalListedPlan } from "./cashSignalListedPlan";
 import type { CashSignalMatchesItem } from "./cashSignalMatchesItem";
 import type { CashSignalStatus } from "./cashSignalStatus";
@@ -83,4 +84,11 @@ only an unpaid remainder over $1 stays on the curve; a tier 3 pair
 pays nothing and every other plan still counts.
  */
   matches?: CashSignalMatchesItem[];
+  everyday?: CashSignalEveryday;
+  /** (PR8r, /forecast/cash-signal only) Income due today that no deposit
+has arrived for (the arrival rule `incomeNotArrived` uses): "Expected
+today". Off `balance` and `expected`, as before PR8r; `scheduled`
+counts it today. Sorted by due date.
+ */
+  incomeExpectedToday?: CashSignalListedPlan[];
 }

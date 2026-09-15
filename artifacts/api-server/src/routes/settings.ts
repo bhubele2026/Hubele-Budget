@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, settingsTable } from "@workspace/db";
+import { and, eq, inArray } from "drizzle-orm";
+import { db, recurringItemsTable, settingsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateSettingsBody } from "@workspace/api-zod";
+import { readEverydayHooks } from "../lib/moneyContext";
 import {
   dedupeTransactionsAcrossAccountsForUser,
   dedupeTransactionsForUser,
@@ -126,6 +127,56 @@ export function keepServerOwnedPreferences(
   return { ...next, ...kept };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * (PR8r, owner decision 7) `preferences.everydayHooks` names the recurring items
+ * the everyday Amex payoffs replace on the curve. Every id the request SETS OR
+ * CHANGES must be one of THIS household's ACTIVE recurring items; null unlinks.
+ * The message names the key, or null when the request is fine.
+ *
+ * An id the row already stores is not checked again: a web preferences save sends
+ * every key back (`{...prev, ...patch}`), and a bill paused since it was linked
+ * must not make an unrelated save fail. The forecast reads a hook that is no
+ * longer an active item as unlinked (`resolveHookLinks`).
+ */
+export async function everydayHooksProblem(
+  reader: Pick<typeof db, "select">,
+  householdId: string,
+  stored: unknown,
+  incoming: Record<string, unknown> | null,
+): Promise<string | null> {
+  if (!incoming || incoming.everydayHooks == null) return null;
+  const next = readEverydayHooks({ everydayHooks: incoming.everydayHooks });
+  const before = readEverydayHooks(stored);
+  const changed = (["weeklyItemId", "monthlyItemId"] as const).flatMap((key) =>
+    next[key] && next[key] !== before[key] ? [[key, next[key]!] as const] : [],
+  );
+  if (changed.length === 0) return null;
+  const problem = (key: string) => `everydayHooks.${key} must be one of this household's active recurring items`;
+  const malformed = changed.find(([, id]) => !UUID_RE.test(id));
+  if (malformed) return problem(malformed[0]);
+  const found = await reader
+    .select({ id: recurringItemsTable.id })
+    .from(recurringItemsTable)
+    .where(
+      and(
+        eq(recurringItemsTable.householdId, householdId),
+        eq(recurringItemsTable.active, "true"),
+        inArray(
+          recurringItemsTable.id,
+          changed.map(([, id]) => id),
+        ),
+      ),
+    );
+  const ok = new Set(found.map((r) => r.id));
+  const missing = changed.find(([, id]) => !ok.has(id));
+  return missing ? problem(missing[0]) : null;
+}
+
+/** A PUT the settings route refuses after it has started its transaction. */
+class SettingsRequestError extends Error {}
+
 router.put("/settings", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpdateSettingsBody.safeParse(req.body);
   if (!parsed.success) {
@@ -133,30 +184,42 @@ router.put("/settings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const ownerUserId = req.householdOwnerId!;
-  await loadOrCreate(ownerUserId, req.householdId!);
+  const householdId = req.householdId!;
+  await loadOrCreate(ownerUserId, householdId);
   const { preferences, ...rest } = parsed.data;
-  const row = await db.transaction(async (tx) => {
-    // A body without `preferences` leaves the column alone, as before.
-    let preferencesSet: { preferences?: Record<string, unknown> | null } = {};
-    if (preferences !== undefined) {
-      // Lock the row so a server write that lands between this read and the
-      // update below is not overwritten with the value read here.
-      const [current] = await tx
-        .select({ preferences: settingsTable.preferences })
-        .from(settingsTable)
+  let row;
+  try {
+    row = await db.transaction(async (tx) => {
+      // A body without `preferences` leaves the column alone, as before.
+      let preferencesSet: { preferences?: Record<string, unknown> | null } = {};
+      if (preferences !== undefined) {
+        // Lock the row so a server write that lands between this read and the
+        // update below is not overwritten with the value read here.
+        const [current] = await tx
+          .select({ preferences: settingsTable.preferences })
+          .from(settingsTable)
+          .where(eq(settingsTable.userId, ownerUserId))
+          .for("update");
+        const problem = await everydayHooksProblem(tx, householdId, current?.preferences, preferences);
+        if (problem) throw new SettingsRequestError(problem);
+        preferencesSet = {
+          preferences: keepServerOwnedPreferences(current?.preferences, preferences),
+        };
+      }
+      const [updated] = await tx
+        .update(settingsTable)
+        .set({ ...rest, ...preferencesSet, updatedAt: new Date() })
         .where(eq(settingsTable.userId, ownerUserId))
-        .for("update");
-      preferencesSet = {
-        preferences: keepServerOwnedPreferences(current?.preferences, preferences),
-      };
+        .returning();
+      return updated;
+    });
+  } catch (err) {
+    if (err instanceof SettingsRequestError) {
+      res.status(400).json({ error: err.message });
+      return;
     }
-    const [updated] = await tx
-      .update(settingsTable)
-      .set({ ...rest, ...preferencesSet, updatedAt: new Date() })
-      .where(eq(settingsTable.userId, ownerUserId))
-      .returning();
-    return updated;
-  });
+    throw err;
+  }
   res.json(row);
 });
 

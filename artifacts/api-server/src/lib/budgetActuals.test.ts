@@ -98,10 +98,16 @@ const ONE_RULE_CLASSES = [
   "card_payment_description", // rule 9: an issuer payment phrase (CRCARDPMT, …)
   "bank_noise_description", // rule 9b: AUTOPAY, EPAY, WEB ID:, ONLINE TRANSFER, ACH PMT, …
 ] as const;
-/** Forward mode only (PR8r/PR10), on top of the classes above. */
+/**
+ * Forward mode only (PR10), on top of the classes above. (PR8r, the owner's
+ * answer 1) PR-H also listed `reimbursable_flagged` here: its classifier put the
+ * flags before reimbursable and bucketed a flagged reimbursable row that today's
+ * rule screens out. Reimbursable now comes first, so the class is gone — such a
+ * unit must now be EQUAL in forward mode (stricter), and the generator still
+ * reaches it (`reimbursable_flagged_equal`, asserted below).
+ */
 const FORWARD_ONLY_CLASSES = [
   "bill_matched_flagged", // decision 12: a confirmed match buckets nowhere
-  "reimbursable_flagged", // steps 3-5 outrank step 6: the classifier buckets it, today does not
 ] as const;
 type DivergenceClass = (typeof ONE_RULE_CLASSES)[number] | (typeof FORWARD_ONLY_CLASSES)[number];
 
@@ -134,17 +140,20 @@ function todayClass(t: Filed, ctx: MovementContext): DivergenceClass | null {
   return oneRuleClass(t, ctx);
 }
 
-/** Mode "forward": today's classes, plus the two forward-only ones. */
+/** Mode "forward": today's classes, plus the forward-only one. */
 function forwardClass(t: Filed, ctx: MovementContext): DivergenceClass | null {
   if (!flagBucket(t)) return null;
   if (passesTodaysScreens(t)) {
     return oneRuleClass(t, ctx) ?? (ctx.matchedTxnIds.has(t.id) ? "bill_matched_flagged" : null);
   }
-  const onlyReimbursable = t.reimbursable && !t.isTransfer && !t.isExternalCardPayment && !t.debtId;
-  if (onlyReimbursable && oneRuleClass(t, ctx) === null && !ctx.matchedTxnIds.has(t.id)) {
-    return "reimbursable_flagged";
-  }
   return null;
+}
+
+/** (PR8r) A unit PR-H's `reimbursable_flagged` class named — now required to be equal in forward mode. */
+function wasReimbursableFlagged(t: Filed, ctx: MovementContext): boolean {
+  if (!flagBucket(t)) return false;
+  const onlyReimbursable = t.reimbursable && !t.isTransfer && !t.isExternalCardPayment && !t.debtId;
+  return onlyReimbursable && oneRuleClass(t, ctx) === null && !ctx.matchedTxnIds.has(t.id);
 }
 
 // ── Seeded generator ───────────────────────────────────────────────────────
@@ -296,18 +305,9 @@ describe("classifierAllowanceRows vs aggregateBudgetMonth — seeded randomized 
 
       const fc = forwardClass(t, u.movement);
       bump(forwardHits, fc ?? "equal");
+      if (wasReimbursableFlagged(t, u.movement)) bump(forwardHits, "reimbursable_flagged_equal");
       if (fc === null) {
         expect(classifierForward, `unit ${i} (forward mode)`).toEqual(today);
-      } else if (fc === "reimbursable_flagged") {
-        expect(today, `unit ${i}`).toEqual([]);
-        const expected: AllowanceAggregateRow = {
-          bucket: flagBucket(t)!,
-          subBucket: t.weeklyBucket,
-          pending: u.counted.pending,
-          spend: (spendCents(u.counted.source, Math.round(Number(u.counted.amount) * 100)) / 100).toFixed(2),
-          cnt: "1",
-        };
-        expect(classifierForward, `unit ${i}`).toEqual([expected]);
       } else {
         expect(today, `unit ${i}`).toHaveLength(1);
         expect(classifierForward, `unit ${i}`).toEqual([]);
@@ -332,6 +332,8 @@ describe("classifierAllowanceRows vs aggregateBudgetMonth — seeded randomized 
       expect(todayHits.get(k) ?? 0, k).toBe(0);
       expect(forwardHits.get(k) ?? 0, k).toBeGreaterThanOrEqual(MIN_HITS);
     }
+    // (PR8r) PR-H's reimbursable_flagged units are still generated — and now agree.
+    expect(forwardHits.get("reimbursable_flagged_equal") ?? 0).toBeGreaterThanOrEqual(MIN_HITS);
     // And agreement is the common case, not an accident of a tiny sample.
     expect(todayHits.get("equal") ?? 0).toBeGreaterThan(UNITS / 2);
   });
@@ -361,18 +363,16 @@ describe("classifierAllowanceRows vs aggregateBudgetMonth — seeded randomized 
   }
 });
 
-describe("classifierAllowanceRows — reimbursable + a flag (forward-only difference)", () => {
-  // Today's rule gates on `!reimbursable` before looking at a flag. The
-  // classifier's precedence (flags, steps 3-5, before reimbursable, step 6)
-  // buckets such a row — so mode "today" keeps today's gate, and only mode
-  // "forward" shows the difference.
-  it("today and the classifier's today mode bucket it nowhere; forward mode buckets it under its flag", () => {
+describe("classifierAllowanceRows — reimbursable + a flag (answer 1: no longer a difference)", () => {
+  // Today's rule gates on `!reimbursable` before looking at a flag. PR-H's
+  // classifier put the flags first, so forward mode bucketed this row ($25.00
+  // weekly). (PR8r, the owner's answer 1) Reimbursable now comes before the
+  // flags: every mode buckets it nowhere. The replaced assertion is stricter.
+  it("today, the classifier's today mode and forward mode all bucket it nowhere", () => {
     const rows = [row({ id: "reimb-flag-1", weeklyAllowance: true, reimbursable: true, amount: "-25.00" })];
     expect(aggregateBudgetMonth(rows, noSupersede, filingCtx).allowanceRows).toEqual([]);
     expect(classifierAllowanceRows(rows, noSupersede, filingCtx, movementCtx())).toEqual([]);
-    expect(classifierAllowanceRows(rows, noSupersede, filingCtx, movementCtx(), { mode: "forward" })).toEqual([
-      { bucket: "weekly", subBucket: null, pending: false, spend: "25.00", cnt: "1" },
-    ]);
+    expect(classifierAllowanceRows(rows, noSupersede, filingCtx, movementCtx(), { mode: "forward" })).toEqual([]);
   });
 
   it("a matched reimbursable flagged row: nowhere today, nowhere in either mode", () => {
@@ -381,6 +381,18 @@ describe("classifierAllowanceRows — reimbursable + a flag (forward-only differ
     expect(aggregateBudgetMonth(rows, noSupersede, filingCtx).allowanceRows).toEqual([]);
     expect(classifierAllowanceRows(rows, noSupersede, filingCtx, matched)).toEqual([]);
     expect(classifierAllowanceRows(rows, noSupersede, filingCtx, matched, { mode: "forward" })).toEqual([]);
+  });
+});
+
+describe("classifierAllowanceRows — an unknown mode throws (PR-H review N2)", () => {
+  it("only 'today' and 'forward' are modes", () => {
+    const rows = [row({ id: "n2", weeklyAllowance: true, amount: "-5.00" })];
+    for (const mode of ["future", "", "TODAY"]) {
+      expect(
+        () => classifierAllowanceRows(rows, noSupersede, filingCtx, movementCtx(), { mode } as never),
+        JSON.stringify(mode),
+      ).toThrow(/unknown mode/);
+    }
   });
 });
 

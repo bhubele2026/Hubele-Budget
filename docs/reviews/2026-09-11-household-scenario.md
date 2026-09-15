@@ -25,6 +25,7 @@ same in Chicago and in UTC.
 | | **Bills:** Mortgage −$1,800 on the 12th. Electric −$140 on the 13th. Phone −$95 on the 8th. |
 | | **Spend plans:** Weekly Spend −$300 on Saturdays (the Platinum payoff). Monthly Spend −$400 on the 28th (Blue). |
 | **Last week** | Amex Platinum groceries $180.00 on Tue 9/29 — the payoff that posts this Tuesday. |
+| **Allowances** | Weekly $300, monthly $400. The Allowances settings own the everyday amounts (decision 7); Weekly Spend and Monthly Spend are linked as the Amex payoff hooks (PR8r). |
 
 ## Rules the expected values assume
 
@@ -42,7 +43,9 @@ column on here.
 - **Review count (now):** unresolved Chase rows this month in the forecast.
   - A row that has already happened always counts until resolved (`inForecast`).
   - A probable match still counts until it is confirmed (PR5).
-- **Remaining this week (PR8, PR10):** $300 minus weekly-tagged everyday spend, from any account.
+- **Remaining this week (PR8r, asserted; PR10 brings it to Spending):** the Allowances weekly plan, $300, minus
+  weekly-tagged everyday spend, from any account. Read from `/forecast/cash-signal`'s `everyday.weekly.remaining`,
+  never from the spine.
   - Unplanned spend sits on top and never shrinks it.
   - Bill-matched spend doesn't consume it.
 - **Expected balance on Fri 10/16 (PR8 + PR9):** end-of-day checking balance.
@@ -60,7 +63,7 @@ column on here.
 
 ## The week
 
-**Asserted now:** cash, spent this week, review count. **Contract for later PRs:** remaining, unplanned,
+**Asserted now:** cash, spent this week, review count, remaining (PR8r). **Contract for later PRs:** unplanned,
 needs classification, expected on 10/16, lowest before payday, Chase to review, stale.
 
 | # | When | Event | Cash | Spent week | Review | Remaining | Unplanned | Needs class. | Expected Fri 10/16 | Lowest before payday | Chase to review | Stale |
@@ -185,3 +188,13 @@ Every purchase is tagged weekly or unplanned, so this is $0.00 all week. PR10 mu
 - **Verification:** see the commit and CI for this PR. The test must pass with every current column
   asserted, and the pending items must list exactly one known-wrong value (S10 spending, PR7).
   PR7 switched that value on; no step carries a known-wrong value now.
+
+## PR8r delivery
+
+- **Switched on:** remaining this week, at every step, from `/forecast/cash-signal`'s `everyday.weekly.remaining`.
+  The expected values are unchanged.
+- **Fixture:** a settings row with the Allowances amounts ($300 weekly, $400 monthly) and the two bills linked as
+  the payoff hooks (`preferences.everydayHooks`). Cash, spent this week and the review count do not read either, and
+  are unchanged.
+- **Still `it.todo`:** expected on 10/16 (PR8 + PR9) and the rest. See `docs/reviews/2026-09-15-everyday-reserve-hooks.md`
+  for what the hooks model gives for expected on 10/16 today.

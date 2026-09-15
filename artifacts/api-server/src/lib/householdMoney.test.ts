@@ -142,6 +142,34 @@ describe("classifyMovement — precedence", () => {
     expect(classifyMovement(row({ reimbursable: true }), ctx()).coverage).toBe("reimbursable");
   });
 
+  // (PR8r — the owner's answer 1, "a reimbursable charge shows as its own row".)
+  // PR-H's order (the flags before reimbursable) must fail here.
+  it("answer 1: a flagged reimbursable row is still reimbursable — unplanned, monthly and weekly never outrank it", () => {
+    for (const flags of [
+      { unplannedAllowance: true },
+      { monthlyAllowance: true },
+      { weeklyAllowance: true },
+      { unplannedAllowance: true, monthlyAllowance: true, weeklyAllowance: true },
+    ]) {
+      expect(classifyMovement(row({ reimbursable: true, ...flags }), ctx()), JSON.stringify(flags)).toEqual({
+        coverage: "reimbursable",
+        timing: { kind: "checking", date: "2026-09-01" },
+      });
+    }
+  });
+
+  it("answer 1: a confirmed match still comes before reimbursable, and reports the flag it beat", () => {
+    const matched = ctx({ matchedTxnIds: new Set(["t1"]) });
+    expect(classifyMovement(row({ reimbursable: true }), matched)).toEqual({
+      coverage: "bill_matched",
+      timing: { kind: "checking", date: "2026-09-01" },
+    });
+    expect(classifyMovement(row({ reimbursable: true, weeklyAllowance: true }), matched)).toMatchObject({
+      coverage: "bill_matched",
+      conflict: "flag_ignored_matched",
+    });
+  });
+
   it("nothing matched, no flags: needs_classification", () => {
     expect(classifyMovement(row(), ctx()).coverage).toBe("needs_classification");
   });
@@ -278,6 +306,59 @@ describe("classifyMovement — timing", () => {
   });
 });
 
+describe("classifyMovement — timing via an Amex payoff (PR8r)", () => {
+  const payoffCards = new Map<string, "weekly" | "monthly">([
+    ["plat-ext", "weekly"],
+    ["blue-ext", "monthly"],
+  ]);
+  const onCard = (accountId: string, occurredOn: string) =>
+    row({ source: "plaid:amex", plaidAccountId: accountId, occurredOn, amount: "-42.00" });
+
+  it("a weekly card's charge moves cash through the payoff on its week's Saturday", () => {
+    expect(classifyMovement(onCard("plat-ext", "2026-09-08"), ctx({ amexPayoffCadence: payoffCards })).timing).toEqual({
+      kind: "amex_payoff",
+      accountId: "plat-ext",
+      date: "2026-09-08",
+      payoffDate: "2026-09-12",
+    });
+  });
+
+  it("a Saturday charge is paid that Saturday; a Sunday charge the next Saturday", () => {
+    const c = ctx({ amexPayoffCadence: payoffCards });
+    expect(classifyMovement(onCard("plat-ext", "2026-09-12"), c).timing).toMatchObject({ payoffDate: "2026-09-12" });
+    expect(classifyMovement(onCard("plat-ext", "2026-09-13"), c).timing).toMatchObject({ payoffDate: "2026-09-19" });
+  });
+
+  it("a monthly card's charge is paid on the 1st of the next month, across the year end", () => {
+    const c = ctx({ amexPayoffCadence: payoffCards });
+    expect(classifyMovement(onCard("blue-ext", "2026-09-01"), c).timing).toMatchObject({
+      kind: "amex_payoff",
+      payoffDate: "2026-10-01",
+    });
+    expect(classifyMovement(onCard("blue-ext", "2026-12-31"), c).timing).toMatchObject({ payoffDate: "2027-01-01" });
+  });
+
+  it("a card the hooks do not pay, a workbook row with no account, or no map at all: plain card timing", () => {
+    const c = ctx({ amexPayoffCadence: payoffCards });
+    expect(classifyMovement(onCard("sky-debt-ext", "2026-09-08"), c).timing).toEqual({
+      kind: "card",
+      accountId: "sky-debt-ext",
+      date: "2026-09-08",
+    });
+    expect(classifyMovement(row({ source: "amex", plaidAccountId: null, amount: "42.00" }), c).timing).toEqual({
+      kind: "card",
+      accountId: "amex",
+      date: "2026-09-01",
+    });
+    expect(classifyMovement(onCard("plat-ext", "2026-09-08"), ctx()).timing.kind).toBe("card");
+  });
+
+  it("a row that is not on the card ledger never gets payoff timing, whatever its account id", () => {
+    const c = ctx({ amexPayoffCadence: new Map([["other-ext", "weekly"]]) });
+    expect(classifyMovement(row({ source: "plaid:chase", plaidAccountId: "other-ext" }), c).timing).toEqual({ kind: "none" });
+  });
+});
+
 // ── Property test (review N3): every row gets exactly one coverage and one
 // timing, and the answer is the one plan section A specifies — checked against
 // an independent model of the spec over seeded rows built so that EVERY
@@ -295,14 +376,30 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+/** Section A's payoff date, by Date.UTC arithmetic: the Saturday ending the row's week; the 1st of the next month. */
+function specPayoffDate(cadence: "weekly" | "monthly", iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number) as [number, number, number];
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const paid = cadence === "weekly" ? new Date(Date.UTC(y, m - 1, d + (6 - dow))) : new Date(Date.UTC(y, m, 1));
+  return paid.toISOString().slice(0, 10);
+}
+
 /** Plan section A, written out as its own model — not a copy of the implementation's control flow. */
 function specClassification(r: MovementRow, c: MovementContext): MovementClassification {
   const onCardLedger = ["amex", "plaid:amex"].includes(r.source.toLowerCase());
+  const payoffCadence = r.plaidAccountId ? c.amexPayoffCadence?.get(r.plaidAccountId) : undefined;
   const timing: MovementTiming = isBankRow(r.source, r.plaidAccountId, c.checkingAccountExternalId)
     ? { kind: "checking", date: r.occurredOn }
-    : onCardLedger
-      ? { kind: "card", accountId: r.plaidAccountId ?? r.source, date: r.occurredOn }
-      : { kind: "none" };
+    : onCardLedger && payoffCadence && r.plaidAccountId
+      ? {
+          kind: "amex_payoff",
+          accountId: r.plaidAccountId,
+          date: r.occurredOn,
+          payoffDate: specPayoffDate(payoffCadence, r.occurredOn),
+        }
+      : onCardLedger
+        ? { kind: "card", accountId: r.plaidAccountId ?? r.source, date: r.occurredOn }
+        : { kind: "none" };
 
   // 1. The core rule decides transfer / debt / card payment / income / excluded.
   const core = classifyOutflow(r, c, { reimbursableIsSpend: true });
@@ -332,12 +429,12 @@ function specClassification(r: MovementRow, c: MovementContext): MovementClassif
     return conflict ? { coverage: "bill_matched", timing, conflict } : { coverage: "bill_matched", timing };
   }
   if (!anyFlag && (c.tier2PairedTxnIds ?? new Set()).has(r.id)) return { coverage: "bill_matched", timing };
-  // 3-7.
+  // 3-7. (PR8r, answer 1) Reimbursable first: a reimbursable charge is its own row.
   const ladder: [boolean, MovementCoverage][] = [
+    [r.reimbursable, "reimbursable"],
     [flags.unplanned, "unplanned"],
     [flags.monthly, "allowance_monthly"],
     [flags.weekly, "allowance_weekly"],
-    [r.reimbursable, "reimbursable"],
   ];
   for (const [on, coverage] of ladder) if (on) return { coverage, timing };
   return { coverage: "needs_classification", timing };
@@ -360,9 +457,17 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
     { source: "plaid:chase", plaidAccountId: CHECKING },
     { source: "plaid:chase", plaidAccountId: "savings-ext" },
     { source: "plaid:amex", plaidAccountId: "amex-ext" },
+    { source: "plaid:amex", plaidAccountId: "amex-blue-ext" },
     { source: "amex", plaidAccountId: null },
     { source: "manual", plaidAccountId: null },
   ];
+  // (PR8r) The payoff cards, when the hooks' cadence map is handed in; the days
+  // cover a Saturday, a Sunday, a month end and a year end.
+  const PAYOFF_CARDS = new Map<string, "weekly" | "monthly">([
+    ["amex-ext", "weekly"],
+    ["amex-blue-ext", "monthly"],
+  ]);
+  const DAYS = ["2026-09-01", "2026-09-12", "2026-09-13", "2026-09-30", "2026-12-31"];
   // One trigger for the core rule (step 1) on 40% of rows; the rest reach step 2.
   type Trigger = (r: MovementRow) => void;
   const TRIGGERS: Trigger[] = [
@@ -396,7 +501,7 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       const magnitude = Math.round(1 + rnd() * 29999) / 100;
       const r: MovementRow = {
         id: `row-${i}`,
-        occurredOn: "2026-09-01",
+        occurredOn: pick(DAYS),
         amount: account.source === "amex" ? magnitude : -magnitude,
         source: account.source,
         isTransfer: false,
@@ -420,6 +525,7 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
         checkingAccountExternalId: bool(0.8) ? CHECKING : null,
         matchedTxnIds: matched ? new Set([r.id]) : new Set(),
         tier2PairedTxnIds: tier2 ? new Set([r.id]) : bool(0.5) ? new Set(["someone-else"]) : undefined,
+        amexPayoffCadence: bool(0.6) ? PAYOFF_CARDS : undefined,
       });
 
       const got = classifyMovement(r, c);
@@ -444,14 +550,19 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       } else {
         if (tier2) hit("tier2-ignored:flagged");
         hit(`step3-7:${got.coverage}`);
-        if (r.reimbursable && anyFlag) hit("step3-5:flag-over-reimbursable");
-        if (r.unplannedAllowance && (r.monthlyAllowance || r.weeklyAllowance)) hit("step3:unplanned-over-other-flag");
-        if (!r.unplannedAllowance && r.monthlyAllowance && r.weeklyAllowance) hit("step4:monthly-over-weekly");
+        if (r.reimbursable && anyFlag) hit("step3:reimbursable-over-flag");
+        if (!r.reimbursable && r.unplannedAllowance && (r.monthlyAllowance || r.weeklyAllowance)) {
+          hit("step4:unplanned-over-other-flag");
+        }
+        if (!r.reimbursable && !r.unplannedAllowance && r.monthlyAllowance && r.weeklyAllowance) {
+          hit("step5:monthly-over-weekly");
+        }
       }
     }
 
     const required = [
       "timing:checking",
+      "timing:amex_payoff",
       "timing:card",
       "timing:none",
       "timing:checking-with-no-account",
@@ -472,11 +583,11 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       "step2:tier2",
       "tier2-ignored:flagged",
       "step3-7:unplanned",
-      "step3:unplanned-over-other-flag",
+      "step4:unplanned-over-other-flag",
       "step3-7:allowance_monthly",
-      "step4:monthly-over-weekly",
+      "step5:monthly-over-weekly",
       "step3-7:allowance_weekly",
-      "step3-5:flag-over-reimbursable",
+      "step3:reimbursable-over-flag",
       "step3-7:reimbursable",
       "step3-7:needs_classification",
     ];

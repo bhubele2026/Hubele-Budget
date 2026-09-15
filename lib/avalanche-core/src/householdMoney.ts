@@ -38,20 +38,20 @@
 //      empty. (`reimbursable` is not an allowance flag, so an unflagged
 //      reimbursable row on a tier-2 pair reads bill_matched, the same as it
 //      does on a confirmed match.)
-//   3. `unplanned_allowance` → unplanned;
-//   4. `monthly_allowance`   → allowance_monthly;
-//   5. `weekly_allowance`    → allowance_weekly;
-//   6. `reimbursable`        → reimbursable;
+//   3. `reimbursable`        → reimbursable;
+//   4. `unplanned_allowance` → unplanned;
+//   5. `monthly_allowance`   → allowance_monthly;
+//   6. `weekly_allowance`    → allowance_weekly;
 //   7. otherwise             → needs_classification.
 //
-// ⚠️ Steps 3-5 outrank step 6 ON PURPOSE (plan section A): a row that is BOTH
-// `reimbursable` and flagged reads as its flag's coverage, never
-// `reimbursable`. Today's `classifyOutflow`-based rules (`spendingFacts.ts`,
-// `budgetActuals.ts`) exclude a reimbursable row before any flag is looked at.
-// The parity helpers' "today" mode reproduces that; their "forward" mode shows
-// the difference. The owner's 2026-09-15 rule ("a reimbursable charge shows as
-// its own row") sides with today here — PR8r decides before it switches a
-// figure (see the review note).
+// ⭐ (PR8r — the owner's answer 1 of 2026-09-15, "a reimbursable charge shows as
+// its own row") REIMBURSABLE COMES BEFORE THE FLAGS. A row that is BOTH
+// `reimbursable` and flagged reads `reimbursable` and never uses up an
+// allowance: the answer today's `classifyOutflow`-based rules
+// (`spendingFacts.ts`, `budgetActuals.ts`) already give, since they screen a
+// reimbursable row before any flag is looked at. PR-H put the flags first and
+// listed the difference as the class `reimbursable_flagged`; that class is
+// gone. A confirmed match (step 2) still comes first: the bill is in the plan.
 //
 // An inflow (`classifyOutflow`'s "not_outflow": the row is not an outflow at
 // all) is not covered by the outflow rule, so it is decided on its own
@@ -67,20 +67,23 @@
 //     checking account no PLAID row is checking, but a manual row (no Plaid
 //     account, source not a card) still is — exactly as the cash rule counts
 //     it ("cash moves only through checking rows");
-//   - `card`: the row is on the Amex ledger itself (`CARD_LEDGER_SOURCES`,
-//     mirrored from `AMEX_TXN_SOURCES` in
-//     `artifacts/api-server/src/lib/amexAnchor.ts` — avalanche-core cannot
-//     import from api-server, so the two lists are pinned equal by
-//     `artifacts/api-server/src/lib/moneyContext.test.ts`). It never moves
-//     cash; it sizes a future Amex payoff plan;
+//   - `amex_payoff` (PR8r, section A's "via an Amex payoff on date Y"): the row
+//     is on the Amex ledger AND on a card the everyday payoff hooks pay
+//     (`ctx.amexPayoffCadence`: the household's Amex cards with no linked debt,
+//     each with its billing cadence). It moves no cash on its own date; the
+//     payoff that settles it does, on `payoffDate` — its period's payoff date
+//     (`everydayPeriod.ts`): the Saturday of its Sunday–Saturday week on a
+//     weekly card, the 1st of the next month on a monthly card;
+//   - `card`: any other row on the Amex ledger (`CARD_LEDGER_SOURCES`, mirrored
+//     from `AMEX_TXN_SOURCES` in `artifacts/api-server/src/lib/amexAnchor.ts` —
+//     avalanche-core cannot import from api-server, so the two lists are pinned
+//     equal by `artifacts/api-server/src/lib/moneyContext.test.ts`): a card
+//     tracked as a debt, a workbook row with no Plaid account, or any card row
+//     when no payoff cadence is handed in. It never moves cash here;
 //   - `none`: neither.
-//
-// ⚠️ NOT YET: section A's third timing, "via an Amex payoff on date Y" (a card
-// row tied to the payoff that settles it), needs the payoff hooks
-// (`everydayHooks`), which ship with PR8r. Until then a card row's timing is
-// `card` with its own date.
 
 import { isBankRow } from "./cashRows";
+import { everydayPeriodOf } from "./everydayPeriod";
 import { weekBounds } from "./householdTime";
 import {
   classifyOutflow,
@@ -113,6 +116,7 @@ export type MovementConflict = "flag_ignored_matched" | "unplanned_on_matched";
 
 export type MovementTiming =
   | { kind: "checking"; date: string }
+  | { kind: "amex_payoff"; accountId: string; date: string; payoffDate: string }
   | { kind: "card"; accountId: string; date: string }
   | { kind: "none" };
 
@@ -164,6 +168,12 @@ export interface MovementContext extends SpendContext {
    * from the match tiers. Omitted = empty.
    */
   tier2PairedTxnIds?: ReadonlySet<string>;
+  /**
+   * (PR8r) External Amex account id → billing cadence, for the cards the everyday
+   * payoff hooks pay (no linked debt). A card row on one of them has timing
+   * `amex_payoff`. Omitted = no card row does.
+   */
+  amexPayoffCadence?: ReadonlyMap<string, "weekly" | "monthly">;
 }
 
 function timingOf(row: MovementRow, ctx: MovementContext): MovementTiming {
@@ -172,6 +182,15 @@ function timingOf(row: MovementRow, ctx: MovementContext): MovementTiming {
   }
   const source = (row.source ?? "").toLowerCase();
   if ((CARD_LEDGER_SOURCES as readonly string[]).includes(source)) {
+    const cadence = row.plaidAccountId ? ctx.amexPayoffCadence?.get(row.plaidAccountId) : undefined;
+    if (cadence && row.plaidAccountId) {
+      return {
+        kind: "amex_payoff",
+        accountId: row.plaidAccountId,
+        date: row.occurredOn,
+        payoffDate: everydayPeriodOf(cadence, row.occurredOn).payoffDate,
+      };
+    }
     return { kind: "card", accountId: row.plaidAccountId ?? row.source, date: row.occurredOn };
   }
   return { kind: "none" };
@@ -228,10 +247,11 @@ export function classifyMovement(
   if (!flagged && ctx.tier2PairedTxnIds?.has(row.id)) {
     return { coverage: "bill_matched", timing };
   }
+  // (PR8r, answer 1) A reimbursable charge is its own row, flagged or not.
+  if (row.reimbursable) return { coverage: "reimbursable", timing };
   if (row.unplannedAllowance) return { coverage: "unplanned", timing };
   if (row.monthlyAllowance) return { coverage: "allowance_monthly", timing };
   if (row.weeklyAllowance) return { coverage: "allowance_weekly", timing };
-  if (row.reimbursable) return { coverage: "reimbursable", timing };
   return { coverage: "needs_classification", timing };
 }
 

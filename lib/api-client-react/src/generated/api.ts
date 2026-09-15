@@ -5567,6 +5567,9 @@ export function useGetForecastReviewCount<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
+/**
+ * The cash signal, with (PR8r) the three views on `daily[]` (`scheduled`, `expected` = `balance`, `conservative`), the `everyday` block and `incomeExpectedToday`. The spine carries none of them: no owed or payoff figure ever goes on /spine.
+ */
 export const getGetForecastCashSignalUrl = (
   params?: GetForecastCashSignalParams,
 ) => {

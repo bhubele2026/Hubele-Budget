@@ -1304,6 +1304,11 @@ paths:
     get:
       operationId: getForecastCashSignal
       tags: [forecast]
+      description: >-
+        The cash signal, with (PR8r) the three views on `daily[]` (`scheduled`,
+        `expected` = `balance`, `conservative`), the `everyday` block and
+        `incomeExpectedToday`. The spine carries none of them: no owed or
+        payoff figure ever goes on /spine.
       parameters:
         - in: query
           name: horizonDays
@@ -4095,6 +4100,21 @@ components:
             (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both
             partners see the same per-week edit.
           additionalProperties: { type: string }
+        everydayHooks:
+          type: object
+          description: >-
+            (PR8r, owner decision 7) The recurring items linked as the everyday
+            Amex payoff DATE hooks: the weekly hook pays the weekly cards on each
+            Saturday, the monthly hook pays the monthly card on the 1st. Once
+            linked, the bill's own amount is ignored: the payoff is the owed
+            charges plus what is left of the Allowances plan. An id the request
+            sets or changes must be one of this household's active recurring
+            items (PUT /settings answers 400 otherwise); an id already stored is
+            not re-checked; null unlinks. The forecast reads an id that is no
+            longer an active item as unlinked.
+          properties:
+            weeklyItemId: { type: ["string", "null"] }
+            monthlyItemId: { type: ["string", "null"] }
         amexCardBrands:
           type: object
           description: >-
@@ -4373,6 +4393,22 @@ components:
             properties:
               date: { type: string }
               balance: { type: string }
+              scheduled:
+                type: string
+                description: |
+                  (PR8r, /forecast/cash-signal only) Every plan on its own due
+                  date: a bill overdue before today is listed (in `events`, with
+                  its assumption), not dragged; a bill due today stays on today;
+                  income due today that has not arrived (`incomeExpectedToday`)
+                  counts today. The everyday payoffs are the same as `expected`.
+              expected:
+                type: string
+                description: (PR8r, /forecast/cash-signal only) Always equal to `balance`.
+              conservative:
+                type: string
+                description: |
+                  (PR8r, /forecast/cash-signal only) `expected` with every planned
+                  income one business day later. The everyday payoffs are the same.
         events:
           type: array
           items:
@@ -4412,6 +4448,10 @@ components:
                   false for an underpayment), and only the unpaid remainder
                   lands — on the plan's OWN date, never dragged to a business
                   day like the overdue sibling above.
+                  `amex_payoff_not_posted` (PR8r): an everyday payoff (the hook
+                  item's event; `occurrenceDate` is the period's payoff date)
+                  whose period closed with no Amex payment settling it — the
+                  owed charges only, on the next business day.
               occurrenceKey:
                 type: string
                 description: (PR6) `<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`.
@@ -4497,6 +4537,16 @@ components:
                   `overdueAssumedPaid`): the amount still assumed unpaid, signed
                   like the plan ("0.00" when paid in full). Only that remainder
                   stays on the curve.
+        everyday: { $ref: "#/components/schemas/CashSignalEveryday" }
+        incomeExpectedToday:
+          type: array
+          description: |
+            (PR8r, /forecast/cash-signal only) Income due today that no deposit
+            has arrived for (the arrival rule `incomeNotArrived` uses): "Expected
+            today". Off `balance` and `expected`, as before PR8r; `scheduled`
+            counts it today. Sorted by due date.
+          items:
+            $ref: "#/components/schemas/CashSignalListedPlan"
     CashSignalAccount:
       type: object
       description: |
@@ -4543,6 +4593,95 @@ components:
         amount: { type: string, description: Signed; negative is money out. A partial lists its remainder. }
         label: { type: string }
         daysOverdue: { type: integer, description: Whole days from dueDate to today. }
+    CashSignalEveryday:
+      type: object
+      description: |
+        (PR8r, plan section A; owner decisions 7 and 12) The everyday Amex payoff
+        hooks, for the week and the month containing today. /forecast/cash-signal
+        only; no owed or payoff figure ever goes on /spine.
+      required: [weekly, monthly, billMatched]
+      properties:
+        weekly: { $ref: "#/components/schemas/CashSignalEverydayHook" }
+        monthly: { $ref: "#/components/schemas/CashSignalEverydayHook" }
+        billMatched:
+          type: array
+          description: |
+            Spending rows dated this week or this month that a CONFIRMED bill
+            match keeps out of every allowance (decision 12), with how much more
+            than the plan each row paid.
+          items: { $ref: "#/components/schemas/CashSignalEverydayBillMatch" }
+    CashSignalEverydayHook:
+      type: object
+      description: |
+        One hook, for the period containing today. The weekly period is the
+        Sunday–Saturday week, paid on its Saturday; the monthly period the
+        calendar month, paid on the 1st of the next month. Amounts are strings.
+      required: [status, itemId, billAmount, allowanceAmount, discrepancy, periodStart, periodEnd, payoffDate, plan, spent, remaining, overage, unplanned, needsClassification, owed, payoff, payment]
+      properties:
+        status:
+          type: string
+          enum: [linked, unlinked, invalid]
+          description: |
+            `linked`: `preferences.everydayHooks` names an active item of this
+            household — its payoffs replace the bill on the curve. `unlinked`:
+            nothing is named; the bill (if any) is a bill. `invalid`: the named
+            item is paused or gone; read as unlinked.
+        itemId:
+          type: ["string", "null"]
+          description: |
+            The linked item; unlinked, the household's one active bill named
+            "Weekly Spend" / "Monthly Spend" (the discrepancy flag's bill), if
+            exactly one; invalid, the stored id.
+        billAmount: { type: ["string", "null"], description: That bill's own amount. }
+        allowanceAmount: { type: string, description: The Allowances standing amount. }
+        discrepancy: { type: boolean, description: The bill's amount and the Allowances amount differ (PR8r-web's banner). }
+        periodStart: { type: string }
+        periodEnd: { type: string }
+        payoffDate: { type: string }
+        plan: { type: string, description: This period's plan — the standing amount, or this week's override. }
+        spent:
+          type: string
+          description: |
+            Everyday spend against the plan, from any account: weekly-flagged
+            spend and unflagged spend that needs classification for the week;
+            monthly-flagged spend for the month. A flagged row keeps today's
+            allowance screens (transfer, card-payment flag, reimbursable, debt
+            tag); a confirmed bill match uses up no plan.
+        remaining: { type: string }
+        overage: { type: string }
+        unplanned: { type: string, description: Unplanned spend dated in the period (on top of the plan). }
+        needsClassification: { type: string, description: Unflagged spend dated in the period. }
+        owed: { type: ["string", "null"], description: "Linked only: the owed charges on the hook's cards in the period (the Amex weekly payoff's own figure)." }
+        payoff: { type: ["string", "null"], description: "Linked only: what is on the curve for the period — owed + max(0, plan − covered spend) while open — or null when nothing is." }
+        payment:
+          oneOf:
+            - $ref: "#/components/schemas/CashSignalEverydayPayment"
+            - type: "null"
+    CashSignalEverydayPayment:
+      type: object
+      description: The Amex payment on checking that settled the period's owed charges (within max($1, 1%)).
+      required: [txnId, date, amount]
+      properties:
+        txnId: { type: string }
+        date: { type: string }
+        amount: { type: string, description: Signed like the row. }
+    CashSignalEverydayBillMatch:
+      type: object
+      required: [txnId, date, txnAmount, planKey, planLabel, planAmount, overage, conflict]
+      properties:
+        txnId: { type: string }
+        date: { type: string }
+        txnAmount: { type: string, description: Signed like the row. }
+        planKey: { type: ["string", "null"], description: "`<itemId>|<occurrenceDate>` of the confirmed match." }
+        planLabel: { type: ["string", "null"] }
+        planAmount: { type: ["string", "null"], description: Signed like the plan. }
+        overage: { type: ["string", "null"], description: How much more the row paid than the plan; "0.00" when not more. }
+        conflict:
+          type: ["string", "null"]
+          description: |
+            `flag_ignored_matched`: a weekly or monthly flag the match outranked
+            (shown with a note). `unplanned_on_matched`: an unplanned flag on a
+            confirmed match (a conflict for Review). Null when unflagged.
     SpendingFacts:
       type: object
       required:

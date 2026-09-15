@@ -9,6 +9,7 @@ import type { DaysSinceTracker } from "./daysSinceTracker";
 import type { SettingsPreferencesAmexCardBrands } from "./settingsPreferencesAmexCardBrands";
 import type { SettingsPreferencesAmexCardCadence } from "./settingsPreferencesAmexCardCadence";
 import type { SettingsPreferencesAmexCardNames } from "./settingsPreferencesAmexCardNames";
+import type { SettingsPreferencesEverydayHooks } from "./settingsPreferencesEverydayHooks";
 import type { SettingsPreferencesRecurringChargeReview } from "./settingsPreferencesRecurringChargeReview";
 import type { SettingsPreferencesWeeklyAllowanceOverrides } from "./settingsPreferencesWeeklyAllowanceOverrides";
 import type { WeeklyBucketLabels } from "./weeklyBucketLabels";
@@ -18,6 +19,8 @@ export interface SettingsPreferences {
   daysSinceTrackers?: DaysSinceTracker[];
   /** Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit. */
   weeklyAllowanceOverrides?: SettingsPreferencesWeeklyAllowanceOverrides;
+  /** (PR8r, owner decision 7) The recurring items linked as the everyday Amex payoff DATE hooks: the weekly hook pays the weekly cards on each Saturday, the monthly hook pays the monthly card on the 1st. Once linked, the bill's own amount is ignored: the payoff is the owed charges plus what is left of the Allowances plan. An id the request sets or changes must be one of this household's active recurring items (PUT /settings answers 400 otherwise); an id already stored is not re-checked; null unlinks. The forecast reads an id that is no longer an active item as unlinked. */
+  everydayHooks?: SettingsPreferencesEverydayHooks;
   /** Per-card Amex tier override, keyed by the external Plaid account_id -> "blue" | "silver" | "gold". User-assigned so the Kill Stack / per-card UI label each physical card correctly even when Plaid's card name doesn't contain the tier word. Display metadata only — does not change any financial math. */
   amexCardBrands?: SettingsPreferencesAmexCardBrands;
   /** Per-card billing cadence, keyed by external Plaid account_id -> "weekly" | "monthly" (default weekly). A monthly card's charges accumulate over the calendar month and are paid at month-end; weekly cards reset each Sun–Sat week. Grouping metadata only — amounts are still the same server-computed real-charge sums, just over a different window. */

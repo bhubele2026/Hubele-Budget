@@ -10,7 +10,8 @@
 // numbers back through the real /spine route.
 //
 // Asserted now: cash today, spent this week, review count — the three columns
-// the app computes today. A column the app still gets wrong at a step is
+// the app computed first — and (PR8r) remaining this week, from
+// /forecast/cash-signal's `everyday` block. A column the app still gets wrong at a step is
 // marked pending with the PR that fixes it, rather than pinning a wrong value.
 // Every later column is an it.todo naming its PR; switching it on is part of
 // that PR's definition of done. Never loosen an expectation to go green — if a
@@ -59,6 +60,7 @@ import {
   plaidAccountsTable,
   plaidItemsTable,
   recurringItemsTable,
+  settingsTable,
   transactionsTable,
 } from "@workspace/db";
 import spineRouter from "../routes/spine";
@@ -67,6 +69,7 @@ import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 import {
   ACCOUNTS,
+  ALLOWANCES,
   CONTRACT_COLUMNS,
   EXPECTED,
   SNAPSHOT,
@@ -107,6 +110,7 @@ async function post(path: string, body: unknown): Promise<void> {
 }
 
 async function cleanup(): Promise<void> {
+  await db.delete(settingsTable).where(eq(settingsTable.userId, TEST_USER));
   await db
     .delete(forecastResolutionsTable)
     .where(eq(forecastResolutionsTable.userId, TEST_USER));
@@ -188,6 +192,10 @@ async function expectToday(id: StepId): Promise<void> {
   } else {
     expect(spine.spentWeek, `${id} spent this week`).toBeCloseTo(e.spentWeek, 2);
   }
+  // (PR8r) Remaining this week: the Allowances weekly plan less weekly-tagged
+  // everyday spend, from any account. Never on the spine.
+  const signal = await get<{ everyday: { weekly: { remaining: string } } }>("/forecast/cash-signal?horizonDays=90");
+  expect(signal.everyday.weekly.remaining, `${id} remaining this week`).toBe(e.remainingWeek);
 }
 
 beforeAll(async () => {
@@ -291,6 +299,16 @@ beforeAll(async () => {
       .returning();
     plan[key] = p!.id;
   }
+
+  // (PR8r, owner decision 7) The Allowances settings own the everyday amounts;
+  // Weekly Spend and Monthly Spend are linked as the Amex payoff hooks.
+  await db.insert(settingsTable).values({
+    userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
+    weeklyAllowanceAmount: ALLOWANCES.weekly,
+    monthlyAllowanceAmount: ALLOWANCES.monthly,
+    preferences: { everydayHooks: { weeklyItemId: plan.weeklySpend, monthlyItemId: plan.monthlySpend } },
+  });
 
   // ── Last week on Amex Platinum (Sun 9/27 – Sat 10/3): the $180 its payoff covers.
   await addTxn({

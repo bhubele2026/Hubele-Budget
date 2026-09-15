@@ -561,15 +561,17 @@ export async function buildSpendingFacts(
  *     no idea of a match);
  *   - (review M1) a reimbursable row never counts, whatever flag or match it
  *     carries: today's rule 7 fires before either is looked at, while
- *     `classifyMovement` lets a match (step 2) or a flag (steps 3-5) outrank
- *     `reimbursable` (step 6).
+ *     `classifyMovement` lets a confirmed match (step 2) outrank
+ *     `reimbursable` (step 3).
  * mode "forward" is coverage alone — what switching the figure onto
- * `classifyMovement`, as section A specifies it, would do:
- *   1. a confirmed match (carried to its posted row) stops counting —
- *      decision 12: the bill is already in the plan;
- *   2. a reimbursable row that carries an allowance flag counts under its
- *      flag. The owner's 2026-09-15 rule ("a reimbursable charge shows as its
- *      own row") says it should not; PR8r settles it before switching.
+ * `classifyMovement`, as section A specifies it, would do: a confirmed match
+ * (carried to its posted row) stops counting — decision 12: the bill is
+ * already in the plan. (PR8r, the owner's answer 1) A reimbursable row that
+ * carries an allowance flag no longer counts under it: reimbursable comes
+ * before the flags, so the two modes agree on every reimbursable row that no
+ * confirmed match claims.
+ *
+ * (PR8r, PR-H review N2) Any other `mode` throws.
  *
  * `rows` must already be in EFFECTIVE-FILING form (`effectiveFiling`) with
  * replaced-pending rows left out — the same preparation `buildSpendingFacts`
@@ -582,6 +584,9 @@ export function classifierHouseholdSpend(
   opts: { mode?: "today" | "forward" } = {},
 ): { total: number; transactionCount: number } {
   const mode = opts.mode ?? "today";
+  if (mode !== "today" && mode !== "forward") {
+    throw new Error(`classifierHouseholdSpend: unknown mode ${JSON.stringify(mode)}`);
+  }
   let total = 0;
   let count = 0;
   for (const row of rows) {

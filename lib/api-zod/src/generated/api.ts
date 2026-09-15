@@ -2779,6 +2779,15 @@ export const GetSettingsResponse = zod.object({
           .describe(
             "Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.",
           ),
+        everydayHooks: zod
+          .object({
+            weeklyItemId: zod.string().nullish(),
+            monthlyItemId: zod.string().nullish(),
+          })
+          .optional()
+          .describe(
+            "(PR8r, owner decision 7) The recurring items linked as the everyday Amex payoff DATE hooks: the weekly hook pays the weekly cards on each Saturday, the monthly hook pays the monthly card on the 1st. Once linked, the bill's own amount is ignored: the payoff is the owed charges plus what is left of the Allowances plan. An id the request sets or changes must be one of this household's active recurring items (PUT \/settings answers 400 otherwise); an id already stored is not re-checked; null unlinks. The forecast reads an id that is no longer an active item as unlinked.",
+          ),
         amexCardBrands: zod
           .record(zod.string(), zod.enum(["blue", "silver", "gold"]))
           .optional()
@@ -2860,6 +2869,15 @@ export const UpdateSettingsBody = zod.object({
           .describe(
             "Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.",
           ),
+        everydayHooks: zod
+          .object({
+            weeklyItemId: zod.string().nullish(),
+            monthlyItemId: zod.string().nullish(),
+          })
+          .optional()
+          .describe(
+            "(PR8r, owner decision 7) The recurring items linked as the everyday Amex payoff DATE hooks: the weekly hook pays the weekly cards on each Saturday, the monthly hook pays the monthly card on the 1st. Once linked, the bill's own amount is ignored: the payoff is the owed charges plus what is left of the Allowances plan. An id the request sets or changes must be one of this household's active recurring items (PUT \/settings answers 400 otherwise); an id already stored is not re-checked; null unlinks. The forecast reads an id that is no longer an active item as unlinked.",
+          ),
         amexCardBrands: zod
           .record(zod.string(), zod.enum(["blue", "silver", "gold"]))
           .optional()
@@ -2940,6 +2958,15 @@ export const UpdateSettingsResponse = zod.object({
           .optional()
           .describe(
             "Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.",
+          ),
+        everydayHooks: zod
+          .object({
+            weeklyItemId: zod.string().nullish(),
+            monthlyItemId: zod.string().nullish(),
+          })
+          .optional()
+          .describe(
+            "(PR8r, owner decision 7) The recurring items linked as the everyday Amex payoff DATE hooks: the weekly hook pays the weekly cards on each Saturday, the monthly hook pays the monthly card on the 1st. Once linked, the bill's own amount is ignored: the payoff is the owed charges plus what is left of the Allowances plan. An id the request sets or changes must be one of this household's active recurring items (PUT \/settings answers 400 otherwise); an id already stored is not re-checked; null unlinks. The forecast reads an id that is no longer an active item as unlinked.",
           ),
         amexCardBrands: zod
           .record(zod.string(), zod.enum(["blue", "silver", "gold"]))
@@ -3167,6 +3194,24 @@ export const GetForecastResponse = zod.object({
             zod.object({
               date: zod.string(),
               balance: zod.string(),
+              scheduled: zod
+                .string()
+                .optional()
+                .describe(
+                  "(PR8r, \/forecast\/cash-signal only) Every plan on its own due\ndate: a bill overdue before today is listed (in `events`, with\nits assumption), not dragged; a bill due today stays on today;\nincome due today that has not arrived (`incomeExpectedToday`)\ncounts today. The everyday payoffs are the same as `expected`.\n",
+                ),
+              expected: zod
+                .string()
+                .optional()
+                .describe(
+                  "(PR8r, \/forecast\/cash-signal only) Always equal to `balance`.",
+                ),
+              conservative: zod
+                .string()
+                .optional()
+                .describe(
+                  "(PR8r, \/forecast\/cash-signal only) `expected` with every planned\nincome one business day later. The everyday payoffs are the same.\n",
+                ),
             }),
           )
           .optional(),
@@ -3187,7 +3232,7 @@ export const GetForecastResponse = zod.object({
                 .string()
                 .nullish()
                 .describe(
-                  "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n`remainder_assumed_unpaid` (decision 13, round 4): due after\ntoday, a tier-1\/2 pair paid part of it (`offCurve` stays\nfalse for an underpayment), and only the unpaid remainder\nlands — on the plan's OWN date, never dragged to a business\nday like the overdue sibling above.\n",
+                  "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n`remainder_assumed_unpaid` (decision 13, round 4): due after\ntoday, a tier-1\/2 pair paid part of it (`offCurve` stays\nfalse for an underpayment), and only the unpaid remainder\nlands — on the plan's OWN date, never dragged to a business\nday like the overdue sibling above.\n`amex_payoff_not_posted` (PR8r): an everyday payoff (the hook\nitem's event; `occurrenceDate` is the period's payoff date)\nwhose period closed with no Amex payment settling it — the\nowed charges only, on the next business day.\n",
                 ),
               occurrenceKey: zod
                 .string()
@@ -3341,6 +3386,231 @@ export const GetForecastResponse = zod.object({
           .describe(
             '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). The bank\nrow always counts. Amounts are signed; `difference` is |txn| − |plan|\n(positive = paid more than planned). `confidence` is \"high\",\n\"medium\" or \"low\".\n(Decision 13) `tier` is what the pair proves: 1 explicit (a\nchecking row tagged to the plan\'s debt); 2 obligation evidence (not\nambiguous, a checking-cash row that is not a logged debt payment,\npaying at most the plan + max($25, 10%), and either strong evidence\npaying at least the plan − max($25, 10%) — the plan\'s own category\nwhen no other active item of its direction carries it, or a\ndescription the user confirmed for this item before — or name\nevidence paying at least the plan − max($1, 1%): its full name when\nno other active item\'s full name is in the row, some of its name\nwithin 5 days, or some of its name anywhere in the window when no\nother active item shares a name word with the row); 3 a suggestion\nonly. `offCurve` is true for a tier 1 or 2 pair paying at least the\nplan − max($1, 1%): only those plans are off the forecast curve\nbefore they are due. Once due, a tier 1 or 2 pair pays the bill and\nonly an unpaid remainder over $1 stays on the curve; a tier 3 pair\npays nothing and every other plan still counts.\n',
           ),
+        everyday: zod
+          .object({
+            weekly: zod
+              .object({
+                status: zod
+                  .enum(["linked", "unlinked", "invalid"])
+                  .describe(
+                    "`linked`: `preferences.everydayHooks` names an active item of this\nhousehold — its payoffs replace the bill on the curve. `unlinked`:\nnothing is named; the bill (if any) is a bill. `invalid`: the named\nitem is paused or gone; read as unlinked.\n",
+                  ),
+                itemId: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    'The linked item; unlinked, the household\'s one active bill named\n\"Weekly Spend\" \/ \"Monthly Spend\" (the discrepancy flag\'s bill), if\nexactly one; invalid, the stored id.\n',
+                  ),
+                billAmount: zod
+                  .string()
+                  .nullable()
+                  .describe("That bill's own amount."),
+                allowanceAmount: zod
+                  .string()
+                  .describe("The Allowances standing amount."),
+                discrepancy: zod
+                  .boolean()
+                  .describe(
+                    "The bill's amount and the Allowances amount differ (PR8r-web's banner).",
+                  ),
+                periodStart: zod.string(),
+                periodEnd: zod.string(),
+                payoffDate: zod.string(),
+                plan: zod
+                  .string()
+                  .describe("This period's plan — the standing amount"),
+                spent: zod
+                  .string()
+                  .describe(
+                    "Everyday spend against the plan, from any account: weekly-flagged\nspend and unflagged spend that needs classification for the week;\nmonthly-flagged spend for the month. A flagged row keeps today's\nallowance screens (transfer, card-payment flag, reimbursable, debt\ntag); a confirmed bill match uses up no plan.\n",
+                  ),
+                remaining: zod.string(),
+                overage: zod.string(),
+                unplanned: zod
+                  .string()
+                  .describe(
+                    "Unplanned spend dated in the period (on top of the plan).",
+                  ),
+                needsClassification: zod
+                  .string()
+                  .describe("Unflagged spend dated in the period."),
+                owed: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "Linked only: the owed charges on the hook's cards in the period (the Amex weekly payoff's own figure).",
+                  ),
+                payoff: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "Linked only: what is on the curve for the period — owed + max(0, plan − covered spend) while open — or null when nothing is.",
+                  ),
+                payment: zod.union([
+                  zod
+                    .object({
+                      txnId: zod.string(),
+                      date: zod.string(),
+                      amount: zod.string().describe("Signed like the row."),
+                    })
+                    .describe(
+                      "The Amex payment on checking that settled the period's owed charges (within max($1, 1%)).",
+                    ),
+                  zod.null(),
+                ]),
+              })
+              .describe(
+                "One hook, for the period containing today. The weekly period is the\nSunday–Saturday week, paid on its Saturday; the monthly period the\ncalendar month, paid on the 1st of the next month. Amounts are strings.\n",
+              ),
+            monthly: zod
+              .object({
+                status: zod
+                  .enum(["linked", "unlinked", "invalid"])
+                  .describe(
+                    "`linked`: `preferences.everydayHooks` names an active item of this\nhousehold — its payoffs replace the bill on the curve. `unlinked`:\nnothing is named; the bill (if any) is a bill. `invalid`: the named\nitem is paused or gone; read as unlinked.\n",
+                  ),
+                itemId: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    'The linked item; unlinked, the household\'s one active bill named\n\"Weekly Spend\" \/ \"Monthly Spend\" (the discrepancy flag\'s bill), if\nexactly one; invalid, the stored id.\n',
+                  ),
+                billAmount: zod
+                  .string()
+                  .nullable()
+                  .describe("That bill's own amount."),
+                allowanceAmount: zod
+                  .string()
+                  .describe("The Allowances standing amount."),
+                discrepancy: zod
+                  .boolean()
+                  .describe(
+                    "The bill's amount and the Allowances amount differ (PR8r-web's banner).",
+                  ),
+                periodStart: zod.string(),
+                periodEnd: zod.string(),
+                payoffDate: zod.string(),
+                plan: zod
+                  .string()
+                  .describe("This period's plan — the standing amount"),
+                spent: zod
+                  .string()
+                  .describe(
+                    "Everyday spend against the plan, from any account: weekly-flagged\nspend and unflagged spend that needs classification for the week;\nmonthly-flagged spend for the month. A flagged row keeps today's\nallowance screens (transfer, card-payment flag, reimbursable, debt\ntag); a confirmed bill match uses up no plan.\n",
+                  ),
+                remaining: zod.string(),
+                overage: zod.string(),
+                unplanned: zod
+                  .string()
+                  .describe(
+                    "Unplanned spend dated in the period (on top of the plan).",
+                  ),
+                needsClassification: zod
+                  .string()
+                  .describe("Unflagged spend dated in the period."),
+                owed: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "Linked only: the owed charges on the hook's cards in the period (the Amex weekly payoff's own figure).",
+                  ),
+                payoff: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "Linked only: what is on the curve for the period — owed + max(0, plan − covered spend) while open — or null when nothing is.",
+                  ),
+                payment: zod.union([
+                  zod
+                    .object({
+                      txnId: zod.string(),
+                      date: zod.string(),
+                      amount: zod.string().describe("Signed like the row."),
+                    })
+                    .describe(
+                      "The Amex payment on checking that settled the period's owed charges (within max($1, 1%)).",
+                    ),
+                  zod.null(),
+                ]),
+              })
+              .describe(
+                "One hook, for the period containing today. The weekly period is the\nSunday–Saturday week, paid on its Saturday; the monthly period the\ncalendar month, paid on the 1st of the next month. Amounts are strings.\n",
+              ),
+            billMatched: zod
+              .array(
+                zod.object({
+                  txnId: zod.string(),
+                  date: zod.string(),
+                  txnAmount: zod.string().describe("Signed like the row."),
+                  planKey: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "`<itemId>|<occurrenceDate>` of the confirmed match.",
+                    ),
+                  planLabel: zod.string().nullable(),
+                  planAmount: zod
+                    .string()
+                    .nullable()
+                    .describe("Signed like the plan."),
+                  overage: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      'How much more the row paid than the plan; \"0.00\" when not more.',
+                    ),
+                  conflict: zod
+                    .string()
+                    .nullable()
+                    .describe(
+                      "`flag_ignored_matched`: a weekly or monthly flag the match outranked\n(shown with a note). `unplanned_on_matched`: an unplanned flag on a\nconfirmed match (a conflict for Review). Null when unflagged.\n",
+                    ),
+                }),
+              )
+              .describe(
+                "Spending rows dated this week or this month that a CONFIRMED bill\nmatch keeps out of every allowance (decision 12), with how much more\nthan the plan each row paid.\n",
+              ),
+          })
+          .optional()
+          .describe(
+            "(PR8r, plan section A; owner decisions 7 and 12) The everyday Amex payoff\nhooks, for the week and the month containing today. \/forecast\/cash-signal\nonly; no owed or payoff figure ever goes on \/spine.\n",
+          ),
+        incomeExpectedToday: zod
+          .array(
+            zod
+              .object({
+                planKey: zod
+                  .string()
+                  .describe(
+                    "`<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`.",
+                  ),
+                itemId: zod.string(),
+                occurrenceDate: zod
+                  .string()
+                  .describe(
+                    "The date resolutions are keyed on (before any reschedule).",
+                  ),
+                dueDate: zod
+                  .string()
+                  .describe("The date it was due (after any reschedule)."),
+                amount: zod
+                  .string()
+                  .describe(
+                    "Signed; negative is money out. A partial lists its remainder.",
+                  ),
+                label: zod.string(),
+                daysOverdue: zod
+                  .number()
+                  .describe("Whole days from dueDate to today."),
+              })
+              .describe(
+                "(PR6) An unresolved plan occurrence kept off the forecast curve.",
+              ),
+          )
+          .optional()
+          .describe(
+            '(PR8r, \/forecast\/cash-signal only) Income due today that no deposit\nhas arrived for (the arrival rule `incomeNotArrived` uses): \"Expected\ntoday\". Off `balance` and `expected`, as before PR8r; `scheduled`\ncounts it today. Sorted by due date.\n',
+          ),
       }),
       zod.null(),
     ])
@@ -3484,6 +3754,9 @@ export const GetForecastReviewCountResponse = zod.object({
   count: zod.number(),
 });
 
+/**
+ * The cash signal, with (PR8r) the three views on `daily[]` (`scheduled`, `expected` = `balance`, `conservative`), the `everyday` block and `incomeExpectedToday`. The spine carries none of them: no owed or payoff figure ever goes on /spine.
+ */
 export const GetForecastCashSignalQueryParams = zod.object({
   horizonDays: zod.coerce.number().optional(),
   fromDate: zod.coerce.string().optional(),
@@ -3531,6 +3804,24 @@ export const GetForecastCashSignalResponse = zod.object({
       zod.object({
         date: zod.string(),
         balance: zod.string(),
+        scheduled: zod
+          .string()
+          .optional()
+          .describe(
+            "(PR8r, \/forecast\/cash-signal only) Every plan on its own due\ndate: a bill overdue before today is listed (in `events`, with\nits assumption), not dragged; a bill due today stays on today;\nincome due today that has not arrived (`incomeExpectedToday`)\ncounts today. The everyday payoffs are the same as `expected`.\n",
+          ),
+        expected: zod
+          .string()
+          .optional()
+          .describe(
+            "(PR8r, \/forecast\/cash-signal only) Always equal to `balance`.",
+          ),
+        conservative: zod
+          .string()
+          .optional()
+          .describe(
+            "(PR8r, \/forecast\/cash-signal only) `expected` with every planned\nincome one business day later. The everyday payoffs are the same.\n",
+          ),
       }),
     )
     .optional(),
@@ -3551,7 +3842,7 @@ export const GetForecastCashSignalResponse = zod.object({
           .string()
           .nullish()
           .describe(
-            "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n`remainder_assumed_unpaid` (decision 13, round 4): due after\ntoday, a tier-1\/2 pair paid part of it (`offCurve` stays\nfalse for an underpayment), and only the unpaid remainder\nlands — on the plan's OWN date, never dragged to a business\nday like the overdue sibling above.\n",
+            "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n`remainder_assumed_unpaid` (decision 13, round 4): due after\ntoday, a tier-1\/2 pair paid part of it (`offCurve` stays\nfalse for an underpayment), and only the unpaid remainder\nlands — on the plan's OWN date, never dragged to a business\nday like the overdue sibling above.\n`amex_payoff_not_posted` (PR8r): an everyday payoff (the hook\nitem's event; `occurrenceDate` is the period's payoff date)\nwhose period closed with no Amex payment settling it — the\nowed charges only, on the next business day.\n",
           ),
         occurrenceKey: zod
           .string()
@@ -3702,6 +3993,229 @@ export const GetForecastCashSignalResponse = zod.object({
     .optional()
     .describe(
       '(PR5) Plans a bank row probably paid, as suggestions for the user\nto confirm (\"matched\"\/\"partial\") or reject (\"not_match\"). The bank\nrow always counts. Amounts are signed; `difference` is |txn| − |plan|\n(positive = paid more than planned). `confidence` is \"high\",\n\"medium\" or \"low\".\n(Decision 13) `tier` is what the pair proves: 1 explicit (a\nchecking row tagged to the plan\'s debt); 2 obligation evidence (not\nambiguous, a checking-cash row that is not a logged debt payment,\npaying at most the plan + max($25, 10%), and either strong evidence\npaying at least the plan − max($25, 10%) — the plan\'s own category\nwhen no other active item of its direction carries it, or a\ndescription the user confirmed for this item before — or name\nevidence paying at least the plan − max($1, 1%): its full name when\nno other active item\'s full name is in the row, some of its name\nwithin 5 days, or some of its name anywhere in the window when no\nother active item shares a name word with the row); 3 a suggestion\nonly. `offCurve` is true for a tier 1 or 2 pair paying at least the\nplan − max($1, 1%): only those plans are off the forecast curve\nbefore they are due. Once due, a tier 1 or 2 pair pays the bill and\nonly an unpaid remainder over $1 stays on the curve; a tier 3 pair\npays nothing and every other plan still counts.\n',
+    ),
+  everyday: zod
+    .object({
+      weekly: zod
+        .object({
+          status: zod
+            .enum(["linked", "unlinked", "invalid"])
+            .describe(
+              "`linked`: `preferences.everydayHooks` names an active item of this\nhousehold — its payoffs replace the bill on the curve. `unlinked`:\nnothing is named; the bill (if any) is a bill. `invalid`: the named\nitem is paused or gone; read as unlinked.\n",
+            ),
+          itemId: zod
+            .string()
+            .nullable()
+            .describe(
+              'The linked item; unlinked, the household\'s one active bill named\n\"Weekly Spend\" \/ \"Monthly Spend\" (the discrepancy flag\'s bill), if\nexactly one; invalid, the stored id.\n',
+            ),
+          billAmount: zod
+            .string()
+            .nullable()
+            .describe("That bill's own amount."),
+          allowanceAmount: zod
+            .string()
+            .describe("The Allowances standing amount."),
+          discrepancy: zod
+            .boolean()
+            .describe(
+              "The bill's amount and the Allowances amount differ (PR8r-web's banner).",
+            ),
+          periodStart: zod.string(),
+          periodEnd: zod.string(),
+          payoffDate: zod.string(),
+          plan: zod
+            .string()
+            .describe("This period's plan — the standing amount"),
+          spent: zod
+            .string()
+            .describe(
+              "Everyday spend against the plan, from any account: weekly-flagged\nspend and unflagged spend that needs classification for the week;\nmonthly-flagged spend for the month. A flagged row keeps today's\nallowance screens (transfer, card-payment flag, reimbursable, debt\ntag); a confirmed bill match uses up no plan.\n",
+            ),
+          remaining: zod.string(),
+          overage: zod.string(),
+          unplanned: zod
+            .string()
+            .describe(
+              "Unplanned spend dated in the period (on top of the plan).",
+            ),
+          needsClassification: zod
+            .string()
+            .describe("Unflagged spend dated in the period."),
+          owed: zod
+            .string()
+            .nullable()
+            .describe(
+              "Linked only: the owed charges on the hook's cards in the period (the Amex weekly payoff's own figure).",
+            ),
+          payoff: zod
+            .string()
+            .nullable()
+            .describe(
+              "Linked only: what is on the curve for the period — owed + max(0, plan − covered spend) while open — or null when nothing is.",
+            ),
+          payment: zod.union([
+            zod
+              .object({
+                txnId: zod.string(),
+                date: zod.string(),
+                amount: zod.string().describe("Signed like the row."),
+              })
+              .describe(
+                "The Amex payment on checking that settled the period's owed charges (within max($1, 1%)).",
+              ),
+            zod.null(),
+          ]),
+        })
+        .describe(
+          "One hook, for the period containing today. The weekly period is the\nSunday–Saturday week, paid on its Saturday; the monthly period the\ncalendar month, paid on the 1st of the next month. Amounts are strings.\n",
+        ),
+      monthly: zod
+        .object({
+          status: zod
+            .enum(["linked", "unlinked", "invalid"])
+            .describe(
+              "`linked`: `preferences.everydayHooks` names an active item of this\nhousehold — its payoffs replace the bill on the curve. `unlinked`:\nnothing is named; the bill (if any) is a bill. `invalid`: the named\nitem is paused or gone; read as unlinked.\n",
+            ),
+          itemId: zod
+            .string()
+            .nullable()
+            .describe(
+              'The linked item; unlinked, the household\'s one active bill named\n\"Weekly Spend\" \/ \"Monthly Spend\" (the discrepancy flag\'s bill), if\nexactly one; invalid, the stored id.\n',
+            ),
+          billAmount: zod
+            .string()
+            .nullable()
+            .describe("That bill's own amount."),
+          allowanceAmount: zod
+            .string()
+            .describe("The Allowances standing amount."),
+          discrepancy: zod
+            .boolean()
+            .describe(
+              "The bill's amount and the Allowances amount differ (PR8r-web's banner).",
+            ),
+          periodStart: zod.string(),
+          periodEnd: zod.string(),
+          payoffDate: zod.string(),
+          plan: zod
+            .string()
+            .describe("This period's plan — the standing amount"),
+          spent: zod
+            .string()
+            .describe(
+              "Everyday spend against the plan, from any account: weekly-flagged\nspend and unflagged spend that needs classification for the week;\nmonthly-flagged spend for the month. A flagged row keeps today's\nallowance screens (transfer, card-payment flag, reimbursable, debt\ntag); a confirmed bill match uses up no plan.\n",
+            ),
+          remaining: zod.string(),
+          overage: zod.string(),
+          unplanned: zod
+            .string()
+            .describe(
+              "Unplanned spend dated in the period (on top of the plan).",
+            ),
+          needsClassification: zod
+            .string()
+            .describe("Unflagged spend dated in the period."),
+          owed: zod
+            .string()
+            .nullable()
+            .describe(
+              "Linked only: the owed charges on the hook's cards in the period (the Amex weekly payoff's own figure).",
+            ),
+          payoff: zod
+            .string()
+            .nullable()
+            .describe(
+              "Linked only: what is on the curve for the period — owed + max(0, plan − covered spend) while open — or null when nothing is.",
+            ),
+          payment: zod.union([
+            zod
+              .object({
+                txnId: zod.string(),
+                date: zod.string(),
+                amount: zod.string().describe("Signed like the row."),
+              })
+              .describe(
+                "The Amex payment on checking that settled the period's owed charges (within max($1, 1%)).",
+              ),
+            zod.null(),
+          ]),
+        })
+        .describe(
+          "One hook, for the period containing today. The weekly period is the\nSunday–Saturday week, paid on its Saturday; the monthly period the\ncalendar month, paid on the 1st of the next month. Amounts are strings.\n",
+        ),
+      billMatched: zod
+        .array(
+          zod.object({
+            txnId: zod.string(),
+            date: zod.string(),
+            txnAmount: zod.string().describe("Signed like the row."),
+            planKey: zod
+              .string()
+              .nullable()
+              .describe("`<itemId>|<occurrenceDate>` of the confirmed match."),
+            planLabel: zod.string().nullable(),
+            planAmount: zod
+              .string()
+              .nullable()
+              .describe("Signed like the plan."),
+            overage: zod
+              .string()
+              .nullable()
+              .describe(
+                'How much more the row paid than the plan; \"0.00\" when not more.',
+              ),
+            conflict: zod
+              .string()
+              .nullable()
+              .describe(
+                "`flag_ignored_matched`: a weekly or monthly flag the match outranked\n(shown with a note). `unplanned_on_matched`: an unplanned flag on a\nconfirmed match (a conflict for Review). Null when unflagged.\n",
+              ),
+          }),
+        )
+        .describe(
+          "Spending rows dated this week or this month that a CONFIRMED bill\nmatch keeps out of every allowance (decision 12), with how much more\nthan the plan each row paid.\n",
+        ),
+    })
+    .optional()
+    .describe(
+      "(PR8r, plan section A; owner decisions 7 and 12) The everyday Amex payoff\nhooks, for the week and the month containing today. \/forecast\/cash-signal\nonly; no owed or payoff figure ever goes on \/spine.\n",
+    ),
+  incomeExpectedToday: zod
+    .array(
+      zod
+        .object({
+          planKey: zod
+            .string()
+            .describe(
+              "`<itemId>|<occurrenceDate>` — the resolution key; joins `matches[].planKey`.",
+            ),
+          itemId: zod.string(),
+          occurrenceDate: zod
+            .string()
+            .describe(
+              "The date resolutions are keyed on (before any reschedule).",
+            ),
+          dueDate: zod
+            .string()
+            .describe("The date it was due (after any reschedule)."),
+          amount: zod
+            .string()
+            .describe(
+              "Signed; negative is money out. A partial lists its remainder.",
+            ),
+          label: zod.string(),
+          daysOverdue: zod
+            .number()
+            .describe("Whole days from dueDate to today."),
+        })
+        .describe(
+          "(PR6) An unresolved plan occurrence kept off the forecast curve.",
+        ),
+    )
+    .optional()
+    .describe(
+      '(PR8r, \/forecast\/cash-signal only) Income due today that no deposit\nhas arrived for (the arrival rule `incomeNotArrived` uses): \"Expected\ntoday\". Off `balance` and `expected`, as before PR8r; `scheduled`\ncounts it today. Sorted by due date.\n',
     ),
 });
 

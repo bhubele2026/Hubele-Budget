@@ -576,7 +576,9 @@ router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void>
     }
     fromDate = req.query.fromDate;
   }
-  const signal = await computeCashSignal(req.householdId!, req.householdOwnerId!, { horizonDays, fromDate });
+  // (PR8r) The three views, the `everyday` block and "Expected today" ride on this
+  // route only; the spine and the Forecast bundle keep the plain shape.
+  const signal = await computeCashSignal(req.householdId!, req.householdOwnerId!, { horizonDays, fromDate, views: true });
   res.json(signal);
 });
 

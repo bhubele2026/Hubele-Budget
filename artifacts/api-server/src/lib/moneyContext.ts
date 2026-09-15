@@ -25,15 +25,17 @@
 //     `discoverAmexCards`, shared with `computeWeeklyPayoff` so the two can
 //     never disagree on a card's cadence).
 //
-// ⚠️ NOTHING IN PRODUCTION CALLS THIS YET. `loadMoneyContext` is the shared
-// foundation PR8r/PR10 switch a figure onto; until then only the parity tests
-// read it. See docs/reviews/2026-09-14-household-money-core.md.
+// (PR8r) `buildForecastLedger` calls it through `everydayHooks.ts` for the
+// everyday payoff hooks and the `everyday` block — the first production figure
+// on it — handing in what the ledger has already read: the checking account,
+// the settings row and the tier-2 pairs (`LoadMoneyContextOptions`). PR10 wires
+// Spending and the Budget page. See docs/reviews/2026-09-14-household-money-core.md
+// and docs/reviews/2026-09-15-everyday-reserve-hooks.md.
 //
-// NOT READ HERE YET (plan section A, scope amended 2026-09-15):
-//   - `preferences.everydayHooks` (the weekly/monthly payoff hooks) — PR8r,
-//     with its OpenAPI schema and server validation;
-//   - `preferences.paycheckItemIds` — PR9, likewise;
-//   - the tier-2 match pairs — PR8r supplies `tier2PairedTxnIds`; it is empty.
+// Read here since PR8r: `preferences.everydayHooks` (as stored — the ledger
+// checks each id is an active item of this household) and
+// `preferences.amexExcludedTxnIds`. NOT read here: `preferences.paycheckItemIds`
+// (PR9, with its OpenAPI schema and server validation).
 
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { SUPERSEDE_MAX_DAYS, type MovementContext } from "@workspace/avalanche-core";
@@ -64,6 +66,58 @@ export interface MoneyContextSettings {
   unplannedAllowanceAmount: string;
   /** `preferences.weeklyAllowanceOverrides`, as stored: Sunday ISO -> dollar amount. `everydayPlan` validates it. */
   weeklyAllowanceOverrides: Record<string, string | number>;
+  /**
+   * (PR8r) `preferences.everydayHooks`: the recurring items linked as the weekly
+   * and monthly Amex payoff hooks, as stored (`readEverydayHooks`). NOT checked
+   * here — the ledger reads a linked id only when it is an active item of this
+   * household.
+   */
+  everydayHooks: EverydayHookLinks;
+  /** (PR8r) `preferences.amexExcludedTxnIds`: the charges the owner marked "not mine", out of the Amex owed figure. */
+  amexExcludedTxnIds: ReadonlySet<string>;
+}
+
+/** (PR8r) Which recurring items are the everyday payoff hooks. */
+export interface EverydayHookLinks {
+  weeklyItemId: string | null;
+  monthlyItemId: string | null;
+}
+
+/** (PR8r) `preferences.everydayHooks`, read as stored: anything that is not a non-empty string id reads as null. */
+export function readEverydayHooks(preferences: unknown): EverydayHookLinks {
+  const prefs = (preferences && typeof preferences === "object" ? preferences : {}) as Record<string, unknown>;
+  const hooks = (prefs.everydayHooks && typeof prefs.everydayHooks === "object" ? prefs.everydayHooks : {}) as Record<string, unknown>;
+  const id = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
+  return { weeklyItemId: id(hooks.weeklyItemId), monthlyItemId: id(hooks.monthlyItemId) };
+}
+
+/** The owner's settings row, as the money context reads it. */
+export interface MoneyContextSettingsRow {
+  weekly: string;
+  monthly: string;
+  unplanned: string;
+  preferences: unknown;
+}
+
+/**
+ * The owner's settings row, read ONCE.
+ *
+ * ⚠️ (PR-H review L1) A Drizzle query builder is a thenable that runs its query
+ * on EVERY `.then`. Awaiting it in one place and attaching a `.then` in another
+ * ran the same select twice. `.then((rows) => rows)` here runs it once and hands
+ * back a real Promise every consumer can share.
+ */
+export function readSettingsRow(ownerUserId: string): Promise<MoneyContextSettingsRow | null> {
+  return db
+    .select({
+      weekly: settingsTable.weeklyAllowanceAmount,
+      monthly: settingsTable.monthlyAllowanceAmount,
+      unplanned: settingsTable.unplannedAllowanceAmount,
+      preferences: settingsTable.preferences,
+    })
+    .from(settingsTable)
+    .where(eq(settingsTable.userId, ownerUserId))
+    .then((rows) => rows[0] ?? null);
 }
 
 /** The superseded-pending answer the context carries: which rows were replaced, and by what. */
@@ -79,7 +133,7 @@ export interface MoneyContext extends MovementContext {
    * answer pairs with a matched pending row (`confirmedMatchIds`).
    */
   matchedTxnIds: ReadonlySet<string>;
-  /** Tier-2 pairs: none until PR8r supplies them. */
+  /** Tier-2 pairs: the caller's (`LoadMoneyContextOptions.tier2PairedTxnIds`); empty by default. */
   tier2PairedTxnIds: ReadonlySet<string>;
   /** Superseded-pending pairs for `range`, filing included. */
   supersede: MoneyContextSupersede;
@@ -100,6 +154,25 @@ export interface LoadMoneyContextOptions {
    * here for `range`.
    */
   supersede?: MoneyContextSupersede;
+  /**
+   * (PR8r) The tracked checking account's external id, when the caller has
+   * already resolved it — the ledger hands in the one its cash rule ran on, so
+   * a row this context calls "checking" is a row the curve counts. PRESENT, even
+   * as null, means "use it". Omitted, it is resolved here.
+   */
+  checkingAccountExternalId?: string | null;
+  /**
+   * (PR8r) The tier-2 pairs (`classifyMovement` step 2's second half): the
+   * transactions a tier-1/2 bill pair covers, from the ledger's match tiers.
+   * Omitted = none.
+   */
+  tier2PairedTxnIds?: ReadonlySet<string>;
+  /**
+   * (PR8r) The owner's settings row, when the caller has already read it
+   * (`readSettingsRow`). PRESENT, even as null, means "use it; do not read
+   * settings again". Omitted, it is read here, once.
+   */
+  settingsRow?: MoneyContextSettingsRow | null;
 }
 
 /** One confirmed match: the matched transaction and its own date. */
@@ -118,6 +191,12 @@ export interface ConfirmedMatchRow {
  * The extra days before the range are the pending rows a posted row in the
  * range can have replaced (it is dated 0-7 days after them) — see
  * `confirmedMatchIds`.
+ *
+ * ⚠️ TODO(PR-I, `feat/bank-removed-review-carry`): a confirmed match on a
+ * BANK-REMOVED row must not count as coverage — except a removed pending row a
+ * live posted row replaced. PR8r reads coverage through here (the everyday
+ * hooks), so apply PR-I's `notBankRemovedSql` to this read at whichever of the
+ * two merges lands second.
  */
 export async function loadConfirmedMatchRows(
   householdId: string,
@@ -207,35 +286,34 @@ export async function loadMoneyContext(
     .where(eq(householdsTable.id, householdId));
   const ownerUserId = household?.ownerUserId ?? null;
 
-  // (review L1) The owner's settings row, read ONCE: its amounts and overrides
-  // below, its Amex preferences handed to `discoverAmexCards`. `.then` attaches
-  // that consumer inside the Promise.all, so a failed read rejects it instead
-  // of surfacing as an unhandled rejection.
-  const settingsRead = ownerUserId
-    ? db
-        .select({
-          weekly: settingsTable.weeklyAllowanceAmount,
-          monthly: settingsTable.monthlyAllowanceAmount,
-          unplanned: settingsTable.unplannedAllowanceAmount,
-          preferences: settingsTable.preferences,
-        })
-        .from(settingsTable)
-        .where(eq(settingsTable.userId, ownerUserId))
-    : Promise.resolve([]);
+  // (review L1) The owner's settings row, read ONCE — a real Promise
+  // (`readSettingsRow`), never a Drizzle builder, which would run its select on
+  // each `.then` below: its amounts and overrides for the context, its Amex
+  // preferences for `discoverAmexCards`. `.then` attaches that consumer inside
+  // the Promise.all, so a failed read rejects it instead of surfacing as an
+  // unhandled rejection. A caller that already read the row hands it in.
+  const settingsRead: Promise<MoneyContextSettingsRow | null> =
+    "settingsRow" in opts
+      ? Promise.resolve(opts.settingsRow ?? null)
+      : ownerUserId
+        ? readSettingsRow(ownerUserId)
+        : Promise.resolve(null);
 
-  const [settingsRow, matchRows, supersede, ledgerAccounts, cardCadence, cats] =
+  const [s, matchRows, supersede, checkingAccountExternalId, cardCadence, cats] =
     await Promise.all([
       settingsRead,
       loadConfirmedMatchRows(householdId, range),
       opts.supersede
         ? Promise.resolve(opts.supersede)
         : findSupersededPendingForRange(householdId, range.start, range.end),
-      ownerUserId
-        ? resolveLedgerAccounts(householdId, ownerUserId, undefined)
-        : Promise.resolve(null),
-      settingsRead.then((rows) =>
+      "checkingAccountExternalId" in opts
+        ? Promise.resolve(opts.checkingAccountExternalId ?? null)
+        : ownerUserId
+          ? resolveLedgerAccounts(householdId, ownerUserId, undefined).then((a) => a.accountExternalId)
+          : Promise.resolve(null),
+      settingsRead.then((row) =>
         discoverAmexCards(householdId, ownerUserId ?? undefined, {
-          preferences: rows[0]?.preferences ?? null,
+          preferences: row?.preferences ?? null,
         }),
       ),
       // (review L1) Everything the context needs from categories, in one read.
@@ -250,10 +328,12 @@ export async function loadMoneyContext(
         .where(eq(budgetCategoriesTable.householdId, householdId)),
     ]);
 
-  const s = settingsRow[0];
   const prefs = (s?.preferences as Record<string, unknown> | null | undefined) ?? {};
   const weeklyAllowanceOverrides =
     (prefs.weeklyAllowanceOverrides as Record<string, string | number>) ?? {};
+  const excluded = Array.isArray(prefs.amexExcludedTxnIds)
+    ? prefs.amexExcludedTxnIds.filter((v): v is string => typeof v === "string")
+    : [];
 
   // The same shape `buildSpendingFacts` builds for `classifyOutflow`.
   const categoriesById = new Map<string, { name: string; debtId: string | null; kind: string }>();
@@ -270,14 +350,16 @@ export async function loadMoneyContext(
       monthlyAllowanceAmount: s?.monthly ?? "0",
       unplannedAllowanceAmount: s?.unplanned ?? "0",
       weeklyAllowanceOverrides,
+      everydayHooks: readEverydayHooks(prefs),
+      amexExcludedTxnIds: new Set(excluded),
     },
     categoriesById,
     debtCategoryIds,
     matchedTxnIds: confirmedMatchIds(matchRows, range, supersede),
-    tier2PairedTxnIds: new Set<string>(),
+    tier2PairedTxnIds: opts.tier2PairedTxnIds ?? new Set<string>(),
     supersede,
     filingCtx: { uncategorizedIds: uncategorizedCategoryIds(cats) },
-    checkingAccountExternalId: ledgerAccounts?.accountExternalId ?? null,
+    checkingAccountExternalId,
     amexCardCadence: cadenceMapFrom(cardCadence),
   };
 }

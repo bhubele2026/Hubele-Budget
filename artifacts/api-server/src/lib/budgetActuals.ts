@@ -171,11 +171,13 @@ export interface ClassifierBudgetMonthRow
  * enumerated, and pinned exactly, by `budgetActuals.test.ts`'s randomized
  * comparison; the review note lists each for the owner.
  *
- * mode "forward" is coverage alone (PR8r/PR10): on top of the classes above, a
- * confirmed match buckets NOWHERE — the bill is already counted in the plan
- * (decision 12) — and a reimbursable row buckets under its flag, which the
- * owner's 2026-09-15 rule ("a reimbursable charge shows as its own row") says
- * it should not; PR8r settles that before switching.
+ * mode "forward" is coverage alone (PR10 switches the card onto it): on top of
+ * the classes above, a confirmed match buckets NOWHERE — the bill is already
+ * counted in the plan (decision 12). (PR8r, the owner's answer 1) A
+ * reimbursable row buckets nowhere in either mode: reimbursable comes before
+ * the flags.
+ *
+ * (PR8r, PR-H review N2) Any other `mode` throws.
  */
 export function classifierAllowanceRows(
   rows: readonly ClassifierBudgetMonthRow[],
@@ -185,6 +187,9 @@ export function classifierAllowanceRows(
   opts: { mode?: "today" | "forward" } = {},
 ): AllowanceAggregateRow[] {
   const mode = opts.mode ?? "today";
+  if (mode !== "today" && mode !== "forward") {
+    throw new Error(`classifierAllowanceRows: unknown mode ${JSON.stringify(mode)}`);
+  }
   const out: AllowanceAggregateRow[] = [];
 
   for (const row of rows) {

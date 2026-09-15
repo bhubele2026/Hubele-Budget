@@ -23,6 +23,13 @@ export const SNAPSHOT = {
   cashBuffer: "500.00",
 };
 
+/**
+ * (PR8r, owner decision 7) The Allowances settings own the everyday amounts. The
+ * Weekly Spend ($300) and Monthly Spend ($400) bills are linked as the Amex payoff
+ * hooks, so these amounts — not the bills' — size the payoffs.
+ */
+export const ALLOWANCES = { weekly: "300.00", monthly: "400.00" };
+
 export const ACCOUNTS = {
   chase: { accountId: "hs-chase-5526", mask: "5526", name: "Chase Checking" },
   savings: { accountId: "hs-savings-8801", mask: "8801", name: "Chase Savings" },
@@ -58,9 +65,12 @@ export type StepExpectation = {
    * asserting a known-wrong number.
    */
   notYet?: { column: "spentWeek"; turnsOnIn: string; appReportsToday: number };
-  // ── Contract for later PRs (it.todo until the named PR ships) ──────────
-  /** Weekly Spend plan ($300) minus weekly-tagged everyday spend. PR8 / PR10. */
+  /**
+   * The weekly Allowances plan ($300) minus weekly-tagged everyday spend —
+   * /forecast/cash-signal `everyday.weekly.remaining`. Switched on in PR8r.
+   */
   remainingWeek: string;
+  // ── Contract for later PRs (it.todo until the named PR ships) ──────────
   /** Purchases flagged unplanned this week. PR10. */
   unplannedWeek: string;
   /** Real spend that is neither planned nor unplanned. PR10. */
@@ -227,7 +237,7 @@ export const CONTRACT_COLUMNS: Array<{
   turnsOnIn: string;
 }> = [
   { key: "bankStale", label: "bank freshness flag", turnsOnIn: "PR3" },
-  { key: "remainingWeek", label: "remaining weekly allowance", turnsOnIn: "PR8" },
+  // (PR8r) remainingWeek is switched on: asserted at every step (expectToday).
   { key: "expectedFri1016", label: "expected balance on Fri 10/16", turnsOnIn: "PR8 + PR9" },
   { key: "lowBeforePayday", label: "lowest before payday", turnsOnIn: "PR9" },
   { key: "unplannedWeek", label: "unplanned this week", turnsOnIn: "PR10" },

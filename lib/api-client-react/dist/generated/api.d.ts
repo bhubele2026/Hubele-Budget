@@ -1593,6 +1593,9 @@ export declare function useGetForecastReviewCount<TData = Awaited<ReturnType<typ
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * The cash signal, with (PR8r) the three views on `daily[]` (`scheduled`, `expected` = `balance`, `conservative`), the `everyday` block and `incomeExpectedToday`. The spine carries none of them: no owed or payoff figure ever goes on /spine.
+ */
 export declare const getGetForecastCashSignalUrl: (params?: GetForecastCashSignalParams) => string;
 export declare const getForecastCashSignal: (params?: GetForecastCashSignalParams, options?: RequestInit) => Promise<CashSignal>;
 export declare const getGetForecastCashSignalQueryKey: (params?: GetForecastCashSignalParams) => readonly ["/api/forecast/cash-signal", ...GetForecastCashSignalParams[]];

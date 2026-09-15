@@ -29,6 +29,7 @@ import {
   type MatchPlan,
   type MatchRow,
   type PlanRowMatch,
+  type EverydayCadence,
 } from "@workspace/avalanche-core";
 import {
   addDays,
@@ -39,6 +40,7 @@ import {
   parseISO,
   type CashEvent,
 } from "./cashSignal";
+import type { LedgerEveryday } from "./everydayHooks";
 
 type RecurringRow = typeof recurringItemsTable.$inferSelect;
 
@@ -88,6 +90,9 @@ export type LedgerPlan = {
    *   today (`keepsPreSnapshotRule`, until PR8); due today it is
    *   `due_today_not_posted` like any other plan;
    * - `pre_window_on_first_day`: no snapshot, and due before the window, so it lands on the window's first day.
+   * - `amex_payoff_not_posted` (PR8r): an everyday payoff (`everyday` set) whose
+   *   period closed and no Amex payment settled it — the owed charges only, on the
+   *   next business day. A payoff still open and due today is `due_today_not_posted`.
    */
   assumption?:
     | "overdue_assumed_unpaid"
@@ -95,7 +100,14 @@ export type LedgerPlan = {
     | "remainder_assumed_unpaid"
     | "due_today_not_posted"
     | "dragged_past_due"
-    | "pre_window_on_first_day";
+    | "pre_window_on_first_day"
+    | "amex_payoff_not_posted";
+  /**
+   * (PR8r) Set on an everyday payoff: the hook's cadence and the period it pays.
+   * `itemId` is the hook item; `occurrenceDate` the period's payoff date, which
+   * resolutions on the payoff are keyed on.
+   */
+  everyday?: { cadence: EverydayCadence; periodStart: string; periodEnd: string };
 };
 
 /**
@@ -200,6 +212,17 @@ export type ForecastLedger = {
   incomeNotArrived: LedgerListedPlan[];
   /** (PR6 review) Overdue expenses a bank row is taken to have paid. Sorted by due date. */
   overdueAssumedPaid: LedgerAssumedPaidPlan[];
+  /**
+   * (PR8r) Income due TODAY that no deposit has arrived for (the arrival rule
+   * `incomeNotArrived` uses): "Expected today". Listed only — still off the
+   * curve, as before PR8r. Sorted by due date.
+   */
+  incomeExpectedToday: LedgerListedPlan[];
+  /**
+   * (PR8r) The everyday hooks' facts for the week and month containing today.
+   * Null unless a hook is linked or the caller asked (`opts.everyday`).
+   */
+  everyday: LedgerEveryday | null;
 };
 
 /** (PR6) How far back an overdue expense still drags onto the curve (#803's floor). */
@@ -281,6 +304,8 @@ export async function buildForecastLedger(
   opts: {
     horizonDays?: number;
     fromDate?: string;
+    /** (PR8r) Read the everyday facts even when no hook is linked (the `everyday` block). */
+    everyday?: boolean;
   } = {},
 ): Promise<ForecastLedger> {
   const [settings] = await db
@@ -378,6 +403,19 @@ export async function buildForecastLedger(
     .select()
     .from(debtsTable)
     .where(eq(debtsTable.householdId, householdId));
+  // ⭐ (PR8r, owner decision 7) THE EVERYDAY PAYOFF HOOKS. The owner's settings
+  // row, read once: which recurring items are linked as the weekly and monthly
+  // Amex payoff hooks (`preferences.everydayHooks`). A linked item's own
+  // occurrences never reach the curve — its payoffs replace them, sized by the
+  // Allowances amounts, not the bill's (`everydayHooks.ts`). With no hook linked
+  // nothing below changes: the bill is a bill.
+  const { readSettingsRow, readEverydayHooks } = await import("./moneyContext");
+  const { resolveHookLinks } = await import("./everydayHooks");
+  const settingsRow = await readSettingsRow(ownerUserId);
+  const hookLinks = resolveHookLinks(readEverydayHooks(settingsRow?.preferences), recurring);
+  const hookItemIds = new Set(
+    (["weekly", "monthly"] as const).flatMap((c) => (hookLinks[c].status === "linked" ? [hookLinks[c].item!.id] : [])),
+  );
   const linkedRecurringByDebt = new Map<string, RecurringRow>();
   for (const r of recurring) {
     // (PR6) A one-time bill dated before today no longer links its debt: before
@@ -387,7 +425,9 @@ export async function buildForecastLedger(
     }
   }
   const events: CashEvent[] = [];
-  for (const item of recurring) events.push(...expandItem(item, expandStart, to));
+  for (const item of recurring) {
+    if (!hookItemIds.has(item.id)) events.push(...expandItem(item, expandStart, to));
+  }
   // (#687) Synthetic events (debt minimums for debts WITHOUT a linked
   // recurring item, and the "Avalanche extra payment" series) are
   // expanded from the SAME `expandStart` as real recurring items.
@@ -593,6 +633,8 @@ export async function buildForecastLedger(
   const eventKeys = new Set(events.map(e => `${e.itemId}|${e.date}`));
   for (const r of resolutionsAll) {
     if (r.status !== "rescheduled" || !r.recurringItemId || !r.occurrenceDate || !r.rescheduledTo || r.rescheduledTo > toISO) continue;
+    // (PR8r) A linked hook's bill has no occurrences to recover: its payoffs read their own answers.
+    if (hookItemIds.has(r.recurringItemId)) continue;
     const key = `${r.recurringItemId}|${r.occurrenceDate}`;
     if (eventKeys.has(key)) continue;
     const day = parseISO(r.occurrenceDate);
@@ -783,6 +825,23 @@ export async function buildForecastLedger(
       partialTxnByKey.set(`${r.recurringItemId}|${r.occurrenceDate}`, r.matchedTxnId);
     }
   }
+  // ⭐ (PR8r) THE AMEX PAYMENTS THAT SETTLED A PAYOFF (tier 1), found before any
+  // bill is matched, and claimed: one payment never pays both a bill and a payoff.
+  // Null (and no query) with no hook linked.
+  const { prepareEverydayHooks } = await import("./everydayHooks");
+  const hooks = await prepareEverydayHooks({
+    householdId,
+    ownerUserId,
+    todayISO,
+    dragFloorISO,
+    toISO,
+    checkingAccountExternalId: configuredCheckingExternalId,
+    links: hookLinks,
+    resolutions: resolutionsAll,
+    resolvedTxnAmount,
+    claimedTxnIds,
+  });
+  for (const payment of hooks?.settled.values() ?? []) claimedTxnIds.add(payment.txnId);
   // (Debt tag) The debt a plan pays: a `debt:` minimum's, or the debt its recurring bill is linked to.
   const planDebtId = (itemId: string): string | null =>
     itemId.startsWith("debt:") ? itemId.slice("debt:".length) : (recurringById.get(itemId)?.debtId ?? null);
@@ -858,6 +917,8 @@ export async function buildForecastLedger(
   let cardPayments: PaidInFull[] = [];
   // Pairs that count as overdue evidence (decision 13): tier 1 or 2, so never a row tagged to another debt.
   let evidencePairs: PlanRowMatch[] = [];
+  // (PR8r) The rows a tier-1/2 pair ties to a bill: `classifyMovement` step 2's tier-2 half.
+  let tier2PairedTxnIds: ReadonlySet<string> = new Set<string>();
   if (matchPlans.length > 0 || listingPlans.length > 0) {
     const candidateRowsAll = await db
       .select()
@@ -1031,6 +1092,16 @@ export async function buildForecastLedger(
       );
     }
     evidencePairs = [...matches, ...listingMatches].filter(isEvidence);
+    // (PR8r) An outflow a tier-1/2 pair ties to a bill uses up no everyday plan
+    // (honoured only on a row with no allowance flag). A pair the hold-back
+    // demoted is tier 3 here, so its row is not in the set.
+    // ⚠️ TODO(PR-I, `feat/bank-removed-review-carry`): built from the matcher's
+    // candidate rows; at the second of the two merges, check PR-I's bank-removed
+    // filter on those rows reaches `matches`/`listingMatches`, so a removed row
+    // is never a tier-2 pair here.
+    tier2PairedTxnIds = new Set(
+      [...matches, ...listingMatches].filter((m) => m.tier <= 2 && m.planAmount < 0).map((m) => m.txnId),
+    );
   }
   // (Decision 13) Only tier-1/2 pairs (`offCurve`) take a plan off the curve; tier 3 is a suggestion.
   const probablyPaidKeys = new Set(matches.filter((m) => m.offCurve).map((m) => m.planKey));
@@ -1058,6 +1129,7 @@ export async function buildForecastLedger(
   const plans: LedgerPlan[] = [];
   const overdueOutsideForecast: LedgerListedPlan[] = [];
   const incomeNotArrived: LedgerListedPlan[] = [];
+  const incomeExpectedToday: LedgerListedPlan[] = [];
   const overdueAssumedPaid: LedgerAssumedPaidPlan[] = [];
   const remainderByPlanKey = new Map<string, number>();
   for (const ev of events) {
@@ -1150,6 +1222,9 @@ export async function buildForecastLedger(
       if (ev.amount >= 0) {
         // (PR6 review, M2) A deposit that paired with the paycheck arrived, name or not.
         if (ev.amount > 0 && dueBeforeToday && !paid) incomeNotArrived.push(listed);
+        // (PR8r) Due today, not arrived: "Expected today". Listed only; it stays off
+        // the curve — see docs/reviews/2026-09-15-everyday-reserve-hooks.md.
+        if (ev.amount > 0 && rawEffectiveDate === todayISO && !paid) incomeExpectedToday.push(listed);
         continue;
       }
       if (paid) {
@@ -1262,6 +1337,48 @@ export async function buildForecastLedger(
     });
   }
 
+  // ⭐ (PR8r) THE PAYOFFS, AND THE EVERYDAY FACTS. With a hook linked, each of its
+  // periods' payoff joins the plans (`everydayReserve.ts`'s rules); the facts are
+  // read too when the caller asks (`opts.everyday`), linked or not.
+  let everyday: LedgerEveryday | null = null;
+  if (hooks || opts.everyday) {
+    const { finishEverydayHooks } = await import("./everydayHooks");
+    const eventByKey = new Map(events.map((e) => [`${e.itemId}|${e.date}`, e] as const));
+    const finished = await finishEverydayHooks({
+      householdId,
+      todayISO,
+      dragCutoffISO,
+      dragFloorISO,
+      checkingAccountExternalId: configuredCheckingExternalId,
+      settingsRow,
+      links: hookLinks,
+      prepared: hooks,
+      tier2PairedTxnIds,
+      resolutions: resolutionsAll,
+      planOf: (itemId, occurrenceDate) => {
+        const ev = eventByKey.get(`${itemId}|${occurrenceDate}`);
+        if (ev) return { label: ev.label, amount: ev.amount };
+        const item = recurringById.get(itemId);
+        return item ? { label: item.name, amount: (item.kind === "income" ? 1 : -1) * Math.abs(Number(item.amount) || 0) } : null;
+      },
+    });
+    everyday = finished.facts;
+    for (const payoff of finished.plans) {
+      plans.push({
+        kind: "plan",
+        eventKind: "expense",
+        date: payoff.curve.date,
+        originalDate: payoff.curve.originalDate,
+        occurrenceDate: payoff.period.payoffDate,
+        amount: -payoff.curve.amountCents / 100,
+        itemId: payoff.item.id,
+        label: payoff.item.name,
+        ...(payoff.curve.assumption ? { assumption: payoff.curve.assumption } : {}),
+        everyday: { cadence: payoff.cadence, periodStart: payoff.period.start, periodEnd: payoff.period.end },
+      });
+    }
+  }
+
   // Due date, then label, then key. ⚠️ The key embeds a random item id, so two
   // plans due the same day must be told apart by label first, or their order
   // changes from one read to the next (the golden "ties" entry caught it).
@@ -1272,6 +1389,7 @@ export async function buildForecastLedger(
         : a.planKey < b.planKey ? -1 : a.planKey > b.planKey ? 1 : 0;
   overdueOutsideForecast.sort(byDueDate);
   incomeNotArrived.sort(byDueDate);
+  incomeExpectedToday.sort(byDueDate);
   overdueAssumedPaid.sort(byDueDate);
 
   for (const a of actuals) a.matched = matchedTxnIds.has(a.txnId);
@@ -1300,5 +1418,7 @@ export async function buildForecastLedger(
     overdueOutsideForecast,
     incomeNotArrived,
     overdueAssumedPaid,
+    incomeExpectedToday,
+    everyday,
   };
 }

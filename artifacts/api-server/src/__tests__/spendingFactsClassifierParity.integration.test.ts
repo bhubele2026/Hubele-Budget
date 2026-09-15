@@ -395,8 +395,13 @@ describe("mode 'forward' — decision 12: a confirmed bill match stops counting"
   });
 });
 
-describe("mode 'forward' — reimbursable + an allowance flag counts under its flag", () => {
-  it("today excludes it; forward counts the flagged one only — a plain reimbursable row stays out", async () => {
+// (PR8r, the owner's answer 1: "a reimbursable charge shows as its own row".)
+// PR-H's forward mode counted the flagged $35 under its flag ({ total: 35,
+// transactionCount: 1 }). Reimbursable now comes before the flags, so forward
+// agrees with today on both rows — the assertion below replaces that one and is
+// stricter: forward must now EQUAL today here.
+describe("mode 'forward' — a reimbursable row never counts, flagged or not (PR8r, answer 1)", () => {
+  it("today excludes both; forward excludes both too — the flagged one and the plain one", async () => {
     const hh = await household("d2");
     await db.insert(transactionsTable).values([
       {
@@ -422,7 +427,8 @@ describe("mode 'forward' — reimbursable + an allowance flag counts under its f
     expect(facts.householdSpend.total).toBe(0);
     const { rows, money, spend } = await classifierSpendForRange(hh.householdId, "2026-08-01", "2026-08-31");
     expect(spend).toEqual(facts.householdSpend);
-    expect(classifierHouseholdSpend(rows, money, { mode: "forward" })).toEqual({ total: 35, transactionCount: 1 });
+    expect(classifierHouseholdSpend(rows, money, { mode: "forward" })).toEqual({ total: 0, transactionCount: 0 });
+    expect(classifierHouseholdSpend(rows, money, { mode: "forward" })).toEqual(facts.householdSpend);
   });
 });
 
@@ -474,5 +480,11 @@ describe("classifierHouseholdSpend — what each coverage adds, and 'today' is t
 
   it("no mode given is 'today'", () => {
     expect(classifierHouseholdSpend(rows, ctx)).toEqual({ total: 31, transactionCount: 5 });
+  });
+
+  it("any other mode throws (PR-H review N2)", () => {
+    for (const mode of ["future", "", "TODAY"]) {
+      expect(() => classifierHouseholdSpend(rows, ctx, { mode } as never), JSON.stringify(mode)).toThrow(/unknown mode/);
+    }
   });
 });

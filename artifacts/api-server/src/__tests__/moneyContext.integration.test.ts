@@ -23,6 +23,7 @@ vi.mock("../lib/amexCardCadence", async (importOriginal) => {
 
 import {
   db,
+  pool,
   budgetCategoriesTable,
   debtsTable,
   forecastResolutionsTable,
@@ -386,6 +387,75 @@ describe("loadMoneyContext — one household only (review L2)", () => {
   it("a resolution in this household that names another household's row is ignored — on both sides", async () => {
     expect((await loadMoneyContext(TEST_HOUSEHOLD_ID, SEPT)).matchedTxnIds.has(OTHER_ROW_THIS_RESOLUTION)).toBe(false);
     expect((await loadMoneyContext(OTHER_HOUSEHOLD_ID, SEPT)).matchedTxnIds.has(OTHER_ROW_THIS_RESOLUTION)).toBe(false);
+  });
+});
+
+describe("loadMoneyContext — the settings row is read with ONE select (PR8r, PR-H review L1)", () => {
+  const sqlOf = (arg: unknown): string =>
+    typeof arg === "string" ? arg : ((arg as { text?: string } | null)?.text ?? "");
+  const settingsSelects = (calls: unknown[][]): string[] =>
+    calls.map(([arg]) => sqlOf(arg)).filter((sql) => /\bfrom "settings"/i.test(sql));
+
+  it("a Drizzle builder runs its query on every .then — one settings select reaches the pool, not two", async () => {
+    const spy = vi.spyOn(pool, "query");
+    try {
+      const ctx = await loadMoneyContext(LINKED_HOUSEHOLD_ID, SEPT);
+      expect(settingsSelects(spy.mock.calls)).toHaveLength(1);
+      // And both consumers still got the row: the cadence override came through.
+      expect(ctx.amexCardCadence.get(LINKED_PLATINUM_MONTHLY)).toBe("monthly");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("a settings row handed in is used as is: no settings select at all", async () => {
+    const spy = vi.spyOn(pool, "query");
+    try {
+      const ctx = await loadMoneyContext(LINKED_HOUSEHOLD_ID, SEPT, {
+        settingsRow: { weekly: "1.00", monthly: "2.00", unplanned: "3.00", preferences: LINKED_PREFS },
+      });
+      expect(settingsSelects(spy.mock.calls)).toHaveLength(0);
+      expect(ctx.settings.weeklyAllowanceAmount).toBe("1.00");
+      expect(ctx.amexCardCadence.get(LINKED_PLATINUM_MONTHLY)).toBe("monthly");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("a checking account and tier-2 pairs handed in are used as is (PR8r)", async () => {
+    const pairs = new Set(["t2-row"]);
+    const ctx = await loadMoneyContext(LINKED_HOUSEHOLD_ID, SEPT, { checkingAccountExternalId: null, tier2PairedTxnIds: pairs });
+    expect(ctx.checkingAccountExternalId).toBeNull();
+    expect(ctx.tier2PairedTxnIds).toBe(pairs);
+  });
+});
+
+describe("loadMoneyContext — a match carries only from the pending row it replaced (PR8r, PR-H review L2)", () => {
+  it("a posted row whose replaced pending row was UNMATCHED is not matched, though another pending row on the same account is", async () => {
+    const account = `acct-card-l2-${randomUUID()}`;
+    const at = (day: string) => new Date(createdAtStartOfHouseholdDay(day).getTime() + 3_600_000);
+    const matchedPending = await insertTxn(TEST_USER, TEST_HOUSEHOLD_ID, {
+      plaidAccountId: account, source: "plaid", description: "CITY POWER CO", occurredOn: "2026-11-03", createdAt: at("2026-11-03"), amount: "-40.00", pending: true,
+    });
+    const matchedPosted = await insertTxn(TEST_USER, TEST_HOUSEHOLD_ID, {
+      plaidAccountId: account, source: "plaid", description: "CITY POWER CO", occurredOn: "2026-11-05", createdAt: at("2026-11-05"), amount: "-44.00",
+    });
+    const plainPending = await insertTxn(TEST_USER, TEST_HOUSEHOLD_ID, {
+      plaidAccountId: account, source: "plaid", description: "RIVER GAS UTIL", occurredOn: "2026-11-04", createdAt: at("2026-11-04"), amount: "-25.00", pending: true,
+    });
+    const plainPosted = await insertTxn(TEST_USER, TEST_HOUSEHOLD_ID, {
+      plaidAccountId: account, source: "plaid", description: "RIVER GAS UTIL", occurredOn: "2026-11-06", createdAt: at("2026-11-06"), amount: "-27.00",
+    });
+    await resolve(TEST_USER, TEST_HOUSEHOLD_ID, matchedPending, "matched", "2026-11-03");
+
+    const ctx = await loadMoneyContext(TEST_HOUSEHOLD_ID, NOV);
+    // Both pairs are real pairs on the same account…
+    expect(ctx.supersede.replacedBy.get(matchedPosted)?.id).toBe(matchedPending);
+    expect(ctx.supersede.replacedBy.get(plainPosted)?.id).toBe(plainPending);
+    // …and only the matched pending row's posted row reads as matched.
+    expect(ctx.matchedTxnIds.has(matchedPosted)).toBe(true);
+    expect(ctx.matchedTxnIds.has(plainPosted)).toBe(false);
+    expect(ctx.matchedTxnIds.has(plainPending)).toBe(false);
   });
 });
 

@@ -36,6 +36,10 @@ export type CashSignalEventsItem = {
   false for an underpayment), and only the unpaid remainder
   lands — on the plan's OWN date, never dragged to a business
   day like the overdue sibling above.
+  `amex_payoff_not_posted` (PR8r): an everyday payoff (the hook
+  item's event; `occurrenceDate` is the period's payoff date)
+  whose period closed with no Amex payment settling it — the
+  owed charges only, on the next business day.
   
      * @nullable
      */

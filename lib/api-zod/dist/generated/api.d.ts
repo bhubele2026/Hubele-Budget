@@ -5228,6 +5228,16 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }>, "many">>;
         weeklyAllowanceOverrides: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
+        everydayHooks: zod.ZodOptional<zod.ZodObject<{
+            weeklyItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            monthlyItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        }, "strip", zod.ZodTypeAny, {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        }, {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        }>>;
         amexCardBrands: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["blue", "silver", "gold"]>>>;
         amexCardCadence: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["weekly", "monthly"]>>>;
         amexCardNames: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
@@ -5250,6 +5260,10 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5272,6 +5286,10 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5300,6 +5318,10 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5328,6 +5350,10 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5379,6 +5405,16 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             matchValue: string;
         }>, "many">>;
         weeklyAllowanceOverrides: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
+        everydayHooks: zod.ZodOptional<zod.ZodObject<{
+            weeklyItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            monthlyItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        }, "strip", zod.ZodTypeAny, {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        }, {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        }>>;
         amexCardBrands: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["blue", "silver", "gold"]>>>;
         amexCardCadence: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["weekly", "monthly"]>>>;
         amexCardNames: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
@@ -5401,6 +5437,10 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5423,6 +5463,10 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5451,6 +5495,10 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5479,6 +5527,10 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5530,6 +5582,16 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }>, "many">>;
         weeklyAllowanceOverrides: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
+        everydayHooks: zod.ZodOptional<zod.ZodObject<{
+            weeklyItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            monthlyItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        }, "strip", zod.ZodTypeAny, {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        }, {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        }>>;
         amexCardBrands: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["blue", "silver", "gold"]>>>;
         amexCardCadence: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["weekly", "monthly"]>>>;
         amexCardNames: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
@@ -5552,6 +5614,10 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5574,6 +5640,10 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5602,6 +5672,10 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5630,6 +5704,10 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        everydayHooks?: {
+            weeklyItemId?: string | null | undefined;
+            monthlyItemId?: string | null | undefined;
+        } | undefined;
         amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
         amexCardCadence?: Record<string, "weekly" | "monthly"> | undefined;
         amexCardNames?: Record<string, string> | undefined;
@@ -5872,12 +5950,21 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
             date: zod.ZodString;
             balance: zod.ZodString;
+            scheduled: zod.ZodOptional<zod.ZodString>;
+            expected: zod.ZodOptional<zod.ZodString>;
+            conservative: zod.ZodOptional<zod.ZodString>;
         }, "strip", zod.ZodTypeAny, {
             date: string;
             balance: string;
+            expected?: string | undefined;
+            scheduled?: string | undefined;
+            conservative?: string | undefined;
         }, {
             date: string;
             balance: string;
+            expected?: string | undefined;
+            scheduled?: string | undefined;
+            conservative?: string | undefined;
         }>, "many">>;
         events: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
             date: zod.ZodString;
@@ -6037,6 +6124,325 @@ export declare const GetForecastResponse: zod.ZodObject<{
             offCurve: boolean;
             remainderAmount?: string | undefined;
         }>, "many">>;
+        everyday: zod.ZodOptional<zod.ZodObject<{
+            weekly: zod.ZodObject<{
+                status: zod.ZodEnum<["linked", "unlinked", "invalid"]>;
+                itemId: zod.ZodNullable<zod.ZodString>;
+                billAmount: zod.ZodNullable<zod.ZodString>;
+                allowanceAmount: zod.ZodString;
+                discrepancy: zod.ZodBoolean;
+                periodStart: zod.ZodString;
+                periodEnd: zod.ZodString;
+                payoffDate: zod.ZodString;
+                plan: zod.ZodString;
+                spent: zod.ZodString;
+                remaining: zod.ZodString;
+                overage: zod.ZodString;
+                unplanned: zod.ZodString;
+                needsClassification: zod.ZodString;
+                owed: zod.ZodNullable<zod.ZodString>;
+                payoff: zod.ZodNullable<zod.ZodString>;
+                payment: zod.ZodUnion<[zod.ZodObject<{
+                    txnId: zod.ZodString;
+                    date: zod.ZodString;
+                    amount: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                }, {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                }>, zod.ZodNull]>;
+            }, "strip", zod.ZodTypeAny, {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            }, {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            }>;
+            monthly: zod.ZodObject<{
+                status: zod.ZodEnum<["linked", "unlinked", "invalid"]>;
+                itemId: zod.ZodNullable<zod.ZodString>;
+                billAmount: zod.ZodNullable<zod.ZodString>;
+                allowanceAmount: zod.ZodString;
+                discrepancy: zod.ZodBoolean;
+                periodStart: zod.ZodString;
+                periodEnd: zod.ZodString;
+                payoffDate: zod.ZodString;
+                plan: zod.ZodString;
+                spent: zod.ZodString;
+                remaining: zod.ZodString;
+                overage: zod.ZodString;
+                unplanned: zod.ZodString;
+                needsClassification: zod.ZodString;
+                owed: zod.ZodNullable<zod.ZodString>;
+                payoff: zod.ZodNullable<zod.ZodString>;
+                payment: zod.ZodUnion<[zod.ZodObject<{
+                    txnId: zod.ZodString;
+                    date: zod.ZodString;
+                    amount: zod.ZodString;
+                }, "strip", zod.ZodTypeAny, {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                }, {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                }>, zod.ZodNull]>;
+            }, "strip", zod.ZodTypeAny, {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            }, {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            }>;
+            billMatched: zod.ZodArray<zod.ZodObject<{
+                txnId: zod.ZodString;
+                date: zod.ZodString;
+                txnAmount: zod.ZodString;
+                planKey: zod.ZodNullable<zod.ZodString>;
+                planLabel: zod.ZodNullable<zod.ZodString>;
+                planAmount: zod.ZodNullable<zod.ZodString>;
+                overage: zod.ZodNullable<zod.ZodString>;
+                conflict: zod.ZodNullable<zod.ZodString>;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                txnAmount: string;
+                planKey: string | null;
+                planAmount: string | null;
+                txnId: string;
+                overage: string | null;
+                planLabel: string | null;
+                conflict: string | null;
+            }, {
+                date: string;
+                txnAmount: string;
+                planKey: string | null;
+                planAmount: string | null;
+                txnId: string;
+                overage: string | null;
+                planLabel: string | null;
+                conflict: string | null;
+            }>, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            weekly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            monthly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            billMatched: {
+                date: string;
+                txnAmount: string;
+                planKey: string | null;
+                planAmount: string | null;
+                txnId: string;
+                overage: string | null;
+                planLabel: string | null;
+                conflict: string | null;
+            }[];
+        }, {
+            weekly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            monthly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            billMatched: {
+                date: string;
+                txnAmount: string;
+                planKey: string | null;
+                planAmount: string | null;
+                txnId: string;
+                overage: string | null;
+                planLabel: string | null;
+                conflict: string | null;
+            }[];
+        }>>;
+        incomeExpectedToday: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            planKey: zod.ZodString;
+            itemId: zod.ZodString;
+            occurrenceDate: zod.ZodString;
+            dueDate: zod.ZodString;
+            amount: zod.ZodString;
+            label: zod.ZodString;
+            daysOverdue: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
+        }, {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
+        }>, "many">>;
     }, "strip", zod.ZodTypeAny, {
         status: "ready" | "tight" | "not_yet" | "no_data";
         account: {
@@ -6089,6 +6495,9 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+            expected?: string | undefined;
+            scheduled?: string | undefined;
+            conservative?: string | undefined;
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
@@ -6120,6 +6529,73 @@ export declare const GetForecastResponse: zod.ZodObject<{
             txnId: string;
             confidence: string;
             unpaidRemainder: string;
+        }[] | undefined;
+        everyday?: {
+            weekly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            monthly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            billMatched: {
+                date: string;
+                txnAmount: string;
+                planKey: string | null;
+                planAmount: string | null;
+                txnId: string;
+                overage: string | null;
+                planLabel: string | null;
+                conflict: string | null;
+            }[];
+        } | undefined;
+        incomeExpectedToday?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
         }[] | undefined;
     }, {
         status: "ready" | "tight" | "not_yet" | "no_data";
@@ -6173,6 +6649,9 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+            expected?: string | undefined;
+            scheduled?: string | undefined;
+            conservative?: string | undefined;
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
@@ -6204,6 +6683,73 @@ export declare const GetForecastResponse: zod.ZodObject<{
             txnId: string;
             confidence: string;
             unpaidRemainder: string;
+        }[] | undefined;
+        everyday?: {
+            weekly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            monthly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            billMatched: {
+                date: string;
+                txnAmount: string;
+                planKey: string | null;
+                planAmount: string | null;
+                txnId: string;
+                overage: string | null;
+                planLabel: string | null;
+                conflict: string | null;
+            }[];
+        } | undefined;
+        incomeExpectedToday?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
         }[] | undefined;
     }>, zod.ZodNull]>>;
     plaidCheckingAccounts: zod.ZodArray<zod.ZodObject<{
@@ -6407,6 +6953,9 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+            expected?: string | undefined;
+            scheduled?: string | undefined;
+            conservative?: string | undefined;
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
@@ -6438,6 +6987,73 @@ export declare const GetForecastResponse: zod.ZodObject<{
             txnId: string;
             confidence: string;
             unpaidRemainder: string;
+        }[] | undefined;
+        everyday?: {
+            weekly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            monthly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            billMatched: {
+                date: string;
+                txnAmount: string;
+                planKey: string | null;
+                planAmount: string | null;
+                txnId: string;
+                overage: string | null;
+                planLabel: string | null;
+                conflict: string | null;
+            }[];
+        } | undefined;
+        incomeExpectedToday?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
         }[] | undefined;
     } | null | undefined;
     checkingAccountExternalId?: string | null | undefined;
@@ -6588,6 +7204,9 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+            expected?: string | undefined;
+            scheduled?: string | undefined;
+            conservative?: string | undefined;
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
@@ -6619,6 +7238,73 @@ export declare const GetForecastResponse: zod.ZodObject<{
             txnId: string;
             confidence: string;
             unpaidRemainder: string;
+        }[] | undefined;
+        everyday?: {
+            weekly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            monthly: {
+                status: "linked" | "unlinked" | "invalid";
+                payment: {
+                    date: string;
+                    amount: string;
+                    txnId: string;
+                } | null;
+                itemId: string | null;
+                unplanned: string;
+                billAmount: string | null;
+                allowanceAmount: string;
+                discrepancy: boolean;
+                periodStart: string;
+                periodEnd: string;
+                payoffDate: string;
+                plan: string;
+                spent: string;
+                remaining: string;
+                overage: string;
+                needsClassification: string;
+                owed: string | null;
+                payoff: string | null;
+            };
+            billMatched: {
+                date: string;
+                txnAmount: string;
+                planKey: string | null;
+                planAmount: string | null;
+                txnId: string;
+                overage: string | null;
+                planLabel: string | null;
+                conflict: string | null;
+            }[];
+        } | undefined;
+        incomeExpectedToday?: {
+            amount: string;
+            itemId: string;
+            label: string;
+            occurrenceDate: string;
+            planKey: string;
+            dueDate: string;
+            daysOverdue: number;
         }[] | undefined;
     } | null | undefined;
     checkingAccountExternalId?: string | null | undefined;
@@ -6833,6 +7519,9 @@ export declare const GetForecastReviewCountResponse: zod.ZodObject<{
 }, {
     count: number;
 }>;
+/**
+ * The cash signal, with (PR8r) the three views on `daily[]` (`scheduled`, `expected` = `balance`, `conservative`), the `everyday` block and `incomeExpectedToday`. The spine carries none of them: no owed or payoff figure ever goes on /spine.
+ */
 export declare const GetForecastCashSignalQueryParams: zod.ZodObject<{
     horizonDays: zod.ZodOptional<zod.ZodNumber>;
     fromDate: zod.ZodOptional<zod.ZodString>;
@@ -6880,12 +7569,21 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     daily: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
         date: zod.ZodString;
         balance: zod.ZodString;
+        scheduled: zod.ZodOptional<zod.ZodString>;
+        expected: zod.ZodOptional<zod.ZodString>;
+        conservative: zod.ZodOptional<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         date: string;
         balance: string;
+        expected?: string | undefined;
+        scheduled?: string | undefined;
+        conservative?: string | undefined;
     }, {
         date: string;
         balance: string;
+        expected?: string | undefined;
+        scheduled?: string | undefined;
+        conservative?: string | undefined;
     }>, "many">>;
     events: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
         date: zod.ZodString;
@@ -7045,6 +7743,325 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         offCurve: boolean;
         remainderAmount?: string | undefined;
     }>, "many">>;
+    everyday: zod.ZodOptional<zod.ZodObject<{
+        weekly: zod.ZodObject<{
+            status: zod.ZodEnum<["linked", "unlinked", "invalid"]>;
+            itemId: zod.ZodNullable<zod.ZodString>;
+            billAmount: zod.ZodNullable<zod.ZodString>;
+            allowanceAmount: zod.ZodString;
+            discrepancy: zod.ZodBoolean;
+            periodStart: zod.ZodString;
+            periodEnd: zod.ZodString;
+            payoffDate: zod.ZodString;
+            plan: zod.ZodString;
+            spent: zod.ZodString;
+            remaining: zod.ZodString;
+            overage: zod.ZodString;
+            unplanned: zod.ZodString;
+            needsClassification: zod.ZodString;
+            owed: zod.ZodNullable<zod.ZodString>;
+            payoff: zod.ZodNullable<zod.ZodString>;
+            payment: zod.ZodUnion<[zod.ZodObject<{
+                txnId: zod.ZodString;
+                date: zod.ZodString;
+                amount: zod.ZodString;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                amount: string;
+                txnId: string;
+            }, {
+                date: string;
+                amount: string;
+                txnId: string;
+            }>, zod.ZodNull]>;
+        }, "strip", zod.ZodTypeAny, {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        }, {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        }>;
+        monthly: zod.ZodObject<{
+            status: zod.ZodEnum<["linked", "unlinked", "invalid"]>;
+            itemId: zod.ZodNullable<zod.ZodString>;
+            billAmount: zod.ZodNullable<zod.ZodString>;
+            allowanceAmount: zod.ZodString;
+            discrepancy: zod.ZodBoolean;
+            periodStart: zod.ZodString;
+            periodEnd: zod.ZodString;
+            payoffDate: zod.ZodString;
+            plan: zod.ZodString;
+            spent: zod.ZodString;
+            remaining: zod.ZodString;
+            overage: zod.ZodString;
+            unplanned: zod.ZodString;
+            needsClassification: zod.ZodString;
+            owed: zod.ZodNullable<zod.ZodString>;
+            payoff: zod.ZodNullable<zod.ZodString>;
+            payment: zod.ZodUnion<[zod.ZodObject<{
+                txnId: zod.ZodString;
+                date: zod.ZodString;
+                amount: zod.ZodString;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                amount: string;
+                txnId: string;
+            }, {
+                date: string;
+                amount: string;
+                txnId: string;
+            }>, zod.ZodNull]>;
+        }, "strip", zod.ZodTypeAny, {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        }, {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        }>;
+        billMatched: zod.ZodArray<zod.ZodObject<{
+            txnId: zod.ZodString;
+            date: zod.ZodString;
+            txnAmount: zod.ZodString;
+            planKey: zod.ZodNullable<zod.ZodString>;
+            planLabel: zod.ZodNullable<zod.ZodString>;
+            planAmount: zod.ZodNullable<zod.ZodString>;
+            overage: zod.ZodNullable<zod.ZodString>;
+            conflict: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            txnAmount: string;
+            planKey: string | null;
+            planAmount: string | null;
+            txnId: string;
+            overage: string | null;
+            planLabel: string | null;
+            conflict: string | null;
+        }, {
+            date: string;
+            txnAmount: string;
+            planKey: string | null;
+            planAmount: string | null;
+            txnId: string;
+            overage: string | null;
+            planLabel: string | null;
+            conflict: string | null;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        weekly: {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        };
+        monthly: {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        };
+        billMatched: {
+            date: string;
+            txnAmount: string;
+            planKey: string | null;
+            planAmount: string | null;
+            txnId: string;
+            overage: string | null;
+            planLabel: string | null;
+            conflict: string | null;
+        }[];
+    }, {
+        weekly: {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        };
+        monthly: {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        };
+        billMatched: {
+            date: string;
+            txnAmount: string;
+            planKey: string | null;
+            planAmount: string | null;
+            txnId: string;
+            overage: string | null;
+            planLabel: string | null;
+            conflict: string | null;
+        }[];
+    }>>;
+    incomeExpectedToday: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        planKey: zod.ZodString;
+        itemId: zod.ZodString;
+        occurrenceDate: zod.ZodString;
+        dueDate: zod.ZodString;
+        amount: zod.ZodString;
+        label: zod.ZodString;
+        daysOverdue: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
+    }, {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
+    }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     status: "ready" | "tight" | "not_yet" | "no_data";
     account: {
@@ -7097,6 +8114,9 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     daily?: {
         date: string;
         balance: string;
+        expected?: string | undefined;
+        scheduled?: string | undefined;
+        conservative?: string | undefined;
     }[] | undefined;
     overdueOutsideForecast?: {
         amount: string;
@@ -7128,6 +8148,73 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         txnId: string;
         confidence: string;
         unpaidRemainder: string;
+    }[] | undefined;
+    everyday?: {
+        weekly: {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        };
+        monthly: {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        };
+        billMatched: {
+            date: string;
+            txnAmount: string;
+            planKey: string | null;
+            planAmount: string | null;
+            txnId: string;
+            overage: string | null;
+            planLabel: string | null;
+            conflict: string | null;
+        }[];
+    } | undefined;
+    incomeExpectedToday?: {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
     }[] | undefined;
 }, {
     status: "ready" | "tight" | "not_yet" | "no_data";
@@ -7181,6 +8268,9 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     daily?: {
         date: string;
         balance: string;
+        expected?: string | undefined;
+        scheduled?: string | undefined;
+        conservative?: string | undefined;
     }[] | undefined;
     overdueOutsideForecast?: {
         amount: string;
@@ -7212,6 +8302,73 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         txnId: string;
         confidence: string;
         unpaidRemainder: string;
+    }[] | undefined;
+    everyday?: {
+        weekly: {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        };
+        monthly: {
+            status: "linked" | "unlinked" | "invalid";
+            payment: {
+                date: string;
+                amount: string;
+                txnId: string;
+            } | null;
+            itemId: string | null;
+            unplanned: string;
+            billAmount: string | null;
+            allowanceAmount: string;
+            discrepancy: boolean;
+            periodStart: string;
+            periodEnd: string;
+            payoffDate: string;
+            plan: string;
+            spent: string;
+            remaining: string;
+            overage: string;
+            needsClassification: string;
+            owed: string | null;
+            payoff: string | null;
+        };
+        billMatched: {
+            date: string;
+            txnAmount: string;
+            planKey: string | null;
+            planAmount: string | null;
+            txnId: string;
+            overage: string | null;
+            planLabel: string | null;
+            conflict: string | null;
+        }[];
+    } | undefined;
+    incomeExpectedToday?: {
+        amount: string;
+        itemId: string;
+        label: string;
+        occurrenceDate: string;
+        planKey: string;
+        dueDate: string;
+        daysOverdue: number;
     }[] | undefined;
 }>;
 /**
