@@ -862,7 +862,7 @@ export default function BillsPage() {
                 </div>
                 <span className="chip gray">Paid off</span>
                 <span className="ml-auto text-micro text-neutral-400">
-                  manage on Future Goal
+                  manage on the Debt page
                 </span>
               </div>
               <div className={scrollX}>
@@ -1635,7 +1635,7 @@ function DebtMinimumsCard({
         <Lock className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
         <div className="text-label font-semibold text-brand-navy">Debt minimums</div>
         <Help>
-          Synced from Debts and edited on Future Goal, never here. Each minimum
+          Synced from Debts and edited on the Debt page, never here. Each minimum
           stops on the month the avalanche pays that debt off.
         </Help>
         <span className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy">
