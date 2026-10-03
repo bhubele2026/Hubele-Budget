@@ -95,3 +95,12 @@ The upload client (generated `importWorkbook`) sends a single `file` field, so m
 - Render auto-deploys `main`; after merge, check `/api/version` returns the merge SHA and `/api/healthz` is 200.
 - CI's API-test job will show the calendar-dependent `spineParity` failure above through Saturday 2026-10-03
   (household day), on this branch and on `main` alike. A re-run from Sunday 2026-10-04 should be green.
+
+## Follow-up: the date-dependent parity check (same branch)
+
+CI's api-tests failed on this branch and on `main` alike: `spineParity` asserted "a week cannot outspend its month",
+which is false for a Sun–Sat week that began before the 1st (Sun Sep 27 – Sat Oct 3 holds four September days the
+October month-to-date does not: 221.14 month vs 285.24 week). Render deploys only on a passing CI, so the security
+pins could not ship until Sunday. The assertion now holds only when the week starts on or after the month's 1st;
+every parity assertion (to the cent) is unchanged. Test-only — no calculation, query or stored value moved.
+`spineParity.integration.test.ts`: 13/13 on a fresh test database; typecheck clean.

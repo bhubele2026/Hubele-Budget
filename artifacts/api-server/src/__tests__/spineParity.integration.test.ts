@@ -552,9 +552,11 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(spine.spentMonth).not.toBe(month.realSpend.total);
     expect(spine.spentWeek).not.toBe(week.realSpend.total);
 
-    // Not vacuous, and internally coherent: a week cannot outspend its month.
+    // Not vacuous, and internally coherent: a week cannot outspend its month — when the week lies inside it.
+    // A Sun–Sat week that began before the 1st (Sun Sep 27 – Sat Oct 3) also holds the last days of the
+    // previous month, so it can (it failed every run that week: 221.14 month vs 285.24 week).
     expect(spine.spentMonth).toBeGreaterThan(0);
-    expect(spine.spentMonth).toBeGreaterThanOrEqual(spine.spentWeek);
+    if (weekStartFor(TODAY) >= MONTH_START_ISO) expect(spine.spentMonth).toBeGreaterThanOrEqual(spine.spentWeek);
   });
 
   it("(PR-H) spentMonth + spentWeek equal the household money classifier (mode 'today') over the spine's own windows", async () => {
