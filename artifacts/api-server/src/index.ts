@@ -1,5 +1,8 @@
 import cron from "node-cron";
+import { runMigrations } from "@workspace/db/migrate";
 import app from "./app";
+import { migrateOnBootEnabled, startServer } from "./boot";
+import { findMigrationsDir } from "./lib/migrationsDir";
 import { logger } from "./lib/logger";
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
@@ -88,7 +91,27 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
+// (PR-0) Pending SQL migrations run BEFORE listen; a failure exits 1 so the
+// deploy fails and the old build keeps serving. See boot.ts.
+await startServer({
+  migrateOnBoot: migrateOnBootEnabled(),
+  migrate: () =>
+    runMigrations({
+      databaseUrl: process.env.DATABASE_URL!,
+      dir: findMigrationsDir(import.meta.url),
+      log: (msg) => logger.info(`[migrate] ${msg}`),
+    }),
+  listen: () => {
+    app.listen(port, onListening);
+  },
+  exit: (code) => process.exit(code),
+  log: {
+    info: (msg) => logger.info(msg),
+    error: (msg, err) => logger.error({ err }, msg),
+  },
+});
+
+function onListening(err?: Error): void {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
@@ -146,4 +169,4 @@ app.listen(port, (err) => {
       "Plaid credentials missing — the daily sync-attempts prune is disabled",
     );
   }
-});
+}

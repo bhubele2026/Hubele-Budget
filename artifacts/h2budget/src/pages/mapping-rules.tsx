@@ -1185,6 +1185,8 @@ export default function MappingRulesPage() {
                               fromCategoryId: previewSnapshot.toCategoryId,
                               toCategoryId: previewSnapshot.fromCategoryId!,
                               ids: res.affectedIds,
+                              // (PR-0) Restore each row's category lock.
+                              ...(res.lockedIds ? { lockedIds: res.lockedIds } : {}),
                               // Re-point the rule back to its previous
                               // category too — without this the rule
                               // would still match new charges into the

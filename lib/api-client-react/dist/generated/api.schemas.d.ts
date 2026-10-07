@@ -319,6 +319,16 @@ export interface Transaction {
   `isTransfer` in PATCH /transactions/:id sets it automatically.
    */
     isTransferUserOverridden: boolean;
+    /** (PR-0) True when a person chose this row's category by hand:
+  PATCH /transactions/:id or bulk-update with a categoryId,
+  recategorize-by-pattern, or a create whose body named the
+  category (never a mapping rule's auto-fill). Clearing the
+  category (categoryId null, uncategorize-by-ids) clears it. The
+  automatic categorizer never moves a locked row and Plaid sync
+  never writes it. Server-managed and read-only: the input schemas
+  do not accept it.
+   */
+    readonly categoryLockedByUser?: boolean;
     /** (#632 follow-up) User-set per-row flag marking a card payment
   as going to a card that is NOT in our debt avalanche (e.g. a
   spouse's external card). Excluded from avalanche actuals so
@@ -937,6 +947,17 @@ export interface RecategorizeByPatternInput {
   onto the user's accidental category pick.
    */
     ruleId?: string;
+    /**
+     * (PR-0) Undo only. The `lockedIds` the original call returned:
+  the rows it moved that a person had already locked. When
+  present, each row this call moves is locked only if its id is
+  in the list, so an Undo restores every row's
+  `categoryLockedByUser` exactly. When absent, every moved row is
+  locked (a person re-filed it).
+  
+     * @maxItems 1000
+     */
+    lockedIds?: string[];
 }
 export interface RecategorizeByPatternResult {
     /** Number of transactions whose categoryId was flipped. */
@@ -952,6 +973,11 @@ export interface RecategorizeByPatternResult {
   "Undo" of a bulk recategorization.
    */
     affectedIds: string[];
+    /** (PR-0) The subset of `affectedIds` whose category a person had
+  locked BEFORE this call moved them. The Undo passes it back as
+  the request's `lockedIds` to restore each row's lock.
+   */
+    lockedIds?: string[];
 }
 export interface UncategorizeByIdsInput {
     /**

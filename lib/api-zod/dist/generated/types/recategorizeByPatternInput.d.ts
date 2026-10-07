@@ -49,5 +49,16 @@ export interface RecategorizeByPatternInput {
   onto the user's accidental category pick.
    */
     ruleId?: string;
+    /**
+     * (PR-0) Undo only. The `lockedIds` the original call returned:
+  the rows it moved that a person had already locked. When
+  present, each row this call moves is locked only if its id is
+  in the list, so an Undo restores every row's
+  `categoryLockedByUser` exactly. When absent, every moved row is
+  locked (a person re-filed it).
+  
+     * @maxItems 1000
+     */
+    lockedIds?: string[];
 }
 //# sourceMappingURL=recategorizeByPatternInput.d.ts.map

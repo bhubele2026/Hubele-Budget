@@ -11,9 +11,14 @@ to get the household out of debt; correctness and trust beat everything.
 
 ## 1. Money & correctness (non-negotiable)
 
-- **This app contains NO AI.** No advisor, no generated narratives, no LLM
-  calls anywhere — every number and every word on screen is computed or
-  written in our code. Do not re-add AI features (removed 2026-08).
+- **Code computes every figure.** Every number on screen is computed in
+  application code from verified records. A language model may classify a
+  transaction, extract fields from a receipt, draft text, or propose a change;
+  it **never computes a money figure, never writes an amount, never raises a
+  budget or goal**, and every model output is validated by code (schema and
+  business rules) before it touches a row. Model calls are bounded (timeouts,
+  retries, per-household caps) and logged with redaction. (Owner's decision,
+  2026-10-07; it replaces the 2026-08 "no AI" rule.)
 - **Never change financial calculations, queries, or stored data values** while
   doing UI, routing, performance, or copy work. UI consumes existing hooks/data
   unchanged. If a change genuinely requires touching financial logic, **stop and
@@ -49,88 +54,67 @@ to get the household out of debt; correctness and trust beat everything.
 - **Prefer stale-while-revalidate:** render cached data immediately, revalidate
   in the background. **Skeletons are for genuine cold loads only.**
 - **Prefetch** a route's primary queries on nav-link **hover/focus** or on idle.
-- **The open path is budgeted, and CI enforces it.**
-  `node scripts/check-entry-graph.mjs` fails the build if recharts reaches a
-  preloaded chunk, if react-dom lands outside `vendor-react`, or if landing JS
-  exceeds its cap. **Never add a chart to the open path.** Charts are lazy, in
-  `vendor-charts`, and never imported by anything the landing route pulls in.
-- `routePrefetch.ts` and `App.tsx` move in lockstep on any route change.
+- **The open path is budgeted per app, and CI enforces it.**
+  `node scripts/check-entry-graph.mjs` runs against each web app's build:
+  **classic caps landing JS at 580 KB, h2 at 400 KB.** It fails the build if
+  landing JS exceeds its cap, if react-dom lands outside `vendor-react`, or if
+  a chart library reaches a preloaded chunk. **Never add a chart to the open
+  path.** Charts are lazy and never imported by anything the landing route
+  pulls in (classic: recharts, in `vendor-charts`; h2: small SVG only).
+- **`routePrefetch.ts` and `App.tsx` move in lockstep on any route change —
+  in each app.**
 
-## 3. UI consistency — the design system
+## 3. UI — two apps during the transition
 
-The look is the **KFI Financial Dashboard language**: navy + orange, platinum
-surfaces, flat and matte, one typeface, quiet motion. There is one kit, and it
-is small. Reuse it; do not invent a second one.
+### The two-app rule
 
-### Where the kit lives
+- **`artifacts/h2` is the new app, served at `/`.** All new UI work lands
+  here, on the **"Paper & rule"** design system below.
+- **`artifacts/h2budget` is CLASSIC: frozen.** Hotfixes only (a wrong figure,
+  a broken flow) — no features, no redesign, no new dependencies. It is served
+  at **`/classic`** and is **deleted at the end of the reinvention program**.
+  Its old design laws (see "Classic, inside it only" below) apply **only inside
+  `artifacts/h2budget`**. Never import across the two apps; shared logic moves
+  to `lib/` or is ported.
 
-- **`src/ui.tsx`** — the page furniture. Class-string tokens (`card`,
-  `cardHead`, `btn`/`btnSecondary`/`btnDanger`/`btnLink`, `input`, `fieldLabel`,
-  `th`/`td`/`tdNum`, `errorBanner`, `emptyNote`) and components (`Page`,
-  `Stat`, `Field`, `Help`, `Note`, `Foot`, `Crumbs`). **Cards use `card` +
-  `cardHead`; tables use the `th`/`td`/`tdNum` trio; stat rows use `Stat`.**
-- **`src/lib/chartTokens.ts`** — the palette and pure chart maths, deliberately
-  dependency-free (`CHART`, `CAT8`, `OTHER_GREY`, `NAVY_RAMP`, `rampByRank`,
-  `catColor`, `niceAxis`, `compactUSD`, motion presets). Import charts from
-  `@/lib/charts`, which re-exports all of it.
-- **`src/lib/charts.tsx`** — the recharts kit (`LineTrend`, `HBar`, `Donut`,
-  `useXTicks`, `PointLabels`). Lazy-loaded only.
-- **`src/lib/cssBars.tsx`** — `CssBars` and `CssFillMeter`. **Hover-scrubbed
-  lists are CSS bars, never recharts**: recharts restarts its draw animation on
-  every data-reference change, so a hover-driven list strobes.
-- **`src/index.css`** — every design token: the `@theme` palette, the 6-step
-  type scale, two radii, three elevations, the motion dials, and the **bridge
-  layer** that rebinds shadcn's HSL variable *names* to navy/platinum values so
-  the surviving `components/ui/*` wrappers inherit the palette for free.
-- **`src/components/viz/*`** — small SVG primitives (`Sparkline`, `MiniBars`,
-  `StackBar`, `RingStat`, `DeltaPill`, `MoneyText`).
+### Paper & rule — the design system for `artifacts/h2`
 
-### The laws
+There is one kit, `artifacts/h2/src/kit/`, and it is small. Reuse it; do not
+invent a second one.
 
-- **Navy + orange only.** Every colour on screen ∈ {navy `#19315b` / `#22406e`,
-  orange `#f68d2e`, deep orange `#e16d3e`, the platinum ramp, `NAVY_RAMP`,
-  `CAT8`, neutral greys, white/black}. **`#f68d2e` is the accent; `#e16d3e`
-  means something is wrong** — never swap them.
-- **Zero banned Tailwind colour utilities.** No `red-*`, `green-*`,
-  `emerald-*`, `amber-*`, `blue-*`, `teal-*`, … and **no arbitrary colour
-  literals** (`bg-[#abc123]`). If you need a colour, add a token in `index.css`
-  and use the generated utility. An escape-hatch hex is invisible to every
-  palette grep.
-- **No colour aliases.** There is no `primary`/`teal`/`danger` name pointing at
-  a hex that another name also points at. Aliases are how two series read as two
-  colours while drawing one pixel. `chartTokens.test.ts` asserts this.
-- **Status is never colour alone.** The label says the state. Good is the same
-  navy as body text on purpose — good is the resting state and should not shout.
-- **Sequential data uses `NAVY_RAMP` indexed by RANK** (`rampByRank`), never by
-  series. Categorical identity uses `CAT8`, capped at 8, tail rolled into
-  `OTHER_GREY`.
-- **Mono numerals everywhere money or a count renders** — `font-mono
-  tabular-nums` (`tdNum` and `Stat` already do this). Digits that don't line up
-  are the loudest "nobody designed this" signal on a financial screen.
-- **One type family (Inter Variable, self-hosted) and the 6-step scale only.**
-  No ad-hoc font sizes. `--text-hero` is reserved for THE ONE number a screen
-  exists to answer; a screen gets one or none.
-- **Dark mode does not exist.** No `dark:` variants, no theme toggle.
-- **Word diet.** No sentence where a label works; explanations demote to a
-  `Help` chip. Zero exclamation marks, zero cute copy.
+- **Semantic colour tokens only:** `paper` (the ground), `ink` (text), `moss`
+  (the accent), `clay` (needs attention), `ochre` (caution), `slate`
+  (secondary text and rules). Components use the token utilities — **no raw
+  hex, no arbitrary colour literals, no Tailwind palette colours** (`red-*`,
+  `green-*`, `blue-*`, …). If you need a colour, add a token.
+- **Three faces, each with one job:** **Public Sans** for UI text; **Source
+  Serif 4** for headlines and section labels; **IBM Plex Mono with tabular
+  numerals** for money and counts. Digits that don't line up are the loudest
+  "nobody designed this" signal on a financial screen.
+- **Hairline rules, not cards.** Sections are separated by a rule and a label,
+  not boxes, shadows or stat-card grids.
+- **Light only.** No `dark:` variants and no theme toggle. The tokens are
+  semantic so a dark theme can be added later without touching components.
+- **Status is never colour alone.** A word says the state; colour only
+  reinforces it.
+- **One hero figure per screen** — the one number the screen exists to answer.
+  A screen gets one or none.
+- **Word diet.** No sentence where a label works; explanations go behind a
+  disclosure. Zero exclamation marks, zero cute copy.
+- **Voice:** calm, supportive, plain. The app calls itself **"H2"**, never
+  "I".
 
-### Motion — two curves and four dials
+### Motion — reduced motion (both apps)
 
-- Dials in `index.css :root`: `--anim-speed` (2.2), `--dur-press`, `--dur-in`,
-  `--dur-page`, `--stagger`. Durations are written as
-  `calc(<base> * var(--anim-speed))` so the whole system moves on one knob.
-  **Keep `--anim-speed` equal to `SPEED` in `chartTokens.ts`.**
-- Two curves, and they mean different things: **`--ease-enter`** (gentle
-  ease-out) for things ARRIVING, **`--ease-move`** (symmetric) for anything
-  TRAVELLING — a bar growing, a line drawing, a row re-ranking.
 - ⚠️ **The reduced-motion switch has two halves and both are load-bearing.**
-  The dial overrides MUST stay **unlayered and below the base `:root`**:
-  unlayered CSS beats layered CSS outright, so a `:root` inside `@layer
-  utilities` is silently dead. The `!important` keyframe kills are NOT
-  redundant — `.stagger`'s per-child delays and `.skeleton`'s sweep are literal
-  durations no dial can reach. `index.css.test.ts` pins both halves.
-- Recharts animates in JS, where CSS media queries can't reach it, so
-  `chartTokens.ts` gates it separately via `PREFERS_REDUCED_MOTION`.
+  The `prefers-reduced-motion: reduce` override of the motion dials MUST stay
+  **unlayered and below the base `:root`**: unlayered CSS beats layered CSS
+  outright, so a `:root` override inside `@layer` is silently dead. And any
+  animation written with a literal duration (per-child stagger delays, a
+  skeleton sweep) needs its own `!important` kill, because no dial reaches it.
+  Each app pins both halves in a CSS test.
+- Animation driven from JS (charts, scripted transitions) cannot see CSS media
+  queries; gate it on `matchMedia("(prefers-reduced-motion: reduce)")` in code.
 
 ### ⭐ The spine — one snapshot, many surfaces
 
@@ -140,17 +124,18 @@ buffer/verdict, debt payoff %, review count). Every field is produced by **the
 same function the owning page's endpoint calls** — never reimplemented.
 
 - **Any number the spine carries is read from `useSpine()`, never recomputed
-  locally.** A page that re-derives its own copy is how two tiles come to
-  disagree, which is exactly what this endpoint exists to make impossible.
+  locally** — in either app. A page that re-derives its own copy is how two
+  tiles come to disagree, which is exactly what this endpoint exists to make
+  impossible.
 - **The parity contract is tested, not hoped for.**
   `api-server/src/__tests__/spineParity.integration.test.ts` asserts each spine
   field equals its owning endpoint **to the cent**, and asserts the spine never
   carries a debt balance or amount owed. If you add a spine field, add its
   parity assertion in the same PR.
-- Mutations invalidate the spine centrally through the `mutationCache` in
-  `App.tsx` — not with thirty hand-written invalidations.
+- Mutations invalidate the spine centrally through the `mutationCache` in each
+  app's `App.tsx` — not with thirty hand-written invalidations.
 
-### Other UI rules
+### Other UI rules (both apps)
 
 - **User identity/name comes from a single source of truth** (Clerk
   `user.firstName`). No "Brad" vs "Hannah" drift; user-facing copy stays
@@ -163,6 +148,25 @@ same function the owning page's endpoint calls** — never reimplemented.
   numbers and next actions; frame partial periods as "so far".
 - **Send-to-Forecast is a single flow.** Sent = in review = on the curve. Never
   re-add a separate review gate.
+
+### Classic, inside it only (`artifacts/h2budget`, frozen)
+
+These laws bind a classic hotfix and nothing else:
+
+- The kit: `src/ui.tsx` (page furniture), `src/lib/chartTokens.ts` (palette and
+  chart maths), `src/lib/charts.tsx` (recharts, lazy only), `src/lib/cssBars.tsx`
+  (hover-scrubbed lists are CSS bars, never recharts), `src/index.css` (every
+  token), `src/components/viz/*`.
+- Navy + orange only (`#19315b` / `#22406e`, `#f68d2e` accent, `#e16d3e` means
+  something is wrong), the platinum ramp, `NAVY_RAMP` by rank, `CAT8` capped at
+  8. No banned Tailwind colour utilities, no arbitrary colour literals, no
+  colour aliases (`chartTokens.test.ts` asserts this).
+- Inter Variable and the 6-step type scale only; mono tabular numerals for money
+  and counts; no dark mode.
+- Motion dials in `index.css :root`; keep `--anim-speed` equal to `SPEED` in
+  `chartTokens.ts`; `--ease-enter` for arriving, `--ease-move` for travelling;
+  recharts gated by `PREFERS_REDUCED_MOTION`; `index.css.test.ts` pins the
+  reduced-motion halves.
 
 ## 4. Workflow
 
@@ -178,6 +182,17 @@ same function the owning page's endpoint calls** — never reimplemented.
   10.34.3 exactly.
 - **Adding a dependency needs a named justification.** The overhaul removed
   dozens; the entry-graph guard exists because weight is a feature here.
+- **Schema changes ship as idempotent SQL files in `lib/db/migrations/`.**
+  Migrations run at server boot, before listen (`src/boot.ts`, on unless
+  `MIGRATE_ON_BOOT=false`), or by the pre-deploy command
+  (`node artifacts/api-server/dist/migrate.mjs`); both use the same idempotent
+  runner, and a failure keeps the old build serving. **Additive only; never
+  DROP in the same release as the code that stops reading;** backfills are
+  idempotent and live in the same file. Dev and tests keep `drizzle-kit push`, and the drizzle schema
+  remains the type source and **must match the SQL** (tested). Conventions and
+  reserved number ranges: `lib/db/migrations/README.md`.
+- **Background jobs run on pg-boss** (Postgres-backed, idempotent handlers);
+  node-cron is retired.
 
 ---
 
@@ -185,23 +200,32 @@ same function the owning page's endpoint calls** — never reimplemented.
 
 - **Stack:** pnpm workspaces, Node 24, TS 5.9. API = Express 5 + Drizzle +
   PostgreSQL + Zod + Orval. Web = React + Vite + TanStack Query + wouter + Clerk.
-- **Packages:** `artifacts/api-server` (Express `/api/*`), `artifacts/h2budget`
-  (web UI), `lib/api-spec` (OpenAPI), `lib/api-zod` + `lib/api-client-react`
-  (generated), `lib/db` (Drizzle schema), `lib/avalanche-core` (shared payoff
-  maths).
+- **Packages:** `artifacts/api-server` (Express `/api/*`), **two web apps
+  during the transition** — `artifacts/h2` (the new app, `/`) and
+  `artifacts/h2budget` (classic, frozen, `/classic`) — `lib/api-spec`
+  (OpenAPI), `lib/api-zod` + `lib/api-client-react` (generated), `lib/db`
+  (Drizzle schema + `migrate.ts` runner, exported as `@workspace/db/migrate`),
+  `lib/db/migrations` (the SQL that production runs), `lib/avalanche-core`
+  (shared payoff maths). `lib/db/drizzle/*.sql` is legacy history; nothing runs
+  it.
 - **Commands:**
   - `pnpm run typecheck` — singleton-dep check + typecheck all packages (the green gate)
   - `pnpm run build` — typecheck + build every package
-  - `node scripts/check-entry-graph.mjs` — open-path weight guard (run after a build)
+  - `node scripts/check-entry-graph.mjs` — open-path weight guard (run after a build, per app)
   - `pnpm --filter @workspace/api-spec run codegen` — regen API hooks + Zod
-  - `pnpm --filter @workspace/db run push` — push DB schema (dev only)
-- **Tests:** `pnpm --filter h2budget exec vitest run` (web, jsdom) and
-  `pnpm --filter api-server exec vitest run` (API integration — needs a real
-  Postgres and `DATABASE_URL` + `ALLOW_TEST_DB=1`). Parallel agents must use
-  **separate test databases**. The API suite runs **serially**
-  (`fileParallelism: false`): `singleFork` alone still let Vitest interleave
-  files against one Postgres, which flaked `plaidRefreshUserRetry` about one run
-  in three. Do not turn it back on to buy the ~60s back.
+  - `pnpm --filter @workspace/db run push` — push DB schema (dev and tests only)
+  - `node artifacts/api-server/dist/migrate.mjs` (or `pnpm --filter
+    @workspace/api-server run migrate`) — apply pending `lib/db/migrations`
+    files to `DATABASE_URL`; idempotent (after a build). The server does the
+    same at boot unless `MIGRATE_ON_BOOT=false`.
+- **Tests:** `pnpm --filter ./artifacts/h2 exec vitest run` (new web) and
+  `pnpm --filter h2budget exec vitest run` (classic web), both jsdom, and
+  `pnpm --filter api-server exec vitest run` (API
+  integration — needs a real Postgres and `DATABASE_URL` + `ALLOW_TEST_DB=1`).
+  Parallel agents must use **separate test databases**. The API suite runs
+  **serially** (`fileParallelism: false`): `singleFork` alone still let Vitest
+  interleave files against one Postgres, which flaked `plaidRefreshUserRetry`
+  about one run in three. Do not turn it back on to buy the ~60s back.
 - **Two dependencies carry a story** (`pnpm audit --prod` must stay at 0 high):
   `xlsx` is installed from the **SheetJS CDN tarball**, not npm — npm's last
   publish (0.18.5) has two unfixable highs. ⚠️ A tarball URL has no registry
@@ -213,8 +237,12 @@ same function the owning page's endpoint calls** — never reimplemented.
   before it runs a single test. `js-cookie` is pinned by override for
   GHSA-qjx8-664m-686j; Clerk ships the fix on `@clerk/shared` >=4.20.
 - **Deploy:** GitHub `main` is the source of truth; **Render** auto-deploys
-  `main` (single Web Service `h2budget` serving SPA + `/api`, health check
-  `/api/healthz`, live at https://h2budget.onrender.com). Pinned
-  `packageManager: pnpm@10.34.3`, Node 24. Verify `/api/version` matches the
-  merge SHA after deploy. (Replit remains only as a dormant rollback.) Never
-  deploy unreviewed work.
+  `main` (single Web Service `h2budget` serving both web apps + `/api`, health
+  check `/api/healthz`, live at https://h2budget.onrender.com). Pending
+  migrations run when the new build boots, before it listens (and by the
+  Pre-Deploy Command once it is set in the Render dashboard — the service was
+  created through the API, so `render.yaml` is informational and a Blueprint
+  sync must never be run). **A failing migration keeps the old build
+  serving.** Pinned `packageManager: pnpm@10.34.3`, Node 24. Verify
+  `/api/version` matches the merge SHA after deploy. (Replit remains only as a
+  dormant rollback.) Never deploy unreviewed work.

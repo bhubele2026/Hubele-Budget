@@ -19,5 +19,10 @@ export interface RecategorizeByPatternResult {
   "Undo" of a bulk recategorization.
    */
     affectedIds: string[];
+    /** (PR-0) The subset of `affectedIds` whose category a person had
+  locked BEFORE this call moved them. The Undo passes it back as
+  the request's `lockedIds` to restore each row's lock.
+   */
+    lockedIds?: string[];
 }
 //# sourceMappingURL=recategorizeByPatternResult.d.ts.map

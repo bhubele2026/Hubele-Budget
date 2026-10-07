@@ -286,6 +286,12 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     insertValues.monthlyAllowance = false;
     insertValues.unplannedAllowance = false;
   }
+  // (PR-0) A category named in the body was chosen by a person, so the row
+  // is born locked: the categorizer never moves it. A category the rules
+  // auto-filled above is NOT locked.
+  if (bodyHasCategoryId && parsed.data.categoryId) {
+    insertValues.categoryLockedByUser = true;
+  }
   // (#642) Defensive guard on the create path: a row whose description
   // already looks like a transfer / card payment must never be born
   // tagged Unplanned, no matter what the client sent. Runs *after* the
@@ -370,6 +376,12 @@ router.patch(
     const patchToApply: Record<string, unknown> = { ...patch };
     if (bodyHasIsTransfer || pickingCategory) {
       patchToApply.isTransferUserOverridden = true;
+    }
+    // (PR-0) A category picked here was picked by a person: lock it so the
+    // categorizer never moves it. Clearing the category (`categoryId: null`)
+    // clears the lock and hands the row back to the categorizer.
+    if (bodyHasCategoryId) {
+      patchToApply.categoryLockedByUser = pickingCategory;
     }
     // When the user manually moves a row to a different day (e.g. pulling a
     // "paid Saturday, posted Sunday" charge back into the correct Sun→Sat
@@ -862,8 +874,15 @@ router.post(
       return;
     }
     const userId = req.userId!;
-    const { pattern, matchType, fromCategoryId, toCategoryId, ids, ruleId } =
-      parsed.data;
+    const {
+      pattern,
+      matchType,
+      fromCategoryId,
+      toCategoryId,
+      ids,
+      ruleId,
+      lockedIds,
+    } = parsed.data;
     // (#474) Reject any attempt to repoint a mapping rule onto an
     // `exclude_from_budget` category. The bulk-row UPDATE itself is
     // fine (the user may legitimately want to mark a batch of rows
@@ -944,9 +963,39 @@ router.post(
     // `effectiveFiling` (round 4) treats a re-file here exactly like a
     // one-off PATCH re-file, and so a future Plaid re-mint preserves the
     // pick (plaidSync.ts's `isTransferUserOverridden` preservation).
+    // (PR-0) Which of these rows a person had already locked, BEFORE the
+    // move: returned as `lockedIds` so the Undo can hand them back.
+    const wasLocked = new Set(
+      (
+        await db
+          .select({ id: transactionsTable.id })
+          .from(transactionsTable)
+          .where(
+            and(
+              eq(transactionsTable.householdId, req.householdId!),
+              inArray(transactionsTable.id, candidateIds),
+              eq(transactionsTable.categoryLockedByUser, true),
+            ),
+          )
+      ).map((r) => r.id),
+    );
+    // Only ids this call can move count (also keeps a malformed id out of SQL).
+    const relockIds = lockedIds?.filter((id) => candidateIds.includes(id));
     const updated = await db
       .update(transactionsTable)
-      .set({ categoryId: toCategoryId, isTransferUserOverridden: true })
+      .set({
+        categoryId: toCategoryId,
+        isTransferUserOverridden: true,
+        // (PR-0) A person re-filed these rows, so they are locked — unless
+        // this is an Undo carrying `lockedIds`, which restores each row's
+        // lock exactly as it was before the move being undone.
+        categoryLockedByUser:
+          relockIds === undefined
+            ? true
+            : relockIds.length > 0
+              ? inArray(transactionsTable.id, relockIds)
+              : false,
+      })
       .where(
         and(
           eq(transactionsTable.householdId, req.householdId!),
@@ -961,6 +1010,7 @@ router.post(
       updated: updated.length,
       affectedMonths: Array.from(monthSet).sort(),
       affectedIds: updated.map((r) => r.id),
+      lockedIds: updated.filter((r) => wasLocked.has(r.id)).map((r) => r.id),
     });
   },
 );
@@ -1053,6 +1103,12 @@ router.post(
       drizzlePatch.categoryId !== undefined;
     if (bulkBodyHasIsTransfer || bulkPickingCategory) {
       (drizzlePatch as Record<string, unknown>).isTransferUserOverridden = true;
+    }
+    // (PR-0) Same lock rule as PATCH: a bulk category pick locks the rows; a
+    // bulk clear (`categoryId: null`) unlocks them.
+    if (Object.prototype.hasOwnProperty.call(patch, "categoryId")) {
+      (drizzlePatch as Record<string, unknown>).categoryLockedByUser =
+        bulkPickingCategory;
     }
     if (
       drizzlePatch.debtId &&
@@ -1232,7 +1288,8 @@ router.post(
     }
     const updated = await db
       .update(transactionsTable)
-      .set({ categoryId: null })
+      // (PR-0) No category, no lock: the row goes back to the categorizer.
+      .set({ categoryId: null, categoryLockedByUser: false })
       .where(
         and(
           eq(transactionsTable.householdId, req.householdId!),
@@ -1415,7 +1472,9 @@ router.post(
     }
     const [row] = await db
       .update(transactionsTable)
-      .set({ isTransferUserOverridden: false })
+      // (PR-0) "Reset to auto" hands the row back to the automatic
+      // categorizer too: the category lock goes with the transfer override.
+      .set({ isTransferUserOverridden: false, categoryLockedByUser: false })
       .where(
         and(
           eq(transactionsTable.id, params.data.id),

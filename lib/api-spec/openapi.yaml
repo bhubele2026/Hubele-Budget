@@ -2340,6 +2340,18 @@ components:
             silently re-flag it as a transfer. Server-managed: writes to
             this field are not accepted via the input schema — toggling
             `isTransfer` in PATCH /transactions/:id sets it automatically.
+        categoryLockedByUser:
+          type: boolean
+          readOnly: true
+          description: |
+            (PR-0) True when a person chose this row's category by hand:
+            PATCH /transactions/:id or bulk-update with a categoryId,
+            recategorize-by-pattern, or a create whose body named the
+            category (never a mapping rule's auto-fill). Clearing the
+            category (categoryId null, uncategorize-by-ids) clears it. The
+            automatic categorizer never moves a locked row and Plaid sync
+            never writes it. Server-managed and read-only: the input schemas
+            do not accept it.
         isExternalCardPayment:
           type: boolean
           description: |
@@ -2887,6 +2899,17 @@ components:
             affordance passes the original rule id with `from`/`to`
             swapped so future matching transactions stop snapping
             onto the user's accidental category pick.
+        lockedIds:
+          type: array
+          maxItems: 1000
+          description: |
+            (PR-0) Undo only. The `lockedIds` the original call returned:
+            the rows it moved that a person had already locked. When
+            present, each row this call moves is locked only if its id is
+            in the list, so an Undo restores every row's
+            `categoryLockedByUser` exactly. When absent, every moved row is
+            locked (a person re-filed it).
+          items: { type: string }
 
     RecategorizeByPatternResult:
       type: object
@@ -2909,6 +2932,13 @@ components:
             client passes these back into the same endpoint with `from`
             and `to` swapped (and `ids` set) to implement one-click
             "Undo" of a bulk recategorization.
+          items: { type: string }
+        lockedIds:
+          type: array
+          description: |
+            (PR-0) The subset of `affectedIds` whose category a person had
+            locked BEFORE this call moved them. The Undo passes it back as
+            the request's `lockedIds` to restore each row's lock.
           items: { type: string }
 
     UncategorizeByIdsInput:
