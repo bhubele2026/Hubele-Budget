@@ -8,6 +8,7 @@
     "prebuild": "node ../../scripts/build-id.mjs --write && tsc -b ../../lib/db ../../lib/api-zod ../../lib/avalanche-core",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
+    "migrate": "node ./dist/migrate.mjs",
     "pretypecheck": "tsc -b ../../lib/db ../../lib/api-zod ../../lib/avalanche-core",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "pretest": "pnpm --filter @workspace/db push",

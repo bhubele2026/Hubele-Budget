@@ -18,6 +18,14 @@
 #
 # Toolchain mirrors CI (.github/workflows/ci.yml): Node 24, pnpm 10.34.3,
 # the .npmrc strict-dep-builds/verify-deps accommodations, --frozen-lockfile.
+#
+# Schema changes: `preDeployCommand` runs the migration runner
+# (artifacts/api-server/dist/migrate.mjs) after the build and before the new
+# build starts serving. It applies any pending lib/db/migrations/*.sql files,
+# each in its own transaction and recorded in the `schema_migrations` ledger,
+# and is a no-op when nothing is pending. A failing migration exits 1, which
+# CANCELS the deploy: the old build keeps serving on the old schema, which is
+# why every migration is additive (lib/db/migrations/README.md).
 databases:
   - name: h2budget-db
     plan: basic-256mb
@@ -38,6 +46,7 @@ services:
       printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc &&
       pnpm install --frozen-lockfile &&
       pnpm run build
+    preDeployCommand: node artifacts/api-server/dist/migrate.mjs
     startCommand: node artifacts/api-server/dist/index.mjs
     envVars:
       - key: NODE_VERSION

@@ -26,7 +26,14 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    // Two standalone bundles with the same options: the server (index.mjs)
+    // and the migration runner (migrate.mjs) that Render's preDeployCommand
+    // runs before the new server starts. No code splitting, so index.mjs is
+    // built exactly as before.
+    entryPoints: [
+      path.resolve(artifactDir, "src/index.ts"),
+      path.resolve(artifactDir, "src/migrate.ts"),
+    ],
     platform: "node",
     bundle: true,
     format: "esm",
