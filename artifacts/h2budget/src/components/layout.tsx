@@ -549,6 +549,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
+      {/* (S0) The classic app now lives at /classic while H2 takes over /.
+          One line, on every classic page (the landing included), with a plain
+          <a>: "/" is the other app, so it must be a full page load and must
+          NOT go through wouter, whose base would turn it into /classic/. */}
+      <div
+        data-testid="classic-retiring-banner"
+        className="shrink-0 border-b border-brand-line bg-platinum-3 px-3 py-1.5 text-center text-micro text-brand-ink"
+      >
+        Classic app — retiring.{" "}
+        <a href="/" className="font-semibold underline underline-offset-2 hover:text-brand-navy">
+          Back to H2 →
+        </a>
+      </div>
       {/* ── The navy rail: wordmark home control · area ribbon · account.
           Hidden on the landing (/home) — there the tiles ARE the navigation
           and the hero carries its own mark. ────────────────────────────── */}
