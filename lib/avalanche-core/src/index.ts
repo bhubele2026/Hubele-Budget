@@ -114,6 +114,13 @@ export {
   type MovementRow,
   type MovementTiming,
 } from "./householdMoney";
+export {
+  rollForwardBalance,
+  walkLedger,
+  type LedgerWalkDay,
+  type LedgerWalkItem,
+  type LedgerWalkResult,
+} from "./ledgerWalk";
 
 export type Strategy = "avalanche" | "snowball";
 
