@@ -83,3 +83,22 @@ services:
         sync: false
       - key: SENDGRID_FROM_EMAIL
         sync: false
+      # --- AI platform + jobs (AI-0) ---
+      # AI stays off until the owner sets AI_ENABLED=true in the dashboard.
+      - key: AI_ENABLED
+        value: "false"
+      - key: AI_PROVIDER
+        value: anthropic
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AI_REF_SALT
+        sync: false
+      - key: JOBS_MODE
+        value: "on"
+      - key: PGBOSS_SCHEMA
+        value: pgboss
+      # Per-task model/effort overrides (ai_task_config rows beat these):
+      # - key: AI_MODEL_CATEGORIZE
+      #   value: claude-sonnet-5-5
+      # - key: AI_EFFORT_CHAT
+      #   value: medium
