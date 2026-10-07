@@ -4,11 +4,15 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  classifyMovement,
   computePosition,
   selectPayday,
+  spendAmount,
   addDaysISO,
   POSITION_ASSUMPTIONS,
   PAYDAY_MAX_DAYS,
+  type MovementContext,
+  type MovementRow,
   type PositionEvent,
   type PositionInputs,
   type PositionWeekRow,
@@ -62,7 +66,8 @@ describe("payday — the window's end", () => {
   it("is the earliest paycheck on the curve after today", () => {
     const p = computePosition(inputs({ events: [paycheck("2026-10-16"), paycheck("2026-10-09")] }));
     expect(p.paydayDate).toBe("2026-10-09");
-    expect(p.horizon).toEqual({ kind: "payday", endDate: "2026-10-09", lastDay: "2026-10-08" });
+    // Today THROUGH payday (Round 2): payday's own day is counted, before its paycheck.
+    expect(p.horizon).toEqual({ kind: "payday", endDate: "2026-10-09", lastDay: "2026-10-09" });
     expect(p.payday).toEqual({ itemId: "pay", label: "Paycheck", amount: "2000.00" });
   });
 
@@ -123,17 +128,56 @@ describe("payday — the window's end", () => {
 });
 
 describe("lowest before payday and what is available", () => {
-  it("is the lowest end-of-day balance from today up to the day BEFORE payday", () => {
-    // payday 10/12; window 10/7..10/11; the 10/12 dip (payday's own day) is outside it.
-    const daily = curve(TODAY, [1500, 1200, 1300, 1250, 1210, 900, 5000]);
+  it("is the lowest end-of-day balance from today through payday; days after payday are outside it", () => {
+    // payday 10/12 (+2,000 that day, so 10/12 reads 3,210 − 2,000 = 1,210); the 10/13 dip is after it.
+    const daily = curve(TODAY, [1500, 1200, 1300, 1250, 1210, 3210, 900]);
     const p = computePosition(inputs({ daily, events: [paycheck("2026-10-12")] }));
     expect(p.lowestUntilPayday).toBe("1200.00");
     expect(p.lowestUntilPaydayDate).toBe("2026-10-08");
     expect(p.availableUntilPayday).toBe("700.00"); // 1200 − 500 buffer
   });
 
+  describe("⭐ (Round 2) on payday the bills count before the paycheck", () => {
+    // Payday Fri 10/9, +2,000. Wed 10/7 1,000.
+    it("a bill that lands ON payday counts: payday reads its balance less the paycheck", () => {
+      // 10/8 1,000 · 10/9 1,000 + 2,000 − 300 = 2,700 → before the paycheck 700.
+      const daily = curve(TODAY, [1000, 1000, 2700, 2700]);
+      const p = computePosition(inputs({ daily, events: [paycheck("2026-10-09"), bill("2026-10-09", 300)] }));
+      expect(p.lowestUntilPayday).toBe("700.00");
+      expect(p.lowestUntilPaydayDate).toBe("2026-10-09");
+      expect(p.availableUntilPayday).toBe("200.00");
+      expect(p.committedUntilPayday).toBe("300.00");
+      expect(p.assumptions).toContain(POSITION_ASSUMPTIONS.paydayBillsFirst);
+    });
+
+    it("a bill the day before payday: that day is the low, and payday (bills, no paycheck) ties it", () => {
+      // 10/8 1,000 − 300 = 700 · 10/9 700 + 2,000 = 2,700 → before the paycheck 700 (a tie: the first day stands).
+      const daily = curve(TODAY, [1000, 700, 2700, 2700]);
+      const p = computePosition(inputs({ daily, events: [bill("2026-10-08", 300), paycheck("2026-10-09")] }));
+      expect(p.lowestUntilPayday).toBe("700.00");
+      expect(p.lowestUntilPaydayDate).toBe("2026-10-08");
+      expect(p.committedUntilPayday).toBe("300.00");
+    });
+
+    it("nothing else on payday: payday reads the day before's balance, and nothing moves", () => {
+      const daily = curve(TODAY, [1000, 950, 2950, 2950]);
+      const p = computePosition(inputs({ daily, events: [bill("2026-10-08", 50), paycheck("2026-10-09")] }));
+      expect(p.lowestUntilPayday).toBe("950.00");
+      expect(p.lowestUntilPaydayDate).toBe("2026-10-08");
+      expect(p.availableUntilPayday).toBe("450.00");
+      expect(p.committedUntilPayday).toBe("50.00");
+    });
+
+    it("every deposit plan dated payday is held back, not only the paycheck", () => {
+      // 10/9: +2,000 paycheck, +150 reimbursement, −300 bill → 1,000 + 1,850 = 2,850; before both deposits 700.
+      const daily = curve(TODAY, [1000, 1000, 2850]);
+      const events = [paycheck("2026-10-09"), paycheck("2026-10-09", 150, { itemId: "refund" }), bill("2026-10-09", 300)];
+      expect(computePosition(inputs({ daily, events })).lowestUntilPayday).toBe("700.00");
+    });
+  });
+
   it("today counts: a curve already at its lowest today reads today", () => {
-    const daily = curve(TODAY, [800, 900, 1000]);
+    const daily = curve(TODAY, [800, 900, 2900]);
     const p = computePosition(inputs({ daily, events: [paycheck("2026-10-09")] }));
     expect(p.lowestUntilPaydayDate).toBe(TODAY);
     expect(p.availableUntilPayday).toBe("300.00");
@@ -169,9 +213,10 @@ describe("lowest before payday and what is available", () => {
       bill("2026-10-08", 100.1),
       { date: "2026-10-08", amount: -77, kind: "actual" as const, itemId: "t", label: "row" },
       paycheck("2026-10-09"),
-      bill("2026-10-09", 999), // payday's own day: outside
+      bill("2026-10-09", 999), // payday's own day: inside (Round 2)
+      bill("2026-10-10", 5), // after payday: outside
     ];
-    expect(computePosition(inputs({ events })).committedUntilPayday).toBe("140.10");
+    expect(computePosition(inputs({ events })).committedUntilPayday).toBe("1139.10");
   });
 });
 
@@ -303,6 +348,7 @@ describe("confidence, assumptions, freshness", () => {
       "due_today_not_posted",
       POSITION_ASSUMPTIONS.noCredit,
       POSITION_ASSUMPTIONS.bankFrom("2026-10-07"),
+      POSITION_ASSUMPTIONS.paydayBillsFirst,
     ]);
     expect(computePosition(inputs({ freshness: { stale: false, staleReason: null, asOfBank: null } })).assumptions).toContain(
       POSITION_ASSUMPTIONS.noBank,
@@ -319,6 +365,45 @@ describe("confidence, assumptions, freshness", () => {
     const { degraded: _a, degradedReason: _b, ...freshFigures } = fresh;
     const { degraded: _c, degradedReason: _d, ...staleFigures } = stale;
     expect(staleFigures).toEqual(freshFigures);
+  });
+});
+
+describe("(Round 2, Q6) a reimbursable charge flagged weekly — TODAY'S behaviour, pinned", () => {
+  // ⚠️ PINNED, NOT ENDORSED. The owner's 2026-09-15 rule: a reimbursable charge
+  // is excluded regardless of flags. `classifyMovement` still lets an allowance
+  // flag outrank `reimbursable` (PR-H's step order), so today this row reads
+  // `allowance_weekly` and counts against the cap. PR-B2 moves `reimbursable`
+  // ahead of the flags inside `classifyMovement`; when it does, this row leaves
+  // the sum and THIS TEST MUST FLIP (expect "reimbursable" and 0.00).
+  it("counts against the weekly cap today", () => {
+    const row: MovementRow = {
+      id: "r1",
+      occurredOn: "2026-10-06",
+      description: "OFFICE DEPOT",
+      amount: "-35.00",
+      categoryId: null,
+      isTransfer: false,
+      source: "plaid:amex",
+      reimbursable: true,
+      debtId: null,
+      isExternalCardPayment: false,
+      pfcDetailed: null,
+      plaidAccountId: "acct-amex",
+      unplannedAllowance: false,
+      monthlyAllowance: false,
+      weeklyAllowance: true,
+    };
+    const ctx: MovementContext = {
+      categoriesById: new Map(),
+      debtCategoryIds: new Set(),
+      checkingAccountExternalId: "acct-chase",
+      matchedTxnIds: new Set(),
+    };
+    const coverage = classifyMovement(row, ctx).coverage;
+    expect(coverage).toBe("allowance_weekly");
+    const p = computePosition(inputs({ weekRows: [{ coverage, spend: spendAmount(row) }] }));
+    expect(p.spentWeekDiscretionary).toBe("35.00");
+    expect(p.remainingWeek).toBe("665.00");
   });
 });
 

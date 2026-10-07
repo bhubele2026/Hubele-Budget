@@ -318,8 +318,13 @@ export interface AllowancePlanRow {
 /**
  * The household pool's plan for `period` in effect for the week starting
  * `periodStartSunday`: of the rows that have started by the end of that week
- * (`effectiveFrom` ≤ its Saturday), the newest. A plan that starts mid-week
- * therefore governs that whole week. Null when none has started.
+ * (`effectiveFrom` ≤ its Saturday), the newest. So (lead's ruling on PR-B1 Q3)
+ * a row effective on or before the week's Sunday governs the whole week, and a
+ * change made mid-week with `effective_from` = today governs the week that
+ * contains today — the whole of it, not from today on. Null when none has
+ * started. Every writer dates a row on or before today (the classic settings
+ * mirror uses the current week's Sunday), so a row never governs a week
+ * before it was written.
  */
 export function allowancePlanInEffect(
   periodStartSunday: string,
@@ -338,7 +343,13 @@ export function allowancePlanInEffect(
 }
 
 export interface EverydayPlanFromRows extends EverydayPlan {
-  /** Where `weeklyCents` came from: that week's override, a plan row, or nothing (0). */
+  /**
+   * Where `weeklyCents` came from: that week's override, a plan row, or
+   * nothing (0). (Lead's ruling on PR-B1 Q2) A plan row of $0 is "nothing": a
+   * $0 standing allowance means no cap was set, never a $0 cap. A per-week
+   * override of 0 is still reported as the override (the money position reads
+   * any $0 week as no cap).
+   */
   weeklySource: "override" | "plan" | "none";
   monthlySource: "plan" | "none";
 }
@@ -368,7 +379,7 @@ export function everydayPlanFromRows(
   return {
     weeklyCents: toCents(weeklyDollars),
     monthlyCents: toCents(monthlyPlan ?? 0),
-    weeklySource: override != null ? "override" : weeklyPlan != null ? "plan" : "none",
-    monthlySource: monthlyPlan != null ? "plan" : "none",
+    weeklySource: override != null ? "override" : weeklyPlan ? "plan" : "none",
+    monthlySource: monthlyPlan ? "plan" : "none",
   };
 }

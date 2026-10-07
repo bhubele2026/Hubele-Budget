@@ -51,8 +51,10 @@ import {
   recurringItemsTable,
   settingsTable,
 } from "@workspace/db";
-import { everydayPlan, everydayPlanFromRows, addDaysISO } from "@workspace/avalanche-core";
+import { everydayPlan, everydayPlanFromRows, addDaysISO, weekBounds } from "@workspace/avalanche-core";
 import moneyRouter from "../routes/money";
+import settingsRouter from "../routes/settings";
+import { householdTodayISO } from "../lib/householdClock";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { loadAllowancePlans, planRowsOf } from "../lib/allowancePlans";
 
@@ -63,10 +65,11 @@ const SRC = resolve(HERE, "..");
 const app = express();
 app.use(express.json());
 app.use(moneyRouter);
+app.use(settingsRouter);
 let server: Server;
 let baseUrl: string;
 
-async function call(method: "GET" | "PUT", path: string, as: string, body?: unknown) {
+async function call(method: "GET" | "PUT" | "POST", path: string, as: string, body?: unknown) {
   const r = await fetch(`${baseUrl}${path}`, {
     method,
     headers: { "x-test-user": as, "content-type": "application/json" },
@@ -302,6 +305,61 @@ describe("PUT /allowance-plans/:id — the owner only", () => {
   });
 });
 
+describe("(Round 2, Q4) the classic Allowances page's save is mirrored into the plan", () => {
+  it("a changed allowance upserts this week's household-pool plan, and the position reads it at once", async () => {
+    // This test runs on the real clock: clear H1's per-week overrides so the
+    // plan in effect, not an override, is what the week reads.
+    await db.update(settingsTable).set({ preferences: {} }).where(eq(settingsTable.userId, H1_OWNER));
+    const thisSunday = weekBounds(householdTodayISO()).start;
+    const capNow = async () => (await call("GET", "/money/position", H1_MEMBER)).body.weekCap as string | null;
+    const weeklyRows = async () =>
+      (await plansOf(H1_OWNER)).filter((p) => p.period === "weekly").sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+    expect(await capNow()).toBe("320.50");
+    const before = await weeklyRows();
+
+    // A household member saves a new weekly allowance on the classic page.
+    expect((await call("PUT", "/settings", H1_MEMBER, { weeklyAllowanceAmount: "410" })).status).toBe(200);
+    const after = await weeklyRows();
+    expect(after.length).toBe(before.length + 1);
+    const mirrored = after.find((p) => p.effectiveFrom === thisSunday)!;
+    expect([mirrored.amount, mirrored.source, mirrored.createdByKind, mirrored.memberUserId, mirrored.derivation]).toEqual([
+      "410.00",
+      "owner",
+      "user",
+      null,
+      null,
+    ]);
+    expect(await capNow()).toBe("410.00");
+    // Past weeks keep the cap they had.
+    expect(after.find((p) => p.effectiveFrom === "2026-05-01")!.amount).toBe("320.50");
+
+    // A second save in the same week updates that row; saving the same value, or another field, writes nothing.
+    await call("PUT", "/settings", H1_MEMBER, { weeklyAllowanceAmount: "425" });
+    await call("PUT", "/settings", H1_MEMBER, { weeklyAllowanceAmount: "425.00", unplannedAllowanceAmount: "50" });
+    expect((await weeklyRows()).length).toBe(before.length + 1);
+    expect(await capNow()).toBe("425.00");
+
+    // The monthly allowance mirrors on its own.
+    await call("PUT", "/settings", H1_MEMBER, { monthlyAllowanceAmount: "380" });
+    const monthly = (await plansOf(H1_OWNER)).filter((p) => p.period === "monthly");
+    expect(monthly.find((p) => p.effectiveFrom === thisSunday)?.amount).toBe("380.00");
+
+    // $0 on the classic page means no cap (Q2): a $0 row, read as none.
+    await call("PUT", "/settings", H1_MEMBER, { weeklyAllowanceAmount: "0" });
+    expect((await weeklyRows()).find((p) => p.effectiveFrom === thisSunday)!.amount).toBe("0.00");
+    expect(await capNow()).toBeNull();
+
+    // …and so does a $0 override for this week: never a $0 cap.
+    await call("PUT", "/settings", H1_MEMBER, { weeklyAllowanceAmount: "410" });
+    expect(await capNow()).toBe("410.00");
+    await db
+      .update(settingsTable)
+      .set({ preferences: { weeklyAllowanceOverrides: { [thisSunday]: "0" } } })
+      .where(eq(settingsTable.userId, H1_OWNER));
+    expect(await capNow()).toBeNull();
+  });
+});
+
 describe("⚠️ nothing automatic writes a plan", () => {
   /** Every .ts file under `dir`, recursively; none when the directory does not exist yet. */
   function sourcesUnder(dir: string): string[] {
@@ -322,8 +380,13 @@ describe("⚠️ nothing automatic writes a plan", () => {
     for (const f of files) expect(writesPlans(f), f).toBe(false);
   });
 
-  it("the scan is live: it finds the one route that does write", () => {
+  it("the scan is live: it finds the two user-initiated routes that do write, and no other", () => {
     expect(writesPlans(join(SRC, "routes", "money.ts"))).toBe(true);
-    expect(sourcesUnder(join(SRC, "routes")).filter(writesPlans).map((f) => f.slice(SRC.length + 1))).toEqual(["routes/money.ts"]);
+    expect(
+      sourcesUnder(join(SRC, "routes"))
+        .filter(writesPlans)
+        .map((f) => f.slice(SRC.length + 1))
+        .sort(),
+    ).toEqual(["routes/money.ts", "routes/settings.ts"]);
   });
 });

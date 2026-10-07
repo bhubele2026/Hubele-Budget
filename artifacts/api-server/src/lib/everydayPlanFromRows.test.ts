@@ -117,6 +117,35 @@ describe("which plan is in effect", () => {
     expect(everydayPlanFromRows("2026-05-31", plans)).toMatchObject({ monthlyCents: 40000, monthlySource: "plan" });
   });
 
+  it("(Round 2, Q3) a change made mid-week with effective_from = today governs the week containing today, all of it", () => {
+    // Wed 10/7 the owner moves the cap from $300 to $350, effective today.
+    const rows: AllowancePlanRow[] = [
+      { memberUserId: null, period: "weekly", amount: "300", effectiveFrom: "2026-05-01" },
+      { memberUserId: null, period: "weekly", amount: "350", effectiveFrom: "2026-10-07" },
+    ];
+    expect(everydayPlanFromRows("2026-10-04", rows).weeklyCents).toBe(35000); // Sun 10/4 – Sat 10/10, from its Sunday
+    expect(everydayPlanFromRows("2026-09-27", rows).weeklyCents).toBe(30000); // the week before keeps its cap
+    // A row effective on the week's own Sunday governs it just the same.
+    rows[1] = { ...rows[1]!, effectiveFrom: "2026-10-04" };
+    expect(everydayPlanFromRows("2026-10-04", rows).weeklyCents).toBe(35000);
+    expect(everydayPlanFromRows("2026-09-27", rows).weeklyCents).toBe(30000);
+  });
+
+  it("(Round 2, Q2) a $0 plan is no plan: no cap, never a $0 cap", () => {
+    const rows: AllowancePlanRow[] = [
+      { memberUserId: null, period: "weekly", amount: "300", effectiveFrom: "2026-05-01" },
+      { memberUserId: null, period: "weekly", amount: "0.00", effectiveFrom: "2026-10-04" },
+      { memberUserId: null, period: "monthly", amount: "0", effectiveFrom: "2026-05-01" },
+    ];
+    expect(everydayPlanFromRows("2026-10-04", rows)).toEqual({
+      weeklyCents: 0,
+      monthlyCents: 0,
+      weeklySource: "none",
+      monthlySource: "none",
+    });
+    expect(everydayPlanFromRows("2026-09-27", rows)).toMatchObject({ weeklyCents: 30000, weeklySource: "plan" });
+  });
+
   it("an override still wins for its own week", () => {
     expect(everydayPlanFromRows("2026-10-04", plans, { "2026-10-04": "120.5" })).toMatchObject({
       weeklyCents: 12050,

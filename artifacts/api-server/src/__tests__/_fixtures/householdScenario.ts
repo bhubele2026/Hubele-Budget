@@ -272,9 +272,12 @@ export const CONTRACT_COLUMNS: Array<{
  * ⭐ (PR-B1) The money position's columns, read from `GET /money/position`
  * (the spine's `position` is the same call). Switched on at every step:
  * `remainingWeek`, `unplannedWeek`, `needsClassificationWeek` and
- * `safeToSpendNow`. Switched on where today's ledger already yields the
- * contract's value: `lowBeforePayday` and `availableUntilPayday`, at the steps
- * NOT listed in `POSITION_LEDGER_NOT_YET`.
+ * `safeToSpendNow`. `lowBeforePayday` and `availableUntilPayday` are switched
+ * on at the steps NOT listed in `POSITION_LEDGER_NOT_YET` — since round 2
+ * (bills on payday count before the paycheck) that is none of them: today's
+ * ledger still carries the $300 Weekly Spend bill where the contract has the
+ * Amex payoff. At a listed step the test pins what the app reports today
+ * (reading LOW, as the law allows) so the hooks package notices the change.
  */
 export const POSITION_COLUMNS = [
   "remainingWeek",
@@ -286,7 +289,7 @@ export const POSITION_COLUMNS = [
 /**
  * Steps where today's forecast ledger does not yet yield the contract's lowest
  * before payday (and so its available until payday), with the one-line reason
- * and what the app reports today. `it.todo` until the named package.
+ * and what the app reports today (pinned). `it.todo` until the named package.
  */
 export const POSITION_LEDGER_NOT_YET: Partial<
   Record<StepId, { turnsOnIn: string; reason: string; appReportsToday: { lowBeforePayday: string; availableUntilPayday: string } }>
@@ -312,9 +315,25 @@ export const POSITION_LEDGER_NOT_YET: Partial<
     appReportsToday: { lowBeforePayday: "1680.00 2026-10-08", availableUntilPayday: "1180.00" },
   },
   S5: {
-    turnsOnIn: "owner decision (PR6 rule)",
-    reason: "a bill due today lands on the next business day (day 0 = the bank), so the $95 phone moves to payday Fri 10/9",
-    appReportsToday: { lowBeforePayday: "2072.60 2026-10-08", availableUntilPayday: "1572.60" },
+    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
+    reason:
+      "the $95 phone (due today, landed on payday) now counts before the paycheck as the contract says, but so does the $300 Weekly Spend bill due 10/3, dragged onto payday where the contract has nothing left to pay",
+    appReportsToday: { lowBeforePayday: "1677.60 2026-10-09", availableUntilPayday: "1177.60" },
+  },
+  S6: {
+    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
+    reason: "the $300 Weekly Spend bill due 10/3 is dragged onto payday Fri 10/9 and counts before the paycheck; the contract's $180 payoff posted 10/6",
+    appReportsToday: { lowBeforePayday: "1772.60 2026-10-09", availableUntilPayday: "1272.60" },
+  },
+  S7: {
+    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
+    reason: "the $300 Weekly Spend bill due 10/3 is dragged onto payday Fri 10/9 and counts before the paycheck",
+    appReportsToday: { lowBeforePayday: "1772.60 2026-10-09", availableUntilPayday: "1272.60" },
+  },
+  S8: {
+    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
+    reason: "the $300 Weekly Spend bill due 10/3 is dragged onto payday Fri 10/9 and counts before the paycheck",
+    appReportsToday: { lowBeforePayday: "1772.60 2026-10-09", availableUntilPayday: "1272.60" },
   },
   S9: {
     turnsOnIn: "the funding-bill hooks (decision 7, next package)",

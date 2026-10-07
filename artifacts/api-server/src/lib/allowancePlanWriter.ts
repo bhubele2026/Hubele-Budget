@@ -1,14 +1,22 @@
 // ⚠️ (PR-B1) THE ONE WRITER OF `allowance_plans`.
 //
-// The weekly cap is the household's own decision. Only the owner, through
-// `PUT /allowance-plans/:id`, changes a plan; nothing automatic ever does — no
-// job, no agent, no "helpful" raise when a week runs over.
+// The weekly cap is the household's own decision. A person changes a plan, in
+// one of two user-initiated ways; nothing automatic ever does — no job, no
+// agent, no "helpful" raise when a week runs over:
+//   - the owner, through `PUT /allowance-plans/:id` (`writeOwnerAllowancePlan`);
+//   - (lead's ruling on PR-B1 Q4) a household member saving the weekly or
+//     monthly allowance on the classic Allowances page (`PUT /settings`), which
+//     is mirrored into the household pool's plan for the current week
+//     (`mirrorSettingsAllowance`) until `settings` is retired.
 // `allowancePlans.integration.test.ts` asserts that no file under `src/jobs` or
 // `src/ai` imports this module or names the table, and the table's own CHECK
 // pins `created_by_kind = 'user'`.
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { allowancePlansTable, db, type AllowancePlan } from "@workspace/db";
+
+/** `db` or a transaction on it. */
+type Executor = Pick<typeof db, "execute">;
 
 export interface AllowancePlanEdit {
   /** Dollars, `0`–`99999999.99`, at most two decimals. */
@@ -53,4 +61,29 @@ export async function writeOwnerAllowancePlan(
     }
     throw err;
   }
+}
+
+/**
+ * (Lead's ruling on PR-B1 Q4) Mirror a classic-page allowance edit into the
+ * household pool's plan: upsert the `period` row effective `weekStartSunday`
+ * (the Sunday of the current household week, so the edit governs this week, as
+ * the classic page always meant it to) at `amount`, `source = 'owner'`, no
+ * derivation. A second edit in the same week updates that row. Older rows are
+ * kept, so past weeks keep the cap they had. A $0 amount is written as a $0 row,
+ * which reads as "no cap" (`everydayPlanFromRows`, ruling Q2).
+ */
+export async function mirrorSettingsAllowance(
+  exec: Executor,
+  householdId: string,
+  period: "weekly" | "monthly",
+  amount: string,
+  weekStartSunday: string,
+): Promise<void> {
+  await exec.execute(sql`
+    INSERT INTO allowance_plans
+      (household_id, member_user_id, period, amount, effective_from, source, derivation, created_by_kind)
+    VALUES (${householdId}, NULL, ${period}, ${amount}, ${weekStartSunday}, 'owner', NULL, 'user')
+    ON CONFLICT (household_id, (coalesce("member_user_id", '')), period, effective_from)
+    DO UPDATE SET amount = EXCLUDED.amount, source = 'owner', derivation = NULL, created_by_kind = 'user'
+  `);
 }

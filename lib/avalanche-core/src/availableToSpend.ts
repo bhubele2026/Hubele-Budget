@@ -11,6 +11,12 @@
 //      there is to work with; the household's cash buffer and any money held
 //      back for goals stay out of reach:
 //          availableUntilPayday = max(0, lowest before payday − buffer − reserves)
+//      ⭐ (Round 2, lead's ruling on PR-B1 Q1) The window is today THROUGH
+//      payday, and on payday itself the bills count before the paycheck: that
+//      day reads its end-of-day balance less every income event dated payday.
+//      A bill the ledger lands on payday (one due today, dragged to the next
+//      business day, or one simply due that day) can post before the deposit,
+//      so leaving it out would read HIGH by that bill.
 //   2. THE WEEK'S PLAN. The weekly cap minus what this Sunday–Saturday week has
 //      already spent from it:
 //          remainingWeek = weekCap − spentWeekDiscretionary
@@ -128,15 +134,19 @@ export interface MoneyPosition {
   paydayDate: string | null;
   payday: { itemId: string; label: string; amount: string } | null;
   /**
-   * The window the cash figures cover. `payday`: today up to the day before
-   * `endDate` (the payday). `week_end`: no payday within 45 days, so today
-   * through `endDate`, this week's Saturday. `lastDay` is the last day counted.
+   * The window the cash figures cover, both ends inclusive. `payday`: today
+   * through `endDate`, the payday — on payday the bills count and the paycheck
+   * does not. `week_end`: no payday within 45 days, so today through
+   * `endDate`, this week's Saturday. `lastDay` is the last day counted.
    */
   horizon: { kind: "payday" | "week_end"; endDate: string; lastDay: string };
-  /** The lowest end-of-day balance the curve expects in the window; null with no curve. */
+  /**
+   * The lowest end-of-day balance the curve expects in the window — payday's
+   * own day read before its paycheck — or null with no curve.
+   */
   lowestUntilPayday: string | null;
   lowestUntilPaydayDate: string | null;
-  /** Σ |planned outflows| landing in the window. */
+  /** Σ |planned outflows| landing in the window, payday's own bills included. */
   committedUntilPayday: string;
   cashBuffer: string;
   reservesHeld: string;
@@ -175,6 +185,7 @@ export const POSITION_ASSUMPTIONS = {
   noBank: "no bank balance yet",
   bankFrom: (day: string) => `bank data from ${day}`,
   noPayday: `no payday in the next ${PAYDAY_MAX_DAYS} days: counted to Saturday`,
+  paydayBillsFirst: "bills due on payday are counted before the paycheck",
   unfiledCounts: "spending not yet filed counts against the weekly cap",
 } as const;
 
@@ -225,20 +236,28 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
   const { todayISO } = inputs;
   const week = weekBounds(todayISO);
 
-  // ── The window: today up to payday, or through Saturday when no payday is near.
+  // ── The window: today through payday, or through Saturday when no payday is near.
   const payday = selectPayday(todayISO, inputs.events, inputs.incomeItems);
   const horizon: MoneyPosition["horizon"] = payday
-    ? { kind: "payday", endDate: payday.date, lastDay: addDaysISO(payday.date, -1) }
+    ? { kind: "payday", endDate: payday.date, lastDay: payday.date }
     : { kind: "week_end", endDate: week.end, lastDay: week.end };
   const inWindow = (iso: string): boolean => iso >= todayISO && iso <= horizon.lastDay;
+  // On payday the paycheck — and any other deposit plan dated that day — does
+  // not count: the day's bills may post before it.
+  const paydayIncome = (e: PositionEvent): boolean =>
+    payday != null && e.kind === "income" && e.date === payday.date;
+  let paydayIncomeCents = 0;
+  for (const e of inputs.events) if (paydayIncome(e)) paydayIncomeCents += toCents(e.amount) ?? 0;
 
-  // ── Lowest end-of-day balance in the window (first day it is reached).
+  // ── Lowest end-of-day balance in the window (first day it is reached);
+  // payday's own day before its paycheck.
   let lowestCents: number | null = null;
   let lowestDate: string | null = null;
   for (const d of inputs.daily) {
     if (!inWindow(d.date)) continue;
-    const c = toCents(d.balance);
+    let c = toCents(d.balance);
     if (c == null) continue;
+    if (payday && d.date === payday.date) c -= paydayIncomeCents;
     if (lowestCents == null || c < lowestCents) {
       lowestCents = c;
       lowestDate = d.date;
@@ -251,7 +270,7 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
   const estimates: PositionEstimate[] = [];
   const tags: string[] = [];
   for (const e of inputs.events) {
-    if (!inWindow(e.date)) continue;
+    if (!inWindow(e.date) || paydayIncome(e)) continue;
     if (e.kind === "expense") committedCents += Math.abs(toCents(e.amount) ?? 0);
     if (e.kind !== "actual" && e.amountKind === "estimate") {
       estimated = true;
@@ -312,7 +331,7 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
       ? POSITION_ASSUMPTIONS.bankFrom(householdDateOf(bankAt))
       : POSITION_ASSUMPTIONS.noBank,
   );
-  if (!payday) assumptions.push(POSITION_ASSUMPTIONS.noPayday);
+  assumptions.push(payday ? POSITION_ASSUMPTIONS.paydayBillsFirst : POSITION_ASSUMPTIONS.noPayday);
   if (unfiled > 0 && capCents != null) assumptions.push(POSITION_ASSUMPTIONS.unfiledCounts);
 
   return {

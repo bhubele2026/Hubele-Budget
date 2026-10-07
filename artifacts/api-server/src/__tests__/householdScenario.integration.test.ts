@@ -218,12 +218,24 @@ async function expectToday(id: StepId): Promise<void> {
   for (const column of POSITION_COLUMNS) {
     expect(pos[column], `${id} ${column}`).toBe(e[column]);
   }
-  if (!POSITION_LEDGER_NOT_YET[id]) {
+  const pending = POSITION_LEDGER_NOT_YET[id];
+  if (!pending) {
     expect(
       { balance: pos.lowestUntilPayday, date: pos.lowestUntilPaydayDate },
       `${id} lowest before payday`,
     ).toEqual(e.lowBeforePayday);
     expect(pos.availableUntilPayday, `${id} available until payday`).toBe(e.availableUntilPayday);
+  } else {
+    // Not the contract yet (it.todo below): pinned at what the app reports
+    // today — lower than the contract, never higher — so the package that
+    // closes the gap notices the change.
+    expect(`${pos.lowestUntilPayday} ${pos.lowestUntilPaydayDate}`, `${id} lowest before payday (today's value)`).toBe(
+      pending.appReportsToday.lowBeforePayday,
+    );
+    expect(pos.availableUntilPayday, `${id} available until payday (today's value)`).toBe(
+      pending.appReportsToday.availableUntilPayday,
+    );
+    expect(Number(pos.availableUntilPayday), `${id} reads low, never high`).toBeLessThanOrEqual(Number(e.availableUntilPayday));
   }
   // The spine's headline is the same call.
   expect(spine.position.safeToSpendNow, `${id} spine safe to spend`).toBe(pos.safeToSpendNow);

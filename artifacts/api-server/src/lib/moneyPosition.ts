@@ -125,7 +125,9 @@ export async function buildMoneyPosition(
   const weekRows = rows.map((r) => ({ coverage: classifyMovement(r, money).coverage, spend: spendAmount(r) }));
 
   const plan = everydayPlanFromRows(week.start, planRowsOf(planRows), money.settings.weeklyAllowanceOverrides);
-  const weekCap = plan.weeklySource === "none" ? null : plan.weeklyCents / 100;
+  // (Lead's ruling on PR-B1 Q2) A $0 week — no plan, a $0 plan, or a $0
+  // override — means no cap was set: null, never a $0 cap.
+  const weekCap = plan.weeklySource === "none" || plan.weeklyCents === 0 ? null : plan.weeklyCents / 100;
 
   return computePosition({
     todayISO,

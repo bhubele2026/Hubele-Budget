@@ -10,7 +10,7 @@ export type MoneyPositionHorizon = {
     kind: MoneyPositionHorizonKind;
     /** The payday, or this week's Saturday */
     endDate: string;
-    /** The last day the cash figures count (the day before payday, or the Saturday) */
+    /** The last day the cash figures count (payday itself, before its paycheck; or the Saturday) */
     lastDay: string;
 };
 //# sourceMappingURL=moneyPositionHorizon.d.ts.map

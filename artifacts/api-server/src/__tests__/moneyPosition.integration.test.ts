@@ -20,8 +20,9 @@
 //
 //   Payday:       Fri 10/9 — the $150 reimbursement on 10/8 is under 25% of the
 //                 $2,000 paycheck, so it is not payday.
-//   Curve:        10/7 2,814.50 · 10/8 2,814.50 + 150 − 340 = 2,624.50
-//   Lowest before payday 2,624.50 on 10/8 → available 2,624.50 − 500 = 2,124.50
+//   Curve:        10/7 2,814.50 · 10/8 2,814.50 + 150 − 340 = 2,624.50 ·
+//                 10/9 4,624.50, read before its $2,000 paycheck: 2,624.50 (a tie)
+//   Lowest through payday 2,624.50 on 10/8 → available 2,624.50 − 500 = 2,124.50
 //   Week:         counted 80.00 weekly + 25.50 unfiled = 105.50; unplanned
 //                 40.00 and monthly 30.00 beside it; the City Water row is the
 //                 bill (tier 2), the transfer is a transfer.
@@ -245,7 +246,7 @@ describe("GET /money/position — household A, worked by hand", () => {
       status: "ready",
       paydayDate: "2026-10-09",
       payday: { itemId: expect.any(String), label: "Paycheck", amount: "2000.00" },
-      horizon: { kind: "payday", endDate: "2026-10-09", lastDay: "2026-10-08" },
+      horizon: { kind: "payday", endDate: "2026-10-09", lastDay: "2026-10-09" },
       lowestUntilPayday: "2624.50",
       lowestUntilPaydayDate: "2026-10-08",
       committedUntilPayday: "340.00",
@@ -268,6 +269,7 @@ describe("GET /money/position — household A, worked by hand", () => {
       assumptions: [
         "available credit is not counted",
         "bank data from 2026-10-04",
+        "bills due on payday are counted before the paycheck",
         "spending not yet filed counts against the weekly cap",
       ],
       degraded: false,

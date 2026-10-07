@@ -5382,14 +5382,16 @@ export const GetMoneyPositionResponse = zod
       lastDay: zod
         .string()
         .describe(
-          "The last day the cash figures count (the day before payday, or the Saturday)",
+          "The last day the cash figures count (payday itself, before its paycheck; or the Saturday)",
         ),
     }),
     lowestUntilPayday: zod.string().nullable(),
     lowestUntilPaydayDate: zod.string().nullable(),
     committedUntilPayday: zod
       .string()
-      .describe("Sum of the planned outflows landing in the window"),
+      .describe(
+        "Sum of the planned outflows landing in the window, payday's own bills included",
+      ),
     cashBuffer: zod.string(),
     reservesHeld: zod
       .string()
@@ -5401,7 +5403,7 @@ export const GetMoneyPositionResponse = zod
       .string()
       .nullable()
       .describe(
-        "This week's cap from allowance_plans (or the week's override); null when none is set",
+        "This week's cap from allowance_plans (or the week's override); null when none is set, and a $0 week is none",
       ),
     spentWeekDiscretionary: zod.string(),
     needsClassificationWeek: zod
@@ -5448,7 +5450,7 @@ export const GetMoneyPositionResponse = zod
       .nullable(),
   })
   .describe(
-    "(PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; without one the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).",
+    "(PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).",
   );
 
 /**
