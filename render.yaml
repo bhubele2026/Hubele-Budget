@@ -19,13 +19,23 @@
 # Toolchain mirrors CI (.github/workflows/ci.yml): Node 24, pnpm 10.34.3,
 # the .npmrc strict-dep-builds/verify-deps accommodations, --frozen-lockfile.
 #
-# Schema changes: `preDeployCommand` runs the migration runner
-# (artifacts/api-server/dist/migrate.mjs) after the build and before the new
-# build starts serving. It applies any pending lib/db/migrations/*.sql files,
-# each in its own transaction and recorded in the `schema_migrations` ledger,
-# and is a no-op when nothing is pending. A failing migration exits 1, which
-# CANCELS the deploy: the old build keeps serving on the old schema, which is
-# why every migration is additive (lib/db/migrations/README.md).
+# Schema changes: pending lib/db/migrations/*.sql files are applied by the
+# migration runner — each in its own transaction, recorded in the
+# `schema_migrations` ledger, a no-op when nothing is pending — in one of two
+# places:
+#   1. At server boot, before listen (artifacts/api-server/src/boot.ts), unless
+#      MIGRATE_ON_BOOT=false. A failing migration exits 1: the new instance
+#      never passes the health check and the old build keeps serving.
+#   2. `preDeployCommand` below (dist/migrate.mjs), after the build and before
+#      the new build starts; a failure cancels the deploy.
+# ⚠️ This service was created through the Render API, not from this
+# Blueprint, and a Blueprint sync must NOT be run (it would create a second
+# database). So this file is INFORMATIONAL: the preDeployCommand only runs
+# once someone sets it in the dashboard (Settings → Pre-Deploy Command). Until
+# then, boot migration (1) is what applies schema changes; set
+# MIGRATE_ON_BOOT=false only after the dashboard command is in place. Every
+# migration is additive (lib/db/migrations/README.md), so the old build keeps
+# working on the new schema while the new one starts.
 databases:
   - name: h2budget-db
     plan: basic-256mb

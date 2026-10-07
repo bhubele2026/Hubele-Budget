@@ -182,11 +182,13 @@ These laws bind a classic hotfix and nothing else:
   10.34.3 exactly.
 - **Adding a dependency needs a named justification.** The overhaul removed
   dozens; the entry-graph guard exists because weight is a feature here.
-- **Schema changes ship as idempotent SQL files in `lib/db/migrations/`**, run
-  by Render's `preDeployCommand` (`node artifacts/api-server/dist/migrate.mjs`)
-  before the new build serves. **Additive only; never DROP in the same release
-  as the code that stops reading;** backfills are idempotent and live in the
-  same file. Dev and tests keep `drizzle-kit push`, and the drizzle schema
+- **Schema changes ship as idempotent SQL files in `lib/db/migrations/`.**
+  Migrations run at server boot, before listen (`src/boot.ts`, on unless
+  `MIGRATE_ON_BOOT=false`), or by the pre-deploy command
+  (`node artifacts/api-server/dist/migrate.mjs`); both use the same idempotent
+  runner, and a failure keeps the old build serving. **Additive only; never
+  DROP in the same release as the code that stops reading;** backfills are
+  idempotent and live in the same file. Dev and tests keep `drizzle-kit push`, and the drizzle schema
   remains the type source and **must match the SQL** (tested). Conventions and
   reserved number ranges: `lib/db/migrations/README.md`.
 - **Background jobs run on pg-boss** (Postgres-backed, idempotent handlers);
@@ -214,7 +216,8 @@ These laws bind a classic hotfix and nothing else:
   - `pnpm --filter @workspace/db run push` — push DB schema (dev and tests only)
   - `node artifacts/api-server/dist/migrate.mjs` (or `pnpm --filter
     @workspace/api-server run migrate`) — apply pending `lib/db/migrations`
-    files to `DATABASE_URL`; idempotent (after a build)
+    files to `DATABASE_URL`; idempotent (after a build). The server does the
+    same at boot unless `MIGRATE_ON_BOOT=false`.
 - **Tests:** `pnpm --filter ./artifacts/h2 exec vitest run` (new web) and
   `pnpm --filter h2budget exec vitest run` (classic web), both jsdom, and
   `pnpm --filter api-server exec vitest run` (API
@@ -235,9 +238,11 @@ These laws bind a classic hotfix and nothing else:
   GHSA-qjx8-664m-686j; Clerk ships the fix on `@clerk/shared` >=4.20.
 - **Deploy:** GitHub `main` is the source of truth; **Render** auto-deploys
   `main` (single Web Service `h2budget` serving both web apps + `/api`, health
-  check `/api/healthz`, live at https://h2budget.onrender.com). Each deploy
-  runs `preDeployCommand` (the migration runner) after the build and before the
-  new build starts; **a failing migration cancels the deploy and the old build
-  keeps serving.** Pinned `packageManager: pnpm@10.34.3`, Node 24. Verify
+  check `/api/healthz`, live at https://h2budget.onrender.com). Pending
+  migrations run when the new build boots, before it listens (and by the
+  Pre-Deploy Command once it is set in the Render dashboard — the service was
+  created through the API, so `render.yaml` is informational and a Blueprint
+  sync must never be run). **A failing migration keeps the old build
+  serving.** Pinned `packageManager: pnpm@10.34.3`, Node 24. Verify
   `/api/version` matches the merge SHA after deploy. (Replit remains only as a
   dormant rollback.) Never deploy unreviewed work.

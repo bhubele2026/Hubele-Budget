@@ -1,12 +1,20 @@
 # lib/db/migrations — the SQL production runs
 
-Every schema change ships here as a numbered SQL file. On each deploy, Render's
-`preDeployCommand` runs `node artifacts/api-server/dist/migrate.mjs`, which
-applies the files the `schema_migrations` ledger has not seen, in file-name
-order, each in its own transaction together with its ledger row. A failing file
-rolls back, the command exits 1, and **the deploy is cancelled — the old build
-keeps serving on the old schema.** Run it locally the same way after
-`pnpm run build`; it is safe to run any number of times.
+Every schema change ships here as a numbered SQL file. The runner
+(`lib/db/src/migrate.ts`) applies the files the `schema_migrations` ledger has
+not seen, in file-name order, each in its own transaction together with its
+ledger row. It runs in two places, both idempotent:
+
+- **At server boot, before listen** (`artifacts/api-server/src/boot.ts`),
+  unless `MIGRATE_ON_BOOT=false`. A failing file exits the process 1, the new
+  instance never passes Render's health check, and **the old build keeps
+  serving.**
+- **As Render's Pre-Deploy Command**, `node artifacts/api-server/dist/migrate.mjs`
+  — once it is set in the Render dashboard. (The service was created through
+  the API, so `render.yaml`'s `preDeployCommand` is informational.) A failing
+  file exits 1 and cancels the deploy.
+
+Run it locally after `pnpm run build`; it is safe to run any number of times.
 
 Dev databases and the API test suite still use `drizzle-kit push`
 (`pnpm --filter @workspace/db run push`). `lib/db/drizzle/*.sql` is legacy
