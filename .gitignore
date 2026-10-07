@@ -81,3 +81,6 @@ Thumbs.db
 
 # Review artifacts (PR screenshots) — kept on disk, never committed.
 .screenshots/
+# (S0) The classic baseline from scripts/capture-classic.mjs: screens of a
+# signed-in household, so never committed.
+screenshots/classic-baseline/

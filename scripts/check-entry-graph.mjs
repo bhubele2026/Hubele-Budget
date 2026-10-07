@@ -3,9 +3,10 @@
  * Entry-graph guard (PR A2 of the FAST OPEN overhaul).
  *
  * After `pnpm run build`, this script inspects what the browser actually
- * downloads to open the app: the <script type="module"> entry plus every
- * <link rel="modulepreload"> chunk in artifacts/h2budget/dist/public/
- * index.html, expanded through each chunk's STATIC imports (a statically
+ * downloads to open an app: the <script type="module"> entry plus every
+ * <link rel="modulepreload"> chunk in its dist's index.html (by default the
+ * classic app, artifacts/h2budget/dist/public), expanded through each chunk's
+ * STATIC imports (a statically
  * imported chunk loads on open even if index.html forgot to preload it;
  * dynamic `import(...)` chunks are lazy and excluded on purpose).
  *
@@ -19,6 +20,13 @@
  *
  * On success it prints every landing chunk with its size so the numbers are
  * visible in CI logs. Plain node builtins only — no dependencies.
+ *
+ * Usage (both run in CI after the build):
+ *   node scripts/check-entry-graph.mjs
+ *       the classic app at artifacts/h2budget/dist/public, 580,000 bytes
+ *   node scripts/check-entry-graph.mjs --dist artifacts/h2/dist/public --max 400000
+ *       H2 (S0, 2026-10-07): the new app's open path is capped at 400 KB
+ * `--dist` resolves from the repo root (an absolute path is used as is).
  */
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -42,19 +50,44 @@ import { gzipSync } from "node:zlib";
 // regression risk on pages that were just rebuilt, traded against roughly a
 // tenth of a second on a warm open. Not worth it. If someone revisits this,
 // revisit it as a deliberate piece of work — not as a leftover chore.
-const MAX_TOTAL_BYTES = 580_000;
+const DEFAULT_MAX_TOTAL_BYTES = 580_000;
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const distRoot = path.join(repoRoot, "artifacts", "h2budget", "dist", "public");
-const indexHtmlPath = path.join(distRoot, "index.html");
 
 function die(msg) {
   console.error(`\n[check-entry-graph] FAIL: ${msg}\n`);
   process.exit(1);
 }
+
+/** `--dist <path>` and `--max <bytes>`; anything else is a usage error. */
+function parseArgs(argv) {
+  const out = { dist: null, max: null };
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i];
+    const value = argv[i + 1];
+    if (flag === "--dist" || flag === "--max") {
+      if (value === undefined || value.startsWith("--")) die(`${flag} needs a value`);
+      out[flag.slice(2)] = value;
+      i++;
+    } else {
+      die(`unknown argument "${flag}" (expected --dist <path> and/or --max <bytes>)`);
+    }
+  }
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+const distRoot = args.dist
+  ? path.resolve(repoRoot, args.dist)
+  : path.join(repoRoot, "artifacts", "h2budget", "dist", "public");
+const MAX_TOTAL_BYTES = args.max === null ? DEFAULT_MAX_TOTAL_BYTES : Number(args.max);
+if (!Number.isInteger(MAX_TOTAL_BYTES) || MAX_TOTAL_BYTES <= 0) {
+  die(`--max must be a positive whole number of bytes, got "${args.max}"`);
+}
+const indexHtmlPath = path.join(distRoot, "index.html");
 
 if (!existsSync(indexHtmlPath)) {
   die(
@@ -179,7 +212,9 @@ if (totalBytes > MAX_TOTAL_BYTES) {
 
 // --- 4. Report --------------------------------------------------------------
 const kb = (n) => `${(n / 1000).toFixed(1)} KB`;
-console.log("[check-entry-graph] landing-route JS (entry + modulepreload + static imports):");
+console.log(
+  `[check-entry-graph] ${path.relative(repoRoot, distRoot) || distRoot} — landing-route JS (entry + modulepreload + static imports):`,
+);
 for (const { name, bytes } of rows) {
   console.log(`  ${kb(bytes).padStart(9)}  ${name}`);
 }

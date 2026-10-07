@@ -128,6 +128,48 @@ jobs:
           CI: "true"
           TZ: America/Los_Angeles
 
+  # (S0) The same four-zone run for the new app, artifacts/h2. Its own job so a
+  # failure names the app it is in; the zones, the order and the
+  # keep-going-after-a-failed-zone rule mirror web-tests above.
+  web-tests-h2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - id: install
+        run: |
+          printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc
+          pnpm install --frozen-lockfile
+      - name: H2 web unit tests (jsdom, no DB), TZ=UTC
+        run: pnpm --filter ./artifacts/h2 run test
+        env:
+          CI: "true"
+          TZ: UTC
+      - name: H2 web unit tests (jsdom, no DB), TZ=America/Chicago
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm --filter ./artifacts/h2 run test
+        env:
+          CI: "true"
+          TZ: America/Chicago
+      - name: H2 web unit tests (jsdom, no DB), TZ=America/New_York
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm --filter ./artifacts/h2 run test
+        env:
+          CI: "true"
+          TZ: America/New_York
+      - name: H2 web unit tests (jsdom, no DB), TZ=America/Los_Angeles
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm --filter ./artifacts/h2 run test
+        env:
+          CI: "true"
+          TZ: America/Los_Angeles
+
   api-tests:
     runs-on: ubuntu-latest
     services:
@@ -198,13 +240,19 @@ jobs:
           printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc
           pnpm install --frozen-lockfile
       - name: Production build (same command Replit deploys)
+        id: build
         run: pnpm run build
       # Entry-graph guard: the landing route must never statically pull
       # recharts (vendor-charts), react-dom must live only in vendor-react,
       # and total landing JS stays under the byte budget. Fails the PR the
-      # moment an import chain re-eagerizes a heavy vendor chunk.
-      - name: Entry-graph guard (no recharts on open, JS byte budget)
+      # moment an import chain re-eagerizes a heavy vendor chunk. Run once per
+      # app: the classic app (served at /classic) keeps its 580 KB cap; H2
+      # (served at /) is capped at 400 KB from its first build.
+      - name: Entry-graph guard, classic app (no recharts on open, 580 KB)
         run: node scripts/check-entry-graph.mjs
+      - name: Entry-graph guard, H2 (no recharts on open, 400 KB)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node scripts/check-entry-graph.mjs --dist artifacts/h2/dist/public --max 400000
 
   # Playwright e2e needs a booted app + Clerk test credentials + browsers.
   # Opt-in until those secrets/profile exist (set repo variable E2E_ENABLED=true)

@@ -62,7 +62,16 @@ export default function PlaidOAuthPage() {
 
   const goBack = useCallback(
     (delayMs = 0) => {
-      const target = returnTo || "/dashboard";
+      // (S0) The Link button stores `window.location.pathname`, which under the
+      // /classic/ base is "/classic/settings". wouter's setLocation is
+      // base-relative, so the stored path is stripped back to "/settings"
+      // first — otherwise it would land on /classic/classic/settings.
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const stored = returnTo || "/dashboard";
+      const target =
+        base && (stored === base || stored.startsWith(`${base}/`))
+          ? stored.slice(base.length) || "/"
+          : stored;
       window.setTimeout(() => setLocation(target), delayMs);
     },
     [returnTo, setLocation],
