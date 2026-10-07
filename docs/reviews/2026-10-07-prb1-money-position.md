@@ -139,7 +139,7 @@ hand in the test file's header):
 
 The pending cells are `it.todo`, one line each: S1–S4, S9, S10 need the funding-bill hooks (today's ledger
 drags the $300 Weekly Spend bill where the contract has the Amex payoff); S5 needs an owner decision (a bill
-due today lands on the next business day — see Residual 1).
+due today lands on the next business day — see Residual 3).
 
 **`GET /allowance-plans`, household H1 of `allowancePlans.integration.test.ts`:** suggested weekly — → 430.00
 (take-home 4,333.33 − committed 1,815.99 − minimums 395.00 − extra 250.00 = 1,872.34 a month → 432.08 a week).
@@ -243,58 +243,58 @@ Run on the branch head, Node 24.18, pnpm 10.34.3, local Postgres (`h2budget_test
 | Parent `8148f2a1`, same suite, scratch DB | 151 files; 1,606 passed, 7 todo |
 | Golden under `CI=true` | passes; snapshot files unchanged |
 | `pnpm run build` + `node scripts/check-entry-graph.mjs` | build OK; landing route 575.7 KB raw (173.4 KB gz), budget 580 KB — unchanged; no recharts on open |
-| `pnpm audit --prod` | ⚠️ **3 (1 critical, 2 high) — the same 3 on `main` at `8148f2a1`**, none introduced here (no dependency or lockfile change): `proxy-addr` < 2.0.8 via `express`, `compression` < 1.8.2, `braces` ≤ 3.0.3 via `http-proxy-middleware` (no patched release). Needs a security-pin change on `main` (Residual 0). |
+| `pnpm audit --prod` | ⚠️ **3 (1 critical, 2 high) — the same 3 on `main` at `8148f2a1`**, none introduced here (no dependency or lockfile change): `proxy-addr` < 2.0.8 via `express`, `compression` < 1.8.2, `braces` ≤ 3.0.3 via `http-proxy-middleware` (no patched release). Needs a security-pin change on `main` (Residual 1). |
 
 ## Residuals
 
-0. **`pnpm audit --prod` is not 0 on `main` itself.** Three advisories published against packages already in
+1. **`pnpm audit --prod` is not 0 on `main` itself.** Three advisories published against packages already in
    the tree (`proxy-addr`, `compression`, `braces`) fail the audit gate on `8148f2a1` exactly as on this
    branch. Fixing them is a dependency change (overrides / upgrades, and `braces` has no patched release, so
    its path through `http-proxy-middleware` must go) that belongs in one security-pin PR on `main`, not in a
    money package. Flagged to the lead.
-0b. **⚠️ Deploy order: the SQL must run before this code serves.** Drizzle reads full `recurring_items` rows in
+2. **⚠️ Deploy order: the SQL must run before this code serves.** Drizzle reads full `recurring_items` rows in
    the forecast, bills and spine, so once this code is live every one of those reads names `amount_kind`; and
    the spine reads `allowance_plans`. Production gets both only from `0040`/`0041` through PR-0's migration
    runner (`preDeployCommand`). This branch must merge after PR-0, and the runner must apply `lib/db/migrations`
    in name order. Without them the forecast, Bills and the spine fail.
-1. **⚠️ Reads high by a bill due today when the next business day is payday.** The ledger lands an unposted
+3. **⚠️ Reads high by a bill due today when the next business day is payday.** The ledger lands an unposted
    bill due today (and an overdue one) on the next business day, so day 0 equals the bank (PR6). When that
    day is payday the bill falls outside the window, and available until payday reads high by it for that
    day (scenario S5: the $95 phone; 1,572.60 where the contract says 1,477.60). The formula follows the
    specification exactly; counting a due-but-dragged outflow that lands ON payday inside the window would
    restore "low, never high" and match the contract at S5 once the hooks land. Not changed here: it is a
    money rule (Question 1).
-2. **The cap reads `allowance_plans`; the classic Allowances page still writes `settings`.** Until settings is
+4. **The cap reads `allowance_plans`; the classic Allowances page still writes `settings`.** Until settings is
    retired, an edit on the classic page does not move the position's cap (the backfill ran once). The
    overrides are still read from `settings.preferences`, as `everydayPlan` reads them (Question 4).
-3. **Funding-bill hooks are the next package.** Until then the Weekly Spend bill is a plain weekly bill on the
+5. **Funding-bill hooks are the next package.** Until then the Weekly Spend bill is a plain weekly bill on the
    curve, so lowest before payday and available until payday read lower than the contract at S1–S4, S9, S10
    (low, not high).
-4. **Bank freshness reads `old` at scenario S3–S7.** The 48-hour quiet-feed rule post-dates the contract's
+6. **Bank freshness reads `old` at scenario S3–S7.** The 48-hour quiet-feed rule post-dates the contract's
    "Stale" column, which says fresh; the position reports `degraded: true` there. The column stays pending for
    its owner.
-5. **Spine cost.** The spine now also runs the position's reads: the household's income plans and allowance
+7. **Spine cost.** The spine now also runs the position's reads: the household's income plans and allowance
    plans, `loadMoneyContext` (owner, settings, confirmed matches, ledger accounts, Amex cards, categories) and
    the week's rows. The ledger, freshness and pending pairs are shared, not re-read. Not measured against
    production data.
-6. `drizzle-kit push` re-creates the expression unique index on every push (dev and tests only; production
+8. `drizzle-kit push` re-creates the expression unique index on every push (dev and tests only; production
    runs the SQL file, which is idempotent). A known drizzle-kit limit with expression indexes.
-7. `committedUntilPayday` sums planned outflows only; a future-dated real checking row lowers the curve (and
+9. `committedUntilPayday` sums planned outflows only; a future-dated real checking row lowers the curve (and
    so the low) but is not listed as committed.
-8. The position classifies the week with `classifyMovement` as specified, so a row that is both reimbursable
+10. The position classifies the week with `classifyMovement` as specified, so a row that is both reimbursable
    and weekly-flagged counts against the cap (PR-H's open question), while `spentWeek` excludes it.
 
 ## Questions for the owner
 
-1. **A bill due today with payday tomorrow** (Residual 1): should a bill that is already due but dragged onto
+1. **A bill due today with payday tomorrow** (Residual 3): should a bill that is already due but dragged onto
    payday count inside "until payday"? Yes reads safe (low); no is today's formula (high by that bill for a
    day).
 2. **No allowance set means no cap.** The backfill writes no plan for a $0 setting, so such a household sees
    "no weekly cap" rather than "over a $0 cap". Right?
 3. **A cap changed mid-week governs the whole week** (the newest plan that has started by Saturday). Or
    should it start the following Sunday?
-4. **Classic Allowances page vs. `allowance_plans`** (Residual 2): mirror the classic page's writes into the
+4. **Classic Allowances page vs. `allowance_plans`** (Residual 4): mirror the classic page's writes into the
    plan until it is retired, or leave the classic page reading its own setting?
 5. **Unfiled spending counts against the weekly cap until it is filed.** Confirm.
-6. **Reimbursable + weekly-flagged** (Residual 8): count it against the cap (the classifier's order today) or
+6. **Reimbursable + weekly-flagged** (Residual 10): count it against the cap (the classifier's order today) or
    leave it out (the 2026-09-15 rule)?
