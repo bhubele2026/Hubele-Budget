@@ -14,8 +14,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@clerk/express": "^2.1.12",
     "@clerk/shared": "^4.9.0",
+    "@opentelemetry/api": "^1.9.1",
     "@workspace/api-zod": "workspace:*",
     "@workspace/avalanche-core": "workspace:*",
     "@workspace/db": "workspace:*",
@@ -27,7 +29,7 @@
     "helmet": "^8.1.0",
     "http-proxy-middleware": "^3.0.7",
     "multer": "^2.4.0",
-    "node-cron": "^4.2.1",
+    "pg-boss": "^12.37.0",
     "pino": "^9",
     "pino-http": "^10",
     "plaid": "^42.2.0",
@@ -40,7 +42,6 @@
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "catalog:",
-    "@types/node-cron": "^3.0.11",
     "esbuild": "^0.27.3",
     "esbuild-plugin-pino": "^2.3.3",
     "pino-pretty": "^13",
