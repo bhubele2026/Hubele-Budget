@@ -1,0 +1,42 @@
+import type Anthropic from "@anthropic-ai/sdk";
+import { logger } from "../../lib/logger";
+import type { AiTask } from "../config";
+
+// (AI-0) Versioned prompts. Each task maps version keys ("v1", "v2", …) to a
+// prompt; the newest runs unless AI_PROMPT_<TASK> names another version (an
+// eval can pin one). System text is stable — no dates, ids or other
+// per-call values in it — so prompt caching can hit; per-call facts go in
+// `build`'s messages, outside text wrapped with `untrusted()`.
+//
+// No business prompts live in this package: each arrives with the package
+// that owns its task. `ping.v1` exists for the tests only.
+
+export interface PromptDef<I = any> {
+  /** Recorded on every ai_usage row, e.g. "categorize.v2". */
+  PROMPT_VERSION: string;
+  system: string;
+  build(input: I): Anthropic.MessageParam[];
+}
+
+export type PromptRegistry = Partial<Record<AiTask, Record<string, PromptDef>>>;
+
+export const PROMPTS: PromptRegistry = {};
+
+function versionNumber(key: string): number {
+  const m = /^v(\d+)$/.exec(key);
+  return m ? Number(m[1]) : -1;
+}
+
+export function resolvePrompt(task: AiTask, registry: PromptRegistry = PROMPTS): PromptDef | null {
+  const versions = registry[task];
+  if (!versions) return null;
+  const keys = Object.keys(versions);
+  if (keys.length === 0) return null;
+  const pinned = process.env[`AI_PROMPT_${task.toUpperCase()}`]?.trim();
+  if (pinned) {
+    if (versions[pinned]) return versions[pinned]!;
+    logger.warn({ task, pinned }, "AI_PROMPT_<TASK> names a version that does not exist — using the newest");
+  }
+  const newest = keys.reduce((a, b) => (versionNumber(b) > versionNumber(a) ? b : a));
+  return versions[newest] ?? null;
+}

@@ -25,12 +25,17 @@ tags:
   - name: invitations
   - name: members
   - name: spine
+  - name: ops
+    description: (AI-0) Owner-only operations views (job queues).
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
-      summary: Health check
+      summary: |
+        Health check. Always 200 while the process serves; job, AI and SMS
+        state are reported as booleans and counts (never secrets) and never
+        fail the check.
       responses:
         "200":
           description: Healthy
@@ -53,6 +58,50 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/VersionInfo" }
+
+  /ops/jobs:
+    get:
+      operationId: getOpsJobs
+      tags: [ops]
+      summary: |
+        (AI-0, owner only) Job counts per queue and state, plus the 50 most
+        recent failed jobs. Read straight from the pg-boss tables, so it works
+        whether or not this instance runs jobs.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpsJobsReport" }
+        "403":
+          description: Forbidden
+
+  /ops/jobs/{id}/retry:
+    post:
+      operationId: retryOpsJob
+      tags: [ops]
+      summary: (AI-0, owner only) Put a failed job back in its queue.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Retried
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpsJobRetryResult" }
+        "400":
+          description: Not a job id
+        "403":
+          description: Forbidden
+        "404":
+          description: No such job
+        "409":
+          description: The job is not in a failed state
+        "503":
+          description: Jobs are not running on this instance
 
   /dashboard:
     get:
@@ -2098,9 +2147,85 @@ components:
   schemas:
     HealthStatus:
       type: object
-      required: [status]
+      required: [status, version, jobs, ai, sms]
       properties:
         status: { type: string }
+        version: { type: string }
+        jobs: { $ref: "#/components/schemas/HealthJobs" }
+        ai: { $ref: "#/components/schemas/HealthAi" }
+        sms: { $ref: "#/components/schemas/HealthSms" }
+
+    HealthJobs:
+      type: object
+      required: [mode, started, failedLast24h, dlq]
+      properties:
+        mode: { type: string, enum: ["on", "off"] }
+        started: { type: boolean }
+        failedLast24h:
+          type: ["integer", "null"]
+          description: Jobs that failed for good in the last 24 hours; null when unreadable.
+        dlq:
+          type: ["integer", "null"]
+          description: Jobs waiting in dead-letter queues; null when unreadable.
+
+    HealthAi:
+      type: object
+      required: [enabled, configured, provider]
+      properties:
+        enabled: { type: boolean }
+        configured: { type: boolean }
+        provider: { type: string, enum: [anthropic, fake] }
+
+    HealthSms:
+      type: object
+      required: [provider, configured]
+      properties:
+        provider: { type: string, enum: [twilio, console, fake] }
+        configured: { type: boolean }
+
+    OpsJobQueueCount:
+      type: object
+      required: [queue, state, count]
+      properties:
+        queue: { type: string }
+        state: { type: string }
+        count: { type: integer }
+
+    OpsJobFailure:
+      type: object
+      required: [id, queue, error, retryCount, createdOn, startedOn, completedOn]
+      properties:
+        id: { type: string }
+        queue: { type: string }
+        error:
+          type: ["string", "null"]
+          description: The error message the handler failed with (no stack), at most 500 characters.
+        retryCount: { type: integer }
+        createdOn: { type: string, format: date-time }
+        startedOn: { type: ["string", "null"], format: date-time }
+        completedOn: { type: ["string", "null"], format: date-time }
+
+    OpsJobsReport:
+      type: object
+      required: [mode, started, schema, counts, failures]
+      properties:
+        mode: { type: string, enum: ["on", "off"] }
+        started: { type: boolean }
+        schema: { type: string }
+        counts:
+          type: array
+          items: { $ref: "#/components/schemas/OpsJobQueueCount" }
+        failures:
+          type: array
+          items: { $ref: "#/components/schemas/OpsJobFailure" }
+
+    OpsJobRetryResult:
+      type: object
+      required: [id, queue, retried]
+      properties:
+        id: { type: string }
+        queue: { type: string }
+        retried: { type: boolean }
 
     BadgeCount:
       type: object

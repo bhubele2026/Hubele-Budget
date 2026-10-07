@@ -22,6 +22,7 @@ import amexRouter from "./amex";
 import reportsRouter from "./reports";
 import spineRouter from "./spine";
 import bankBalanceExplainRouter from "./bankBalanceExplain";
+import opsRouter from "./ops";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(amexRouter);
 router.use(reportsRouter);
 router.use(bankBalanceExplainRouter);
 router.use(spineRouter);
+router.use(opsRouter);
 
 export default router;

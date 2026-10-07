@@ -1,12 +1,15 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 /**
- * @summary Health check
+ * @summary Health check. Always 200 while the process serves; job, AI and SMS
+state are reported as booleans and counts (never secrets) and never
+fail the check.
+
  */
 export declare const getHealthCheckUrl: () => string;
 export declare const healthCheck: (options?: RequestInit) => Promise<HealthStatus>;
@@ -20,7 +23,10 @@ export declare const getHealthCheckQueryOptions: <TData = Awaited<ReturnType<typ
 export type HealthCheckQueryResult = NonNullable<Awaited<ReturnType<typeof healthCheck>>>;
 export type HealthCheckQueryError = ErrorType<unknown>;
 /**
- * @summary Health check
+ * @summary Health check. Always 200 while the process serves; job, AI and SMS
+state are reported as booleans and counts (never secrets) and never
+fail the check.
+
  */
 export declare function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>(options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>;
@@ -59,6 +65,61 @@ export declare function useGetVersion<TData = Awaited<ReturnType<typeof getVersi
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * @summary (AI-0, owner only) Job counts per queue and state, plus the 50 most
+recent failed jobs. Read straight from the pg-boss tables, so it works
+whether or not this instance runs jobs.
+
+ */
+export declare const getGetOpsJobsUrl: () => string;
+export declare const getOpsJobs: (options?: RequestInit) => Promise<OpsJobsReport>;
+export declare const getGetOpsJobsQueryKey: () => readonly ["/api/ops/jobs"];
+export declare const getGetOpsJobsQueryOptions: <TData = Awaited<ReturnType<typeof getOpsJobs>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getOpsJobs>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getOpsJobs>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetOpsJobsQueryResult = NonNullable<Awaited<ReturnType<typeof getOpsJobs>>>;
+export type GetOpsJobsQueryError = ErrorType<void>;
+/**
+ * @summary (AI-0, owner only) Job counts per queue and state, plus the 50 most
+recent failed jobs. Read straight from the pg-boss tables, so it works
+whether or not this instance runs jobs.
+
+ */
+export declare function useGetOpsJobs<TData = Awaited<ReturnType<typeof getOpsJobs>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getOpsJobs>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary (AI-0, owner only) Put a failed job back in its queue.
+ */
+export declare const getRetryOpsJobUrl: (id: string) => string;
+export declare const retryOpsJob: (id: string, options?: RequestInit) => Promise<OpsJobRetryResult>;
+export declare const getRetryOpsJobMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof retryOpsJob>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof retryOpsJob>>, TError, {
+    id: string;
+}, TContext>;
+export type RetryOpsJobMutationResult = NonNullable<Awaited<ReturnType<typeof retryOpsJob>>>;
+export type RetryOpsJobMutationError = ErrorType<void>;
+/**
+ * @summary (AI-0, owner only) Put a failed job back in its queue.
+ */
+export declare const useRetryOpsJob: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof retryOpsJob>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof retryOpsJob>>, TError, {
+    id: string;
+}, TContext>;
 /**
  * @summary Dashboard summary
  */

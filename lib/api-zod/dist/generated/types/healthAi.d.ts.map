@@ -1,0 +1,1 @@
+{"version":3,"file":"healthAi.d.ts","sourceRoot":"","sources":["../../../src/generated/types/healthAi.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,gBAAgB,EAAE,MAAM,oBAAoB,CAAC;AAE3D,MAAM,WAAW,QAAQ;IACvB,OAAO,EAAE,OAAO,CAAC;IACjB,UAAU,EAAE,OAAO,CAAC;IACpB,QAAQ,EAAE,gBAAgB,CAAC;CAC5B"}
