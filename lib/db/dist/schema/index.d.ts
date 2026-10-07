@@ -1,3 +1,4 @@
+export * from "./migrations";
 export declare const householdsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "households";
     schema: undefined;
@@ -1961,6 +1962,23 @@ export declare const transactionsTable: import("drizzle-orm/pg-core").PgTableWit
         }, {}, {}>;
         occurredOnUserOverridden: import("drizzle-orm/pg-core").PgColumn<{
             name: "occurred_on_user_overridden";
+            tableName: "transactions";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        categoryLockedByUser: import("drizzle-orm/pg-core").PgColumn<{
+            name: "category_locked_by_user";
             tableName: "transactions";
             dataType: "boolean";
             columnType: "PgBoolean";
@@ -4801,6 +4819,7 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     isTransfer: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     isTransferUserOverridden: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     occurredOnUserOverridden: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
+    categoryLockedByUser: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     isExternalCardPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     importBatchId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     source: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;

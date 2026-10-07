@@ -16,6 +16,8 @@ import {
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 
+export * from "./migrations";
+
 // (#623) HOUSEHOLD DATA MODEL
 //
 // A household is the unit of data sharing. The owner (defined by
@@ -322,6 +324,15 @@ export const transactionsTable = pgTable(
     // row doesn't restamp the date back to Plaid's value — mirrors the
     // `isTransferUserOverridden` preservation pattern.
     occurredOnUserOverridden: boolean("occurred_on_user_overridden")
+      .notNull()
+      .default(false),
+    // (PR-0) True when a person chose this row's category by hand: PATCH
+    // with a categoryId, bulk-update, recategorize-by-pattern, or a create
+    // whose body named the category (never a rule's auto-fill). Cleared when
+    // a person clears the category. The categorizer never moves a locked row;
+    // Plaid sync never writes this column. Added by
+    // lib/db/migrations/0002_category_locked_by_user.sql (keep them equal).
+    categoryLockedByUser: boolean("category_locked_by_user")
       .notNull()
       .default(false),
     isExternalCardPayment: boolean("is_external_card_payment")
