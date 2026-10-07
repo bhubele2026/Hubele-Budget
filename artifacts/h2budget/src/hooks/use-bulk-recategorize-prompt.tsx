@@ -153,7 +153,7 @@ export function useBulkRecategorizePrompt(): {
   );
 
   const undoBulkRecategorize = useCallback(
-    (rule: BulkRecategorizeRule, affectedIds: string[]) => {
+    (rule: BulkRecategorizeRule, affectedIds: string[], lockedIds?: string[]) => {
       if (affectedIds.length === 0) return;
       // Swap from/to so we move the rows back to their original
       // category. The `ids` whitelist plus the server-side
@@ -175,6 +175,8 @@ export function useBulkRecategorizePrompt(): {
             fromCategoryId: rule.toCategoryId,
             toCategoryId: swappedTo,
             ids: affectedIds,
+            // (PR-0) Restore each row's category lock as it was before.
+            ...(lockedIds ? { lockedIds } : {}),
             // Task #199 — re-point the mapping rule back to its
             // previous category so future matching transactions
             // don't keep auto-flipping onto the user's mistaken
@@ -254,7 +256,7 @@ export function useBulkRecategorizePrompt(): {
                         altText="Undo bulk recategorize"
                         data-testid="action-undo-bulk-recategorize"
                         onClick={() =>
-                          undoBulkRecategorize(rule, res.affectedIds)
+                          undoBulkRecategorize(rule, res.affectedIds, res.lockedIds)
                         }
                       >
                         Undo

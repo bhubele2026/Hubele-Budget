@@ -1057,6 +1057,7 @@ rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
 
  */
 export declare const recategorizeTransactionsByPatternBodyIdsMax = 1000;
+export declare const recategorizeTransactionsByPatternBodyLockedIdsMax = 1000;
 export declare const RecategorizeTransactionsByPatternBody: zod.ZodObject<{
     pattern: zod.ZodString;
     matchType: zod.ZodEnum<["contains", "exact", "starts_with"]>;
@@ -1064,6 +1065,7 @@ export declare const RecategorizeTransactionsByPatternBody: zod.ZodObject<{
     toCategoryId: zod.ZodString;
     ids: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
     ruleId: zod.ZodOptional<zod.ZodString>;
+    lockedIds: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
 }, "strip", zod.ZodTypeAny, {
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
@@ -1071,6 +1073,7 @@ export declare const RecategorizeTransactionsByPatternBody: zod.ZodObject<{
     toCategoryId: string;
     ruleId?: string | undefined;
     ids?: string[] | undefined;
+    lockedIds?: string[] | undefined;
 }, {
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
@@ -1078,19 +1081,23 @@ export declare const RecategorizeTransactionsByPatternBody: zod.ZodObject<{
     toCategoryId: string;
     ruleId?: string | undefined;
     ids?: string[] | undefined;
+    lockedIds?: string[] | undefined;
 }>;
 export declare const RecategorizeTransactionsByPatternResponse: zod.ZodObject<{
     updated: zod.ZodNumber;
     affectedMonths: zod.ZodArray<zod.ZodString, "many">;
     affectedIds: zod.ZodArray<zod.ZodString, "many">;
+    lockedIds: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
 }, "strip", zod.ZodTypeAny, {
     updated: number;
     affectedMonths: string[];
     affectedIds: string[];
+    lockedIds?: string[] | undefined;
 }, {
     updated: number;
     affectedMonths: string[];
     affectedIds: string[];
+    lockedIds?: string[] | undefined;
 }>;
 /**
  * @summary (#888) Set or update a friendly merchant name (alias) for a

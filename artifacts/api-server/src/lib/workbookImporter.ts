@@ -218,15 +218,17 @@ export async function importWorkbook(
         amount: transactionsTable.amount,
         source: transactionsTable.source,
         categoryId: transactionsTable.categoryId,
+        categoryLockedByUser: transactionsTable.categoryLockedByUser,
       })
       .from(transactionsTable)
       .where(eq(transactionsTable.userId, userId));
     const priorTxByKey = new Map<string, string | null>();
+    // (PR-0) The lock each prior row carried, so a preserved override keeps it.
+    const priorLockByKey = new Map<string, boolean>();
     for (const t of priorTx) {
-      priorTxByKey.set(
-        `${t.occurredOn}|${t.description}|${t.amount}|${t.source}`,
-        t.categoryId,
-      );
+      const key = `${t.occurredOn}|${t.description}|${t.amount}|${t.source}`;
+      priorTxByKey.set(key, t.categoryId);
+      priorLockByKey.set(key, t.categoryLockedByUser);
     }
 
     // Pre-import safety snapshot. Capture EVERYTHING we're about to wipe
@@ -484,9 +486,11 @@ export async function importWorkbook(
       let finalCategoryId = auto.categoryId;
       let manualOverrideKept = false;
       const flippedSigned = (-Number(signed)).toFixed(2);
-      let priorCatId = priorTxByKey.get(`${date}|${description}|${signed}|amex`);
+      let priorKey = `${date}|${description}|${signed}|amex`;
+      let priorCatId = priorTxByKey.get(priorKey);
       if (priorCatId === undefined) {
-        priorCatId = priorTxByKey.get(`${date}|${description}|${flippedSigned}|amex`);
+        priorKey = `${date}|${description}|${flippedSigned}|amex`;
+        priorCatId = priorTxByKey.get(priorKey);
       }
       if (priorCatId !== undefined) {
         const priorName = priorCatId
@@ -531,6 +535,12 @@ export async function importWorkbook(
         description,
         amount: signed,
         categoryId: finalCategoryId,
+        // (PR-0) Locked when a person chose the category: the sheet row
+        // named it in Target, or a prior row's override was kept (with the
+        // lock that row had). A category the rules picked is not locked.
+        categoryLockedByUser: manualOverrideKept
+          ? priorLockByKey.get(priorKey) === true && finalCategoryId !== null
+          : explicitCat !== null && finalCategoryId === explicitCat,
         isTransfer: auto.isTransfer,
         source: "amex",
         importBatchId: batchId,

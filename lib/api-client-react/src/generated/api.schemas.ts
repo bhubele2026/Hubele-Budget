@@ -1032,6 +1032,17 @@ swapped so future matching transactions stop snapping
 onto the user's accidental category pick.
  */
   ruleId?: string;
+  /**
+   * (PR-0) Undo only. The `lockedIds` the original call returned:
+the rows it moved that a person had already locked. When
+present, each row this call moves is locked only if its id is
+in the list, so an Undo restores every row's
+`categoryLockedByUser` exactly. When absent, every moved row is
+locked (a person re-filed it).
+
+   * @maxItems 1000
+   */
+  lockedIds?: string[];
 }
 
 export interface RecategorizeByPatternResult {
@@ -1048,6 +1059,11 @@ and `to` swapped (and `ids` set) to implement one-click
 "Undo" of a bulk recategorization.
  */
   affectedIds: string[];
+  /** (PR-0) The subset of `affectedIds` whose category a person had
+locked BEFORE this call moved them. The Undo passes it back as
+the request's `lockedIds` to restore each row's lock.
+ */
+  lockedIds?: string[];
 }
 
 export interface UncategorizeByIdsInput {

@@ -237,6 +237,67 @@ describe("POST /transactions/recategorize-by-pattern", () => {
   });
 });
 
+describe("POST /transactions/recategorize-by-pattern Undo", () => {
+  it("returns which moved rows were locked, and an Undo with lockedIds restores each row's lock", async () => {
+    const hand = await insertTxn({
+      description: "LOCKTEST UNDO STORE 1",
+      categoryId: CAT_B,
+      categoryLockedByUser: true,
+    });
+    const ruled = await insertTxn({ description: "LOCKTEST UNDO STORE 2", categoryId: CAT_B });
+    const forward = await request("POST", "/transactions/recategorize-by-pattern", {
+      pattern: "LOCKTEST UNDO STORE",
+      matchType: "contains",
+      fromCategoryId: CAT_B,
+      toCategoryId: CAT_A,
+    });
+    expect(forward.status).toBe(200);
+    const res = forward.json as { affectedIds: string[]; lockedIds: string[] };
+    expect([...res.affectedIds].sort()).toEqual([hand, ruled].sort());
+    expect(res.lockedIds).toEqual([hand]);
+    expect(await lockOf(ruled)).toEqual({ categoryId: CAT_A, locked: true });
+
+    const undo = await request("POST", "/transactions/recategorize-by-pattern", {
+      pattern: "LOCKTEST UNDO STORE",
+      matchType: "contains",
+      fromCategoryId: CAT_A,
+      toCategoryId: CAT_B,
+      ids: res.affectedIds,
+      lockedIds: res.lockedIds,
+    });
+    expect(undo.status).toBe(200);
+    expect(await lockOf(hand)).toEqual({ categoryId: CAT_B, locked: true });
+    expect(await lockOf(ruled)).toEqual({ categoryId: CAT_B, locked: false });
+  });
+
+  it("an Undo with an empty lockedIds unlocks every row; ids it cannot move are ignored", async () => {
+    const id = await insertTxn({ description: "LOCKTEST UNDO EMPTY", categoryId: CAT_A, categoryLockedByUser: true });
+    const r = await request("POST", "/transactions/recategorize-by-pattern", {
+      pattern: "LOCKTEST UNDO EMPTY",
+      matchType: "contains",
+      fromCategoryId: CAT_A,
+      toCategoryId: CAT_B,
+      ids: [id],
+      lockedIds: ["not-a-uuid"],
+    });
+    expect(r.status).toBe(200);
+    expect(await lockOf(id)).toEqual({ categoryId: CAT_B, locked: false });
+  });
+});
+
+describe("POST /transactions/:id/clear-transfer-override (Reset to auto)", () => {
+  it("unlocks the category along with the transfer override", async () => {
+    const id = await insertTxn({
+      categoryId: CAT_A,
+      categoryLockedByUser: true,
+      isTransferUserOverridden: true,
+    });
+    const r = await request("POST", `/transactions/${id}/clear-transfer-override`);
+    expect(r.status).toBe(200);
+    expect(await lockOf(id)).toEqual({ categoryId: CAT_A, locked: false });
+  });
+});
+
 describe("POST /transactions/uncategorize-by-ids", () => {
   it("clears the category and the lock", async () => {
     const id = await insertTxn({ categoryId: CAT_A, categoryLockedByUser: true });

@@ -874,8 +874,15 @@ router.post(
       return;
     }
     const userId = req.userId!;
-    const { pattern, matchType, fromCategoryId, toCategoryId, ids, ruleId } =
-      parsed.data;
+    const {
+      pattern,
+      matchType,
+      fromCategoryId,
+      toCategoryId,
+      ids,
+      ruleId,
+      lockedIds,
+    } = parsed.data;
     // (#474) Reject any attempt to repoint a mapping rule onto an
     // `exclude_from_budget` category. The bulk-row UPDATE itself is
     // fine (the user may legitimately want to mark a batch of rows
@@ -956,13 +963,38 @@ router.post(
     // `effectiveFiling` (round 4) treats a re-file here exactly like a
     // one-off PATCH re-file, and so a future Plaid re-mint preserves the
     // pick (plaidSync.ts's `isTransferUserOverridden` preservation).
+    // (PR-0) Which of these rows a person had already locked, BEFORE the
+    // move: returned as `lockedIds` so the Undo can hand them back.
+    const wasLocked = new Set(
+      (
+        await db
+          .select({ id: transactionsTable.id })
+          .from(transactionsTable)
+          .where(
+            and(
+              eq(transactionsTable.householdId, req.householdId!),
+              inArray(transactionsTable.id, candidateIds),
+              eq(transactionsTable.categoryLockedByUser, true),
+            ),
+          )
+      ).map((r) => r.id),
+    );
+    // Only ids this call can move count (also keeps a malformed id out of SQL).
+    const relockIds = lockedIds?.filter((id) => candidateIds.includes(id));
     const updated = await db
       .update(transactionsTable)
       .set({
         categoryId: toCategoryId,
         isTransferUserOverridden: true,
-        // (PR-0) A person re-filed these rows: lock them (see PATCH).
-        categoryLockedByUser: true,
+        // (PR-0) A person re-filed these rows, so they are locked — unless
+        // this is an Undo carrying `lockedIds`, which restores each row's
+        // lock exactly as it was before the move being undone.
+        categoryLockedByUser:
+          relockIds === undefined
+            ? true
+            : relockIds.length > 0
+              ? inArray(transactionsTable.id, relockIds)
+              : false,
       })
       .where(
         and(
@@ -978,6 +1010,7 @@ router.post(
       updated: updated.length,
       affectedMonths: Array.from(monthSet).sort(),
       affectedIds: updated.map((r) => r.id),
+      lockedIds: updated.filter((r) => wasLocked.has(r.id)).map((r) => r.id),
     });
   },
 );
@@ -1439,7 +1472,9 @@ router.post(
     }
     const [row] = await db
       .update(transactionsTable)
-      .set({ isTransferUserOverridden: false })
+      // (PR-0) "Reset to auto" hands the row back to the automatic
+      // categorizer too: the category lock goes with the transfer override.
+      .set({ isTransferUserOverridden: false, categoryLockedByUser: false })
       .where(
         and(
           eq(transactionsTable.id, params.data.id),
