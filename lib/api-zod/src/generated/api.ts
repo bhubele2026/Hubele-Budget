@@ -78,6 +78,12 @@ export const GetDashboardResponse = zod.object({
         .describe(
           "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
         ),
+      categoryLockedByUser: zod
+        .boolean()
+        .optional()
+        .describe(
+          "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
+        ),
       isExternalCardPayment: zod
         .boolean()
         .describe(
@@ -197,6 +203,12 @@ export const ListTransactionsResponseItem = zod.object({
     .boolean()
     .describe(
       "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+    ),
+  categoryLockedByUser: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
     ),
   isExternalCardPayment: zod
     .boolean()
@@ -359,6 +371,12 @@ export const UpdateTransactionResponse = zod
       .boolean()
       .describe(
         "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+      ),
+    categoryLockedByUser: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
       ),
     isExternalCardPayment: zod
       .boolean()
@@ -563,6 +581,12 @@ export const ClearTransferOverrideResponse = zod.object({
     .boolean()
     .describe(
       "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+    ),
+  categoryLockedByUser: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
     ),
   isExternalCardPayment: zod
     .boolean()
@@ -1085,6 +1109,12 @@ export const GetTransactionsLedgerResponse = zod.object({
           .boolean()
           .describe(
             "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+          ),
+        categoryLockedByUser: zod
+          .boolean()
+          .optional()
+          .describe(
+            "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
           ),
         isExternalCardPayment: zod
           .boolean()
@@ -3040,6 +3070,12 @@ export const GetForecastResponse = zod.object({
         .boolean()
         .describe(
           "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import re-categorize\npaths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+        ),
+      categoryLockedByUser: zod
+        .boolean()
+        .optional()
+        .describe(
+          "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
         ),
       isExternalCardPayment: zod
         .boolean()

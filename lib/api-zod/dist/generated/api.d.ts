@@ -61,6 +61,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         reviewed: zod.ZodBoolean;
         isTransfer: zod.ZodBoolean;
         isTransferUserOverridden: zod.ZodBoolean;
+        categoryLockedByUser: zod.ZodOptional<zod.ZodBoolean>;
         isExternalCardPayment: zod.ZodBoolean;
         sentToReviewAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -96,6 +97,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -128,6 +130,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -215,6 +218,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -274,6 +278,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -358,6 +363,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     reviewed: zod.ZodBoolean;
     isTransfer: zod.ZodBoolean;
     isTransferUserOverridden: zod.ZodBoolean;
+    categoryLockedByUser: zod.ZodOptional<zod.ZodBoolean>;
     isExternalCardPayment: zod.ZodBoolean;
     sentToReviewAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -393,6 +399,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
     weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+    categoryLockedByUser?: boolean | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -425,6 +432,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
     weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+    categoryLockedByUser?: boolean | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -455,6 +463,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     reviewed: zod.ZodBoolean;
     isTransfer: zod.ZodBoolean;
     isTransferUserOverridden: zod.ZodBoolean;
+    categoryLockedByUser: zod.ZodOptional<zod.ZodBoolean>;
     isExternalCardPayment: zod.ZodBoolean;
     sentToReviewAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -490,6 +499,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
     weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+    categoryLockedByUser?: boolean | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -522,6 +532,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
     weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+    categoryLockedByUser?: boolean | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -696,6 +707,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     reviewed: zod.ZodBoolean;
     isTransfer: zod.ZodBoolean;
     isTransferUserOverridden: zod.ZodBoolean;
+    categoryLockedByUser: zod.ZodOptional<zod.ZodBoolean>;
     isExternalCardPayment: zod.ZodBoolean;
     sentToReviewAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -731,6 +743,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
     weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+    categoryLockedByUser?: boolean | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -763,6 +776,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
     weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+    categoryLockedByUser?: boolean | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -951,6 +965,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     reviewed: zod.ZodBoolean;
     isTransfer: zod.ZodBoolean;
     isTransferUserOverridden: zod.ZodBoolean;
+    categoryLockedByUser: zod.ZodOptional<zod.ZodBoolean>;
     isExternalCardPayment: zod.ZodBoolean;
     sentToReviewAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -986,6 +1001,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
     weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+    categoryLockedByUser?: boolean | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -1018,6 +1034,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
     weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+    categoryLockedByUser?: boolean | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -1506,6 +1523,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         reviewed: zod.ZodBoolean;
         isTransfer: zod.ZodBoolean;
         isTransferUserOverridden: zod.ZodBoolean;
+        categoryLockedByUser: zod.ZodOptional<zod.ZodBoolean>;
         isExternalCardPayment: zod.ZodBoolean;
         sentToReviewAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -1541,6 +1559,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -1573,6 +1592,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -1701,6 +1721,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -1772,6 +1793,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -5686,6 +5708,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         reviewed: zod.ZodBoolean;
         isTransfer: zod.ZodBoolean;
         isTransferUserOverridden: zod.ZodBoolean;
+        categoryLockedByUser: zod.ZodOptional<zod.ZodBoolean>;
         isExternalCardPayment: zod.ZodBoolean;
         sentToReviewAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -5721,6 +5744,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -5753,6 +5777,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -6308,6 +6333,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -6489,6 +6515,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
         weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
+        categoryLockedByUser?: boolean | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;

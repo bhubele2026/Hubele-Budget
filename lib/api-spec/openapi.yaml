@@ -2340,6 +2340,18 @@ components:
             silently re-flag it as a transfer. Server-managed: writes to
             this field are not accepted via the input schema — toggling
             `isTransfer` in PATCH /transactions/:id sets it automatically.
+        categoryLockedByUser:
+          type: boolean
+          readOnly: true
+          description: |
+            (PR-0) True when a person chose this row's category by hand:
+            PATCH /transactions/:id or bulk-update with a categoryId,
+            recategorize-by-pattern, or a create whose body named the
+            category (never a mapping rule's auto-fill). Clearing the
+            category (categoryId null, uncategorize-by-ids) clears it. The
+            automatic categorizer never moves a locked row and Plaid sync
+            never writes it. Server-managed and read-only: the input schemas
+            do not accept it.
         isExternalCardPayment:
           type: boolean
           description: |

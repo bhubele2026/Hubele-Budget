@@ -319,6 +319,16 @@ export interface Transaction {
   `isTransfer` in PATCH /transactions/:id sets it automatically.
    */
     isTransferUserOverridden: boolean;
+    /** (PR-0) True when a person chose this row's category by hand:
+  PATCH /transactions/:id or bulk-update with a categoryId,
+  recategorize-by-pattern, or a create whose body named the
+  category (never a mapping rule's auto-fill). Clearing the
+  category (categoryId null, uncategorize-by-ids) clears it. The
+  automatic categorizer never moves a locked row and Plaid sync
+  never writes it. Server-managed and read-only: the input schemas
+  do not accept it.
+   */
+    readonly categoryLockedByUser?: boolean;
     /** (#632 follow-up) User-set per-row flag marking a card payment
   as going to a card that is NOT in our debt avalanche (e.g. a
   spouse's external card). Excluded from avalanche actuals so
