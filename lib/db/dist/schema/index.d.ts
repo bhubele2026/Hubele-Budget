@@ -4714,13 +4714,13 @@ export declare const dashboardBudgetsTable: import("drizzle-orm/pg-core").PgTabl
 }>;
 export declare const insertDebtSchema: import("zod/v4").ZodObject<{
     name: import("zod/v4").ZodString;
+    status: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     balance: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     originalBalance: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     apr: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     minPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     payment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     type: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
-    status: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     sortOrder: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
     dueDay: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodInt>>;
     statementDay: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodInt>>;
@@ -5253,4 +5253,5 @@ export declare const importSnapshotsTable: import("drizzle-orm/pg-core").PgTable
     dialect: "pg";
 }>;
 export type ImportSnapshot = typeof importSnapshotsTable.$inferSelect;
+export * from "./ai";
 //# sourceMappingURL=index.d.ts.map
