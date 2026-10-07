@@ -113,10 +113,13 @@ describe("startServer with the real runner", () => {
     expect(h.exits).toEqual([1]);
     expect(String(h.errors[0])).toMatch(/9990_broken\.sql failed and was rolled back/);
     // The files before it did apply, each in its own transaction.
+    // Expected = every real migration that sorts before the broken file, so a
+    // new package's SQL file never breaks this test.
+    const expected = (await readdir(real))
+      .filter((f) => f.endsWith(".sql") && f < "9990_broken.sql")
+      .sort();
+    expect(expected.length).toBeGreaterThanOrEqual(2);
     const { rows } = await pool.query(`SELECT name FROM ${schema}.schema_migrations ORDER BY name`);
-    expect(rows.map((r: { name: string }) => r.name)).toEqual([
-      "0001_schema_migrations.sql",
-      "0002_category_locked_by_user.sql",
-    ]);
+    expect(rows.map((r: { name: string }) => r.name)).toEqual(expected);
   });
 });
