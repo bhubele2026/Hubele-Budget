@@ -36,7 +36,7 @@ import {
 } from "@workspace/avalanche-core";
 import { computeCashSignalDetailed, type DetailedCashSignal } from "./cashSignal";
 import { computeBankFreshness, type BankFreshness } from "./bankFreshness";
-import { loadMoneyContext, loadMovementRows } from "./moneyContext";
+import { loadMoneyContext, loadMovementRows, type MoneyContextSupersede } from "./moneyContext";
 import { loadAllowancePlans, planRowsOf } from "./allowancePlans";
 import { TRACKING_START } from "./spendingFacts";
 
@@ -48,6 +48,13 @@ export interface BuildMoneyPositionOptions {
   cash?: Promise<DetailedCashSignal> | DetailedCashSignal;
   /** The spine's own freshness read. */
   freshness?: Promise<BankFreshness> | BankFreshness;
+  /**
+   * The spine's own pending pairs: a `findSupersededPendingForRange` answer
+   * whose range covers this household week (the spine reads one for its month
+   * and week windows together). Omitted, `loadMoneyContext` reads them for the
+   * week.
+   */
+  supersede?: Promise<MoneyContextSupersede> | MoneyContextSupersede;
 }
 
 /** The ledger's events on the curve, as the position reads them. */
@@ -109,7 +116,10 @@ export async function buildMoneyPosition(
   const money = await loadMoneyContext(
     householdId,
     { start: from, end: week.end },
-    { tier2PairedTxnIds: tier2PairedTxnIdsOf(ledger) },
+    {
+      tier2PairedTxnIds: tier2PairedTxnIdsOf(ledger),
+      ...(opts.supersede ? { supersede: await opts.supersede } : {}),
+    },
   );
   const rows = await loadMovementRows(householdId, from, week.end, money);
   const weekRows = rows.map((r) => ({ coverage: classifyMovement(r, money).coverage, spend: spendAmount(r) }));

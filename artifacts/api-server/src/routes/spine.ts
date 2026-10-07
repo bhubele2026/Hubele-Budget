@@ -48,8 +48,9 @@ const router: IRouter = Router();
  *   reviewCount                   → computeReviewCount()  [lib/reviewCount]
  *   position.*                    → buildMoneyPosition()  [lib/moneyPosition]
  *                                   (also GET /money/position), handed THIS
- *                                   request's own cash-signal and freshness
- *                                   reads so one request builds one ledger
+ *                                   request's own cash-signal, freshness and
+ *                                   pending-pair reads so one request builds
+ *                                   one ledger
  *
  * `spine.integration.test.ts` asserts every one of those equals what the owning
  * endpoint returns, to the cent. If a future change makes two tiles disagree,
@@ -110,7 +111,11 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       db.select().from(debtsTable).where(eq(debtsTable.householdId, householdId)),
       computeReviewCount(householdId, ownerUserId),
       freshnessPromise,
-      buildMoneyPosition(householdId, ownerUserId, { cash: cashPromise, freshness: freshnessPromise }),
+      buildMoneyPosition(householdId, ownerUserId, {
+        cash: cashPromise,
+        freshness: freshnessPromise,
+        supersede: supersedePromise,
+      }),
     ]);
   const signal = cash.signal;
 
