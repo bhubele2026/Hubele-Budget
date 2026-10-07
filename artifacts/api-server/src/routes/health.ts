@@ -1,11 +1,32 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse, GetVersionResponse } from "@workspace/api-zod";
 import { APP_VERSION } from "../lib/version";
+import { getJobsHealth } from "../jobs/boss";
+import { getAiStatus } from "../ai/client";
+import { getSmsStatus } from "../lib/smsStatus";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-router.get("/healthz", (_req, res) => {
-  const data = HealthCheckResponse.parse({ status: "ok" });
+// (AI-0) Render's health check. It answers 200 whenever the process serves:
+// job, AI and SMS state are reported (booleans and counts, never secrets)
+// but never fail the check — a stuck queue must not get the web service
+// restarted. The job counts are cached 30 s and bounded to ~2 s.
+router.get("/healthz", async (_req, res) => {
+  let jobs: Awaited<ReturnType<typeof getJobsHealth>>;
+  try {
+    jobs = await getJobsHealth();
+  } catch (err) {
+    logger.warn({ err }, "healthz: jobs state unavailable");
+    jobs = { mode: "off", started: false, failedLast24h: null, dlq: null };
+  }
+  const data = HealthCheckResponse.parse({
+    status: "ok",
+    version: APP_VERSION,
+    jobs,
+    ai: getAiStatus(),
+    sms: getSmsStatus(),
+  });
   res.json(data);
 });
 

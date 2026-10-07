@@ -1,0 +1,1 @@
+{"version":3,"file":"healthJobs.d.ts","sourceRoot":"","sources":["../../../src/generated/types/healthJobs.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,kBAAkB,CAAC;AAEvD,MAAM,WAAW,UAAU;IACzB,IAAI,EAAE,cAAc,CAAC;IACrB,OAAO,EAAE,OAAO,CAAC;IACjB;;;OAGG;IACH,aAAa,EAAE,MAAM,GAAG,IAAI,CAAC;IAC7B;;;OAGG;IACH,GAAG,EAAE,MAAM,GAAG,IAAI,CAAC;CACpB"}

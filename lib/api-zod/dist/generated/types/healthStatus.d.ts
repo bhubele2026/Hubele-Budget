@@ -5,7 +5,14 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { HealthAi } from "./healthAi";
+import type { HealthJobs } from "./healthJobs";
+import type { HealthSms } from "./healthSms";
 export interface HealthStatus {
     status: string;
+    version: string;
+    jobs: HealthJobs;
+    ai: HealthAi;
+    sms: HealthSms;
 }
 //# sourceMappingURL=healthStatus.d.ts.map

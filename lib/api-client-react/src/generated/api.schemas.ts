@@ -5,8 +5,107 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+export type HealthJobsMode =
+  (typeof HealthJobsMode)[keyof typeof HealthJobsMode];
+
+export const HealthJobsMode = {
+  on: "on",
+  off: "off",
+} as const;
+
+export interface HealthJobs {
+  mode: HealthJobsMode;
+  started: boolean;
+  /**
+   * Jobs that failed for good in the last 24 hours; null when unreadable.
+   * @nullable
+   */
+  failedLast24h: number | null;
+  /**
+   * Jobs waiting in dead-letter queues; null when unreadable.
+   * @nullable
+   */
+  dlq: number | null;
+}
+
+export type HealthAiProvider =
+  (typeof HealthAiProvider)[keyof typeof HealthAiProvider];
+
+export const HealthAiProvider = {
+  anthropic: "anthropic",
+  fake: "fake",
+} as const;
+
+export interface HealthAi {
+  enabled: boolean;
+  configured: boolean;
+  provider: HealthAiProvider;
+}
+
+export type HealthSmsProvider =
+  (typeof HealthSmsProvider)[keyof typeof HealthSmsProvider];
+
+export const HealthSmsProvider = {
+  twilio: "twilio",
+  console: "console",
+  fake: "fake",
+} as const;
+
+export interface HealthSms {
+  provider: HealthSmsProvider;
+  configured: boolean;
+}
+
 export interface HealthStatus {
   status: string;
+  version: string;
+  jobs: HealthJobs;
+  ai: HealthAi;
+  sms: HealthSms;
+}
+
+export interface OpsJobQueueCount {
+  queue: string;
+  state: string;
+  count: number;
+}
+
+export interface OpsJobFailure {
+  id: string;
+  queue: string;
+  /**
+   * The error message the handler failed with (no stack), at most 500 characters.
+   * @nullable
+   */
+  error: string | null;
+  retryCount: number;
+  createdOn: string;
+  /** @nullable */
+  startedOn: string | null;
+  /** @nullable */
+  completedOn: string | null;
+}
+
+export type OpsJobsReportMode =
+  (typeof OpsJobsReportMode)[keyof typeof OpsJobsReportMode];
+
+export const OpsJobsReportMode = {
+  on: "on",
+  off: "off",
+} as const;
+
+export interface OpsJobsReport {
+  mode: OpsJobsReportMode;
+  started: boolean;
+  schema: string;
+  counts: OpsJobQueueCount[];
+  failures: OpsJobFailure[];
+}
+
+export interface OpsJobRetryResult {
+  id: string;
+  queue: string;
+  retried: boolean;
 }
 
 export interface BadgeCount {

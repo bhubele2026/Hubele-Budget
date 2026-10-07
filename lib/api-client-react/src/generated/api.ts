@@ -97,6 +97,8 @@ import type {
   MappingRuleRecategorizePreviewInput,
   MeResponse,
   Member,
+  OpsJobRetryResult,
+  OpsJobsReport,
   PinBudgetLineInput,
   PinBudgetMonthInput,
   PinResult,
@@ -154,7 +156,10 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * @summary Health check
+ * @summary Health check. Always 200 while the process serves; job, AI and SMS
+state are reported as booleans and counts (never secrets) and never
+fail the check.
+
  */
 export const getHealthCheckUrl = () => {
   return `/api/healthz`;
@@ -205,7 +210,10 @@ export type HealthCheckQueryResult = NonNullable<
 export type HealthCheckQueryError = ErrorType<unknown>;
 
 /**
- * @summary Health check
+ * @summary Health check. Always 200 while the process serves; job, AI and SMS
+state are reported as booleans and counts (never secrets) and never
+fail the check.
+
  */
 
 export function useHealthCheck<
@@ -310,6 +318,171 @@ export function useGetVersion<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary (AI-0, owner only) Job counts per queue and state, plus the 50 most
+recent failed jobs. Read straight from the pg-boss tables, so it works
+whether or not this instance runs jobs.
+
+ */
+export const getGetOpsJobsUrl = () => {
+  return `/api/ops/jobs`;
+};
+
+export const getOpsJobs = async (
+  options?: RequestInit,
+): Promise<OpsJobsReport> => {
+  return customFetch<OpsJobsReport>(getGetOpsJobsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetOpsJobsQueryKey = () => {
+  return [`/api/ops/jobs`] as const;
+};
+
+export const getGetOpsJobsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOpsJobs>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getOpsJobs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetOpsJobsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getOpsJobs>>> = ({
+    signal,
+  }) => getOpsJobs({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOpsJobs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOpsJobsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOpsJobs>>
+>;
+export type GetOpsJobsQueryError = ErrorType<void>;
+
+/**
+ * @summary (AI-0, owner only) Job counts per queue and state, plus the 50 most
+recent failed jobs. Read straight from the pg-boss tables, so it works
+whether or not this instance runs jobs.
+
+ */
+
+export function useGetOpsJobs<
+  TData = Awaited<ReturnType<typeof getOpsJobs>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getOpsJobs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOpsJobsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary (AI-0, owner only) Put a failed job back in its queue.
+ */
+export const getRetryOpsJobUrl = (id: string) => {
+  return `/api/ops/jobs/${id}/retry`;
+};
+
+export const retryOpsJob = async (
+  id: string,
+  options?: RequestInit,
+): Promise<OpsJobRetryResult> => {
+  return customFetch<OpsJobRetryResult>(getRetryOpsJobUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRetryOpsJobMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryOpsJob>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof retryOpsJob>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["retryOpsJob"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof retryOpsJob>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return retryOpsJob(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RetryOpsJobMutationResult = NonNullable<
+  Awaited<ReturnType<typeof retryOpsJob>>
+>;
+
+export type RetryOpsJobMutationError = ErrorType<void>;
+
+/**
+ * @summary (AI-0, owner only) Put a failed job back in its queue.
+ */
+export const useRetryOpsJob = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryOpsJob>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof retryOpsJob>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getRetryOpsJobMutationOptions(options));
+};
 
 /**
  * @summary Dashboard summary

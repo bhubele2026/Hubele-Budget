@@ -7,14 +7,89 @@
  */
 import * as zod from "zod";
 /**
- * @summary Health check
+ * @summary Health check. Always 200 while the process serves; job, AI and SMS
+state are reported as booleans and counts (never secrets) and never
+fail the check.
+
  */
 export declare const HealthCheckResponse: zod.ZodObject<{
     status: zod.ZodString;
+    version: zod.ZodString;
+    jobs: zod.ZodObject<{
+        mode: zod.ZodEnum<["on", "off"]>;
+        started: zod.ZodBoolean;
+        failedLast24h: zod.ZodNullable<zod.ZodNumber>;
+        dlq: zod.ZodNullable<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        mode: "on" | "off";
+        started: boolean;
+        failedLast24h: number | null;
+        dlq: number | null;
+    }, {
+        mode: "on" | "off";
+        started: boolean;
+        failedLast24h: number | null;
+        dlq: number | null;
+    }>;
+    ai: zod.ZodObject<{
+        enabled: zod.ZodBoolean;
+        configured: zod.ZodBoolean;
+        provider: zod.ZodEnum<["anthropic", "fake"]>;
+    }, "strip", zod.ZodTypeAny, {
+        enabled: boolean;
+        configured: boolean;
+        provider: "anthropic" | "fake";
+    }, {
+        enabled: boolean;
+        configured: boolean;
+        provider: "anthropic" | "fake";
+    }>;
+    sms: zod.ZodObject<{
+        provider: zod.ZodEnum<["twilio", "console", "fake"]>;
+        configured: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        configured: boolean;
+        provider: "fake" | "twilio" | "console";
+    }, {
+        configured: boolean;
+        provider: "fake" | "twilio" | "console";
+    }>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
+    version: string;
+    jobs: {
+        mode: "on" | "off";
+        started: boolean;
+        failedLast24h: number | null;
+        dlq: number | null;
+    };
+    ai: {
+        enabled: boolean;
+        configured: boolean;
+        provider: "anthropic" | "fake";
+    };
+    sms: {
+        configured: boolean;
+        provider: "fake" | "twilio" | "console";
+    };
 }, {
     status: string;
+    version: string;
+    jobs: {
+        mode: "on" | "off";
+        started: boolean;
+        failedLast24h: number | null;
+        dlq: number | null;
+    };
+    ai: {
+        enabled: boolean;
+        configured: boolean;
+        provider: "anthropic" | "fake";
+    };
+    sms: {
+        configured: boolean;
+        provider: "fake" | "twilio" | "console";
+    };
 }>;
 /**
  * @summary Stable per-deploy build identifier. The web bundle bakes the
@@ -29,6 +104,114 @@ export declare const GetVersionResponse: zod.ZodObject<{
     version: string;
 }, {
     version: string;
+}>;
+/**
+ * @summary (AI-0, owner only) Job counts per queue and state, plus the 50 most
+recent failed jobs. Read straight from the pg-boss tables, so it works
+whether or not this instance runs jobs.
+
+ */
+export declare const GetOpsJobsResponse: zod.ZodObject<{
+    mode: zod.ZodEnum<["on", "off"]>;
+    started: zod.ZodBoolean;
+    schema: zod.ZodString;
+    counts: zod.ZodArray<zod.ZodObject<{
+        queue: zod.ZodString;
+        state: zod.ZodString;
+        count: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        queue: string;
+        state: string;
+        count: number;
+    }, {
+        queue: string;
+        state: string;
+        count: number;
+    }>, "many">;
+    failures: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        queue: zod.ZodString;
+        error: zod.ZodNullable<zod.ZodString>;
+        retryCount: zod.ZodNumber;
+        createdOn: zod.ZodDate;
+        startedOn: zod.ZodNullable<zod.ZodDate>;
+        completedOn: zod.ZodNullable<zod.ZodDate>;
+    }, "strip", zod.ZodTypeAny, {
+        queue: string;
+        id: string;
+        error: string | null;
+        retryCount: number;
+        createdOn: Date;
+        startedOn: Date | null;
+        completedOn: Date | null;
+    }, {
+        queue: string;
+        id: string;
+        error: string | null;
+        retryCount: number;
+        createdOn: Date;
+        startedOn: Date | null;
+        completedOn: Date | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    mode: "on" | "off";
+    started: boolean;
+    schema: string;
+    counts: {
+        queue: string;
+        state: string;
+        count: number;
+    }[];
+    failures: {
+        queue: string;
+        id: string;
+        error: string | null;
+        retryCount: number;
+        createdOn: Date;
+        startedOn: Date | null;
+        completedOn: Date | null;
+    }[];
+}, {
+    mode: "on" | "off";
+    started: boolean;
+    schema: string;
+    counts: {
+        queue: string;
+        state: string;
+        count: number;
+    }[];
+    failures: {
+        queue: string;
+        id: string;
+        error: string | null;
+        retryCount: number;
+        createdOn: Date;
+        startedOn: Date | null;
+        completedOn: Date | null;
+    }[];
+}>;
+/**
+ * @summary (AI-0, owner only) Put a failed job back in its queue.
+ */
+export declare const RetryOpsJobParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const RetryOpsJobResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    queue: zod.ZodString;
+    retried: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    queue: string;
+    id: string;
+    retried: boolean;
+}, {
+    queue: string;
+    id: string;
+    retried: boolean;
 }>;
 /**
  * @summary Dashboard summary
@@ -3769,13 +3952,13 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             count: zod.ZodNumber;
             amount: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
+            count: number;
             amount: string;
             source: "Bank" | "Amex" | "Other";
-            count: number;
         }, {
+            count: number;
             amount: string;
             source: "Bank" | "Amex" | "Other";
-            count: number;
         }>, "many">>;
         plannedSource: zod.ZodOptional<zod.ZodObject<{
             kind: zod.ZodEnum<["bills", "pinned", "derived", "manual"]>;
@@ -3834,9 +4017,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         id?: string | null | undefined;
         note?: string | null | undefined;
         sourceBreakdown?: {
+            count: number;
             amount: string;
             source: "Bank" | "Amex" | "Other";
-            count: number;
         }[] | undefined;
         plannedSource?: {
             kind: "manual" | "bills" | "pinned" | "derived";
@@ -3865,9 +4048,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         id?: string | null | undefined;
         note?: string | null | undefined;
         sourceBreakdown?: {
+            count: number;
             amount: string;
             source: "Bank" | "Amex" | "Other";
-            count: number;
         }[] | undefined;
         plannedSource?: {
             kind: "manual" | "bills" | "pinned" | "derived";
@@ -3905,13 +4088,13 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 count: zod.ZodNumber;
                 amount: zod.ZodString;
             }, "strip", zod.ZodTypeAny, {
+                count: number;
                 amount: string;
                 source: "Bank" | "Amex" | "Other";
-                count: number;
             }, {
+                count: number;
                 amount: string;
                 source: "Bank" | "Amex" | "Other";
-                count: number;
             }>, "many">>;
             plannedSource: zod.ZodOptional<zod.ZodObject<{
                 kind: zod.ZodEnum<["bills", "pinned", "derived", "manual"]>;
@@ -3970,9 +4153,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
+                count: number;
                 amount: string;
                 source: "Bank" | "Amex" | "Other";
-                count: number;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -4001,9 +4184,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
+                count: number;
                 amount: string;
                 source: "Bank" | "Amex" | "Other";
-                count: number;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -4035,9 +4218,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
+                count: number;
                 amount: string;
                 source: "Bank" | "Amex" | "Other";
-                count: number;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -4071,9 +4254,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
+                count: number;
                 amount: string;
                 source: "Bank" | "Amex" | "Other";
-                count: number;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -4293,8 +4476,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 bucket: "groceries" | "dining" | "alcohol" | "entertainment" | "misc";
             }>, "many">;
         }, "strip", zod.ZodTypeAny, {
-            pending: string;
             count: number;
+            pending: string;
             actual: string;
             planned: string;
             bucket: "weekly" | "monthly" | "unplanned";
@@ -4306,8 +4489,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 bucket: "groceries" | "dining" | "alcohol" | "entertainment" | "misc";
             }[];
         }, {
-            pending: string;
             count: number;
+            pending: string;
             actual: string;
             planned: string;
             bucket: "weekly" | "monthly" | "unplanned";
@@ -4330,8 +4513,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         actual: string;
         planned: string;
         lines: {
-            pending: string;
             count: number;
+            pending: string;
             actual: string;
             planned: string;
             bucket: "weekly" | "monthly" | "unplanned";
@@ -4351,8 +4534,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         actual: string;
         planned: string;
         lines: {
-            pending: string;
             count: number;
+            pending: string;
             actual: string;
             planned: string;
             bucket: "weekly" | "monthly" | "unplanned";
@@ -4399,9 +4582,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         id?: string | null | undefined;
         note?: string | null | undefined;
         sourceBreakdown?: {
+            count: number;
             amount: string;
             source: "Bank" | "Amex" | "Other";
-            count: number;
         }[] | undefined;
         plannedSource?: {
             kind: "manual" | "bills" | "pinned" | "derived";
@@ -4433,9 +4616,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
+                count: number;
                 amount: string;
                 source: "Bank" | "Amex" | "Other";
-                count: number;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -4499,8 +4682,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         actual: string;
         planned: string;
         lines: {
-            pending: string;
             count: number;
+            pending: string;
             actual: string;
             planned: string;
             bucket: "weekly" | "monthly" | "unplanned";
@@ -4542,9 +4725,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         id?: string | null | undefined;
         note?: string | null | undefined;
         sourceBreakdown?: {
+            count: number;
             amount: string;
             source: "Bank" | "Amex" | "Other";
-            count: number;
         }[] | undefined;
         plannedSource?: {
             kind: "manual" | "bills" | "pinned" | "derived";
@@ -4576,9 +4759,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
+                count: number;
                 amount: string;
                 source: "Bank" | "Amex" | "Other";
-                count: number;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -4642,8 +4825,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         actual: string;
         planned: string;
         lines: {
-            pending: string;
             count: number;
+            pending: string;
             actual: string;
             planned: string;
             bucket: "weekly" | "monthly" | "unplanned";
@@ -7729,29 +7912,29 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
             total: zod.ZodNumber;
             count: zod.ZodNumber;
         }, "strip", zod.ZodTypeAny, {
+            count: number;
             total: number;
             name: string;
-            count: number;
         }, {
+            count: number;
             total: number;
             name: string;
-            count: number;
         }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         transactionCount: number;
         total: number;
         sampleMerchants: {
+            count: number;
             total: number;
             name: string;
-            count: number;
         }[];
     }, {
         transactionCount: number;
         total: number;
         sampleMerchants: {
+            count: number;
             total: number;
             name: string;
-            count: number;
         }[];
     }>;
     excluded: zod.ZodObject<{
@@ -7805,15 +7988,15 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         sampleCategoryName: zod.ZodNullable<zod.ZodString>;
         sampleCategoryId: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
+        count: number;
         total: number;
         name: string;
-        count: number;
         sampleCategoryName: string | null;
         sampleCategoryId: string | null;
     }, {
+        count: number;
         total: number;
         name: string;
-        count: number;
         sampleCategoryName: string | null;
         sampleCategoryId: string | null;
     }>, "many">;
@@ -7823,12 +8006,12 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         count: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         date: string;
-        total: number;
         count: number;
+        total: number;
     }, {
         date: string;
-        total: number;
         count: number;
+        total: number;
     }>, "many">;
     dailyNet: zod.ZodArray<zod.ZodObject<{
         date: zod.ZodString;
@@ -7921,9 +8104,9 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         transactionCount: number;
         total: number;
         sampleMerchants: {
+            count: number;
             total: number;
             name: string;
-            count: number;
         }[];
     };
     unplanned: {
@@ -7972,16 +8155,16 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         pctOfRealSpend: number;
     }[];
     byMerchant: {
+        count: number;
         total: number;
         name: string;
-        count: number;
         sampleCategoryName: string | null;
         sampleCategoryId: string | null;
     }[];
     dailyBuckets: {
         date: string;
-        total: number;
         count: number;
+        total: number;
     }[];
     dailyNet: {
         date: string;
@@ -8014,9 +8197,9 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         transactionCount: number;
         total: number;
         sampleMerchants: {
+            count: number;
             total: number;
             name: string;
-            count: number;
         }[];
     };
     unplanned: {
@@ -8065,16 +8248,16 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         pctOfRealSpend: number;
     }[];
     byMerchant: {
+        count: number;
         total: number;
         name: string;
-        count: number;
         sampleCategoryName: string | null;
         sampleCategoryId: string | null;
     }[];
     dailyBuckets: {
         date: string;
-        total: number;
         count: number;
+        total: number;
     }[];
     dailyNet: {
         date: string;
@@ -8384,14 +8567,14 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
             total: zod.ZodNumber;
             sampleCategoryName: zod.ZodNullable<zod.ZodString>;
         }, "strip", zod.ZodTypeAny, {
+            count: number;
             total: number;
             name: string;
-            count: number;
             sampleCategoryName: string | null;
         }, {
+            count: number;
             total: number;
             name: string;
-            count: number;
             sampleCategoryName: string | null;
         }>, zod.ZodNull]>;
         quietestDay: zod.ZodUnion<[zod.ZodObject<{
@@ -8425,12 +8608,12 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
             total: zod.ZodNumber;
             exampleMerchants: zod.ZodArray<zod.ZodString, "many">;
         }, "strip", zod.ZodTypeAny, {
-            total: number;
             count: number;
+            total: number;
             exampleMerchants: string[];
         }, {
-            total: number;
             count: number;
+            total: number;
             exampleMerchants: string[];
         }>;
         subscriptionsCount: zod.ZodObject<{
@@ -8490,9 +8673,9 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
             merchant: string;
         } | null;
         mostVisitedMerchant: {
+            count: number;
             total: number;
             name: string;
-            count: number;
             sampleCategoryName: string | null;
         } | null;
         quietestDay: {
@@ -8506,8 +8689,8 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
             dayOfWeek: string;
         } | null;
         impulseBuyCount: {
-            total: number;
             count: number;
+            total: number;
             exampleMerchants: string[];
         };
         subscriptionsCount: {
@@ -8533,9 +8716,9 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
             merchant: string;
         } | null;
         mostVisitedMerchant: {
+            count: number;
             total: number;
             name: string;
-            count: number;
             sampleCategoryName: string | null;
         } | null;
         quietestDay: {
@@ -8549,8 +8732,8 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
             dayOfWeek: string;
         } | null;
         impulseBuyCount: {
-            total: number;
             count: number;
+            total: number;
             exampleMerchants: string[];
         };
         subscriptionsCount: {
@@ -8574,12 +8757,12 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
         total: zod.ZodNumber;
         count: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
-        total: number;
         count: number;
+        total: number;
         hour: number;
     }, {
-        total: number;
         count: number;
+        total: number;
         hour: number;
     }>, "many">;
     dayOfWeekSpend: zod.ZodArray<zod.ZodObject<{
@@ -8589,14 +8772,14 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
         count: zod.ZodNumber;
         avgPerDay: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
-        total: number;
         count: number;
+        total: number;
         label: string;
         dow: number;
         avgPerDay: number;
     }, {
-        total: number;
         count: number;
+        total: number;
         label: string;
         dow: number;
         avgPerDay: number;
@@ -8727,9 +8910,9 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
             merchant: string;
         } | null;
         mostVisitedMerchant: {
+            count: number;
             total: number;
             name: string;
-            count: number;
             sampleCategoryName: string | null;
         } | null;
         quietestDay: {
@@ -8743,8 +8926,8 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
             dayOfWeek: string;
         } | null;
         impulseBuyCount: {
-            total: number;
             count: number;
+            total: number;
             exampleMerchants: string[];
         };
         subscriptionsCount: {
@@ -8764,13 +8947,13 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
         } | null;
     };
     hourlySpendingClock: {
-        total: number;
         count: number;
+        total: number;
         hour: number;
     }[];
     dayOfWeekSpend: {
-        total: number;
         count: number;
+        total: number;
         label: string;
         dow: number;
         avgPerDay: number;
@@ -8855,9 +9038,9 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
             merchant: string;
         } | null;
         mostVisitedMerchant: {
+            count: number;
             total: number;
             name: string;
-            count: number;
             sampleCategoryName: string | null;
         } | null;
         quietestDay: {
@@ -8871,8 +9054,8 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
             dayOfWeek: string;
         } | null;
         impulseBuyCount: {
-            total: number;
             count: number;
+            total: number;
             exampleMerchants: string[];
         };
         subscriptionsCount: {
@@ -8892,13 +9075,13 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
         } | null;
     };
     hourlySpendingClock: {
-        total: number;
         count: number;
+        total: number;
         hour: number;
     }[];
     dayOfWeekSpend: {
-        total: number;
         count: number;
+        total: number;
         label: string;
         dow: number;
         avgPerDay: number;
@@ -10400,8 +10583,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
                 plaidTransactionId: string;
             }>, "many">;
         }, "strip", zod.ZodTypeAny, {
-            plaidAccountId: string;
             count: number;
+            plaidAccountId: string;
             items: {
                 occurredOn: string;
                 description: string | null;
@@ -10413,8 +10596,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
             minOccurredOn: string;
             maxOccurredOn: string;
         }, {
-            plaidAccountId: string;
             count: number;
+            plaidAccountId: string;
             items: {
                 occurredOn: string;
                 description: string | null;
@@ -10438,8 +10621,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         cleanupDetails?: {
-            plaidAccountId: string;
             count: number;
+            plaidAccountId: string;
             items: {
                 occurredOn: string;
                 description: string | null;
@@ -10463,8 +10646,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         cleanupDetails?: {
-            plaidAccountId: string;
             count: number;
+            plaidAccountId: string;
             items: {
                 occurredOn: string;
                 description: string | null;
@@ -10490,8 +10673,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         cleanupDetails?: {
-            plaidAccountId: string;
             count: number;
+            plaidAccountId: string;
             items: {
                 occurredOn: string;
                 description: string | null;
@@ -10517,8 +10700,8 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         cleanupDetails?: {
-            plaidAccountId: string;
             count: number;
+            plaidAccountId: string;
             items: {
                 occurredOn: string;
                 description: string | null;
@@ -10720,13 +10903,13 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             pattern: zod.ZodString;
             count: zod.ZodNumber;
         }, "strip", zod.ZodTypeAny, {
+            count: number;
             ruleId: string;
             pattern: string;
-            count: number;
         }, {
+            count: number;
             ruleId: string;
             pattern: string;
-            count: number;
         }>, "many">;
         error: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
@@ -10770,12 +10953,12 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         removed: number;
         autoCategorized: number;
         ruleAttributions: {
+            count: number;
             ruleId: string;
             pattern: string;
-            count: number;
         }[];
-        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         error?: string | null | undefined;
+        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         institutionName?: string | null | undefined;
         lastSyncedAt?: string | null | undefined;
         stillPreparing?: boolean | undefined;
@@ -10804,12 +10987,12 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         removed: number;
         autoCategorized: number;
         ruleAttributions: {
+            count: number;
             ruleId: string;
             pattern: string;
-            count: number;
         }[];
-        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         error?: string | null | undefined;
+        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         institutionName?: string | null | undefined;
         lastSyncedAt?: string | null | undefined;
         stillPreparing?: boolean | undefined;
@@ -10840,12 +11023,12 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         removed: number;
         autoCategorized: number;
         ruleAttributions: {
+            count: number;
             ruleId: string;
             pattern: string;
-            count: number;
         }[];
-        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         error?: string | null | undefined;
+        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         institutionName?: string | null | undefined;
         lastSyncedAt?: string | null | undefined;
         stillPreparing?: boolean | undefined;
@@ -10876,12 +11059,12 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         removed: number;
         autoCategorized: number;
         ruleAttributions: {
+            count: number;
             ruleId: string;
             pattern: string;
-            count: number;
         }[];
-        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         error?: string | null | undefined;
+        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         institutionName?: string | null | undefined;
         lastSyncedAt?: string | null | undefined;
         stillPreparing?: boolean | undefined;
@@ -10924,8 +11107,8 @@ export declare const GetPlaidEnvironmentResponse: zod.ZodObject<{
         institutionName?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
-    env: "sandbox" | "development" | "production" | null;
     configured: boolean;
+    env: "sandbox" | "development" | "production" | null;
     nonProdItemCount: number;
     nonProdItems: {
         id: string;
@@ -10934,8 +11117,8 @@ export declare const GetPlaidEnvironmentResponse: zod.ZodObject<{
     }[];
     configError?: string | null | undefined;
 }, {
-    env: "sandbox" | "development" | "production" | null;
     configured: boolean;
+    env: "sandbox" | "development" | "production" | null;
     nonProdItemCount: number;
     nonProdItems: {
         id: string;
@@ -11428,30 +11611,30 @@ export declare const ImportWorkbookResponse: zod.ZodObject<{
         pattern: zod.ZodString;
         count: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
+        count: number;
         ruleId: string;
         pattern: string;
-        count: number;
     }, {
+        count: number;
         ruleId: string;
         pattern: string;
-        count: number;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
+    counts: Record<string, number>;
     ruleAttributions: {
+        count: number;
         ruleId: string;
         pattern: string;
-        count: number;
     }[];
     batchId: string;
-    counts: Record<string, number>;
 }, {
+    counts: Record<string, number>;
     ruleAttributions: {
+        count: number;
         ruleId: string;
         pattern: string;
-        count: number;
     }[];
     batchId: string;
-    counts: Record<string, number>;
 }>;
 /**
  * @summary Returns information about the current authenticated user, including whether they are the owner.

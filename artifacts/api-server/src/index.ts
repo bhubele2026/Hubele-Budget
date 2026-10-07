@@ -1,8 +1,8 @@
-import cron from "node-cron";
+import { pool } from "@workspace/db";
 import app from "./app";
 import { logger } from "./lib/logger";
-import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
+import { markJobsFailed, startJobs, stopJobs } from "./jobs/boss";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
@@ -88,7 +88,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
+const server = app.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
@@ -96,54 +96,61 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 
-  // Boot does NOTHING but listen. Every one-shot repair sweep that used
-  // to run here (accountSnapshots repair, card-payment reclassify,
-  // pending-notes backfill, revolving-Amex auto-link) and every Plaid
-  // boot scan (malformed-token flag, malformed-token sibling cleanup,
-  // orphan plaid_items cleanup) has been removed: they had been running
-  // on every deploy for months against a converged database, so they
-  // cost startup latency and PG contention while doing no work. The
-  // repairs that still matter run where the data actually changes —
-  // `linkRevolvingAmexDebts` on every manual Plaid sync (see
-  // lib/plaidLiabilities.ts) and the malformed-token check inside the
-  // owner-triggered sync path (see routes/plaid.ts POST /plaid/sync).
+  // Boot does NOTHING but listen, then start the job runner. Every one-shot
+  // repair sweep that used to run here (accountSnapshots repair, card-payment
+  // reclassify, pending-notes backfill, revolving-Amex auto-link) and every
+  // Plaid boot scan (malformed-token flag, malformed-token sibling cleanup,
+  // orphan plaid_items cleanup) has been removed: they had been running on
+  // every deploy for months against a converged database, so they cost
+  // startup latency and PG contention while doing no work. The repairs that
+  // still matter run where the data actually changes — `linkRevolvingAmexDebts`
+  // on every manual Plaid sync (see lib/plaidLiabilities.ts) and the
+  // malformed-token check inside the owner-triggered sync path (see
+  // routes/plaid.ts POST /plaid/sync).
   //
-  // The automatic Plaid sync crons (hourly cursor sync, */10 forced
-  // refresh, daily consent refresh) are gone entirely rather than
-  // sitting dead behind a kill-switch: they were hard-disabled in code
-  // after Plaid billed the household ~$500 for background pulls. Banks
-  // sync ONLY when the owner clicks Sync (POST /plaid/sync, untouched).
-  // Restoring background syncing means writing a Render Cron Job, not
-  // flipping a flag here.
-
-  if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
-    // (#279) Daily prune of the plaid_sync_attempts audit log so the
-    // table stays bounded as users accumulate syncs over months. This
-    // is the ONLY scheduled job left in the process — it makes no Plaid
-    // API calls and is therefore free. Runs at 03:47 UTC.
-    cron.schedule(
-      "47 3 * * *",
-      () => {
-        prunePlaidSyncAttempts()
-          .then((deleted) => {
-            logger.info(
-              { deleted },
-              "Daily plaid_sync_attempts prune complete",
-            );
-          })
-          .catch((err) => {
-            logger.error(
-              { err },
-              "Daily plaid_sync_attempts prune failed",
-            );
-          });
-      },
-      { timezone: "UTC" },
-    );
-    logger.info("Plaid daily sync-attempts prune scheduled");
-  } else {
-    logger.warn(
-      "Plaid credentials missing — the daily sync-attempts prune is disabled",
-    );
-  }
+  // The automatic Plaid sync crons (hourly cursor sync, */10 forced refresh,
+  // daily consent refresh) are gone entirely rather than sitting dead behind a
+  // kill-switch: they were hard-disabled in code after Plaid billed the
+  // household ~$500 for background pulls. Banks sync ONLY when the owner
+  // clicks Sync (POST /plaid/sync, untouched). No job registered in
+  // jobs/register.ts may call Plaid.
+  //
+  // (AI-0) Jobs run on pg-boss (jobs/), started AFTER listen. A failure to
+  // start never stops the server serving: it is logged and /api/healthz shows
+  // jobs.started=false. The daily plaid_sync_attempts prune (03:47 UTC) moved
+  // from node-cron to the `maintenance.prune-sync-attempts` schedule.
+  startJobs().catch((jobsErr) => {
+    markJobsFailed(jobsErr);
+    logger.error({ err: jobsErr }, "Jobs failed to start — serving without them");
+  });
 });
+
+// Graceful shutdown (Render sends SIGTERM, then SIGKILL ~30 s later): stop
+// taking requests, let running jobs finish (up to 20 s), then close the pool.
+let shuttingDown = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info({ signal }, "Shutting down");
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, 5_000);
+    server.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+    server.closeIdleConnections?.();
+  });
+  try {
+    await stopJobs({ graceful: true, timeout: 20_000 });
+  } catch (stopErr) {
+    logger.error({ err: stopErr }, "Jobs did not stop cleanly");
+  }
+  try {
+    await pool.end();
+  } catch (poolErr) {
+    logger.error({ err: poolErr }, "Database pool did not close cleanly");
+  }
+  process.exit(0);
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));

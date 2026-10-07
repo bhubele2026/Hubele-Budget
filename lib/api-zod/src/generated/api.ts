@@ -8,10 +8,37 @@
 import * as zod from "zod";
 
 /**
- * @summary Health check
+ * @summary Health check. Always 200 while the process serves; job, AI and SMS
+state are reported as booleans and counts (never secrets) and never
+fail the check.
+
  */
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
+  version: zod.string(),
+  jobs: zod.object({
+    mode: zod.enum(["on", "off"]),
+    started: zod.boolean(),
+    failedLast24h: zod
+      .number()
+      .nullable()
+      .describe(
+        "Jobs that failed for good in the last 24 hours; null when unreadable.",
+      ),
+    dlq: zod
+      .number()
+      .nullable()
+      .describe("Jobs waiting in dead-letter queues; null when unreadable."),
+  }),
+  ai: zod.object({
+    enabled: zod.boolean(),
+    configured: zod.boolean(),
+    provider: zod.enum(["anthropic", "fake"]),
+  }),
+  sms: zod.object({
+    provider: zod.enum(["twilio", "console", "fake"]),
+    configured: zod.boolean(),
+  }),
 });
 
 /**
@@ -27,6 +54,54 @@ export const GetVersionResponse = zod.object({
     .describe(
       'Per-deploy build identifier (APP_BUILD_ID env, falling back\nto the git short hash, then a shared \"dev\" sentinel when\nneither is available). Compared against the identifier baked\ninto the loaded web bundle to detect a new deploy.\n',
     ),
+});
+
+/**
+ * @summary (AI-0, owner only) Job counts per queue and state, plus the 50 most
+recent failed jobs. Read straight from the pg-boss tables, so it works
+whether or not this instance runs jobs.
+
+ */
+export const GetOpsJobsResponse = zod.object({
+  mode: zod.enum(["on", "off"]),
+  started: zod.boolean(),
+  schema: zod.string(),
+  counts: zod.array(
+    zod.object({
+      queue: zod.string(),
+      state: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  failures: zod.array(
+    zod.object({
+      id: zod.string(),
+      queue: zod.string(),
+      error: zod
+        .string()
+        .nullable()
+        .describe(
+          "The error message the handler failed with (no stack), at most 500 characters.",
+        ),
+      retryCount: zod.number(),
+      createdOn: zod.coerce.date(),
+      startedOn: zod.coerce.date().nullable(),
+      completedOn: zod.coerce.date().nullable(),
+    }),
+  ),
+});
+
+/**
+ * @summary (AI-0, owner only) Put a failed job back in its queue.
+ */
+export const RetryOpsJobParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const RetryOpsJobResponse = zod.object({
+  id: zod.string(),
+  queue: zod.string(),
+  retried: zod.boolean(),
 });
 
 /**
