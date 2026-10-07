@@ -64,6 +64,13 @@ export type LedgerPlan = {
   itemId: string;
   label: string;
   /**
+   * (PR-B1) The recurring item's `amount_kind`: "estimate" when the household
+   * expects the amount to vary. A debt minimum or the Avalanche extra is
+   * "fixed". Internal to the ledger — `computeCashSignal`'s output does not
+   * carry it (the golden snapshot pins that output); the money position reads it.
+   */
+  amountKind: "fixed" | "estimate";
+  /**
    * (PR6) The date resolutions are keyed on: the occurrence's own date, before any
    * reschedule. For a moved bill `originalDate` is the moved-to date and this is
    * the date it was moved from — Mark missed / Skip / match must send THIS.
@@ -463,6 +470,9 @@ export async function buildForecastLedger(
   };
   const keepsOldRule = (ev: CashEvent): boolean =>
     keepsPreSnapshotRule(recurringById.get(ev.itemId), ev.amount);
+  // (PR-B1) A plan's amount kind travels with it onto the curve.
+  const amountKindOf = (itemId: string): "fixed" | "estimate" =>
+    recurringById.get(itemId)?.amountKind === "estimate" ? "estimate" : "fixed";
 
   // Resolve the configured Chase checking account's external Plaid
   // account_id. Forecast is bank-only and scoped to this single account —
@@ -1124,6 +1134,7 @@ export async function buildForecastLedger(
           amount: planAmount,
           itemId: ev.itemId,
           label: ev.label,
+          amountKind: amountKindOf(ev.itemId),
           assumption: dueBeforeToday ? "dragged_past_due" : "due_today_not_posted",
         });
         continue;
@@ -1183,6 +1194,7 @@ export async function buildForecastLedger(
             amount: -remainder,
             itemId: ev.itemId,
             label: ev.label,
+            amountKind: amountKindOf(ev.itemId),
             assumption: "overdue_remainder_assumed_unpaid",
           });
         }
@@ -1201,6 +1213,7 @@ export async function buildForecastLedger(
         amount: planAmount,
         itemId: ev.itemId,
         label: ev.label,
+        amountKind: amountKindOf(ev.itemId),
         assumption: dueBeforeToday ? "overdue_assumed_unpaid" : "due_today_not_posted",
       });
       continue;
@@ -1241,6 +1254,7 @@ export async function buildForecastLedger(
             amount: signedRemainder,
             itemId: ev.itemId,
             label: ev.label,
+            amountKind: amountKindOf(ev.itemId),
             assumption: "remainder_assumed_unpaid",
           });
         }
@@ -1256,6 +1270,7 @@ export async function buildForecastLedger(
       amount: planAmount,
       itemId: ev.itemId,
       label: ev.label,
+      amountKind: amountKindOf(ev.itemId),
       ...(effectiveDate !== rawEffectiveDate
         ? { assumption: "pre_window_on_first_day" as const }
         : {}),

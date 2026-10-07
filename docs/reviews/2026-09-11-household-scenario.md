@@ -5,7 +5,10 @@ reconciling every displayed number without guessing which hidden rule produced i
 
 - **The table as data:** `artifacts/api-server/src/__tests__/_fixtures/householdScenario.ts`.
 - **The test:** `artifacts/api-server/src/__tests__/householdScenario.integration.test.ts`.
-  - It asserts the three columns the app computes today.
+  - It asserts the three columns the app computes today, and (PR-B1, 2026-10-07) the money position's
+    columns from `GET /money/position`: remaining, unplanned and needs classification this week and safe
+    to spend now at every step; lowest before payday and available until payday at S6–S8, where today's
+    ledger already yields them.
   - Every other column is an `it.todo` naming the PR that switches it on. Switching it on is part of
     that PR's definition of done.
   - A PR that legitimately changes a rule updates this document, the fixture and the test together —
@@ -24,6 +27,7 @@ same in Chicago and in UTC.
 | **Plans** | **Income:** Paycheck A +$2,000, biweekly from Fri 10/9. Paycheck B +$1,500 on the 15th. |
 | | **Bills:** Mortgage −$1,800 on the 12th. Electric −$140 on the 13th. Phone −$95 on the 8th. |
 | | **Spend plans:** Weekly Spend −$300 on Saturdays (the Platinum payoff). Monthly Spend −$400 on the 28th (Blue). |
+| | **Weekly cap (PR-B1):** $300 — the household pool's allowance plan (`allowance_plans`, from 2026-05-01), the allowance the Weekly Spend bill funds. |
 | **Last week** | Amex Platinum groceries $180.00 on Tue 9/29 — the payoff that posts this Tuesday. |
 
 ## Rules the expected values assume
@@ -54,27 +58,32 @@ column on here.
   - **Closed week not yet paid:** the payoff lands on the next business day.
 - **Lowest before payday (PR9):** the lowest end-of-day expected balance from today until the day
   before the next income that hasn't already been matched away.
+- **Available until payday (PR-B1):** lowest before payday less the $500 cash buffer (and any money
+  held for goals; none here), never below zero.
+- **Safe to spend now (PR-B1):** the smaller of remaining this week and available until payday.
 - **Chase to review (PR13, PR14):** Chase rows this month not marked reviewed. Marking reviewed never
   moves money.
 - **Bank freshness (PR3):** `refresh_failed` from a failed refresh until the next successful one.
 
 ## The week
 
-**Asserted now:** cash, spent this week, review count. **Contract for later PRs:** remaining, unplanned,
-needs classification, expected on 10/16, lowest before payday, Chase to review, stale.
+**Asserted now:** cash, spent this week, review count; (PR-B1) remaining, unplanned, needs classification
+and safe to spend now at every step, lowest before payday and available until payday at S6–S8.
+**Contract for later work:** expected on 10/16, Chase to review, stale; lowest before payday and available
+until payday at S1–S5, S9 and S10 (see "PR-B1 delivery" below).
 
-| # | When | Event | Cash | Spent week | Review | Remaining | Unplanned | Needs class. | Expected Fri 10/16 | Lowest before payday | Chase to review | Stale |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| S1 | Sun 10/4 12:00 | Set up | 2,500.00 | 0.00 | 0 | 300.00 | 0.00 | 0.00 | 3,485.00 | 2,225.00 Thu 10/8 | 0 | — |
-| S2 | Mon 10/5 12:00 | Amex Plat: groceries 96.60, gas 45.00 (weekly) | 2,500.00 | 141.60 | 0 | 158.40 | 0.00 | 0.00 | 3,485.00 | 2,225.00 Thu 10/8 | 0 | — |
-| S3 | Tue 10/6 12:00 | Amex Plat: hardware 85.00 (unplanned). Chase: 200.00 to savings; Amex payoff 180.00 posts | 2,120.00 | 226.60 | 2 | 158.40 | 85.00 | 0.00 | 3,200.00 | 2,025.00 Thu 10/8 | 2 | — |
-| S4 | Wed 10/7 12:00 | Chase debit: Shell 45.00 pending (weekly) | 2,075.00 | 271.60 | 3 | 113.40 | 85.00 | 0.00 | 3,200.00 | 1,980.00 Thu 10/8 | 3 | — |
-| S5 | Thu 10/8 09:00 | Shell posts at 47.40 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,200.00 | 1,977.60 Thu 10/8 | 3 | — |
-| S6 | Thu 10/8 12:00 | Phone moved 10/8 → 10/14 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,200.00 | 2,072.60 Thu 10/8 | 3 | — |
-| S7 | Thu 10/8 15:00 | Electric 140 → 165 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,175.00 | 2,072.60 Thu 10/8 | 3 | — |
-| S8 | Thu 10/8 16:00 | Chase refresh fails | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,175.00 | 2,072.60 Thu 10/8 | 3 | refresh_failed |
-| S9 | Fri 10/9 09:00 | Refresh OK; Paycheck A 2,000.00 posts | 4,072.60 | 274.00 | 4 | 111.00 | 85.00 | 0.00 | 3,175.00 | 1,675.00 Wed 10/14 | 4 | — |
-| S10 | Sat 10/10 10:00 | Chase: Capital One card payment 150.00; payroll match confirmed; all Chase rows reviewed | 3,922.60 | 274.00 | 4 | 111.00 | 85.00 | 0.00 | 3,025.00 | 1,525.00 Wed 10/14 | 0 | — |
+| # | When | Event | Cash | Spent week | Review | Remaining | Unplanned | Needs class. | Expected Fri 10/16 | Lowest before payday | Available until payday | Safe to spend now | Chase to review | Stale |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S1 | Sun 10/4 12:00 | Set up | 2,500.00 | 0.00 | 0 | 300.00 | 0.00 | 0.00 | 3,485.00 | 2,225.00 Thu 10/8 | 1,725.00 | 300.00 | 0 | — |
+| S2 | Mon 10/5 12:00 | Amex Plat: groceries 96.60, gas 45.00 (weekly) | 2,500.00 | 141.60 | 0 | 158.40 | 0.00 | 0.00 | 3,485.00 | 2,225.00 Thu 10/8 | 1,725.00 | 158.40 | 0 | — |
+| S3 | Tue 10/6 12:00 | Amex Plat: hardware 85.00 (unplanned). Chase: 200.00 to savings; Amex payoff 180.00 posts | 2,120.00 | 226.60 | 2 | 158.40 | 85.00 | 0.00 | 3,200.00 | 2,025.00 Thu 10/8 | 1,525.00 | 158.40 | 2 | — |
+| S4 | Wed 10/7 12:00 | Chase debit: Shell 45.00 pending (weekly) | 2,075.00 | 271.60 | 3 | 113.40 | 85.00 | 0.00 | 3,200.00 | 1,980.00 Thu 10/8 | 1,480.00 | 113.40 | 3 | — |
+| S5 | Thu 10/8 09:00 | Shell posts at 47.40 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,200.00 | 1,977.60 Thu 10/8 | 1,477.60 | 111.00 | 3 | — |
+| S6 | Thu 10/8 12:00 | Phone moved 10/8 → 10/14 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,200.00 | 2,072.60 Thu 10/8 | 1,572.60 | 111.00 | 3 | — |
+| S7 | Thu 10/8 15:00 | Electric 140 → 165 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,175.00 | 2,072.60 Thu 10/8 | 1,572.60 | 111.00 | 3 | — |
+| S8 | Thu 10/8 16:00 | Chase refresh fails | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,175.00 | 2,072.60 Thu 10/8 | 1,572.60 | 111.00 | 3 | refresh_failed |
+| S9 | Fri 10/9 09:00 | Refresh OK; Paycheck A 2,000.00 posts | 4,072.60 | 274.00 | 4 | 111.00 | 85.00 | 0.00 | 3,175.00 | 1,675.00 Wed 10/14 | 1,175.00 | 111.00 | 4 | — |
+| S10 | Sat 10/10 10:00 | Chase: Capital One card payment 150.00; payroll match confirmed; all Chase rows reviewed | 3,922.60 | 274.00 | 4 | 111.00 | 85.00 | 0.00 | 3,025.00 | 1,525.00 Wed 10/14 | 1,025.00 | 111.00 | 0 | — |
 
 Before PR7 the app reported **424.00** at S10: it counted the Capital One payment as spending. PR7
 recognizes card payments in spending totals, and S10 is asserted at 274.00
@@ -175,6 +184,43 @@ real $180 payment is in cash and the plan is matched away.
 
 ### Needs classification
 Every purchase is tagged weekly or unplanned, so this is $0.00 all week. PR10 must keep it that way.
+
+### Available until payday and safe to spend now (PR-B1)
+
+Available until payday is the lowest before payday less the $500 buffer; safe to spend now is the smaller of
+that and remaining this week. The week binds at every step, so safe to spend now is remaining this week.
+
+| Step | Lowest before payday − 500 | Available | min(remaining, available) | Safe to spend now |
+|---|---|---|---|---|
+| S1–S2 | 2,225 − 500 | 1,725.00 | min(300.00 / 158.40, 1,725.00) | 300.00 / 158.40 |
+| S3 | 2,025 − 500 | 1,525.00 | min(158.40, 1,525.00) | 158.40 |
+| S4 | 1,980 − 500 | 1,480.00 | min(113.40, 1,480.00) | 113.40 |
+| S5 | 1,977.60 − 500 | 1,477.60 | min(111.00, 1,477.60) | 111.00 |
+| S6–S8 | 2,072.60 − 500 | 1,572.60 | min(111.00, 1,572.60) | 111.00 |
+| S9 | 1,675 − 500 | 1,175.00 | min(111.00, 1,175.00) | 111.00 |
+| S10 | 1,525 − 500 | 1,025.00 | min(111.00, 1,025.00) | 111.00 |
+
+## PR-B1 delivery (2026-10-07)
+
+- **Switched on, every step:** remaining, unplanned and needs classification this week, and safe to spend
+  now — read from `GET /money/position`, whose figures the spine's `position` carries.
+- **Switched on, S6–S8:** lowest before payday and available until payday. On those steps the window is
+  today alone (Thu 10/8; payday Fri 10/9), and today's ledger yields the contract's 2,072.60.
+- **Still pending (`it.todo`, one line each):**
+
+  | Step | Today's ledger (lowest / available) | Why | Turns on with |
+  |---|---|---|---|
+  | S1, S2 | 2,105.00 Thu 10/8 / 1,605.00 | Last Saturday's $300 Weekly Spend bill is dragged to Mon 10/5; the contract has the $180 Amex payoff | the funding-bill hooks (decision 7, next package) |
+  | S3 | 1,725.00 Thu 10/8 / 1,225.00 | The $180 payoff posted, but the $300 Weekly Spend bill due 10/3 is still dragged, to Wed 10/7 | the funding-bill hooks |
+  | S4 | 1,680.00 Thu 10/8 / 1,180.00 | The same $300 bill, dragged to Thu 10/8 | the funding-bill hooks |
+  | S5 | 2,072.60 Thu 10/8 / 1,572.60 | A bill due today lands on the next business day (PR6: day 0 equals the bank), so the $95 phone moves to payday, Fri 10/9; the contract counts it on 10/8 | an owner decision on the PR6 rule |
+  | S9, S10 | 1,412.60 / 1,262.60 Wed 10/14 / 912.60 / 762.60 | Two $300 Weekly Spend bills (10/3 dragged to Mon 10/12, and 10/10) instead of the $337.60 payoff | the funding-bill hooks |
+
+- **Safe to spend now matches at every step** because the week is the smaller ceiling throughout; the hooks
+  change available until payday, not which ceiling binds here.
+- **Stale stays pending.** At S3–S7 today's freshness rule already reads `old` (a Plaid balance read
+  Sun 08:00 with no sync for over 48 hours), where this table says fresh; the money position reports that
+  as `degraded`. The column predates the 48-hour rule and is left for PR3's owner to reconcile.
 
 ## PR1 delivery
 

@@ -10,8 +10,12 @@
 // numbers back through the real /spine route.
 //
 // Asserted now: cash today, spent this week, review count — the three columns
-// the app computes today. A column the app still gets wrong at a step is
-// marked pending with the PR that fixes it, rather than pinning a wrong value.
+// the app computes today — and (PR-B1) the money position's columns from
+// GET /money/position: remaining, unplanned and needs classification this week
+// and safe to spend now at every step; lowest before payday and available
+// until payday where today's ledger already yields the contract's value. A
+// column the app still gets wrong at a step is marked pending with the PR that
+// fixes it, rather than pinning a wrong value.
 // Every later column is an it.todo naming its PR; switching it on is part of
 // that PR's definition of done. Never loosen an expectation to go green — if a
 // rule legitimately changes, the document and the fixture change with it.
@@ -53,6 +57,7 @@ vi.mock("../middlewares/requireAuth", () => ({
 
 import {
   db,
+  allowancePlansTable,
   budgetCategoriesTable,
   forecastResolutionsTable,
   forecastSettingsTable,
@@ -63,13 +68,17 @@ import {
 } from "@workspace/db";
 import spineRouter from "../routes/spine";
 import forecastRouter from "../routes/forecast";
+import moneyRouter from "../routes/money";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 import {
   ACCOUNTS,
   CONTRACT_COLUMNS,
   EXPECTED,
+  POSITION_COLUMNS,
+  POSITION_LEDGER_NOT_YET,
   SNAPSHOT,
+  WEEKLY_CAP,
   type StepId,
 } from "./_fixtures/householdScenario";
 
@@ -81,6 +90,7 @@ app.use((req: { log?: unknown }, _res, next) => {
 });
 app.use(spineRouter);
 app.use(forecastRouter);
+app.use(moneyRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -89,6 +99,17 @@ type Spine = {
   bank: { balance: string; asOfDate: string | null };
   spentWeek: number;
   reviewCount: number;
+  position: { safeToSpendNow: string | null; remainingWeek: string | null; availableUntilPayday: string | null };
+};
+
+type Position = {
+  remainingWeek: string | null;
+  unplannedWeek: string;
+  needsClassificationWeek: string;
+  safeToSpendNow: string | null;
+  availableUntilPayday: string | null;
+  lowestUntilPayday: string | null;
+  lowestUntilPaydayDate: string | null;
 };
 
 async function get<T>(path: string): Promise<T> {
@@ -126,6 +147,9 @@ async function cleanup(): Promise<void> {
     .delete(plaidAccountsTable)
     .where(eq(plaidAccountsTable.userId, TEST_USER));
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
+  if (TEST_HOUSEHOLD_ID) {
+    await db.delete(allowancePlansTable).where(eq(allowancePlansTable.householdId, TEST_HOUSEHOLD_ID));
+  }
 }
 
 // Ids created during setup and carried across steps.
@@ -188,6 +212,23 @@ async function expectToday(id: StepId): Promise<void> {
   } else {
     expect(spine.spentWeek, `${id} spent this week`).toBeCloseTo(e.spentWeek, 2);
   }
+
+  // ⭐ (PR-B1) The money position — read at the same pinned instant.
+  const pos = await get<Position>("/money/position");
+  for (const column of POSITION_COLUMNS) {
+    expect(pos[column], `${id} ${column}`).toBe(e[column]);
+  }
+  if (!POSITION_LEDGER_NOT_YET[id]) {
+    expect(
+      { balance: pos.lowestUntilPayday, date: pos.lowestUntilPaydayDate },
+      `${id} lowest before payday`,
+    ).toEqual(e.lowBeforePayday);
+    expect(pos.availableUntilPayday, `${id} available until payday`).toBe(e.availableUntilPayday);
+  }
+  // The spine's headline is the same call.
+  expect(spine.position.safeToSpendNow, `${id} spine safe to spend`).toBe(pos.safeToSpendNow);
+  expect(spine.position.remainingWeek, `${id} spine remaining`).toBe(pos.remainingWeek);
+  expect(spine.position.availableUntilPayday, `${id} spine available`).toBe(pos.availableUntilPayday);
 }
 
 beforeAll(async () => {
@@ -291,6 +332,16 @@ beforeAll(async () => {
       .returning();
     plan[key] = p!.id;
   }
+
+  // ── (PR-B1) The weekly cap the Weekly Spend bill funds: the household pool's plan.
+  await db.insert(allowancePlansTable).values({
+    householdId: TEST_HOUSEHOLD_ID,
+    memberUserId: null,
+    period: "weekly",
+    amount: WEEKLY_CAP.amount,
+    effectiveFrom: WEEKLY_CAP.effectiveFrom,
+    source: "owner",
+  });
 
   // ── Last week on Amex Platinum (Sun 9/27 – Sat 10/3): the $180 its payoff covers.
   await addTxn({
@@ -504,5 +555,15 @@ describe("household scenario — Sun 10/4 to Sat 10/10, 2026", () => {
       .map((id) => `${id} ${JSON.stringify(EXPECTED[id][column.key])}`)
       .join(" · ");
     it.todo(`${column.turnsOnIn}: ${column.label} — ${perStep}`);
+  }
+  // (PR-B1) Lowest before payday / available until payday, step by step, where
+  // today's ledger does not yet yield the contract.
+  for (const [id, pending] of Object.entries(POSITION_LEDGER_NOT_YET) as Array<
+    [StepId, NonNullable<(typeof POSITION_LEDGER_NOT_YET)[StepId]>]
+  >) {
+    const e = EXPECTED[id];
+    it.todo(
+      `${pending.turnsOnIn}: ${id} lowest before payday ${e.lowBeforePayday.balance} ${e.lowBeforePayday.date} / available ${e.availableUntilPayday} — ${pending.reason} (today: ${pending.appReportsToday.lowBeforePayday} / ${pending.appReportsToday.availableUntilPayday})`,
+    );
   }
 });

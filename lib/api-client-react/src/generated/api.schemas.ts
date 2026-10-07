@@ -284,6 +284,75 @@ export type SpineDebt = {
   payoffPct: number | null;
 };
 
+/**
+ * MoneyPosition.horizon.kind
+ */
+export type SpinePositionHorizonKind =
+  (typeof SpinePositionHorizonKind)[keyof typeof SpinePositionHorizonKind];
+
+export const SpinePositionHorizonKind = {
+  payday: "payday",
+  week_end: "week_end",
+} as const;
+
+/**
+ * MoneyPosition.withinPlan
+ * @nullable
+ */
+export type SpinePositionWithinPlan =
+  | (typeof SpinePositionWithinPlan)[keyof typeof SpinePositionWithinPlan]
+  | null;
+
+export const SpinePositionWithinPlan = {
+  over: "over",
+  tight: "tight",
+  yes: "yes",
+} as const;
+
+export type SpinePositionConfidence =
+  (typeof SpinePositionConfidence)[keyof typeof SpinePositionConfidence];
+
+export const SpinePositionConfidence = {
+  firm: "firm",
+  estimated: "estimated",
+} as const;
+
+/**
+ * (PR-B1) The headline of the money position — the same buildMoneyPosition call GET /money/position makes, field for field. Never credit, a limit, a debt balance or an amount owed.
+ */
+export interface SpinePosition {
+  /**
+   * MoneyPosition.safeToSpendNow
+   * @nullable
+   */
+  safeToSpendNow: string | null;
+  /**
+   * MoneyPosition.remainingWeek
+   * @nullable
+   */
+  remainingWeek: string | null;
+  /**
+   * MoneyPosition.availableUntilPayday
+   * @nullable
+   */
+  availableUntilPayday: string | null;
+  /**
+   * MoneyPosition.paydayDate
+   * @nullable
+   */
+  paydayDate: string | null;
+  /** MoneyPosition.horizon.kind */
+  horizonKind: SpinePositionHorizonKind;
+  /**
+   * MoneyPosition.withinPlan
+   * @nullable
+   */
+  withinPlan: SpinePositionWithinPlan;
+  confidence: SpinePositionConfidence;
+  /** The bank data is stale; every figure is from the last good snapshot */
+  degraded: boolean;
+}
+
 export interface Spine {
   /** ISO timestamp the snapshot was read */
   asOf: string;
@@ -300,6 +369,205 @@ export interface Spine {
   debt: SpineDebt;
   /** computeReviewCount() — unmatched forecast-flagged bank txns this month */
   reviewCount: number;
+  position: SpinePosition;
+}
+
+export interface MoneyPositionEstimate {
+  itemId: string;
+  label: string;
+  /** Signed like the plan (negative is money out) */
+  amount: string;
+  date: string;
+}
+
+/**
+ * computeCashSignal().status
+ */
+export type MoneyPositionStatus =
+  (typeof MoneyPositionStatus)[keyof typeof MoneyPositionStatus];
+
+export const MoneyPositionStatus = {
+  ready: "ready",
+  tight: "tight",
+  not_yet: "not_yet",
+  no_data: "no_data",
+} as const;
+
+export type MoneyPositionPayday = {
+  itemId: string;
+  label: string;
+  amount: string;
+} | null;
+
+export type MoneyPositionHorizonKind =
+  (typeof MoneyPositionHorizonKind)[keyof typeof MoneyPositionHorizonKind];
+
+export const MoneyPositionHorizonKind = {
+  payday: "payday",
+  week_end: "week_end",
+} as const;
+
+export type MoneyPositionHorizon = {
+  kind: MoneyPositionHorizonKind;
+  /** The payday, or this week's Saturday */
+  endDate: string;
+  /** The last day the cash figures count (the day before payday, or the Saturday) */
+  lastDay: string;
+};
+
+/**
+ * @nullable
+ */
+export type MoneyPositionWithinPlan =
+  | (typeof MoneyPositionWithinPlan)[keyof typeof MoneyPositionWithinPlan]
+  | null;
+
+export const MoneyPositionWithinPlan = {
+  over: "over",
+  tight: "tight",
+  yes: "yes",
+} as const;
+
+export type MoneyPositionConfidence =
+  (typeof MoneyPositionConfidence)[keyof typeof MoneyPositionConfidence];
+
+export const MoneyPositionConfidence = {
+  firm: "firm",
+  estimated: "estimated",
+} as const;
+
+/**
+ * @nullable
+ */
+export type MoneyPositionDegradedReason =
+  | (typeof MoneyPositionDegradedReason)[keyof typeof MoneyPositionDegradedReason]
+  | null;
+
+export const MoneyPositionDegradedReason = {
+  refresh_failed: "refresh_failed",
+  old: "old",
+  manual_old: "manual_old",
+} as const;
+
+/**
+ * (PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; without one the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).
+ */
+export interface MoneyPosition {
+  todayISO: string;
+  /** computeCashSignal().status */
+  status: MoneyPositionStatus;
+  /** @nullable */
+  paydayDate: string | null;
+  payday: MoneyPositionPayday;
+  horizon: MoneyPositionHorizon;
+  /** @nullable */
+  lowestUntilPayday: string | null;
+  /** @nullable */
+  lowestUntilPaydayDate: string | null;
+  /** Sum of the planned outflows landing in the window */
+  committedUntilPayday: string;
+  cashBuffer: string;
+  /** Money held back for goals; 0.00 until goals ship */
+  reservesHeld: string;
+  /** @nullable */
+  availableUntilPayday: string | null;
+  weekStart: string;
+  weekEnd: string;
+  /**
+   * This week's cap from allowance_plans (or the week's override); null when none is set
+   * @nullable
+   */
+  weekCap: string | null;
+  spentWeekDiscretionary: string;
+  /** The part of spentWeekDiscretionary not yet filed — it counts against the cap until it is */
+  needsClassificationWeek: string;
+  unplannedWeek: string;
+  monthlyWeek: string;
+  /** @nullable */
+  remainingWeek: string | null;
+  /**
+   * weekCap × days elapsed (today included) ÷ 7
+   * @nullable
+   */
+  paceAllowedToday: string | null;
+  /** @nullable */
+  withinPlan: MoneyPositionWithinPlan;
+  /** @nullable */
+  safeToSpendNow: string | null;
+  confidence: MoneyPositionConfidence;
+  estimates: MoneyPositionEstimate[];
+  assumptions: string[];
+  degraded: boolean;
+  /** @nullable */
+  degradedReason: MoneyPositionDegradedReason;
+}
+
+export type AllowancePlanPeriod =
+  (typeof AllowancePlanPeriod)[keyof typeof AllowancePlanPeriod];
+
+export const AllowancePlanPeriod = {
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
+
+export type AllowancePlanSource =
+  (typeof AllowancePlanSource)[keyof typeof AllowancePlanSource];
+
+export const AllowancePlanSource = {
+  owner: "owner",
+  derived: "derived",
+} as const;
+
+export interface AllowancePlan {
+  id: string;
+  /**
+   * Null for the household's shared pool
+   * @nullable
+   */
+  memberUserId: string | null;
+  period: AllowancePlanPeriod;
+  amount: string;
+  effectiveFrom: string;
+  source: AllowancePlanSource;
+  /** The suggestion's working when the owner accepted it; null for a typed amount */
+  derivation: unknown;
+  createdAt: string;
+}
+
+export interface AllowancePlanUpdate {
+  /**
+   * Dollars, at most two decimals
+   * @pattern ^\d{1,8}(\.\d{1,2})?$
+   */
+  amount: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  effectiveFrom?: string;
+}
+
+export interface WeeklyLimitDerivation {
+  takeHomeMonthly: string;
+  /** Active bills and subscriptions, less the Weekly/Monthly Spend funding items and debt-linked bills */
+  committedMonthly: string;
+  debtMinimumsMonthly: string;
+  /** The Avalanche extra payment */
+  extraMonthly: string;
+  goalsMonthly: string;
+  discretionaryMonthly: string;
+}
+
+/**
+ * A suggestion only — nothing writes it; the owner sets the cap.
+ */
+export type AllowancePlansSuggested = {
+  /** Discretionary per week, rounded down to whole $5 */
+  weekly: string;
+  derivation: WeeklyLimitDerivation;
+};
+
+export interface AllowancePlans {
+  plans: AllowancePlan[];
+  /** A suggestion only — nothing writes it; the owner sets the cap. */
+  suggested: AllowancePlansSuggested;
 }
 
 export interface VersionInfo {
@@ -1611,6 +1879,17 @@ export interface SyncMinimumsResult {
   updated: SyncMinimumsResultUpdatedItem[];
 }
 
+/**
+ * (PR-B1) "estimate" when the amount is expected to vary; the money position then says its answer is estimated.
+ */
+export type RecurringItemAmountKind =
+  (typeof RecurringItemAmountKind)[keyof typeof RecurringItemAmountKind];
+
+export const RecurringItemAmountKind = {
+  fixed: "fixed",
+  estimate: "estimate",
+} as const;
+
 export interface RecurringItem {
   id: string;
   name: string;
@@ -1626,6 +1905,8 @@ export interface RecurringItem {
   categoryId?: string | null;
   /** @nullable */
   debtId?: string | null;
+  /** (PR-B1) "estimate" when the amount is expected to vary; the money position then says its answer is estimated. */
+  amountKind: RecurringItemAmountKind;
 }
 
 /**
@@ -1641,6 +1922,14 @@ export type UpdateRecurringItemResponse = RecurringItem & {
   moveResult?: RecurringItemMoveResult;
 };
 
+export type RecurringItemInputAmountKind =
+  (typeof RecurringItemInputAmountKind)[keyof typeof RecurringItemInputAmountKind];
+
+export const RecurringItemInputAmountKind = {
+  fixed: "fixed",
+  estimate: "estimate",
+} as const;
+
 export interface RecurringItemInput {
   name: string;
   kind?: string;
@@ -1655,6 +1944,7 @@ export interface RecurringItemInput {
   categoryId?: string | null;
   /** @nullable */
   debtId?: string | null;
+  amountKind?: RecurringItemInputAmountKind;
 }
 
 export interface BillsSummaryRow {

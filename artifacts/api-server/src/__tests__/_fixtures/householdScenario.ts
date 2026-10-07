@@ -23,6 +23,12 @@ export const SNAPSHOT = {
   cashBuffer: "500.00",
 };
 
+/**
+ * (PR-B1) The household's weekly cap: an `allowance_plans` row for the shared
+ * pool, $300 from 2026-05-01 — the allowance the Weekly Spend bill funds.
+ */
+export const WEEKLY_CAP = { amount: "300.00", effectiveFrom: "2026-05-01" };
+
 export const ACCOUNTS = {
   chase: { accountId: "hs-chase-5526", mask: "5526", name: "Chase Checking" },
   savings: { accountId: "hs-savings-8801", mask: "8801", name: "Chase Savings" },
@@ -58,19 +64,30 @@ export type StepExpectation = {
    * asserting a known-wrong number.
    */
   notYet?: { column: "spentWeek"; turnsOnIn: string; appReportsToday: number };
-  // ── Contract for later PRs (it.todo until the named PR ships) ──────────
-  /** Weekly Spend plan ($300) minus weekly-tagged everyday spend. PR8 / PR10. */
+  // ── (PR-B1) Asserted through GET /money/position at every step ─────────
+  /** The weekly cap ($300) minus weekly-tagged and unfiled everyday spend. */
   remainingWeek: string;
-  /** Purchases flagged unplanned this week. PR10. */
+  /** Purchases flagged unplanned this week. */
   unplannedWeek: string;
-  /** Real spend that is neither planned nor unplanned. PR10. */
+  /** Real spend that is neither planned nor unplanned (it counts against the cap). */
   needsClassificationWeek: string;
+  // ── Contract for later PRs (it.todo until the named PR ships) ──────────
   /** Expected end-of-day checking balance on Fri 10/16. PR8 + PR9. */
   expectedFri1016: string;
-  /** Lowest expected end-of-day balance from today until the next payday. PR9. */
+  /**
+   * Lowest expected end-of-day balance from today until the next payday. PR9;
+   * (PR-B1) asserted at the steps not in `POSITION_LEDGER_NOT_YET`.
+   */
   lowBeforePayday: { balance: string; date: string };
   /** Chase ledger rows this month not yet marked reviewed. PR13 / PR14. */
   chaseToReview: number;
+  /**
+   * (PR-B1) Lowest before payday less the $500 buffer: what is free until
+   * payday. Asserted with `lowBeforePayday`.
+   */
+  availableUntilPayday: string;
+  /** (PR-B1) The smaller of remaining this week and available until payday. Asserted at every step. */
+  safeToSpendNow: string;
   /** Bank freshness flag. PR3. */
   bankStale: false | "refresh_failed";
 };
@@ -88,6 +105,8 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     expectedFri1016: "3485.00",
     lowBeforePayday: { balance: "2225.00", date: "2026-10-08" },
     chaseToReview: 0,
+    availableUntilPayday: "1725.00",
+    safeToSpendNow: "300.00",
     bankStale: false,
   },
   S2: {
@@ -102,6 +121,8 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     expectedFri1016: "3485.00",
     lowBeforePayday: { balance: "2225.00", date: "2026-10-08" },
     chaseToReview: 0,
+    availableUntilPayday: "1725.00",
+    safeToSpendNow: "158.40",
     bankStale: false,
   },
   S3: {
@@ -117,6 +138,8 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     expectedFri1016: "3200.00",
     lowBeforePayday: { balance: "2025.00", date: "2026-10-08" },
     chaseToReview: 2,
+    availableUntilPayday: "1525.00",
+    safeToSpendNow: "158.40",
     bankStale: false,
   },
   S4: {
@@ -131,6 +154,8 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     expectedFri1016: "3200.00",
     lowBeforePayday: { balance: "1980.00", date: "2026-10-08" },
     chaseToReview: 3,
+    availableUntilPayday: "1480.00",
+    safeToSpendNow: "113.40",
     bankStale: false,
   },
   S5: {
@@ -145,6 +170,8 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     expectedFri1016: "3200.00",
     lowBeforePayday: { balance: "1977.60", date: "2026-10-08" },
     chaseToReview: 3,
+    availableUntilPayday: "1477.60",
+    safeToSpendNow: "111.00",
     bankStale: false,
   },
   S6: {
@@ -159,6 +186,8 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     expectedFri1016: "3200.00",
     lowBeforePayday: { balance: "2072.60", date: "2026-10-08" },
     chaseToReview: 3,
+    availableUntilPayday: "1572.60",
+    safeToSpendNow: "111.00",
     bankStale: false,
   },
   S7: {
@@ -173,6 +202,8 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     expectedFri1016: "3175.00",
     lowBeforePayday: { balance: "2072.60", date: "2026-10-08" },
     chaseToReview: 3,
+    availableUntilPayday: "1572.60",
+    safeToSpendNow: "111.00",
     bankStale: false,
   },
   S8: {
@@ -187,6 +218,8 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     expectedFri1016: "3175.00",
     lowBeforePayday: { balance: "2072.60", date: "2026-10-08" },
     chaseToReview: 3,
+    availableUntilPayday: "1572.60",
+    safeToSpendNow: "111.00",
     bankStale: "refresh_failed",
   },
   S9: {
@@ -201,6 +234,8 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     expectedFri1016: "3175.00",
     lowBeforePayday: { balance: "1675.00", date: "2026-10-14" },
     chaseToReview: 4,
+    availableUntilPayday: "1175.00",
+    safeToSpendNow: "111.00",
     bankStale: false,
   },
   S10: {
@@ -216,6 +251,8 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     expectedFri1016: "3025.00",
     lowBeforePayday: { balance: "1525.00", date: "2026-10-14" },
     chaseToReview: 0,
+    availableUntilPayday: "1025.00",
+    safeToSpendNow: "111.00",
     bankStale: false,
   },
 };
@@ -227,14 +264,66 @@ export const CONTRACT_COLUMNS: Array<{
   turnsOnIn: string;
 }> = [
   { key: "bankStale", label: "bank freshness flag", turnsOnIn: "PR3" },
-  { key: "remainingWeek", label: "remaining weekly allowance", turnsOnIn: "PR8" },
   { key: "expectedFri1016", label: "expected balance on Fri 10/16", turnsOnIn: "PR8 + PR9" },
-  { key: "lowBeforePayday", label: "lowest before payday", turnsOnIn: "PR9" },
-  { key: "unplannedWeek", label: "unplanned this week", turnsOnIn: "PR10" },
-  {
-    key: "needsClassificationWeek",
-    label: "needs classification this week",
-    turnsOnIn: "PR10",
-  },
   { key: "chaseToReview", label: "Chase rows to review", turnsOnIn: "PR13 + PR14" },
 ];
+
+/**
+ * ⭐ (PR-B1) The money position's columns, read from `GET /money/position`
+ * (the spine's `position` is the same call). Switched on at every step:
+ * `remainingWeek`, `unplannedWeek`, `needsClassificationWeek` and
+ * `safeToSpendNow`. Switched on where today's ledger already yields the
+ * contract's value: `lowBeforePayday` and `availableUntilPayday`, at the steps
+ * NOT listed in `POSITION_LEDGER_NOT_YET`.
+ */
+export const POSITION_COLUMNS = [
+  "remainingWeek",
+  "unplannedWeek",
+  "needsClassificationWeek",
+  "safeToSpendNow",
+] as const;
+
+/**
+ * Steps where today's forecast ledger does not yet yield the contract's lowest
+ * before payday (and so its available until payday), with the one-line reason
+ * and what the app reports today. `it.todo` until the named package.
+ */
+export const POSITION_LEDGER_NOT_YET: Partial<
+  Record<StepId, { turnsOnIn: string; reason: string; appReportsToday: { lowBeforePayday: string; availableUntilPayday: string } }>
+> = {
+  S1: {
+    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
+    reason: "the ledger drags last Saturday's $300 Weekly Spend bill to Mon 10/5 instead of the $180 Amex payoff",
+    appReportsToday: { lowBeforePayday: "2105.00 2026-10-08", availableUntilPayday: "1605.00" },
+  },
+  S2: {
+    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
+    reason: "the ledger drags last Saturday's $300 Weekly Spend bill instead of the $180 Amex payoff",
+    appReportsToday: { lowBeforePayday: "2105.00 2026-10-08", availableUntilPayday: "1605.00" },
+  },
+  S3: {
+    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
+    reason: "the $180 payoff posted, but the ledger still drags the $300 Weekly Spend bill due 10/3 to Wed 10/7",
+    appReportsToday: { lowBeforePayday: "1725.00 2026-10-08", availableUntilPayday: "1225.00" },
+  },
+  S4: {
+    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
+    reason: "the ledger drags the $300 Weekly Spend bill due 10/3 to Thu 10/8",
+    appReportsToday: { lowBeforePayday: "1680.00 2026-10-08", availableUntilPayday: "1180.00" },
+  },
+  S5: {
+    turnsOnIn: "owner decision (PR6 rule)",
+    reason: "a bill due today lands on the next business day (day 0 = the bank), so the $95 phone moves to payday Fri 10/9",
+    appReportsToday: { lowBeforePayday: "2072.60 2026-10-08", availableUntilPayday: "1572.60" },
+  },
+  S9: {
+    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
+    reason: "the ledger counts two $300 Weekly Spend bills (10/3 dragged to 10/12, and 10/10) instead of the $337.60 payoff",
+    appReportsToday: { lowBeforePayday: "1412.60 2026-10-14", availableUntilPayday: "912.60" },
+  },
+  S10: {
+    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
+    reason: "the ledger counts two $300 Weekly Spend bills (10/3 dragged to 10/12, and 10/10) instead of the $337.60 payoff",
+    appReportsToday: { lowBeforePayday: "1262.60 2026-10-14", availableUntilPayday: "762.60" },
+  },
+};

@@ -11,6 +11,7 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  check,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -282,10 +283,19 @@ export const recurringItemsTable = pgTable(
     categoryId: uuid("category_id"),
     debtId: uuid("debt_id").references(() => debtsTable.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // (PR-B1) "fixed" — the amount is what will post; "estimate" — a figure the
+    // household expects to vary (a utility, a variable paycheck). The money
+    // position reads it to say its answer is estimated and which plans make it
+    // so. Migration lib/db/migrations/0041_recurring_amount_kind.sql.
+    amountKind: text("amount_kind").notNull().default("fixed"),
   },
   (t) => ({
     userIdx: index("recurring_items_user_idx").on(t.userId),
     householdIdx: index("recurring_items_household_idx").on(t.householdId),
+    amountKindCheck: check(
+      "recurring_items_amount_kind_check",
+      sql`${t.amountKind} in ('fixed', 'estimate')`,
+    ),
   }),
 );
 
@@ -665,6 +675,53 @@ export const settingsTable = pgTable("settings", {
   preferences: jsonb("preferences"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ⭐ (PR-B1) ALLOWANCE PLANS — the everyday spending caps, one row per period.
+//
+// `member_user_id` null is the household's shared pool; a member's id is that
+// member's own allowance (none are written yet). A row is in effect from
+// `effective_from`; the newest row that has started by the end of a week governs
+// that week (`everydayPlanFromRows`, avalanche-core). Backfilled from
+// `settings.weekly_allowance_amount` / `monthly_allowance_amount` by
+// lib/db/migrations/0040_allowance_plans.sql, which this definition mirrors so
+// `drizzle-kit push` (dev, tests) and the SQL file (production) build the same
+// table.
+//
+// ⚠️ OWNER-WRITTEN ONLY. `created_by_kind` is pinned to 'user' by a CHECK: no
+// job or agent may write a plan, and `allowancePlanWriter.ts` is the one module
+// that writes this table (a test asserts nothing under src/jobs or src/ai
+// imports it). `source` says whether the owner typed the amount ('owner') or
+// accepted the suggested figure ('derived', with its `derivation`).
+export const allowancePlansTable = pgTable(
+  "allowance_plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    memberUserId: text("member_user_id"),
+    period: text("period").notNull(),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    source: text("source").notNull(),
+    derivation: jsonb("derivation"),
+    createdByKind: text("created_by_kind").notNull().default("user"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    householdIdx: index("allowance_plans_household_idx").on(t.householdId),
+    householdMemberPeriodFromUq: uniqueIndex("allowance_plans_household_member_period_from_uq").on(
+      t.householdId,
+      sql`coalesce("member_user_id", '')`,
+      t.period,
+      t.effectiveFrom,
+    ),
+    periodCheck: check("allowance_plans_period_check", sql`${t.period} in ('weekly', 'monthly')`),
+    sourceCheck: check("allowance_plans_source_check", sql`${t.source} in ('owner', 'derived')`),
+    createdByKindCheck: check("allowance_plans_created_by_kind_check", sql`${t.createdByKind} = 'user'`),
+  }),
+);
+export type AllowancePlan = typeof allowancePlansTable.$inferSelect;
 
 // (#860) Per-USER UI preferences — distinct from the household-scoped
 // `settings.preferences` JSONB. Keyed by the signed-in Clerk userId

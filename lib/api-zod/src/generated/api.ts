@@ -145,6 +145,11 @@ export const GetDashboardResponse = zod.object({
       active: zod.string(),
       categoryId: zod.string().nullish(),
       debtId: zod.string().nullish(),
+      amountKind: zod
+        .enum(["fixed", "estimate"])
+        .describe(
+          '(PR-B1) \"estimate\" when the amount is expected to vary; the money position then says its answer is estimated.',
+        ),
     }),
   ),
 });
@@ -2005,6 +2010,11 @@ export const ListRecurringItemsResponseItem = zod.object({
   active: zod.string(),
   categoryId: zod.string().nullish(),
   debtId: zod.string().nullish(),
+  amountKind: zod
+    .enum(["fixed", "estimate"])
+    .describe(
+      '(PR-B1) \"estimate\" when the amount is expected to vary; the money position then says its answer is estimated.',
+    ),
 });
 export const ListRecurringItemsResponse = zod.array(
   ListRecurringItemsResponseItem,
@@ -2020,6 +2030,7 @@ export const CreateRecurringItemBody = zod.object({
   active: zod.string().optional(),
   categoryId: zod.string().nullish(),
   debtId: zod.string().nullish(),
+  amountKind: zod.enum(["fixed", "estimate"]).optional(),
 });
 
 export const UpdateRecurringItemParams = zod.object({
@@ -2036,6 +2047,7 @@ export const UpdateRecurringItemBody = zod.object({
   active: zod.string().optional(),
   categoryId: zod.string().nullish(),
   debtId: zod.string().nullish(),
+  amountKind: zod.enum(["fixed", "estimate"]).optional(),
 });
 
 export const UpdateRecurringItemResponse = zod
@@ -2050,6 +2062,11 @@ export const UpdateRecurringItemResponse = zod
     active: zod.string(),
     categoryId: zod.string().nullish(),
     debtId: zod.string().nullish(),
+    amountKind: zod
+      .enum(["fixed", "estimate"])
+      .describe(
+        '(PR-B1) \"estimate\" when the amount is expected to vary; the money position then says its answer is estimated.',
+      ),
   })
   .and(
     zod.object({
@@ -4989,6 +5006,11 @@ export const GetBillsSummaryResponse = zod.object({
         active: zod.string(),
         categoryId: zod.string().nullish(),
         debtId: zod.string().nullish(),
+        amountKind: zod
+          .enum(["fixed", "estimate"])
+          .describe(
+            '(PR-B1) \"estimate\" when the amount is expected to vary; the money position then says its answer is estimated.',
+          ),
       }),
       nextOccurrence: zod.string().nullable(),
       monthlyAmount: zod.string(),
@@ -5008,6 +5030,11 @@ export const GetBillsSummaryResponse = zod.object({
         active: zod.string(),
         categoryId: zod.string().nullish(),
         debtId: zod.string().nullish(),
+        amountKind: zod
+          .enum(["fixed", "estimate"])
+          .describe(
+            '(PR-B1) \"estimate\" when the amount is expected to vary; the money position then says its answer is estimated.',
+          ),
       }),
       nextOccurrence: zod.string().nullable(),
       monthlyAmount: zod.string(),
@@ -5193,7 +5220,7 @@ export const RemoveMemberParams = zod.object({
 });
 
 /**
- * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
 export const GetSpineResponse = zod.object({
@@ -5291,4 +5318,222 @@ export const GetSpineResponse = zod.object({
     .describe(
       "computeReviewCount() — unmatched forecast-flagged bank txns this month",
     ),
+  position: zod
+    .object({
+      safeToSpendNow: zod
+        .string()
+        .nullable()
+        .describe("MoneyPosition.safeToSpendNow"),
+      remainingWeek: zod
+        .string()
+        .nullable()
+        .describe("MoneyPosition.remainingWeek"),
+      availableUntilPayday: zod
+        .string()
+        .nullable()
+        .describe("MoneyPosition.availableUntilPayday"),
+      paydayDate: zod.string().nullable().describe("MoneyPosition.paydayDate"),
+      horizonKind: zod
+        .enum(["payday", "week_end"])
+        .describe("MoneyPosition.horizon.kind"),
+      withinPlan: zod
+        .union([
+          zod.literal("over"),
+          zod.literal("tight"),
+          zod.literal("yes"),
+          zod.literal(null),
+        ])
+        .nullable()
+        .describe("MoneyPosition.withinPlan"),
+      confidence: zod.enum(["firm", "estimated"]),
+      degraded: zod
+        .boolean()
+        .describe(
+          "The bank data is stale; every figure is from the last good snapshot",
+        ),
+    })
+    .describe(
+      "(PR-B1) The headline of the money position — the same buildMoneyPosition call GET \/money\/position makes, field for field. Never credit, a limit, a debt balance or an amount owed.",
+    ),
+});
+
+/**
+ * computePosition (avalanche-core) over one read of the household: the forecast curve computeCashSignal builds (the spine's own horizon of 90 days), the current Sunday–Saturday week classified by classifyMovement, the weekly cap from allowance_plans and the bank's freshness. The spine's `position` is the same call; an integration test asserts they agree to the cent. Never carries credit, a limit, a debt balance or an amount owed.
+ * @summary How much is safe to spend now, until payday and this week (the money position)
+ */
+export const GetMoneyPositionResponse = zod
+  .object({
+    todayISO: zod.string(),
+    status: zod
+      .enum(["ready", "tight", "not_yet", "no_data"])
+      .describe("computeCashSignal().status"),
+    paydayDate: zod.string().nullable(),
+    payday: zod.union([
+      zod.object({
+        itemId: zod.string(),
+        label: zod.string(),
+        amount: zod.string(),
+      }),
+      zod.null(),
+    ]),
+    horizon: zod.object({
+      kind: zod.enum(["payday", "week_end"]),
+      endDate: zod.string().describe("The payday, or this week's Saturday"),
+      lastDay: zod
+        .string()
+        .describe(
+          "The last day the cash figures count (the day before payday, or the Saturday)",
+        ),
+    }),
+    lowestUntilPayday: zod.string().nullable(),
+    lowestUntilPaydayDate: zod.string().nullable(),
+    committedUntilPayday: zod
+      .string()
+      .describe("Sum of the planned outflows landing in the window"),
+    cashBuffer: zod.string(),
+    reservesHeld: zod
+      .string()
+      .describe("Money held back for goals; 0.00 until goals ship"),
+    availableUntilPayday: zod.string().nullable(),
+    weekStart: zod.string(),
+    weekEnd: zod.string(),
+    weekCap: zod
+      .string()
+      .nullable()
+      .describe(
+        "This week's cap from allowance_plans (or the week's override); null when none is set",
+      ),
+    spentWeekDiscretionary: zod.string(),
+    needsClassificationWeek: zod
+      .string()
+      .describe(
+        "The part of spentWeekDiscretionary not yet filed — it counts against the cap until it is",
+      ),
+    unplannedWeek: zod.string(),
+    monthlyWeek: zod.string(),
+    remainingWeek: zod.string().nullable(),
+    paceAllowedToday: zod
+      .string()
+      .nullable()
+      .describe("weekCap × days elapsed (today included) ÷ 7"),
+    withinPlan: zod
+      .union([
+        zod.literal("over"),
+        zod.literal("tight"),
+        zod.literal("yes"),
+        zod.literal(null),
+      ])
+      .nullable(),
+    safeToSpendNow: zod.string().nullable(),
+    confidence: zod.enum(["firm", "estimated"]),
+    estimates: zod.array(
+      zod.object({
+        itemId: zod.string(),
+        label: zod.string(),
+        amount: zod
+          .string()
+          .describe("Signed like the plan (negative is money out)"),
+        date: zod.string(),
+      }),
+    ),
+    assumptions: zod.array(zod.string()),
+    degraded: zod.boolean(),
+    degradedReason: zod
+      .union([
+        zod.literal("refresh_failed"),
+        zod.literal("old"),
+        zod.literal("manual_old"),
+        zod.literal(null),
+      ])
+      .nullable(),
+  })
+  .describe(
+    "(PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; without one the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).",
+  );
+
+/**
+ * @summary The household's allowance plans and the suggested weekly cap with its working
+ */
+export const ListAllowancePlansResponse = zod.object({
+  plans: zod.array(
+    zod.object({
+      id: zod.string(),
+      memberUserId: zod
+        .string()
+        .nullable()
+        .describe("Null for the household's shared pool"),
+      period: zod.enum(["weekly", "monthly"]),
+      amount: zod.string(),
+      effectiveFrom: zod.string(),
+      source: zod.enum(["owner", "derived"]),
+      derivation: zod
+        .unknown()
+        .describe(
+          "The suggestion's working when the owner accepted it; null for a typed amount",
+        ),
+      createdAt: zod.string(),
+    }),
+  ),
+  suggested: zod
+    .object({
+      weekly: zod
+        .string()
+        .describe("Discretionary per week, rounded down to whole $5"),
+      derivation: zod.object({
+        takeHomeMonthly: zod.string(),
+        committedMonthly: zod
+          .string()
+          .describe(
+            "Active bills and subscriptions, less the Weekly\/Monthly Spend funding items and debt-linked bills",
+          ),
+        debtMinimumsMonthly: zod.string(),
+        extraMonthly: zod.string().describe("The Avalanche extra payment"),
+        goalsMonthly: zod.string(),
+        discretionaryMonthly: zod.string(),
+      }),
+    })
+    .describe("A suggestion only — nothing writes it; the owner sets the cap."),
+});
+
+/**
+ * @summary Set a plan's amount (household owner only; writes source "owner")
+ */
+export const UpdateAllowancePlanParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const updateAllowancePlanBodyAmountRegExp = new RegExp(
+  "^\\d{1,8}(\\.\\d{1,2})?$",
+);
+export const updateAllowancePlanBodyEffectiveFromRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const UpdateAllowancePlanBody = zod.object({
+  amount: zod
+    .string()
+    .regex(updateAllowancePlanBodyAmountRegExp)
+    .describe("Dollars, at most two decimals"),
+  effectiveFrom: zod
+    .string()
+    .regex(updateAllowancePlanBodyEffectiveFromRegExp)
+    .optional(),
+});
+
+export const UpdateAllowancePlanResponse = zod.object({
+  id: zod.string(),
+  memberUserId: zod
+    .string()
+    .nullable()
+    .describe("Null for the household's shared pool"),
+  period: zod.enum(["weekly", "monthly"]),
+  amount: zod.string(),
+  effectiveFrom: zod.string(),
+  source: zod.enum(["owner", "derived"]),
+  derivation: zod
+    .unknown()
+    .describe(
+      "The suggestion's working when the owner accepted it; null for a typed amount",
+    ),
+  createdAt: zod.string(),
 });

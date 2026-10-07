@@ -14,6 +14,9 @@
 // `inForecast` (which checking rows are cash), the household calendar
 // (America/Chicago today, Sunday–Saturday weeks, calendar months) and the one
 // spending rule (`classifyOutflow`: what is a purchase, what is a card payment).
+// (PR-B1) And the money position: the daily balance walk (`walkLedger`), what
+// is safe to spend until payday and this week (`computePosition`), and the
+// suggested weekly cap (`deriveWeeklyLimit`).
 
 export { inForecast } from "./forecastInclusion";
 export {
@@ -104,9 +107,13 @@ export {
   MOVEMENT_COVERAGES,
   classifyMovement,
   everydayPlan,
+  everydayPlanFromRows,
+  allowancePlanInEffect,
   isHouseholdWeekStart,
   type AllowanceAmountSettings,
+  type AllowancePlanRow,
   type EverydayPlan,
+  type EverydayPlanFromRows,
   type MovementClassification,
   type MovementConflict,
   type MovementContext,
@@ -121,6 +128,33 @@ export {
   type LedgerWalkItem,
   type LedgerWalkResult,
 } from "./ledgerWalk";
+export {
+  PAYDAY_MAX_DAYS,
+  PAYDAY_MIN_SHARE,
+  POSITION_ASSUMPTIONS,
+  computePosition,
+  selectPayday,
+  type MoneyPosition,
+  type PositionEstimate,
+  type PositionEvent,
+  type PositionEventKind,
+  type PositionFreshness,
+  type PositionIncomeItem,
+  type PositionInputs,
+  type PositionStatus,
+  type PositionWeekRow,
+  type WithinPlan,
+} from "./availableToSpend";
+export {
+  EVERYDAY_FUNDING_ITEM_NAMES,
+  MONTHLY_FACTORS,
+  deriveWeeklyLimit,
+  isEverydayFundingItem,
+  monthlyCentsOf,
+  type WeeklyLimitDerivation,
+  type WeeklyLimitInputs,
+  type WeeklyLimitSuggestion,
+} from "./weeklyLimit";
 
 export type Strategy = "avalanche" | "snowball";
 
