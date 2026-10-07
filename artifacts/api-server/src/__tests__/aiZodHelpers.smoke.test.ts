@@ -37,9 +37,16 @@ describe("SDK zod helpers accept a schema built with the workspace zod", () => {
       run: (args) => `pong:${args.word}`,
     });
     expect(tool.name).toBe("ping");
-    const input = tool.input_schema as { type?: string; properties?: Record<string, unknown> };
-    expect(input.type).toBe("object");
-    expect(Object.keys(input.properties ?? {})).toEqual(["word"]);
+    // BetaRunnableTool is a union over tool kinds; a zod tool is the `custom` arm.
+    const def = tool as unknown as {
+      type: string;
+      input_schema: { type?: string; properties?: Record<string, unknown> };
+    };
+    expect(def.type).toBe("custom");
+    expect(def.input_schema.type).toBe("object");
+    expect(Object.keys(def.input_schema.properties ?? {})).toEqual(["word"]);
+    expect(tool.parse({ word: "hi" })).toEqual({ word: "hi" });
+    expect(() => tool.parse({ word: 7 })).toThrow();
     expect(await tool.run({ word: "hi" })).toBe("pong:hi");
   });
 
