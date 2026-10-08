@@ -30,6 +30,7 @@ import smsRouter from "./sms";
 import debtPlanRouter from "./debtPlan";
 import categorizationRouter from "./categorization";
 import learnedRulesRouter from "./learnedRules";
+import aiRouter from "./ai";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use(smsRouter);
 router.use(debtPlanRouter);
 router.use(categorizationRouter);
 router.use(learnedRulesRouter);
+router.use(aiRouter);
 
 export default router;

@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentRunList, AllowancePlan, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, ApplyRetroactivelyResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentRunsParams, ListCategorizationReviewParams, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewQueue, ReviewResolution, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlan, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, ApplyRetroactivelyResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, CreateWishlistItemBody, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategorizationReviewParams, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMemoryBody, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewQueue, ReviewResolution, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, UpdateWishlistItemBody, VersionInfo, WeeklySettlement, WeeklySettlementInput, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -3598,6 +3598,360 @@ export declare const useDeleteTransactionSplits: <TError = ErrorType<void>, TCon
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof deleteTransactionSplits>>, TError, {
     id: string;
+}, TContext>;
+/**
+ * @summary Start a conversation with Ask
+ */
+export declare const getCreateAiConversationUrl: () => string;
+export declare const createAiConversation: (options?: RequestInit) => Promise<AiConversation>;
+export declare const getCreateAiConversationMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof createAiConversation>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof createAiConversation>>, TError, void, TContext>;
+export type CreateAiConversationMutationResult = NonNullable<Awaited<ReturnType<typeof createAiConversation>>>;
+export type CreateAiConversationMutationError = ErrorType<unknown>;
+/**
+ * @summary Start a conversation with Ask
+ */
+export declare const useCreateAiConversation: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof createAiConversation>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof createAiConversation>>, TError, void, TContext>;
+/**
+ * @summary The signed-in person's conversations, newest first
+ */
+export declare const getListAiConversationsUrl: (params?: ListAiConversationsParams) => string;
+export declare const listAiConversations: (params?: ListAiConversationsParams, options?: RequestInit) => Promise<AiConversationList>;
+export declare const getListAiConversationsQueryKey: (params?: ListAiConversationsParams) => readonly ["/api/ai/conversations", ...ListAiConversationsParams[]];
+export declare const getListAiConversationsQueryOptions: <TData = Awaited<ReturnType<typeof listAiConversations>>, TError = ErrorType<unknown>>(params?: ListAiConversationsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListAiConversationsQueryResult = NonNullable<Awaited<ReturnType<typeof listAiConversations>>>;
+export type ListAiConversationsQueryError = ErrorType<unknown>;
+/**
+ * @summary The signed-in person's conversations, newest first
+ */
+export declare function useListAiConversations<TData = Awaited<ReturnType<typeof listAiConversations>>, TError = ErrorType<unknown>>(params?: ListAiConversationsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary One conversation with its messages (the polling fallback after a dropped stream)
+ */
+export declare const getGetAiConversationUrl: (id: string) => string;
+export declare const getAiConversation: (id: string, options?: RequestInit) => Promise<AiConversationDetail>;
+export declare const getGetAiConversationQueryKey: (id: string) => readonly [`/api/ai/conversations/${string}`];
+export declare const getGetAiConversationQueryOptions: <TData = Awaited<ReturnType<typeof getAiConversation>>, TError = ErrorType<void>>(id: string, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetAiConversationQueryResult = NonNullable<Awaited<ReturnType<typeof getAiConversation>>>;
+export type GetAiConversationQueryError = ErrorType<void>;
+/**
+ * @summary One conversation with its messages (the polling fallback after a dropped stream)
+ */
+export declare function useGetAiConversation<TData = Awaited<ReturnType<typeof getAiConversation>>, TError = ErrorType<void>>(id: string, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary Changes Ask proposed, newest first (open by default)
+ */
+export declare const getListAgentProposalsUrl: (params?: ListAgentProposalsParams) => string;
+export declare const listAgentProposals: (params?: ListAgentProposalsParams, options?: RequestInit) => Promise<AgentProposalList>;
+export declare const getListAgentProposalsQueryKey: (params?: ListAgentProposalsParams) => readonly ["/api/agent/proposals", ...ListAgentProposalsParams[]];
+export declare const getListAgentProposalsQueryOptions: <TData = Awaited<ReturnType<typeof listAgentProposals>>, TError = ErrorType<unknown>>(params?: ListAgentProposalsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAgentProposals>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listAgentProposals>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListAgentProposalsQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentProposals>>>;
+export type ListAgentProposalsQueryError = ErrorType<unknown>;
+/**
+ * @summary Changes Ask proposed, newest first (open by default)
+ */
+export declare function useListAgentProposals<TData = Awaited<ReturnType<typeof listAgentProposals>>, TError = ErrorType<unknown>>(params?: ListAgentProposalsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAgentProposals>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary Approve a proposal and apply it through the app's own writer
+ */
+export declare const getApproveAgentProposalUrl: (id: string) => string;
+export declare const approveAgentProposal: (id: string, options?: RequestInit) => Promise<AgentProposal>;
+export declare const getApproveAgentProposalMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof approveAgentProposal>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof approveAgentProposal>>, TError, {
+    id: string;
+}, TContext>;
+export type ApproveAgentProposalMutationResult = NonNullable<Awaited<ReturnType<typeof approveAgentProposal>>>;
+export type ApproveAgentProposalMutationError = ErrorType<void>;
+/**
+ * @summary Approve a proposal and apply it through the app's own writer
+ */
+export declare const useApproveAgentProposal: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof approveAgentProposal>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof approveAgentProposal>>, TError, {
+    id: string;
+}, TContext>;
+/**
+ * @summary Reject a proposal
+ */
+export declare const getRejectAgentProposalUrl: (id: string) => string;
+export declare const rejectAgentProposal: (id: string, options?: RequestInit) => Promise<AgentProposal>;
+export declare const getRejectAgentProposalMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof rejectAgentProposal>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof rejectAgentProposal>>, TError, {
+    id: string;
+}, TContext>;
+export type RejectAgentProposalMutationResult = NonNullable<Awaited<ReturnType<typeof rejectAgentProposal>>>;
+export type RejectAgentProposalMutationError = ErrorType<void>;
+/**
+ * @summary Reject a proposal
+ */
+export declare const useRejectAgentProposal: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof rejectAgentProposal>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof rejectAgentProposal>>, TError, {
+    id: string;
+}, TContext>;
+/**
+ * @summary What the household (or Ask, visibly) keeps in memory
+ */
+export declare const getListMemoryUrl: () => string;
+export declare const listMemory: (options?: RequestInit) => Promise<MemoryList>;
+export declare const getListMemoryQueryKey: () => readonly ["/api/memory"];
+export declare const getListMemoryQueryOptions: <TData = Awaited<ReturnType<typeof listMemory>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listMemory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listMemory>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListMemoryQueryResult = NonNullable<Awaited<ReturnType<typeof listMemory>>>;
+export type ListMemoryQueryError = ErrorType<unknown>;
+/**
+ * @summary What the household (or Ask, visibly) keeps in memory
+ */
+export declare function useListMemory<TData = Awaited<ReturnType<typeof listMemory>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listMemory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary State a preference or decision (replaces what the key held)
+ */
+export declare const getPutMemoryUrl: (scope: "categorization" | "spending" | "debt" | "general", key: string) => string;
+export declare const putMemory: (scope: "categorization" | "spending" | "debt" | "general", key: string, putMemoryBody: PutMemoryBody, options?: RequestInit) => Promise<MemoryItem>;
+export declare const getPutMemoryMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof putMemory>>, TError, {
+        scope: "categorization" | "spending" | "debt" | "general";
+        key: string;
+        data: BodyType<PutMemoryBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof putMemory>>, TError, {
+    scope: "categorization" | "spending" | "debt" | "general";
+    key: string;
+    data: BodyType<PutMemoryBody>;
+}, TContext>;
+export type PutMemoryMutationResult = NonNullable<Awaited<ReturnType<typeof putMemory>>>;
+export type PutMemoryMutationBody = BodyType<PutMemoryBody>;
+export type PutMemoryMutationError = ErrorType<void>;
+/**
+ * @summary State a preference or decision (replaces what the key held)
+ */
+export declare const usePutMemory: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof putMemory>>, TError, {
+        scope: "categorization" | "spending" | "debt" | "general";
+        key: string;
+        data: BodyType<PutMemoryBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof putMemory>>, TError, {
+    scope: "categorization" | "spending" | "debt" | "general";
+    key: string;
+    data: BodyType<PutMemoryBody>;
+}, TContext>;
+/**
+ * @summary Forget one memory (it leaves every list and every prompt)
+ */
+export declare const getDeleteMemoryUrl: (id: string) => string;
+export declare const deleteMemory: (id: string, options?: RequestInit) => Promise<void>;
+export declare const getDeleteMemoryMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteMemory>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof deleteMemory>>, TError, {
+    id: string;
+}, TContext>;
+export type DeleteMemoryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMemory>>>;
+export type DeleteMemoryMutationError = ErrorType<void>;
+/**
+ * @summary Forget one memory (it leaves every list and every prompt)
+ */
+export declare const useDeleteMemory: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteMemory>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof deleteMemory>>, TError, {
+    id: string;
+}, TContext>;
+/**
+ * @summary The wish list, with each item's waiting period
+ */
+export declare const getListWishlistUrl: () => string;
+export declare const listWishlist: (options?: RequestInit) => Promise<WishlistList>;
+export declare const getListWishlistQueryKey: () => readonly ["/api/wishlist"];
+export declare const getListWishlistQueryOptions: <TData = Awaited<ReturnType<typeof listWishlist>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listWishlist>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listWishlist>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListWishlistQueryResult = NonNullable<Awaited<ReturnType<typeof listWishlist>>>;
+export type ListWishlistQueryError = ErrorType<unknown>;
+/**
+ * @summary The wish list, with each item's waiting period
+ */
+export declare function useListWishlist<TData = Awaited<ReturnType<typeof listWishlist>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listWishlist>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary Add something to the wish list (starts a waiting period)
+ */
+export declare const getCreateWishlistItemUrl: () => string;
+export declare const createWishlistItem: (createWishlistItemBody: CreateWishlistItemBody, options?: RequestInit) => Promise<WishlistItem>;
+export declare const getCreateWishlistItemMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof createWishlistItem>>, TError, {
+        data: BodyType<CreateWishlistItemBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof createWishlistItem>>, TError, {
+    data: BodyType<CreateWishlistItemBody>;
+}, TContext>;
+export type CreateWishlistItemMutationResult = NonNullable<Awaited<ReturnType<typeof createWishlistItem>>>;
+export type CreateWishlistItemMutationBody = BodyType<CreateWishlistItemBody>;
+export type CreateWishlistItemMutationError = ErrorType<void>;
+/**
+ * @summary Add something to the wish list (starts a waiting period)
+ */
+export declare const useCreateWishlistItem: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof createWishlistItem>>, TError, {
+        data: BodyType<CreateWishlistItemBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof createWishlistItem>>, TError, {
+    data: BodyType<CreateWishlistItemBody>;
+}, TContext>;
+/**
+ * @summary Edit an item or decide it (a yes waits out the waiting period)
+ */
+export declare const getUpdateWishlistItemUrl: (id: string) => string;
+export declare const updateWishlistItem: (id: string, updateWishlistItemBody: UpdateWishlistItemBody, options?: RequestInit) => Promise<WishlistItem>;
+export declare const getUpdateWishlistItemMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateWishlistItem>>, TError, {
+        id: string;
+        data: BodyType<UpdateWishlistItemBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof updateWishlistItem>>, TError, {
+    id: string;
+    data: BodyType<UpdateWishlistItemBody>;
+}, TContext>;
+export type UpdateWishlistItemMutationResult = NonNullable<Awaited<ReturnType<typeof updateWishlistItem>>>;
+export type UpdateWishlistItemMutationBody = BodyType<UpdateWishlistItemBody>;
+export type UpdateWishlistItemMutationError = ErrorType<void>;
+/**
+ * @summary Edit an item or decide it (a yes waits out the waiting period)
+ */
+export declare const useUpdateWishlistItem: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateWishlistItem>>, TError, {
+        id: string;
+        data: BodyType<UpdateWishlistItemBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof updateWishlistItem>>, TError, {
+    id: string;
+    data: BodyType<UpdateWishlistItemBody>;
+}, TContext>;
+/**
+ * @summary This month's AI cost, calls, caps and the latest runs
+ */
+export declare const getGetAiUsageSummaryUrl: () => string;
+export declare const getAiUsageSummary: (options?: RequestInit) => Promise<AiUsageSummary>;
+export declare const getGetAiUsageSummaryQueryKey: () => readonly ["/api/ai/usage/summary"];
+export declare const getGetAiUsageSummaryQueryOptions: <TData = Awaited<ReturnType<typeof getAiUsageSummary>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAiUsageSummary>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getAiUsageSummary>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetAiUsageSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getAiUsageSummary>>>;
+export type GetAiUsageSummaryQueryError = ErrorType<unknown>;
+/**
+ * @summary This month's AI cost, calls, caps and the latest runs
+ */
+export declare function useGetAiUsageSummary<TData = Awaited<ReturnType<typeof getAiUsageSummary>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAiUsageSummary>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary Owner sets the monthly caps and the pause
+ */
+export declare const getUpdateAiBudgetUrl: () => string;
+export declare const updateAiBudget: (updateAiBudgetBody: UpdateAiBudgetBody, options?: RequestInit) => Promise<AiBudget>;
+export declare const getUpdateAiBudgetMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateAiBudget>>, TError, {
+        data: BodyType<UpdateAiBudgetBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof updateAiBudget>>, TError, {
+    data: BodyType<UpdateAiBudgetBody>;
+}, TContext>;
+export type UpdateAiBudgetMutationResult = NonNullable<Awaited<ReturnType<typeof updateAiBudget>>>;
+export type UpdateAiBudgetMutationBody = BodyType<UpdateAiBudgetBody>;
+export type UpdateAiBudgetMutationError = ErrorType<void>;
+/**
+ * @summary Owner sets the monthly caps and the pause
+ */
+export declare const useUpdateAiBudget: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateAiBudget>>, TError, {
+        data: BodyType<UpdateAiBudgetBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof updateAiBudget>>, TError, {
+    data: BodyType<UpdateAiBudgetBody>;
 }, TContext>;
 export {};
 //# sourceMappingURL=api.d.ts.map

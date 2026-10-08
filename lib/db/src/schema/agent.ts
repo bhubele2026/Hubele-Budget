@@ -7,6 +7,7 @@ import {
   timestamp,
   uuid,
   jsonb,
+  date,
   index,
   uniqueIndex,
   unique,
@@ -136,3 +137,144 @@ export const agentFindingsTable = pgTable(
 export type AgentRun = typeof agentRunsTable.$inferSelect;
 export type AgentAction = typeof agentActionsTable.$inferSelect;
 export type AgentFinding = typeof agentFindingsTable.$inferSelect;
+
+// ── (AI-2) Ask: conversations, proposals, memory, wish list ─────────────────
+// SQL twin: lib/db/migrations/0050_ask_agent.sql (askAgentSchemaParity test).
+
+export const agentConversationsTable = pgTable(
+  "agent_conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    title: text("title").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    householdUserIdx: index("agent_conversations_household_user_idx").on(t.householdId, t.userId, t.lastMessageAt),
+  }),
+);
+
+export const agentMessagesTable = pgTable(
+  "agent_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => agentConversationsTable.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    content: jsonb("content").notNull(),
+    runId: uuid("run_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    conversationCreatedIdx: index("agent_messages_conversation_created_idx").on(t.conversationId, t.createdAt),
+    roleCheck: check("agent_messages_role_check", sql`${t.role} in ('user', 'assistant', 'tool')`),
+  }),
+);
+
+// What the model proposes, a person approves. Nothing here is applied by the
+// model: `POST /agent/proposals/:id/approve` applies it through the existing
+// writers and stamps `applied_action_id`.
+export const agentProposalsTable = pgTable(
+  "agent_proposals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => agentRunsTable.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    payload: jsonb("payload").notNull(),
+    rationale: text("rationale").notNull().default(""),
+    status: text("status").notNull().default("proposed"),
+    decidedBy: text("decided_by"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    appliedActionId: uuid("applied_action_id"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    householdStatusIdx: index("agent_proposals_household_status_idx").on(t.householdId, t.status, t.createdAt),
+    kindCheck: check(
+      "agent_proposals_kind_check",
+      sql`${t.kind} in ('set_category', 'weekly_limit', 'budget_line', 'extra_debt_payment', 'bill_amount')`,
+    ),
+    statusCheck: check(
+      "agent_proposals_status_check",
+      sql`${t.status} in ('proposed', 'approved', 'rejected', 'applied', 'expired')`,
+    ),
+  }),
+);
+
+// Preferences and decisions the household (or the agent, visibly) keeps. Read
+// ONLY by the agent's tools and /memory: no money figure is computed from it
+// (memoryImportLaw.test.ts walks the import graph).
+export const agentMemoryTable = pgTable(
+  "agent_memory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    memberUserId: text("member_user_id"),
+    scope: text("scope").notNull(),
+    key: text("key").notNull(),
+    value: jsonb("value").notNull(),
+    source: text("source").notNull(),
+    createdByKind: text("created_by_kind").notNull(),
+    createdByUserId: text("created_by_user_id"),
+    evidenceTxnIds: uuid("evidence_txn_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    confidence: numeric("confidence", { precision: 4, scale: 3 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => ({
+    keyUq: uniqueIndex("agent_memory_household_member_scope_key_uq").on(
+      t.householdId,
+      sql`coalesce(${t.memberUserId}, '')`,
+      t.scope,
+      t.key,
+    ),
+    scopeCheck: check("agent_memory_scope_check", sql`${t.scope} in ('categorization', 'spending', 'debt', 'general')`),
+    sourceCheck: check("agent_memory_source_check", sql`${t.source} in ('user_stated', 'inferred', 'agent_proposed')`),
+    createdByKindCheck: check("agent_memory_created_by_kind_check", sql`${t.createdByKind} in ('user', 'agent')`),
+  }),
+);
+
+export const wishlistItemsTable = pgTable(
+  "wishlist_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    amount: numeric("amount", { precision: 12, scale: 2 }),
+    url: text("url"),
+    categoryId: uuid("category_id"),
+    targetDate: date("target_date"),
+    requestedBy: text("requested_by").notNull(),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).defaultNow().notNull(),
+    waitingUntil: date("waiting_until").notNull(),
+    decision: text("decision").notNull().default("pending"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    lastEvaluation: jsonb("last_evaluation"),
+  },
+  (t) => ({
+    householdIdx: index("wishlist_items_household_idx").on(t.householdId, t.requestedAt),
+    decisionCheck: check("wishlist_items_decision_check", sql`${t.decision} in ('pending', 'approved', 'declined', 'bought')`),
+  }),
+);
+
+export type AgentConversation = typeof agentConversationsTable.$inferSelect;
+export type AgentMessage = typeof agentMessagesTable.$inferSelect;
+export type AgentProposal = typeof agentProposalsTable.$inferSelect;
+export type AgentMemory = typeof agentMemoryTable.$inferSelect;
+export type WishlistItem = typeof wishlistItemsTable.$inferSelect;

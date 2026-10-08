@@ -14988,4 +14988,829 @@ export declare const DeleteTransactionSplitsParams: zod.ZodObject<{
 }, {
     id: string;
 }>;
+/**
+ * @summary The signed-in person's conversations, newest first
+ */
+export declare const listAiConversationsQueryLimitDefault = 20;
+export declare const listAiConversationsQueryLimitMax = 20;
+export declare const ListAiConversationsQueryParams: zod.ZodObject<{
+    limit: zod.ZodDefault<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    limit: number;
+}, {
+    limit?: number | undefined;
+}>;
+export declare const ListAiConversationsResponse: zod.ZodObject<{
+    conversations: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        title: zod.ZodString;
+        createdAt: zod.ZodDate;
+        lastMessageAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        title: string;
+        lastMessageAt: Date;
+    }, {
+        id: string;
+        createdAt: Date;
+        title: string;
+        lastMessageAt: Date;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    conversations: {
+        id: string;
+        createdAt: Date;
+        title: string;
+        lastMessageAt: Date;
+    }[];
+}, {
+    conversations: {
+        id: string;
+        createdAt: Date;
+        title: string;
+        lastMessageAt: Date;
+    }[];
+}>;
+/**
+ * @summary One conversation with its messages (the polling fallback after a dropped stream)
+ */
+export declare const GetAiConversationParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const GetAiConversationResponse: zod.ZodObject<{
+    conversation: zod.ZodObject<{
+        id: zod.ZodString;
+        title: zod.ZodString;
+        createdAt: zod.ZodDate;
+        lastMessageAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        title: string;
+        lastMessageAt: Date;
+    }, {
+        id: string;
+        createdAt: Date;
+        title: string;
+        lastMessageAt: Date;
+    }>;
+    messages: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        role: zod.ZodEnum<["user", "assistant", "tool"]>;
+        content: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+        runId: zod.ZodNullable<zod.ZodString>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        createdAt: Date;
+        runId: string | null;
+        role: "user" | "assistant" | "tool";
+        content: Record<string, unknown>;
+    }, {
+        id: string;
+        createdAt: Date;
+        runId: string | null;
+        role: "user" | "assistant" | "tool";
+        content: Record<string, unknown>;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    conversation: {
+        id: string;
+        createdAt: Date;
+        title: string;
+        lastMessageAt: Date;
+    };
+    messages: {
+        id: string;
+        createdAt: Date;
+        runId: string | null;
+        role: "user" | "assistant" | "tool";
+        content: Record<string, unknown>;
+    }[];
+}, {
+    conversation: {
+        id: string;
+        createdAt: Date;
+        title: string;
+        lastMessageAt: Date;
+    };
+    messages: {
+        id: string;
+        createdAt: Date;
+        runId: string | null;
+        role: "user" | "assistant" | "tool";
+        content: Record<string, unknown>;
+    }[];
+}>;
+/**
+ * (AI-2) `text/event-stream`. Each frame is `event: <type>` and `data: <AiChatEvent as JSON>`; a `: ping` comment arrives every 15 seconds. The model reads through tools and may propose changes; it never applies one. After `done` (or a dropped stream) read the stored answer from `GET /ai/conversations/{id}`. Tagged `ai-stream`: generated for the zod package only — the web client reads the stream itself.
+ * @summary Ask a question; the answer streams back as server-sent events
+ */
+export declare const aiChatBodyTextMax = 2000;
+export declare const aiChatBodyUserAskedToChangeDefault = false;
+export declare const AiChatBody: zod.ZodObject<{
+    conversationId: zod.ZodString;
+    text: zod.ZodString;
+    userAskedToChange: zod.ZodDefault<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    text: string;
+    conversationId: string;
+    userAskedToChange: boolean;
+}, {
+    text: string;
+    conversationId: string;
+    userAskedToChange?: boolean | undefined;
+}>;
+export declare const AiChatResponse: zod.ZodObject<{
+    type: zod.ZodEnum<["token", "tool", "done", "error"]>;
+    text: zod.ZodOptional<zod.ZodString>;
+    name: zod.ZodOptional<zod.ZodString>;
+    status: zod.ZodOptional<zod.ZodEnum<["running", "done", "error"]>>;
+    runId: zod.ZodOptional<zod.ZodString>;
+    messageId: zod.ZodOptional<zod.ZodString>;
+    grounded: zod.ZodOptional<zod.ZodBoolean>;
+    demo: zod.ZodOptional<zod.ZodBoolean>;
+    code: zod.ZodOptional<zod.ZodString>;
+    message: zod.ZodOptional<zod.ZodString>;
+    retryable: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    type: "error" | "tool" | "token" | "done";
+    status?: "error" | "running" | "done" | undefined;
+    code?: string | undefined;
+    message?: string | undefined;
+    text?: string | undefined;
+    demo?: boolean | undefined;
+    name?: string | undefined;
+    runId?: string | undefined;
+    messageId?: string | undefined;
+    grounded?: boolean | undefined;
+    retryable?: boolean | undefined;
+}, {
+    type: "error" | "tool" | "token" | "done";
+    status?: "error" | "running" | "done" | undefined;
+    code?: string | undefined;
+    message?: string | undefined;
+    text?: string | undefined;
+    demo?: boolean | undefined;
+    name?: string | undefined;
+    runId?: string | undefined;
+    messageId?: string | undefined;
+    grounded?: boolean | undefined;
+    retryable?: boolean | undefined;
+}>;
+/**
+ * @summary Changes Ask proposed, newest first (open by default)
+ */
+export declare const listAgentProposalsQueryStatusDefault = "proposed";
+export declare const listAgentProposalsQueryLimitDefault = 20;
+export declare const listAgentProposalsQueryLimitMax = 50;
+export declare const ListAgentProposalsQueryParams: zod.ZodObject<{
+    status: zod.ZodDefault<zod.ZodEnum<["proposed", "approved", "rejected", "applied", "expired", "all"]>>;
+    limit: zod.ZodDefault<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    status: "expired" | "all" | "applied" | "proposed" | "approved" | "rejected";
+    limit: number;
+}, {
+    status?: "expired" | "all" | "applied" | "proposed" | "approved" | "rejected" | undefined;
+    limit?: number | undefined;
+}>;
+export declare const ListAgentProposalsResponse: zod.ZodObject<{
+    proposals: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        kind: zod.ZodEnum<["set_category", "weekly_limit", "budget_line", "extra_debt_payment", "bill_amount"]>;
+        status: zod.ZodEnum<["proposed", "approved", "rejected", "applied", "expired"]>;
+        payload: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+        rationale: zod.ZodString;
+        runId: zod.ZodString;
+        decidedBy: zod.ZodNullable<zod.ZodString>;
+        decidedAt: zod.ZodNullable<zod.ZodDate>;
+        appliedActionId: zod.ZodNullable<zod.ZodString>;
+        expiresAt: zod.ZodDate;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+        id: string;
+        expiresAt: Date;
+        kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
+        createdAt: Date;
+        rationale: string;
+        payload: Record<string, unknown>;
+        runId: string;
+        decidedBy: string | null;
+        decidedAt: Date | null;
+        appliedActionId: string | null;
+    }, {
+        status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+        id: string;
+        expiresAt: Date;
+        kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
+        createdAt: Date;
+        rationale: string;
+        payload: Record<string, unknown>;
+        runId: string;
+        decidedBy: string | null;
+        decidedAt: Date | null;
+        appliedActionId: string | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    proposals: {
+        status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+        id: string;
+        expiresAt: Date;
+        kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
+        createdAt: Date;
+        rationale: string;
+        payload: Record<string, unknown>;
+        runId: string;
+        decidedBy: string | null;
+        decidedAt: Date | null;
+        appliedActionId: string | null;
+    }[];
+}, {
+    proposals: {
+        status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+        id: string;
+        expiresAt: Date;
+        kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
+        createdAt: Date;
+        rationale: string;
+        payload: Record<string, unknown>;
+        runId: string;
+        decidedBy: string | null;
+        decidedAt: Date | null;
+        appliedActionId: string | null;
+    }[];
+}>;
+/**
+ * @summary Approve a proposal and apply it through the app's own writer
+ */
+export declare const ApproveAgentProposalParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const ApproveAgentProposalResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    kind: zod.ZodEnum<["set_category", "weekly_limit", "budget_line", "extra_debt_payment", "bill_amount"]>;
+    status: zod.ZodEnum<["proposed", "approved", "rejected", "applied", "expired"]>;
+    payload: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+    rationale: zod.ZodString;
+    runId: zod.ZodString;
+    decidedBy: zod.ZodNullable<zod.ZodString>;
+    decidedAt: zod.ZodNullable<zod.ZodDate>;
+    appliedActionId: zod.ZodNullable<zod.ZodString>;
+    expiresAt: zod.ZodDate;
+    createdAt: zod.ZodDate;
+}, "strip", zod.ZodTypeAny, {
+    status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+    id: string;
+    expiresAt: Date;
+    kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
+    createdAt: Date;
+    rationale: string;
+    payload: Record<string, unknown>;
+    runId: string;
+    decidedBy: string | null;
+    decidedAt: Date | null;
+    appliedActionId: string | null;
+}, {
+    status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+    id: string;
+    expiresAt: Date;
+    kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
+    createdAt: Date;
+    rationale: string;
+    payload: Record<string, unknown>;
+    runId: string;
+    decidedBy: string | null;
+    decidedAt: Date | null;
+    appliedActionId: string | null;
+}>;
+/**
+ * @summary Reject a proposal
+ */
+export declare const RejectAgentProposalParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const RejectAgentProposalResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    kind: zod.ZodEnum<["set_category", "weekly_limit", "budget_line", "extra_debt_payment", "bill_amount"]>;
+    status: zod.ZodEnum<["proposed", "approved", "rejected", "applied", "expired"]>;
+    payload: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+    rationale: zod.ZodString;
+    runId: zod.ZodString;
+    decidedBy: zod.ZodNullable<zod.ZodString>;
+    decidedAt: zod.ZodNullable<zod.ZodDate>;
+    appliedActionId: zod.ZodNullable<zod.ZodString>;
+    expiresAt: zod.ZodDate;
+    createdAt: zod.ZodDate;
+}, "strip", zod.ZodTypeAny, {
+    status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+    id: string;
+    expiresAt: Date;
+    kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
+    createdAt: Date;
+    rationale: string;
+    payload: Record<string, unknown>;
+    runId: string;
+    decidedBy: string | null;
+    decidedAt: Date | null;
+    appliedActionId: string | null;
+}, {
+    status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+    id: string;
+    expiresAt: Date;
+    kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
+    createdAt: Date;
+    rationale: string;
+    payload: Record<string, unknown>;
+    runId: string;
+    decidedBy: string | null;
+    decidedAt: Date | null;
+    appliedActionId: string | null;
+}>;
+/**
+ * @summary What the household (or Ask, visibly) keeps in memory
+ */
+export declare const ListMemoryResponse: zod.ZodObject<{
+    memories: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        scope: zod.ZodEnum<["categorization", "spending", "debt", "general"]>;
+        key: zod.ZodString;
+        value: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+        source: zod.ZodEnum<["user_stated", "inferred", "agent_proposed"]>;
+        createdByKind: zod.ZodEnum<["user", "agent"]>;
+        memberUserId: zod.ZodNullable<zod.ZodString>;
+        updatedAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        value: Record<string, unknown>;
+        id: string;
+        source: "user_stated" | "inferred" | "agent_proposed";
+        updatedAt: Date;
+        key: string;
+        memberUserId: string | null;
+        scope: "debt" | "categorization" | "spending" | "general";
+        createdByKind: "user" | "agent";
+    }, {
+        value: Record<string, unknown>;
+        id: string;
+        source: "user_stated" | "inferred" | "agent_proposed";
+        updatedAt: Date;
+        key: string;
+        memberUserId: string | null;
+        scope: "debt" | "categorization" | "spending" | "general";
+        createdByKind: "user" | "agent";
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    memories: {
+        value: Record<string, unknown>;
+        id: string;
+        source: "user_stated" | "inferred" | "agent_proposed";
+        updatedAt: Date;
+        key: string;
+        memberUserId: string | null;
+        scope: "debt" | "categorization" | "spending" | "general";
+        createdByKind: "user" | "agent";
+    }[];
+}, {
+    memories: {
+        value: Record<string, unknown>;
+        id: string;
+        source: "user_stated" | "inferred" | "agent_proposed";
+        updatedAt: Date;
+        key: string;
+        memberUserId: string | null;
+        scope: "debt" | "categorization" | "spending" | "general";
+        createdByKind: "user" | "agent";
+    }[];
+}>;
+/**
+ * @summary State a preference or decision (replaces what the key held)
+ */
+export declare const putMemoryPathKeyMax = 60;
+export declare const PutMemoryParams: zod.ZodObject<{
+    scope: zod.ZodEnum<["categorization", "spending", "debt", "general"]>;
+    key: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    key: string;
+    scope: "debt" | "categorization" | "spending" | "general";
+}, {
+    key: string;
+    scope: "debt" | "categorization" | "spending" | "general";
+}>;
+export declare const putMemoryBodyValueMax = 300;
+export declare const putMemoryBodyMineDefault = false;
+export declare const PutMemoryBody: zod.ZodObject<{
+    value: zod.ZodString;
+    mine: zod.ZodDefault<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    value: string;
+    mine: boolean;
+}, {
+    value: string;
+    mine?: boolean | undefined;
+}>;
+export declare const PutMemoryResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    scope: zod.ZodEnum<["categorization", "spending", "debt", "general"]>;
+    key: zod.ZodString;
+    value: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+    source: zod.ZodEnum<["user_stated", "inferred", "agent_proposed"]>;
+    createdByKind: zod.ZodEnum<["user", "agent"]>;
+    memberUserId: zod.ZodNullable<zod.ZodString>;
+    updatedAt: zod.ZodDate;
+}, "strip", zod.ZodTypeAny, {
+    value: Record<string, unknown>;
+    id: string;
+    source: "user_stated" | "inferred" | "agent_proposed";
+    updatedAt: Date;
+    key: string;
+    memberUserId: string | null;
+    scope: "debt" | "categorization" | "spending" | "general";
+    createdByKind: "user" | "agent";
+}, {
+    value: Record<string, unknown>;
+    id: string;
+    source: "user_stated" | "inferred" | "agent_proposed";
+    updatedAt: Date;
+    key: string;
+    memberUserId: string | null;
+    scope: "debt" | "categorization" | "spending" | "general";
+    createdByKind: "user" | "agent";
+}>;
+/**
+ * @summary Forget one memory (it leaves every list and every prompt)
+ */
+export declare const DeleteMemoryParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+/**
+ * @summary The wish list, with each item's waiting period
+ */
+export declare const ListWishlistResponse: zod.ZodObject<{
+    waitDays: zod.ZodNumber;
+    items: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        title: zod.ZodString;
+        amount: zod.ZodNullable<zod.ZodNumber>;
+        url: zod.ZodNullable<zod.ZodString>;
+        categoryId: zod.ZodNullable<zod.ZodString>;
+        targetDate: zod.ZodNullable<zod.ZodString>;
+        requestedBy: zod.ZodString;
+        requestedAt: zod.ZodDate;
+        waitingUntil: zod.ZodString;
+        waitingDaysLeft: zod.ZodNumber;
+        decision: zod.ZodEnum<["pending", "approved", "declined", "bought"]>;
+        decidedAt: zod.ZodNullable<zod.ZodDate>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        amount: number | null;
+        categoryId: string | null;
+        url: string | null;
+        title: string;
+        decidedAt: Date | null;
+        targetDate: string | null;
+        requestedBy: string;
+        requestedAt: Date;
+        waitingUntil: string;
+        waitingDaysLeft: number;
+        decision: "pending" | "approved" | "declined" | "bought";
+    }, {
+        id: string;
+        amount: number | null;
+        categoryId: string | null;
+        url: string | null;
+        title: string;
+        decidedAt: Date | null;
+        targetDate: string | null;
+        requestedBy: string;
+        requestedAt: Date;
+        waitingUntil: string;
+        waitingDaysLeft: number;
+        decision: "pending" | "approved" | "declined" | "bought";
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    items: {
+        id: string;
+        amount: number | null;
+        categoryId: string | null;
+        url: string | null;
+        title: string;
+        decidedAt: Date | null;
+        targetDate: string | null;
+        requestedBy: string;
+        requestedAt: Date;
+        waitingUntil: string;
+        waitingDaysLeft: number;
+        decision: "pending" | "approved" | "declined" | "bought";
+    }[];
+    waitDays: number;
+}, {
+    items: {
+        id: string;
+        amount: number | null;
+        categoryId: string | null;
+        url: string | null;
+        title: string;
+        decidedAt: Date | null;
+        targetDate: string | null;
+        requestedBy: string;
+        requestedAt: Date;
+        waitingUntil: string;
+        waitingDaysLeft: number;
+        decision: "pending" | "approved" | "declined" | "bought";
+    }[];
+    waitDays: number;
+}>;
+/**
+ * @summary Add something to the wish list (starts a waiting period)
+ */
+export declare const createWishlistItemBodyTitleMax = 120;
+export declare const createWishlistItemBodyAmountMin = 0;
+export declare const createWishlistItemBodyAmountMax = 1000000;
+export declare const createWishlistItemBodyUrlMax = 500;
+export declare const createWishlistItemBodyTargetDateRegExp: RegExp;
+export declare const CreateWishlistItemBody: zod.ZodObject<{
+    title: zod.ZodString;
+    amount: zod.ZodOptional<zod.ZodNumber>;
+    url: zod.ZodOptional<zod.ZodString>;
+    categoryId: zod.ZodOptional<zod.ZodString>;
+    targetDate: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    title: string;
+    amount?: number | undefined;
+    categoryId?: string | undefined;
+    url?: string | undefined;
+    targetDate?: string | undefined;
+}, {
+    title: string;
+    amount?: number | undefined;
+    categoryId?: string | undefined;
+    url?: string | undefined;
+    targetDate?: string | undefined;
+}>;
+/**
+ * @summary Edit an item or decide it (a yes waits out the waiting period)
+ */
+export declare const UpdateWishlistItemParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const updateWishlistItemBodyTitleMax = 120;
+export declare const updateWishlistItemBodyAmountMin = 0;
+export declare const updateWishlistItemBodyAmountMax = 1000000;
+export declare const updateWishlistItemBodyUrlMax = 500;
+export declare const updateWishlistItemBodyTargetDateRegExp: RegExp;
+export declare const UpdateWishlistItemBody: zod.ZodObject<{
+    title: zod.ZodOptional<zod.ZodString>;
+    amount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    url: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    targetDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    decision: zod.ZodOptional<zod.ZodEnum<["pending", "approved", "declined", "bought"]>>;
+}, "strip", zod.ZodTypeAny, {
+    amount?: number | null | undefined;
+    url?: string | null | undefined;
+    title?: string | undefined;
+    targetDate?: string | null | undefined;
+    decision?: "pending" | "approved" | "declined" | "bought" | undefined;
+}, {
+    amount?: number | null | undefined;
+    url?: string | null | undefined;
+    title?: string | undefined;
+    targetDate?: string | null | undefined;
+    decision?: "pending" | "approved" | "declined" | "bought" | undefined;
+}>;
+export declare const UpdateWishlistItemResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    title: zod.ZodString;
+    amount: zod.ZodNullable<zod.ZodNumber>;
+    url: zod.ZodNullable<zod.ZodString>;
+    categoryId: zod.ZodNullable<zod.ZodString>;
+    targetDate: zod.ZodNullable<zod.ZodString>;
+    requestedBy: zod.ZodString;
+    requestedAt: zod.ZodDate;
+    waitingUntil: zod.ZodString;
+    waitingDaysLeft: zod.ZodNumber;
+    decision: zod.ZodEnum<["pending", "approved", "declined", "bought"]>;
+    decidedAt: zod.ZodNullable<zod.ZodDate>;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    amount: number | null;
+    categoryId: string | null;
+    url: string | null;
+    title: string;
+    decidedAt: Date | null;
+    targetDate: string | null;
+    requestedBy: string;
+    requestedAt: Date;
+    waitingUntil: string;
+    waitingDaysLeft: number;
+    decision: "pending" | "approved" | "declined" | "bought";
+}, {
+    id: string;
+    amount: number | null;
+    categoryId: string | null;
+    url: string | null;
+    title: string;
+    decidedAt: Date | null;
+    targetDate: string | null;
+    requestedBy: string;
+    requestedAt: Date;
+    waitingUntil: string;
+    waitingDaysLeft: number;
+    decision: "pending" | "approved" | "declined" | "bought";
+}>;
+/**
+ * @summary This month's AI cost, calls, caps and the latest runs
+ */
+export declare const GetAiUsageSummaryResponse: zod.ZodObject<{
+    month: zod.ZodString;
+    monthToDateUsd: zod.ZodNumber;
+    calls: zod.ZodOptional<zod.ZodNumber>;
+    failures: zod.ZodOptional<zod.ZodNumber>;
+    blocked: zod.ZodOptional<zod.ZodNumber>;
+    cacheHitRatio: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    byTask: zod.ZodArray<zod.ZodObject<{
+        task: zod.ZodString;
+        costUsd: zod.ZodNumber;
+        calls: zod.ZodNumber;
+        failures: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        failures: number;
+        costUsd: number;
+        calls: number;
+        task: string;
+    }, {
+        failures: number;
+        costUsd: number;
+        calls: number;
+        task: string;
+    }>, "many">;
+    budget: zod.ZodObject<{
+        monthlyCapUsd: zod.ZodNumber;
+        hardCapUsd: zod.ZodNumber;
+        dailyCaps: zod.ZodRecord<zod.ZodString, zod.ZodNumber>;
+        pausedUntil: zod.ZodNullable<zod.ZodDate>;
+    }, "strip", zod.ZodTypeAny, {
+        pausedUntil: Date | null;
+        monthlyCapUsd: number;
+        hardCapUsd: number;
+        dailyCaps: Record<string, number>;
+    }, {
+        pausedUntil: Date | null;
+        monthlyCapUsd: number;
+        hardCapUsd: number;
+        dailyCaps: Record<string, number>;
+    }>;
+    recentRuns: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        kind: zod.ZodEnum<["chat", "categorize", "monitor", "recap", "receipt", "sms_question"]>;
+        trigger: zod.ZodEnum<["user", "txn_arrived", "schedule", "sms", "retry"]>;
+        status: zod.ZodEnum<["running", "succeeded", "failed", "refused", "budget_exceeded"]>;
+        startedAt: zod.ZodDate;
+        finishedAt: zod.ZodNullable<zod.ZodDate>;
+        summary: zod.ZodNullable<zod.ZodString>;
+        inputTokens: zod.ZodNumber;
+        outputTokens: zod.ZodNumber;
+        costUsd: zod.ZodNullable<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
+        id: string;
+        kind: "recap" | "chat" | "categorize" | "monitor" | "receipt" | "sms_question";
+        summary: string | null;
+        trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
+        startedAt: Date;
+        finishedAt: Date | null;
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: number | null;
+    }, {
+        status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
+        id: string;
+        kind: "recap" | "chat" | "categorize" | "monitor" | "receipt" | "sms_question";
+        summary: string | null;
+        trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
+        startedAt: Date;
+        finishedAt: Date | null;
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: number | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    budget: {
+        pausedUntil: Date | null;
+        monthlyCapUsd: number;
+        hardCapUsd: number;
+        dailyCaps: Record<string, number>;
+    };
+    month: string;
+    monthToDateUsd: number;
+    byTask: {
+        failures: number;
+        costUsd: number;
+        calls: number;
+        task: string;
+    }[];
+    recentRuns: {
+        status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
+        id: string;
+        kind: "recap" | "chat" | "categorize" | "monitor" | "receipt" | "sms_question";
+        summary: string | null;
+        trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
+        startedAt: Date;
+        finishedAt: Date | null;
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: number | null;
+    }[];
+    failures?: number | undefined;
+    calls?: number | undefined;
+    blocked?: number | undefined;
+    cacheHitRatio?: number | null | undefined;
+}, {
+    budget: {
+        pausedUntil: Date | null;
+        monthlyCapUsd: number;
+        hardCapUsd: number;
+        dailyCaps: Record<string, number>;
+    };
+    month: string;
+    monthToDateUsd: number;
+    byTask: {
+        failures: number;
+        costUsd: number;
+        calls: number;
+        task: string;
+    }[];
+    recentRuns: {
+        status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
+        id: string;
+        kind: "recap" | "chat" | "categorize" | "monitor" | "receipt" | "sms_question";
+        summary: string | null;
+        trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
+        startedAt: Date;
+        finishedAt: Date | null;
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: number | null;
+    }[];
+    failures?: number | undefined;
+    calls?: number | undefined;
+    blocked?: number | undefined;
+    cacheHitRatio?: number | null | undefined;
+}>;
+/**
+ * @summary Owner sets the monthly caps and the pause
+ */
+export declare const updateAiBudgetBodyMonthlyCapUsdMin = 0;
+export declare const updateAiBudgetBodyMonthlyCapUsdMax = 1000;
+export declare const updateAiBudgetBodyHardCapUsdMin = 0;
+export declare const updateAiBudgetBodyHardCapUsdMax = 1000;
+export declare const UpdateAiBudgetBody: zod.ZodObject<{
+    monthlyCapUsd: zod.ZodOptional<zod.ZodNumber>;
+    hardCapUsd: zod.ZodOptional<zod.ZodNumber>;
+    pausedUntil: zod.ZodOptional<zod.ZodNullable<zod.ZodDate>>;
+}, "strip", zod.ZodTypeAny, {
+    pausedUntil?: Date | null | undefined;
+    monthlyCapUsd?: number | undefined;
+    hardCapUsd?: number | undefined;
+}, {
+    pausedUntil?: Date | null | undefined;
+    monthlyCapUsd?: number | undefined;
+    hardCapUsd?: number | undefined;
+}>;
+export declare const UpdateAiBudgetResponse: zod.ZodObject<{
+    monthlyCapUsd: zod.ZodNumber;
+    hardCapUsd: zod.ZodNumber;
+    dailyCaps: zod.ZodRecord<zod.ZodString, zod.ZodNumber>;
+    pausedUntil: zod.ZodNullable<zod.ZodDate>;
+}, "strip", zod.ZodTypeAny, {
+    pausedUntil: Date | null;
+    monthlyCapUsd: number;
+    hardCapUsd: number;
+    dailyCaps: Record<string, number>;
+}, {
+    pausedUntil: Date | null;
+    monthlyCapUsd: number;
+    hardCapUsd: number;
+    dailyCaps: Record<string, number>;
+}>;
 //# sourceMappingURL=api.d.ts.map
