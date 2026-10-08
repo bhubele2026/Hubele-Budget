@@ -1,14 +1,31 @@
 import { Page } from "@/ui";
-import { PageGrid, Panel } from "@/components/next";
+import { PageGrid } from "@/components/next";
+import BriefingPanel from "./dashboard/BriefingPanel";
+import AccountsRow from "./dashboard/AccountsRow";
+import CashPanel from "./dashboard/CashPanel";
+import SpendingPanel from "./dashboard/SpendingPanel";
+import UpcomingPanel from "./dashboard/UpcomingPanel";
+import ForecastPanel from "./dashboard/ForecastPanel";
+import DebtPanel from "./dashboard/DebtPanel";
+import ActivityPanel from "./dashboard/ActivityPanel";
+import ReviewPanel from "./dashboard/ReviewPanel";
 
+/** The preview dashboard: one screen for the household's whole position.
+ *  Panel order is importance order, so a phone reads it top to bottom. */
 export default function NextDashboardPage() {
   return (
     <div data-testid="page-next-dashboard">
       <Page title="Dashboard" sub="Preview">
         <PageGrid>
-          <Panel title="Preview page" span={12}>
-            <p className="text-body text-neutral-600">Preview page — the dashboard build lands here.</p>
-          </Panel>
+          <BriefingPanel />
+          <AccountsRow />
+          <CashPanel />
+          <SpendingPanel />
+          <UpcomingPanel />
+          <ForecastPanel />
+          <DebtPanel />
+          <ActivityPanel />
+          <ReviewPanel />
         </PageGrid>
       </Page>
     </div>
