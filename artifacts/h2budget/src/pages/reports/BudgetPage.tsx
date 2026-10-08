@@ -13,16 +13,15 @@ import { CHART } from "@/lib/chartTokens";
 import { LineTrend } from "@/lib/charts";
 import { CssFillMeter } from "@/lib/cssBars";
 import {
-  card,
   emptyNote,
   fieldLabel,
   th,
   td,
   tdNum,
   Foot,
-  Stat,
 } from "@/ui";
-import { ChartCard, PanelCard, ReportShell } from "./reportsShared";
+import { PageGrid } from "@/components/next";
+import { ChartCard, PanelCard, ReportShell, Stat } from "./reportsShared";
 
 export default function BudgetPage() {
   const [monthOffset, setMonthOffset] = useState("0");
@@ -114,7 +113,7 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
 
   if (!facts) {
     return (
-      <div className={card}>
+      <div className="panel">
         <div className={emptyNote}>
           {isLoading
             ? "Loading"
@@ -159,7 +158,7 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
 
   if (nothingSet) {
     return (
-      <div className={card}>
+      <div className="panel">
         <div className={emptyNote}>No budget set for this month</div>
       </div>
     );
@@ -167,17 +166,18 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
 
   const projectedUnder = flex.projectedVsPlan < 0;
   const overPace = flex.paceStatus === "over";
+  const showPace = flex.lines.length > 0 && burndownData.length > 0;
 
   return (
-    <div className="space-y-4">
+    <PageGrid>
       {/* Three separate stories, three tiles. */}
-      <div className="stagger grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Stat
           index={0}
           label="Money in"
           value={formatCurrency(incomeActual)}
           hint={`${paychecksLanded} of ${paychecksExpected} paychecks landed · ${formatCurrency(incomePlanned)} expected`}
           data-testid="budget-report-income"
+          span={4}
         />
         <Stat
           index={1}
@@ -185,6 +185,7 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
           value={`${billsPaid} of ${billsTotal}`}
           hint={`${formatCurrency(fixedActual)} of ${formatCurrency(fixedPlanned)}`}
           data-testid="budget-report-fixed"
+          span={4}
         />
         <Stat
           index={2}
@@ -193,13 +194,14 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
           hint={`of ${formatCurrency(flex.plannedTotal)} planned · ${daysLeft} days left`}
           tone={overPace ? "bad" : "navy"}
           data-testid="budget-report-flex"
+          span={4}
         />
-      </div>
 
       {/* Flex — the part you actually steer week to week. */}
       {flex.lines.length > 0 && (
         <PanelCard
           title="Day-to-day spending"
+          span={showPace ? 8 : 12}
           help="Flex categories only — bills, loans and income are excluded. Pace-to-date is what the plan says should be gone by today."
           right={
             <span className={`chip ${overPace ? "bad" : "ok"}`}>
@@ -285,10 +287,30 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
         </PanelCard>
       )}
 
+      {/* Pace of the month — flex burndown */}
+      {showPace && (
+        <ChartCard
+          title="Pace of the month"
+          span={4}
+          help="Cumulative flex spending against the plan paced evenly across the month. Above the dashed line is ahead of plan."
+          height={300}
+        >
+          <LineTrend
+            data={burndownData}
+            xKey="day"
+            lines={burndownLines}
+            height={300}
+            labelMode="none"
+            ariaLabel="Cumulative flex spending against the paced plan"
+          />
+        </ChartCard>
+      )}
+
       {/* Bills & loans — a checklist, as a table. */}
       {fixedLines.length > 0 && (
         <PanelCard
           title="Bills & loans"
+          span={income.lines.length > 0 ? 6 : 12}
           help="Fixed obligations. A loan at 100% is paid, not over — these are graded on being complete, not on being small."
         >
           <div className="overflow-x-auto">
@@ -338,6 +360,7 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
       {income.lines.length > 0 && (
         <PanelCard
           title="Paychecks"
+          span={fixedLines.length > 0 ? 6 : 12}
           help="Money landing this month. Coming in over the estimate is good and is never flagged."
         >
           <div className="overflow-x-auto">
@@ -379,24 +402,6 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
             </table>
           </div>
         </PanelCard>
-      )}
-
-      {/* Pace of the month — flex burndown */}
-      {flex.lines.length > 0 && burndownData.length > 0 && (
-        <ChartCard
-          title="Pace of the month"
-          help="Cumulative flex spending against the plan paced evenly across the month. Above the dashed line is ahead of plan."
-          height={300}
-        >
-          <LineTrend
-            data={burndownData}
-            xKey="day"
-            lines={burndownLines}
-            height={300}
-            labelMode="none"
-            ariaLabel="Cumulative flex spending against the paced plan"
-          />
-        </ChartCard>
       )}
 
       {/* Six-month streak board */}
@@ -452,6 +457,6 @@ function BudgetSection({ monthStart }: { monthStart: string }) {
           </Foot>
         </PanelCard>
       )}
-    </div>
+    </PageGrid>
   );
 }

@@ -60,7 +60,9 @@ import {
 import { formatCurrency, cn } from "@/lib/utils";
 import { moneyFace } from "@/components/data-state";
 import { CHART } from "@/lib/chartTokens";
-import { card, cardHead, emptyNote, fieldLabel, Stat, Help } from "@/ui";
+import { emptyNote, fieldLabel, Help } from "@/ui";
+import { Panel, StatBlock, type PanelSpan } from "@/components/next";
+import { useCountUp } from "@/hooks/useCountUp";
 
 // Recharts ships these as class components, which TypeScript + React 19's
 // @types/react can no longer accept as JSX element constructors. Re-bind each
@@ -132,12 +134,15 @@ export const GRID_STROKE = CHART.grid;
 // --- Small visual building blocks -----------------------------------------
 
 /**
- * A chart in a kit card.
+ * A chart in a panel.
  *
  * ⭐ WHERE THE CAPTIONS WENT. Every one of these used to carry a sentence
  * under the title ("The classic line — income up top, expense below"). The
  * sentence is not deleted, it is demoted to the `Help` chip in the head:
  * the face carries the title, the explanation is one hover away.
+ *
+ * (C1) A `Panel` on the 12-column grid. `span` places it; the chart box keeps
+ * its fixed inline `height` (a `ResponsiveContainer` needs a sized parent).
  */
 export function ChartCard({
   title,
@@ -149,6 +154,8 @@ export function ChartCard({
   right,
   testId,
   banner,
+  span = 12,
+  className,
 }: {
   title: string;
   /** The disclosure — what this counts, or which basis it uses. */
@@ -168,35 +175,41 @@ export function ChartCard({
    * edge. It shows over the empty state too.
    */
   banner?: ReactNode;
+  span?: PanelSpan;
+  className?: string;
 }) {
   if (empty && hideWhenEmpty) return null;
   return (
-    <div className={card} data-testid={testId}>
-      <div className={cardHead}>
-        <span className={cn(fieldLabel, "flex-1 truncate")}>{title}</span>
-        {help && <Help>{help}</Help>}
-        {right}
-      </div>
-      {/* The banner keeps its own bottom margin; -mb-3 takes back the body's
-          top padding so the gap under it isn't doubled. */}
-      {banner ? <div className="-mb-3 px-4 pt-3">{banner}</div> : null}
+    <Panel
+      title={title}
+      span={span}
+      variant="static"
+      data-testid={testId}
+      className={cn("tile-in", className)}
+      actions={
+        help || right ? (
+          <>
+            {help && <Help>{help}</Help>}
+            {right}
+          </>
+        ) : undefined
+      }
+    >
+      {banner ? <div className="mb-3">{banner}</div> : null}
       {empty ? (
         <div className={emptyNote} style={{ height }}>
           <span className="flex h-full items-center justify-center">{empty}</span>
         </div>
       ) : (
-        <div className="px-4 py-3" style={{ height: height + 24 }}>
-          <div style={{ height }}>{children}</div>
-        </div>
+        <div style={{ height }}>{children}</div>
       )}
-    </div>
+    </Panel>
   );
 }
 
 /**
- * A plain card with a kit head — for the blocks that are a list or a figure
- * rather than a chart. Same head geometry as `ChartCard` so titles line up
- * down the page.
+ * A plain panel — for the blocks that are a list or a figure rather than a
+ * chart. Flush: the contents pad their own rows, as they always did.
  */
 export function PanelCard({
   title,
@@ -205,6 +218,7 @@ export function PanelCard({
   right,
   className,
   testId,
+  span = 12,
 }: {
   title: string;
   help?: string;
@@ -212,15 +226,63 @@ export function PanelCard({
   right?: ReactNode;
   className?: string;
   testId?: string;
+  span?: PanelSpan;
 }) {
   return (
-    <div className={cn(card, className)} data-testid={testId}>
-      <div className={cardHead}>
-        <span className={cn(fieldLabel, "flex-1 truncate")}>{title}</span>
-        {help && <Help>{help}</Help>}
-        {right}
-      </div>
+    <Panel
+      title={title}
+      span={span}
+      variant={["static", "flush"]}
+      data-testid={testId}
+      className={cn("tile-in", className)}
+      actions={
+        help || right ? (
+          <>
+            {help && <Help>{help}</Help>}
+            {right}
+          </>
+        ) : undefined
+      }
+    >
       {children}
+    </Panel>
+  );
+}
+
+/**
+ * A KPI on the grid: the panel surface around a `StatBlock`. Same props as
+ * the classic `Stat` (a plain number rises into place; anything pre-formatted
+ * is shown as given). `navy` and `ok` are both the resting tone.
+ */
+export function Stat(props: {
+  value: ReactNode;
+  label: string;
+  hint?: ReactNode;
+  tone?: "ok" | "bad" | "navy";
+  index?: number;
+  /** `null` leaves placement to the parent (a wrapper that is the grid item). */
+  span?: PanelSpan | null;
+  "data-testid"?: string;
+}) {
+  const counted = useCountUp(typeof props.value === "number" ? props.value : null);
+  const shown = typeof props.value === "number" ? String(Math.round(counted)) : props.value;
+  const span = props.span === undefined ? 3 : props.span;
+  return (
+    <div
+      className={cn("panel tile-in p-4", span != null && `span-${span}`)}
+      style={
+        props.index != null
+          ? { animationDelay: `calc(${Math.min(props.index, 12)} * var(--stagger))` }
+          : undefined
+      }
+    >
+      <StatBlock
+        label={props.label}
+        value={shown}
+        hint={props.hint}
+        tone={props.tone === "bad" ? "bad" : "neutral"}
+        data-testid={props["data-testid"]}
+      />
     </div>
   );
 }
@@ -339,7 +401,7 @@ export function ReportsBalanceTiles({
       : `Lowest ${moneyFace(lowest)} · buffer ${moneyFace(buffer)}`;
 
   return (
-    <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <>
       <Stat
         index={0}
         label="Total debt"
@@ -370,11 +432,13 @@ export function ReportsBalanceTiles({
           Restored here on a wrapper we control, with a testid so the spec can
           stop matching on class names. */}
       <div
+        className="span-3 grid"
         title={amexNoCardLinked ? undefined : AMEX_BALANCE_DISTINCTION.reportsTooltip}
         data-testid="reports-tile-amex"
       >
         <Stat
           index={2}
+          span={null}
           label="Amex (Blue Cash + Platinum)"
           value={amexValue}
           hint={amexSub}
@@ -388,7 +452,7 @@ export function ReportsBalanceTiles({
         hint={cashSub}
         data-testid="reports-tile-cash-buffer"
       />
-    </div>
+    </>
   );
 }
 

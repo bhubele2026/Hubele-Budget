@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
+import { PageGrid } from "@/components/next";
 import {
   useListTransactions,
   useListCategories,
@@ -25,7 +26,7 @@ import {
   barColorForSign,
   catColor,
 } from "@/lib/chartTokens";
-import { fieldLabel, Foot, Stat } from "@/ui";
+import { fieldLabel, Foot } from "@/ui";
 import {
   fmtISO,
   dailyCashFlow,
@@ -59,6 +60,7 @@ import {
   tooltipMoney,
   tooltipStyle,
   ReportShell,
+  Stat,
   ReportsRangeControls,
   daysForMode,
 } from "./reportsShared";
@@ -361,6 +363,9 @@ function CashFlowSection({
   cashSignalRefreshing: boolean;
   onRetryCashSignal: () => void;
 }) {
+  // (C1) Unique per mount: two copies of a chart on screen must not share a
+  // gradient id (the second one would paint from the first's definition).
+  const gid = useId().replace(/:/g, "");
   const period: "day" | "week" | "month" =
     rangeDays <= 60 ? "day" : rangeDays <= 180 ? "week" : "month";
 
@@ -509,11 +514,10 @@ function CashFlowSection({
   }, [flowBars]);
 
   return (
-    <div className="space-y-4">
+    <PageGrid>
       {/* The period's averages. Deltas ride in the hint as words, not as a
           coloured arrow the reader has to decode. */}
-      <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat
+      <Stat
           index={0}
           label="Savings rate"
           value={`${kpis.savingsRatePct.toFixed(0)}%`}
@@ -543,7 +547,6 @@ function CashFlowSection({
           tone={kpis.avgNet < 0 ? "bad" : "navy"}
           data-testid="cashflow-avg-net"
         />
-      </div>
 
       <ChartCard
         title="Income vs expense"
@@ -554,6 +557,7 @@ function CashFlowSection({
         }
         empty={series.length === 0 ? "No transactions in this window" : null}
         hideWhenEmpty
+        height={360}
       >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={seriesWithPrev} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -595,6 +599,7 @@ function CashFlowSection({
         help="Bars are the net for each period — navy above the line, deep orange below. The line is the running cumulative net."
         empty={series.length === 0 ? "No transactions in this window" : null}
         hideWhenEmpty
+        height={360}
       >
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={seriesWithPrev} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -635,9 +640,9 @@ function CashFlowSection({
         </ResponsiveContainer>
       </ChartCard>
 
-      <div className="grid gap-4 lg:grid-cols-2">
         <PanelCard
           title="Locked-in monthly burn"
+          span={4}
           help="The monthly-equivalent total of every active recurring item, before any discretionary spending."
         >
           <div className="px-4 py-3">
@@ -670,6 +675,7 @@ function CashFlowSection({
 
         <ChartCard
           title={forecastCardTitle}
+          span={8}
           help={forecastCardHelp}
           testId="cashflow-forecast-card"
           // (PR-K round 2, L3) A failed refresh keeps the last good curve and
@@ -721,7 +727,7 @@ function CashFlowSection({
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={forecastSeries} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
                 <defs>
-                  <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id={`${gid}-forecast`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={SERIES.forecast} stopOpacity={0.35} />
                     <stop offset="100%" stopColor={SERIES.forecast} stopOpacity={0} />
                   </linearGradient>
@@ -735,18 +741,17 @@ function CashFlowSection({
                   dataKey="balance"
                   stroke={SERIES.forecast}
                   strokeWidth={2}
-                  fill="url(#forecastGrad)"
+                  fill={`url(#${gid}-forecast)`}
                   name="Projected balance"
                 />
               </AreaChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
-      </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Money flow this month"
+          span={flowBars.length === 0 ? 12 : 6}
           help="Income sources, then where it went, then what survived. Each segment is named on hover — there are more segments than the eight-colour set, so colour separates them but never identifies them on its own."
           empty={flowBars.length === 0 ? "No transactions yet" : null}
           hideWhenEmpty
@@ -772,6 +777,7 @@ function CashFlowSection({
 
         <ChartCard
           title="Rolling 30-day burn rate"
+          span={burn.length === 0 ? 12 : 6}
           help="Average daily spending over a trailing 30-day window — the smoothed signal under the day-to-day noise."
           empty={burn.length === 0 ? "No spending data yet" : null}
           hideWhenEmpty
@@ -779,7 +785,7 @@ function CashFlowSection({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={burn} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
               <defs>
-                <linearGradient id="burn-gradient" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={`${gid}-burn`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={SERIES.burn} stopOpacity={0.7} />
                   <stop offset="100%" stopColor={SERIES.burn} stopOpacity={0.05} />
                 </linearGradient>
@@ -788,11 +794,10 @@ function CashFlowSection({
               <XAxis dataKey="date" tick={AXIS_TICK} interval="preserveStartEnd" angle={-25} textAnchor="end" height={50} />
               <YAxis tick={AXIS_TICK} tickFormatter={axisMoney} width={62} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
-              <Area {...ANIM_AREA} animationBegin={animBegin(0)} type="monotone" dataKey="avg" stroke={SERIES.burn} strokeWidth={2} fill="url(#burn-gradient)" name="Avg daily spend" />
+              <Area {...ANIM_AREA} animationBegin={animBegin(0)} type="monotone" dataKey="avg" stroke={SERIES.burn} strokeWidth={2} fill={`url(#${gid}-burn)`} name="Avg daily spend" />
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>
-      </div>
-    </div>
+    </PageGrid>
   );
 }
