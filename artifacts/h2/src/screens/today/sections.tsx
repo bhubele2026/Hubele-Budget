@@ -216,9 +216,9 @@ export function DebtSection({ spine, state }: { spine: Spine | undefined; state:
         sub={spine && spine.debt?.payoffPct == null ? "No debt has a starting balance yet." : undefined}
         data-testid="figure-debt"
       />
-      {(down != null || milestone) && (
+      {((down != null && down > 0) || milestone) && (
         <div className="mt-3 flex flex-col gap-1 type-body text-ink-2">
-          {down != null && (
+          {down != null && down > 0 && (
             <p data-testid="debt-paid-down">
               Paid down{" "}
               <data value={centsValue(down)} className="tnum">
