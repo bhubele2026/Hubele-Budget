@@ -1,3 +1,4 @@
+import { displayAmount } from "@/lib/amountDisplay";
 import { useMemo } from "react";
 import { Link } from "wouter";
 import { Panel, TxnTable, type TxnRow } from "@/components/next";
@@ -32,7 +33,7 @@ export default function ActivityPanel() {
         id: t.id,
         date: t.occurredOn.slice(0, 10),
         description: t.description,
-        amount: Number(t.amount),
+        amount: displayAmount(t.amount, identity),
         identity,
         pending: t.pending,
         category: t.categoryId ? catName.get(t.categoryId) ?? null : null,

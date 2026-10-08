@@ -15,8 +15,8 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
   useGetAmexWeeklyPayoff: () => ({ data: h.payoff }),
   useGetForecast: () => ({ data: h.forecast }),
   useListTransactions: () => ({ data: [
-    { id: "t1", occurredOn: "2026-10-07", description: "COFFEE", amount: "4.50", plaidAccountId: "ext-amex", pending: true, categoryId: "c1" },
-    { id: "t2", occurredOn: "2026-10-06", description: "PAYROLL", amount: "-900", plaidAccountId: "ext-chk", pending: false, categoryId: null },
+    { id: "t1", occurredOn: "2026-10-07", description: "COFFEE", amount: "-4.50", plaidAccountId: "ext-amex", pending: true, categoryId: "c1" },
+    { id: "t2", occurredOn: "2026-10-06", description: "PAYROLL", amount: "900", plaidAccountId: "ext-chk", pending: false, categoryId: null },
   ], isLoading: false }),
   useListCategories: () => ({ data: [{ id: "c1", name: "Dining" }] }),
 }));
@@ -79,6 +79,20 @@ describe("combined view", () => {
     expect(panel.textContent).toContain("Dining");
     expect(panel.querySelector('[title="Chase Total Checking"]')).toBeTruthy();
     expect(panel.textContent).toContain("Posted");
+  });
+});
+
+describe("route id", () => {
+  it("accepts the items response row id as well as the Plaid account_id", async () => {
+    seed(); renderAt("/next/accounts/r-amex");
+    await waitFor(() => expect(screen.getByTestId("amex-ledger")).toBeTruthy());
+    expect(h.amexProps).toHaveBeenCalledWith(expect.objectContaining({ accountId: "ext-amex" }));
+    expect(screen.queryByText(/not linked here/)).toBeNull();
+    expect(screen.getByTestId("account-chip-ext-amex").getAttribute("aria-current")).toBe("page");
+  });
+  it("shows card purchases as spending in the combined view", () => {
+    seed(); renderAt("/next/accounts");
+    expect(screen.getByTestId("combined-activity").textContent).toContain("-$4.50");
   });
 });
 
