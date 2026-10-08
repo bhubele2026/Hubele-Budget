@@ -279,6 +279,16 @@ describe("proposals", () => {
     expect((await call("POST", "/agent/proposals/nope/approve")).status).toBe(404);
   });
 
+  it("two taps at once apply once", async () => {
+    const pid = await propose(A, "bill_amount", A.billId, 52);
+    const [x, y] = await Promise.all([call("POST", `/agent/proposals/${pid}/approve`), call("POST", `/agent/proposals/${pid}/approve`, A_MEMBER)]);
+    expect([x.status, y.status].sort()).toEqual([200, 409]);
+    const p = await status(pid);
+    expect(p.status).toBe("applied");
+    const acts = await db.select().from(agentActionsTable).where(and(eq(agentActionsTable.runId, p.runId), eq(agentActionsTable.targetKind, "bill_amount"), eq(agentActionsTable.outcome, "applied")));
+    expect(acts).toHaveLength(1);
+  });
+
   it("a target that vanished leaves the proposal open and changes nothing", async () => {
     const run = await newRun(A.householdId);
     const tools = makeTools({ householdId: A.householdId, ownerUserId: A.owner, actorUserId: A.owner, runId: run });
