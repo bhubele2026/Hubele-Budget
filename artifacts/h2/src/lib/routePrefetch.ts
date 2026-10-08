@@ -41,7 +41,9 @@ export const importDesignRecap = () => import("../screens/design/DesignRecap");
 export const importAsk = () => import("../screens/ask/Ask");
 export const importAskMemory = () => import("../screens/ask/AskMemory");
 export const importPlanProposals = () => import("../screens/ask/Proposals");
-export const importHouseholdAi = () => import("../screens/household/AiCost");
+// (V6) AI cost and Automation share this importer: the open path has no room for a second one.
+// The wrapper holds AI cost; Automation loads on demand inside it.
+export const importHouseholdAi = () => import("../screens/household/HouseholdMore");
 export const importDesignAsk = () => import("../screens/design/DesignAsk");
 
 /** href → importer, keyed exactly as the routes are declared in App.tsx. */

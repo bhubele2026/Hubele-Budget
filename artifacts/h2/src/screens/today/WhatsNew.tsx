@@ -11,7 +11,6 @@ import { OWN_INVALIDATION } from "@/data/mutationInvalidation";
 import { Button, buttonClass } from "@/kit/Button";
 import { Sheet } from "@/kit/Sheet";
 import { centsValue, fmtMoney } from "@/lib/money";
-import { cx } from "@/lib/cx";
 
 /** Bump this id for the next sheet; a user who saw "h2-1" sees the new one once. */
 export const WHATS_NEW_ID = "h2-1";
@@ -31,8 +30,8 @@ function Amount({ n }: { n: number | null }) {
  * history. The choice is saved on the signed-in USER (`PUT /me/ui-preferences`,
  * merged into what is already there), not on the household.
  *
- * The auto-filing switch is a PREFERENCE only (`autoCategorize`). Nothing in
- * H2 reads it yet; the categorizer package will.
+ * Step 2 only EXPLAINS filing and links to Automation, where the owner's
+ * switches live. This sheet writes nothing but "seen".
  */
 export default function WhatsNew({ bank, spentWeek }: { bank: number | null; spentWeek: number | null }) {
   const qc = useQueryClient();
@@ -41,7 +40,6 @@ export default function WhatsNew({ bank, spentWeek }: { bank: number | null; spe
   });
   const save = useUpdateUiPreferences({ mutation: { meta: OWN_INVALIDATION } });
   const [step, setStep] = useState(0);
-  const [auto, setAuto] = useState(true);
   const [closed, setClosed] = useState(false);
 
   const current: UiPreferences | undefined = prefs.data;
@@ -49,7 +47,7 @@ export default function WhatsNew({ bank, spentWeek }: { bank: number | null; spe
 
   const finish = () => {
     setClosed(true);
-    const merged: UiPreferences = { ...current, whatsNewSeen: WHATS_NEW_ID, autoCategorize: auto };
+    const merged: UiPreferences = { ...current, whatsNewSeen: WHATS_NEW_ID };
     qc.setQueryData(getGetUiPreferencesQueryKey(), merged);
     save.mutate({ data: merged });
   };
@@ -75,20 +73,14 @@ export default function WhatsNew({ bank, spentWeek }: { bank: number | null; spe
         )}
         {step === 1 && (
           <>
-            <p className="type-headline text-ink">
-              H2 will start filing new charges automatically; uncertain ones wait for you in Activity.
+            <p className="type-headline text-ink">H2 files new charges for you.</p>
+            <p className="type-body text-ink-2">
+              It uses your rules and what you taught it first. Anything it is unsure about waits for you in Review. The owner chooses how far it may go in
+              Automation.
             </p>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={auto}
-              onClick={() => setAuto((v) => !v)}
-              className={cx(buttonClass({ variant: "quiet", size: "md" }), "self-start")}
-              data-testid="auto-switch"
-            >
-              <span aria-hidden className={cx("inline-block size-2 rounded-full", auto ? "bg-moss" : "border-2 border-rule-strong")} />
-              Auto-file new charges: {auto ? "On" : "Off"}
-            </button>
+            <Link href="/household/automation" onClick={finish} className={buttonClass({ variant: "link", size: "md" })} data-testid="open-automation">
+              Open Automation
+            </Link>
           </>
         )}
         {step === 2 && (

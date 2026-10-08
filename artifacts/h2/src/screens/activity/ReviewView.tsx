@@ -9,7 +9,8 @@ import {
   type ReviewItem,
 } from "@workspace/api-client-react";
 import { reviewParams, useCategoryList, useInvalidateActivity, useReviewQueue } from "@/data/activityData";
-import { Button } from "@/kit/Button";
+import { Link } from "wouter";
+import { Button, buttonClass } from "@/kit/Button";
 import { CategoryChip } from "@/kit/CategoryChip";
 import { Note, RefreshNote } from "@/kit/Note";
 import { SkeletonLine } from "@/kit/Skeleton";
@@ -128,6 +129,11 @@ export function ReviewView({ now }: { now?: Date }) {
   const total = queue.data?.total ?? 0;
   return (
     <div className="flex flex-col gap-3" data-testid="review">
+      <p className="type-caption text-ink-3" data-testid="automation-link">
+        <Link href="/household/automation" className={buttonClass({ variant: "link", size: "sm" })}>
+          How filing works and what the model may do → Automation
+        </Link>
+      </p>
       <RefreshNote state={queue.state} updatedAt={null} onRetry={queue.refetch} retrying={queue.isFetching} now={now} />
       {items.length === 0 ? (
         <Note kind="empty" data-testid="review-empty">
