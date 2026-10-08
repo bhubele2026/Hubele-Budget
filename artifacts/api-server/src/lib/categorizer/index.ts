@@ -27,7 +27,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { addDaysISO, householdToday } from "@workspace/avalanche-core";
-import { AUTO_MIN, bandFor, REDECIDE_AFTER_DAYS } from "./bands";
+import { AUTO_MIN, bandFor, PROVISIONAL_MIN, REDECIDE_AFTER_DAYS } from "./bands";
 import { inputHash, loadEngineContext, loadEngineRows, sha256 } from "./context";
 import { decideRow } from "./decide";
 import { ENGINE_ACTOR, type Exec } from "./db";
@@ -71,6 +71,11 @@ export interface RunOptions {
   now?: Date;
   /** Omitted: deterministic stages only (the sync path). */
   modelStage?: ModelStage;
+  /**
+   * (AI-1) The household's model gate is open (modelGate.ts): a `high` answer
+   * may reach the auto band. Otherwise every model answer is clamped below it.
+   */
+  modelAutoAllowed?: boolean;
 }
 
 export interface BatchResult {
@@ -237,20 +242,38 @@ export async function applyDecision(
   });
 }
 
-/** A model's answer, validated by code before it can touch a row (CLAUDE.md §1). */
+/**
+ * A model's answer, validated by code before it can touch a row (CLAUDE.md §1).
+ * Its category must be one of the household's. Unless the household's gate is
+ * open (`autoAllowed`) the confidence is clamped below the auto band, so the
+ * answer is at most provisional. An answer with no category is the model's
+ * "this looks like a transfer": it is kept as a queue-only decision (never a
+ * category, never `is_transfer`).
+ */
 export function validateModelResult(
   result: StageResult,
   allowedCategoryIds: ReadonlySet<string>,
+  opts: { autoAllowed?: boolean } = {},
 ): StageResult | null {
-  if (!result.categoryId || !allowedCategoryIds.has(result.categoryId)) return null;
   const c = Number(result.confidence);
   if (!Number.isFinite(c)) return null;
+  const explanation = String(result.explanation ?? "").slice(0, 140) || "Suggested from similar charges.";
+  if (result.categoryId == null) {
+    return {
+      source: "model",
+      categoryId: null,
+      confidence: Math.min(Math.max(c, 0), PROVISIONAL_MIN - 0.001),
+      explanation,
+      model: result.model ?? null,
+      promptVersion: result.promptVersion ?? null,
+    };
+  }
+  if (!allowedCategoryIds.has(result.categoryId)) return null;
   return {
     source: "model",
     categoryId: result.categoryId,
-    // Model decisions stay provisional until the owner flips modelAutoCategorize.
-    confidence: Math.min(Math.max(c, 0), AUTO_MIN - 0.001),
-    explanation: String(result.explanation ?? "").slice(0, 140) || "Suggested from similar charges.",
+    confidence: Math.min(Math.max(c, 0), opts.autoAllowed ? 1 : AUTO_MIN - 0.001),
+    explanation,
     model: result.model ?? null,
     promptVersion: result.promptVersion ?? null,
   };
@@ -306,16 +329,23 @@ export async function runCategorizationBatch(
     const allowed = new Set(
       [...ctx.spendCtx.categoriesById.keys()].filter((id) => !ctx.uncategorizedIds.has(id)),
     );
-    const answers = await opts.modelStage.decide(householdId, ambiguous, ctx);
+    // (AI-1) A row the model already answered for this exact input is not asked
+    // again (a second run costs nothing); it stays ambiguous if its answer is
+    // still waiting for a person.
+    const modelHash = (r: EngineRow) => sha256(`model|${hashes.get(r.id)}`);
+    const toAsk = ambiguous.filter((r) => !(history.get(r.id) ?? []).some((h) => h.inputHash === modelHash(r)));
+    const answers = toAsk.length > 0 ? await opts.modelStage.decide(householdId, toAsk, ctx) : new Map<string, StageResult>();
     const decided = new Set<string>();
-    for (const row of ambiguous) {
+    for (const row of toAsk) {
       const raw = answers.get(row.id);
-      const ok = raw ? validateModelResult(raw, allowed) : null;
+      const ok = raw ? validateModelResult(raw, allowed, { autoAllowed: opts.modelAutoAllowed }) : null;
       if (!ok) continue;
-      const out = await applyDecision(householdId, row, ok, sha256(`model|${hashes.get(row.id)}`), now);
+      const out = await applyDecision(householdId, row, ok, modelHash(row), now);
       if ("decision" in out) {
         decisions.push(out.decision);
-        decided.add(row.id);
+        // A queue-band answer (low confidence, or "looks like a transfer") is
+        // still a question for a person.
+        if (out.decision.band !== "queue") decided.add(row.id);
       }
     }
     stillAmbiguous = ambiguous.filter((r) => !decided.has(r.id));

@@ -45,6 +45,8 @@ import {
   type PlaidPendingCleanupItem,
 } from "./plaidSyncAttempts";
 import { PLAID_REAUTH_ERROR_CODES } from "./plaidReauthCodes";
+import { emit } from "../jobs/emit";
+import { QUEUES } from "../jobs/queues";
 
 /**
  * (#760, Phase A) Master kill-switch for the post-sync auto-match block
@@ -2025,11 +2027,23 @@ export async function syncPlaidItem(
     try {
       const alive = [...new Set(syncedTxnIds)];
       await reconcileSplitsAfterSync(householdId, alive);
-      await runCategorizationBatch(householdId, {
+      const batch = await runCategorizationBatch(householdId, {
         txnIds: alive,
         trigger: "sync",
         freshIds: insertedTxnIds,
       });
+      // (AI-1) Rows landed: the job pipeline takes it from here — the model
+      // categorizes what the deterministic pass left ambiguous, and the monitor
+      // looks at the new facts. `emit` never throws and sends nothing when jobs
+      // are off.
+      if (alive.length > 0) {
+        await emit(QUEUES.txnArrived, {
+          householdId,
+          ownerUserId,
+          txnIds: (batch?.ambiguous ?? []).slice(0, 2000),
+          arrived: alive.length,
+        });
+      }
     } catch (e) {
       logger.warn({ householdId, itemRowId, err: e }, "[plaid-sync] categorization batch failed (non-fatal)");
     }

@@ -14,6 +14,8 @@ import {
   UndoCategoryDecisionParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
+import { isAiEnabled } from "../ai/client";
+import { enqueueCategorize, openQueueTxnIds } from "../jobs/handlers/categorize";
 import { runCategorizationBatch } from "../lib/categorizer";
 import { listReviewQueue, resolveDecision, undoDecision } from "../lib/categorizer/review";
 import { deleteSplits, getSplits, replaceSplits } from "../lib/categorizer/splits";
@@ -37,10 +39,21 @@ router.post("/categorization/run", requireAuth, async (req, res): Promise<void> 
       : (parsed.data.since as Date).toISOString().slice(0, 10)
     : undefined;
   const out = await runCategorizationBatch(req.householdId!, { since, trigger: "manual" });
+  // (AI-1) The model pass runs as a job over everything unresolved: the rows
+  // no deterministic stage could decide, plus the open review-queue rows.
+  let modelQueued = 0;
+  if (isAiEnabled()) {
+    const ids = [...new Set([...out.ambiguous, ...(await openQueueTxnIds(req.householdId!))])];
+    if (ids.length > 0) {
+      await enqueueCategorize(req.householdId!, req.householdOwnerId!, ids, "user");
+      modelQueued = ids.length;
+    }
+  }
   res.json({
     decided: out.decisions.filter((d) => d.source !== "locked" && d.band !== "queue" && d.categoryId).length,
     queued: out.decisions.filter((d) => d.band !== "auto").length,
     ambiguous: out.ambiguous.length,
+    modelQueued,
   });
 });
 

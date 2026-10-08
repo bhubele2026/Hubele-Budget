@@ -166,7 +166,7 @@ describe("POST /agent/monitor/run, GET /agent/runs, GET /agent/actions", () => {
 });
 
 describe("POST /agent/actions/:id/undo", () => {
-  it("404 for another household's action, 409 for a non-reversible or undone one, 501 for a reversible type that has not shipped", async () => {
+  it("404 for another household's action, 409 for a non-reversible or undone one, 501 for a reversible type that has not shipped (set_category: see categorizeJob)", async () => {
     const [run] = await db.select().from(agentRunsTable).where(eq(agentRunsTable.householdId, A));
     const [plain] = await db.select().from(agentActionsTable).where(eq(agentActionsTable.householdId, A));
     expect((await call("POST", `/agent/actions/${plain!.id}/undo`, B_OWNER)).status).toBe(404);
@@ -176,7 +176,12 @@ describe("POST /agent/actions/:id/undo", () => {
     const [rev] = await db.insert(agentActionsTable).values({
       householdId: A, runId: run!.id, type: "set_category", targetKind: "transaction", targetId: randomUUID(), outcome: "applied", reversible: true,
     }).returning();
-    expect((await call("POST", `/agent/actions/${rev!.id}/undo`)).status).toBe(501);
+    // (AI-1) set_category has its undo now; with no decision recorded there is nothing to undo.
+    expect((await call("POST", `/agent/actions/${rev!.id}/undo`)).status).toBe(409);
+    const [other] = await db.insert(agentActionsTable).values({
+      householdId: A, runId: run!.id, type: "remember", targetKind: "memory", targetId: randomUUID(), outcome: "applied", reversible: true,
+    }).returning();
+    expect((await call("POST", `/agent/actions/${other!.id}/undo`)).status).toBe(501);
     await db.update(agentActionsTable).set({ undoneAt: new Date() }).where(eq(agentActionsTable.id, rev!.id));
     expect((await call("POST", `/agent/actions/${rev!.id}/undo`)).status).toBe(409);
   });

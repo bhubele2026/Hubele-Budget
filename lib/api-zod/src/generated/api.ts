@@ -5635,7 +5635,13 @@ export const GetUiPreferencesResponse = zod
       .boolean()
       .optional()
       .describe(
-        "(S1) The user's choice that H2 files new charges on its own.\nA preference only; the categorizer reads it in a later package.\n",
+        "(S1) The user's choice that H2 files new charges on its own.\n(AI-1) The categorizer's model pass reads it: false skips the model\nentirely (the deterministic stages still run). Absent means true.\n",
+      ),
+    modelAutoCategorize: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(AI-1) The owner lets the model's high-confidence answers write a\ncategory outright. Only counts once the household has at least 50\nmodel filings accepted in the last 30 days (and 9 in 10 of the ones\njudged); until then the model stays provisional. Absent means false.\n",
       ),
   })
   .describe(
@@ -5667,7 +5673,13 @@ export const UpdateUiPreferencesBody = zod
       .boolean()
       .optional()
       .describe(
-        "(S1) The user's choice that H2 files new charges on its own.\nA preference only; the categorizer reads it in a later package.\n",
+        "(S1) The user's choice that H2 files new charges on its own.\n(AI-1) The categorizer's model pass reads it: false skips the model\nentirely (the deterministic stages still run). Absent means true.\n",
+      ),
+    modelAutoCategorize: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(AI-1) The owner lets the model's high-confidence answers write a\ncategory outright. Only counts once the household has at least 50\nmodel filings accepted in the last 30 days (and 9 in 10 of the ones\njudged); until then the model stays provisional. Absent means false.\n",
       ),
   })
   .describe(
@@ -5696,7 +5708,13 @@ export const UpdateUiPreferencesResponse = zod
       .boolean()
       .optional()
       .describe(
-        "(S1) The user's choice that H2 files new charges on its own.\nA preference only; the categorizer reads it in a later package.\n",
+        "(S1) The user's choice that H2 files new charges on its own.\n(AI-1) The categorizer's model pass reads it: false skips the model\nentirely (the deterministic stages still run). Absent means true.\n",
+      ),
+    modelAutoCategorize: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(AI-1) The owner lets the model's high-confidence answers write a\ncategory outright. Only counts once the household has at least 50\nmodel filings accepted in the last 30 days (and 9 in 10 of the ones\njudged); until then the model stays provisional. Absent means false.\n",
       ),
   })
   .describe(
@@ -6490,11 +6508,30 @@ export const ListAgentActionsResponse = zod.object({
 });
 
 /**
- * Only reversible action types can be undone; today none are (the first, set_category, arrives with the categorizer).
+ * Only reversible action types can be undone. `set_category` (the categorizer's model pass) undoes the decision it recorded and stamps the action.
  * @summary Undo a reversible agent action
  */
 export const UndoAgentActionParams = zod.object({
   id: zod.coerce.string(),
+});
+
+export const UndoAgentActionResponse = zod.object({
+  id: zod.string(),
+  runId: zod.string(),
+  type: zod.enum([
+    "set_category",
+    "remember",
+    "propose",
+    "wishlist",
+    "finding",
+    "recap",
+  ]),
+  targetKind: zod.string(),
+  targetId: zod.string().nullable(),
+  outcome: zod.enum(["applied", "proposed", "needs_attention"]),
+  reversible: zod.boolean(),
+  undoneAt: zod.coerce.date().nullable(),
+  createdAt: zod.coerce.date(),
 });
 
 /**
@@ -6515,6 +6552,12 @@ export const RunCategorizationResponse = zod.object({
   ambiguous: zod
     .number()
     .describe("Rows no deterministic stage decided at 0.6 or more."),
+  modelQueued: zod
+    .number()
+    .optional()
+    .describe(
+      "Rows handed to the model pass (a background job); 0 when AI is off.",
+    ),
 });
 
 /**

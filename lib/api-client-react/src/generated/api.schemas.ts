@@ -3292,9 +3292,16 @@ depends on it.
    */
   whatsNewSeen?: string;
   /** (S1) The user's choice that H2 files new charges on its own.
-A preference only; the categorizer reads it in a later package.
+(AI-1) The categorizer's model pass reads it: false skips the model
+entirely (the deterministic stages still run). Absent means true.
  */
   autoCategorize?: boolean;
+  /** (AI-1) The owner lets the model's high-confidence answers write a
+category outright. Only counts once the household has at least 50
+model filings accepted in the last 30 days (and 9 in 10 of the ones
+judged); until then the model stays provisional. Absent means false.
+ */
+  modelAutoCategorize?: boolean;
 }
 
 export interface Settings {
@@ -4913,6 +4920,8 @@ export interface CategorizationRunResult {
   queued: number;
   /** Rows no deterministic stage decided at 0.6 or more. */
   ambiguous: number;
+  /** Rows handed to the model pass (a background job); 0 when AI is off. */
+  modelQueued?: number;
 }
 
 export interface ReviewFlags {
