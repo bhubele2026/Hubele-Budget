@@ -4,6 +4,7 @@ import {
   PRUNE_SYNC_ATTEMPTS_TZ,
   handlePruneSyncAttempts,
 } from "./handlers/maintenance";
+import { MONITOR_CRON, MONITOR_TZ, handleMonitorJobs } from "./handlers/monitor";
 import { ALL_QUEUES, QUEUES, dlqName, queueOptions } from "./queues";
 
 // (AI-0) Create every queue (dead-letter queue first — a queue's deadLetter
@@ -25,4 +26,8 @@ export async function registerJobs(boss: PgBoss): Promise<void> {
   await boss.schedule(QUEUES.maintenancePruneSyncAttempts, PRUNE_SYNC_ATTEMPTS_CRON, null, {
     tz: PRUNE_SYNC_ATTEMPTS_TZ,
   });
+
+  // (AI-3) The proactive monitor: a worker, and one daily fan-out tick.
+  await boss.work(QUEUES.monitorHousehold, handleMonitorJobs);
+  await boss.schedule(QUEUES.monitorHousehold, MONITOR_CRON, { fanout: true }, { tz: MONITOR_TZ });
 }
