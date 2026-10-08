@@ -68,6 +68,7 @@ import {
   settingsTable,
   transactionsTable,
 } from "@workspace/db";
+import { classifyRefund } from "@workspace/avalanche-core";
 import spineRouter from "../routes/spine";
 import forecastRouter from "../routes/forecast";
 import moneyRouter from "../routes/money";
@@ -636,6 +637,19 @@ describe("household scenario — Sun 10/4 to Sat 10/10, 2026", () => {
       .set({ reviewed: true })
       .where(eq(transactionsTable.plaidAccountId, ACCOUNTS.chase.accountId));
     await expectToday("S10");
+  });
+
+  // (B6) Refunds net — and this contract has none, so not one figure above moved:
+  // no row of the household, at its last step, is a refund (nor anything else B6 reads).
+  it("(B6) no row of the scenario is a refund", async () => {
+    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.householdId, TEST_HOUSEHOLD_ID));
+    const cats = await db.select().from(budgetCategoriesTable).where(eq(budgetCategoriesTable.householdId, TEST_HOUSEHOLD_ID));
+    const ctx = {
+      categoriesById: new Map(cats.map((c) => [c.id, { name: c.name, debtId: c.debtId, kind: c.kind }])),
+      debtCategoryIds: new Set(cats.filter((c) => c.debtId).map((c) => c.id)),
+    };
+    expect(rows.length).toBeGreaterThanOrEqual(10);
+    expect(rows.filter((r) => classifyRefund(r, ctx, { reimbursableIsSpend: true })).map((r) => r.description)).toEqual([]);
   });
 
   for (const column of CONTRACT_COLUMNS) {

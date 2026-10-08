@@ -38,6 +38,11 @@
 //     the weekly cap until someone files it. Deliberate: an unfiled purchase is
 //     still a purchase, and leaving it out would let the cap read high. Filing
 //     it unplanned (or matching it to a bill) gives that room back;
+//   - (B6) a refund (`classifyRefund`) takes its credit off the pool it nets,
+//     on its own account and inside this week, never below zero
+//     (`allowanceTotals`). It is bank-confirmed money back, so the room it
+//     returns is real; a refund larger than the week's spend returns no more
+//     than the week spent;
 //   - with no bank data (`status: "no_data"`) or no curve the cash figures are
 //     null — never a false zero, never a false "plenty".
 //
@@ -50,7 +55,7 @@
 // ceiling is a CAP the household set, named `weekCap`.
 
 import { addDaysISO, dayOfWeekISO, householdDateOf, weekBounds } from "./householdTime";
-import type { MovementCoverage } from "./householdMoney";
+import { allowanceTotals, type MovementCoverage } from "./householdMoney";
 
 /** How far ahead a paycheck still counts as "payday" for this figure. */
 export const PAYDAY_MAX_DAYS = 45;
@@ -87,11 +92,21 @@ export interface PositionIncomeItem {
   active: boolean;
 }
 
-/** A row of the current household week, already classified (`classifyMovement`) and sized (`spendAmount`). */
+/**
+ * A row of the current household week, already classified (`classifyMovement`)
+ * and sized — `allowanceRowOf` builds it.
+ */
 export interface PositionWeekRow {
+  /** The coverage it counts in. (B6) A refund carries the coverage it nets. */
   coverage: MovementCoverage;
-  /** `spendAmount(row)`: positive dollars for an outflow, 0 otherwise. */
+  /**
+   * `spendAmount(row)`: positive dollars for an outflow, 0 otherwise. (B6) A
+   * refund is negative (`-creditAmount(row)`): it takes money off its coverage
+   * on its own account, never below zero (`allowanceTotals`).
+   */
   spend: number;
+  /** (B6) `netAccountOf(row)`: the account a refund nets on. Absent: one shared account. */
+  account?: string;
 }
 
 export interface PositionFreshness {
@@ -340,19 +355,13 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
       : Math.max(0, lowestCents - bufferCents - reservesCents);
 
   // ── The week: what counts against the cap, and what sits beside it.
-  let discretionary = 0;
-  let unfiled = 0;
-  let unplanned = 0;
-  let monthly = 0;
-  for (const r of inputs.weekRows) {
-    const c = toCents(r.spend) ?? 0;
-    if (r.coverage === "allowance_weekly") discretionary += c;
-    else if (r.coverage === "needs_classification") {
-      discretionary += c;
-      unfiled += c;
-    } else if (r.coverage === "unplanned") unplanned += c;
-    else if (r.coverage === "allowance_monthly") monthly += c;
-  }
+  // (B6) Refunds net on their own account, never below zero (`allowanceTotals`);
+  // with none, these are the plain sums they always were.
+  const netted = allowanceTotals(inputs.weekRows);
+  const discretionary = netted.discretionaryCents;
+  const unfiled = netted.unfiledCents;
+  const unplanned = netted.unplannedCents;
+  const monthly = netted.monthlyCents;
 
   const capCents = toCents(inputs.weekCap);
   let remainingCents: number | null = null;

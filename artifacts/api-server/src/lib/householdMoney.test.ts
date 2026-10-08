@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyMovement,
   classifyOutflow,
+  classifyRefund,
   everydayPlan,
   isBankRow,
   isHouseholdWeekStart,
@@ -325,7 +326,12 @@ function specClassification(r: MovementRow, c: MovementContext): MovementClassif
   // 1. The core rule decides transfer / debt / card payment / income / excluded.
   const core = classifyOutflow(r, c, { reimbursableIsSpend: true });
   if (core.kind === "not_outflow") {
-    return { coverage: isRealIncome(r, c) ? "income" : "excluded", timing };
+    if (isRealIncome(r, c)) return { coverage: "income", timing };
+    // (B6) A refund nets the coverage steps 2-7 give a purchase with its flags.
+    if (classifyRefund(r, c, { reimbursableIsSpend: true })) {
+      return { coverage: "refund", timing, nets: specPlace(r, c).coverage as MovementClassification["nets"] };
+    }
+    return { coverage: "excluded", timing };
   }
   const step1: Partial<Record<OutflowKind, MovementCoverage>> = {
     transfer: "transfer",
@@ -337,7 +343,11 @@ function specClassification(r: MovementRow, c: MovementContext): MovementClassif
   };
   const decided = step1[core.kind];
   if (decided) return { coverage: decided, timing };
+  return { ...specPlace(r, c), timing };
+}
 
+/** Steps 2-7 of plan section A: where a purchase (B6: or the refund of one) lands. */
+function specPlace(r: MovementRow, c: MovementContext): Omit<MovementClassification, "timing"> {
   const flags = { unplanned: r.unplannedAllowance, monthly: r.monthlyAllowance, weekly: r.weeklyAllowance };
   const anyFlag = flags.unplanned || flags.monthly || flags.weekly;
   // 2. A confirmed match (conflicts reported), or a tier-2 pair with no flag.
@@ -347,9 +357,9 @@ function specClassification(r: MovementRow, c: MovementContext): MovementClassif
       : anyFlag
         ? "flag_ignored_matched"
         : undefined;
-    return conflict ? { coverage: "bill_matched", timing, conflict } : { coverage: "bill_matched", timing };
+    return conflict ? { coverage: "bill_matched", conflict } : { coverage: "bill_matched" };
   }
-  if (!anyFlag && (c.tier2PairedTxnIds ?? new Set()).has(r.id)) return { coverage: "bill_matched", timing };
+  if (!anyFlag && (c.tier2PairedTxnIds ?? new Set()).has(r.id)) return { coverage: "bill_matched" };
   // 3-7. (PR-B2, owner's rule 2026-09-15) A reimbursable charge is its own row: ahead of every flag.
   const ladder: [boolean, MovementCoverage][] = [
     [r.reimbursable, "reimbursable"],
@@ -357,8 +367,8 @@ function specClassification(r: MovementRow, c: MovementContext): MovementClassif
     [flags.monthly, "allowance_monthly"],
     [flags.weekly, "allowance_weekly"],
   ];
-  for (const [on, coverage] of ladder) if (on) return { coverage, timing };
-  return { coverage: "needs_classification", timing };
+  for (const [on, coverage] of ladder) if (on) return { coverage };
+  return { coverage: "needs_classification" };
 }
 
 describe("classifyMovement — property: exactly one coverage, the spec's precedence, every path hit", () => {
@@ -400,6 +410,12 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       r.categoryId = "cat-income";
     },
     (r) => (r.amount = 0),
+    // (B6) Money back on the card: a refund, whatever flags and matches it carries.
+    (r) => {
+      r.source = "plaid:amex";
+      r.plaidAccountId = "amex-ext";
+      r.amount = Math.abs(Number(r.amount));
+    },
   ];
 
   it(`${N} seeded rows: each equals the spec model, and every precedence path is reached at least ${MIN_HITS} times`, () => {
@@ -449,7 +465,10 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       const anyFlag = r.unplannedAllowance || r.monthlyAllowance || r.weeklyAllowance;
       hit(`timing:${got.timing.kind}`);
       if (got.timing.kind === "checking" && c.checkingAccountExternalId === null) hit("timing:checking-with-no-account");
-      if (core.kind === "not_outflow") hit(`step1:inflow->${got.coverage}`);
+      if (core.kind === "not_outflow") {
+        hit(`step1:inflow->${got.coverage}`);
+        if (got.coverage === "refund") hit(`step1:refund-nets:${got.nets}`);
+      }
       else if (core.kind !== "spend") {
         hit(`step1:${core.kind}`);
         if (r.reimbursable && core.kind === "card_payment") hit("step1:card_payment-over-reimbursable");
@@ -482,6 +501,8 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       "step1:income",
       "step1:inflow->income",
       "step1:inflow->excluded",
+      // (B6) A credit on the card is a refund.
+      "step1:inflow->refund",
       "step2:confirmed",
       "step2:confirmed+flag_ignored_matched",
       "step2:confirmed+unplanned_on_matched",
@@ -504,6 +525,11 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
     }
     for (const key of required) {
       expect(hits.get(key) ?? 0, key).toBeGreaterThanOrEqual(MIN_HITS);
+    }
+    // (B6) …and a refund nets each coverage a purchase can have. Refunds are one
+    // trigger of fourteen, so each rung is reached fewer times (17–69 on this seed).
+    for (const nets of ["bill_matched", "unplanned", "allowance_monthly", "allowance_weekly", "reimbursable", "needs_classification"]) {
+      expect(hits.get(`step1:refund-nets:${nets}`) ?? 0, `refund nets ${nets}`).toBeGreaterThanOrEqual(10);
     }
   });
 });

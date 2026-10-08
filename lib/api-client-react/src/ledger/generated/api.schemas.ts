@@ -4189,7 +4189,7 @@ export type SpendingFactsRange = {
 };
 
 /**
- * Every purchase on any account, categorized or not — realSpend plus uncategorized — through the one spending rule (spendingFilter.ts classifyOutflow). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth.
+ * Every purchase on any account, categorized or not, through the one spending rule (spendingFilter.ts classifyOutflow), less the refunds on the same account (B6, classifyRefund), never below zero per account: realSpend + uncategorized − (refunds.total − refunds.fromCategories). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth. transactionCount counts purchases.
  */
 export type SpendingFactsHouseholdSpend = {
   total: number;
@@ -4213,11 +4213,20 @@ export type SpendingFactsUnplanned = {
 };
 
 /**
- * The categorized part of householdSpend; the basis of byCategory, byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends.
+ * The categorized part of householdSpend, less the refunds filed to the same category on the same account (B6, never below zero there); the basis of byCategory. byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends stay purchases. transactionCount counts purchases.
  */
 export type SpendingFactsRealSpend = {
   total: number;
   transactionCount: number;
+};
+
+/**
+ * (B6) Refunds in the range (classifyRefund): money back on a card, or a credit whose description says REFUND on another account — never a transfer, a card payment, income or a reimbursable credit. Each nets its own account's spending, never below zero. total is what they took off householdSpend; fromCategories the part of it also taken off realSpend and byCategory; transactionCount the refund rows.
+ */
+export type SpendingFactsRefunds = {
+  total: number;
+  transactionCount: number;
+  fromCategories: number;
 };
 
 /**
@@ -4313,12 +4322,14 @@ export type SpendingFactsReimbursable = {
 
 export interface SpendingFacts {
   range: SpendingFactsRange;
-  /** Every purchase on any account, categorized or not — realSpend plus uncategorized — through the one spending rule (spendingFilter.ts classifyOutflow). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth. */
+  /** Every purchase on any account, categorized or not, through the one spending rule (spendingFilter.ts classifyOutflow), less the refunds on the same account (B6, classifyRefund), never below zero per account: realSpend + uncategorized − (refunds.total − refunds.fromCategories). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth. transactionCount counts purchases. */
   householdSpend: SpendingFactsHouseholdSpend;
   /** Purchases explicitly marked UN, categorized or not, through the same rule as householdSpend (so never a transfer, debt payment, card payment or reimbursable charge). Details are the largest 20 purchases; total covers the whole window. */
   unplanned: SpendingFactsUnplanned;
-  /** The categorized part of householdSpend; the basis of byCategory, byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends. */
+  /** The categorized part of householdSpend, less the refunds filed to the same category on the same account (B6, never below zero there); the basis of byCategory. byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends stay purchases. transactionCount counts purchases. */
   realSpend: SpendingFactsRealSpend;
+  /** (B6) Refunds in the range (classifyRefund): money back on a card, or a credit whose description says REFUND on another account — never a transfer, a card payment, income or a reimbursable credit. Each nets its own account's spending, never below zero. total is what they took off householdSpend; fromCategories the part of it also taken off realSpend and byCategory; transactionCount the refund rows. */
+  refunds: SpendingFactsRefunds;
   /** The mirror of realSpend — money arriving from outside the household, through the same filter that decides real spending. Transfers between the household's own accounts, reimbursements, debt-payment counterparts and card refunds are all excluded, so this is what was EARNED in the range rather than everything that landed in an account. */
   realIncome: SpendingFactsRealIncome;
   uncategorized: SpendingFactsUncategorized;

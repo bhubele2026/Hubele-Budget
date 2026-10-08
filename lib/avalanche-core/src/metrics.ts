@@ -14,6 +14,7 @@
 
 import { effectiveDebtBalance } from "./index";
 import { goalProgress, reservesHeldCents, type GoalMathRow } from "./goals";
+import { allowanceTotals } from "./householdMoney";
 
 export const METRICS_VERSION = 1;
 
@@ -32,7 +33,10 @@ export interface MetricsSnapshotRow {
 /** A week row as the money position reads it (`PositionWeekRow`). */
 export interface MetricsSpendRow {
   coverage: string;
+  /** (B6) Signed: a refund is negative, in the coverage it nets (`allowanceRowOf`). */
   spend: number | string;
+  /** (B6) The account a refund nets on (`netAccountOf`). */
+  account?: string;
 }
 
 /** (PR-C) A goal row with its current amount in dollars (the linked account's balance or the typed amount; null = unknown). */
@@ -122,14 +126,10 @@ function dayNumber(iso: string): number {
 /**
  * What counts against the weekly cap — the money position's own rule
  * (`computePosition`): filed to the weekly allowance, plus spending not yet
- * filed. In cents.
+ * filed, (B6) refunds netted per account by the same `allowanceTotals`. In cents.
  */
 export function discretionaryCents(rows: readonly MetricsSpendRow[]): number {
-  let c = 0;
-  for (const r of rows) {
-    if (r.coverage === "allowance_weekly" || r.coverage === "needs_classification") c += cents(r.spend);
-  }
-  return c;
+  return allowanceTotals(rows).discretionaryCents;
 }
 
 /** The longest any Plaid item has gone without a good sync, in whole days; null with none to judge. */

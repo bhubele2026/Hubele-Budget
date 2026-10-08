@@ -503,6 +503,7 @@ export * from "./spendingFactsMonthlyTrendsItemByTopCategoryItem";
 export * from "./spendingFactsRange";
 export * from "./spendingFactsRealIncome";
 export * from "./spendingFactsRealSpend";
+export * from "./spendingFactsRefunds";
 export * from "./spendingFactsReimbursable";
 export * from "./spendingFactsUncategorized";
 export * from "./spendingFactsUncategorizedSampleMerchantsItem";

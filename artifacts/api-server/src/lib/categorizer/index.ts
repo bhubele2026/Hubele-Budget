@@ -2,11 +2,12 @@
 //
 // Stages (stages/, first that yields wins; see decide.ts):
 //   locked     category_locked_by_user → skipped entirely (the flag is the audit)
+//   refund     (B6) a credit linked to an earlier purchase → QUEUE only, never the model   0.55
 //   memory     merchant_memory by merchantSignature (a correction beats a rule) 0.92 / 0.75
 //   rule       household mapping_rules (user-authored), deterministic order     0.95 / 0.85
 //   recurring  an active recurring item, name + amount                           0.90 / 0.70
 //   inherited  the pending row's filing via effectiveFiling (write ≡ read)       0.95
-//   heuristic  card payment / transfer / refund evidence → QUEUE only            0.50 / 0.55
+//   heuristic  card payment / transfer / unmatched refund → QUEUE only           0.50 / 0.55
 //   model      ModelStage (AI-1); NullModelStage here                            ≤ 0.899
 // Bands: auto ≥ 0.9 writes category_id; provisional 0.6–0.9 writes it, sets
 // category_provisional and queues; < 0.6 leaves category_id and queues.
@@ -309,7 +310,9 @@ export async function runCategorizationBatch(
     if (row.categoryLockedByUser) continue;
     if (!engineMayWrite(row, hist, { freshIds: opts.freshIds, now })) continue;
     const result = decideRow(row, ctx);
-    if (!result || bandFor(result.confidence) === "queue") ambiguous.push(row);
+    // (B6) A refund decision is a question for a person, never the model's: a
+    // model answer could file it (provisional, or auto behind an open gate).
+    if (!result || (bandFor(result.confidence) === "queue" && result.source !== "refund")) ambiguous.push(row);
     if (!result) continue;
     const latest = latestLive(hist);
     if (

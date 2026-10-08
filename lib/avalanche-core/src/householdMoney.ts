@@ -53,9 +53,13 @@
 //
 // An inflow (`classifyOutflow`'s "not_outflow": the row is not an outflow at
 // all) is not covered by the outflow rule, so it is decided on its own
-// footing: real income (`isRealIncome`) is `income`; every other inflow
-// (a transfer in, a refund, a debt draw) is `excluded` — the same inflows
-// `buildSpendingFacts` already ignores when it sums income.
+// footing: real income (`isRealIncome`) is `income`; (B6) a refund
+// (`classifyRefund`, with `reimbursableIsSpend: true`) is `refund`, and
+// `nets` names the coverage it takes money off — placed by steps 2-7 below
+// exactly as a purchase with the same flags would be; every other inflow (a
+// transfer in, a debt draw, an unmarked deposit) is `excluded`, as before.
+// `allowanceTotals` does the netting: per account, inside a window, never
+// below zero (docs/reviews/2026-10-08-b6-refunds.md).
 //
 // timing — which pool the row moves through:
 //   - `checking`: the row is on the household's tracked checking account —
@@ -81,8 +85,12 @@
 import { isBankRow } from "./cashRows";
 import { weekBounds } from "./householdTime";
 import {
+  CARD_LEDGER_SOURCES,
   classifyOutflow,
+  classifyRefund,
+  creditAmount,
   isRealIncome,
+  spendAmount,
   type SpendContext,
   type SpendTxn,
 } from "./spendingRule";
@@ -99,8 +107,20 @@ export const MOVEMENT_COVERAGES = [
   "needs_classification",
   "income",
   "excluded",
+  // (B6) Money back on a spending account; `nets` says which coverage it reduces.
+  "refund",
 ] as const;
 export type MovementCoverage = (typeof MOVEMENT_COVERAGES)[number];
+
+/**
+ * (B6) The coverages a refund can net: the ones steps 2-7 place a purchase in.
+ * A refund is never itself a transfer, debt payment, card payment, income or
+ * excluded row — those credits are not refunds.
+ */
+export type RefundNets = Extract<
+  MovementCoverage,
+  "bill_matched" | "unplanned" | "allowance_monthly" | "allowance_weekly" | "reimbursable" | "needs_classification"
+>;
 
 /**
  * A precedence conflict this row had, reported rather than hidden. Both only
@@ -119,6 +139,8 @@ export interface MovementClassification {
   timing: MovementTiming;
   /** Present only when a lower-precedence signal on the row was overruled. */
   conflict?: MovementConflict;
+  /** (B6) Present only on a `refund`: the coverage it takes money off. */
+  nets?: RefundNets;
 }
 
 /**
@@ -127,7 +149,7 @@ export interface MovementClassification {
  * file header for why this is a mirror, not an import, and where the two are
  * pinned equal.
  */
-export const CARD_LEDGER_SOURCES = ["amex", "plaid:amex"] as const;
+export { CARD_LEDGER_SOURCES };
 
 /** The row `classifyMovement` reads: the core outflow fields, identity, and
  *  the three allowance flags. Every field required, same reasoning as
@@ -205,36 +227,140 @@ export function classifyMovement(
     case "income":
       return { coverage: "income", timing };
     case "not_outflow":
-      return { coverage: isRealIncome(row, ctx) ? "income" : "excluded", timing };
+      if (isRealIncome(row, ctx)) return { coverage: "income", timing };
+      // (B6) A refund nets the coverage a purchase with its flags would have.
+      if (classifyRefund(row, ctx, { reimbursableIsSpend: true })) {
+        return { coverage: "refund", timing, nets: placeOf(row, ctx).coverage };
+      }
+      return { coverage: "excluded", timing };
     case "reimbursable": // unreachable: reimbursableIsSpend suppresses this
     case "spend":
       break;
   }
+  return { ...placeOf(row, ctx), timing };
+}
 
+/** Steps 2-7: where a purchase (or, B6, the refund of one) is placed. */
+function placeOf(
+  row: MovementRow,
+  ctx: MovementContext,
+): { coverage: RefundNets; conflict?: MovementConflict } {
   // Step 2: a confirmed match beats every flag, and says which one it beat.
   if (ctx.matchedTxnIds.has(row.id)) {
     if (row.unplannedAllowance) {
-      return { coverage: "bill_matched", timing, conflict: "unplanned_on_matched" };
+      return { coverage: "bill_matched", conflict: "unplanned_on_matched" };
     }
     if (row.monthlyAllowance || row.weeklyAllowance) {
-      return { coverage: "bill_matched", timing, conflict: "flag_ignored_matched" };
+      return { coverage: "bill_matched", conflict: "flag_ignored_matched" };
     }
-    return { coverage: "bill_matched", timing };
+    return { coverage: "bill_matched" };
   }
   // …a tier-2 pair only where the household put no flag.
   const flagged = row.unplannedAllowance || row.monthlyAllowance || row.weeklyAllowance;
   if (!flagged && ctx.tier2PairedTxnIds?.has(row.id)) {
-    return { coverage: "bill_matched", timing };
+    return { coverage: "bill_matched" };
   }
   // ⭐ (PR-B2, the owner's rule of 2026-09-15) A REIMBURSABLE CHARGE IS ITS OWN ROW:
   // it comes ahead of every allowance flag, as `classifyOutflow`'s own rule 7 and
   // today's Spending report and Budget card already treat it. Before PR-B2 a
   // reimbursable row the household also flagged weekly counted against the week.
-  if (row.reimbursable) return { coverage: "reimbursable", timing };
-  if (row.unplannedAllowance) return { coverage: "unplanned", timing };
-  if (row.monthlyAllowance) return { coverage: "allowance_monthly", timing };
-  if (row.weeklyAllowance) return { coverage: "allowance_weekly", timing };
-  return { coverage: "needs_classification", timing };
+  if (row.reimbursable) return { coverage: "reimbursable" };
+  if (row.unplannedAllowance) return { coverage: "unplanned" };
+  if (row.monthlyAllowance) return { coverage: "allowance_monthly" };
+  if (row.weeklyAllowance) return { coverage: "allowance_weekly" };
+  return { coverage: "needs_classification" };
+}
+
+// ── (B6) Refunds net: per account, inside a window, never below zero ───────
+
+/**
+ * The account a row nets on: its Plaid account, else its ledger source (a
+ * workbook Amex row, a manual row). A refund only ever nets spending on the
+ * same account.
+ */
+export function netAccountOf(row: { plaidAccountId: string | null; source: string }): string {
+  return row.plaidAccountId ?? `source:${row.source}`;
+}
+
+/**
+ * One classified row as the allowance figures read it — the shape
+ * `PositionWeekRow` (availableToSpend.ts) and `MetricsSpendRow` (metrics.ts)
+ * already have, plus its account.
+ */
+export interface AllowanceRow {
+  /** The coverage the row counts in; a refund carries the coverage it nets. */
+  coverage: string;
+  /** Signed dollars: + a purchase (`spendAmount`), − a refund (`creditAmount`). 0 for anything else. */
+  spend: number | string;
+  /** `netAccountOf(row)`. Absent: every such row nets on one shared account. */
+  account?: string;
+}
+
+/** ⭐ (B6) A row as `allowanceTotals` reads it: a refund moves into the coverage it nets, with its credit negative. */
+export function allowanceRowOf(
+  row: MovementRow,
+  m: MovementClassification,
+): { coverage: MovementCoverage; spend: number; account: string } {
+  const account = netAccountOf(row);
+  if (m.coverage === "refund" && m.nets) return { coverage: m.nets, spend: -creditAmount(row), account };
+  return { coverage: m.coverage, spend: spendAmount(row), account };
+}
+
+export interface AllowanceTotals {
+  /** allowance_weekly + needs_classification: what counts against the weekly cap. */
+  discretionaryCents: number;
+  /** The not-yet-filed part of it (needs_classification). Never more than `discretionaryCents`. */
+  unfiledCents: number;
+  unplannedCents: number;
+  monthlyCents: number;
+}
+
+const rowCents = (v: number | string): number => {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+};
+
+/**
+ * ⭐ (B6) THE WINDOW'S ALLOWANCE FIGURES, REFUNDS NETTED. The caller passes the
+ * rows of ONE window (a household week, a month). On each account, a refund
+ * takes its credit off the pool it nets, and no pool goes below zero:
+ *
+ *   the cap's pool  = weekly + unfiled  (one pool: both count against the cap)
+ *   unplanned       = unplanned
+ *   monthly         = monthly
+ *
+ *   discretionary_a = max(0, weekly_a + unfiled_a)
+ *   unfiled_a       = min(discretionary_a, max(0, unfiled_a))
+ *   unplanned_a     = max(0, unplanned_a),  monthly_a = max(0, monthly_a)
+ *
+ * and each figure is the sum over accounts. The cap's pool nets as ONE pool on
+ * purpose: the card's payoff takes a refund off the card's charges whichever
+ * flag it carries, and the hook's remaining allowance must give back exactly
+ * that much, or the payoff would shrink while the room stayed put — reading
+ * high (see the review note). With no refund every figure is the plain sum it
+ * was before B6: a sum of non-negative amounts is never floored.
+ */
+export function allowanceTotals(rows: readonly AllowanceRow[]): AllowanceTotals {
+  const by = new Map<string, { weekly: number; unfiled: number; unplanned: number; monthly: number }>();
+  for (const r of rows) {
+    const key = r.account ?? "";
+    let a = by.get(key);
+    if (!a) by.set(key, (a = { weekly: 0, unfiled: 0, unplanned: 0, monthly: 0 }));
+    const c = rowCents(r.spend);
+    if (r.coverage === "allowance_weekly") a.weekly += c;
+    else if (r.coverage === "needs_classification") a.unfiled += c;
+    else if (r.coverage === "unplanned") a.unplanned += c;
+    else if (r.coverage === "allowance_monthly") a.monthly += c;
+  }
+  const out: AllowanceTotals = { discretionaryCents: 0, unfiledCents: 0, unplannedCents: 0, monthlyCents: 0 };
+  for (const a of by.values()) {
+    const disc = Math.max(0, a.weekly + a.unfiled);
+    out.discretionaryCents += disc;
+    out.unfiledCents += Math.min(disc, Math.max(0, a.unfiled));
+    out.unplannedCents += Math.max(0, a.unplanned);
+    out.monthlyCents += Math.max(0, a.monthly);
+  }
+  return out;
 }
 
 // ── The everyday plan (owner decision 7) ────────────────────────────────────

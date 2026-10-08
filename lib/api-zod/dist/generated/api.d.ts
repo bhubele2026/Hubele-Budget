@@ -9118,6 +9118,19 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         transactionCount: number;
         total: number;
     }>;
+    refunds: zod.ZodObject<{
+        total: zod.ZodNumber;
+        transactionCount: zod.ZodNumber;
+        fromCategories: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        transactionCount: number;
+        total: number;
+        fromCategories: number;
+    }, {
+        transactionCount: number;
+        total: number;
+        fromCategories: number;
+    }>;
     realIncome: zod.ZodObject<{
         total: zod.ZodNumber;
         transactionCount: zod.ZodNumber;
@@ -9358,6 +9371,11 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         transactionCount: number;
         total: number;
     };
+    refunds: {
+        transactionCount: number;
+        total: number;
+        fromCategories: number;
+    };
     realIncome: {
         transactionCount: number;
         total: number;
@@ -9450,6 +9468,11 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
     realSpend: {
         transactionCount: number;
         total: number;
+    };
+    refunds: {
+        transactionCount: number;
+        total: number;
+        fromCategories: number;
     };
     realIncome: {
         transactionCount: number;

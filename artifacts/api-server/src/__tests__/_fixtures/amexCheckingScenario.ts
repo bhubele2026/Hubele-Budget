@@ -265,39 +265,22 @@ export const EOD_DATES = [
 // package that changes one notices — and lists each as an it.todo carrying the
 // contract's value.
 
-// (B5) D3 — the Amex anchor never moved after a Plaid sync — is fixed: its
-// figures are asserted at the contract's value at every step.
-export type DifferenceId = "D1" | "D2";
-export const DIFFERENCE_TITLES: Record<DifferenceId, string> = {
-  D1: "a refund does not net: spend, the allowance left, the Amex page and the closed week's payoff count the charge gross",
-  D2: "the refund is not queued: 'KROGER #442 REFUND' never links to 'KROGER #442', so no refund decision is made",
-};
+// (B5) D3 — the Amex anchor never moved after a Plaid sync — is fixed.
+// (B6) D1 — a refund did not net — and D2 — the refund was not queued — are
+// fixed (docs/reviews/2026-10-08-b6-refunds.md). No difference remains: every
+// figure of every step is asserted at the contract's value.
+export type DifferenceId = never;
+export const DIFFERENCE_TITLES: Record<DifferenceId, string> = {};
 export type Difference = { id: DifferenceId; path: string; today: unknown };
 
-const grossRefund: Difference[] = [
-  { id: "D1", path: "amex.weekCharges", today: "86.33" },
-  { id: "D1", path: "amex.combinedWeekCharges", today: "86.33" },
-  { id: "D1", path: "spentMonth", today: "128.43" },
-];
 export const DIFFERENCES: Record<StepId, Difference[]> = {
   S0: [],
   S1: [],
   S2: [],
   S3a: [],
   S3b: [],
-  S4: [
-    ...grossRefund,
-    { id: "D1", path: "spentWeek", today: "128.43" },
-    { id: "D1", path: "position.remainingWeek", today: "171.57" },
-    { id: "D1", path: "position.needsClassificationWeek", today: "128.43" },
-    { id: "D1", path: "position.safeToSpendNow", today: "171.57" },
-    { id: "D2", path: "queue", today: [] },
-  ],
-  S5: [
-    ...grossRefund,
-    { id: "D1", path: "forecast.assumedPaid", today: ["Weekly Spend 2026-10-10 plan -86.33 ← AMERICAN EXPRESS ACH PMT M2481 -100.00"] },
-    { id: "D2", path: "queue", today: ["AMERICAN EXPRESS ACH PMT M2481 | heuristic | queue | —"] },
-  ],
+  S4: [],
+  S5: [],
 };
 
 const getPath = (o: unknown, path: string): unknown =>

@@ -7,7 +7,7 @@
  */
 
 /**
- * Every purchase on any account, categorized or not — realSpend plus uncategorized — through the one spending rule (spendingFilter.ts classifyOutflow). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth.
+ * Every purchase on any account, categorized or not, through the one spending rule (spendingFilter.ts classifyOutflow), less the refunds on the same account (B6, classifyRefund), never below zero per account: realSpend + uncategorized − (refunds.total − refunds.fromCategories). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth. transactionCount counts purchases.
  */
 export type SpendingFactsHouseholdSpend = {
   total: number;

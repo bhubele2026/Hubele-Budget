@@ -9,11 +9,11 @@ import {
 } from "@workspace/db";
 import {
   METRICS_VERSION,
+  allowanceRowOf,
   classifyMovement,
   computeDailyMetrics,
   keepPointInTime,
   monthStartOf,
-  spendAmount,
   weekBounds,
   type DailyMetrics,
   type DailyMetricsInputs,
@@ -116,10 +116,8 @@ async function liveSpend(
   const to = week.end > today ? week.end : today;
   const money = await loadMoneyContext(householdId, { start: from, end: to }, { tier2PairedTxnIds: tier2 });
   const rows = await loadMovementRows(householdId, from, to, money);
-  const asRow = (r: (typeof rows)[number]): MetricsSpendRow => ({
-    coverage: classifyMovement(r, money).coverage,
-    spend: spendAmount(r),
-  });
+  // (B6) `allowanceRowOf`: the position's own row, refunds netted on their account.
+  const asRow = (r: (typeof rows)[number]): MetricsSpendRow => allowanceRowOf(r, classifyMovement(r, money));
   return {
     weekRows: rows.filter((r) => r.occurredOn >= weekFrom && r.occurredOn <= week.end).map(asRow),
     monthRows: rows.filter((r) => r.occurredOn >= monthFrom && r.occurredOn <= today).map(asRow),
