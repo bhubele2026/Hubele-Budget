@@ -179,8 +179,9 @@ describe("prompt registry", () => {
     expect(resolvePrompt("recap", reg)).toBeNull();
   });
 
-  it("ships the categorize (AI-1) and recap (AI-4a) prompts, and no prompt carries a date in its system text", () => {
-    expect(Object.keys(PROMPTS)).toEqual(["categorize", "recap"]);
+  it("ships the categorize (AI-1), recap (AI-4a) and chat (AI-2) prompts, and no prompt carries a date in its system text", () => {
+    expect(Object.keys(PROMPTS)).toEqual(["categorize", "recap", "chat"]);
+    for (const v of Object.values(PROMPTS)) for (const p of Object.values(v!)) expect(p.system).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     expect(pingV1.system).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     expect(pingV1.build({ word: "hello" })[0]!.content).toBe('<untrusted source="word">hello</untrusted>');
   });
