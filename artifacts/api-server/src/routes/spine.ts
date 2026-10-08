@@ -17,6 +17,7 @@ import { buildBillsSummary, pickNextBill, todayDate } from "../lib/billsSummary"
 import { computeReviewCount } from "../lib/reviewCount";
 import { withPendingPayments } from "../lib/debtPending";
 import { computeBankFreshness } from "../lib/bankFreshness";
+import { computeDebtHeadline } from "../lib/debtPlan";
 
 const router: IRouter = Router();
 
@@ -45,6 +46,8 @@ const router: IRouter = Router();
  *   nextBill / billsDueCount      → pickNextBill(buildBillsSummary())  [lib/billsSummary]
  *   debt.payoffPct                → payoffPct()          [@workspace/avalanche-core]
  *                                   over withPendingPayments() rows [lib/debtPending]
+ *   debt.nextMilestone / .paidDownMtd → computeDebtHeadline(signal)  [lib/debtPlan]
+ *                                   (also GET /debt-plan .milestones.next / .paidDownGenuineMtd)
  *   reviewCount                   → computeReviewCount()  [lib/reviewCount]
  *   position.*                    → buildMoneyPosition()  [lib/moneyPosition]
  *                                   (also GET /money/position), handed THIS
@@ -128,7 +131,13 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
   // the Debts and Avalanche pages, which is the exact disagreement C10 exists
   // to end. One extra read of already-visible transaction rows, on the same
   // household, off the same connection.
-  const debtRowsWithPending = await withPendingPayments(householdId, debtRows);
+  const [debtRowsWithPending, debtHeadline] = await Promise.all([
+    withPendingPayments(householdId, debtRows),
+    // (PR-D) The same function `GET /debt-plan` runs, over the same 90-day
+    // signal. Both fields are safe for the front door: a month and a label, and
+    // an amount PAID — never a balance.
+    computeDebtHeadline(householdId, ownerUserId, signal),
+  ]);
 
   res.json({
     asOf: new Date().toISOString(),
@@ -164,6 +173,8 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
     },
     debt: {
       payoffPct: payoffPct(debtRowsWithPending),
+      nextMilestone: debtHeadline.nextMilestone,
+      paidDownMtd: debtHeadline.paidDownMtd,
     },
     reviewCount,
     // ⭐ (PR-B1) The money position's headline. Every field is the

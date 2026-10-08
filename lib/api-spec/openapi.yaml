@@ -25,6 +25,7 @@ tags:
   - name: invitations
   - name: members
   - name: spine
+  - name: debt-plan
   - name: ops
   - name: recap
     description: (AI-0) Owner-only operations views (job queues).
@@ -2303,6 +2304,44 @@ paths:
         "403":
           description: Forbidden
 
+  /debt-plan:
+    get:
+      operationId: getDebtPlan
+      tags: [debt-plan]
+      summary: The debt plan — strategies, debt-free range, milestones, planned vs confirmed
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DebtPlan" }
+  /debt-plan/reconcile:
+    post:
+      operationId: reconcileDebtPlan
+      tags: [debt-plan]
+      summary: (Owner) Re-run the liability ledger and claim confirmation passes
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DebtPlanReconcileResult" }
+  /debt-plan/snapshot:
+    post:
+      operationId: snapshotDebtPlan
+      tags: [debt-plan]
+      summary: (Owner) Write the day's debt progress snapshot and reached milestones
+      parameters:
+        - in: query
+          name: date
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DebtPlanSnapshotResult" }
   /spine:
     get:
       operationId: getSpine
@@ -2697,6 +2736,172 @@ components:
       properties:
         count: { type: integer }
 
+    SpineNextMilestone:
+      type: object
+      required: [label, estimatedMonth]
+      properties:
+        label: { type: string }
+        estimatedMonth: { type: string, description: YYYY-MM — a month, never a date }
+    DebtPlanStrategySummary:
+      type: object
+      required: [monthsToFreedom, debtFreeMonth, totalInterest, firstKill]
+      properties:
+        monthsToFreedom: { type: ["integer", "null"] }
+        debtFreeMonth: { type: ["string", "null"], description: YYYY-MM }
+        totalInterest: { type: ["number", "null"] }
+        firstKill:
+          oneOf:
+            - type: object
+              required: [debtId, month]
+              properties:
+                debtId: { type: string }
+                month: { type: string }
+            - type: "null"
+    DebtPlanAssumption:
+      type: object
+      required: [key, text]
+      properties:
+        key: { type: string }
+        text: { type: string }
+    DebtPlanMilestone:
+      type: object
+      required: [key, kind, label, debtId, monthIndex, estimatedMonth]
+      properties:
+        key: { type: string }
+        kind: { type: string, enum: [debt_paid_off, first_card_zero, percent_paid] }
+        label: { type: string }
+        debtId: { type: ["string", "null"] }
+        monthIndex: { type: integer }
+        estimatedMonth: { type: string }
+    DebtPlan:
+      type: object
+      description: >-
+        (PR-D) The debt plan. Months and ranges only — never one exact payoff
+        date. ⚠️ `comparison.detail` is the only part that carries a balance
+        (per debt, for the Plan › Debt page); every other key is held to the
+        no-balance law by spineParity.integration.test.ts.
+      required:
+        [asOf, strategy, extraMonthly, comparison, range, milestones, planned60d, confirmedMtd, paidDownGenuineMtd, assumptions]
+      properties:
+        asOf: { type: string }
+        strategy: { type: string, enum: [avalanche, snowball] }
+        extraMonthly: { type: number, description: avalanche_settings.manual_extra — the extra the forecast plans }
+        comparison:
+          type: object
+          required: [avalanche, snowball, delta, killMonths, detail]
+          properties:
+            avalanche: { $ref: "#/components/schemas/DebtPlanStrategySummary" }
+            snowball: { $ref: "#/components/schemas/DebtPlanStrategySummary" }
+            delta:
+              type: object
+              required: [months, interest]
+              properties:
+                months: { type: ["integer", "null"], description: Snowball minus avalanche }
+                interest: { type: ["number", "null"], description: Snowball minus avalanche }
+            killMonths:
+              type: array
+              items:
+                type: object
+                required: [debtId, avalanche, snowball]
+                properties:
+                  debtId: { type: string }
+                  avalanche: { type: ["string", "null"] }
+                  snowball: { type: ["string", "null"] }
+            detail:
+              type: object
+              required: [debts]
+              properties:
+                debts:
+                  type: array
+                  items:
+                    type: object
+                    required: [debtId, name, apr, balance, minPayment, minPaymentSource]
+                    properties:
+                      debtId: { type: string }
+                      name: { type: string }
+                      apr: { type: number }
+                      balance: { type: number }
+                      minPayment: { type: number }
+                      minPaymentSource: { type: ["string", "null"] }
+        range:
+          type: object
+          required: [earliestMonth, latestMonth, interestLow, interestHigh, runs, assumptions, newChargesPerMonth]
+          properties:
+            earliestMonth: { type: ["string", "null"] }
+            latestMonth: { type: ["string", "null"], description: null = open-ended (a run never finishes) }
+            interestLow: { type: ["number", "null"] }
+            interestHigh: { type: ["number", "null"] }
+            newChargesPerMonth: { type: number, description: Measured — charges on the plan's debts over the last 90 days ÷ 3 }
+            runs:
+              type: array
+              items:
+                type: object
+                required: [key, debtFreeMonth, totalInterest]
+                properties:
+                  key: { type: string, enum: [base, half_extra, new_charges] }
+                  debtFreeMonth: { type: ["string", "null"] }
+                  totalInterest: { type: ["number", "null"] }
+            assumptions:
+              type: array
+              items: { $ref: "#/components/schemas/DebtPlanAssumption" }
+        milestones:
+          type: object
+          required: [achieved, next, upcoming]
+          properties:
+            achieved:
+              type: array
+              items:
+                type: object
+                required: [key, label, debtId, achievedOn]
+                properties:
+                  key: { type: string }
+                  label: { type: string }
+                  debtId: { type: ["string", "null"] }
+                  achievedOn: { type: string }
+            next:
+              oneOf:
+                - type: object
+                  required: [key, label, estimatedMonth]
+                  properties:
+                    key: { type: string }
+                    label: { type: string }
+                    estimatedMonth: { type: string }
+                - type: "null"
+            upcoming:
+              type: array
+              items: { $ref: "#/components/schemas/DebtPlanMilestone" }
+        planned60d:
+          type: array
+          description: Debt minimums and the Avalanche extra still on the cash curve in the next 60 days
+          items:
+            type: object
+            required: [date, itemId, debtId, label, amount]
+            properties:
+              date: { type: string }
+              itemId: { type: string }
+              debtId: { type: ["string", "null"] }
+              label: { type: string }
+              amount: { type: number }
+        confirmedMtd: { type: number, description: Debt payments a bank row confirms, this household month }
+        paidDownGenuineMtd: { type: number, description: confirmedMtd less transfer pairs }
+        assumptions:
+          type: array
+          items: { $ref: "#/components/schemas/DebtPlanAssumption" }
+    DebtPlanReconcileResult:
+      type: object
+      required: [ledgerEventsWritten, ledgerEventsCleared, claimsConfirmed, claimsReverted]
+      properties:
+        ledgerEventsWritten: { type: integer }
+        ledgerEventsCleared: { type: integer }
+        claimsConfirmed: { type: integer }
+        claimsReverted: { type: integer }
+    DebtPlanSnapshotResult:
+      type: object
+      required: [asOf, snapshotsWritten, milestonesInserted]
+      properties:
+        asOf: { type: string }
+        snapshotsWritten: { type: integer }
+        milestonesInserted: { type: array, items: { type: string } }
     SpineNextBill:
       type: object
       required: [name, amount, dueDate]
@@ -2867,7 +3072,7 @@ components:
                 that is under the floor.
         debt:
           type: object
-          required: [payoffPct]
+          required: [payoffPct, nextMilestone, paidDownMtd]
           properties:
             payoffPct:
               type: ["number", "null"]
@@ -2876,6 +3081,19 @@ components:
                 balance or amount owed may ever be added to this object; the
                 landing page renders it and the standing rule is that the front
                 door never shows what is owed. null = no debt carries an anchor.
+            nextMilestone:
+              oneOf:
+                - $ref: "#/components/schemas/SpineNextMilestone"
+                - type: "null"
+              description: >-
+                (PR-D) computeDebtHeadline() — the next milestone the plan
+                passes; equals GET /debt-plan .milestones.next. null when none.
+            paidDownMtd:
+              type: number
+              description: >-
+                (PR-D) computeDebtHeadline() — genuine confirmed debt payments
+                this household month (transfer pairs excluded). An amount PAID,
+                never a balance; equals GET /debt-plan .paidDownGenuineMtd.
         reviewCount: { type: integer, description: computeReviewCount() — unmatched forecast-flagged bank txns this month }
         position: { $ref: "#/components/schemas/SpinePosition" }
 
@@ -3155,6 +3373,16 @@ components:
             to count how many rows a rename will affect. Empty string when no
             stable signature can be derived. Computed server-side per list
             response — never persisted.
+        paymentState:
+          type: ["string", "null"]
+          enum: [claimed, confirmed, null]
+          description: |
+            (PR-D) A payment logged in the app (POST /debts/{id}/payments) is
+            a claim: "claimed" when written, "confirmed" once a bank row pairs
+            with it. Null on every other row.
+        confirmedByTxnId:
+          type: ["string", "null"]
+          description: (PR-D) The bank row that confirmed this claim.
     LedgerRow:
       allOf:
         - $ref: "#/components/schemas/Transaction"
@@ -3183,7 +3411,9 @@ components:
                 counted (moves the balance by its amount); superseded (a pending
                 row its posted row replaced); duplicate (a second row with the
                 same Plaid transaction id); not_bank (a mask-twin row, which the
-                bank balance does not read).
+                bank balance does not read); claim_confirmed (PR-D: a payment
+                logged in the app that a bank row confirmed — the bank row is
+                the payment).
             replacedPendingId:
               type: ["string", "null"]
               description: For a posted row that replaced a pending row, that pending row's id.

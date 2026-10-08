@@ -60,6 +60,8 @@ export function toCashRow(t: TransactionRow): CashRow {
     source: t.source ?? null,
     plaidAccountId: t.plaidAccountId ?? null,
     plaidTransactionId: t.plaidTransactionId ?? null,
+    // (PR-D) A logged payment a bank row confirmed adds 0: the bank row counts.
+    claimConfirmed: t.paymentState === "confirmed" && !!t.confirmedByTxnId,
   };
 }
 

@@ -5,11 +5,16 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { SpineNextMilestone } from "./spineNextMilestone";
 export type SpineDebt = {
     /**
      * Percent of anchored debt paid off, 0–100. ⚠️ PERCENT ONLY — no balance or amount owed may ever be added to this object; the landing page renders it and the standing rule is that the front door never shows what is owed. null = no debt carries an anchor.
      * @nullable
      */
     payoffPct: number | null;
+    /** (PR-D) computeDebtHeadline() — the next milestone the plan passes; equals GET /debt-plan .milestones.next. null when none. */
+    nextMilestone: SpineNextMilestone | null;
+    /** (PR-D) computeDebtHeadline() — genuine confirmed debt payments this household month (transfer pairs excluded). An amount PAID, never a balance; equals GET /debt-plan .paidDownGenuineMtd. */
+    paidDownMtd: number;
 };
 //# sourceMappingURL=spineDebt.d.ts.map

@@ -27,6 +27,7 @@ import moneyRouter from "./money";
 import agentRouter from "./agent";
 import recapRouter from "./recap";
 import smsRouter from "./sms";
+import debtPlanRouter from "./debtPlan";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use(moneyRouter);
 router.use(agentRouter);
 router.use(recapRouter);
 router.use(smsRouter);
+router.use(debtPlanRouter);
 
 export default router;

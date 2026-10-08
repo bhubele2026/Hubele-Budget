@@ -454,7 +454,7 @@ export async function resolveLedgerScope(
  * - `duplicate`: 0 — a second row with the same Plaid transaction id;
  * - `not_bank`: 0 — a mask-twin row; the bank balance reads only the snapshot's account.
  */
-export type BalanceReason = "counted" | "superseded" | "duplicate" | "not_bank";
+export type BalanceReason = "counted" | "superseded" | "duplicate" | "not_bank" | "claim_confirmed";
 
 export type RegisterRow = {
   id: string;
@@ -503,6 +503,9 @@ function registerAmount(
     case "superseded":
     case "duplicate":
     case "not_bank":
+    // (PR-D) The first OPEN item above, decided: a logged payment a bank row
+    // confirmed moves the register by 0 — here and in the bank balance alike.
+    case "claim_confirmed":
       return { cents: 0, counts: false, reason: outcome.reason };
     case "held":
     case "adjusted":
@@ -530,6 +533,8 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
       plaidAccountId: t.plaidAccountId,
       plaidTransactionId: t.plaidTransactionId,
       forecastFlag: t.forecastFlag,
+      paymentState: t.paymentState,
+      confirmedByTxnId: t.confirmedByTxnId,
     })
     .from(t)
     .where(and(eq(t.householdId, scope.householdId), bankRowWhere(scope.plaidAccountIds, scope.snapshotAccount)))
@@ -547,6 +552,7 @@ export async function loadRegister(scope: LedgerScope): Promise<Register> {
     source: r.source ?? null,
     plaidAccountId: r.plaidAccountId ?? null,
     plaidTransactionId: r.plaidTransactionId ?? null,
+    claimConfirmed: r.paymentState === "confirmed" && !!r.confirmedByTxnId,
   }));
   const today = scope.anchor.today;
 

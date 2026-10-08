@@ -403,9 +403,28 @@ export const transactionsTable = pgTable(
     debtId: uuid("debt_id").references((): AnyPgColumn => debtsTable.id, {
       onDelete: "set null",
     }),
+    // (PR-D) A payment logged in the app (`POST /debts/:id/payments`) is a
+    // CLAIM: 'claimed' when written, 'confirmed' once a bank row pairs with it
+    // (`lib/debtPaymentConfirm.ts`), which `confirmed_by_txn_id` names. NULL on
+    // every other row, and on payments logged before PR-D. A confirmed claim
+    // adds 0 to cash (`classifyCashRows` reason `claim_confirmed`): the bank
+    // row is the payment. Added by lib/db/migrations/0060_debt_plan.sql.
+    paymentState: text("payment_state"),
+    confirmedByTxnId: uuid("confirmed_by_txn_id").references(
+      (): AnyPgColumn => transactionsTable.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
+    paymentStateCheck: check(
+      "transactions_payment_state_check",
+      sql`${t.paymentState} IS NULL OR ${t.paymentState} IN ('claimed', 'confirmed')`,
+    ),
+    // One bank row confirms at most one claim.
+    confirmedByTxnUq: uniqueIndex("transactions_confirmed_by_txn_uq")
+      .on(t.confirmedByTxnId)
+      .where(sql`${t.confirmedByTxnId} IS NOT NULL`),
     userIdx: index("transactions_user_idx").on(t.userId, t.occurredOn),
     sourceIdx: index("transactions_user_source_idx").on(t.userId, t.source),
     plaidTxnUq: uniqueIndex("transactions_plaid_txn_uq").on(t.plaidTransactionId),
@@ -1005,3 +1024,4 @@ export type ImportSnapshot = typeof importSnapshotsTable.$inferSelect;
 export * from "./ai";
 export * from "./agent";
 export * from "./recap";
+export * from "./debt";

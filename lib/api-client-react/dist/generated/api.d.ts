@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentRunList, AllowancePlan, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListAgentActionsParams, ListAgentFindingsParams, ListAgentRunsParams, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapPauseInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentRunList, AllowancePlan, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListAgentActionsParams, ListAgentFindingsParams, ListAgentRunsParams, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapPauseInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -2849,6 +2849,73 @@ export declare const useRemoveMember: <TError = ErrorType<void>, TContext = unkn
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof removeMember>>, TError, {
     id: string;
+}, TContext>;
+/**
+ * @summary The debt plan — strategies, debt-free range, milestones, planned vs confirmed
+ */
+export declare const getGetDebtPlanUrl: () => string;
+export declare const getDebtPlan: (options?: RequestInit) => Promise<DebtPlan>;
+export declare const getGetDebtPlanQueryKey: () => readonly ["/api/debt-plan"];
+export declare const getGetDebtPlanQueryOptions: <TData = Awaited<ReturnType<typeof getDebtPlan>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDebtPlan>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getDebtPlan>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetDebtPlanQueryResult = NonNullable<Awaited<ReturnType<typeof getDebtPlan>>>;
+export type GetDebtPlanQueryError = ErrorType<unknown>;
+/**
+ * @summary The debt plan — strategies, debt-free range, milestones, planned vs confirmed
+ */
+export declare function useGetDebtPlan<TData = Awaited<ReturnType<typeof getDebtPlan>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDebtPlan>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary (Owner) Re-run the liability ledger and claim confirmation passes
+ */
+export declare const getReconcileDebtPlanUrl: () => string;
+export declare const reconcileDebtPlan: (options?: RequestInit) => Promise<DebtPlanReconcileResult>;
+export declare const getReconcileDebtPlanMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof reconcileDebtPlan>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof reconcileDebtPlan>>, TError, void, TContext>;
+export type ReconcileDebtPlanMutationResult = NonNullable<Awaited<ReturnType<typeof reconcileDebtPlan>>>;
+export type ReconcileDebtPlanMutationError = ErrorType<unknown>;
+/**
+ * @summary (Owner) Re-run the liability ledger and claim confirmation passes
+ */
+export declare const useReconcileDebtPlan: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof reconcileDebtPlan>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof reconcileDebtPlan>>, TError, void, TContext>;
+/**
+ * @summary (Owner) Write the day's debt progress snapshot and reached milestones
+ */
+export declare const getSnapshotDebtPlanUrl: (params?: SnapshotDebtPlanParams) => string;
+export declare const snapshotDebtPlan: (params?: SnapshotDebtPlanParams, options?: RequestInit) => Promise<DebtPlanSnapshotResult>;
+export declare const getSnapshotDebtPlanMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof snapshotDebtPlan>>, TError, {
+        params?: SnapshotDebtPlanParams;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof snapshotDebtPlan>>, TError, {
+    params?: SnapshotDebtPlanParams;
+}, TContext>;
+export type SnapshotDebtPlanMutationResult = NonNullable<Awaited<ReturnType<typeof snapshotDebtPlan>>>;
+export type SnapshotDebtPlanMutationError = ErrorType<unknown>;
+/**
+ * @summary (Owner) Write the day's debt progress snapshot and reached milestones
+ */
+export declare const useSnapshotDebtPlan: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof snapshotDebtPlan>>, TError, {
+        params?: SnapshotDebtPlanParams;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof snapshotDebtPlan>>, TError, {
+    params?: SnapshotDebtPlanParams;
 }, TContext>;
 /**
  * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
