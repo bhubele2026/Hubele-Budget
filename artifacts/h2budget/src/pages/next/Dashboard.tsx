@@ -14,7 +14,7 @@ import ReviewPanel from "./dashboard/ReviewPanel";
  *  Panel order is importance order, so a phone reads it top to bottom. */
 export default function NextDashboardPage() {
   return (
-    <div data-testid="page-next-dashboard">
+    <div data-testid="page-next-dashboard" className="lg:pb-14">
       <Page title="Dashboard" sub="Preview">
         <PageGrid>
           <BriefingPanel />

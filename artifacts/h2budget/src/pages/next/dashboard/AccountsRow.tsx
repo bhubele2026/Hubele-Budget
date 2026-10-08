@@ -5,6 +5,7 @@ import { AccountChip } from "@/components/next";
 import { cardOrderOf, identityOf, type AccountIdentity } from "@/lib/accountIdentity";
 import { useSpine } from "@/hooks/useSpine";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
+import { FreshnessLine } from "@/components/data-state";
 import { isPlaidReauthCode, isSyntheticPlaidItem, plaidReauthReason } from "@/components/plaid-reconnect-button";
 import { btnSecondarySm } from "@/ui";
 import { cn } from "@/lib/utils";
@@ -120,18 +121,28 @@ export default function AccountsRow() {
                         <Fact label="Due" value={due} />
                       </dl>
                     ) : null}
-                    <div className="mt-auto p-4 pt-3 text-micro text-neutral-500">
-                      <span className={cn("font-semibold", st === "ok" ? "text-neutral-600" : "text-bad")} data-testid="dash-account-state">
-                        {STATE_WORD[st]}
-                      </span>
-                      {through ? <span> · Data through {through}</span> : null}
+                    <div className="mt-auto p-4 pt-3 text-micro text-neutral-500" data-testid="dash-account-fresh">
                       {st === "reauth" ? (
-                        <p className="mt-0.5" data-testid="dash-account-reason">
-                          {plaidReauthReason(item.lastSyncErrorCode, {
-                            consentExpirationAt: item.consentExpirationAt, institutionName: item.institutionName,
-                          })}
-                        </p>
-                      ) : null}
+                        <span className="font-semibold text-bad" data-testid="dash-account-state">
+                          Needs reconnecting
+                          {item.lastSyncErrorCode ? (
+                            <span className="font-normal text-neutral-600" data-testid="dash-account-reason">
+                              {" "}· {plaidReauthReason(item.lastSyncErrorCode, {
+                                consentExpirationAt: item.consentExpirationAt, institutionName: item.institutionName,
+                              })}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : isCash && spine?.bank.source && spine.bank.asOfDate ? (
+                        <span data-testid="dash-account-state"><FreshnessLine bank={spine.bank} /></span>
+                      ) : (
+                        <>
+                          <span className={cn("font-semibold", st === "ok" ? "text-neutral-600" : "text-bad")} data-testid="dash-account-state">
+                            {STATE_WORD[st]}
+                          </span>
+                          {through ? <span> · Data through {through}</span> : null}
+                        </>
+                      )}
                     </div>
                   </li>
                 );
