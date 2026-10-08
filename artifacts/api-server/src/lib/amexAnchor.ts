@@ -128,7 +128,11 @@ export async function refreshAmexAnchor(
       .where(
         and(
           eq(debtsTable.userId, userId),
-          sql`${debtsTable.plaidAccountId}::text = ANY(${amexPlaidAccountIds})`,
+          // (B5) `inArray`, as the file's other queries bind lists. The raw
+          // `= ANY(${ids})` spread the array into `ANY(($2))`, which Postgres
+          // refused ("malformed array literal") on every Plaid Amex row — the
+          // sync swallowed it, so the anchor never moved (B4, D3).
+          inArray(sql`${debtsTable.plaidAccountId}::text`, amexPlaidAccountIds),
         ),
       )
       .limit(1);
