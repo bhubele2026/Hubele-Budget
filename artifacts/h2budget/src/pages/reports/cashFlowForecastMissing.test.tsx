@@ -178,9 +178,9 @@ function bannerIn(card: HTMLElement): HTMLElement | null {
   return card.querySelector<HTMLElement>("[data-testid='cashflow-forecast-refresh-banner']");
 }
 
-/** The kit head's title: the card's first span. */
+/** The panel head's title: the card's h2. */
 function titleOf(card: HTMLElement): string {
-  return card.querySelector("span")?.textContent ?? "";
+  return card.querySelector("h2")?.textContent ?? "";
 }
 
 function renderPage() {

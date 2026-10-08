@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
+import { PageGrid } from "@/components/next";
 import {
   useListDebts,
   useListDebtBalanceHistory,
@@ -17,7 +18,7 @@ import {
   catColor,
 } from "@/lib/chartTokens";
 import { CssFillMeter } from "@/lib/cssBars";
-import { emptyNote, th, td, tdNum, Foot, Stat } from "@/ui";
+import { emptyNote, th, td, tdNum, Foot } from "@/ui";
 import {
   fmtMonthLabel,
   debtToSim,
@@ -55,6 +56,7 @@ import {
   tooltipMoney,
   tooltipStyle,
   ReportShell,
+  Stat,
 } from "./reportsShared";
 
 /**
@@ -108,6 +110,7 @@ function DebtSection({
   extraPerMonth: number;
   today: Date;
 }) {
+  const gid = useId().replace(/:/g, "");
   const simDebts = useMemo(() => debts.map(debtToSim), [debts]);
   const sim = useMemo(
     () => simulate({ debts: simDebts, extraPerMonth, strategy }),
@@ -157,8 +160,7 @@ function DebtSection({
   );
 
   return (
-    <div className="space-y-4">
-      <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <PageGrid>
         <Stat
           index={0}
           label="Total debt"
@@ -194,11 +196,11 @@ function DebtSection({
           hint={`vs ${formatCurrency(sim.totalInterestPaid)} on plan`}
           data-testid="debt-report-interest-saved"
         />
-      </div>
 
       {/* Paid off so far — the one big number, as % of the starting total. */}
       <PanelCard
         title="Paid off since tracking began"
+        span={4}
         help="Share of the starting total balance already cleared. The starting total is the earliest balance on record for each debt."
       >
         <div className="px-4 py-3">
@@ -233,6 +235,7 @@ function DebtSection({
           fill against its own starting balance. */}
       <PanelCard
         title="Per-debt progress"
+        span={8}
         help="Filled share is how much of each debt's own starting balance is already paid off. Months left and payoff date come from the current plan."
       >
         {progress.length === 0 ? (
@@ -295,10 +298,11 @@ function DebtSection({
       {/* Real past curve */}
       <ChartCard
         title="Total balance — actual history"
+        span={6}
         help="Total household debt over time. Balances from before a debt was linked are approximated, and the final point reflects current balances, so paid-off debts drop to zero."
         empty={pastBalanceCurve.length === 0 ? "No history yet" : null}
         hideWhenEmpty
-        height={220}
+        height={300}
       >
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
@@ -306,7 +310,7 @@ function DebtSection({
             margin={{ top: 10, right: 16, bottom: 16, left: 0 }}
           >
             <defs>
-              <linearGradient id="past-balance" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id={`${gid}-past`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={DEBT_SERIES.history} stopOpacity={0.7} />
                 <stop offset="100%" stopColor={DEBT_SERIES.history} stopOpacity={0.1} />
               </linearGradient>
@@ -318,7 +322,7 @@ function DebtSection({
             <Area {...ANIM_AREA} animationBegin={animBegin(0)} type="monotone"
               dataKey="total"
               stroke={DEBT_SERIES.history}
-              fill="url(#past-balance)"
+              fill={`url(#${gid}-past)`}
               strokeWidth={2}
               name="Total balance"
             />
@@ -329,16 +333,17 @@ function DebtSection({
       {/* Stacked payoff timeline */}
       <ChartCard
         title="Payoff timeline"
+        span={6}
         help="Stacked balance per debt over time — each layer disappears as that debt is cleared. A colour marks a debt, so it stays with that debt across the whole chart; past the eighth debt the tail shares one grey and the legend names each."
         empty={activeDebts.length === 0 ? "No active debts to project" : null}
         hideWhenEmpty
-        height={340}
+        height={300}
       >
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={stacked} margin={{ top: 10, right: 16, bottom: 16, left: 0 }}>
             <defs>
               {activeDebts.map((d, i) => (
-                <linearGradient key={d.id} id={`payoff-${d.id}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient key={d.id} id={`${gid}-payoff-${d.id}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={catColor(i)} stopOpacity={0.85} />
                   <stop offset="100%" stopColor={catColor(i)} stopOpacity={0.25} />
                 </linearGradient>
@@ -356,7 +361,7 @@ function DebtSection({
                 dataKey={d.name}
                 stackId="1"
                 stroke={catColor(i)}
-                fill={`url(#payoff-${d.id})`}
+                fill={`url(#${gid}-payoff-${d.id})`}
                 strokeWidth={1.5}
               />
             ))}
@@ -364,9 +369,9 @@ function DebtSection({
         </ResponsiveContainer>
       </ChartCard>
 
-      <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Snowball waterfall"
+          span={6}
           help="As each debt is cleared its minimum is freed and rolls into the next one. Orange is the amount freed by that single payoff; navy is the running total rolling forward."
           empty={waterfall.length === 0 ? "No projected payoffs in this window" : null}
           hideWhenEmpty
@@ -386,6 +391,7 @@ function DebtSection({
 
         <ChartCard
           title="Interest vs principal"
+          span={6}
           help="How each projected monthly payment splits. The interest slice should shrink as the smaller balances die."
           empty={ipBars.length === 0 ? "No projection to draw yet" : null}
           hideWhenEmpty
@@ -402,12 +408,11 @@ function DebtSection({
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
-      </div>
 
       {/* Payoff order + months remaining */}
-      <div className="grid gap-4 lg:grid-cols-2">
         <PanelCard
           title="Payoff order"
+          span={6}
           help="Projected payoff date for every debt, in the order the current strategy clears them."
         >
           {killed.length === 0 ? (
@@ -442,6 +447,7 @@ function DebtSection({
 
         <PanelCard
           title="Months remaining"
+          span={6}
           help="How long each balance has left on the current plan. A shorter bar is closer to done, so the bar is scaled to the longest remaining debt."
         >
           {progress.length === 0 ? (
@@ -491,9 +497,8 @@ function DebtSection({
             </div>
           )}
         </PanelCard>
-      </div>
 
-      <p className="text-micro text-neutral-400">
+      <p className="span-12 text-micro text-neutral-400">
         Projection assumes a total monthly payment of{" "}
         {formatCurrency(totalMin + extraPerMonth)} — {formatCurrency(totalMin)} in
         minimums plus {formatCurrency(extraPerMonth)} extra — on the{" "}
@@ -502,6 +507,6 @@ function DebtSection({
           : "snowball strategy (smallest balance first)"}
         .
       </p>
-    </div>
+    </PageGrid>
   );
 }

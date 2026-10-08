@@ -15,7 +15,8 @@ import { effectiveDebtBalance } from "@/lib/debtBalance";
 // Tokens only — no recharts on the hub. `viz` is plain SVG/CSS, so this whole
 // route stays chart-library-free.
 import { CHART, catColor } from "@/lib/chartTokens";
-import { cardButton, fieldLabel } from "@/ui";
+import { fieldLabel } from "@/ui";
+import { PageGrid } from "@/components/next";
 import { ReportsBalanceTiles } from "./reports/reportsShared";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -39,7 +40,7 @@ function ReportTile({
   return (
     <Link
       href={href}
-      className={`${cardButton} p-4`}
+      className="panel panel-link press group tile-in span-4 flex flex-col p-4"
       style={{ animationDelay: `calc(${index} * var(--stagger))` }}
       data-testid={`report-tile-${href.split("/").pop()}`}
     >
@@ -167,11 +168,11 @@ export default function ReportsPage() {
     <div className="space-y-4">
       <h1 className="text-display font-semibold text-brand-navy">Reports</h1>
 
+      <PageGrid>
       {/* At-a-glance balance tiles — the household's live vitals */}
       <ReportsBalanceTiles forecast={forecast} forecastError={forecastError} />
 
       {/* The five drill destinations */}
-      <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <ReportTile
           index={0}
           label="Debt payoff"
@@ -313,7 +314,7 @@ export default function ReportsPage() {
             )
           }
         />
-      </div>
+      </PageGrid>
     </div>
   );
 }

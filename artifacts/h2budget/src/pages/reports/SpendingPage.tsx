@@ -30,6 +30,7 @@ import {
   animBegin,
   catColor,
 } from "@/lib/chartTokens";
+import { PageGrid } from "@/components/next";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
 import {
   card,
@@ -39,7 +40,6 @@ import {
   td,
   tdNum,
   Foot,
-  Stat,
 } from "@/ui";
 import { type RangeMode } from "@/lib/timeRange";
 import {
@@ -66,6 +66,7 @@ import {
   tooltipStyle,
   ReportShell,
   ReportsRangeControls,
+  Stat,
   daysForMode,
 } from "./reportsShared";
 
@@ -483,14 +484,12 @@ function SpendingSection({
 
   if (isLoading || !facts) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-20 w-full rounded-card" />
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-card" />
-          ))}
-        </div>
-      </div>
+      <PageGrid>
+        <Skeleton className="span-12 h-20 w-full rounded-card" />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="span-3 h-24 rounded-card" />
+        ))}
+      </PageGrid>
     );
   }
 
@@ -502,17 +501,22 @@ function SpendingSection({
       ? null
       : facts.dayOfWeek.find((d) => d.dow === selectedDow) ?? null;
 
+  const pieEmpty = pieData.length === 0;
+  const reimEmpty = reimDonut.length === 0;
+  const dowEmpty = (facts.dayOfWeek ?? []).every((d) => d.avgPerDay === 0);
+
   return (
-    <div className="space-y-4">
+    <PageGrid>
       {showUncatBanner && (
-        <UncategorizedBanner
-          facts={facts}
-          uncategorizedTxns={uncategorizedTxns}
-          categories={categories}
-        />
+        <div className="span-12">
+          <UncategorizedBanner
+            facts={facts}
+            uncategorizedTxns={uncategorizedTxns}
+            categories={categories}
+          />
+        </div>
       )}
 
-      <div className="stagger grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat
           index={0}
           label="Total real spend"
@@ -572,11 +576,10 @@ function SpendingSection({
           }
           data-testid="spending-reimbursable"
         />
-      </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Top categories"
+          span={reimEmpty ? 12 : 6}
           help="Real spend by category. Uncategorized is excluded — it has its own banner — so these percentages are of categorized spend only."
           empty={pieData.length === 0 ? "No categorized spend yet" : null}
           hideWhenEmpty
@@ -635,6 +638,7 @@ function SpendingSection({
 
         <ChartCard
           title="Reimbursable vs personal"
+          span={pieEmpty ? 12 : 6}
           help="On Amex: how much is still expected back against the true personal cost."
           empty={reimDonut.length === 0 ? "No Amex spend tagged yet" : null}
           hideWhenEmpty
@@ -661,7 +665,6 @@ function SpendingSection({
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
-      </div>
 
       <ChartCard
         title="Spending heatmap"
@@ -711,9 +714,10 @@ function SpendingSection({
         </div>
       </ChartCard>
 
-      <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Day of week"
+          span={6}
+          className="self-start"
           help="Average spend per day for each weekday. The heaviest day takes the orange; click any bar to break that day down."
           empty={
             (facts.dayOfWeek ?? []).every((d) => d.avgPerDay === 0)
@@ -721,10 +725,10 @@ function SpendingSection({
               : null
           }
           hideWhenEmpty
-          height={selected ? 300 : 190}
+          height={selected ? 380 : 260}
         >
           <div className="flex h-full flex-col">
-            <div className="h-[180px] w-full shrink-0">
+            <div className="h-[240px] w-full shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={facts.dayOfWeek}
@@ -810,6 +814,7 @@ function SpendingSection({
 
         <PanelCard
           title="Top merchants"
+          span={dowEmpty ? 12 : 6}
           help="Top 10 by total spend in this window, with how many times each was hit. Bars darken with rank."
         >
           {merchRows.length === 0 ? (
@@ -832,7 +837,6 @@ function SpendingSection({
             </div>
           )}
         </PanelCard>
-      </div>
 
       {months.length === 1 ? (
         <PanelCard
@@ -955,6 +959,6 @@ function SpendingSection({
           </ResponsiveContainer>
         </ChartCard>
       )}
-    </div>
+    </PageGrid>
   );
 }

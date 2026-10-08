@@ -5,7 +5,8 @@ import { formatCurrency } from "@/lib/utils";
 import { fmtISO } from "@/lib/reportsAnalytics";
 import { type RangeMode } from "@/lib/timeRange";
 import { ANIM_BAR, CHART, animBegin, niceAxis } from "@/lib/chartTokens";
-import { card, cardHead, emptyNote, fieldLabel, Foot, Stat } from "@/ui";
+import { emptyNote, fieldLabel, Foot } from "@/ui";
+import { PageGrid, Panel } from "@/components/next";
 import {
   ResponsiveContainer,
   BarChart,
@@ -23,6 +24,7 @@ import {
   tooltipMoney,
   tooltipStyle,
   ReportShell,
+  Stat,
   ReportsRangeControls,
   daysForMode,
 } from "./reportsShared";
@@ -94,17 +96,17 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <PageGrid>
         {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-24 rounded-card" />
+          <Skeleton key={i} className="span-4 h-24 rounded-card" />
         ))}
-      </div>
+      </PageGrid>
     );
   }
 
   if (isError || !facts) {
     return (
-      <div className={card}>
+      <div className="panel">
         <div className={emptyNote}>Behavior facts unavailable</div>
       </div>
     );
@@ -121,9 +123,9 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
   const sinceMax = Math.max(1, ...sinceRows.map((r) => r.entry?.days ?? 0));
 
   return (
-    <div className="space-y-4">
+    <PageGrid>
       {facts.range.floorApplied && (
-        <p className="text-micro text-neutral-400">
+        <p className="span-12 text-micro text-neutral-400">
           Window clamped to the tracking start, {facts.range.trackingStart}.
         </p>
       )}
@@ -132,9 +134,10 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
           in the set so the three are comparable at a glance. */}
       <PanelCard
         title="Days since last"
+        span={4}
         help="Days since the most recent charge in each group, within this window. Bars are scaled to the longest of the three."
       >
-        <div className="grid grid-cols-1 gap-4 px-4 py-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 px-4 py-3">
           {sinceRows.map((r, i) => (
             <div key={r.key}>
               <div className="flex items-baseline justify-between gap-2">
@@ -169,8 +172,9 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
 
       {/* The facts, as tiles. Every sentence these used to carry now lives in
           the tile's own hint line. */}
-      <div className="stagger grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="span-8 grid grid-cols-1 content-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Stat
+          span={null}
           index={0}
           label="Biggest charge"
           value={ff.biggestSplurge ? formatCurrency(ff.biggestSplurge.amount) : "—"}
@@ -182,6 +186,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
           data-testid="habits-biggest-charge"
         />
         <Stat
+          span={null}
           index={1}
           label="Most-visited merchant"
           value={ff.mostVisitedMerchant ? ff.mostVisitedMerchant.name : "—"}
@@ -193,6 +198,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
           data-testid="habits-top-merchant"
         />
         <Stat
+          span={null}
           index={2}
           label="Next paycheck"
           value={ff.nextPaycheckCountdown ? `${ff.nextPaycheckCountdown.days} days` : "—"}
@@ -204,6 +210,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
           data-testid="habits-next-paycheck"
         />
         <Stat
+          span={null}
           index={3}
           label="Quietest day"
           value={ff.quietestDay ? formatCurrency(ff.quietestDay.total) : "—"}
@@ -214,6 +221,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
           }
         />
         <Stat
+          span={null}
           index={4}
           label="Impulse buys"
           value={ff.impulseBuyCount.count}
@@ -224,6 +232,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
           }
         />
         <Stat
+          span={null}
           index={5}
           label="Subscriptions"
           value={ff.subscriptionsCount.count}
@@ -237,7 +246,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
 
       {/* Streaks — current run against the record, so the meter has a ceiling
           that means something. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="span-6 grid content-start gap-4">
         <StreakCard
           label="No-dining run"
           current={streaks.noDining.currentDays}
@@ -252,6 +261,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
 
       <ChartCard
         title="Spend by day of week"
+        span={6}
         help="Average dollars per day, for each weekday in this window. The heaviest day takes the orange."
         empty={dow.every((d) => d.avgPerDay === 0) ? "No spending in this window" : null}
         hideWhenEmpty
@@ -291,7 +301,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
       </ChartCard>
 
       {/* Biggest expense + biggest income, side by side. */}
-      <PanelCard title="Largest movements">
+      <PanelCard title="Largest movements" span={12}>
         <div className="grid grid-cols-1 divide-y divide-brand-line sm:grid-cols-2 sm:divide-x sm:divide-y-0">
           <div className="px-4 py-3">
             <div className={fieldLabel}>Biggest expense</div>
@@ -325,7 +335,7 @@ function HabitsSection({ from, to }: { from: string; to: string }) {
           the outflow takes a colour; the label says which either way.
         </Foot>
       </PanelCard>
-    </div>
+    </PageGrid>
   );
 }
 
@@ -340,14 +350,16 @@ function StreakCard({
 }) {
   const atRecord = longest > 0 && current >= longest;
   return (
-    <div className={card}>
-      <div className={cardHead}>
-        <span className={`${fieldLabel} flex-1`}>{label}</span>
+    <Panel
+      title={label}
+      variant="static"
+      actions={
         <span className={`chip ${atRecord ? "ok" : "gray"}`}>
           {atRecord ? "At record" : `Record ${longest}`}
         </span>
-      </div>
-      <div className="px-4 py-3">
+      }
+    >
+      <div>
         <div className="flex items-baseline gap-2">
           <span className="font-mono text-display font-semibold tabular-nums text-brand-navy">
             {current}
@@ -373,6 +385,6 @@ function StreakCard({
           />
         </div>
       </div>
-    </div>
+    </Panel>
   );
 }
