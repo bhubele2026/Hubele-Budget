@@ -7,7 +7,8 @@ import { publishableKeyFromHost } from "@clerk/react/internal";
 import { createQueryClient, prefetchSpineOnHint } from "@/data/queryClient";
 import { askForSpineAgainIfFailed } from "@/data/spineRecovery";
 import { readAuthHint, writeAuthHint } from "@/lib/authHint";
-import { importDesign, importPlaidOAuth } from "@/lib/routePrefetch";
+import { prefetchTodayOnIdle } from "@/data/todayData";
+import { importDesign, importDesignToday, importPlaidOAuth } from "@/lib/routePrefetch";
 import { SkeletonFigure, SkeletonLine } from "@/kit/Skeleton";
 import { BootFrame, Shell } from "@/shell/Shell";
 import { NotFound } from "@/shell/NotFound";
@@ -22,6 +23,7 @@ import { SignInPage, SignUpPage } from "@/screens/auth/Auth";
 import Today, { TodaySkeleton } from "@/screens/today/Today";
 
 const DesignPage = lazy(importDesign);
+const DesignTodayPage = lazy(importDesignToday);
 const PlaidOAuthPage = lazy(importPlaidOAuth);
 
 const queryClient = createQueryClient();
@@ -35,6 +37,8 @@ if (typeof window !== "undefined") {
 // Ask for the spine now, in parallel with clerk-js, when this browser has been
 // signed in before. See `prefetchSpineOnHint`.
 prefetchSpineOnHint(queryClient);
+// …then, once it lands and the browser is idle, everything else Today reads.
+prefetchTodayOnIdle(queryClient);
 
 // Captured ONCE at load, before the effect below can write it: "was this
 // browser signed in on a previous open", not "has Clerk answered yet".
@@ -128,6 +132,20 @@ function PublicDesign() {
   );
 }
 
+/** Today on made-up data: public, no network, so the composition can be judged signed out. */
+function PublicDesignToday() {
+  const [location] = useLocation();
+  return (
+    <Shell>
+      <PageErrorBoundary resetKey={location}>
+        <Suspense fallback={<RouteFallback />}>
+          <DesignTodayPage />
+        </Suspense>
+      </PageErrorBoundary>
+    </Shell>
+  );
+}
+
 /** Drops every cached figure when the signed-in user changes (ported). */
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
@@ -163,6 +181,7 @@ function ClerkProviderWithRoutes() {
         <Switch>
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route path="/design/today" component={PublicDesignToday} />
           <Route path="/design" component={PublicDesign} />
           <Route component={ProtectedShell} />
         </Switch>

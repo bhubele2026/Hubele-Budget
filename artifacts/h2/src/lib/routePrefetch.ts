@@ -12,11 +12,13 @@
  * screen that must feel instant.
  */
 export const importDesign = () => import("../screens/design/Design");
+export const importDesignToday = () => import("../screens/design/DesignToday");
 export const importPlaidOAuth = () => import("../screens/plaid-oauth/PlaidOAuth");
 
 /** href → importer, keyed exactly as the routes are declared in App.tsx. */
 export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/design": importDesign,
+  "/design/today": importDesignToday,
   "/plaid-oauth": importPlaidOAuth,
 };
 

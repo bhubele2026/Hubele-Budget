@@ -3,6 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import {
   getGetSpineQueryKey,
   getGetForecastBankBalanceExplainQueryKey,
+  getGetMoneyPositionQueryKey,
 } from "@workspace/api-client-react";
 import {
   getGetTransactionsBalancesQueryKey,
@@ -23,6 +24,7 @@ import {
 
 const SPINE = getGetSpineQueryKey();
 const EXPLAIN = getGetForecastBankBalanceExplainQueryKey();
+const POSITION = getGetMoneyPositionQueryKey();
 const REPORTS = ["/api/reports/spending-facts", { from: "2026-09-01", to: "2026-09-30" }];
 const UNRELATED = ["/api/debts"];
 // (PR14) The Chase list's pages and the balances behind its charts.
@@ -31,7 +33,7 @@ const LEDGER_BALANCES = getGetTransactionsBalancesQueryKey({ dates: "2026-09-05,
 
 function seeded() {
   const qc = new QueryClient();
-  for (const key of [SPINE, EXPLAIN, REPORTS, UNRELATED, LEDGER_PAGES, LEDGER_BALANCES]) {
+  for (const key of [SPINE, EXPLAIN, POSITION, REPORTS, UNRELATED, LEDGER_PAGES, LEDGER_BALANCES]) {
     qc.setQueryData(key, { seeded: true });
   }
   return qc;
@@ -45,6 +47,12 @@ describe("invalidateAfterWrite", () => {
     const qc = seeded();
     invalidateAfterWrite(qc);
     expect(invalidated(qc, SPINE)).toBe(true);
+  });
+
+  it("(S1) marks the money position stale: Today's hero and its sheet read it beside the spine", () => {
+    const qc = seeded();
+    invalidateAfterWrite(qc);
+    expect(invalidated(qc, POSITION)).toBe(true);
   });
 
   it("marks 'Why this number?' stale, so it is never older than the tile", () => {
@@ -80,7 +88,7 @@ describe("(PR14 review M3) writes that invalidate what they move themselves", ()
     expect(shouldInvalidateAfterWrite(OWN_INVALIDATION)).toBe(false);
     const skipped = seeded();
     onWriteSuccess(skipped, { meta: OWN_INVALIDATION });
-    for (const key of [SPINE, EXPLAIN, REPORTS, LEDGER_PAGES, LEDGER_BALANCES]) {
+    for (const key of [SPINE, EXPLAIN, POSITION, REPORTS, LEDGER_PAGES, LEDGER_BALANCES]) {
       expect(invalidated(skipped, key)).toBe(false);
     }
     const ran = seeded();

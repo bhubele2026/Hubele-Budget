@@ -11726,38 +11726,59 @@ export declare const GetMeResponse: zod.ZodObject<{
 /**
  * @summary Returns the signed-in user's per-user UI preferences.
  */
+export declare const getUiPreferencesResponseWhatsNewSeenMax = 32;
 export declare const GetUiPreferencesResponse: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
     chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
+    whatsNewSeen: zod.ZodOptional<zod.ZodString>;
+    autoCategorize: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
+    whatsNewSeen?: string | undefined;
+    autoCategorize?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
+    whatsNewSeen?: string | undefined;
+    autoCategorize?: boolean | undefined;
 }>;
 /**
  * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
  */
+export declare const updateUiPreferencesBodyWhatsNewSeenMax = 32;
 export declare const UpdateUiPreferencesBody: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
     chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
+    whatsNewSeen: zod.ZodOptional<zod.ZodString>;
+    autoCategorize: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
+    whatsNewSeen?: string | undefined;
+    autoCategorize?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
+    whatsNewSeen?: string | undefined;
+    autoCategorize?: boolean | undefined;
 }>;
+export declare const updateUiPreferencesResponseWhatsNewSeenMax = 32;
 export declare const UpdateUiPreferencesResponse: zod.ZodObject<{
     sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
     chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
+    whatsNewSeen: zod.ZodOptional<zod.ZodString>;
+    autoCategorize: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
+    whatsNewSeen?: string | undefined;
+    autoCategorize?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
+    whatsNewSeen?: string | undefined;
+    autoCategorize?: boolean | undefined;
 }>;
 /**
  * @summary List all invitations (owner only).
