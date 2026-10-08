@@ -11,6 +11,10 @@ import { prefetchTodayOnIdle } from "@/data/todayData";
 import {
   importDesign,
   importDesignPlan,
+  importDesignRecap,
+  importHousehold,
+  importHouseholdMembers,
+  importRecap,
   importDesignToday,
   importPlaidOAuth,
   importPlanBills,
@@ -41,6 +45,10 @@ const PlanDebtPage = lazy(importPlanDebt);
 const PlanCategoriesPage = lazy(importPlanCategories);
 const PlanWishlistPage = lazy(importPlanWishlist);
 const DesignPlanPage = lazy(importDesignPlan);
+const HouseholdPage = lazy(importHousehold);
+const HouseholdMembersPage = lazy(importHouseholdMembers);
+const RecapPage = lazy(importRecap);
+const DesignRecapPage = lazy(importDesignRecap);
 
 const queryClient = createQueryClient();
 
@@ -136,6 +144,15 @@ function ProtectedShell() {
             <Route path="/plan/wishlist">
               <PlanWishlistPage />
             </Route>
+            <Route path="/household">
+              <HouseholdPage />
+            </Route>
+            <Route path="/household/members">
+              <HouseholdMembersPage />
+            </Route>
+            <Route path="/recap">
+              <RecapPage />
+            </Route>
             <Route>
               <NotFound />
             </Route>
@@ -191,6 +208,20 @@ function PublicDesignPlan() {
   );
 }
 
+/** Household and Recap on made-up data: public, so the composition can be judged signed out. */
+function PublicDesignRecap() {
+  const [location] = useLocation();
+  return (
+    <Shell>
+      <PageErrorBoundary resetKey={location}>
+        <Suspense fallback={<RouteFallback />}>
+          <DesignRecapPage />
+        </Suspense>
+      </PageErrorBoundary>
+    </Shell>
+  );
+}
+
 /** Drops every cached figure when the signed-in user changes (ported). */
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
@@ -228,6 +259,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/design/today" component={PublicDesignToday} />
           <Route path="/design/plan" component={PublicDesignPlan} />
+          <Route path="/design/recap" component={PublicDesignRecap} />
           <Route path="/design" component={PublicDesign} />
           <Route component={ProtectedShell} />
         </Switch>

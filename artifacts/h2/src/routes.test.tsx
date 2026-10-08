@@ -25,6 +25,7 @@ vi.mock("@clerk/react", () => ({
     (when === "signed-in") === auth.signedIn ? <>{children}</> : null,
   useAuth: () => ({ isLoaded: true, isSignedIn: auth.signedIn }),
   useClerk: () => ({ addListener: () => () => {} }),
+  useUser: () => ({ user: { firstName: "Sam" } }),
   UserButton: () => <div data-testid="user-button" />,
 }));
 vi.mock("@clerk/react/internal", () => ({ publishableKeyFromHost: () => "pk_test_routes" }));
@@ -47,6 +48,10 @@ vi.mock("./lib/routePrefetch", () => {
     importPlanCategories: page("plan-categories"),
     importPlanWishlist: page("plan-wishlist"),
     importDesignPlan: page("design-plan"),
+    importHousehold: page("household"),
+    importHouseholdMembers: page("household-members"),
+    importRecap: page("recap"),
+    importDesignRecap: page("design-recap"),
     routeImporters: {},
     prefetchRoute: () => {},
   };
@@ -87,6 +92,10 @@ const ROUTES: Row[] = [
   { from: "/plan/categories", lands: "/plan/categories", page: "plan-categories", shell: true },
   { from: "/plan/wishlist", lands: "/plan/wishlist", page: "plan-wishlist", shell: true },
   { from: "/design/plan", lands: "/design/plan", page: "design-plan", shell: true },
+  { from: "/household", lands: "/household", page: "household", shell: true },
+  { from: "/household/members", lands: "/household/members", page: "household-members", shell: true },
+  { from: "/recap", lands: "/recap", page: "recap", shell: true },
+  { from: "/design/recap", lands: "/design/recap", page: "design-recap", shell: true },
   { from: "/sign-in", lands: "/sign-in", page: "sign-in", shell: false },
   { from: "/sign-up", lands: "/sign-up", page: "sign-up", shell: false },
 ];
@@ -144,7 +153,7 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
 
   it("has a row for every path App.tsx declares, and no row for a path it does not", () => {
     const covered = new Set(ROUTES.map((r) => r.from));
-    expect(declared.length).toBeGreaterThanOrEqual(12);
+    expect(declared.length).toBeGreaterThanOrEqual(16);
     expect(declared.filter((p) => !covered.has(p))).toEqual([]);
     expect([...covered].filter((p) => !declared.includes(p))).toEqual([]);
   });
@@ -166,13 +175,17 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
     expect(keys.sort()).toEqual([
       "/design",
       "/design/plan",
+      "/design/recap",
       "/design/today",
+      "/household",
+      "/household/members",
       "/plaid-oauth",
       "/plan",
       "/plan/bills",
       "/plan/categories",
       "/plan/debt",
       "/plan/wishlist",
+      "/recap",
     ]);
   });
 });

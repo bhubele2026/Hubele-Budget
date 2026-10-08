@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { useLocation } from "wouter";
-import { Show, UserButton } from "@clerk/react";
+import { Show } from "@clerk/react";
 import { Masthead } from "@/kit/Masthead";
 import { Dock } from "@/kit/Dock";
+import { AccountMenu } from "./AccountMenu";
 
 /**
  * The frame every screen sits in: masthead, a 720 px reading column with
@@ -23,7 +24,7 @@ export function Shell({ children }: { children: ReactNode }) {
         location={location}
         account={
           <Show when="signed-in">
-            <UserButton />
+            <AccountMenu />
           </Show>
         }
       />
