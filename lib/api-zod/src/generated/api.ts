@@ -6198,6 +6198,11 @@ export const GetDebtPlanResponse = zod
     paidDownGenuineMtd: zod
       .number()
       .describe("confirmedMtd less transfer pairs"),
+    newChargesMtd: zod
+      .number()
+      .describe(
+        "(V5) New charges this household month: posted rows on a debt's own account (a linked credit\/loan account, a debt-tagged row on an unlinked one, or workbook Amex rows for a manual Amex debt) that read as a charge — never interest, fees, payments, refunds, transfers or balance-transfer pairs. An amount CHARGED, never a balance. May read low, never high.",
+      ),
     assumptions: zod.array(
       zod.object({
         key: zod.string(),
@@ -6445,6 +6450,16 @@ export const GetSpineResponse = zod.object({
       .describe(
         "(PR-D) computeDebtHeadline() — genuine confirmed debt payments this household month (transfer pairs excluded). An amount PAID, never a balance; equals GET \/debt-plan .paidDownGenuineMtd.",
       ),
+    confirmedPaymentsMtd: zod
+      .number()
+      .describe(
+        "(V5) computeDebtHeadline() — GROSS confirmed debt payments this household month (transfer pairs included). An amount PAID, never a balance; equals GET \/debt-plan .confirmedMtd.",
+      ),
+    newChargesMtd: zod
+      .number()
+      .describe(
+        "(V5) computeDebtHeadline() — new charges on the debts' own accounts this household month (see DebtPlan.newChargesMtd). An amount CHARGED, never a balance or available credit; equals GET \/debt-plan .newChargesMtd.",
+      ),
   }),
   reviewCount: zod
     .number()
@@ -6484,6 +6499,26 @@ export const GetSpineResponse = zod.object({
         .describe(
           "The bank data is stale; every figure is from the last good snapshot",
         ),
+      weekAdjustment: zod
+        .union([
+          zod
+            .object({
+              amount: zod
+                .string()
+                .describe(
+                  'Signed two-decimal dollars, never positive (e.g. \"-40.00\")',
+                ),
+              reason: zod.string().nullable(),
+              weekStart: zod
+                .string()
+                .describe("The Sunday of the week it lowers"),
+            })
+            .describe(
+              "(V5) The carry-over the household chose for this week. It lowers remainingWeek (and so safeToSpendNow); weekCap stays the cap.",
+            ),
+          zod.null(),
+        ])
+        .describe("MoneyPosition.weekAdjustment"),
     })
     .describe(
       "(PR-B1) The headline of the money position — the same buildMoneyPosition call GET \/money\/position makes, field for field. Never credit, a limit, a debt balance or an amount owed.",
@@ -6540,6 +6575,26 @@ export const GetMoneyPositionResponse = zod
       .describe(
         "This week's cap from allowance_plans (or the week's override); null when none is set, and a $0 week is none",
       ),
+    weekAdjustment: zod
+      .union([
+        zod
+          .object({
+            amount: zod
+              .string()
+              .describe(
+                'Signed two-decimal dollars, never positive (e.g. \"-40.00\")',
+              ),
+            reason: zod.string().nullable(),
+            weekStart: zod
+              .string()
+              .describe("The Sunday of the week it lowers"),
+          })
+          .describe(
+            "(V5) The carry-over the household chose for this week. It lowers remainingWeek (and so safeToSpendNow); weekCap stays the cap.",
+          ),
+        zod.null(),
+      ])
+      .describe("(V5) The household's own carry-over for this week, or null"),
     spentWeekDiscretionary: zod.string(),
     needsClassificationWeek: zod
       .string()
@@ -6585,7 +6640,7 @@ export const GetMoneyPositionResponse = zod
       .nullable(),
   })
   .describe(
-    "(PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).",
+    "(PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap + weekAdjustment − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed; weekAdjustment is the household's own carry-over for this week, never positive, 0 when none). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).",
   );
 
 /**
@@ -6771,6 +6826,112 @@ export const UpdateAllowancePlanResponse = zod.object({
       "The suggestion's working when the owner accepted it; null for a typed amount",
     ),
   createdAt: zod.string(),
+});
+
+/**
+ * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement. Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
+ * @summary A way back when the week is over — how far over, what is left per day, what to trim, next week carried
+ */
+export const getWaysBackResponseOverByMin = 0;
+
+export const getWaysBackResponseDaysLeftMax = 7;
+
+export const GetWaysBackResponse = zod
+  .object({
+    weekStart: zod.string(),
+    weekEnd: zod.string(),
+    overBy: zod
+      .number()
+      .min(getWaysBackResponseOverByMin)
+      .describe(
+        "How far past the cap this week is, whole cents; 0 when not over",
+      ),
+    daysLeft: zod
+      .number()
+      .min(1)
+      .max(getWaysBackResponseDaysLeftMax)
+      .describe("Days left in the week, today included"),
+    hold: zod.object({
+      perDay: zod.number().nullable(),
+      leavesUntilPayday: zod.number().nullable(),
+    }),
+    trims: zod.array(
+      zod.object({
+        categoryId: zod.string(),
+        name: zod.string(),
+        spentWeek: zod
+          .number()
+          .describe("This week's spend in the category, whole cents"),
+        usualWeek: zod
+          .number()
+          .nullable()
+          .describe(
+            "Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents; null when no week counts.",
+          ),
+      }),
+    ),
+    carryOver: zod.object({
+      nextWeekStart: zod.string(),
+      nextWeekCap: zod.number().nullable(),
+      applied: zod
+        .boolean()
+        .describe("The household already chose a carry-over for next week"),
+      adjustment: zod.union([
+        zod.object({
+          weekStart: zod.string().describe("The Sunday of the week it lowers"),
+          amountCents: zod.number().describe("Whole cents, negative"),
+          reason: zod.string().nullable(),
+        }),
+        zod.null(),
+      ]),
+    }),
+  })
+  .describe(
+    "(V5) A way back when the week is over. Every amount is WHOLE CENTS. overBy = max(0, −remainingWeek). hold.perDay = floor(max(0, remainingWeek) ÷ daysLeft), null with no cap; hold.leavesUntilPayday = availableUntilPayday (null with no bank data). trims = the three categories that spent most this week among the rows counting against the cap. carryOver.nextWeekCap = max(0, next week's cap + the applied adjustment, or − overBy when none is applied); null with no cap.",
+  );
+
+/**
+ * Upserts the household's carry-over for one week (unique on household, week and kind). amountCents is whole cents and must be negative: an adjustment can only LOWER a week. weekStart must be a Sunday, this week or later. The money position subtracts it from that week's remainingWeek.
+ * @summary Start a week lower — carry an overage into it (household owner only)
+ */
+export const createWeekAdjustmentBodyWeekStartRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+export const createWeekAdjustmentBodyAmountCentsMin = -10000000;
+export const createWeekAdjustmentBodyAmountCentsMax = -1;
+
+export const createWeekAdjustmentBodyReasonMax = 200;
+
+export const CreateWeekAdjustmentBody = zod.object({
+  weekStart: zod
+    .string()
+    .regex(createWeekAdjustmentBodyWeekStartRegExp)
+    .describe("The Sunday of the week to lower: this week or later."),
+  amountCents: zod
+    .number()
+    .min(createWeekAdjustmentBodyAmountCentsMin)
+    .max(createWeekAdjustmentBodyAmountCentsMax)
+    .describe("Whole cents, negative: an adjustment only lowers a week."),
+  reason: zod.string().max(createWeekAdjustmentBodyReasonMax).optional(),
+});
+
+export const CreateWeekAdjustmentResponse = zod.object({
+  weekStart: zod.string(),
+  kind: zod.enum(["carry_over"]),
+  amountCents: zod.number().describe("Whole cents, negative"),
+  reason: zod.string().nullable(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Remove a week's carry-over (household owner only)
+ */
+export const deleteWeekAdjustmentPathWeekStartRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const DeleteWeekAdjustmentParams = zod.object({
+  weekStart: zod.coerce.string().regex(deleteWeekAdjustmentPathWeekStartRegExp),
 });
 
 /**

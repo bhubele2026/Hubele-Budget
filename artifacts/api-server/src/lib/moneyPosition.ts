@@ -23,12 +23,20 @@
 //   reserves       (PR-C) `reservesHeld` — money the active goals hold back in
 //                  checking (`lib/goals.ts`); a goal backed by a savings
 //                  account never enters it.
+//   adjustments    (V5) `plan_adjustments` rows for THIS week (it lowers
+//                  `remainingWeek`) and NEXT week (an assumption only) — the
+//                  household's own carry-over choice. A plain SELECT: this
+//                  module never writes the table, and must not import the
+//                  week-adjustment writer — the agent reads the position, and
+//                  nothing it reaches may write an adjustment (the V5 laws
+//                  test scans for it).
 //
 // ⚠️ READ-ONLY. No write, no Plaid call: it sits on the spine's path.
 
-import { eq } from "drizzle-orm";
-import { db, recurringItemsTable } from "@workspace/db";
+import { and, eq, inArray } from "drizzle-orm";
+import { db, planAdjustmentsTable, recurringItemsTable } from "@workspace/db";
 import {
+  addDaysISO,
   classifyMovement,
   computePosition,
   everydayPlanFromRows,
@@ -88,10 +96,49 @@ export function tier2PairedTxnIdsOf(ledger: DetailedCashSignal["ledger"]): Set<s
   return new Set(ledger.matches.filter((m) => m.tier === 2 && m.offCurve).map((m) => m.txnId));
 }
 
+/** (V5) A `plan_adjustments` row as the position and the ways back read it. */
+export interface WeekAdjustmentRead {
+  weekStart: string;
+  /** Whole cents, negative. */
+  amountCents: number;
+  reason: string | null;
+}
+
 /** (PR-F1) One read of the household: `computePosition`'s exact inputs, and the curve they came from. */
 export interface MoneyPositionRead {
   inputs: PositionInputs;
   cash: DetailedCashSignal;
+  /**
+   * (V5) Next week as the same read sees it: its Sunday, its cap in whole
+   * cents (null with none — the same $0-is-no-cap rule as this week) and the
+   * carry-over already applied to it. Read for `GET /money/ways-back`.
+   */
+  nextWeek: { start: string; capCents: number | null; adjustment: WeekAdjustmentRead | null };
+}
+
+/**
+ * (V5) The household's carry-over rows for the given weeks (read-only).
+ * Only kind `carry_over` exists; the CHECKs keep every amount negative.
+ */
+export async function readWeekAdjustments(
+  householdId: string,
+  weekStarts: readonly string[],
+): Promise<Map<string, WeekAdjustmentRead>> {
+  const rows = await db
+    .select({
+      weekStart: planAdjustmentsTable.weekStart,
+      amountCents: planAdjustmentsTable.amountCents,
+      reason: planAdjustmentsTable.reason,
+    })
+    .from(planAdjustmentsTable)
+    .where(
+      and(
+        eq(planAdjustmentsTable.householdId, householdId),
+        eq(planAdjustmentsTable.kind, "carry_over"),
+        inArray(planAdjustmentsTable.weekStart, [...weekStarts]),
+      ),
+    );
+  return new Map(rows.map((r) => [r.weekStart, r]));
 }
 
 /**
@@ -110,7 +157,7 @@ export async function loadPositionInputs(
     opts.cash ?? computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: POSITION_HORIZON_DAYS }),
   );
   const freshnessRead = Promise.resolve(opts.freshness ?? computeBankFreshness(householdId, ownerUserId));
-  const [{ signal, ledger }, freshness, incomeRows, planRows, reserves] = await Promise.all([
+  const [{ signal, ledger }, freshness, incomeRows, planRows, reserves, adjustments] = await Promise.all([
     cashRead,
     freshnessRead,
     db
@@ -125,6 +172,11 @@ export async function loadPositionInputs(
       .where(eq(recurringItemsTable.householdId, householdId)),
     loadAllowancePlans(householdId),
     loadReservesHeld(householdId),
+    // (V5) This week and next, on the ledger's today (read below with the curve).
+    cashRead.then(({ ledger: l }) => {
+      const start = weekBounds(l.todayISO).start;
+      return readWeekAdjustments(householdId, [start, addDaysISO(start, 7)]);
+    }),
   ]);
 
   // The household week on the ledger's own today, clamped to the tracking
@@ -147,6 +199,13 @@ export async function loadPositionInputs(
   // (Lead's ruling on PR-B1 Q2) A $0 week — no plan, a $0 plan, or a $0
   // override — means no cap was set: null, never a $0 cap.
   const weekCap = plan.weeklySource === "none" || plan.weeklyCents === 0 ? null : plan.weeklyCents / 100;
+  // (V5) The household's own carry-over: this week's lowers the week; next
+  // week's is said, not counted.
+  const nextStart = addDaysISO(week.start, 7);
+  const thisAdj = adjustments.get(week.start) ?? null;
+  const nextAdj = adjustments.get(nextStart) ?? null;
+  const nextPlan = everydayPlanFromRows(nextStart, planRowsOf(planRows), money.settings.weeklyAllowanceOverrides);
+  const nextCapCents = nextPlan.weeklySource === "none" || nextPlan.weeklyCents === 0 ? null : nextPlan.weeklyCents;
 
   const inputs: PositionInputs = {
     todayISO,
@@ -165,8 +224,15 @@ export async function loadPositionInputs(
       asOfBank: signal.snapshotAt,
     },
     status: signal.status,
+    weekAdjustmentCents: thisAdj ? thisAdj.amountCents : null,
+    weekAdjustmentReason: thisAdj ? thisAdj.reason : null,
+    nextWeekAdjustmentCents: nextAdj ? nextAdj.amountCents : null,
   };
-  return { inputs, cash: { signal, ledger } };
+  return {
+    inputs,
+    cash: { signal, ledger },
+    nextWeek: { start: nextStart, capCents: nextCapCents, adjustment: nextAdj },
+  };
 }
 
 export async function buildMoneyPosition(

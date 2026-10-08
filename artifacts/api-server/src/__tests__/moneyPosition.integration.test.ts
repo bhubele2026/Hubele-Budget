@@ -256,6 +256,8 @@ describe("GET /money/position — household A, worked by hand", () => {
       weekStart: "2026-10-04",
       weekEnd: "2026-10-10",
       weekCap: "250.00",
+      // (V5) No carry-over row: null, and every figure as before.
+      weekAdjustment: null,
       spentWeekDiscretionary: "105.50",
       needsClassificationWeek: "25.50",
       unplannedWeek: "40.00",

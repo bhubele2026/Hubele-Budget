@@ -2593,6 +2593,65 @@ paths:
         "409":
           description: Another plan for the same member and period already starts on that date
 
+  # ── (V5) A way back when the week is over ─────────────────────────────────
+  /money/ways-back:
+    get:
+      operationId: getWaysBack
+      tags: [money]
+      summary: A way back when the week is over — how far over, what is left per day, what to trim, next week carried
+      description: >-
+        computeWaysBack (avalanche-core) over the money position (the same read
+        GET /money/position makes) and the rows of this week and the 8 before it,
+        classified by classifyMovement. Code only; every amount is WHOLE CENTS
+        (integers). Read-only: nothing is written.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaysBack" }
+
+  /money/week-adjustments:
+    post:
+      operationId: createWeekAdjustment
+      tags: [money]
+      summary: Start a week lower — carry an overage into it (household owner only)
+      description: >-
+        Upserts the household's carry-over for one week (unique on household,
+        week and kind). amountCents is whole cents and must be negative: an
+        adjustment can only LOWER a week. weekStart must be a Sunday, this week
+        or later. The money position subtracts it from that week's
+        remainingWeek.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateWeekAdjustmentBody" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeekAdjustment" }
+        "400": { description: "amountCents is not negative whole cents, or weekStart is not a Sunday this week or later" }
+        "403": { description: "owner_only — a member of the household may not choose this" }
+
+  /money/week-adjustments/{weekStart}:
+    delete:
+      operationId: deleteWeekAdjustment
+      tags: [money]
+      summary: Remove a week's carry-over (household owner only)
+      parameters:
+        - in: path
+          name: weekStart
+          required: true
+          schema: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+      responses:
+        "204": { description: Removed }
+        "400": { description: weekStart is not a calendar date }
+        "403": { description: "owner_only — a member of the household may not choose this" }
+        "404": { description: No carry-over for that week in this household }
+
   /agent/findings:
     get:
       operationId: listAgentFindings
@@ -3640,7 +3699,7 @@ components:
         (per debt, for the Plan › Debt page); every other key is held to the
         no-balance law by spineParity.integration.test.ts.
       required:
-        [asOf, strategy, extraMonthly, comparison, range, milestones, planned60d, confirmedMtd, paidDownGenuineMtd, assumptions]
+        [asOf, strategy, extraMonthly, comparison, range, milestones, planned60d, confirmedMtd, paidDownGenuineMtd, newChargesMtd, assumptions]
       properties:
         asOf: { type: string }
         strategy: { type: string, enum: [avalanche, snowball] }
@@ -3743,6 +3802,15 @@ components:
               amount: { type: number }
         confirmedMtd: { type: number, description: Debt payments a bank row confirms, this household month }
         paidDownGenuineMtd: { type: number, description: confirmedMtd less transfer pairs }
+        newChargesMtd:
+          type: number
+          description: >-
+            (V5) New charges this household month: posted rows on a debt's own
+            account (a linked credit/loan account, a debt-tagged row on an
+            unlinked one, or workbook Amex rows for a manual Amex debt) that
+            read as a charge — never interest, fees, payments, refunds,
+            transfers or balance-transfer pairs. An amount CHARGED, never a
+            balance. May read low, never high.
         assumptions:
           type: array
           items: { $ref: "#/components/schemas/DebtPlanAssumption" }
@@ -4000,7 +4068,7 @@ components:
                 that is under the floor.
         debt:
           type: object
-          required: [payoffPct, nextMilestone, paidDownMtd]
+          required: [payoffPct, nextMilestone, paidDownMtd, confirmedPaymentsMtd, newChargesMtd]
           properties:
             payoffPct:
               type: ["number", "null"]
@@ -4022,6 +4090,19 @@ components:
                 (PR-D) computeDebtHeadline() — genuine confirmed debt payments
                 this household month (transfer pairs excluded). An amount PAID,
                 never a balance; equals GET /debt-plan .paidDownGenuineMtd.
+            confirmedPaymentsMtd:
+              type: number
+              description: >-
+                (V5) computeDebtHeadline() — GROSS confirmed debt payments this
+                household month (transfer pairs included). An amount PAID, never
+                a balance; equals GET /debt-plan .confirmedMtd.
+            newChargesMtd:
+              type: number
+              description: >-
+                (V5) computeDebtHeadline() — new charges on the debts' own
+                accounts this household month (see DebtPlan.newChargesMtd). An
+                amount CHARGED, never a balance or available credit; equals GET
+                /debt-plan .newChargesMtd.
         reviewCount: { type: integer, description: computeReviewCount() — unmatched forecast-flagged bank txns this month }
         position: { $ref: "#/components/schemas/SpinePosition" }
 
@@ -4031,7 +4112,7 @@ components:
         (PR-B1) The headline of the money position — the same buildMoneyPosition
         call GET /money/position makes, field for field. Never credit, a limit,
         a debt balance or an amount owed.
-      required: [safeToSpendNow, remainingWeek, availableUntilPayday, paydayDate, horizonKind, withinPlan, confidence, degraded]
+      required: [safeToSpendNow, remainingWeek, availableUntilPayday, paydayDate, horizonKind, withinPlan, confidence, degraded, weekAdjustment]
       properties:
         safeToSpendNow: { type: ["string", "null"], description: MoneyPosition.safeToSpendNow }
         remainingWeek: { type: ["string", "null"], description: MoneyPosition.remainingWeek }
@@ -4041,6 +4122,22 @@ components:
         withinPlan: { type: ["string", "null"], enum: [over, tight, "yes", null], description: MoneyPosition.withinPlan }
         confidence: { type: string, enum: [firm, estimated] }
         degraded: { type: boolean, description: The bank data is stale; every figure is from the last good snapshot }
+        weekAdjustment:
+          oneOf:
+            - $ref: "#/components/schemas/PositionWeekAdjustment"
+            - type: "null"
+          description: MoneyPosition.weekAdjustment
+
+    PositionWeekAdjustment:
+      type: object
+      description: >-
+        (V5) The carry-over the household chose for this week. It lowers
+        remainingWeek (and so safeToSpendNow); weekCap stays the cap.
+      required: [amount, reason, weekStart]
+      properties:
+        amount: { type: string, description: "Signed two-decimal dollars, never positive (e.g. \"-40.00\")" }
+        reason: { type: ["string", "null"] }
+        weekStart: { type: string, description: The Sunday of the week it lowers }
 
     MoneyPositionEstimate:
       type: object
@@ -4157,12 +4254,13 @@ components:
         availableUntilPayday = max(0, lowest end-of-day balance in the window −
         cash buffer − reserves held), null —
         never a false zero — with no bank data or no curve. remainingWeek =
-        weekCap − spentWeekDiscretionary (weekly-allowance spend plus spend not
-        yet filed). safeToSpendNow = max(0, min(remainingWeek,
-        availableUntilPayday)).
+        weekCap + weekAdjustment − spentWeekDiscretionary (weekly-allowance
+        spend plus spend not yet filed; weekAdjustment is the household's own
+        carry-over for this week, never positive, 0 when none).
+        safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).
       required:
         [todayISO, status, paydayDate, payday, horizon, lowestUntilPayday, lowestUntilPaydayDate, committedUntilPayday,
-         cashBuffer, reservesHeld, availableUntilPayday, weekStart, weekEnd, weekCap, spentWeekDiscretionary,
+         cashBuffer, reservesHeld, availableUntilPayday, weekStart, weekEnd, weekCap, weekAdjustment, spentWeekDiscretionary,
          needsClassificationWeek, unplannedWeek, monthlyWeek, remainingWeek, paceAllowedToday, withinPlan,
          safeToSpendNow, confidence, estimates, assumptions, degraded, degradedReason]
       properties:
@@ -4194,6 +4292,11 @@ components:
         weekStart: { type: string }
         weekEnd: { type: string }
         weekCap: { type: ["string", "null"], description: "This week's cap from allowance_plans (or the week's override); null when none is set, and a $0 week is none" }
+        weekAdjustment:
+          oneOf:
+            - $ref: "#/components/schemas/PositionWeekAdjustment"
+            - type: "null"
+          description: (V5) The household's own carry-over for this week, or null
         spentWeekDiscretionary: { type: string }
         needsClassificationWeek: { type: string, description: The part of spentWeekDiscretionary not yet filed — it counts against the cap until it is }
         unplannedWeek: { type: string }
@@ -4211,6 +4314,84 @@ components:
           items: { type: string }
         degraded: { type: boolean }
         degradedReason: { type: ["string", "null"], enum: [refresh_failed, old, manual_old, null] }
+
+    WaysBackAdjustment:
+      type: object
+      required: [weekStart, amountCents, reason]
+      properties:
+        weekStart: { type: string, description: The Sunday of the week it lowers }
+        amountCents: { type: integer, description: "Whole cents, negative" }
+        reason: { type: ["string", "null"] }
+
+    WaysBackTrim:
+      type: object
+      required: [categoryId, name, spentWeek, usualWeek]
+      properties:
+        categoryId: { type: string }
+        name: { type: string }
+        spentWeek: { type: integer, description: "This week's spend in the category, whole cents" }
+        usualWeek:
+          type: ["integer", "null"]
+          description: >-
+            Median weekly spend in the category over the 8 weeks before this
+            one (a week with none counts as 0; weeks before tracking began are
+            left out), whole cents; null when no week counts.
+
+    WaysBack:
+      type: object
+      description: >-
+        (V5) A way back when the week is over. Every amount is WHOLE CENTS.
+        overBy = max(0, −remainingWeek). hold.perDay = floor(max(0,
+        remainingWeek) ÷ daysLeft), null with no cap; hold.leavesUntilPayday =
+        availableUntilPayday (null with no bank data). trims = the three
+        categories that spent most this week among the rows counting against
+        the cap. carryOver.nextWeekCap = max(0, next week's cap + the applied
+        adjustment, or − overBy when none is applied); null with no cap.
+      required: [weekStart, weekEnd, overBy, daysLeft, hold, trims, carryOver]
+      properties:
+        weekStart: { type: string }
+        weekEnd: { type: string }
+        overBy: { type: integer, minimum: 0, description: "How far past the cap this week is, whole cents; 0 when not over" }
+        daysLeft: { type: integer, minimum: 1, maximum: 7, description: "Days left in the week, today included" }
+        hold:
+          type: object
+          required: [perDay, leavesUntilPayday]
+          properties:
+            perDay: { type: ["integer", "null"] }
+            leavesUntilPayday: { type: ["integer", "null"] }
+        trims:
+          type: array
+          items: { $ref: "#/components/schemas/WaysBackTrim" }
+        carryOver:
+          type: object
+          required: [nextWeekStart, nextWeekCap, applied, adjustment]
+          properties:
+            nextWeekStart: { type: string }
+            nextWeekCap: { type: ["integer", "null"] }
+            applied: { type: boolean, description: The household already chose a carry-over for next week }
+            adjustment:
+              oneOf:
+                - $ref: "#/components/schemas/WaysBackAdjustment"
+                - type: "null"
+
+    CreateWeekAdjustmentBody:
+      type: object
+      additionalProperties: false
+      required: [weekStart, amountCents]
+      properties:
+        weekStart: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "The Sunday of the week to lower: this week or later." }
+        amountCents: { type: integer, maximum: -1, minimum: -10000000, description: "Whole cents, negative: an adjustment only lowers a week." }
+        reason: { type: string, maxLength: 200 }
+
+    WeekAdjustment:
+      type: object
+      required: [weekStart, kind, amountCents, reason, createdAt]
+      properties:
+        weekStart: { type: string }
+        kind: { type: string, enum: [carry_over] }
+        amountCents: { type: integer, description: "Whole cents, negative" }
+        reason: { type: ["string", "null"] }
+        createdAt: { type: string }
 
     AllowancePlan:
       type: object

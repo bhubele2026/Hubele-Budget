@@ -29,5 +29,7 @@ export interface DebtPlan {
   confirmedMtd: number;
   /** confirmedMtd less transfer pairs */
   paidDownGenuineMtd: number;
+  /** (V5) New charges this household month: posted rows on a debt's own account (a linked credit/loan account, a debt-tagged row on an unlinked one, or workbook Amex rows for a manual Amex debt) that read as a charge — never interest, fees, payments, refunds, transfers or balance-transfer pairs. An amount CHARGED, never a balance. May read low, never high. */
+  newChargesMtd: number;
   assumptions: DebtPlanAssumption[];
 }

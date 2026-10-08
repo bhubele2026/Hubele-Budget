@@ -576,6 +576,8 @@ export interface DebtPlan {
   confirmedMtd: number;
   /** confirmedMtd less transfer pairs */
   paidDownGenuineMtd: number;
+  /** (V5) New charges this household month: posted rows on a debt's own account (a linked credit/loan account, a debt-tagged row on an unlinked one, or workbook Amex rows for a manual Amex debt) that read as a charge — never interest, fees, payments, refunds, transfers or balance-transfer pairs. An amount CHARGED, never a balance. May read low, never high. */
+  newChargesMtd: number;
   assumptions: DebtPlanAssumption[];
 }
 
@@ -934,6 +936,10 @@ export type SpineDebt = {
   nextMilestone: SpineNextMilestone | null;
   /** (PR-D) computeDebtHeadline() — genuine confirmed debt payments this household month (transfer pairs excluded). An amount PAID, never a balance; equals GET /debt-plan .paidDownGenuineMtd. */
   paidDownMtd: number;
+  /** (V5) computeDebtHeadline() — GROSS confirmed debt payments this household month (transfer pairs included). An amount PAID, never a balance; equals GET /debt-plan .confirmedMtd. */
+  confirmedPaymentsMtd: number;
+  /** (V5) computeDebtHeadline() — new charges on the debts' own accounts this household month (see DebtPlan.newChargesMtd). An amount CHARGED, never a balance or available credit; equals GET /debt-plan .newChargesMtd. */
+  newChargesMtd: number;
 };
 
 /**
@@ -970,6 +976,18 @@ export const SpinePositionConfidence = {
 } as const;
 
 /**
+ * (V5) The carry-over the household chose for this week. It lowers remainingWeek (and so safeToSpendNow); weekCap stays the cap.
+ */
+export interface PositionWeekAdjustment {
+  /** Signed two-decimal dollars, never positive (e.g. "-40.00") */
+  amount: string;
+  /** @nullable */
+  reason: string | null;
+  /** The Sunday of the week it lowers */
+  weekStart: string;
+}
+
+/**
  * (PR-B1) The headline of the money position — the same buildMoneyPosition call GET /money/position makes, field for field. Never credit, a limit, a debt balance or an amount owed.
  */
 export interface SpinePosition {
@@ -1003,6 +1021,8 @@ export interface SpinePosition {
   confidence: SpinePositionConfidence;
   /** The bank data is stale; every figure is from the last good snapshot */
   degraded: boolean;
+  /** MoneyPosition.weekAdjustment */
+  weekAdjustment: PositionWeekAdjustment | null;
 }
 
 export interface Spine {
@@ -1239,7 +1259,7 @@ export const MoneyPositionDegradedReason = {
 } as const;
 
 /**
- * (PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).
+ * (PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap + weekAdjustment − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed; weekAdjustment is the household's own carry-over for this week, never positive, 0 when none). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).
  */
 export interface MoneyPosition {
   todayISO: string;
@@ -1267,6 +1287,8 @@ export interface MoneyPosition {
    * @nullable
    */
   weekCap: string | null;
+  /** (V5) The household's own carry-over for this week, or null */
+  weekAdjustment: PositionWeekAdjustment | null;
   spentWeekDiscretionary: string;
   /** The part of spentWeekDiscretionary not yet filed — it counts against the cap until it is */
   needsClassificationWeek: string;
@@ -1289,6 +1311,98 @@ export interface MoneyPosition {
   degraded: boolean;
   /** @nullable */
   degradedReason: MoneyPositionDegradedReason;
+}
+
+export interface WaysBackAdjustment {
+  /** The Sunday of the week it lowers */
+  weekStart: string;
+  /** Whole cents, negative */
+  amountCents: number;
+  /** @nullable */
+  reason: string | null;
+}
+
+export interface WaysBackTrim {
+  categoryId: string;
+  name: string;
+  /** This week's spend in the category, whole cents */
+  spentWeek: number;
+  /**
+   * Median weekly spend in the category over the 8 weeks before this one (a week with none counts as 0; weeks before tracking began are left out), whole cents; null when no week counts.
+   * @nullable
+   */
+  usualWeek: number | null;
+}
+
+export type WaysBackHold = {
+  /** @nullable */
+  perDay: number | null;
+  /** @nullable */
+  leavesUntilPayday: number | null;
+};
+
+export type WaysBackCarryOver = {
+  nextWeekStart: string;
+  /** @nullable */
+  nextWeekCap: number | null;
+  /** The household already chose a carry-over for next week */
+  applied: boolean;
+  adjustment: WaysBackAdjustment | null;
+};
+
+/**
+ * (V5) A way back when the week is over. Every amount is WHOLE CENTS. overBy = max(0, −remainingWeek). hold.perDay = floor(max(0, remainingWeek) ÷ daysLeft), null with no cap; hold.leavesUntilPayday = availableUntilPayday (null with no bank data). trims = the three categories that spent most this week among the rows counting against the cap. carryOver.nextWeekCap = max(0, next week's cap + the applied adjustment, or − overBy when none is applied); null with no cap.
+ */
+export interface WaysBack {
+  weekStart: string;
+  weekEnd: string;
+  /**
+   * How far past the cap this week is, whole cents; 0 when not over
+   * @minimum 0
+   */
+  overBy: number;
+  /**
+   * Days left in the week, today included
+   * @minimum 1
+   * @maximum 7
+   */
+  daysLeft: number;
+  hold: WaysBackHold;
+  trims: WaysBackTrim[];
+  carryOver: WaysBackCarryOver;
+}
+
+export interface CreateWeekAdjustmentBody {
+  /**
+   * The Sunday of the week to lower: this week or later.
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  weekStart: string;
+  /**
+   * Whole cents, negative: an adjustment only lowers a week.
+   * @minimum -10000000
+   * @maximum -1
+   */
+  amountCents: number;
+  /** @maxLength 200 */
+  reason?: string;
+}
+
+export type WeekAdjustmentKind =
+  (typeof WeekAdjustmentKind)[keyof typeof WeekAdjustmentKind];
+
+export const WeekAdjustmentKind = {
+  carry_over: "carry_over",
+} as const;
+
+export interface WeekAdjustment {
+  weekStart: string;
+  kind: WeekAdjustmentKind;
+  /** Whole cents, negative */
+  amountCents: number;
+  /** @nullable */
+  reason: string | null;
+  createdAt: string;
 }
 
 export type AllowancePlanPeriod =

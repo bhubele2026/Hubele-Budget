@@ -1,13 +1,15 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import { and, eq } from "drizzle-orm";
 import {
+  CreateWeekAdjustmentBody,
+  DeleteWeekAdjustmentParams,
   EvaluateAffordBody,
   EvaluateWishlistItemParams,
   UpdateAllowancePlanBody,
   UpdateAllowancePlanParams,
 } from "@workspace/api-zod";
 import { budgetCategoriesTable, db, householdMembersTable, householdsTable, wishlistItemsTable } from "@workspace/db";
-import { AffordInputError, addDaysISO, evaluateAfford } from "@workspace/avalanche-core";
+import { AffordInputError, addDaysISO, dayOfWeekISO, evaluateAfford, weekBounds } from "@workspace/avalanche-core";
 import { requireAuth } from "../middlewares/requireAuth";
 import { buildMoneyPosition } from "../lib/moneyPosition";
 import {
@@ -18,6 +20,8 @@ import {
 import { writeOwnerAllowancePlan } from "../lib/allowancePlanWriter";
 import { buildAffordBaseline } from "../lib/afford";
 import { evaluateWishlist } from "../jobs/handlers/wishlistEvaluate";
+import { buildWaysBack, deleteCarryOver, upsertCarryOver, WeekAdjustmentError } from "../lib/weekAdjustments";
+import { householdTodayISO } from "../lib/householdClock";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -121,6 +125,89 @@ router.post("/wishlist/:id/evaluate", requireAuth, async (req, res): Promise<voi
   const r = await evaluateWishlist(hh, req.householdOwnerId!, { itemId: item.id, force: true });
   res.json({ itemId: item.id, lastEvaluation: r.results.get(item.id)! });
 });
+
+/**
+ * (V5) The household's OWNER only — the signed-in user must be the household's
+ * owner, not merely a member of it. A member gets 403 `owner_only`.
+ */
+const requireHouseholdOwner: RequestHandler = (req, res, next) => {
+  if (!req.actualUserId || req.actualUserId !== req.householdOwnerId) {
+    res.status(403).json({ error: "owner_only" });
+    return;
+  }
+  next();
+};
+
+/** A real calendar date (the pattern admits "2026-02-30"). */
+const isCalendarDate = (iso: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(iso) && addDaysISO(iso, 0) === iso;
+
+/**
+ * ⭐ (V5) A WAY BACK WHEN THE WEEK IS OVER — how far over the week is, what is
+ * left per day, the categories to trim against their usual week, and next week
+ * with the overage carried. Code only (`buildWaysBack` → avalanche-core's
+ * `computeWaysBack`); every amount is whole cents. Read-only.
+ */
+router.get("/money/ways-back", requireAuth, async (req, res): Promise<void> => {
+  res.json(await buildWaysBack(req.householdId!, req.householdOwnerId!));
+});
+
+/**
+ * (V5) The owner chooses to start a week lower (a carry-over): upsert on
+ * (household, week, kind). The amount is whole cents and must be negative —
+ * zero or more is 400 — and the week must be a Sunday, this week or later.
+ * Written through the one writer (`weekAdjustments.ts`).
+ */
+router.post("/money/week-adjustments", requireAuth, requireHouseholdOwner, async (req, res): Promise<void> => {
+  // Strict: an unknown key is a mistake, never silently ignored.
+  const parsed = CreateWeekAdjustmentBody.strict().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { weekStart, amountCents, reason } = parsed.data;
+  if (!isCalendarDate(weekStart) || dayOfWeekISO(weekStart) !== 0) {
+    res.status(400).json({ error: "weekStart is not a Sunday" });
+    return;
+  }
+  if (weekStart < weekBounds(householdTodayISO()).start) {
+    res.status(400).json({ error: "weekStart is a past week" });
+    return;
+  }
+  try {
+    const view = await upsertCarryOver(req.householdId!, {
+      weekStart,
+      amountCents,
+      reason: reason?.trim() ? reason.trim() : null,
+      createdBy: req.actualUserId ?? null,
+    });
+    res.json(view);
+  } catch (err) {
+    if (err instanceof WeekAdjustmentError) {
+      res.status(400).json({ error: err.code });
+      return;
+    }
+    throw err;
+  }
+});
+
+/** (V5) The owner removes a week's carry-over. 204 when removed, 404 when there was none. */
+router.delete(
+  "/money/week-adjustments/:weekStart",
+  requireAuth,
+  requireHouseholdOwner,
+  async (req, res): Promise<void> => {
+    const params = DeleteWeekAdjustmentParams.safeParse(req.params);
+    if (!params.success || !isCalendarDate(params.data.weekStart)) {
+      res.status(400).json({ error: "weekStart is not a calendar date" });
+      return;
+    }
+    if (!(await deleteCarryOver(req.householdId!, params.data.weekStart))) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.status(204).end();
+  },
+);
 
 /**
  * (PR-B1) The household's allowance plans, and the suggested weekly cap with

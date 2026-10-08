@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import {
   avalancheSettingsTable,
   db,
@@ -6,11 +6,13 @@ import {
   debtMilestonesTable,
   debtsTable,
   forecastResolutionsTable,
+  plaidAccountsTable,
   transactionsTable,
 } from "@workspace/db";
 import {
   addDaysISO,
   CENTS,
+  classifyLiabilityRow,
   compareStrategies,
   debtFreeRange,
   effectiveDebtBalance,
@@ -250,12 +252,142 @@ export async function genuinePaidDown(
   };
 }
 
+/** A workbook Amex debt the household tracks by hand (debtLedger.ts's rule). */
+const AMEX_NAME = /(amex|american\s*express)/i;
+
+/**
+ * ⭐ (V5) NEW CHARGES THIS MONTH — the honest other half of "paid down".
+ * A gross amount CHARGED, never a balance and never available credit.
+ *
+ * A transaction row counts, at its posted amount, when ALL of these hold:
+ *   1. it is the household's, dated in [fromISO, toISO] (the household
+ *      month to today), POSTED (`pending = false` — a pending charge is
+ *      replaced by its posted row, and counting both would double it), not
+ *      `is_transfer`, and not a logged payment claim (`payment_state` null);
+ *   2. it sits on a DEBT'S OWN ACCOUNT:
+ *        a. a Plaid account of type `credit` or `loan` that a debt links
+ *           (`debts.plaid_account_id`) — the debt is that one; or
+ *        b. a Plaid `credit` / `loan` account no debt links, where the row
+ *           itself is tagged to a debt (`transactions.debt_id`) — the debt is
+ *           the tag; or
+ *        c. a workbook `amex` row (no Plaid account) when the household
+ *           tracks a MANUAL Amex debt — the same rule `debtLedger.ts` uses
+ *           for the liability ledger.
+ *      A debt-tagged row anywhere else (a checking row, a logged claim) is a
+ *      PAYMENT by construction and never a charge. A row on an unlinked card
+ *      with no tag is tied to no debt and is left out;
+ *   3. `classifyLiabilityRow` reads it `charge` — so interest, fees,
+ *      payments and credits (refunds) are all out. Refunds are not netted
+ *      against charges: the figure is what was charged;
+ *   4. it is not half of a balance transfer: a charge that `pairTransfers`
+ *      pairs (±5 days, ±1%, a DIFFERENT debt, one to one, closest first) with
+ *      a payment — a payment row on a debt's own account, or a confirmed bank
+ *      payment (`loadConfirmedPayments`) — is moving a debt, not new spending.
+ *      The pairing is the one `genuinePaidDown` uses, so a pair is out of both.
+ * Whenever a row's place is unclear it is left out: this may read low, never
+ * high.
+ */
+export async function newChargesThisMonth(
+  householdId: string,
+  fromISO: string,
+  toISO: string,
+  confirmed: readonly ConfirmedPayment[],
+): Promise<number> {
+  const [accts, debts] = await Promise.all([
+    db
+      .select({ id: plaidAccountsTable.id, accountId: plaidAccountsTable.accountId })
+      .from(plaidAccountsTable)
+      .where(
+        and(eq(plaidAccountsTable.householdId, householdId), inArray(plaidAccountsTable.type, ["credit", "loan"])),
+      ),
+    db
+      .select({ id: debtsTable.id, name: debtsTable.name, plaidAccountId: debtsTable.plaidAccountId })
+      .from(debtsTable)
+      .where(eq(debtsTable.householdId, householdId)),
+  ]);
+  const debtIds = new Set(debts.map((d) => d.id));
+  const debtByInternal = new Map<string, string>();
+  for (const d of debts) if (d.plaidAccountId) debtByInternal.set(d.plaidAccountId, d.id);
+  const liabilityAccounts = new Set<string>();
+  const debtByAccount = new Map<string, string>();
+  for (const a of accts) {
+    liabilityAccounts.add(a.accountId);
+    const debtId = debtByInternal.get(a.id);
+    if (debtId) debtByAccount.set(a.accountId, debtId);
+  }
+  const amexManualDebtId =
+    debts.filter((d) => !d.plaidAccountId && AMEX_NAME.test(d.name)).sort((a, b) => a.id.localeCompare(b.id))[0]?.id ??
+    null;
+  if (liabilityAccounts.size === 0 && !amexManualDebtId) return 0;
+
+  const t = transactionsTable;
+  // Payments within 5 days either side of the month can still pair with a charge in it.
+  const rows = await db
+    .select({
+      id: t.id,
+      occurredOn: t.occurredOn,
+      amount: t.amount,
+      source: t.source,
+      description: t.description,
+      pfcPrimary: t.pfcPrimary,
+      pfcDetailed: t.pfcDetailed,
+      isExternalCardPayment: t.isExternalCardPayment,
+      plaidAccountId: t.plaidAccountId,
+      debtId: t.debtId,
+    })
+    .from(t)
+    .where(
+      and(
+        eq(t.householdId, householdId),
+        eq(t.pending, false),
+        eq(t.isTransfer, false),
+        isNull(t.paymentState),
+        gte(t.occurredOn, addDaysISO(fromISO, -5)),
+        lte(t.occurredOn, addDaysISO(toISO, 5)),
+        or(
+          liabilityAccounts.size > 0 ? inArray(t.plaidAccountId, [...liabilityAccounts]) : sql`false`,
+          amexManualDebtId ? and(eq(t.source, "amex"), isNull(t.plaidAccountId)) : sql`false`,
+        ),
+      ),
+    );
+
+  const charges: TransferCandidate[] = [];
+  const payments = new Map<string, TransferCandidate>();
+  for (const r of rows) {
+    const debtId = r.plaidAccountId
+      ? (debtByAccount.get(r.plaidAccountId) ?? (r.debtId && debtIds.has(r.debtId) ? r.debtId : null))
+      : amexManualDebtId;
+    if (!debtId) continue;
+    const c = classifyLiabilityRow(r);
+    if (!c) continue;
+    const cand = { id: r.id, debtId, amount: c.amount, occurredOn: r.occurredOn };
+    if (c.kind === "charge" && r.occurredOn >= fromISO && r.occurredOn <= toISO) charges.push(cand);
+    else if (c.kind === "payment") payments.set(r.id, cand);
+  }
+  for (const p of confirmed) {
+    if (p.debtId && !payments.has(p.txnId)) {
+      payments.set(p.txnId, { id: p.txnId, debtId: p.debtId, amount: p.amount, occurredOn: p.occurredOn });
+    }
+  }
+  const transferHalves = new Set(pairTransfers([...payments.values()], charges).values());
+  let cents = 0;
+  for (const c of charges) if (!transferHalves.has(c.id)) cents += Math.round(c.amount * 100);
+  return cents / 100;
+}
+
 export type NextMilestone = { key: string; label: string; estimatedMonth: string };
 
 export type DebtHeadline = {
   nextMilestone: { label: string; estimatedMonth: string } | null;
   /** Genuine confirmed payments this household month. A paid amount — never a balance. */
   paidDownMtd: number;
+  /**
+   * (V5) GROSS confirmed payments this household month (`loadConfirmedPayments`,
+   * transfer pairs included) — `GET /debt-plan .confirmedMtd`. An amount PAID.
+   */
+  confirmedPaymentsMtd: number;
+  /** (V5) New charges this household month (`newChargesThisMonth`). An amount CHARGED — never a balance. */
+  newChargesMtd: number;
 };
 
 type HeadlineInternals = DebtHeadline & {
@@ -304,10 +436,15 @@ async function computeHeadlineInternals(
   const next = first ? { key: first.key, label: first.label, estimatedMonth: first.estimatedMonth } : null;
 
   const payments = await loadConfirmedPayments(householdId, signal, monthStart, todayISO);
-  const paid = await genuinePaidDown(householdId, payments, monthStart, todayISO);
+  const [paid, newChargesMtd] = await Promise.all([
+    genuinePaidDown(householdId, payments, monthStart, todayISO),
+    newChargesThisMonth(householdId, monthStart, todayISO, payments),
+  ]);
   return {
     nextMilestone: next ? { label: next.label, estimatedMonth: next.estimatedMonth } : null,
     paidDownMtd: paid.genuine,
+    confirmedPaymentsMtd: paid.confirmed,
+    newChargesMtd,
     next,
     upcoming,
     achieved,
@@ -318,14 +455,19 @@ async function computeHeadlineInternals(
   };
 }
 
-/** The spine's two debt fields. `computeDebtPlan` returns the same values. */
+/** The spine's debt words. `computeDebtPlan` returns the same values. */
 export async function computeDebtHeadline(
   householdId: string,
   ownerUserId: string,
   signal: Pick<CashSignal, "overdueAssumedPaid">,
 ): Promise<DebtHeadline> {
   const h = await computeHeadlineInternals(householdId, ownerUserId, signal);
-  return { nextMilestone: h.nextMilestone, paidDownMtd: h.paidDownMtd };
+  return {
+    nextMilestone: h.nextMilestone,
+    paidDownMtd: h.paidDownMtd,
+    confirmedPaymentsMtd: h.confirmedPaymentsMtd,
+    newChargesMtd: h.newChargesMtd,
+  };
 }
 
 export type PlannedPayment = {
@@ -370,6 +512,8 @@ export type DebtPlan = {
   planned60d: PlannedPayment[];
   confirmedMtd: number;
   paidDownGenuineMtd: number;
+  /** (V5) New charges this household month — the spine's `debt.newChargesMtd`. Never a balance. */
+  newChargesMtd: number;
   assumptions: PlanAssumption[];
 };
 
@@ -484,6 +628,7 @@ export async function computeDebtPlan(
     planned60d,
     confirmedMtd: h.confirmedMtd,
     paidDownGenuineMtd: h.paidDownMtd,
+    newChargesMtd: h.newChargesMtd,
     assumptions: planAssumptions(h.debts.sim, newChargesPerMonth),
   };
 }

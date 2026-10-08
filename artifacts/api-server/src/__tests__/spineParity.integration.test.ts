@@ -71,7 +71,8 @@ import dashboardRouter from "../routes/dashboard";
 import bankBalanceExplainRouter from "../routes/bankBalanceExplain";
 // (PR-B1) `/money/position` owns the spine's `position`.
 import moneyRouter from "../routes/money";
-// (PR-D) `/debt-plan` owns `debt.nextMilestone` and `debt.paidDownMtd`.
+// (PR-D) `/debt-plan` owns `debt.nextMilestone` and `debt.paidDownMtd`
+// (V5: and `debt.confirmedPaymentsMtd` / `debt.newChargesMtd`).
 import debtPlanRouter from "../routes/debtPlan";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
@@ -428,6 +429,44 @@ beforeAll(async () => {
     source: "plaid:amex",
   });
 
+  // ── (V5) A card no debt links, carrying one row tagged to the Visa: a new
+  // charge (42.00) and the card's interest (3.10, never a new charge). Dated
+  // the 1st, so always inside the month. Debt-tagged, so neither is household
+  // spending on any surface, and not on checking, so the bank roll-forward and
+  // the review count are untouched. Without it `debt.newChargesMtd` would be
+  // 0 === 0.
+  {
+    const [cardItem] = await db
+      .insert(plaidItemsTable)
+      .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, itemId: `item-${randomUUID()}`, accessToken: "test-token", institutionSlug: "card" })
+      .returning();
+    const looseCard = `acct-loose-card-${randomUUID()}`;
+    await db.insert(plaidAccountsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      itemId: cardItem!.id,
+      accountId: looseCard,
+      name: "Loose card",
+      type: "credit",
+    });
+    await db.insert(transactionsTable).values(
+      [
+        ["COFFEE HOUSE", "-42.00"],
+        ["INTEREST CHARGE ON PURCHASES", "-3.10"],
+      ].map(([description, amount]) => ({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: dayThisMonth(1),
+        createdAt: createdAtStartOfHouseholdDay(dayThisMonth(1)),
+        description: description!,
+        amount: amount!,
+        debtId: VISA_DEBT_ID,
+        plaidAccountId: looseCard,
+        source: "plaid",
+      })),
+    );
+  }
+
   // ── (PR-B1) A weekly cap, so the position's week figures are not all null.
   await db.insert(allowancePlansTable).values({
     householdId: TEST_HOUSEHOLD_ID,
@@ -476,6 +515,8 @@ type Spine = {
     payoffPct: number | null;
     nextMilestone: { label: string; estimatedMonth: string } | null;
     paidDownMtd: number;
+    confirmedPaymentsMtd: number;
+    newChargesMtd: number;
   };
   reviewCount: number;
   position: {
@@ -487,6 +528,7 @@ type Spine = {
     withinPlan: "over" | "tight" | "yes" | null;
     confidence: "firm" | "estimated";
     degraded: boolean;
+    weekAdjustment: { amount: string; reason: string | null; weekStart: string } | null;
   };
 };
 
@@ -499,6 +541,7 @@ type MoneyPosition = {
   withinPlan: "over" | "tight" | "yes" | null;
   confidence: "firm" | "estimated";
   degraded: boolean;
+  weekAdjustment: { amount: string; reason: string | null; weekStart: string } | null;
   lowestUntilPayday: string | null;
   cashBuffer: string;
   weekCap: string | null;
@@ -808,6 +851,22 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(spine.debt.nextMilestone!.estimatedMonth).toMatch(/^\d{4}-\d{2}$/);
   });
 
+  it("(V5) debt.confirmedPaymentsMtd + debt.newChargesMtd match GET /debt-plan (computeDebtHeadline)", async () => {
+    const [spine, plan] = await Promise.all([
+      get<Spine>("/spine"),
+      get<{ confirmedMtd: number; paidDownGenuineMtd: number; newChargesMtd: number }>("/debt-plan"),
+    ]);
+    expect(spine.debt.confirmedPaymentsMtd).toBe(plan.confirmedMtd);
+    expect(spine.debt.newChargesMtd).toBe(plan.newChargesMtd);
+    // Not vacuous: the tagged checking payment to the Visa (150.00) is the
+    // month's one confirmed payment; the loose card's 42.00 is its one new
+    // charge (its 3.10 of interest is not).
+    expect(spine.debt.confirmedPaymentsMtd).toBe(150);
+    expect(spine.debt.newChargesMtd).toBe(42);
+    // Gross confirmed ≥ genuine, always.
+    expect(spine.debt.confirmedPaymentsMtd).toBeGreaterThanOrEqual(spine.debt.paidDownMtd);
+  });
+
   it("reviewCount matches /forecast/review-count", async () => {
     const spine = await get<Spine>("/spine");
     const badge = await get<{ count: number }>("/forecast/review-count");
@@ -838,7 +897,10 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(spine.position.withinPlan).toBe(pos.withinPlan);
     expect(spine.position.confidence).toBe(pos.confidence);
     expect(spine.position.degraded).toBe(pos.degraded);
-    // The eight headline fields and nothing else.
+    // (V5) The household's carry-over for this week — none in this fixture.
+    expect(spine.position.weekAdjustment).toEqual(pos.weekAdjustment);
+    expect(pos.weekAdjustment).toBeNull();
+    // The nine headline fields and nothing else.
     expect(Object.keys(spine.position).sort()).toEqual([
       "availableUntilPayday",
       "confidence",
@@ -847,6 +909,7 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
       "paydayDate",
       "remainingWeek",
       "safeToSpendNow",
+      "weekAdjustment",
       "withinPlan",
     ]);
 
@@ -884,10 +947,17 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     // survives someone helpfully adding "totalDebt" to the debt object later.
     const spine = await get<Spine>("/spine");
 
-    expect(Object.keys(spine.debt)).toEqual(["payoffPct", "nextMilestone", "paidDownMtd"]);
+    expect(Object.keys(spine.debt)).toEqual([
+      "payoffPct",
+      "nextMilestone",
+      "paidDownMtd",
+      "confirmedPaymentsMtd",
+      "newChargesMtd",
+    ]);
     // (PR-D) No key under `debt`, at any depth, may name a balance, an amount
-    // owed or what remains. `paidDownMtd` is an amount PAID; `nextMilestone` a
-    // label and a month.
+    // owed or what remains. `paidDownMtd` and (V5) `confirmedPaymentsMtd` are
+    // amounts PAID, `newChargesMtd` an amount CHARGED; `nextMilestone` a label
+    // and a month.
     const debtKeys: string[] = [];
     const walk = (v: unknown) => {
       if (v && typeof v === "object") {
@@ -898,8 +968,8 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
       }
     };
     walk(spine.debt);
-    expect(debtKeys.length).toBeGreaterThanOrEqual(5);
-    expect(debtKeys.filter((k) => /balance|owed|remaining/i.test(k))).toEqual([]);
+    expect(debtKeys.length).toBeGreaterThanOrEqual(7);
+    expect(debtKeys.filter((k) => /balance|owed|remaining|credit|limit|available/i.test(k))).toEqual([]);
 
     // `bank.balance` is the household's own cash and is allowed; nothing else
     // in the payload may look like a debt figure.
@@ -939,7 +1009,13 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     // The spine's debt object carries the percentage, the next milestone and
     // the amount paid down this month (PR-D) — never a balance, a limit or an
     // amount owed.
-    expect(Object.keys(spine.debt).sort()).toEqual(["nextMilestone", "paidDownMtd", "payoffPct"]);
+    expect(Object.keys(spine.debt).sort()).toEqual([
+      "confirmedPaymentsMtd",
+      "newChargesMtd",
+      "nextMilestone",
+      "paidDownMtd",
+      "payoffPct",
+    ]);
     for (const key of Object.keys(spine.debt)) {
       expect(key).not.toMatch(/balance|owed|remaining|limit|credit/i);
     }

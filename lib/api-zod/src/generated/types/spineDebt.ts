@@ -17,4 +17,8 @@ export type SpineDebt = {
   nextMilestone: SpineNextMilestone | null;
   /** (PR-D) computeDebtHeadline() — genuine confirmed debt payments this household month (transfer pairs excluded). An amount PAID, never a balance; equals GET /debt-plan .paidDownGenuineMtd. */
   paidDownMtd: number;
+  /** (V5) computeDebtHeadline() — GROSS confirmed debt payments this household month (transfer pairs included). An amount PAID, never a balance; equals GET /debt-plan .confirmedMtd. */
+  confirmedPaymentsMtd: number;
+  /** (V5) computeDebtHeadline() — new charges on the debts' own accounts this household month (see DebtPlan.newChargesMtd). An amount CHARGED, never a balance or available credit; equals GET /debt-plan .newChargesMtd. */
+  newChargesMtd: number;
 };

@@ -162,9 +162,11 @@ export {
   PAYDAY_MAX_DAYS,
   PAYDAY_MIN_SHARE,
   POSITION_ASSUMPTIONS,
+  checkedAdjustmentCents,
   computePosition,
   selectPayday,
   type MoneyPosition,
+  type PositionWeekAdjustment,
   type PositionEstimate,
   type PositionEvent,
   type PositionEventKind,
@@ -175,6 +177,18 @@ export {
   type PositionWeekRow,
   type WithinPlan,
 } from "./availableToSpend";
+export {
+  WAYS_BACK_TRIMS,
+  WAYS_BACK_USUAL_WEEKS,
+  WAYS_BACK_TRIM_COVERAGES,
+  computeWaysBack,
+  medianCents,
+  type WaysBack,
+  type WaysBackAdjustment,
+  type WaysBackInputs,
+  type WaysBackRow,
+  type WaysBackTrim,
+} from "./waysBack";
 export {
   AFFORD_ASSUMPTIONS,
   AFFORD_PURCHASE_ITEM_ID,

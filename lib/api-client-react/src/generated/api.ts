@@ -75,6 +75,7 @@ import type {
   CreateMappingRuleResponse,
   CreateTransactionInput,
   CreateTransactionResponse,
+  CreateWeekAdjustmentBody,
   CreateWishlistItemBody,
   DashboardBudget,
   DashboardBudgetInput,
@@ -217,6 +218,8 @@ import type {
   UpdateTransactionResponse,
   UpdateWishlistItemBody,
   VersionInfo,
+  WaysBack,
+  WeekAdjustment,
   WeeklySettlement,
   WeeklySettlementInput,
   WishlistEvaluationResult,
@@ -11213,6 +11216,252 @@ export const useUpdateAllowancePlan = <
   TContext
 > => {
   return useMutation(getUpdateAllowancePlanMutationOptions(options));
+};
+
+/**
+ * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement. Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
+ * @summary A way back when the week is over — how far over, what is left per day, what to trim, next week carried
+ */
+export const getGetWaysBackUrl = () => {
+  return `/api/money/ways-back`;
+};
+
+export const getWaysBack = async (options?: RequestInit): Promise<WaysBack> => {
+  return customFetch<WaysBack>(getGetWaysBackUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWaysBackQueryKey = () => {
+  return [`/api/money/ways-back`] as const;
+};
+
+export const getGetWaysBackQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWaysBack>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getWaysBack>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetWaysBackQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getWaysBack>>> = ({
+    signal,
+  }) => getWaysBack({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWaysBack>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWaysBackQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWaysBack>>
+>;
+export type GetWaysBackQueryError = ErrorType<unknown>;
+
+/**
+ * @summary A way back when the week is over — how far over, what is left per day, what to trim, next week carried
+ */
+
+export function useGetWaysBack<
+  TData = Awaited<ReturnType<typeof getWaysBack>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getWaysBack>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWaysBackQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Upserts the household's carry-over for one week (unique on household, week and kind). amountCents is whole cents and must be negative: an adjustment can only LOWER a week. weekStart must be a Sunday, this week or later. The money position subtracts it from that week's remainingWeek.
+ * @summary Start a week lower — carry an overage into it (household owner only)
+ */
+export const getCreateWeekAdjustmentUrl = () => {
+  return `/api/money/week-adjustments`;
+};
+
+export const createWeekAdjustment = async (
+  createWeekAdjustmentBody: CreateWeekAdjustmentBody,
+  options?: RequestInit,
+): Promise<WeekAdjustment> => {
+  return customFetch<WeekAdjustment>(getCreateWeekAdjustmentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createWeekAdjustmentBody),
+  });
+};
+
+export const getCreateWeekAdjustmentMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createWeekAdjustment>>,
+    TError,
+    { data: BodyType<CreateWeekAdjustmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createWeekAdjustment>>,
+  TError,
+  { data: BodyType<CreateWeekAdjustmentBody> },
+  TContext
+> => {
+  const mutationKey = ["createWeekAdjustment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createWeekAdjustment>>,
+    { data: BodyType<CreateWeekAdjustmentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createWeekAdjustment(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateWeekAdjustmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createWeekAdjustment>>
+>;
+export type CreateWeekAdjustmentMutationBody =
+  BodyType<CreateWeekAdjustmentBody>;
+export type CreateWeekAdjustmentMutationError = ErrorType<void>;
+
+/**
+ * @summary Start a week lower — carry an overage into it (household owner only)
+ */
+export const useCreateWeekAdjustment = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createWeekAdjustment>>,
+    TError,
+    { data: BodyType<CreateWeekAdjustmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createWeekAdjustment>>,
+  TError,
+  { data: BodyType<CreateWeekAdjustmentBody> },
+  TContext
+> => {
+  return useMutation(getCreateWeekAdjustmentMutationOptions(options));
+};
+
+/**
+ * @summary Remove a week's carry-over (household owner only)
+ */
+export const getDeleteWeekAdjustmentUrl = (weekStart: string) => {
+  return `/api/money/week-adjustments/${weekStart}`;
+};
+
+export const deleteWeekAdjustment = async (
+  weekStart: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteWeekAdjustmentUrl(weekStart), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteWeekAdjustmentMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteWeekAdjustment>>,
+    TError,
+    { weekStart: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteWeekAdjustment>>,
+  TError,
+  { weekStart: string },
+  TContext
+> => {
+  const mutationKey = ["deleteWeekAdjustment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteWeekAdjustment>>,
+    { weekStart: string }
+  > = (props) => {
+    const { weekStart } = props ?? {};
+
+    return deleteWeekAdjustment(weekStart, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteWeekAdjustmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteWeekAdjustment>>
+>;
+
+export type DeleteWeekAdjustmentMutationError = ErrorType<void>;
+
+/**
+ * @summary Remove a week's carry-over (household owner only)
+ */
+export const useDeleteWeekAdjustment = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteWeekAdjustment>>,
+    TError,
+    { weekStart: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteWeekAdjustment>>,
+  TError,
+  { weekStart: string },
+  TContext
+> => {
+  return useMutation(getDeleteWeekAdjustmentMutationOptions(options));
 };
 
 /**

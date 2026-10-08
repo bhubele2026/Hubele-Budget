@@ -18,6 +18,7 @@ export function calmPosition(over: Partial<MoneyPosition> = {}): MoneyPosition {
     weekStart: "2026-10-04",
     weekEnd: "2026-10-10",
     weekCap: "250.00",
+    weekAdjustment: null,
     spentWeekDiscretionary: "100.00",
     needsClassificationWeek: "0.00",
     unplannedWeek: "0.00",
