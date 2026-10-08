@@ -25,6 +25,7 @@ function rec(overrides: Partial<MinRecurringRow>): MinRecurringRow {
     debtId: overrides.debtId ?? null,
     categoryId: overrides.categoryId ?? null,
     createdAt: overrides.createdAt ?? new Date(),
+    amountKind: overrides.amountKind ?? "fixed",
   };
 }
 

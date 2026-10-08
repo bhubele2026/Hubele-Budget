@@ -1,0 +1,1 @@
+{"version":3,"file":"allowancePlans.d.ts","sourceRoot":"","sources":["../../../src/generated/types/allowancePlans.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,aAAa,EAAE,MAAM,iBAAiB,CAAC;AACrD,OAAO,KAAK,EAAE,uBAAuB,EAAE,MAAM,2BAA2B,CAAC;AAEzE,MAAM,WAAW,cAAc;IAC7B,KAAK,EAAE,aAAa,EAAE,CAAC;IACvB,qEAAqE;IACrE,SAAS,EAAE,uBAAuB,CAAC;CACpC"}

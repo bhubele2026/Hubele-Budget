@@ -27,6 +27,8 @@ tags:
   - name: spine
   - name: ops
     description: (AI-0) Owner-only operations views (job queues).
+  - name: money
+    description: (PR-B1) The money position (safe to spend until payday and this week) and the allowance plans behind its weekly cap.
 paths:
   /healthz:
     get:
@@ -2132,7 +2134,8 @@ paths:
         the same function the owning page's endpoint calls — bank/forecast from
         computeCashSignal, spend from buildSpendingFacts, bills from
         buildBillsSummary, payoff from @workspace/avalanche-core, review count
-        from computeReviewCount — and an integration test asserts each one
+        from computeReviewCount, position from buildMoneyPosition (as GET
+        /money/position) — and an integration test asserts each one
         equals the owning endpoint's value to the cent. The debt field carries a
         PERCENTAGE ONLY; this response never contains a balance or an amount
         owed, because it is what the landing page paints.
@@ -2142,6 +2145,67 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Spine" }
+
+  /money/position:
+    get:
+      operationId: getMoneyPosition
+      tags: [money]
+      summary: How much is safe to spend now, until payday and this week (the money position)
+      description: >-
+        computePosition (avalanche-core) over one read of the household: the
+        forecast curve computeCashSignal builds (the spine's own horizon of 90
+        days), the current Sunday–Saturday week classified by classifyMovement,
+        the weekly cap from allowance_plans and the bank's freshness. The spine's
+        `position` is the same call; an integration test asserts they agree to
+        the cent. Never carries credit, a limit, a debt balance or an amount owed.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoneyPosition" }
+
+  /allowance-plans:
+    get:
+      operationId: listAllowancePlans
+      tags: [money]
+      summary: The household's allowance plans and the suggested weekly cap with its working
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AllowancePlans" }
+
+  /allowance-plans/{id}:
+    put:
+      operationId: updateAllowancePlan
+      tags: [money]
+      summary: Set a plan's amount (household owner only; writes source "owner")
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AllowancePlanUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AllowancePlan" }
+        "400":
+          description: Invalid amount or date
+        "403":
+          description: Only the household owner sets a plan
+        "404":
+          description: No such plan in this household
+        "409":
+          description: Another plan for the same member and period already starts on that date
 
 components:
   schemas:
@@ -2362,7 +2426,7 @@ components:
     Spine:
       type: object
       required:
-        [asOf, bank, spentMonth, spentWeek, nextBill, billsDueCount, forecast, debt, reviewCount]
+        [asOf, bank, spentMonth, spentWeek, nextBill, billsDueCount, forecast, debt, reviewCount, position]
       properties:
         asOf: { type: string, description: ISO timestamp the snapshot was read }
         bank:
@@ -2413,6 +2477,147 @@ components:
                 landing page renders it and the standing rule is that the front
                 door never shows what is owed. null = no debt carries an anchor.
         reviewCount: { type: integer, description: computeReviewCount() — unmatched forecast-flagged bank txns this month }
+        position: { $ref: "#/components/schemas/SpinePosition" }
+
+    SpinePosition:
+      type: object
+      description: >-
+        (PR-B1) The headline of the money position — the same buildMoneyPosition
+        call GET /money/position makes, field for field. Never credit, a limit,
+        a debt balance or an amount owed.
+      required: [safeToSpendNow, remainingWeek, availableUntilPayday, paydayDate, horizonKind, withinPlan, confidence, degraded]
+      properties:
+        safeToSpendNow: { type: ["string", "null"], description: MoneyPosition.safeToSpendNow }
+        remainingWeek: { type: ["string", "null"], description: MoneyPosition.remainingWeek }
+        availableUntilPayday: { type: ["string", "null"], description: MoneyPosition.availableUntilPayday }
+        paydayDate: { type: ["string", "null"], description: MoneyPosition.paydayDate }
+        horizonKind: { type: string, enum: [payday, week_end], description: MoneyPosition.horizon.kind }
+        withinPlan: { type: ["string", "null"], enum: [over, tight, "yes", null], description: MoneyPosition.withinPlan }
+        confidence: { type: string, enum: [firm, estimated] }
+        degraded: { type: boolean, description: The bank data is stale; every figure is from the last good snapshot }
+
+    MoneyPositionEstimate:
+      type: object
+      required: [itemId, label, amount, date]
+      properties:
+        itemId: { type: string }
+        label: { type: string }
+        amount: { type: string, description: Signed like the plan (negative is money out) }
+        date: { type: string }
+
+    MoneyPosition:
+      type: object
+      description: >-
+        (PR-B1) computePosition's answer. Money is a two-decimal string. Payday is
+        the first income plan on the forecast curve after today, within 45 days,
+        of at least 25% of the largest active income plan; the window runs from
+        today through payday, and on payday the bills count before the paycheck
+        (that day reads its balance less every income plan dated payday).
+        Without a payday the window runs through this week's Saturday.
+        availableUntilPayday = max(0, lowest end-of-day balance in the window −
+        cash buffer − reserves held), null —
+        never a false zero — with no bank data or no curve. remainingWeek =
+        weekCap − spentWeekDiscretionary (weekly-allowance spend plus spend not
+        yet filed). safeToSpendNow = max(0, min(remainingWeek,
+        availableUntilPayday)).
+      required:
+        [todayISO, status, paydayDate, payday, horizon, lowestUntilPayday, lowestUntilPaydayDate, committedUntilPayday,
+         cashBuffer, reservesHeld, availableUntilPayday, weekStart, weekEnd, weekCap, spentWeekDiscretionary,
+         needsClassificationWeek, unplannedWeek, monthlyWeek, remainingWeek, paceAllowedToday, withinPlan,
+         safeToSpendNow, confidence, estimates, assumptions, degraded, degradedReason]
+      properties:
+        todayISO: { type: string }
+        status: { type: string, enum: [ready, tight, not_yet, no_data], description: computeCashSignal().status }
+        paydayDate: { type: ["string", "null"] }
+        payday:
+          oneOf:
+            - type: object
+              required: [itemId, label, amount]
+              properties:
+                itemId: { type: string }
+                label: { type: string }
+                amount: { type: string }
+            - type: "null"
+        horizon:
+          type: object
+          required: [kind, endDate, lastDay]
+          properties:
+            kind: { type: string, enum: [payday, week_end] }
+            endDate: { type: string, description: "The payday, or this week's Saturday" }
+            lastDay: { type: string, description: "The last day the cash figures count (payday itself, before its paycheck; or the Saturday)" }
+        lowestUntilPayday: { type: ["string", "null"] }
+        lowestUntilPaydayDate: { type: ["string", "null"] }
+        committedUntilPayday: { type: string, description: "Sum of the planned outflows landing in the window, payday's own bills included" }
+        cashBuffer: { type: string }
+        reservesHeld: { type: string, description: Money held back for goals; 0.00 until goals ship }
+        availableUntilPayday: { type: ["string", "null"] }
+        weekStart: { type: string }
+        weekEnd: { type: string }
+        weekCap: { type: ["string", "null"], description: "This week's cap from allowance_plans (or the week's override); null when none is set, and a $0 week is none" }
+        spentWeekDiscretionary: { type: string }
+        needsClassificationWeek: { type: string, description: The part of spentWeekDiscretionary not yet filed — it counts against the cap until it is }
+        unplannedWeek: { type: string }
+        monthlyWeek: { type: string }
+        remainingWeek: { type: ["string", "null"] }
+        paceAllowedToday: { type: ["string", "null"], description: weekCap × days elapsed (today included) ÷ 7 }
+        withinPlan: { type: ["string", "null"], enum: [over, tight, "yes", null] }
+        safeToSpendNow: { type: ["string", "null"] }
+        confidence: { type: string, enum: [firm, estimated] }
+        estimates:
+          type: array
+          items: { $ref: "#/components/schemas/MoneyPositionEstimate" }
+        assumptions:
+          type: array
+          items: { type: string }
+        degraded: { type: boolean }
+        degradedReason: { type: ["string", "null"], enum: [refresh_failed, old, manual_old, null] }
+
+    AllowancePlan:
+      type: object
+      required: [id, memberUserId, period, amount, effectiveFrom, source, derivation, createdAt]
+      properties:
+        id: { type: string }
+        memberUserId: { type: ["string", "null"], description: Null for the household's shared pool }
+        period: { type: string, enum: [weekly, monthly] }
+        amount: { type: string }
+        effectiveFrom: { type: string }
+        source: { type: string, enum: [owner, derived] }
+        derivation: { description: The suggestion's working when the owner accepted it; null for a typed amount }
+        createdAt: { type: string }
+
+    AllowancePlanUpdate:
+      type: object
+      required: [amount]
+      additionalProperties: false
+      properties:
+        amount: { type: string, pattern: '^\d{1,8}(\.\d{1,2})?$', description: "Dollars, at most two decimals" }
+        effectiveFrom: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+
+    WeeklyLimitDerivation:
+      type: object
+      required: [takeHomeMonthly, committedMonthly, debtMinimumsMonthly, extraMonthly, goalsMonthly, discretionaryMonthly]
+      properties:
+        takeHomeMonthly: { type: string }
+        committedMonthly: { type: string, description: "Active bills and subscriptions, less the Weekly/Monthly Spend funding items and debt-linked bills" }
+        debtMinimumsMonthly: { type: string }
+        extraMonthly: { type: string, description: The Avalanche extra payment }
+        goalsMonthly: { type: string }
+        discretionaryMonthly: { type: string }
+
+    AllowancePlans:
+      type: object
+      required: [plans, suggested]
+      properties:
+        plans:
+          type: array
+          items: { $ref: "#/components/schemas/AllowancePlan" }
+        suggested:
+          type: object
+          required: [weekly, derivation]
+          description: A suggestion only — nothing writes it; the owner sets the cap.
+          properties:
+            weekly: { type: string, description: "Discretionary per week, rounded down to whole $5" }
+            derivation: { $ref: "#/components/schemas/WeeklyLimitDerivation" }
 
     VersionInfo:
       type: object
@@ -3535,7 +3740,7 @@ components:
 
     RecurringItem:
       type: object
-      required: [id, name, kind, amount, frequency, active]
+      required: [id, name, kind, amount, frequency, active, amountKind]
       properties:
         id: { type: string }
         name: { type: string }
@@ -3547,6 +3752,10 @@ components:
         active: { type: string }
         categoryId: { type: ["string", "null"] }
         debtId: { type: ["string", "null"] }
+        amountKind:
+          type: string
+          enum: [fixed, estimate]
+          description: (PR-B1) "estimate" when the amount is expected to vary; the money position then says its answer is estimated.
     RecurringItemMoveResult:
       type: object
       description: >-
@@ -3583,6 +3792,7 @@ components:
         active: { type: string }
         categoryId: { type: ["string", "null"] }
         debtId: { type: ["string", "null"] }
+        amountKind: { type: string, enum: [fixed, estimate] }
 
     BillsSummaryRow:
       type: object

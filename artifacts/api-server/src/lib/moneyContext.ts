@@ -25,18 +25,28 @@
 //     `discoverAmexCards`, shared with `computeWeeklyPayoff` so the two can
 //     never disagree on a card's cadence).
 //
-// ⚠️ NOTHING IN PRODUCTION CALLS THIS YET. `loadMoneyContext` is the shared
-// foundation PR8r/PR10 switch a figure onto; until then only the parity tests
-// read it. See docs/reviews/2026-09-14-household-money-core.md.
+// ⭐ (PR-B1) ITS FIRST PRODUCTION CALLER is the money position
+// (`moneyPosition.ts`: `GET /money/position` and the spine's `position`), which
+// classifies the current household week with it. Only those NEW figures read
+// it: `spentWeek`/`spentMonth`, Spending and the Budget allowance card still
+// compute exactly as before (PR-H's "no figure changes" holds for every one of
+// them). See docs/reviews/2026-09-14-household-money-core.md and
+// docs/reviews/2026-10-07-prb1-money-position.md.
 //
 // NOT READ HERE YET (plan section A, scope amended 2026-09-15):
 //   - `preferences.everydayHooks` (the weekly/monthly payoff hooks) — PR8r,
 //     with its OpenAPI schema and server validation;
 //   - `preferences.paycheckItemIds` — PR9, likewise;
-//   - the tier-2 match pairs — PR8r supplies `tier2PairedTxnIds`; it is empty.
+//   - the tier-2 match pairs are the CALLER's to supply
+//     (`opts.tier2PairedTxnIds`; the money position hands in the forecast
+//     ledger's tier-2 off-curve pairs). Omitted, the set is empty.
 
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
-import { SUPERSEDE_MAX_DAYS, type MovementContext } from "@workspace/avalanche-core";
+import {
+  SUPERSEDE_MAX_DAYS,
+  type MovementContext,
+  type MovementRow,
+} from "@workspace/avalanche-core";
 import {
   budgetCategoriesTable,
   db,
@@ -47,7 +57,7 @@ import {
 } from "@workspace/db";
 import { resolveLedgerAccounts } from "./bankLedger";
 import { findSupersededPendingForRange, type SupersededPending } from "./supersededPending";
-import { uncategorizedCategoryIds, type FilingContext } from "./pendingFiling";
+import { effectiveFiling, uncategorizedCategoryIds, type FilingContext } from "./pendingFiling";
 import { discoverAmexCards, type AmexCardCadence } from "./amexCardCadence";
 import { addDaysISO } from "./householdClock";
 
@@ -79,7 +89,7 @@ export interface MoneyContext extends MovementContext {
    * answer pairs with a matched pending row (`confirmedMatchIds`).
    */
   matchedTxnIds: ReadonlySet<string>;
-  /** Tier-2 pairs: none until PR8r supplies them. */
+  /** Tier-2 pairs: the caller's `opts.tier2PairedTxnIds`, else none. */
   tier2PairedTxnIds: ReadonlySet<string>;
   /** Superseded-pending pairs for `range`, filing included. */
   supersede: MoneyContextSupersede;
@@ -100,6 +110,12 @@ export interface LoadMoneyContextOptions {
    * here for `range`.
    */
   supersede?: MoneyContextSupersede;
+  /**
+   * (PR-B1) Rows a tier-2 pair matches to a bill (`classifyMovement` step 2's
+   * second half, honoured only on an unflagged row). The caller reads them from
+   * the forecast ledger's `matches`. Omitted = empty.
+   */
+  tier2PairedTxnIds?: ReadonlySet<string>;
 }
 
 /** One confirmed match: the matched transaction and its own date. */
@@ -274,10 +290,60 @@ export async function loadMoneyContext(
     categoriesById,
     debtCategoryIds,
     matchedTxnIds: confirmedMatchIds(matchRows, range, supersede),
-    tier2PairedTxnIds: new Set<string>(),
+    tier2PairedTxnIds: opts.tier2PairedTxnIds ?? new Set<string>(),
     supersede,
     filingCtx: { uncategorizedIds: uncategorizedCategoryIds(cats) },
     checkingAccountExternalId: ledgerAccounts?.accountExternalId ?? null,
     amexCardCadence: cadenceMapFrom(cardCadence),
   };
+}
+
+/**
+ * (PR-B1; moved from the PR-H test helper `__tests__/_helpers/classifierSpend.ts`,
+ * unchanged) The range's rows as `classifyMovement` must see them, prepared
+ * exactly as `buildSpendingFacts` prepares its own: every row of the household
+ * dated in `[start, end]`, replaced pending rows left out, each posted row in
+ * effective-filing form (the filing its replaced pending row carried, where the
+ * posted row has none of its own).
+ */
+export async function loadMovementRows(
+  householdId: string,
+  start: string,
+  end: string,
+  money: Pick<MoneyContext, "supersede" | "filingCtx">,
+): Promise<MovementRow[]> {
+  const txns = await db
+    .select({
+      id: transactionsTable.id,
+      occurredOn: transactionsTable.occurredOn,
+      description: transactionsTable.description,
+      amount: transactionsTable.amount,
+      categoryId: transactionsTable.categoryId,
+      isTransfer: transactionsTable.isTransfer,
+      source: transactionsTable.source,
+      reimbursable: transactionsTable.reimbursable,
+      debtId: transactionsTable.debtId,
+      isExternalCardPayment: transactionsTable.isExternalCardPayment,
+      pfcDetailed: transactionsTable.pfcDetailed,
+      weeklyAllowance: transactionsTable.weeklyAllowance,
+      monthlyAllowance: transactionsTable.monthlyAllowance,
+      unplannedAllowance: transactionsTable.unplannedAllowance,
+      weeklyBucket: transactionsTable.weeklyBucket,
+      isTransferUserOverridden: transactionsTable.isTransferUserOverridden,
+      plaidAccountId: transactionsTable.plaidAccountId,
+    })
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.householdId, householdId),
+        gte(transactionsTable.occurredOn, start),
+        lte(transactionsTable.occurredOn, end),
+      ),
+    );
+  const rows: MovementRow[] = [];
+  for (const row of txns) {
+    if (money.supersede.replacedIds.has(row.id)) continue;
+    rows.push(effectiveFiling(row, money.supersede.replacedBy.get(row.id), money.filingCtx));
+  }
+  return rows;
 }

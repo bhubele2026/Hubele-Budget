@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { RecurringItemInputAmountKind } from "./recurringItemInputAmountKind";
 export interface RecurringItemInput {
     name: string;
     kind?: string;
@@ -19,5 +20,6 @@ export interface RecurringItemInput {
     categoryId?: string | null;
     /** @nullable */
     debtId?: string | null;
+    amountKind?: RecurringItemInputAmountKind;
 }
 //# sourceMappingURL=recurringItemInput.d.ts.map

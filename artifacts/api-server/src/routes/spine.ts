@@ -4,12 +4,13 @@ import { db, debtsTable } from "@workspace/db";
 import { payoffPct } from "@workspace/avalanche-core";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
-  computeCashSignal,
+  computeCashSignalDetailed,
   runwayDaysFrom,
   weekStartFor,
   weekEndFor,
   fmtISO,
 } from "../lib/cashSignal";
+import { buildMoneyPosition } from "../lib/moneyPosition";
 import { buildSpendingFacts } from "../lib/spendingFacts";
 import { findSupersededPendingForRange } from "../lib/supersededPending";
 import { buildBillsSummary, pickNextBill, todayDate } from "../lib/billsSummary";
@@ -45,6 +46,11 @@ const router: IRouter = Router();
  *   debt.payoffPct                → payoffPct()          [@workspace/avalanche-core]
  *                                   over withPendingPayments() rows [lib/debtPending]
  *   reviewCount                   → computeReviewCount()  [lib/reviewCount]
+ *   position.*                    → buildMoneyPosition()  [lib/moneyPosition]
+ *                                   (also GET /money/position), handed THIS
+ *                                   request's own cash-signal, freshness and
+ *                                   pending-pair reads so one request builds
+ *                                   one ledger
  *
  * `spine.integration.test.ts` asserts every one of those equals what the owning
  * endpoint returns, to the cent. If a future change makes two tiles disagree,
@@ -87,9 +93,14 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
     monthStartISO < weekStartISO ? monthStartISO : weekStartISO,
     todayISO > weekEndISO ? todayISO : weekEndISO,
   );
-  const [signal, monthFacts, weekFacts, billsSummary, debtRows, reviewCount, freshness] =
+  // (PR-B1) The cash signal and the freshness are read once and handed to the
+  // money position too, so its figures sit on the very curve the forecast
+  // fields below quote.
+  const cashPromise = computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: 90 });
+  const freshnessPromise = computeBankFreshness(householdId, ownerUserId);
+  const [cash, monthFacts, weekFacts, billsSummary, debtRows, reviewCount, freshness, position] =
     await Promise.all([
-      computeCashSignal(householdId, ownerUserId, { horizonDays: 90 }),
+      cashPromise,
       supersedePromise.then((supersede) =>
         buildSpendingFacts(householdId, monthStartISO, todayISO, { supersede }),
       ),
@@ -99,8 +110,14 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       buildBillsSummary(householdId, ownerUserId),
       db.select().from(debtsTable).where(eq(debtsTable.householdId, householdId)),
       computeReviewCount(householdId, ownerUserId),
-      computeBankFreshness(householdId, ownerUserId),
+      freshnessPromise,
+      buildMoneyPosition(householdId, ownerUserId, {
+        cash: cashPromise,
+        freshness: freshnessPromise,
+        supersede: supersedePromise,
+      }),
     ]);
+  const signal = cash.signal;
 
   const { nextBill, billsDueCount } = pickNextBill(billsSummary, today);
 
@@ -149,6 +166,19 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       payoffPct: payoffPct(debtRowsWithPending),
     },
     reviewCount,
+    // ⭐ (PR-B1) The money position's headline. Every field is the
+    // `GET /money/position` field of the same name (`horizonKind` is its
+    // `horizon.kind`). ⚠️ Never credit, a limit, a debt balance or an amount owed.
+    position: {
+      safeToSpendNow: position.safeToSpendNow,
+      remainingWeek: position.remainingWeek,
+      availableUntilPayday: position.availableUntilPayday,
+      paydayDate: position.paydayDate,
+      horizonKind: position.horizon.kind,
+      withinPlan: position.withinPlan,
+      confidence: position.confidence,
+      degraded: position.degraded,
+    },
   });
 });
 

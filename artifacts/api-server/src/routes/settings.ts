@@ -3,6 +3,9 @@ import { eq } from "drizzle-orm";
 import { db, settingsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateSettingsBody } from "@workspace/api-zod";
+import { weekBounds } from "@workspace/avalanche-core";
+import { householdTodayISO } from "../lib/householdClock";
+import { mirrorSettingsAllowance } from "../lib/allowancePlanWriter";
 import {
   dedupeTransactionsAcrossAccountsForUser,
   dedupeTransactionsForUser,
@@ -150,11 +153,31 @@ router.put("/settings", requireAuth, async (req, res): Promise<void> => {
         preferences: keepServerOwnedPreferences(current?.preferences, preferences),
       };
     }
+    // (PR-B1, lead's ruling Q4) The standing allowances as they were, to see
+    // whether this save changes one (locked with the row, as above).
+    const [before] = await tx
+      .select({ weekly: settingsTable.weeklyAllowanceAmount, monthly: settingsTable.monthlyAllowanceAmount })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, ownerUserId))
+      .for("update");
     const [updated] = await tx
       .update(settingsTable)
       .set({ ...rest, ...preferencesSet, updatedAt: new Date() })
       .where(eq(settingsTable.userId, ownerUserId))
       .returning();
+    // ⭐ (PR-B1) MIRROR A CHANGED ALLOWANCE INTO `allowance_plans`, which the
+    // money position reads, until `settings` is retired. The household pool's
+    // plan for this household week; through the one writer. The classic page
+    // itself is frozen and unchanged.
+    if (updated && before) {
+      const weekStart = weekBounds(householdTodayISO()).start;
+      if (rest.weeklyAllowanceAmount !== undefined && Number(updated.weeklyAllowanceAmount) !== Number(before.weekly)) {
+        await mirrorSettingsAllowance(tx, req.householdId!, "weekly", updated.weeklyAllowanceAmount, weekStart);
+      }
+      if (rest.monthlyAllowanceAmount !== undefined && Number(updated.monthlyAllowanceAmount) !== Number(before.monthly)) {
+        await mirrorSettingsAllowance(tx, req.householdId!, "monthly", updated.monthlyAllowanceAmount, weekStart);
+      }
+    }
     return updated;
   });
   res.json(row);

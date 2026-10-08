@@ -1,5 +1,6 @@
 import { recurringItemsTable } from "@workspace/db";
-import { buildForecastLedger } from "./forecastLedger";
+import { rollForwardBalance, walkLedger } from "@workspace/avalanche-core";
+import { buildForecastLedger, type ForecastLedger } from "./forecastLedger";
 import type { SnapshotAccountResolution } from "./resolveSnapshotAccount";
 
 type Cadence =
@@ -375,50 +376,46 @@ export async function computeCashSignal(
     fromDate?: string;
   } = {},
 ): Promise<CashSignal> {
+  return (await computeCashSignalDetailed(householdId, ownerUserId, opts)).signal;
+}
+
+/**
+ * (PR-B1) `computeCashSignal`'s output together with the ledger it walked, so a
+ * caller that needs the curve's own events (the money position: paydays,
+ * estimates, the tier-2 pairs) reads the SAME ledger instead of building a
+ * second one. `signal` is exactly what `computeCashSignal` returns.
+ */
+export type DetailedCashSignal = { signal: CashSignal; ledger: ForecastLedger };
+
+export async function computeCashSignalDetailed(
+  householdId: string,
+  ownerUserId: string,
+  opts: {
+    horizonDays?: number;
+    fromDate?: string;
+  } = {},
+): Promise<DetailedCashSignal> {
   const ledger = await buildForecastLedger(householdId, ownerUserId, opts);
-  const { items, fromISO, toISO, fromDateOnly, to, cashBuffer } = ledger;
+  const { items, fromISO, toISO, cashBuffer } = ledger;
 
   // Roll the balance forward from anchor up to (but not including) fromDate
   // so `startingBalance` reflects what the bank should be on the chart's
   // first day.
-  let bal = ledger.startBalanceAtAnchor;
-  for (const it of items) {
-    if (it.date >= fromISO) break;
-    bal = Math.round((bal + it.amount) * 100) / 100;
-  }
-  const startingBalance = bal;
+  const startingBalance = rollForwardBalance(items, ledger.startBalanceAtAnchor, fromISO);
 
-  // Build daily series in [fromDate, toDate] and gather window stats.
-  const totalDays = Math.round((to.getTime() - fromDateOnly.getTime()) / 86_400_000) + 1;
-  const daily: Array<{ date: string; balance: string }> = [];
-  let lowest = startingBalance;
-  let lowestDate: string | null = null;
+  // ⭐ (PR-B1) The daily series in [fromDate, toDate] and the window stats —
+  // `walkLedger` (avalanche-core) is this loop, moved verbatim; the three
+  // accumulators below run inside it, in the order it applies each item.
   let projectedIncome = 0;
   let projectedExpenses = 0;
   let acceptedImpact = 0;
-
-  let cursor = 0;
-  // Skip items before window (already applied above)
-  while (cursor < items.length && items[cursor].date < fromISO) cursor++;
-
-  for (let i = 0; i < totalDays; i++) {
-    const d = addDays(fromDateOnly, i);
-    const dISO = fmtISO(d);
-    while (cursor < items.length && items[cursor].date <= dISO) {
-      const it = items[cursor];
-      bal = Math.round((bal + it.amount) * 100) / 100;
-      if (it.amount > 0) projectedIncome += it.amount;
-      else projectedExpenses += -it.amount;
-      if (it.kind === "actual" && it.matched) acceptedImpact += it.amount;
-      cursor++;
-    }
-    if (bal < lowest) {
-      lowest = bal;
-      lowestDate = dISO;
-    }
-    daily.push({ date: dISO, balance: r2(bal) });
-  }
-  const endingBalance = bal;
+  const walk = walkLedger(items, startingBalance, fromISO, toISO, (it) => {
+    if (it.amount > 0) projectedIncome += it.amount;
+    else projectedExpenses += -it.amount;
+    if (it.kind === "actual" && it.matched) acceptedImpact += it.amount;
+  });
+  const { daily, lowest, lowestDate } = walk;
+  const endingBalance = walk.endingBalance;
   const endingDate = toISO;
 
   const headroom = Math.max(0, lowest - cashBuffer);
@@ -437,7 +434,7 @@ export async function computeCashSignal(
     (it): it is Extract<typeof it, { kind: "plan" }> => it.kind === "plan" && it.amount < 0,
   );
 
-  return {
+  const signal: CashSignal = {
     bankToday: r2(ledger.bankToday),
     lowestProjected: r2(lowest),
     lowestDate,
@@ -509,6 +506,7 @@ export async function computeCashSignal(
       unpaidRemainder: r2(p.unpaidRemainder),
     })),
   };
+  return { signal, ledger };
 }
 
 function listedPlan(p: import("./forecastLedger").LedgerListedPlan): CashSignalListedPlan {

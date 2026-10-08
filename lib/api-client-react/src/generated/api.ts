@@ -17,6 +17,9 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AllowancePlan,
+  AllowancePlanUpdate,
+  AllowancePlans,
   AmexAnchor,
   AmexAnchorInput,
   AmexWeeklyPayoff,
@@ -97,6 +100,7 @@ import type {
   MappingRuleRecategorizePreviewInput,
   MeResponse,
   Member,
+  MoneyPosition,
   OpsJobRetryResult,
   OpsJobsReport,
   PinBudgetLineInput,
@@ -9336,7 +9340,7 @@ export const useRemoveMember = <
 };
 
 /**
- * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
 export const getGetSpineUrl = () => {
@@ -9400,3 +9404,241 @@ export function useGetSpine<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * computePosition (avalanche-core) over one read of the household: the forecast curve computeCashSignal builds (the spine's own horizon of 90 days), the current Sunday–Saturday week classified by classifyMovement, the weekly cap from allowance_plans and the bank's freshness. The spine's `position` is the same call; an integration test asserts they agree to the cent. Never carries credit, a limit, a debt balance or an amount owed.
+ * @summary How much is safe to spend now, until payday and this week (the money position)
+ */
+export const getGetMoneyPositionUrl = () => {
+  return `/api/money/position`;
+};
+
+export const getMoneyPosition = async (
+  options?: RequestInit,
+): Promise<MoneyPosition> => {
+  return customFetch<MoneyPosition>(getGetMoneyPositionUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMoneyPositionQueryKey = () => {
+  return [`/api/money/position`] as const;
+};
+
+export const getGetMoneyPositionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMoneyPosition>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMoneyPosition>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMoneyPositionQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMoneyPosition>>
+  > = ({ signal }) => getMoneyPosition({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMoneyPosition>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMoneyPositionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMoneyPosition>>
+>;
+export type GetMoneyPositionQueryError = ErrorType<unknown>;
+
+/**
+ * @summary How much is safe to spend now, until payday and this week (the money position)
+ */
+
+export function useGetMoneyPosition<
+  TData = Awaited<ReturnType<typeof getMoneyPosition>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMoneyPosition>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMoneyPositionQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary The household's allowance plans and the suggested weekly cap with its working
+ */
+export const getListAllowancePlansUrl = () => {
+  return `/api/allowance-plans`;
+};
+
+export const listAllowancePlans = async (
+  options?: RequestInit,
+): Promise<AllowancePlans> => {
+  return customFetch<AllowancePlans>(getListAllowancePlansUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAllowancePlansQueryKey = () => {
+  return [`/api/allowance-plans`] as const;
+};
+
+export const getListAllowancePlansQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAllowancePlans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAllowancePlans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAllowancePlansQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAllowancePlans>>
+  > = ({ signal }) => listAllowancePlans({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAllowancePlans>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAllowancePlansQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAllowancePlans>>
+>;
+export type ListAllowancePlansQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The household's allowance plans and the suggested weekly cap with its working
+ */
+
+export function useListAllowancePlans<
+  TData = Awaited<ReturnType<typeof listAllowancePlans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAllowancePlans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAllowancePlansQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set a plan's amount (household owner only; writes source "owner")
+ */
+export const getUpdateAllowancePlanUrl = (id: string) => {
+  return `/api/allowance-plans/${id}`;
+};
+
+export const updateAllowancePlan = async (
+  id: string,
+  allowancePlanUpdate: AllowancePlanUpdate,
+  options?: RequestInit,
+): Promise<AllowancePlan> => {
+  return customFetch<AllowancePlan>(getUpdateAllowancePlanUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(allowancePlanUpdate),
+  });
+};
+
+export const getUpdateAllowancePlanMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAllowancePlan>>,
+    TError,
+    { id: string; data: BodyType<AllowancePlanUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAllowancePlan>>,
+  TError,
+  { id: string; data: BodyType<AllowancePlanUpdate> },
+  TContext
+> => {
+  const mutationKey = ["updateAllowancePlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAllowancePlan>>,
+    { id: string; data: BodyType<AllowancePlanUpdate> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateAllowancePlan(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAllowancePlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAllowancePlan>>
+>;
+export type UpdateAllowancePlanMutationBody = BodyType<AllowancePlanUpdate>;
+export type UpdateAllowancePlanMutationError = ErrorType<void>;
+
+/**
+ * @summary Set a plan's amount (household owner only; writes source "owner")
+ */
+export const useUpdateAllowancePlan = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAllowancePlan>>,
+    TError,
+    { id: string; data: BodyType<AllowancePlanUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAllowancePlan>>,
+  TError,
+  { id: string; data: BodyType<AllowancePlanUpdate> },
+  TContext
+> => {
+  return useMutation(getUpdateAllowancePlanMutationOptions(options));
+};

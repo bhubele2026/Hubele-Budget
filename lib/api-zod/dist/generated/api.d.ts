@@ -347,6 +347,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         active: zod.ZodString;
         categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        amountKind: zod.ZodEnum<["fixed", "estimate"]>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         amount: string;
@@ -354,6 +355,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         kind: string;
         frequency: string;
         active: string;
+        amountKind: "fixed" | "estimate";
         categoryId?: string | null | undefined;
         debtId?: string | null | undefined;
         dayOfMonth?: number | null | undefined;
@@ -365,6 +367,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         kind: string;
         frequency: string;
         active: string;
+        amountKind: "fixed" | "estimate";
         categoryId?: string | null | undefined;
         debtId?: string | null | undefined;
         dayOfMonth?: number | null | undefined;
@@ -425,6 +428,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         kind: string;
         frequency: string;
         active: string;
+        amountKind: "fixed" | "estimate";
         categoryId?: string | null | undefined;
         debtId?: string | null | undefined;
         dayOfMonth?: number | null | undefined;
@@ -485,6 +489,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         kind: string;
         frequency: string;
         active: string;
+        amountKind: "fixed" | "estimate";
         categoryId?: string | null | undefined;
         debtId?: string | null | undefined;
         dayOfMonth?: number | null | undefined;
@@ -3635,6 +3640,7 @@ export declare const ListRecurringItemsResponseItem: zod.ZodObject<{
     active: zod.ZodString;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    amountKind: zod.ZodEnum<["fixed", "estimate"]>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     amount: string;
@@ -3642,6 +3648,7 @@ export declare const ListRecurringItemsResponseItem: zod.ZodObject<{
     kind: string;
     frequency: string;
     active: string;
+    amountKind: "fixed" | "estimate";
     categoryId?: string | null | undefined;
     debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
@@ -3653,6 +3660,7 @@ export declare const ListRecurringItemsResponseItem: zod.ZodObject<{
     kind: string;
     frequency: string;
     active: string;
+    amountKind: "fixed" | "estimate";
     categoryId?: string | null | undefined;
     debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
@@ -3669,6 +3677,7 @@ export declare const ListRecurringItemsResponse: zod.ZodArray<zod.ZodObject<{
     active: zod.ZodString;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    amountKind: zod.ZodEnum<["fixed", "estimate"]>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     amount: string;
@@ -3676,6 +3685,7 @@ export declare const ListRecurringItemsResponse: zod.ZodArray<zod.ZodObject<{
     kind: string;
     frequency: string;
     active: string;
+    amountKind: "fixed" | "estimate";
     categoryId?: string | null | undefined;
     debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
@@ -3687,6 +3697,7 @@ export declare const ListRecurringItemsResponse: zod.ZodArray<zod.ZodObject<{
     kind: string;
     frequency: string;
     active: string;
+    amountKind: "fixed" | "estimate";
     categoryId?: string | null | undefined;
     debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
@@ -3702,6 +3713,7 @@ export declare const CreateRecurringItemBody: zod.ZodObject<{
     active: zod.ZodOptional<zod.ZodString>;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    amountKind: zod.ZodOptional<zod.ZodEnum<["fixed", "estimate"]>>;
 }, "strip", zod.ZodTypeAny, {
     name: string;
     amount?: string | undefined;
@@ -3712,6 +3724,7 @@ export declare const CreateRecurringItemBody: zod.ZodObject<{
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
     active?: string | undefined;
+    amountKind?: "fixed" | "estimate" | undefined;
 }, {
     name: string;
     amount?: string | undefined;
@@ -3722,6 +3735,7 @@ export declare const CreateRecurringItemBody: zod.ZodObject<{
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
     active?: string | undefined;
+    amountKind?: "fixed" | "estimate" | undefined;
 }>;
 export declare const UpdateRecurringItemParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -3740,6 +3754,7 @@ export declare const UpdateRecurringItemBody: zod.ZodObject<{
     active: zod.ZodOptional<zod.ZodString>;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    amountKind: zod.ZodOptional<zod.ZodEnum<["fixed", "estimate"]>>;
 }, "strip", zod.ZodTypeAny, {
     name: string;
     amount?: string | undefined;
@@ -3750,6 +3765,7 @@ export declare const UpdateRecurringItemBody: zod.ZodObject<{
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
     active?: string | undefined;
+    amountKind?: "fixed" | "estimate" | undefined;
 }, {
     name: string;
     amount?: string | undefined;
@@ -3760,6 +3776,7 @@ export declare const UpdateRecurringItemBody: zod.ZodObject<{
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
     active?: string | undefined;
+    amountKind?: "fixed" | "estimate" | undefined;
 }>;
 export declare const UpdateRecurringItemResponse: zod.ZodIntersection<zod.ZodObject<{
     id: zod.ZodString;
@@ -3772,6 +3789,7 @@ export declare const UpdateRecurringItemResponse: zod.ZodIntersection<zod.ZodObj
     active: zod.ZodString;
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    amountKind: zod.ZodEnum<["fixed", "estimate"]>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     amount: string;
@@ -3779,6 +3797,7 @@ export declare const UpdateRecurringItemResponse: zod.ZodIntersection<zod.ZodObj
     kind: string;
     frequency: string;
     active: string;
+    amountKind: "fixed" | "estimate";
     categoryId?: string | null | undefined;
     debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
@@ -3790,6 +3809,7 @@ export declare const UpdateRecurringItemResponse: zod.ZodIntersection<zod.ZodObj
     kind: string;
     frequency: string;
     active: string;
+    amountKind: "fixed" | "estimate";
     categoryId?: string | null | undefined;
     debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
@@ -11323,6 +11343,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             active: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            amountKind: zod.ZodEnum<["fixed", "estimate"]>;
         }, "strip", zod.ZodTypeAny, {
             id: string;
             amount: string;
@@ -11330,6 +11351,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11341,6 +11363,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11358,6 +11381,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11374,6 +11398,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11394,6 +11419,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             active: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            amountKind: zod.ZodEnum<["fixed", "estimate"]>;
         }, "strip", zod.ZodTypeAny, {
             id: string;
             amount: string;
@@ -11401,6 +11427,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11412,6 +11439,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11429,6 +11457,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11445,6 +11474,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11525,6 +11555,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11542,6 +11573,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11582,6 +11614,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11599,6 +11632,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             kind: string;
             frequency: string;
             active: string;
+            amountKind: "fixed" | "estimate";
             categoryId?: string | null | undefined;
             debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
@@ -11917,7 +11951,7 @@ export declare const RemoveMemberParams: zod.ZodObject<{
     id: string;
 }>;
 /**
- * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
+ * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
 export declare const GetSpineResponse: zod.ZodObject<{
@@ -11990,6 +12024,34 @@ export declare const GetSpineResponse: zod.ZodObject<{
         payoffPct: number | null;
     }>;
     reviewCount: zod.ZodNumber;
+    position: zod.ZodObject<{
+        safeToSpendNow: zod.ZodNullable<zod.ZodString>;
+        remainingWeek: zod.ZodNullable<zod.ZodString>;
+        availableUntilPayday: zod.ZodNullable<zod.ZodString>;
+        paydayDate: zod.ZodNullable<zod.ZodString>;
+        horizonKind: zod.ZodEnum<["payday", "week_end"]>;
+        withinPlan: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"over">, zod.ZodLiteral<"tight">, zod.ZodLiteral<"yes">, zod.ZodLiteral<null>]>>;
+        confidence: zod.ZodEnum<["firm", "estimated"]>;
+        degraded: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        confidence: "firm" | "estimated";
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        paydayDate: string | null;
+        horizonKind: "payday" | "week_end";
+        withinPlan: "tight" | "over" | "yes" | null;
+        degraded: boolean;
+    }, {
+        confidence: "firm" | "estimated";
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        paydayDate: string | null;
+        horizonKind: "payday" | "week_end";
+        withinPlan: "tight" | "over" | "yes" | null;
+        degraded: boolean;
+    }>;
 }, "strip", zod.ZodTypeAny, {
     asOf: string;
     debt: {
@@ -12020,6 +12082,16 @@ export declare const GetSpineResponse: zod.ZodObject<{
         runwayDays: number | null;
     };
     reviewCount: number;
+    position: {
+        confidence: "firm" | "estimated";
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        paydayDate: string | null;
+        horizonKind: "payday" | "week_end";
+        withinPlan: "tight" | "over" | "yes" | null;
+        degraded: boolean;
+    };
 }, {
     asOf: string;
     debt: {
@@ -12050,5 +12122,341 @@ export declare const GetSpineResponse: zod.ZodObject<{
         runwayDays: number | null;
     };
     reviewCount: number;
+    position: {
+        confidence: "firm" | "estimated";
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        paydayDate: string | null;
+        horizonKind: "payday" | "week_end";
+        withinPlan: "tight" | "over" | "yes" | null;
+        degraded: boolean;
+    };
+}>;
+/**
+ * computePosition (avalanche-core) over one read of the household: the forecast curve computeCashSignal builds (the spine's own horizon of 90 days), the current Sunday–Saturday week classified by classifyMovement, the weekly cap from allowance_plans and the bank's freshness. The spine's `position` is the same call; an integration test asserts they agree to the cent. Never carries credit, a limit, a debt balance or an amount owed.
+ * @summary How much is safe to spend now, until payday and this week (the money position)
+ */
+export declare const GetMoneyPositionResponse: zod.ZodObject<{
+    todayISO: zod.ZodString;
+    status: zod.ZodEnum<["ready", "tight", "not_yet", "no_data"]>;
+    paydayDate: zod.ZodNullable<zod.ZodString>;
+    payday: zod.ZodUnion<[zod.ZodObject<{
+        itemId: zod.ZodString;
+        label: zod.ZodString;
+        amount: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string;
+        itemId: string;
+        label: string;
+    }, {
+        amount: string;
+        itemId: string;
+        label: string;
+    }>, zod.ZodNull]>;
+    horizon: zod.ZodObject<{
+        kind: zod.ZodEnum<["payday", "week_end"]>;
+        endDate: zod.ZodString;
+        lastDay: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        kind: "payday" | "week_end";
+        endDate: string;
+        lastDay: string;
+    }, {
+        kind: "payday" | "week_end";
+        endDate: string;
+        lastDay: string;
+    }>;
+    lowestUntilPayday: zod.ZodNullable<zod.ZodString>;
+    lowestUntilPaydayDate: zod.ZodNullable<zod.ZodString>;
+    committedUntilPayday: zod.ZodString;
+    cashBuffer: zod.ZodString;
+    reservesHeld: zod.ZodString;
+    availableUntilPayday: zod.ZodNullable<zod.ZodString>;
+    weekStart: zod.ZodString;
+    weekEnd: zod.ZodString;
+    weekCap: zod.ZodNullable<zod.ZodString>;
+    spentWeekDiscretionary: zod.ZodString;
+    needsClassificationWeek: zod.ZodString;
+    unplannedWeek: zod.ZodString;
+    monthlyWeek: zod.ZodString;
+    remainingWeek: zod.ZodNullable<zod.ZodString>;
+    paceAllowedToday: zod.ZodNullable<zod.ZodString>;
+    withinPlan: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"over">, zod.ZodLiteral<"tight">, zod.ZodLiteral<"yes">, zod.ZodLiteral<null>]>>;
+    safeToSpendNow: zod.ZodNullable<zod.ZodString>;
+    confidence: zod.ZodEnum<["firm", "estimated"]>;
+    estimates: zod.ZodArray<zod.ZodObject<{
+        itemId: zod.ZodString;
+        label: zod.ZodString;
+        amount: zod.ZodString;
+        date: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        amount: string;
+        itemId: string;
+        label: string;
+    }, {
+        date: string;
+        amount: string;
+        itemId: string;
+        label: string;
+    }>, "many">;
+    assumptions: zod.ZodArray<zod.ZodString, "many">;
+    degraded: zod.ZodBoolean;
+    degradedReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
+}, "strip", zod.ZodTypeAny, {
+    status: "ready" | "tight" | "not_yet" | "no_data";
+    cashBuffer: string;
+    confidence: "firm" | "estimated";
+    weekStart: string;
+    weekEnd: string;
+    safeToSpendNow: string | null;
+    remainingWeek: string | null;
+    availableUntilPayday: string | null;
+    paydayDate: string | null;
+    payday: {
+        amount: string;
+        itemId: string;
+        label: string;
+    } | null;
+    withinPlan: "tight" | "over" | "yes" | null;
+    degraded: boolean;
+    todayISO: string;
+    horizon: {
+        kind: "payday" | "week_end";
+        endDate: string;
+        lastDay: string;
+    };
+    lowestUntilPayday: string | null;
+    lowestUntilPaydayDate: string | null;
+    committedUntilPayday: string;
+    reservesHeld: string;
+    weekCap: string | null;
+    spentWeekDiscretionary: string;
+    needsClassificationWeek: string;
+    unplannedWeek: string;
+    monthlyWeek: string;
+    paceAllowedToday: string | null;
+    estimates: {
+        date: string;
+        amount: string;
+        itemId: string;
+        label: string;
+    }[];
+    assumptions: string[];
+    degradedReason: "refresh_failed" | "old" | "manual_old" | null;
+}, {
+    status: "ready" | "tight" | "not_yet" | "no_data";
+    cashBuffer: string;
+    confidence: "firm" | "estimated";
+    weekStart: string;
+    weekEnd: string;
+    safeToSpendNow: string | null;
+    remainingWeek: string | null;
+    availableUntilPayday: string | null;
+    paydayDate: string | null;
+    payday: {
+        amount: string;
+        itemId: string;
+        label: string;
+    } | null;
+    withinPlan: "tight" | "over" | "yes" | null;
+    degraded: boolean;
+    todayISO: string;
+    horizon: {
+        kind: "payday" | "week_end";
+        endDate: string;
+        lastDay: string;
+    };
+    lowestUntilPayday: string | null;
+    lowestUntilPaydayDate: string | null;
+    committedUntilPayday: string;
+    reservesHeld: string;
+    weekCap: string | null;
+    spentWeekDiscretionary: string;
+    needsClassificationWeek: string;
+    unplannedWeek: string;
+    monthlyWeek: string;
+    paceAllowedToday: string | null;
+    estimates: {
+        date: string;
+        amount: string;
+        itemId: string;
+        label: string;
+    }[];
+    assumptions: string[];
+    degradedReason: "refresh_failed" | "old" | "manual_old" | null;
+}>;
+/**
+ * @summary The household's allowance plans and the suggested weekly cap with its working
+ */
+export declare const ListAllowancePlansResponse: zod.ZodObject<{
+    plans: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        memberUserId: zod.ZodNullable<zod.ZodString>;
+        period: zod.ZodEnum<["weekly", "monthly"]>;
+        amount: zod.ZodString;
+        effectiveFrom: zod.ZodString;
+        source: zod.ZodEnum<["owner", "derived"]>;
+        derivation: zod.ZodUnknown;
+        createdAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        amount: string;
+        source: "derived" | "owner";
+        createdAt: string;
+        memberUserId: string | null;
+        period: "weekly" | "monthly";
+        effectiveFrom: string;
+        derivation?: unknown;
+    }, {
+        id: string;
+        amount: string;
+        source: "derived" | "owner";
+        createdAt: string;
+        memberUserId: string | null;
+        period: "weekly" | "monthly";
+        effectiveFrom: string;
+        derivation?: unknown;
+    }>, "many">;
+    suggested: zod.ZodObject<{
+        weekly: zod.ZodString;
+        derivation: zod.ZodObject<{
+            takeHomeMonthly: zod.ZodString;
+            committedMonthly: zod.ZodString;
+            debtMinimumsMonthly: zod.ZodString;
+            extraMonthly: zod.ZodString;
+            goalsMonthly: zod.ZodString;
+            discretionaryMonthly: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            takeHomeMonthly: string;
+            committedMonthly: string;
+            debtMinimumsMonthly: string;
+            extraMonthly: string;
+            goalsMonthly: string;
+            discretionaryMonthly: string;
+        }, {
+            takeHomeMonthly: string;
+            committedMonthly: string;
+            debtMinimumsMonthly: string;
+            extraMonthly: string;
+            goalsMonthly: string;
+            discretionaryMonthly: string;
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        weekly: string;
+        derivation: {
+            takeHomeMonthly: string;
+            committedMonthly: string;
+            debtMinimumsMonthly: string;
+            extraMonthly: string;
+            goalsMonthly: string;
+            discretionaryMonthly: string;
+        };
+    }, {
+        weekly: string;
+        derivation: {
+            takeHomeMonthly: string;
+            committedMonthly: string;
+            debtMinimumsMonthly: string;
+            extraMonthly: string;
+            goalsMonthly: string;
+            discretionaryMonthly: string;
+        };
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    plans: {
+        id: string;
+        amount: string;
+        source: "derived" | "owner";
+        createdAt: string;
+        memberUserId: string | null;
+        period: "weekly" | "monthly";
+        effectiveFrom: string;
+        derivation?: unknown;
+    }[];
+    suggested: {
+        weekly: string;
+        derivation: {
+            takeHomeMonthly: string;
+            committedMonthly: string;
+            debtMinimumsMonthly: string;
+            extraMonthly: string;
+            goalsMonthly: string;
+            discretionaryMonthly: string;
+        };
+    };
+}, {
+    plans: {
+        id: string;
+        amount: string;
+        source: "derived" | "owner";
+        createdAt: string;
+        memberUserId: string | null;
+        period: "weekly" | "monthly";
+        effectiveFrom: string;
+        derivation?: unknown;
+    }[];
+    suggested: {
+        weekly: string;
+        derivation: {
+            takeHomeMonthly: string;
+            committedMonthly: string;
+            debtMinimumsMonthly: string;
+            extraMonthly: string;
+            goalsMonthly: string;
+            discretionaryMonthly: string;
+        };
+    };
+}>;
+/**
+ * @summary Set a plan's amount (household owner only; writes source "owner")
+ */
+export declare const UpdateAllowancePlanParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const updateAllowancePlanBodyAmountRegExp: RegExp;
+export declare const updateAllowancePlanBodyEffectiveFromRegExp: RegExp;
+export declare const UpdateAllowancePlanBody: zod.ZodObject<{
+    amount: zod.ZodString;
+    effectiveFrom: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    amount: string;
+    effectiveFrom?: string | undefined;
+}, {
+    amount: string;
+    effectiveFrom?: string | undefined;
+}>;
+export declare const UpdateAllowancePlanResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    memberUserId: zod.ZodNullable<zod.ZodString>;
+    period: zod.ZodEnum<["weekly", "monthly"]>;
+    amount: zod.ZodString;
+    effectiveFrom: zod.ZodString;
+    source: zod.ZodEnum<["owner", "derived"]>;
+    derivation: zod.ZodUnknown;
+    createdAt: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    amount: string;
+    source: "derived" | "owner";
+    createdAt: string;
+    memberUserId: string | null;
+    period: "weekly" | "monthly";
+    effectiveFrom: string;
+    derivation?: unknown;
+}, {
+    id: string;
+    amount: string;
+    source: "derived" | "owner";
+    createdAt: string;
+    memberUserId: string | null;
+    period: "weekly" | "monthly";
+    effectiveFrom: string;
+    derivation?: unknown;
 }>;
 //# sourceMappingURL=api.d.ts.map

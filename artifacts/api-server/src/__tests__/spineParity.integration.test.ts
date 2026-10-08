@@ -46,6 +46,7 @@ vi.mock("../middlewares/requireAuth", () => ({
 
 import {
   db,
+  allowancePlansTable,
   budgetCategoriesTable,
   debtsTable,
   forecastSettingsTable,
@@ -68,6 +69,8 @@ import debtsRouter from "../routes/debts";
 import dashboardRouter from "../routes/dashboard";
 // `/forecast/bank-balance-explain` owns the bank freshness fields the spine carries.
 import bankBalanceExplainRouter from "../routes/bankBalanceExplain";
+// (PR-B1) `/money/position` owns the spine's `position`.
+import moneyRouter from "../routes/money";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 import { householdTodayDate } from "../lib/householdClock";
@@ -90,6 +93,7 @@ app.use(reportsRouter);
 app.use(debtsRouter);
 app.use(dashboardRouter);
 app.use(bankBalanceExplainRouter);
+app.use(moneyRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -121,6 +125,9 @@ async function cleanup(): Promise<void> {
     .delete(plaidAccountsTable)
     .where(eq(plaidAccountsTable.userId, TEST_USER));
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
+  if (TEST_HOUSEHOLD_ID) {
+    await db.delete(allowancePlansTable).where(eq(allowancePlansTable.householdId, TEST_HOUSEHOLD_ID));
+  }
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -397,6 +404,16 @@ beforeAll(async () => {
     source: "plaid:amex",
   });
 
+  // ── (PR-B1) A weekly cap, so the position's week figures are not all null.
+  await db.insert(allowancePlansTable).values({
+    householdId: TEST_HOUSEHOLD_ID,
+    memberUserId: null,
+    period: "weekly",
+    amount: "250.00",
+    effectiveFrom: "2026-05-01",
+    source: "owner",
+  });
+
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
   const addr = server.address();
@@ -433,6 +450,33 @@ type Spine = {
   };
   debt: { payoffPct: number | null };
   reviewCount: number;
+  position: {
+    safeToSpendNow: string | null;
+    remainingWeek: string | null;
+    availableUntilPayday: string | null;
+    paydayDate: string | null;
+    horizonKind: "payday" | "week_end";
+    withinPlan: "over" | "tight" | "yes" | null;
+    confidence: "firm" | "estimated";
+    degraded: boolean;
+  };
+};
+
+type MoneyPosition = {
+  safeToSpendNow: string | null;
+  remainingWeek: string | null;
+  availableUntilPayday: string | null;
+  paydayDate: string | null;
+  horizon: { kind: "payday" | "week_end"; endDate: string; lastDay: string };
+  withinPlan: "over" | "tight" | "yes" | null;
+  confidence: "firm" | "estimated";
+  degraded: boolean;
+  lowestUntilPayday: string | null;
+  cashBuffer: string;
+  weekCap: string | null;
+  spentWeekDiscretionary: string;
+  weekStart: string;
+  weekEnd: string;
 };
 
 type CashSignal = {
@@ -735,6 +779,58 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(spine.reviewCount).toBe(2 + 1 + alreadyHappened);
   });
 
+  it("(PR-B1) position matches GET /money/position field for field, to the cent", async () => {
+    const spine = await get<Spine>("/spine");
+    const pos = await get<MoneyPosition>("/money/position");
+
+    expect(spine.position.safeToSpendNow).toBe(pos.safeToSpendNow);
+    expect(spine.position.remainingWeek).toBe(pos.remainingWeek);
+    expect(spine.position.availableUntilPayday).toBe(pos.availableUntilPayday);
+    expect(spine.position.paydayDate).toBe(pos.paydayDate);
+    expect(spine.position.horizonKind).toBe(pos.horizon.kind);
+    expect(spine.position.withinPlan).toBe(pos.withinPlan);
+    expect(spine.position.confidence).toBe(pos.confidence);
+    expect(spine.position.degraded).toBe(pos.degraded);
+    // The eight headline fields and nothing else.
+    expect(Object.keys(spine.position).sort()).toEqual([
+      "availableUntilPayday",
+      "confidence",
+      "degraded",
+      "horizonKind",
+      "paydayDate",
+      "remainingWeek",
+      "safeToSpendNow",
+      "withinPlan",
+    ]);
+
+    // Not vacuous: the fixture has a bank snapshot and a $250 weekly cap.
+    expect(pos.safeToSpendNow).not.toBeNull();
+    expect(pos.availableUntilPayday).not.toBeNull();
+    expect(pos.remainingWeek).not.toBeNull();
+    expect(pos.weekCap).toBe("250.00");
+  });
+
+  it("(PR-B1) position sits on the spine's own curve, week and buffer", async () => {
+    const spine = await get<Spine>("/spine");
+    const pos = await get<MoneyPosition>("/money/position");
+    const { weekStartFor, weekEndFor } = await import("../lib/cashSignal");
+
+    // The window's low can never be below the 90-day low the forecast quotes.
+    expect(Number(pos.lowestUntilPayday)).toBeGreaterThanOrEqual(Number(spine.forecast.lowPoint));
+    expect(pos.cashBuffer).toBe(spine.forecast.cashBuffer);
+    // available = max(0, window low − buffer), on the spine's own numbers.
+    expect(Number(pos.availableUntilPayday)).toBeCloseTo(
+      Math.max(0, Number(pos.lowestUntilPayday) - Number(spine.forecast.cashBuffer)),
+      2,
+    );
+    // The same Sunday–Saturday week the spine's spentWeek reads. This fixture
+    // has no allowance flags, reimbursables or bill matches, so every purchase
+    // in it is unfiled and counts against the cap: the two figures agree here.
+    expect([pos.weekStart, pos.weekEnd]).toEqual([weekStartFor(TODAY), weekEndFor(TODAY)]);
+    expect(Number(pos.spentWeekDiscretionary)).toBeCloseTo(spine.spentWeek, 2);
+    expect(Number(pos.remainingWeek)).toBeCloseTo(250 - spine.spentWeek, 2);
+  });
+
   it("⚠️ never carries a debt balance or amount owed — landing law", async () => {
     // The landing paints this payload. The standing rule is that the front door
     // shows progress, never what is owed. This asserts the SHAPE, so the rule
@@ -755,6 +851,31 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     ]) {
       expect(serialized).not.toContain(banned);
     }
+  });
+
+  it("⚠️ (PR-B1) the position never names credit or a limit, nor a balance owed — on the spine or on its own route", async () => {
+    const spine = await get<Spine>("/spine");
+    const pos = await get<Record<string, unknown>>("/money/position");
+    const keysOf = (v: unknown, out: string[] = []): string[] => {
+      if (Array.isArray(v)) v.forEach((x) => keysOf(x, out));
+      else if (v && typeof v === "object") {
+        for (const [k, x] of Object.entries(v)) {
+          out.push(k);
+          keysOf(x, out);
+        }
+      }
+      return out;
+    };
+    // The whole spine except the bank's own cash balance, and the whole position.
+    const keys = [...keysOf({ ...spine, bank: undefined }), ...keysOf(pos)];
+    expect(keys).toContain("safeToSpendNow");
+    for (const k of keys) {
+      expect(k, k).not.toMatch(/credit|limit(?!s)/i);
+      // "owed" anywhere but inside "allowed" (paceAllowedToday is the cap's pace).
+      expect(k, k).not.toMatch(/debt(?!$)|(?<!all)owed|balance/i);
+    }
+    // The spine's debt object is still the percentage alone.
+    expect(Object.keys(spine.debt)).toEqual(["payoffPct"]);
   });
 
   it("is one snapshot: asOf is present and every field is populated together", async () => {

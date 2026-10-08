@@ -302,3 +302,84 @@ export function everydayPlan(
   const monthlyDollars = finiteDollars(settings.monthlyAllowanceAmount) ?? 0;
   return { weeklyCents: toCents(weeklyDollars), monthlyCents: toCents(monthlyDollars) };
 }
+
+// ── (PR-B1) The everyday plan from `allowance_plans` rows ───────────────────
+
+/** An `allowance_plans` row, as the plan reads it. */
+export interface AllowancePlanRow {
+  /** Null = the household's shared pool. A member's own plan is never the household's cap. */
+  memberUserId: string | null;
+  period: string;
+  amount: string | number;
+  /** `YYYY-MM-DD`. */
+  effectiveFrom: string;
+}
+
+/**
+ * The household pool's plan for `period` in effect for the week starting
+ * `periodStartSunday`: of the rows that have started by the end of that week
+ * (`effectiveFrom` ≤ its Saturday), the newest. So (lead's ruling on PR-B1 Q3)
+ * a row effective on or before the week's Sunday governs the whole week, and a
+ * change made mid-week with `effective_from` = today governs the week that
+ * contains today — the whole of it, not from today on. Null when none has
+ * started. Every writer dates a row on or before today (the classic settings
+ * mirror uses the current week's Sunday), so a row never governs a week
+ * before it was written.
+ */
+export function allowancePlanInEffect(
+  periodStartSunday: string,
+  plans: readonly AllowancePlanRow[],
+  period: "weekly" | "monthly",
+): AllowancePlanRow | null {
+  const weekEnd = /^\d{4}-\d{2}-\d{2}$/.test(periodStartSunday)
+    ? weekBounds(periodStartSunday).end
+    : periodStartSunday;
+  let best: AllowancePlanRow | null = null;
+  for (const p of plans) {
+    if (p.memberUserId != null || p.period !== period || p.effectiveFrom > weekEnd) continue;
+    if (!best || p.effectiveFrom > best.effectiveFrom) best = p;
+  }
+  return best;
+}
+
+export interface EverydayPlanFromRows extends EverydayPlan {
+  /**
+   * Where `weeklyCents` came from: that week's override, a plan row, or
+   * nothing (0). (Lead's ruling on PR-B1 Q2) A plan row of $0 is "nothing": a
+   * $0 standing allowance means no cap was set, never a $0 cap. A per-week
+   * override of 0 is still reported as the override (the money position reads
+   * any $0 week as no cap).
+   */
+  weeklySource: "override" | "plan" | "none";
+  monthlySource: "plan" | "none";
+}
+
+/**
+ * ⭐ (PR-B1) `everydayPlan`, read from `allowance_plans` instead of the
+ * settings row. Same parsing (`Number`, finite only), same per-week override
+ * (`preferences.weeklyAllowanceOverrides`, honoured only on a week start), and
+ * 0 where nothing is planned. Until settings is retired the backfill
+ * (0040_allowance_plans.sql) makes the two agree for every household — pinned
+ * by `everydayPlanFromRows.test.ts` and `allowancePlans.integration.test.ts`.
+ */
+export function everydayPlanFromRows(
+  periodStartSunday: string,
+  plans: readonly AllowancePlanRow[],
+  overrides?: Readonly<Record<string, string | number>> | null,
+): EverydayPlanFromRows {
+  const override =
+    overrides && isHouseholdWeekStart(periodStartSunday)
+      ? finiteDollars(overrides[periodStartSunday])
+      : null;
+  const weekly = allowancePlanInEffect(periodStartSunday, plans, "weekly");
+  const monthly = allowancePlanInEffect(periodStartSunday, plans, "monthly");
+  const weeklyPlan = weekly ? finiteDollars(weekly.amount) : null;
+  const monthlyPlan = monthly ? finiteDollars(monthly.amount) : null;
+  const weeklyDollars = override ?? weeklyPlan ?? 0;
+  return {
+    weeklyCents: toCents(weeklyDollars),
+    monthlyCents: toCents(monthlyPlan ?? 0),
+    weeklySource: override != null ? "override" : weeklyPlan ? "plan" : "none",
+    monthlySource: monthlyPlan ? "plan" : "none",
+  };
+}

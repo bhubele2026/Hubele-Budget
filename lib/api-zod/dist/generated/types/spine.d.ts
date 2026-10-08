@@ -9,6 +9,7 @@ import type { SpineBank } from "./spineBank";
 import type { SpineDebt } from "./spineDebt";
 import type { SpineForecast } from "./spineForecast";
 import type { SpineNextBill } from "./spineNextBill";
+import type { SpinePosition } from "./spinePosition";
 export interface Spine {
     /** ISO timestamp the snapshot was read */
     asOf: string;
@@ -25,5 +26,6 @@ export interface Spine {
     debt: SpineDebt;
     /** computeReviewCount() — unmatched forecast-flagged bank txns this month */
     reviewCount: number;
+    position: SpinePosition;
 }
 //# sourceMappingURL=spine.d.ts.map

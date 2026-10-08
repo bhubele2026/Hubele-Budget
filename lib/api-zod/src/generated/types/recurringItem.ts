@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { RecurringItemAmountKind } from "./recurringItemAmountKind";
 
 export interface RecurringItem {
   id: string;
@@ -21,4 +22,6 @@ export interface RecurringItem {
   categoryId?: string | null;
   /** @nullable */
   debtId?: string | null;
+  /** (PR-B1) "estimate" when the amount is expected to vary; the money position then says its answer is estimated. */
+  amountKind: RecurringItemAmountKind;
 }
