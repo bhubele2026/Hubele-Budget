@@ -17,7 +17,7 @@ export const DEFAULT_FAKE_FIXTURES: Readonly<Record<AiTask, FakeFixture>> = {
     rationale: "Demo answer. No model was called.",
   },
   chat: { text: "This is a demo answer. Turn on AI to ask real questions." },
-  recap: { text: "Demo recap. No model was called.", facts_used: [] },
+  recap: { text: "Demo recap. No model was called.", factsUsed: [] },
   receipt: { merchant: null, total: null, date: null, lineItems: [] },
   sms_question: { text: "Demo reply. No model was called." },
   eval_judge: { score: 0, reason: "Demo judge. No model was called." },

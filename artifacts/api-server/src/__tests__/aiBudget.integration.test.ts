@@ -109,17 +109,17 @@ describe("soft and hard caps", () => {
 
 describe("daily call caps", () => {
   it("defaults are chat 40, categorize 20, recap 3, receipt 15, sms_question 10", () => {
-    expect(DEFAULT_DAILY_CAPS).toEqual({ chat: 40, categorize: 20, recap: 3, receipt: 15, sms_question: 10 });
+    expect(DEFAULT_DAILY_CAPS).toEqual({ chat: 40, categorize: 20, recap: 6, receipt: 15, sms_question: 10 });
   });
 
-  it("recap stops at its 3rd call of the UTC day; yesterday's and blocked calls do not count", async () => {
+  it("recap stops at its 6th call of the UTC day; yesterday's and blocked calls do not count", async () => {
     await spend(0, "2026-10-06T23:59:59Z", "recap");
     await spend(0, "2026-10-07T00:00:00Z", "recap");
     await spend(0, "2026-10-07T08:00:00Z", "recap");
     await spend(0, "2026-10-07T08:01:00Z", "recap", "budget_exceeded");
     expect(await callsToday(HH, "recap", new Date("2026-10-07T12:00:00Z"))).toBe(2);
     expect(await verdict("recap", "2026-10-07T12:00:00Z")).toBe("ok");
-    await spend(0, "2026-10-07T09:00:00Z", "recap");
+    for (const m of ["00", "01", "02", "03"]) await spend(0, `2026-10-07T09:${m}:00Z`, "recap");
     expect(await verdict("recap", "2026-10-07T12:00:00Z")).toBe("budget_exceeded");
     // Other tasks have their own count.
     expect(await verdict("categorize", "2026-10-07T12:00:00Z")).toBe("ok");
@@ -131,7 +131,7 @@ describe("daily call caps", () => {
     await db.insert(aiBudgetTable).values({ householdId: HH, dailyCaps: { categorize: 1, recap: "nonsense" } });
     const s = await getBudgetState(HH, new Date("2026-10-07T12:00:00Z"));
     expect(s.dailyCaps.categorize).toBe(1);
-    expect(s.dailyCaps.recap).toBe(3);
+    expect(s.dailyCaps.recap).toBe(6);
     await spend(0, "2026-10-07T01:00:00Z", "categorize");
     expect(await verdict("categorize", "2026-10-07T12:00:00Z")).toBe("budget_exceeded");
   });

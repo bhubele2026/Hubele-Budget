@@ -287,6 +287,84 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/RecapDeliveryItem" }
 
+  /recap/preview:
+    post:
+      operationId: previewRecap
+      tags: [recap]
+      summary: (AI-4a) Draft the morning recap for a day without storing or sending it (model draft and template).
+      description: |
+        Builds the facts for the caller and returns both drafts. The model draft counts against the
+        household's daily `recap` call cap; it is null when AI is off, over budget, refused, or when
+        its text failed validation twice. With the demo provider the model text is a labelled fixture.
+        Nothing is stored and nothing is sent.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecapPreviewInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapPreview" }
+        "400":
+          description: Not a usable date
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+
+  /recap/history:
+    get:
+      operationId: listRecapHistory
+      tags: [recap]
+      summary: (AI-4a) The caller's most recent recaps, newest first (at most 30), with their delivery status.
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 30 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecapHistoryItem" }
+
+  /recap/generate-now:
+    post:
+      operationId: generateRecapNow
+      tags: [recap]
+      summary: (AI-4a) Owner only. Generate and store a member's recap for a day now (ops); does not send it.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecapGenerateNowInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapGenerateNowResult" }
+        "400":
+          description: Not a usable date, or not a member of this household
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+        "403":
+          description: Only the household owner may do this
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+        "409":
+          description: That recap was already sent and cannot be replaced
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+
   /dashboard:
     get:
       operationId: getDashboard
@@ -2900,6 +2978,67 @@ components:
         forDate: { type: ["string", "null"] }
         status: { type: string, enum: [queued, sent, delivered, undelivered, failed] }
         createdAt: { type: string }
+
+    RecapPreviewInput:
+      type: object
+      properties:
+        forDate: { type: string, description: "YYYY-MM-DD; defaults to today in the member's time zone" }
+
+    RecapPreview:
+      type: object
+      required: [model, template, facts]
+      properties:
+        model:
+          oneOf:
+            - type: object
+              required: [text, source, demo]
+              properties:
+                text: { type: string }
+                source: { type: string, enum: [model] }
+                demo: { type: boolean, description: True when the demo provider wrote it (no model ran) }
+            - type: "null"
+        template:
+          type: object
+          required: [text]
+          properties:
+            text: { type: string }
+        facts:
+          type: object
+          additionalProperties: true
+          description: The deterministic facts both drafts were written from (money in dollars)
+
+    RecapHistoryItem:
+      type: object
+      required: [id, forDate, text, source, status, generatedAt, delivery]
+      properties:
+        id: { type: string }
+        forDate: { type: string }
+        text: { type: string }
+        source: { type: string, enum: [model, template] }
+        status: { type: string, enum: [drafted, sent, failed, skipped] }
+        generatedAt: { type: string }
+        delivery:
+          oneOf:
+            - type: object
+              required: [status, createdAt]
+              properties:
+                status: { type: string, enum: [queued, sent, delivered, undelivered, failed] }
+                createdAt: { type: string }
+            - type: "null"
+
+    RecapGenerateNowInput:
+      type: object
+      properties:
+        forDate: { type: string }
+        userId: { type: string, description: A member of the owner's household; defaults to the caller }
+        replace: { type: boolean, description: Replace a recap that has not been sent }
+
+    RecapGenerateNowResult:
+      type: object
+      required: [created, recap]
+      properties:
+        created: { type: boolean }
+        recap: { $ref: "#/components/schemas/RecapHistoryItem" }
 
     OpsJobQueueCount:
       type: object

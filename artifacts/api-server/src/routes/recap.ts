@@ -1,8 +1,11 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { addDaysISO, localDateInZone } from "@workspace/avalanche-core";
 import {
   db,
+  householdMembersTable,
+  recapsTable,
   recapDeliveriesTable,
   recapSettingsTable,
   recapVerificationsTable,
@@ -11,11 +14,17 @@ import {
 import {
   ConfirmRecapVerificationBody,
   ConfirmRecapVerificationResponse,
+  GenerateRecapNowBody,
+  GenerateRecapNowResponse,
   GetRecapSettingsResponse,
   ListRecapDeliveriesQueryParams,
   ListRecapDeliveriesResponse,
+  ListRecapHistoryQueryParams,
+  ListRecapHistoryResponse,
   PauseRecapBody,
   PauseRecapResponse,
+  PreviewRecapBody,
+  PreviewRecapResponse,
   SendRecapTestResponse,
   StartRecapVerificationBody,
   StartRecapVerificationResponse,
@@ -28,6 +37,7 @@ import { getSmsProvider } from "../lib/sms";
 import { last4, normalizeUsPhone } from "../lib/sms/phone";
 import { sendSms } from "../lib/sms/send";
 import { sendRecapDelivery } from "../recap/deliver";
+import { generateRecap } from "../recap/generate";
 import { CONSENT_TEXT, CONSENT_TEXT_VERSION, testBody, verificationBody } from "../recap/messages";
 
 // (AI-4b) The member's own recap-text settings, phone verification and
@@ -347,6 +357,117 @@ router.get("/recap/deliveries", requireAuth, async (req, res): Promise<void> => 
   res.json(
     ListRecapDeliveriesResponse.parse(rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }))),
   );
+});
+
+// ── (AI-4a) Preview, history, generate-now ─────────────────────────────────
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_DAYS_BACK = 30;
+
+function validDate(v: string): boolean {
+  if (!DATE_RE.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+/** The recap date to use: the one asked for, or today in the member's zone. */
+function resolveForDate(asked: string | undefined, timezone: string): { forDate: string } | { error: string } {
+  const today = localDateInZone(new Date(), timezone);
+  if (asked === undefined) return { forDate: today };
+  if (!validDate(asked)) return { error: "forDate must be a real date, YYYY-MM-DD." };
+  if (asked > addDaysISO(today, 1) || asked < addDaysISO(today, -MAX_DAYS_BACK)) {
+    return { error: `forDate must be within ${MAX_DAYS_BACK} days back and one day ahead.` };
+  }
+  return { forDate: asked };
+}
+
+router.post("/recap/preview", requireAuth, async (req, res): Promise<void> => {
+  const { userId, householdId } = who(req);
+  const parsed = PreviewRecapBody.safeParse(req.body ?? {});
+  if (!parsed.success) return fail(res, 400, "Those settings are not valid.", "invalid_body");
+  const settings = await ensureSettings(householdId, userId);
+  const when = resolveForDate(parsed.data.forDate, settings.timezone);
+  if ("error" in when) return fail(res, 400, when.error, "bad_date");
+  const out = await generateRecap(householdId, userId, when.forDate, {
+    preview: true,
+    ownerUserId: req.householdOwnerId!,
+  });
+  if (!out.preview) return fail(res, 500, "Could not draft the recap.", "preview_failed");
+  res.json(PreviewRecapResponse.parse({ model: out.model, template: out.template, facts: out.facts }));
+});
+
+function historyItem(r: typeof recapsTable.$inferSelect, d: { status: string; createdAt: Date } | null) {
+  return {
+    id: r.id,
+    forDate: r.forDate,
+    text: r.text,
+    source: r.source,
+    status: r.status,
+    generatedAt: r.generatedAt.toISOString(),
+    delivery: d ? { status: d.status, createdAt: d.createdAt.toISOString() } : null,
+  };
+}
+
+router.get("/recap/history", requireAuth, async (req, res): Promise<void> => {
+  const { userId, householdId } = who(req);
+  const q = ListRecapHistoryQueryParams.safeParse(req.query);
+  if (!q.success) return fail(res, 400, "limit must be between 1 and 30.", "bad_limit");
+  const rows = await db
+    .select({
+      recap: recapsTable,
+      deliveryStatus: recapDeliveriesTable.status,
+      deliveryCreatedAt: recapDeliveriesTable.createdAt,
+    })
+    .from(recapsTable)
+    .leftJoin(
+      recapDeliveriesTable,
+      and(eq(recapDeliveriesTable.recapId, recapsTable.id), eq(recapDeliveriesTable.kind, "scheduled")),
+    )
+    .where(and(eq(recapsTable.householdId, householdId), eq(recapsTable.userId, userId)))
+    .orderBy(desc(recapsTable.forDate))
+    .limit(q.data.limit ?? 30);
+  res.json(
+    ListRecapHistoryResponse.parse(
+      rows.map((r) =>
+        historyItem(r.recap, r.deliveryStatus && r.deliveryCreatedAt ? { status: r.deliveryStatus, createdAt: r.deliveryCreatedAt } : null),
+      ),
+    ),
+  );
+});
+
+router.post("/recap/generate-now", requireAuth, async (req, res): Promise<void> => {
+  const { userId, householdId } = who(req);
+  if (req.householdOwnerId !== userId) return fail(res, 403, "Only the household owner can do this.", "owner_only");
+  const parsed = GenerateRecapNowBody.safeParse(req.body ?? {});
+  if (!parsed.success) return fail(res, 400, "Those settings are not valid.", "invalid_body");
+  const target = parsed.data.userId ?? userId;
+  const [member] = await db
+    .select({ userId: householdMembersTable.userId })
+    .from(householdMembersTable)
+    .where(and(eq(householdMembersTable.userId, target), eq(householdMembersTable.householdId, householdId)));
+  if (!member) return fail(res, 400, "That person is not a member of this household.", "not_a_member");
+  const settings = await ensureSettings(householdId, target);
+  const when = resolveForDate(parsed.data.forDate, settings.timezone);
+  if ("error" in when) return fail(res, 400, when.error, "bad_date");
+
+  if (parsed.data.replace) {
+    const [existing] = await db
+      .select()
+      .from(recapsTable)
+      .where(and(eq(recapsTable.userId, target), eq(recapsTable.forDate, when.forDate), eq(recapsTable.householdId, householdId)));
+    if (existing?.status === "sent") return fail(res, 409, "That recap was already sent.", "already_sent");
+    if (existing) await db.delete(recapsTable).where(eq(recapsTable.id, existing.id));
+  }
+  const out = await generateRecap(householdId, target, when.forDate, {
+    ownerUserId: req.householdOwnerId!,
+    trigger: "user",
+  });
+  if (out.preview) return fail(res, 500, "Could not generate the recap.", "generate_failed");
+  const [delivery] = await db
+    .select({ status: recapDeliveriesTable.status, createdAt: recapDeliveriesTable.createdAt })
+    .from(recapDeliveriesTable)
+    .where(and(eq(recapDeliveriesTable.recapId, out.recap.id), eq(recapDeliveriesTable.kind, "scheduled")));
+  res.json(GenerateRecapNowResponse.parse({ created: out.created, recap: historyItem(out.recap, delivery ?? null) }));
 });
 
 export default router;

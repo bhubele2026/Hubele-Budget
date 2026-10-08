@@ -556,6 +556,242 @@ export declare const ListRecapDeliveriesResponse: zod.ZodArray<zod.ZodObject<{
     createdAt: string;
 }>, "many">;
 /**
+ * Builds the facts for the caller and returns both drafts. The model draft counts against the
+household's daily `recap` call cap; it is null when AI is off, over budget, refused, or when
+its text failed validation twice. With the demo provider the model text is a labelled fixture.
+Nothing is stored and nothing is sent.
+
+ * @summary (AI-4a) Draft the morning recap for a day without storing or sending it (model draft and template).
+ */
+export declare const PreviewRecapBody: zod.ZodObject<{
+    forDate: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    forDate?: string | undefined;
+}, {
+    forDate?: string | undefined;
+}>;
+export declare const PreviewRecapResponse: zod.ZodObject<{
+    model: zod.ZodUnion<[zod.ZodObject<{
+        text: zod.ZodString;
+        source: zod.ZodEnum<["model"]>;
+        demo: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        text: string;
+        source: "model";
+        demo: boolean;
+    }, {
+        text: string;
+        source: "model";
+        demo: boolean;
+    }>, zod.ZodNull]>;
+    template: zod.ZodObject<{
+        text: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        text: string;
+    }, {
+        text: string;
+    }>;
+    facts: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+}, "strip", zod.ZodTypeAny, {
+    model: {
+        text: string;
+        source: "model";
+        demo: boolean;
+    } | null;
+    template: {
+        text: string;
+    };
+    facts: Record<string, unknown>;
+}, {
+    model: {
+        text: string;
+        source: "model";
+        demo: boolean;
+    } | null;
+    template: {
+        text: string;
+    };
+    facts: Record<string, unknown>;
+}>;
+/**
+ * @summary (AI-4a) The caller's most recent recaps, newest first (at most 30), with their delivery status.
+ */
+export declare const listRecapHistoryQueryLimitMax = 30;
+export declare const ListRecapHistoryQueryParams: zod.ZodObject<{
+    limit: zod.ZodOptional<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    limit?: number | undefined;
+}, {
+    limit?: number | undefined;
+}>;
+export declare const ListRecapHistoryResponseItem: zod.ZodObject<{
+    id: zod.ZodString;
+    forDate: zod.ZodString;
+    text: zod.ZodString;
+    source: zod.ZodEnum<["model", "template"]>;
+    status: zod.ZodEnum<["drafted", "sent", "failed", "skipped"]>;
+    generatedAt: zod.ZodString;
+    delivery: zod.ZodUnion<[zod.ZodObject<{
+        status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+        createdAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        createdAt: string;
+    }, {
+        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        createdAt: string;
+    }>, zod.ZodNull]>;
+}, "strip", zod.ZodTypeAny, {
+    status: "sent" | "failed" | "drafted" | "skipped";
+    id: string;
+    forDate: string;
+    text: string;
+    source: "model" | "template";
+    generatedAt: string;
+    delivery: {
+        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        createdAt: string;
+    } | null;
+}, {
+    status: "sent" | "failed" | "drafted" | "skipped";
+    id: string;
+    forDate: string;
+    text: string;
+    source: "model" | "template";
+    generatedAt: string;
+    delivery: {
+        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        createdAt: string;
+    } | null;
+}>;
+export declare const ListRecapHistoryResponse: zod.ZodArray<zod.ZodObject<{
+    id: zod.ZodString;
+    forDate: zod.ZodString;
+    text: zod.ZodString;
+    source: zod.ZodEnum<["model", "template"]>;
+    status: zod.ZodEnum<["drafted", "sent", "failed", "skipped"]>;
+    generatedAt: zod.ZodString;
+    delivery: zod.ZodUnion<[zod.ZodObject<{
+        status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+        createdAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        createdAt: string;
+    }, {
+        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        createdAt: string;
+    }>, zod.ZodNull]>;
+}, "strip", zod.ZodTypeAny, {
+    status: "sent" | "failed" | "drafted" | "skipped";
+    id: string;
+    forDate: string;
+    text: string;
+    source: "model" | "template";
+    generatedAt: string;
+    delivery: {
+        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        createdAt: string;
+    } | null;
+}, {
+    status: "sent" | "failed" | "drafted" | "skipped";
+    id: string;
+    forDate: string;
+    text: string;
+    source: "model" | "template";
+    generatedAt: string;
+    delivery: {
+        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        createdAt: string;
+    } | null;
+}>, "many">;
+/**
+ * @summary (AI-4a) Owner only. Generate and store a member's recap for a day now (ops); does not send it.
+ */
+export declare const GenerateRecapNowBody: zod.ZodObject<{
+    forDate: zod.ZodOptional<zod.ZodString>;
+    userId: zod.ZodOptional<zod.ZodString>;
+    replace: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    forDate?: string | undefined;
+    userId?: string | undefined;
+    replace?: boolean | undefined;
+}, {
+    forDate?: string | undefined;
+    userId?: string | undefined;
+    replace?: boolean | undefined;
+}>;
+export declare const GenerateRecapNowResponse: zod.ZodObject<{
+    created: zod.ZodBoolean;
+    recap: zod.ZodObject<{
+        id: zod.ZodString;
+        forDate: zod.ZodString;
+        text: zod.ZodString;
+        source: zod.ZodEnum<["model", "template"]>;
+        status: zod.ZodEnum<["drafted", "sent", "failed", "skipped"]>;
+        generatedAt: zod.ZodString;
+        delivery: zod.ZodUnion<[zod.ZodObject<{
+            status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+            createdAt: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            createdAt: string;
+        }, {
+            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            createdAt: string;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        status: "sent" | "failed" | "drafted" | "skipped";
+        id: string;
+        forDate: string;
+        text: string;
+        source: "model" | "template";
+        generatedAt: string;
+        delivery: {
+            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            createdAt: string;
+        } | null;
+    }, {
+        status: "sent" | "failed" | "drafted" | "skipped";
+        id: string;
+        forDate: string;
+        text: string;
+        source: "model" | "template";
+        generatedAt: string;
+        delivery: {
+            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            createdAt: string;
+        } | null;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    created: boolean;
+    recap: {
+        status: "sent" | "failed" | "drafted" | "skipped";
+        id: string;
+        forDate: string;
+        text: string;
+        source: "model" | "template";
+        generatedAt: string;
+        delivery: {
+            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            createdAt: string;
+        } | null;
+    };
+}, {
+    created: boolean;
+    recap: {
+        status: "sent" | "failed" | "drafted" | "skipped";
+        id: string;
+        forDate: string;
+        text: string;
+        source: "model" | "template";
+        generatedAt: string;
+        delivery: {
+            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            createdAt: string;
+        } | null;
+    };
+}>;
+/**
  * @summary Dashboard summary
  */
 export declare const GetDashboardResponse: zod.ZodObject<{
@@ -605,6 +841,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -618,7 +855,6 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -640,6 +876,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         confirmedByTxnId?: string | null | undefined;
     }, {
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -653,7 +890,6 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -733,6 +969,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
     transactionCount: number;
     recentTransactions: {
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -746,7 +983,6 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -796,6 +1032,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
     transactionCount: number;
     recentTransactions: {
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -809,7 +1046,6 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -862,9 +1098,9 @@ export declare const ListTransactionsQueryParams: zod.ZodObject<{
     categoryId: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     limit?: number | undefined;
+    source?: string | undefined;
     categoryId?: string | undefined;
     reimbursable?: boolean | undefined;
-    source?: string | undefined;
     from?: string | undefined;
     to?: string | undefined;
     uncategorized?: boolean | undefined;
@@ -874,9 +1110,9 @@ export declare const ListTransactionsQueryParams: zod.ZodObject<{
     maxAmount?: string | undefined;
 }, {
     limit?: number | undefined;
+    source?: string | undefined;
     categoryId?: string | undefined;
     reimbursable?: boolean | undefined;
-    source?: string | undefined;
     from?: string | undefined;
     to?: string | undefined;
     uncategorized?: boolean | undefined;
@@ -922,6 +1158,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
+    source: string;
     occurredOn: string;
     description: string;
     amount: string;
@@ -935,7 +1172,6 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     isTransfer: boolean;
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
-    source: string;
     pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -957,6 +1193,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     confirmedByTxnId?: string | null | undefined;
 }, {
     id: string;
+    source: string;
     occurredOn: string;
     description: string;
     amount: string;
@@ -970,7 +1207,6 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     isTransfer: boolean;
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
-    source: string;
     pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -1028,6 +1264,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
+    source: string;
     occurredOn: string;
     description: string;
     amount: string;
@@ -1041,7 +1278,6 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     isTransfer: boolean;
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
-    source: string;
     pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -1063,6 +1299,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     confirmedByTxnId?: string | null | undefined;
 }, {
     id: string;
+    source: string;
     occurredOn: string;
     description: string;
     amount: string;
@@ -1076,7 +1313,6 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     isTransfer: boolean;
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
-    source: string;
     pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -1123,6 +1359,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     occurredOn: string;
     description: string;
     amount: string;
+    source?: string | undefined;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
@@ -1137,7 +1374,6 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     isTransfer?: boolean | undefined;
     isExternalCardPayment?: boolean | undefined;
     notes?: string | null | undefined;
-    source?: string | undefined;
     member?: string | null | undefined;
     owedBy?: string | null | undefined;
     debtId?: string | null | undefined;
@@ -1145,6 +1381,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     occurredOn: string;
     description: string;
     amount: string;
+    source?: string | undefined;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
@@ -1159,7 +1396,6 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     isTransfer?: boolean | undefined;
     isExternalCardPayment?: boolean | undefined;
     notes?: string | null | undefined;
-    source?: string | undefined;
     member?: string | null | undefined;
     owedBy?: string | null | undefined;
     debtId?: string | null | undefined;
@@ -1195,6 +1431,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     rememberPattern: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
+    source?: string | undefined;
     occurredOn?: string | undefined;
     occurredAt?: string | null | undefined;
     description?: string | undefined;
@@ -1212,12 +1449,12 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     isTransfer?: boolean | undefined;
     isExternalCardPayment?: boolean | undefined;
     notes?: string | null | undefined;
-    source?: string | undefined;
     member?: string | null | undefined;
     owedBy?: string | null | undefined;
     debtId?: string | null | undefined;
     rememberPattern?: string | null | undefined;
 }, {
+    source?: string | undefined;
     occurredOn?: string | undefined;
     occurredAt?: string | null | undefined;
     description?: string | undefined;
@@ -1235,7 +1472,6 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     isTransfer?: boolean | undefined;
     isExternalCardPayment?: boolean | undefined;
     notes?: string | null | undefined;
-    source?: string | undefined;
     member?: string | null | undefined;
     owedBy?: string | null | undefined;
     debtId?: string | null | undefined;
@@ -1279,6 +1515,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
+    source: string;
     occurredOn: string;
     description: string;
     amount: string;
@@ -1292,7 +1529,6 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     isTransfer: boolean;
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
-    source: string;
     pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -1314,6 +1550,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     confirmedByTxnId?: string | null | undefined;
 }, {
     id: string;
+    source: string;
     occurredOn: string;
     description: string;
     amount: string;
@@ -1327,7 +1564,6 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     isTransfer: boolean;
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
-    source: string;
     pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -1603,6 +1839,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
+    source: string;
     occurredOn: string;
     description: string;
     amount: string;
@@ -1616,7 +1853,6 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     isTransfer: boolean;
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
-    source: string;
     pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -1638,6 +1874,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     confirmedByTxnId?: string | null | undefined;
 }, {
     id: string;
+    source: string;
     occurredOn: string;
     description: string;
     amount: string;
@@ -1651,7 +1888,6 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     isTransfer: boolean;
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
-    source: string;
     pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -1858,6 +2094,7 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
         debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         rememberPattern: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
+        source?: string | undefined;
         occurredOn?: string | undefined;
         occurredAt?: string | null | undefined;
         description?: string | undefined;
@@ -1875,12 +2112,12 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
         isTransfer?: boolean | undefined;
         isExternalCardPayment?: boolean | undefined;
         notes?: string | null | undefined;
-        source?: string | undefined;
         member?: string | null | undefined;
         owedBy?: string | null | undefined;
         debtId?: string | null | undefined;
         rememberPattern?: string | null | undefined;
     }, {
+        source?: string | undefined;
         occurredOn?: string | undefined;
         occurredAt?: string | null | undefined;
         description?: string | undefined;
@@ -1898,7 +2135,6 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
         isTransfer?: boolean | undefined;
         isExternalCardPayment?: boolean | undefined;
         notes?: string | null | undefined;
-        source?: string | undefined;
         member?: string | null | undefined;
         owedBy?: string | null | undefined;
         debtId?: string | null | undefined;
@@ -1907,6 +2143,7 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     ids: string[];
     patch: {
+        source?: string | undefined;
         occurredOn?: string | undefined;
         occurredAt?: string | null | undefined;
         description?: string | undefined;
@@ -1924,7 +2161,6 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
         isTransfer?: boolean | undefined;
         isExternalCardPayment?: boolean | undefined;
         notes?: string | null | undefined;
-        source?: string | undefined;
         member?: string | null | undefined;
         owedBy?: string | null | undefined;
         debtId?: string | null | undefined;
@@ -1933,6 +2169,7 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
 }, {
     ids: string[];
     patch: {
+        source?: string | undefined;
         occurredOn?: string | undefined;
         occurredAt?: string | null | undefined;
         description?: string | undefined;
@@ -1950,7 +2187,6 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
         isTransfer?: boolean | undefined;
         isExternalCardPayment?: boolean | undefined;
         notes?: string | null | undefined;
-        source?: string | undefined;
         member?: string | null | undefined;
         owedBy?: string | null | undefined;
         debtId?: string | null | undefined;
@@ -2111,10 +2347,10 @@ export declare const GetTransactionsLedgerQueryParams: zod.ZodObject<{
     cursor: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     limit: number;
+    source?: string | undefined;
     account?: string | undefined;
     categoryId?: string | undefined;
     reviewed?: string | undefined;
-    source?: string | undefined;
     member?: string | undefined;
     pending?: string | undefined;
     from?: string | undefined;
@@ -2124,10 +2360,10 @@ export declare const GetTransactionsLedgerQueryParams: zod.ZodObject<{
     cursor?: string | undefined;
 }, {
     limit?: number | undefined;
+    source?: string | undefined;
     account?: string | undefined;
     categoryId?: string | undefined;
     reviewed?: string | undefined;
-    source?: string | undefined;
     member?: string | undefined;
     pending?: string | undefined;
     from?: string | undefined;
@@ -2174,6 +2410,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -2187,7 +2424,6 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -2209,6 +2445,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         confirmedByTxnId?: string | null | undefined;
     }, {
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -2222,7 +2459,6 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -2340,6 +2576,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     };
     rows: ({
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -2353,7 +2590,6 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -2414,6 +2650,7 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
     };
     rows: ({
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -2427,7 +2664,6 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -2612,10 +2848,10 @@ export declare const BulkReviewMatchingTransactionsBody: zod.ZodObject<{
         source: zod.ZodOptional<zod.ZodString>;
         member: zod.ZodOptional<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
+        source?: string | undefined;
         account?: string | undefined;
         categoryId?: string | undefined;
         reviewed?: boolean | undefined;
-        source?: string | undefined;
         member?: string | undefined;
         pending?: boolean | undefined;
         from?: string | undefined;
@@ -2623,10 +2859,10 @@ export declare const BulkReviewMatchingTransactionsBody: zod.ZodObject<{
         uncategorized?: boolean | undefined;
         search?: string | undefined;
     }, {
+        source?: string | undefined;
         account?: string | undefined;
         categoryId?: string | undefined;
         reviewed?: boolean | undefined;
-        source?: string | undefined;
         member?: string | undefined;
         pending?: boolean | undefined;
         from?: string | undefined;
@@ -2638,10 +2874,10 @@ export declare const BulkReviewMatchingTransactionsBody: zod.ZodObject<{
     expectedCount: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
     filter: {
+        source?: string | undefined;
         account?: string | undefined;
         categoryId?: string | undefined;
         reviewed?: boolean | undefined;
-        source?: string | undefined;
         member?: string | undefined;
         pending?: boolean | undefined;
         from?: string | undefined;
@@ -2653,10 +2889,10 @@ export declare const BulkReviewMatchingTransactionsBody: zod.ZodObject<{
     expectedCount: number;
 }, {
     filter: {
+        source?: string | undefined;
         account?: string | undefined;
         categoryId?: string | undefined;
         reviewed?: boolean | undefined;
-        source?: string | undefined;
         member?: string | undefined;
         pending?: boolean | undefined;
         from?: string | undefined;
@@ -3772,8 +4008,8 @@ export declare const GetAvalancheExtraResponse: zod.ZodObject<{
         planned?: string | undefined;
     }>>;
 }, "strip", zod.ZodTypeAny, {
-    amount: string;
     source: "manual" | "budget_net" | "budget_line";
+    amount: string;
     monthStart: string;
     mode?: "budgeted" | "actual" | undefined;
     availableMoney?: string | undefined;
@@ -3791,8 +4027,8 @@ export declare const GetAvalancheExtraResponse: zod.ZodObject<{
         planned?: string | undefined;
     } | undefined;
 }, {
-    amount: string;
     source: "manual" | "budget_net" | "budget_line";
+    amount: string;
     monthStart: string;
     mode?: "budgeted" | "actual" | undefined;
     availableMoney?: string | undefined;
@@ -4449,12 +4685,12 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             amount: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
             count: number;
-            amount: string;
             source: "Bank" | "Amex" | "Other";
+            amount: string;
         }, {
             count: number;
-            amount: string;
             source: "Bank" | "Amex" | "Other";
+            amount: string;
         }>, "many">>;
         plannedSource: zod.ZodOptional<zod.ZodObject<{
             kind: zod.ZodEnum<["bills", "pinned", "derived", "manual"]>;
@@ -4514,8 +4750,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         note?: string | null | undefined;
         sourceBreakdown?: {
             count: number;
-            amount: string;
             source: "Bank" | "Amex" | "Other";
+            amount: string;
         }[] | undefined;
         plannedSource?: {
             kind: "manual" | "bills" | "pinned" | "derived";
@@ -4545,8 +4781,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         note?: string | null | undefined;
         sourceBreakdown?: {
             count: number;
-            amount: string;
             source: "Bank" | "Amex" | "Other";
+            amount: string;
         }[] | undefined;
         plannedSource?: {
             kind: "manual" | "bills" | "pinned" | "derived";
@@ -4585,12 +4821,12 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 amount: zod.ZodString;
             }, "strip", zod.ZodTypeAny, {
                 count: number;
-                amount: string;
                 source: "Bank" | "Amex" | "Other";
+                amount: string;
             }, {
                 count: number;
-                amount: string;
                 source: "Bank" | "Amex" | "Other";
+                amount: string;
             }>, "many">>;
             plannedSource: zod.ZodOptional<zod.ZodObject<{
                 kind: zod.ZodEnum<["bills", "pinned", "derived", "manual"]>;
@@ -4650,8 +4886,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             note?: string | null | undefined;
             sourceBreakdown?: {
                 count: number;
-                amount: string;
                 source: "Bank" | "Amex" | "Other";
+                amount: string;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -4681,8 +4917,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             note?: string | null | undefined;
             sourceBreakdown?: {
                 count: number;
-                amount: string;
                 source: "Bank" | "Amex" | "Other";
+                amount: string;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -4715,8 +4951,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             note?: string | null | undefined;
             sourceBreakdown?: {
                 count: number;
-                amount: string;
                 source: "Bank" | "Amex" | "Other";
+                amount: string;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -4751,8 +4987,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             note?: string | null | undefined;
             sourceBreakdown?: {
                 count: number;
-                amount: string;
                 source: "Bank" | "Amex" | "Other";
+                amount: string;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -5079,8 +5315,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         note?: string | null | undefined;
         sourceBreakdown?: {
             count: number;
-            amount: string;
             source: "Bank" | "Amex" | "Other";
+            amount: string;
         }[] | undefined;
         plannedSource?: {
             kind: "manual" | "bills" | "pinned" | "derived";
@@ -5113,8 +5349,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             note?: string | null | undefined;
             sourceBreakdown?: {
                 count: number;
-                amount: string;
                 source: "Bank" | "Amex" | "Other";
+                amount: string;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -5222,8 +5458,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         note?: string | null | undefined;
         sourceBreakdown?: {
             count: number;
-            amount: string;
             source: "Bank" | "Amex" | "Other";
+            amount: string;
         }[] | undefined;
         plannedSource?: {
             kind: "manual" | "bills" | "pinned" | "derived";
@@ -5256,8 +5492,8 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             note?: string | null | undefined;
             sourceBreakdown?: {
                 count: number;
-                amount: string;
                 source: "Bank" | "Amex" | "Other";
+                amount: string;
             }[] | undefined;
             plannedSource?: {
                 kind: "manual" | "bills" | "pinned" | "derived";
@@ -6384,6 +6620,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         confirmedByTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -6397,7 +6634,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -6419,6 +6655,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         confirmedByTxnId?: string | null | undefined;
     }, {
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -6432,7 +6669,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -6977,6 +7213,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
     }[];
     transactions: {
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -6990,7 +7227,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -7161,6 +7397,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
     }[];
     transactions: {
         id: string;
+        source: string;
         occurredOn: string;
         description: string;
         amount: string;
@@ -7174,7 +7411,6 @@ export declare const GetForecastResponse: zod.ZodObject<{
         isTransfer: boolean;
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
-        source: string;
         pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -11735,19 +11971,19 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
         error: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         error: string | null;
-        channel: "email" | "log" | "skipped";
+        channel: "skipped" | "email" | "log";
         reason: string | null;
         recipient: string | null;
     }, {
         error: string | null;
-        channel: "email" | "log" | "skipped";
+        channel: "skipped" | "email" | "log";
         reason: string | null;
         recipient: string | null;
     }>, zod.ZodNull]>;
 }, "strip", zod.ZodTypeAny, {
     alert: {
         error: string | null;
-        channel: "email" | "log" | "skipped";
+        channel: "skipped" | "email" | "log";
         reason: string | null;
         recipient: string | null;
     } | null;
@@ -11761,7 +11997,7 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
 }, {
     alert: {
         error: string | null;
-        channel: "email" | "log" | "skipped";
+        channel: "skipped" | "email" | "log";
         reason: string | null;
         recipient: string | null;
     } | null;
@@ -11952,8 +12188,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         dueDay: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
         endsThisCycle: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
-        amount: string;
         source: "plaid" | "manual";
+        amount: string;
         debtId: string;
         minPayment: string;
         debtName: string;
@@ -11963,8 +12199,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         linkedRecurringId?: string | null | undefined;
         endsThisCycle?: boolean | undefined;
     }, {
-        amount: string;
         source: "plaid" | "manual";
+        amount: string;
         debtId: string;
         minPayment: string;
         debtName: string;
@@ -12050,8 +12286,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         totalOutflow: string;
     };
     debtMins: {
-        amount: string;
         source: "plaid" | "manual";
+        amount: string;
         debtId: string;
         minPayment: string;
         debtName: string;
@@ -12109,8 +12345,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         totalOutflow: string;
     };
     debtMins: {
-        amount: string;
         source: "plaid" | "manual";
+        amount: string;
         debtId: string;
         minPayment: string;
         debtName: string;
@@ -12663,11 +12899,11 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
             key: zod.ZodString;
             text: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            key: string;
             text: string;
+            key: string;
         }, {
-            key: string;
             text: string;
+            key: string;
         }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         earliestMonth: string | null;
@@ -12681,8 +12917,8 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
             key: "base" | "half_extra" | "new_charges";
         }[];
         assumptions: {
-            key: string;
             text: string;
+            key: string;
         }[];
     }, {
         earliestMonth: string | null;
@@ -12696,8 +12932,8 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
             key: "base" | "half_extra" | "new_charges";
         }[];
         assumptions: {
-            key: string;
             text: string;
+            key: string;
         }[];
     }>;
     milestones: zod.ZodObject<{
@@ -12818,11 +13054,11 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
         key: zod.ZodString;
         text: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
-        key: string;
         text: string;
+        key: string;
     }, {
-        key: string;
         text: string;
+        key: string;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     strategy: "avalanche" | "snowball";
@@ -12839,8 +13075,8 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
             key: "base" | "half_extra" | "new_charges";
         }[];
         assumptions: {
-            key: string;
             text: string;
+            key: string;
         }[];
     };
     extraMonthly: number;
@@ -12884,8 +13120,8 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
         };
     };
     assumptions: {
-        key: string;
         text: string;
+        key: string;
     }[];
     milestones: {
         achieved: {
@@ -12932,8 +13168,8 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
             key: "base" | "half_extra" | "new_charges";
         }[];
         assumptions: {
-            key: string;
             text: string;
+            key: string;
         }[];
     };
     extraMonthly: number;
@@ -12977,8 +13213,8 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
         };
     };
     assumptions: {
-        key: string;
         text: string;
+        key: string;
     }[];
     milestones: {
         achieved: {
@@ -13437,8 +13673,8 @@ export declare const ListAllowancePlansResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         id: string;
         createdAt: string;
-        amount: string;
         source: "derived" | "owner";
+        amount: string;
         memberUserId: string | null;
         period: "weekly" | "monthly";
         effectiveFrom: string;
@@ -13446,8 +13682,8 @@ export declare const ListAllowancePlansResponse: zod.ZodObject<{
     }, {
         id: string;
         createdAt: string;
-        amount: string;
         source: "derived" | "owner";
+        amount: string;
         memberUserId: string | null;
         period: "weekly" | "monthly";
         effectiveFrom: string;
@@ -13502,8 +13738,8 @@ export declare const ListAllowancePlansResponse: zod.ZodObject<{
     plans: {
         id: string;
         createdAt: string;
-        amount: string;
         source: "derived" | "owner";
+        amount: string;
         memberUserId: string | null;
         period: "weekly" | "monthly";
         effectiveFrom: string;
@@ -13524,8 +13760,8 @@ export declare const ListAllowancePlansResponse: zod.ZodObject<{
     plans: {
         id: string;
         createdAt: string;
-        amount: string;
         source: "derived" | "owner";
+        amount: string;
         memberUserId: string | null;
         period: "weekly" | "monthly";
         effectiveFrom: string;
@@ -13577,8 +13813,8 @@ export declare const UpdateAllowancePlanResponse: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     id: string;
     createdAt: string;
-    amount: string;
     source: "derived" | "owner";
+    amount: string;
     memberUserId: string | null;
     period: "weekly" | "monthly";
     effectiveFrom: string;
@@ -13586,8 +13822,8 @@ export declare const UpdateAllowancePlanResponse: zod.ZodObject<{
 }, {
     id: string;
     createdAt: string;
-    amount: string;
     source: "derived" | "owner";
+    amount: string;
     memberUserId: string | null;
     period: "weekly" | "monthly";
     effectiveFrom: string;
@@ -13801,7 +14037,7 @@ export declare const ListAgentRunsResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
         id: string;
-        kind: "chat" | "categorize" | "monitor" | "recap" | "receipt" | "sms_question";
+        kind: "recap" | "chat" | "categorize" | "monitor" | "receipt" | "sms_question";
         summary: string | null;
         trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
         startedAt: Date;
@@ -13812,7 +14048,7 @@ export declare const ListAgentRunsResponse: zod.ZodObject<{
     }, {
         status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
         id: string;
-        kind: "chat" | "categorize" | "monitor" | "recap" | "receipt" | "sms_question";
+        kind: "recap" | "chat" | "categorize" | "monitor" | "receipt" | "sms_question";
         summary: string | null;
         trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
         startedAt: Date;
@@ -13825,7 +14061,7 @@ export declare const ListAgentRunsResponse: zod.ZodObject<{
     runs: {
         status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
         id: string;
-        kind: "chat" | "categorize" | "monitor" | "recap" | "receipt" | "sms_question";
+        kind: "recap" | "chat" | "categorize" | "monitor" | "receipt" | "sms_question";
         summary: string | null;
         trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
         startedAt: Date;
@@ -13838,7 +14074,7 @@ export declare const ListAgentRunsResponse: zod.ZodObject<{
     runs: {
         status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
         id: string;
-        kind: "chat" | "categorize" | "monitor" | "recap" | "receipt" | "sms_question";
+        kind: "recap" | "chat" | "categorize" | "monitor" | "receipt" | "sms_question";
         summary: string | null;
         trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
         startedAt: Date;
@@ -13996,11 +14232,11 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         }>;
     }, "strip", zod.ZodTypeAny, {
         createdAt: Date;
+        source: string;
         occurredOn: Date;
         description: string;
         amount: string;
         account: string | null;
-        source: string;
         transactionId: string;
         confidence: number;
         decisionId: string;
@@ -14015,11 +14251,11 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         };
     }, {
         createdAt: Date;
+        source: string;
         occurredOn: Date;
         description: string;
         amount: string;
         account: string | null;
-        source: string;
         transactionId: string;
         confidence: number;
         decisionId: string;
@@ -14038,11 +14274,11 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
     total: number;
     items: {
         createdAt: Date;
+        source: string;
         occurredOn: Date;
         description: string;
         amount: string;
         account: string | null;
-        source: string;
         transactionId: string;
         confidence: number;
         decisionId: string;
@@ -14060,11 +14296,11 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
     total: number;
     items: {
         createdAt: Date;
+        source: string;
         occurredOn: Date;
         description: string;
         amount: string;
         account: string | null;
-        source: string;
         transactionId: string;
         confidence: number;
         decisionId: string;
@@ -14397,8 +14633,8 @@ export declare const ListLearnedRulesResponseItem: zod.ZodObject<{
     count: number;
     id: string;
     createdAt: Date;
-    categoryId: string;
     source: string;
+    categoryId: string;
     plaidAccountId: string | null;
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
@@ -14410,8 +14646,8 @@ export declare const ListLearnedRulesResponseItem: zod.ZodObject<{
     count: number;
     id: string;
     createdAt: Date;
-    categoryId: string;
     source: string;
+    categoryId: string;
     plaidAccountId: string | null;
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
@@ -14437,8 +14673,8 @@ export declare const ListLearnedRulesResponse: zod.ZodArray<zod.ZodObject<{
     count: number;
     id: string;
     createdAt: Date;
-    categoryId: string;
     source: string;
+    categoryId: string;
     plaidAccountId: string | null;
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
@@ -14450,8 +14686,8 @@ export declare const ListLearnedRulesResponse: zod.ZodArray<zod.ZodObject<{
     count: number;
     id: string;
     createdAt: Date;
-    categoryId: string;
     source: string;
+    categoryId: string;
     plaidAccountId: string | null;
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
@@ -14497,8 +14733,8 @@ export declare const UpdateLearnedRuleResponse: zod.ZodObject<{
     count: number;
     id: string;
     createdAt: Date;
-    categoryId: string;
     source: string;
+    categoryId: string;
     plaidAccountId: string | null;
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
@@ -14510,8 +14746,8 @@ export declare const UpdateLearnedRuleResponse: zod.ZodObject<{
     count: number;
     id: string;
     createdAt: Date;
-    categoryId: string;
     source: string;
+    categoryId: string;
     plaidAccountId: string | null;
     signature: string;
     scope: "merchant" | "merchant_account" | "merchant_amount";
@@ -14566,16 +14802,16 @@ export declare const GetTransactionSplitsResponse: zod.ZodObject<{
         source: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
         id: string;
+        source: string;
         amount: string;
         categoryId: string;
-        source: string;
         member: string | null;
         note: string | null;
     }, {
         id: string;
+        source: string;
         amount: string;
         categoryId: string;
-        source: string;
         member: string | null;
         note: string | null;
     }>, "many">;
@@ -14585,9 +14821,9 @@ export declare const GetTransactionSplitsResponse: zod.ZodObject<{
     invalid: boolean;
     splits: {
         id: string;
+        source: string;
         amount: string;
         categoryId: string;
-        source: string;
         member: string | null;
         note: string | null;
     }[];
@@ -14597,9 +14833,9 @@ export declare const GetTransactionSplitsResponse: zod.ZodObject<{
     invalid: boolean;
     splits: {
         id: string;
+        source: string;
         amount: string;
         categoryId: string;
-        source: string;
         member: string | null;
         note: string | null;
     }[];
@@ -14664,16 +14900,16 @@ export declare const ReplaceTransactionSplitsResponse: zod.ZodObject<{
         source: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
         id: string;
+        source: string;
         amount: string;
         categoryId: string;
-        source: string;
         member: string | null;
         note: string | null;
     }, {
         id: string;
+        source: string;
         amount: string;
         categoryId: string;
-        source: string;
         member: string | null;
         note: string | null;
     }>, "many">;
@@ -14683,9 +14919,9 @@ export declare const ReplaceTransactionSplitsResponse: zod.ZodObject<{
     invalid: boolean;
     splits: {
         id: string;
+        source: string;
         amount: string;
         categoryId: string;
-        source: string;
         member: string | null;
         note: string | null;
     }[];
@@ -14695,9 +14931,9 @@ export declare const ReplaceTransactionSplitsResponse: zod.ZodObject<{
     invalid: boolean;
     splits: {
         id: string;
+        source: string;
         amount: string;
         categoryId: string;
-        source: string;
         member: string | null;
         note: string | null;
     }[];

@@ -20,7 +20,7 @@ export const DEFAULT_HARD_CAP_USD = 40;
 export const DEFAULT_DAILY_CAPS: Readonly<Partial<Record<AiTask, number>>> = {
   chat: 40,
   categorize: 20,
-  recap: 3,
+  recap: 6, // two members × (draft + retry) + a preview
   receipt: 15,
   sms_question: 10,
 };

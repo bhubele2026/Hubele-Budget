@@ -101,6 +101,8 @@ export {
   dayOfWeekISO,
   weekBounds,
   monthBounds,
+  localDateInZone,
+  zonedTimeToUtc,
 } from "./householdTime";
 export {
   compareStrategies,

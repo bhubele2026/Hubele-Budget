@@ -270,6 +270,118 @@ export const ListRecapDeliveriesResponse = zod.array(
 );
 
 /**
+ * Builds the facts for the caller and returns both drafts. The model draft counts against the
+household's daily `recap` call cap; it is null when AI is off, over budget, refused, or when
+its text failed validation twice. With the demo provider the model text is a labelled fixture.
+Nothing is stored and nothing is sent.
+
+ * @summary (AI-4a) Draft the morning recap for a day without storing or sending it (model draft and template).
+ */
+export const PreviewRecapBody = zod.object({
+  forDate: zod
+    .string()
+    .optional()
+    .describe("YYYY-MM-DD; defaults to today in the member's time zone"),
+});
+
+export const PreviewRecapResponse = zod.object({
+  model: zod.union([
+    zod.object({
+      text: zod.string(),
+      source: zod.enum(["model"]),
+      demo: zod
+        .boolean()
+        .describe("True when the demo provider wrote it (no model ran)"),
+    }),
+    zod.null(),
+  ]),
+  template: zod.object({
+    text: zod.string(),
+  }),
+  facts: zod
+    .record(zod.string(), zod.unknown())
+    .describe(
+      "The deterministic facts both drafts were written from (money in dollars)",
+    ),
+});
+
+/**
+ * @summary (AI-4a) The caller's most recent recaps, newest first (at most 30), with their delivery status.
+ */
+export const listRecapHistoryQueryLimitMax = 30;
+
+export const ListRecapHistoryQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listRecapHistoryQueryLimitMax)
+    .optional(),
+});
+
+export const ListRecapHistoryResponseItem = zod.object({
+  id: zod.string(),
+  forDate: zod.string(),
+  text: zod.string(),
+  source: zod.enum(["model", "template"]),
+  status: zod.enum(["drafted", "sent", "failed", "skipped"]),
+  generatedAt: zod.string(),
+  delivery: zod.union([
+    zod.object({
+      status: zod.enum([
+        "queued",
+        "sent",
+        "delivered",
+        "undelivered",
+        "failed",
+      ]),
+      createdAt: zod.string(),
+    }),
+    zod.null(),
+  ]),
+});
+export const ListRecapHistoryResponse = zod.array(ListRecapHistoryResponseItem);
+
+/**
+ * @summary (AI-4a) Owner only. Generate and store a member's recap for a day now (ops); does not send it.
+ */
+export const GenerateRecapNowBody = zod.object({
+  forDate: zod.string().optional(),
+  userId: zod
+    .string()
+    .optional()
+    .describe("A member of the owner's household; defaults to the caller"),
+  replace: zod
+    .boolean()
+    .optional()
+    .describe("Replace a recap that has not been sent"),
+});
+
+export const GenerateRecapNowResponse = zod.object({
+  created: zod.boolean(),
+  recap: zod.object({
+    id: zod.string(),
+    forDate: zod.string(),
+    text: zod.string(),
+    source: zod.enum(["model", "template"]),
+    status: zod.enum(["drafted", "sent", "failed", "skipped"]),
+    generatedAt: zod.string(),
+    delivery: zod.union([
+      zod.object({
+        status: zod.enum([
+          "queued",
+          "sent",
+          "delivered",
+          "undelivered",
+          "failed",
+        ]),
+        createdAt: zod.string(),
+      }),
+      zod.null(),
+    ]),
+  }),
+});
+
+/**
  * @summary Dashboard summary
  */
 export const GetDashboardResponse = zod.object({

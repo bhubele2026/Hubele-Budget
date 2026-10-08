@@ -1,6 +1,9 @@
 import { runMigrations } from "@workspace/db/migrate";
 import { pool } from "@workspace/db";
 import app from "./app";
+import { registerCategorizationReviewCount } from "./recap/facts";
+import { listReviewQueue } from "./lib/categorizer/review";
+
 import { migrateOnBootEnabled, startServer } from "./boot";
 import { findMigrationsDir } from "./lib/migrationsDir";
 import { logger } from "./lib/logger";
@@ -90,6 +93,9 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+// (AI-4a) The recap facts count the categorizer's open review items.
+registerCategorizationReviewCount(async (householdId) => (await listReviewQueue(householdId, 1)).total);
 
 // (PR-0) Pending SQL migrations run BEFORE listen; a failure exits 1 so the
 // deploy fails and the old build keeps serving. See boot.ts.
