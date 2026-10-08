@@ -16,7 +16,10 @@
  *  (b) a react-dom fingerprint ("MessageChannel" AND "Hydration" in the same
  *      chunk) appears in a landing chunk not named vendor-react-* — that is
  *      exactly how react-dom once fell into vendor-clerk;
- *  (c) total landing JS exceeds the byte budget below.
+ *  (c) total landing JS exceeds the byte budget below;
+ *  (d) the virtualizer (@tanstack/react-virtual + virtual-core) is in a
+ *      landing chunk, or anywhere but vendor-virtual-* — it is used only by
+ *      lazy pages, and in vendor-query it cost the open path 16.3 KB (C0).
  *
  * On success it prints every landing chunk with its size so the numbers are
  * visible in CI logs. Plain node builtins only — no dependencies.
@@ -148,6 +151,11 @@ while (queue.length > 0) {
 }
 
 // --- 3. Checks --------------------------------------------------------------
+/** virtual-core's own option defaults: present in the library, never at a call site. */
+function hasVirtualizerFingerprint(content) {
+  return content.includes("isScrollingResetDelay") && content.includes("useScrollendEvent");
+}
+
 const problems = [];
 const rows = [];
 let totalBytes = 0;
@@ -166,6 +174,15 @@ for (const [file, { bytes, content }] of [...landing.entries()].sort(
     problems.push(
       `${name} contains a recharts fingerprint — charts leaked into the landing graph. ` +
         `Only lazy route chunks (/forecast, /avalanche, reports) may import recharts.`,
+    );
+  }
+
+  // (d) the virtualizer must never be in the landing graph — neither its own
+  // chunk nor its code folded into another one (vendor-query, the entry).
+  if (name.startsWith("vendor-virtual-") || hasVirtualizerFingerprint(content)) {
+    problems.push(
+      `${name} carries the virtualizer (@tanstack/react-virtual) — it leaked into the ` +
+        `landing graph. Only lazy pages use it; it belongs in vendor-virtual-*.`,
     );
   }
 
@@ -202,6 +219,29 @@ if (!fingerprintAlive) {
   );
 }
 
+// (d, continued) Wherever the virtualizer is built, it is built into
+// vendor-virtual-* and nowhere else — a vendor-query that still carries it
+// means the manualChunks rule drifted, even while no page happens to preload
+// it. And a vendor-virtual chunk WITHOUT the fingerprint means the fingerprint
+// drifted and the landing check above has gone vacuous.
+const builtJs = existsSync(assetsDir) ? readdirSync(assetsDir).filter((f) => f.endsWith(".js")) : [];
+for (const f of builtJs) {
+  const c = readFileSync(path.join(assetsDir, f), "utf8");
+  const isVirtualChunk = f.startsWith("vendor-virtual-");
+  if (hasVirtualizerFingerprint(c) && !isVirtualChunk) {
+    problems.push(
+      `${f} contains the virtualizer (@tanstack/react-virtual) but is not vendor-virtual-* — ` +
+        `the manualChunks rule in vite.config.ts drifted.`,
+    );
+  }
+  if (isVirtualChunk && !hasVirtualizerFingerprint(c)) {
+    problems.push(
+      `${f} no longer matches the virtualizer fingerprint — update hasVirtualizerFingerprint ` +
+        `in scripts/check-entry-graph.mjs (check (d) is vacuous).`,
+    );
+  }
+}
+
 // (c) byte budget.
 if (totalBytes > MAX_TOTAL_BYTES) {
   problems.push(
@@ -226,4 +266,4 @@ if (problems.length > 0) {
   for (const p of problems) console.error(`[check-entry-graph] FAIL: ${p}`);
   process.exit(1);
 }
-console.log("[check-entry-graph] OK — no recharts on open; react-dom confined to vendor-react-*; budget met.");
+console.log("[check-entry-graph] OK — no recharts on open; react-dom confined to vendor-react-*; virtualizer off the open path; budget met.");
