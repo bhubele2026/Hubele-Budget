@@ -5686,15 +5686,11 @@ export const GetUiPreferencesResponse = zod
     autoCategorize: zod
       .boolean()
       .optional()
-      .describe(
-        "(S1) The user's choice that H2 files new charges on its own.\n(AI-1) The categorizer's model pass reads it: false skips the model\nentirely (the deterministic stages still run). Absent means true.\n",
-      ),
+      .describe("Not read by the server; use \/categorization\/settings"),
     modelAutoCategorize: zod
       .boolean()
       .optional()
-      .describe(
-        "(AI-1) The owner lets the model's high-confidence answers write a\ncategory outright. Only counts once the household has at least 50\nmodel filings accepted in the last 30 days (and 9 in 10 of the ones\njudged); until then the model stays provisional. Absent means false.\n",
-      ),
+      .describe("Not read by the server; use \/categorization\/settings"),
   })
   .describe(
     "Per-user (not per-household) UI preferences for the signed-in user.",
@@ -5724,15 +5720,11 @@ export const UpdateUiPreferencesBody = zod
     autoCategorize: zod
       .boolean()
       .optional()
-      .describe(
-        "(S1) The user's choice that H2 files new charges on its own.\n(AI-1) The categorizer's model pass reads it: false skips the model\nentirely (the deterministic stages still run). Absent means true.\n",
-      ),
+      .describe("Not read by the server; use \/categorization\/settings"),
     modelAutoCategorize: zod
       .boolean()
       .optional()
-      .describe(
-        "(AI-1) The owner lets the model's high-confidence answers write a\ncategory outright. Only counts once the household has at least 50\nmodel filings accepted in the last 30 days (and 9 in 10 of the ones\njudged); until then the model stays provisional. Absent means false.\n",
-      ),
+      .describe("Not read by the server; use \/categorization\/settings"),
   })
   .describe(
     "Per-user (not per-household) UI preferences for the signed-in user.",
@@ -5759,15 +5751,11 @@ export const UpdateUiPreferencesResponse = zod
     autoCategorize: zod
       .boolean()
       .optional()
-      .describe(
-        "(S1) The user's choice that H2 files new charges on its own.\n(AI-1) The categorizer's model pass reads it: false skips the model\nentirely (the deterministic stages still run). Absent means true.\n",
-      ),
+      .describe("Not read by the server; use \/categorization\/settings"),
     modelAutoCategorize: zod
       .boolean()
       .optional()
-      .describe(
-        "(AI-1) The owner lets the model's high-confidence answers write a\ncategory outright. Only counts once the household has at least 50\nmodel filings accepted in the last 30 days (and 9 in 10 of the ones\njudged); until then the model stays provisional. Absent means false.\n",
-      ),
+      .describe("Not read by the server; use \/categorization\/settings"),
   })
   .describe(
     "Per-user (not per-household) UI preferences for the signed-in user.",
@@ -6814,6 +6802,250 @@ export const RunCategorizationResponse = zod.object({
     .describe(
       "Rows handed to the model pass (a background job); 0 when AI is off.",
     ),
+});
+
+/**
+ * @summary (V1) What files the household's charges and how far the model may go:
+the owner's two switches, AI status, the deterministic engine's
+counts, the model's mode and the requirements it still has to meet,
+the last 20 decisions (any source) and the review-queue count. Any
+member. The model's mode is computed by the same function the
+categorize job uses.
+
+ */
+export const getCategorizationSettingsResponseRecentMax = 20;
+
+export const GetCategorizationSettingsResponse = zod.object({
+  autoCategorize: zod.boolean(),
+  modelAutoCategorize: zod.boolean(),
+  ai: zod.object({
+    configured: zod.boolean(),
+    enabled: zod.boolean(),
+  }),
+  engine: zod.object({
+    rules: zod.number().describe("Mapping rules the household wrote."),
+    learned: zod
+      .number()
+      .describe("Learned rules (what GET \/learned-rules lists)."),
+    memories: zod
+      .number()
+      .describe("Learned rules the engine acts on now (not disabled)."),
+    recurring: zod.number().describe("Active recurring items."),
+  }),
+  model: zod.object({
+    mode: zod
+      .enum(["off", "suggest", "auto"])
+      .describe(
+        "off = the model does not run (AI off, or autoCategorize false);\nsuggest = its answers are provisional until a person looks;\nauto = sure answers file on their own.\n",
+      ),
+    eligible: zod
+      .boolean()
+      .describe(
+        "The record has earned automatic filing: at least 30 judged,\n9 in 10 accepted among the last 50; once open it holds while\nthe last 20 stay at 8 in 10, and after a slip reopens at 9 in 10.\n",
+      ),
+    judged: zod
+      .number()
+      .describe(
+        "Model suggestions accepted or corrected (silently or by a person)",
+      ),
+    requirements: zod.array(
+      zod.object({
+        key: zod.enum(["ai", "owner_switch", "judged", "accuracy", "floor"]),
+        label: zod.string().describe("A plain sentence for the screen."),
+        met: zod.boolean(),
+        current: zod.number(),
+        target: zod.number(),
+      }),
+    ),
+    accuracy: zod.object({
+      last50: zod.object({
+        right: zod.number(),
+        judged: zod.number(),
+      }),
+      last20: zod.object({
+        right: zod.number(),
+        judged: zod.number(),
+      }),
+    }),
+  }),
+  recent: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        transactionId: zod.string(),
+        description: zod.string(),
+        amount: zod.string(),
+        occurredOn: zod.coerce.date(),
+        source: zod.enum([
+          "locked",
+          "rule",
+          "memory",
+          "recurring",
+          "inherited",
+          "heuristic",
+          "model",
+          "user",
+          "refund",
+        ]),
+        band: zod.enum(["auto", "provisional", "queue"]),
+        categoryId: zod.string().nullable(),
+        categoryName: zod.string().nullable(),
+        resolution: zod
+          .union([
+            zod.literal("accepted"),
+            zod.literal("corrected"),
+            zod.literal("skipped"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        resolvedBy: zod
+          .union([
+            zod.literal("user"),
+            zod.literal("silent"),
+            zod.literal(null),
+          ])
+          .nullable()
+          .describe(
+            "How it was settled. null while open, or when a newer engine decision superseded it.",
+          ),
+        decidedAt: zod.coerce.date(),
+        undoable: zod
+          .boolean()
+          .describe(
+            "POST \/category-decisions\/{id}\/undo would succeed now (same preconditions).",
+          ),
+      }),
+    )
+    .max(getCategorizationSettingsResponseRecentMax),
+  reviewCount: zod.number(),
+});
+
+/**
+ * @summary (V1) Owner only. Set `autoCategorize` and/or `modelAutoCategorize` in
+the owner's settings preferences (created when missing; every other
+preference key kept). Returns the same view as GET.
+
+ */
+export const UpdateCategorizationSettingsBody = zod.object({
+  autoCategorize: zod
+    .boolean()
+    .optional()
+    .describe(
+      "false turns the model off entirely; the deterministic stages still run.",
+    ),
+  modelAutoCategorize: zod
+    .boolean()
+    .optional()
+    .describe(
+      "The owner lets the model's sure answers file on their own, once the record is eligible.",
+    ),
+});
+
+export const updateCategorizationSettingsResponseRecentMax = 20;
+
+export const UpdateCategorizationSettingsResponse = zod.object({
+  autoCategorize: zod.boolean(),
+  modelAutoCategorize: zod.boolean(),
+  ai: zod.object({
+    configured: zod.boolean(),
+    enabled: zod.boolean(),
+  }),
+  engine: zod.object({
+    rules: zod.number().describe("Mapping rules the household wrote."),
+    learned: zod
+      .number()
+      .describe("Learned rules (what GET \/learned-rules lists)."),
+    memories: zod
+      .number()
+      .describe("Learned rules the engine acts on now (not disabled)."),
+    recurring: zod.number().describe("Active recurring items."),
+  }),
+  model: zod.object({
+    mode: zod
+      .enum(["off", "suggest", "auto"])
+      .describe(
+        "off = the model does not run (AI off, or autoCategorize false);\nsuggest = its answers are provisional until a person looks;\nauto = sure answers file on their own.\n",
+      ),
+    eligible: zod
+      .boolean()
+      .describe(
+        "The record has earned automatic filing: at least 30 judged,\n9 in 10 accepted among the last 50; once open it holds while\nthe last 20 stay at 8 in 10, and after a slip reopens at 9 in 10.\n",
+      ),
+    judged: zod
+      .number()
+      .describe(
+        "Model suggestions accepted or corrected (silently or by a person)",
+      ),
+    requirements: zod.array(
+      zod.object({
+        key: zod.enum(["ai", "owner_switch", "judged", "accuracy", "floor"]),
+        label: zod.string().describe("A plain sentence for the screen."),
+        met: zod.boolean(),
+        current: zod.number(),
+        target: zod.number(),
+      }),
+    ),
+    accuracy: zod.object({
+      last50: zod.object({
+        right: zod.number(),
+        judged: zod.number(),
+      }),
+      last20: zod.object({
+        right: zod.number(),
+        judged: zod.number(),
+      }),
+    }),
+  }),
+  recent: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        transactionId: zod.string(),
+        description: zod.string(),
+        amount: zod.string(),
+        occurredOn: zod.coerce.date(),
+        source: zod.enum([
+          "locked",
+          "rule",
+          "memory",
+          "recurring",
+          "inherited",
+          "heuristic",
+          "model",
+          "user",
+          "refund",
+        ]),
+        band: zod.enum(["auto", "provisional", "queue"]),
+        categoryId: zod.string().nullable(),
+        categoryName: zod.string().nullable(),
+        resolution: zod
+          .union([
+            zod.literal("accepted"),
+            zod.literal("corrected"),
+            zod.literal("skipped"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        resolvedBy: zod
+          .union([
+            zod.literal("user"),
+            zod.literal("silent"),
+            zod.literal(null),
+          ])
+          .nullable()
+          .describe(
+            "How it was settled. null while open, or when a newer engine decision superseded it.",
+          ),
+        decidedAt: zod.coerce.date(),
+        undoable: zod
+          .boolean()
+          .describe(
+            "POST \/category-decisions\/{id}\/undo would succeed now (same preconditions).",
+          ),
+      }),
+    )
+    .max(updateCategorizationSettingsResponseRecentMax),
+  reviewCount: zod.number(),
 });
 
 /**

@@ -14,7 +14,8 @@ import { isAiEnabled } from "../../ai/client";
 import type { AiFailureInfo } from "../../ai/types";
 import { logger } from "../../lib/logger";
 import { runCategorizationBatch, type Decision } from "../../lib/categorizer";
-import { loadModelGate } from "../../lib/categorizer/modelGate";
+import { evaluateModelGate } from "../../lib/categorizer/modelGate";
+import { settleSilentAcceptances } from "../../lib/categorizer/review";
 import { AnthropicModelStage } from "../../lib/categorizer/modelStage";
 import { emit } from "../emit";
 import { QUEUES } from "../queues";
@@ -33,6 +34,11 @@ import { QUEUES } from "../queues";
 // The payload's ids can be incomplete (the queue throttles to one job per
 // household per minute), so the job also sweeps the last CATCH_UP_DAYS days of
 // rows that still have no category.
+//
+// (V1) First, provisional model suggestions left standing for 14 days are
+// settled as silently accepted (review.ts settleSilentAcceptances), so the gate
+// reads an up-to-date record. The gate is `evaluateModelGate` — the same
+// function GET /categorization/settings shows the household.
 //
 // Failures: budget_exceeded ends the run `budget_exceeded` and does NOT retry
 // (the rows stay queued for the next run); a retryable provider failure ends
@@ -162,24 +168,26 @@ export async function runCategorizeJob(
     .where(eq(householdsTable.id, householdId));
   if (!hh) return { status: "skipped", reason: "no such household", ...empty };
   const trigger = data.trigger === "user" ? "user" : "txn_arrived";
-  const gate = await loadModelGate(householdId, hh.ownerUserId, now);
+  await settleSilentAcceptances(householdId, now);
+  const gate = await evaluateModelGate(householdId, hh.ownerUserId, now);
+  const autoAllowed = gate.mode === "auto";
   const ids = [...new Set([...(data.txnIds ?? []).slice(0, MAX_JOB_IDS), ...(await catchUpIds(householdId, now))])];
 
   // The deterministic stages always run; the model is optional.
-  if (!gate.autoCategorize || !isAiEnabled()) {
+  if (gate.mode === "off" || !isAiEnabled()) {
     await runCategorizationBatch(householdId, { txnIds: ids, trigger: "job", now });
     return { status: "skipped", reason: !gate.autoCategorize ? "autoCategorize is off" : "AI is off", ...empty };
   }
   if (ids.length === 0) return { status: "idle", ...empty };
 
   const { run, reopened } = await openRun(householdId, trigger, opts.jobId, now);
-  const stage = new AnthropicModelStage({ autoAllowed: gate.autoAllowed, runId: run.id });
+  const stage = new AnthropicModelStage({ autoAllowed, runId: run.id });
   try {
     const out = await runCategorizationBatch(householdId, {
       txnIds: ids,
       trigger: "job",
       modelStage: stage,
-      modelAutoAllowed: gate.autoAllowed,
+      modelAutoAllowed: autoAllowed,
       now,
     });
     const modelDecisions: Decision[] = out.decisions.filter((d) => d.source === "model");

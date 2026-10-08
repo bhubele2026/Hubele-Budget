@@ -60,6 +60,8 @@ import type {
   BulkUpdateTransactionsResult,
   CashSignal,
   CategorizationRunResult,
+  CategorizationSettings,
+  CategorizationSettingsInput,
   Category,
   CategoryDecision,
   CategoryInput,
@@ -11928,6 +11930,193 @@ export const useRunCategorization = <
   TContext
 > => {
   return useMutation(getRunCategorizationMutationOptions(options));
+};
+
+/**
+ * @summary (V1) What files the household's charges and how far the model may go:
+the owner's two switches, AI status, the deterministic engine's
+counts, the model's mode and the requirements it still has to meet,
+the last 20 decisions (any source) and the review-queue count. Any
+member. The model's mode is computed by the same function the
+categorize job uses.
+
+ */
+export const getGetCategorizationSettingsUrl = () => {
+  return `/api/categorization/settings`;
+};
+
+export const getCategorizationSettings = async (
+  options?: RequestInit,
+): Promise<CategorizationSettings> => {
+  return customFetch<CategorizationSettings>(
+    getGetCategorizationSettingsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetCategorizationSettingsQueryKey = () => {
+  return [`/api/categorization/settings`] as const;
+};
+
+export const getGetCategorizationSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCategorizationSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCategorizationSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCategorizationSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCategorizationSettings>>
+  > = ({ signal }) => getCategorizationSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCategorizationSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCategorizationSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCategorizationSettings>>
+>;
+export type GetCategorizationSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary (V1) What files the household's charges and how far the model may go:
+the owner's two switches, AI status, the deterministic engine's
+counts, the model's mode and the requirements it still has to meet,
+the last 20 decisions (any source) and the review-queue count. Any
+member. The model's mode is computed by the same function the
+categorize job uses.
+
+ */
+
+export function useGetCategorizationSettings<
+  TData = Awaited<ReturnType<typeof getCategorizationSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCategorizationSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCategorizationSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary (V1) Owner only. Set `autoCategorize` and/or `modelAutoCategorize` in
+the owner's settings preferences (created when missing; every other
+preference key kept). Returns the same view as GET.
+
+ */
+export const getUpdateCategorizationSettingsUrl = () => {
+  return `/api/categorization/settings`;
+};
+
+export const updateCategorizationSettings = async (
+  categorizationSettingsInput: CategorizationSettingsInput,
+  options?: RequestInit,
+): Promise<CategorizationSettings> => {
+  return customFetch<CategorizationSettings>(
+    getUpdateCategorizationSettingsUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(categorizationSettingsInput),
+    },
+  );
+};
+
+export const getUpdateCategorizationSettingsMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCategorizationSettings>>,
+    TError,
+    { data: BodyType<CategorizationSettingsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCategorizationSettings>>,
+  TError,
+  { data: BodyType<CategorizationSettingsInput> },
+  TContext
+> => {
+  const mutationKey = ["updateCategorizationSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCategorizationSettings>>,
+    { data: BodyType<CategorizationSettingsInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateCategorizationSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCategorizationSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCategorizationSettings>>
+>;
+export type UpdateCategorizationSettingsMutationBody =
+  BodyType<CategorizationSettingsInput>;
+export type UpdateCategorizationSettingsMutationError = ErrorType<void>;
+
+/**
+ * @summary (V1) Owner only. Set `autoCategorize` and/or `modelAutoCategorize` in
+the owner's settings preferences (created when missing; every other
+preference key kept). Returns the same view as GET.
+
+ */
+export const useUpdateCategorizationSettings = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCategorizationSettings>>,
+    TError,
+    { data: BodyType<CategorizationSettingsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCategorizationSettings>>,
+  TError,
+  { data: BodyType<CategorizationSettingsInput> },
+  TContext
+> => {
+  return useMutation(getUpdateCategorizationSettingsMutationOptions(options));
 };
 
 /**

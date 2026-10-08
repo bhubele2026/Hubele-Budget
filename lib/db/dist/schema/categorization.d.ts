@@ -315,6 +315,23 @@ export declare const categoryDecisionsTable: import("drizzle-orm/pg-core").PgTab
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        resolvedVia: import("drizzle-orm/pg-core").PgColumn<{
+            name: "resolved_via";
+            tableName: "category_decisions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         undoneAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "undone_at";
             tableName: "category_decisions";

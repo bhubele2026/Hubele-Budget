@@ -17,7 +17,7 @@ import {
   validSplit,
 } from "../lib/categorizer/modelStage";
 import { loadPriors, tokensOf } from "../lib/categorizer/modelPriors";
-import { isGateOpen, loadModelGate } from "../lib/categorizer/modelGate";
+import { loadModelGate } from "../lib/categorizer/modelGate";
 import { pinEnv } from "./_helpers/aiEnv";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { addTxn, daysAgo, fixtureBy, seedCategories, setPrefs, wipeHousehold, type Cats } from "./_helpers/aiCategorize";
@@ -102,14 +102,9 @@ describe("confidence bands", () => {
 });
 
 describe("the opt-in gate (modelGate)", () => {
-  it("is open only with the preference AND >= 50 accepted model decisions in 30 days (and 9 in 10 accepted)", () => {
-    expect(isGateOpen(49, 0)).toBe(false);
-    expect(isGateOpen(50, 0)).toBe(true);
-    expect(isGateOpen(50, 5)).toBe(true);
-    expect(isGateOpen(50, 6)).toBe(false);
-  });
-
-  it("reads the preference and counts accepted/corrected, undone and old ones excluded", async () => {
+  // (V1) The rules themselves are tested in categorizationEligibility.integration.test.ts;
+  // this checks the job's projection (`loadModelGate`) of the same record.
+  it("reads the preference and projects the cumulative record: old judgments count, undone ones do not", async () => {
     const seed = async (n: number, resolution: "accepted" | "corrected", o: { undone?: boolean; ageDays?: number } = {}) => {
       for (let i = 0; i < n; i++) {
         const t = await addTxn(HH, OWNER, { categoryId: C.Groceries });
@@ -124,23 +119,22 @@ describe("the opt-in gate (modelGate)", () => {
           inputHash: randomUUID(),
           resolution,
           resolvedBy: OWNER,
-          resolvedAt: new Date(Date.now() - (o.ageDays ?? 1) * 86_400_000),
+          resolvedVia: "user",
+          resolvedAt: new Date(Date.now() - (o.ageDays ?? 1) * 86_400_000 + i),
           ...(o.undone ? { undoneAt: new Date() } : {}),
         });
       }
     };
     await setPrefs(HH, OWNER, { modelAutoCategorize: false });
-    await seed(50, "accepted");
+    await seed(30, "accepted", { ageDays: 400 });
     expect(await loadModelGate(HH, OWNER)).toMatchObject({ modelAutoCategorize: false, autoAllowed: false });
 
+    // A year-old record still counts: the warm-up never expires.
     await setPrefs(HH, OWNER, { modelAutoCategorize: true });
-    expect(await loadModelGate(HH, OWNER)).toMatchObject({ autoCategorize: true, modelAutoCategorize: true, accepted: 50, autoAllowed: true });
+    expect(await loadModelGate(HH, OWNER)).toMatchObject({ autoCategorize: true, modelAutoCategorize: true, accepted: 30, corrected: 0, autoAllowed: true });
 
-    await seed(10, "accepted", { undone: true });
-    await seed(10, "accepted", { ageDays: 45 });
-    expect((await loadModelGate(HH, OWNER)).accepted).toBe(50);
-    await seed(6, "corrected");
-    expect(await loadModelGate(HH, OWNER)).toMatchObject({ accepted: 50, corrected: 6, autoAllowed: false });
+    await seed(10, "corrected", { undone: true });
+    expect(await loadModelGate(HH, OWNER)).toMatchObject({ accepted: 30, corrected: 0, autoAllowed: true });
     await setPrefs(HH, OWNER, null);
   });
 

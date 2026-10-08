@@ -141,7 +141,7 @@ export async function getSplits(householdId: string, txnId: string) {
 async function resolveSplitNotices(exec: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0], txnId: string, actor: string) {
   await exec
     .update(categoryDecisionsTable)
-    .set({ resolvedAt: new Date(), resolvedBy: actor, resolution: "corrected" })
+    .set({ resolvedAt: new Date(), resolvedBy: actor, resolution: "corrected", resolvedVia: "user" })
     .where(
       and(
         eq(categoryDecisionsTable.transactionId, txnId),
