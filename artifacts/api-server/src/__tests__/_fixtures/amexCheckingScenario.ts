@@ -265,18 +265,15 @@ export const EOD_DATES = [
 // package that changes one notices — and lists each as an it.todo carrying the
 // contract's value.
 
-export type DifferenceId = "D1" | "D2" | "D3";
+// (B5) D3 — the Amex anchor never moved after a Plaid sync — is fixed: its
+// figures are asserted at the contract's value at every step.
+export type DifferenceId = "D1" | "D2";
 export const DIFFERENCE_TITLES: Record<DifferenceId, string> = {
   D1: "a refund does not net: spend, the allowance left, the Amex page and the closed week's payoff count the charge gross",
   D2: "the refund is not queued: 'KROGER #442 REFUND' never links to 'KROGER #442', so no refund decision is made",
-  D3: "the Amex anchor never moves after a Plaid sync: refreshAmexAnchor throws on Plaid rows and the sync swallows it",
 };
 export type Difference = { id: DifferenceId; path: string; today: unknown };
 
-const anchorStuck: Difference[] = [
-  { id: "D3", path: "amex.endingBalance", today: "500.00" },
-  { id: "D3", path: "debt.payoffPct", today: "50.000" },
-];
 const grossRefund: Difference[] = [
   { id: "D1", path: "amex.weekCharges", today: "86.33" },
   { id: "D1", path: "amex.combinedWeekCharges", today: "86.33" },
@@ -284,12 +281,11 @@ const grossRefund: Difference[] = [
 ];
 export const DIFFERENCES: Record<StepId, Difference[]> = {
   S0: [],
-  S1: anchorStuck,
-  S2: anchorStuck,
-  S3a: anchorStuck,
-  S3b: anchorStuck,
+  S1: [],
+  S2: [],
+  S3a: [],
+  S3b: [],
   S4: [
-    ...anchorStuck,
     ...grossRefund,
     { id: "D1", path: "spentWeek", today: "128.43" },
     { id: "D1", path: "position.remainingWeek", today: "171.57" },
@@ -298,7 +294,6 @@ export const DIFFERENCES: Record<StepId, Difference[]> = {
     { id: "D2", path: "queue", today: [] },
   ],
   S5: [
-    ...anchorStuck,
     ...grossRefund,
     { id: "D1", path: "forecast.assumedPaid", today: ["Weekly Spend 2026-10-10 plan -86.33 ← AMERICAN EXPRESS ACH PMT M2481 -100.00"] },
     { id: "D2", path: "queue", today: ["AMERICAN EXPRESS ACH PMT M2481 | heuristic | queue | —"] },
