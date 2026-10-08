@@ -216,6 +216,8 @@ export type ForecastLedger = {
    * ⭐ (PR-B2, decision 7) The everyday hooks in force, each with its item's
    * stored amount — which the forecast IGNORES: every occurrence is the card
    * payoff instead (`everydayHooks.ts`). Banner data for the UI. Empty with no hooks.
+   * (Round 2) A hook whose periods have no allowance at all keeps its stored
+   * amount, so it is not listed.
    */
   hookAmountIgnored: Array<{ itemId: string; cadence: HookCadence; storedAmount: string }>;
   /** (PR-B2) Each hook occurrence's payoff, keyed like `matches[].planKey`. */
@@ -283,8 +285,9 @@ const CLOSING_STATUSES: ReadonlySet<string> = new Set(["matched", "skipped", "mi
  *     not amounts: each occurrence is the card payoff for its period — charges
  *     plus what is left of the allowance while the period is open
  *     (`loadHookPayoffs`); the item's stored amount is ignored
- *     (`hookAmountIgnored`). A due payoff (on or before today) is paid only on
- *     evidence (`payoffsPaidBy`: an Amex payment of that amount after the
+ *     (`hookAmountIgnored`) — (round 2) unless the period has no allowance at
+ *     all, when the stored amount stands (never $0). A due payoff (on or before today) is paid only on
+ *     evidence (`payoffsPaidBy`: an Amex payment covering it after the
  *     occurrence); unpaid, it lands on the next business day — "a closed week
  *     not yet paid lands on the next business day". Hooks never enter the
  *     bill matcher. `keepsPreSnapshotRule` (PR6's temporary carve-out for
@@ -1086,7 +1089,8 @@ export async function buildForecastLedger(
     list.push(ev.date);
     hookDatesByItem.set(ev.itemId, list);
     if ((rescheduledByKey.get(key) ?? ev.date) < dragFloorISO) continue;
-    hookOccurrences.push({ key, cadence, occurrenceDate: ev.date });
+    const storedCents = Math.round(Math.abs(Number(recurringById.get(ev.itemId)?.amount ?? 0)) * 100) || 0;
+    hookOccurrences.push({ key, cadence, occurrenceDate: ev.date, storedCents });
   }
   for (const list of hookDatesByItem.values()) list.sort();
   const hookPayoffs = await loadHookPayoffs({
@@ -1174,7 +1178,7 @@ export async function buildForecastLedger(
     // evidence rule below instead. (PR-B2) Weekly-cadence expenses no longer
     // keep the pre-PR6 rule (`keepsPreSnapshotRule`, deleted).
     if (rawEffectiveDate > dragCutoffISO && probablyPaidKeys.has(origKey)) continue;
-    // ⭐ (PR-B2) A DUE HOOK PAYOFF: paid on evidence (an Amex payment of that amount
+    // ⭐ (PR-B2) A DUE HOOK PAYOFF: paid on evidence (an Amex payment covering it
     // after the occurrence) → off the curve and listed in `overdueAssumedPaid`;
     // otherwise "a closed week not yet paid lands on the next business day" (due
     // today: the next business day too, so day 0 equals the bank). Older than the
@@ -1403,7 +1407,12 @@ export async function buildForecastLedger(
     overdueOutsideForecast,
     incomeNotArrived,
     overdueAssumedPaid,
-    hookAmountIgnored,
+    // (Round 2) The banner names a hook only where its stored amount really is
+    // ignored: not when every occurrence sized fell back to it (no allowance at all).
+    hookAmountIgnored: hookAmountIgnored.filter((h) => {
+      const sized = hookOccurrences.filter((o) => o.key.startsWith(`${h.itemId}|`)).map((o) => hookPayoffs.get(o.key));
+      return sized.length === 0 || sized.some((p) => p && !p.fromStoredAmount);
+    }),
     hookPayoffs,
   };
 }

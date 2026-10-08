@@ -23,13 +23,15 @@ The law that binds every change: **the forecast may read low, never high**
   allowance). A card charge moves money from "left" to "charged", so the payoff holds; a checking debit
   tagged weekly already left the bank, so the payoff shrinks by exactly that debit.
 - A **closed** period owes its charges alone. Due and unpaid, it lands on the **next business day**. It counts
-  as paid only on evidence: a checking payment naming Amex, of the payoff within max($1, 1%), dated from the
-  occurrence up to the next one. Anything else keeps it on the curve (low, never high) until Review confirms
+  as paid only on evidence: a checking payment naming Amex that covers the payoff (at least the payoff less
+  max($1, 1%); no upper bound — round 2), dated from the occurrence up to the next one. Anything else keeps it on the curve (low, never high) until Review confirms
   it. A Review answer (matched / skipped / missed / moved) works on a hook like on any plan.
 - The hook item's stored amount is ignored; `GET /forecast/cash-signal` reports it as `hookAmountIgnored`
   (banner data, present only with a hook). No hook = no payoff: the bill stays a plain bill.
 - The cap: `allowance_plans` (`everydayPlanFromRows`, week override honoured); no plan in effect →
-  `settings.weekly_allowance_amount` / `monthly_allowance_amount`.
+  `settings.weekly_allowance_amount` / `monthly_allowance_amount`. (Round 2) Neither → the period has no
+  allowance at all and the occurrence keeps the item's stored amount (never $0); such a hook is not in
+  `hookAmountIgnored`.
 - Paycheck: for an INCOME pair, a runner-up whose row (or plan) an earlier pair of the pass already took
   cannot be this pair's row (or plan), so it casts no doubt.
 
@@ -139,12 +141,13 @@ Added after the red run: T5b (an unfiled card charge is owed), caught by mutant 
 
 ## Residuals
 
-1. **A hook with no allowance at all** (no plan, settings $0) sizes the payoff from the charges alone; a
-   future period then carries $0, where the bill used to carry its stored amount. The banner says so.
-2. **Payment evidence is Amex-named and amount-exact.** A household that pays a different amount, pays before
-   the Saturday, or a week late reads low until Review confirms. A paid-by-autopay week for a card not named
-   "Amex"/"American Express" in the bank description reads low the same way.
-3. **Closed periods older than 14 days** are dropped, as weekly bills were before (not listed).
+1. *(Closed in round 2: a hook with no allowance at all keeps its stored amount.)*
+2. **Payment evidence is Amex-named and must cover the payoff.** A household that pays less, pays before the
+   Saturday, or a week late reads low until Review confirms; so does a payment whose bank description does
+   not name "Amex"/"American Express". Since round 2 a larger payment (a Blue or full-statement payment in the
+   same window) pays the week — the lead's ruling; the oldest due week takes the earliest covering row.
+3. **Old unpaid payoffs are dropped after 14 days** (as weekly bills were before); listing them is a later
+   package (lead's ruling, round 2).
 4. **A non-Saturday weekly hook** pays for the week that contains it; a Tuesday hook meant as "last week's
    payoff" would size the current week. The seed and the scenario use Saturdays.
 5. **A monthly hook dated before month end** (the 28th) sizes its whole calendar month; charges on the 29th–31st
@@ -156,6 +159,21 @@ Added after the red run: T5b (an unfiled card charge is owed), caught by mutant 
 
 ## Questions for the owner
 
-1. With no allowance set, should a hook fall back to its stored amount instead of $0 (reads lower)?
-2. Should a payment that over-pays the closed week (the statement in full) count as paying it?
-3. Should old (> 14 days) unpaid payoffs be listed rather than dropped?
+Round 1 asked three; the lead ruled in round 2 (owner unavailable), below. None remain open.
+
+## Round 2 (lead's rulings, 2026-10-07)
+
+| Q | Ruling | Change | Test (fails on round 1) |
+|---|---|---|---|
+| 1 | No allowance at all (no plan row in effect, settings $0) → the hook keeps the item's stored amount, never $0 | `loadHookPayoffs`: cap `null` → `amountCents = stored`, `fromStoredAmount: true`; such a period is not sized from the card; `hookAmountIgnored` omits a hook whose every sized occurrence kept its stored amount | T9b: 09-26 and 10-03 each −300.00 dragged to Thu 10/8, 10/10 and later −300.00, no banner (round 1: −120.00 / −40.00 / $0) |
+| 2 | A payment that covers the week or MORE pays it; smaller than owed (past max($1, 1%)) does not | `payoffsPaidBy`: paid cents ≥ payoff − tolerance, no upper bound | unit "covers the payoff or MORE" (−400 and −181.80 pay; −178.19 and −100 do not); T7b: −150.00 pays the $120 week (round 1: stayed on the curve); T7 (−100) still does not |
+| 3 | Not now | residual 3 reworded | — |
+
+**Figures that move in round 2:** only the no-allowance fixture (T9b, new). The household scenario, the
+golden (12 entries, byte-identical to round 1) and every other fixture have an allowance or no hook, and no
+covering-more payment, so nothing else moves. Low-never-high: Q1 reads lower than round 1 (stored $300 where
+round 1 put $120 / $40 / $0). Q2 reads higher than round 1 only when a larger Amex payment lands in the
+week's window — the ruling accepts that a full-statement payment pays the week.
+
+**Mutants added:** M14 "no allowance → $0" (round 1's rule) — caught by T9b; M15 "upper bound restored" —
+caught by T7b and the unit test (the round-2 fails-before run above is exactly these two).

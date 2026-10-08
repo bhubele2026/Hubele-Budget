@@ -104,11 +104,15 @@ describe("payoffsPaidBy — a due payoff is paid on evidence only", () => {
   it("(S3) the $180 Amex payment on Tue 10/6 pays the week that closed Sat 10/3", () => {
     expect(payoffsPaidBy([due("w|2026-10-03", "2026-10-03", 18_000)], [pay("t", "2026-10-06", -180)]).get("w|2026-10-03")?.txnId).toBe("t");
   });
-  it("within max($1, 1%) either way pays it; beyond does not (the payoff stays on the curve: low, never high)", () => {
-    expect(payoffsPaidBy([due("k", "2026-10-03", 18_000)], [pay("t", "2026-10-06", -181.8)]).size).toBe(1);
+  it("(round 2) a payment that covers the payoff or MORE pays it; one smaller than owed (past max($1, 1%)) does not", () => {
+    // Below: within the tolerance pays, past it does not (the payoff stays on the curve: low, never high).
+    expect(payoffsPaidBy([due("k", "2026-10-03", 18_000)], [pay("t", "2026-10-06", -178.2)]).size).toBe(1);
     expect(payoffsPaidBy([due("k", "2026-10-03", 18_000)], [pay("t", "2026-10-06", -178.19)]).size).toBe(0);
-    expect(payoffsPaidBy([due("k", "2026-10-03", 18_000)], [pay("t", "2026-10-06", -400)]).size).toBe(0);
+    expect(payoffsPaidBy([due("k", "2026-10-03", 18_000)], [pay("t", "2026-10-06", -100)]).size).toBe(0);
     expect(payoffsPaidBy([due("k", "2026-10-03", 300_000)], [pay("t", "2026-10-06", -2_970)]).size).toBe(1);
+    // Above: no upper bound — the statement paid in full pays the week.
+    expect(payoffsPaidBy([due("k", "2026-10-03", 18_000)], [pay("t", "2026-10-06", -181.8)]).size).toBe(1);
+    expect(payoffsPaidBy([due("k", "2026-10-03", 18_000)], [pay("t", "2026-10-06", -400)]).size).toBe(1);
   });
   it("only a payment dated from the occurrence up to (not including) the next one", () => {
     expect(payoffsPaidBy([due("k", "2026-10-03", 18_000)], [pay("t", "2026-10-02", -180)]).size).toBe(0);

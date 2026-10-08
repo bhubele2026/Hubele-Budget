@@ -16,7 +16,9 @@
 //   the cap       `allowance_plans` through `everydayPlanFromRows` (the week's
 //                 override honoured), falling back to the owner's
 //                 `settings.weekly_allowance_amount` / `monthly_allowance_amount`
-//                 when no plan row is in effect.
+//                 when no plan row is in effect. (Round 2) With neither, the
+//                 period has no allowance at all and the occurrence keeps the
+//                 item's stored amount — never $0, which would read high.
 //   spent         the open period's rows, classified by `classifyMovement` with
 //                 the ledger's own tier-2 pairs — exactly as the money position
 //                 sizes `remainingWeek` (weekly: allowance_weekly + unfiled;
@@ -72,11 +74,19 @@ export interface HookOccurrence {
   key: string;
   cadence: HookCadence;
   occurrenceDate: string;
+  /** The hook item's own stored amount, in cents (≥ 0) — used only when the period has no allowance at all. */
+  storedCents: number;
 }
 
 export interface HookPayoff extends Payoff {
   periodStart: string;
   periodEnd: string;
+  /**
+   * (Round 2, lead's ruling) The period has NO allowance at all — no plan row in
+   * effect and no settings amount — so the occurrence keeps the item's stored
+   * amount (the bill as it was), never $0: a $0 payoff would read higher than before.
+   */
+  fromStoredAmount: boolean;
 }
 
 const toCents = (v: string | number | null | undefined): number => {
@@ -116,7 +126,25 @@ export async function loadHookPayoffs(args: {
     const p = hookPeriodOf(o.cadence, o.occurrenceDate);
     periods.set(`${o.cadence}|${p.start}`, { cadence: o.cadence, ...p });
   }
-  const started = [...periods.values()].filter((p) => p.start <= todayISO);
+  // The cap of each period: the plan in effect (the week's override honoured), else
+  // the owner's settings amount. Null = no allowance at all (round 2): the stored amount.
+  const planRows = planRowsOf(await loadAllowancePlans(householdId));
+  const capOf = (p: Period): number | null => {
+    const plan = everydayPlanFromRows(p.start, planRows, settings.weeklyAllowanceOverrides);
+    if (p.cadence === "weekly") {
+      if (plan.weeklySource !== "none") return plan.weeklyCents;
+      const s = toCents(settings.weeklyAllowanceAmount);
+      return s > 0 ? s : null;
+    }
+    if (plan.monthlySource !== "none") return plan.monthlyCents;
+    const s = toCents(settings.monthlyAllowanceAmount);
+    return s > 0 ? s : null;
+  };
+  const caps = new Map<string, number | null>();
+  for (const [id, p] of periods) caps.set(id, capOf(p));
+
+  // Only a period with an allowance is sized from the card.
+  const started = [...periods.entries()].filter(([id, p]) => p.start <= todayISO && caps.get(id) != null).map(([, p]) => p);
   const open = started.filter((p) => p.end >= todayISO);
 
   // Charges, for the periods that have started (future periods owe nothing yet).
@@ -157,26 +185,31 @@ export async function loadHookPayoffs(args: {
     }
   }
 
-  const planRows = planRowsOf(await loadAllowancePlans(householdId));
-  const capOf = (p: Period): number => {
-    const plan = everydayPlanFromRows(p.start, planRows, settings.weeklyAllowanceOverrides);
-    if (p.cadence === "weekly") {
-      return plan.weeklySource === "none" ? toCents(settings.weeklyAllowanceAmount) : plan.weeklyCents;
-    }
-    return plan.monthlySource === "none" ? toCents(settings.monthlyAllowanceAmount) : plan.monthlyCents;
-  };
-
   for (const o of occurrences) {
     const p = hookPeriodOf(o.cadence, o.occurrenceDate);
     const id = `${o.cadence}|${p.start}`;
+    const cap = caps.get(id) ?? null;
+    if (cap == null) {
+      const stored = Math.max(0, Math.round(o.storedCents));
+      out.set(o.key, {
+        amountCents: stored,
+        chargesCents: 0,
+        remainingCents: 0,
+        closed: p.end < todayISO,
+        periodStart: p.start,
+        periodEnd: p.end,
+        fromStoredAmount: true,
+      });
+      continue;
+    }
     const payoff = payoffFor({
       chargesCents: charges.get(id) ?? 0,
-      capCents: capOf(periods.get(id)!),
+      capCents: cap,
       spentCents: spent.get(id) ?? 0,
       periodEnd: p.end,
       todayISO,
     });
-    out.set(o.key, { ...payoff, periodStart: p.start, periodEnd: p.end });
+    out.set(o.key, { ...payoff, periodStart: p.start, periodEnd: p.end, fromStoredAmount: false });
   }
   return out;
 }

@@ -131,12 +131,13 @@ export function namesCardIssuer(description: string | null | undefined): boolean
 /**
  * ⭐ A DUE PAYOFF IS PAID ON EVIDENCE ONLY — the hold-back law ("the forecast
  * may read low, never high"). A checking outflow that names Amex, dated from
- * the occurrence up to (not including) the hook's next occurrence, paying the
- * payoff within max($1, 1%) either way. Each row pays one occurrence; the
- * oldest occurrence chooses first, and takes its window's earliest row.
- * Anything else — a payment of a different amount, before the occurrence, or a
- * week late — leaves the payoff on the curve (reading low) until the household
- * confirms it in Review.
+ * the occurrence up to (not including) the hook's next occurrence, that COVERS
+ * the payoff: at least the payoff less max($1, 1%), with no upper bound
+ * (round 2, lead's ruling: paying the statement in full pays the week). Each
+ * row pays one occurrence; the oldest occurrence chooses first, and takes its
+ * window's earliest row. Anything else — a payment smaller than owed, before
+ * the occurrence, or a week late — leaves the payoff on the curve (reading
+ * low) until the household confirms it in Review.
  */
 export function payoffsPaidBy(
   due: readonly DuePayoff[],
@@ -158,7 +159,7 @@ export function payoffsPaidBy(
         !used.has(r.txnId) &&
         r.occurredOn >= d.occurrenceDate &&
         r.occurredOn < d.nextOccurrenceDate &&
-        Math.abs(Math.round(-r.amount * 100) - d.amountCents) <= tolerance,
+        Math.round(-r.amount * 100) >= d.amountCents - tolerance,
     );
     if (!hit) continue;
     used.add(hit.txnId);

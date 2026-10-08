@@ -60,8 +60,9 @@ column on here.
     Saturday. (PR-B2) Every charge counts, filed or not; the Weekly Spend bill's own $300 is ignored.
   - **Closed week not yet paid:** the payoff lands on the next business day. A closed week owes its charges
     alone (nothing is left to spend in it). (PR-B2) It counts as paid only on evidence: a checking payment
-    naming Amex of that amount (within max($1, 1%)), dated from the Saturday up to the next one — here the
-    $180 on Tue 10/6.
+    naming Amex that covers it (at least the payoff less max($1, 1%); more is fine — round 2), dated from the
+    Saturday up to the next one — here the $180 on Tue 10/6. (Round 2) A hook whose period has no allowance
+    at all keeps the bill's stored amount.
 - **Lowest before payday (PR9):** the lowest end-of-day expected balance from today until the day
   before the next income that hasn't already been matched away.
 - **Available until payday (PR-B1):** lowest before payday less the $500 cash buffer (and any money

@@ -229,6 +229,19 @@ describe("(PR-B2, decision 7) a hook occurrence is its card payoff", () => {
     expect(balanceOn(sig, "2026-10-08")).toBe("1780.00");
   });
 
+  it("T7b (round 2) an Amex payment covering MORE than owed (the statement in full) pays last week: off the curve, listed", async () => {
+    const paid = await txn({ on: "2026-10-06", amount: "-150.00", desc: "AMERICAN EXPRESS ACH PMT", account: CHASE, source: "plaid:chase" });
+    const sig = await signal();
+    expect(sig.bankToday).toBe("1850.00");
+    expect(hookEvents(sig)[0]).toEqual(["2026-10-10", "-250.00", "2026-10-10", null]);
+    expect(sig.overdueAssumedPaid?.find((p) => p.planKey === `${weeklySpendId}|2026-10-03`)).toMatchObject({
+      txnId: paid,
+      planAmount: "-120.00",
+      txnAmount: "-150.00",
+      confidence: "card_payment",
+    });
+  });
+
   it("T8 confirming last week's occurrence in Review takes it off the curve, as for any plan", async () => {
     const paid = await txn({ on: "2026-10-06", amount: "-100.00", desc: "AMEX EPAYMENT", account: CHASE, source: "plaid:chase" });
     await db.insert(forecastResolutionsTable).values({
@@ -252,6 +265,19 @@ describe("(PR-B2, decision 7) a hook occurrence is its card payoff", () => {
       ["2026-10-10", "-200.00", "2026-10-10", null],
       ["2026-10-17", "-200.00", "2026-10-17", null],
     ]);
+  });
+
+  it("T9b (round 2) hooks with NO allowance at all (no plan, settings $0): each occurrence keeps the stored $300 — never $0 — and no banner", async () => {
+    await db.delete(allowancePlansTable).where(eq(allowancePlansTable.householdId, HH));
+    const sig = await signal();
+    // The two weeks closed in the last 14 days are due and unpaid: they drag like the bill they were.
+    expect(hookEvents(sig).slice(0, 4)).toEqual([
+      ["2026-10-08", "-300.00", "2026-09-26", "overdue_assumed_unpaid"],
+      ["2026-10-08", "-300.00", "2026-10-03", "overdue_assumed_unpaid"],
+      ["2026-10-10", "-300.00", "2026-10-10", null],
+      ["2026-10-17", "-300.00", "2026-10-17", null],
+    ]);
+    expect(sig.hookAmountIgnored).toBeUndefined();
   });
 
   it("T10 no hooks: the Weekly Spend bill is a plain bill — $300 on Saturdays, no payoff, no banner (no funding bill = no reserve event)", async () => {
