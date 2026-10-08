@@ -1,14 +1,16 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   customFetch,
+  type CategorizationRunResult,
   type CategorizationSettings,
   type CategorizationSettingsInput,
   type MappingRule,
   type MappingRuleInput,
+  type RunCategorizationInput,
 } from "@workspace/api-client-react";
 
 /**
- * ⭐ THE AUTOMATION SCREEN'S FIVE CALLS, written out by hand on purpose.
+ * ⭐ THE AUTOMATION SCREEN'S SIX CALLS, written out by hand on purpose.
  *
  * The generated hooks are the right tool everywhere else. Here they are not:
  * the generated module lives in the entry chunk, and every export a lazy screen
@@ -19,6 +21,8 @@ import {
  */
 export const settingsKey = () => ["/api/categorization/settings"] as const;
 export const mappingRulesKey = () => ["/api/mapping-rules"] as const;
+/** (V7) POST /categorization/run — the generated `getRunCategorizationUrl()`. */
+export const RUN_URL = "/api/categorization/run";
 
 export function useCategorizationSettings(options: { staleTime: number; gcTime: number }) {
   return useQuery({
@@ -61,5 +65,17 @@ export function useChangeMappingRule() {
 export function useRemoveMappingRule() {
   return useMutation({
     mutationFn: ({ id }: { id: string }) => customFetch<void>(`/api/mapping-rules/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  });
+}
+
+/** (V7) "File everything up to today": POST /categorization/run with `{ scope: "all" }`. */
+export function useRunCategorization() {
+  return useMutation({
+    mutationFn: (body: RunCategorizationInput) =>
+      customFetch<CategorizationRunResult>(RUN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
   });
 }

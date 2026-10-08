@@ -21,7 +21,10 @@ export interface CategorizationRecentDecision {
     categoryId: string | null;
     /** @nullable */
     categoryName: string | null;
-    /** @nullable */
+    /**
+     * (V7) unreviewed = a model suggestion left unchanged 14 days; not verified.
+     * @nullable
+     */
     resolution: CategorizationRecentDecisionResolution;
     /**
      * How it was settled. null while open, or when a newer engine decision superseded it.

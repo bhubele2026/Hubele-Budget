@@ -5,7 +5,10 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { RunCategorizationInputScope } from "./runCategorizationInputScope";
 export interface RunCategorizationInput {
     since?: Date;
+    /** (V7) File the whole backlog, from the household's oldest row. `since` is ignored. */
+    scope?: RunCategorizationInputScope;
 }
 //# sourceMappingURL=runCategorizationInput.d.ts.map

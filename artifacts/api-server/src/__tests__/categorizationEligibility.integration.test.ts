@@ -208,8 +208,8 @@ describe("evaluateModelGate (the rows)", () => {
     expect(g.requirements).toEqual([
       { key: "ai", label: "AI is turned on for this app.", met: true, current: 1, target: 1 },
       { key: "owner_switch", label: "The owner lets sure answers file on their own.", met: false, current: 0, target: 1 },
-      { key: "judged", label: "At least 30 suggestions judged.", met: false, current: 12, target: 30 },
-      { key: "accuracy", label: "9 in 10 right among the last 50 judged.", met: true, current: 12, target: 11 },
+      { key: "judged", label: "At least 30 suggestions you verified in Review.", met: false, current: 12, target: 30 },
+      { key: "accuracy", label: "9 in 10 right among the last 50 you verified.", met: true, current: 12, target: 11 },
     ]);
     await wipeHousehold(HH);
     await seedJudged(HH, OWNER, [...rep(T, 50), ...rep(F, 5), ...rep(T, 17)]);
@@ -258,21 +258,21 @@ describe("evaluateModelGate (the rows)", () => {
   });
 });
 
-describe("silent acceptance", () => {
+describe("left unchanged 14 days (silent → unreviewed, V7)", () => {
   it("settles a provisional model suggestion standing for 14 days — not one a minute younger", async () => {
     const due = await openSuggestion({ ageMs: SILENT_ACCEPT_DAYS * DAY });
     const young = await openSuggestion({ ageMs: SILENT_ACCEPT_DAYS * DAY - 60_000 });
     expect(await openReviewCount(HH)).toBe(2);
     expect(await settleSilentAcceptances(HH, NOW)).toBe(1);
-    expect(await decision(due.decisionId)).toMatchObject({ resolution: "accepted", resolvedVia: "silent", resolvedAt: NOW, undoneAt: null });
+    expect(await decision(due.decisionId)).toMatchObject({ resolution: "unreviewed", resolvedVia: "silent", resolvedAt: NOW, undoneAt: null });
     expect(await decision(young.decisionId)).toMatchObject({ resolution: null, resolvedAt: null, resolvedVia: null });
     expect(await openReviewCount(HH)).toBe(1);
-    // The settled row stops being provisional; it keeps its category and stays unlocked; no memory is learned.
-    expect(await txnRow(due.txn)).toMatchObject({ categoryId: C.Groceries, categoryProvisional: false, categoryLockedByUser: false });
+    // (V7) The settled row STAYS provisional (nobody verified it); it keeps its category and stays unlocked; no memory is learned.
+    expect(await txnRow(due.txn)).toMatchObject({ categoryId: C.Groceries, categoryProvisional: true, categoryLockedByUser: false });
     expect(await txnRow(young.txn)).toMatchObject({ categoryId: C.Groceries, categoryProvisional: true });
     expect(await db.select().from(merchantMemoryTable).where(eq(merchantMemoryTable.householdId, HH))).toHaveLength(0);
-    // And it counts as judged.
-    expect((await evaluateModelGate(HH, OWNER, NOW)).judged).toBe(1);
+    // (V7) And it is not verified: the record does not count it.
+    expect((await evaluateModelGate(HH, OWNER, NOW)).judged).toBe(0);
   });
 
   it("never settles a locked row, a changed category, a queue-band answer, a non-model decision, or another household's", async () => {
@@ -314,7 +314,7 @@ describe("silent acceptance", () => {
     } finally {
       process.env.AI_ENABLED = "true";
     }
-    expect(await decision(s.decisionId)).toMatchObject({ resolution: "accepted", resolvedVia: "silent" });
+    expect(await decision(s.decisionId)).toMatchObject({ resolution: "unreviewed", resolvedVia: "silent" });
     // A second job run changes nothing.
     await runCategorizeJob({ householdId: HH, ownerUserId: OWNER, txnIds: [] }, { now: new Date(NOW.getTime() + DAY) });
     expect((await decision(s.decisionId)).resolvedAt).toEqual(NOW);
@@ -326,7 +326,7 @@ describe("silent acceptance", () => {
     await expect(handleMonitorJobs([job])).resolves.toEqual({ households: 1, fannedOut: 0 });
     expect(vi.mocked(runMonitor)).toHaveBeenCalledTimes(1);
     const d = await decision(s.decisionId);
-    expect(d).toMatchObject({ resolution: "accepted", resolvedVia: "silent" });
+    expect(d).toMatchObject({ resolution: "unreviewed", resolvedVia: "silent" });
     const first = d.resolvedAt;
     await handleMonitorJobs([job]);
     expect((await decision(s.decisionId)).resolvedAt).toEqual(first);

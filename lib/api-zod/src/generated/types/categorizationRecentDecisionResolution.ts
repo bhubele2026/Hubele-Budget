@@ -7,6 +7,7 @@
  */
 
 /**
+ * (V7) unreviewed = a model suggestion left unchanged 14 days; not verified.
  * @nullable
  */
 export type CategorizationRecentDecisionResolution =
@@ -17,4 +18,5 @@ export const CategorizationRecentDecisionResolution = {
   accepted: "accepted",
   corrected: "corrected",
   skipped: "skipped",
+  unreviewed: "unreviewed",
 } as const;

@@ -5,6 +5,8 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { CategorizationBacklog } from "./categorizationBacklog";
+import type { CategorizationBank } from "./categorizationBank";
 import type { CategorizationRecentDecision } from "./categorizationRecentDecision";
 import type { CategorizationSettingsAi } from "./categorizationSettingsAi";
 import type { CategorizationSettingsEngine } from "./categorizationSettingsEngine";
@@ -19,4 +21,7 @@ export interface CategorizationSettings {
   /** @maxItems 20 */
   recent: CategorizationRecentDecision[];
   reviewCount: number;
+  backlog: CategorizationBacklog;
+  /** (V7) One row per linked bank, from the rows GET /plaid/items lists. No Plaid call. */
+  banks: CategorizationBank[];
 }

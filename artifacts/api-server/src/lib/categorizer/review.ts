@@ -23,61 +23,85 @@ export async function openReviewCount(householdId: string): Promise<number> {
 
 /**
  * (V1) A provisional model suggestion nobody answered for this many days, whose
- * charge still carries it and is not locked, counts as accepted — silently.
+ * charge still carries it and is not locked, leaves the review queue.
  */
 export const SILENT_ACCEPT_DAYS = 14;
 
 /**
- * ⭐ (V1) Silent acceptance. A model decision that is provisional (written and
- * flagged), unresolved and not undone, decided at least SILENT_ACCEPT_DAYS ago,
- * whose transaction STILL carries that category and is NOT locked by a person,
- * becomes resolution 'accepted', resolved_via 'silent', and its row stops being
- * provisional (it is accepted now; the screen must not say "Provisional"
- * forever). Nothing else moves: the category stays, the lock stays off, no
- * memory is learned (memory is a person's act), and modelPriors.ts never uses
- * it as a prior. A changed category or a locked row is never settled.
- * Idempotent: a settled decision is no longer open. Returns how many settled.
+ * ⭐ (V1, V7) Left unchanged ≠ verified. A model decision that is provisional
+ * (written and flagged), unresolved and not undone, decided at least
+ * SILENT_ACCEPT_DAYS ago, whose transaction STILL carries that category and is
+ * NOT locked by a person, becomes resolution 'unreviewed', resolved_via
+ * 'silent', resolved_at now. It leaves the review queue (it is resolved) and
+ * nothing else moves: the row KEEPS category_provisional (no person verified
+ * it), its category stays, the lock stays off, no memory is learned. It counts
+ * toward nothing: the gate record (loadJudgedRecord) and the priors
+ * (modelPriors.ts) read accepted / corrected only. A changed category or a
+ * locked row is never settled. Idempotent: a settled decision is no longer
+ * open. Returns how many settled.
  */
 export async function settleSilentAcceptances(householdId: string, now: Date = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - SILENT_ACCEPT_DAYS * 86_400_000);
-  return db.transaction(async (tx) => {
-    const rows = await tx
-      .update(categoryDecisionsTable)
-      .set({ resolution: "accepted", resolvedAt: now, resolvedVia: "silent" })
-      .where(
-        and(
-          eq(categoryDecisionsTable.householdId, householdId),
-          eq(categoryDecisionsTable.source, "model"),
-          eq(categoryDecisionsTable.band, "provisional"),
-          isNull(categoryDecisionsTable.resolution),
-          isNull(categoryDecisionsTable.resolvedAt),
-          isNull(categoryDecisionsTable.undoneAt),
-          lte(categoryDecisionsTable.createdAt, cutoff),
-          sql`${categoryDecisionsTable.categoryId} IS NOT NULL`,
-          sql`EXISTS (
-            SELECT 1 FROM ${transactionsTable}
-             WHERE ${transactionsTable.id} = ${categoryDecisionsTable.transactionId}
-               AND ${transactionsTable.householdId} = ${householdId}
-               AND ${transactionsTable.categoryId} = ${categoryDecisionsTable.categoryId}
-               AND ${transactionsTable.categoryLockedByUser} = false
-          )`,
-        ),
-      )
-      .returning({ id: categoryDecisionsTable.id, transactionId: categoryDecisionsTable.transactionId });
-    if (rows.length > 0) {
-      await tx
-        .update(transactionsTable)
-        .set({ categoryProvisional: false })
-        .where(
-          and(
-            eq(transactionsTable.householdId, householdId),
-            eq(transactionsTable.categoryLockedByUser, false),
-            inArray(transactionsTable.id, rows.map((r) => r.transactionId)),
-          ),
-        );
-    }
-    return rows.length;
-  });
+  const rows = await db
+    .update(categoryDecisionsTable)
+    .set({ resolution: "unreviewed", resolvedAt: now, resolvedVia: "silent" })
+    .where(
+      and(
+        eq(categoryDecisionsTable.householdId, householdId),
+        eq(categoryDecisionsTable.source, "model"),
+        eq(categoryDecisionsTable.band, "provisional"),
+        isNull(categoryDecisionsTable.resolution),
+        isNull(categoryDecisionsTable.resolvedAt),
+        isNull(categoryDecisionsTable.undoneAt),
+        lte(categoryDecisionsTable.createdAt, cutoff),
+        sql`${categoryDecisionsTable.categoryId} IS NOT NULL`,
+        sql`EXISTS (
+          SELECT 1 FROM ${transactionsTable}
+           WHERE ${transactionsTable.id} = ${categoryDecisionsTable.transactionId}
+             AND ${transactionsTable.householdId} = ${householdId}
+             AND ${transactionsTable.categoryId} = ${categoryDecisionsTable.categoryId}
+             AND ${transactionsTable.categoryLockedByUser} = false
+        )`,
+      ),
+    )
+    .returning({ id: categoryDecisionsTable.id });
+  return rows.length;
+}
+
+/** (V7) Model suggestions left unchanged (resolution 'unreviewed'), not undone. */
+export async function unreviewedCount(householdId: string): Promise<number> {
+  const [{ total }] = (await db
+    .select({ total: count() })
+    .from(categoryDecisionsTable)
+    .where(
+      and(
+        eq(categoryDecisionsTable.householdId, householdId),
+        eq(categoryDecisionsTable.resolution, "unreviewed"),
+        isNull(categoryDecisionsTable.undoneAt),
+      ),
+    )) as [{ total: number }];
+  return Number(total);
+}
+
+const UNFILED = sql`${transactionsTable.categoryId} IS NULL AND ${transactionsTable.categoryLockedByUser} = false`;
+
+/**
+ * (V7) The household's backlog: charges with no category that no person
+ * locked (the rows the engine may still file), the oldest one's date, and the
+ * rows still flagged provisional.
+ */
+export async function backlogOf(
+  householdId: string,
+): Promise<{ unfiled: number; oldestUnfiledOn: string | null; provisional: number }> {
+  const [r] = await db
+    .select({
+      unfiled: sql<number>`count(*) FILTER (WHERE ${UNFILED})::int`,
+      oldest: sql<string | null>`(min(${transactionsTable.occurredOn}) FILTER (WHERE ${UNFILED}))::text`,
+      provisional: sql<number>`count(*) FILTER (WHERE ${transactionsTable.categoryProvisional} = true)::int`,
+    })
+    .from(transactionsTable)
+    .where(eq(transactionsTable.householdId, householdId));
+  return { unfiled: Number(r?.unfiled ?? 0), oldestUnfiledOn: r?.oldest ?? null, provisional: Number(r?.provisional ?? 0) };
 }
 
 export interface ReviewItem {
