@@ -5470,4 +5470,5 @@ export declare const importSnapshotsTable: import("drizzle-orm/pg-core").PgTable
 export type ImportSnapshot = typeof importSnapshotsTable.$inferSelect;
 export * from "./ai";
 export * from "./agent";
+export * from "./recap";
 //# sourceMappingURL=index.d.ts.map

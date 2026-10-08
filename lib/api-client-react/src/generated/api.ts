@@ -98,6 +98,7 @@ import type {
   ListAgentRunsParams,
   ListDashboardBudgetsParams,
   ListPlaidLiabilityAccountsParams,
+  ListRecapDeliveriesParams,
   ListTransactionsParams,
   ListWeeklySettlementsParams,
   MappingRule,
@@ -127,6 +128,15 @@ import type {
   PlaidUpdateLinkTokenInput,
   PutMerchantAliasInput,
   PutMerchantAliasResult,
+  RecapDeliveryItem,
+  RecapError,
+  RecapPauseInput,
+  RecapSettings,
+  RecapSettingsInput,
+  RecapTestSendResult,
+  RecapVerifyConfirmInput,
+  RecapVerifyStartInput,
+  RecapVerifyStartResult,
   RecategorizeByPatternInput,
   RecategorizeByPatternResult,
   RecurringItem,
@@ -495,6 +505,701 @@ export const useRetryOpsJob = <
 > => {
   return useMutation(getRetryOpsJobMutationOptions(options));
 };
+
+/**
+ * @summary (AI-4b) The caller's own daily-recap text settings (created with defaults
+on first read). Never carries the full phone number: only its last four digits.
+
+ */
+export const getGetRecapSettingsUrl = () => {
+  return `/api/recap/settings`;
+};
+
+export const getRecapSettings = async (
+  options?: RequestInit,
+): Promise<RecapSettings> => {
+  return customFetch<RecapSettings>(getGetRecapSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecapSettingsQueryKey = () => {
+  return [`/api/recap/settings`] as const;
+};
+
+export const getGetRecapSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecapSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getRecapSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRecapSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecapSettings>>
+  > = ({ signal }) => getRecapSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecapSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecapSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecapSettings>>
+>;
+export type GetRecapSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary (AI-4b) The caller's own daily-recap text settings (created with defaults
+on first read). Never carries the full phone number: only its last four digits.
+
+ */
+
+export function useGetRecapSettings<
+  TData = Awaited<ReturnType<typeof getRecapSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getRecapSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecapSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary (AI-4b) Change the caller's recap settings. Turning the recap on needs a
+verified phone number and recorded consent, and not an opt-out.
+
+ */
+export const getUpdateRecapSettingsUrl = () => {
+  return `/api/recap/settings`;
+};
+
+export const updateRecapSettings = async (
+  recapSettingsInput: RecapSettingsInput,
+  options?: RequestInit,
+): Promise<RecapSettings> => {
+  return customFetch<RecapSettings>(getUpdateRecapSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(recapSettingsInput),
+  });
+};
+
+export const getUpdateRecapSettingsMutationOptions = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRecapSettings>>,
+    TError,
+    { data: BodyType<RecapSettingsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateRecapSettings>>,
+  TError,
+  { data: BodyType<RecapSettingsInput> },
+  TContext
+> => {
+  const mutationKey = ["updateRecapSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateRecapSettings>>,
+    { data: BodyType<RecapSettingsInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateRecapSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateRecapSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateRecapSettings>>
+>;
+export type UpdateRecapSettingsMutationBody = BodyType<RecapSettingsInput>;
+export type UpdateRecapSettingsMutationError = ErrorType<RecapError>;
+
+/**
+ * @summary (AI-4b) Change the caller's recap settings. Turning the recap on needs a
+verified phone number and recorded consent, and not an opt-out.
+
+ */
+export const useUpdateRecapSettings = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRecapSettings>>,
+    TError,
+    { data: BodyType<RecapSettingsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateRecapSettings>>,
+  TError,
+  { data: BodyType<RecapSettingsInput> },
+  TContext
+> => {
+  return useMutation(getUpdateRecapSettingsMutationOptions(options));
+};
+
+/**
+ * @summary (AI-4b) Record consent and text a 6-digit code (valid 10 minutes, at most
+3 starts per day) to the given US mobile number.
+
+ */
+export const getStartRecapVerificationUrl = () => {
+  return `/api/recap/verify/start`;
+};
+
+export const startRecapVerification = async (
+  recapVerifyStartInput: RecapVerifyStartInput,
+  options?: RequestInit,
+): Promise<RecapVerifyStartResult> => {
+  return customFetch<RecapVerifyStartResult>(getStartRecapVerificationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(recapVerifyStartInput),
+  });
+};
+
+export const getStartRecapVerificationMutationOptions = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startRecapVerification>>,
+    TError,
+    { data: BodyType<RecapVerifyStartInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startRecapVerification>>,
+  TError,
+  { data: BodyType<RecapVerifyStartInput> },
+  TContext
+> => {
+  const mutationKey = ["startRecapVerification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startRecapVerification>>,
+    { data: BodyType<RecapVerifyStartInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return startRecapVerification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartRecapVerificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startRecapVerification>>
+>;
+export type StartRecapVerificationMutationBody =
+  BodyType<RecapVerifyStartInput>;
+export type StartRecapVerificationMutationError = ErrorType<RecapError>;
+
+/**
+ * @summary (AI-4b) Record consent and text a 6-digit code (valid 10 minutes, at most
+3 starts per day) to the given US mobile number.
+
+ */
+export const useStartRecapVerification = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startRecapVerification>>,
+    TError,
+    { data: BodyType<RecapVerifyStartInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startRecapVerification>>,
+  TError,
+  { data: BodyType<RecapVerifyStartInput> },
+  TContext
+> => {
+  return useMutation(getStartRecapVerificationMutationOptions(options));
+};
+
+/**
+ * @summary (AI-4b) Confirm the 6-digit code (5 tries per code). Marks the number verified.
+ */
+export const getConfirmRecapVerificationUrl = () => {
+  return `/api/recap/verify/confirm`;
+};
+
+export const confirmRecapVerification = async (
+  recapVerifyConfirmInput: RecapVerifyConfirmInput,
+  options?: RequestInit,
+): Promise<RecapSettings> => {
+  return customFetch<RecapSettings>(getConfirmRecapVerificationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(recapVerifyConfirmInput),
+  });
+};
+
+export const getConfirmRecapVerificationMutationOptions = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmRecapVerification>>,
+    TError,
+    { data: BodyType<RecapVerifyConfirmInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof confirmRecapVerification>>,
+  TError,
+  { data: BodyType<RecapVerifyConfirmInput> },
+  TContext
+> => {
+  const mutationKey = ["confirmRecapVerification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof confirmRecapVerification>>,
+    { data: BodyType<RecapVerifyConfirmInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return confirmRecapVerification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConfirmRecapVerificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof confirmRecapVerification>>
+>;
+export type ConfirmRecapVerificationMutationBody =
+  BodyType<RecapVerifyConfirmInput>;
+export type ConfirmRecapVerificationMutationError = ErrorType<RecapError>;
+
+/**
+ * @summary (AI-4b) Confirm the 6-digit code (5 tries per code). Marks the number verified.
+ */
+export const useConfirmRecapVerification = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmRecapVerification>>,
+    TError,
+    { data: BodyType<RecapVerifyConfirmInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof confirmRecapVerification>>,
+  TError,
+  { data: BodyType<RecapVerifyConfirmInput> },
+  TContext
+> => {
+  return useMutation(getConfirmRecapVerificationMutationOptions(options));
+};
+
+/**
+ * @summary (AI-4b) Text the fixed test line to the caller's verified number (3 per day).
+ */
+export const getSendRecapTestUrl = () => {
+  return `/api/recap/test-send`;
+};
+
+export const sendRecapTest = async (
+  options?: RequestInit,
+): Promise<RecapTestSendResult> => {
+  return customFetch<RecapTestSendResult>(getSendRecapTestUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSendRecapTestMutationOptions = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendRecapTest>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendRecapTest>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["sendRecapTest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendRecapTest>>,
+    void
+  > = () => {
+    return sendRecapTest(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendRecapTestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendRecapTest>>
+>;
+
+export type SendRecapTestMutationError = ErrorType<RecapError>;
+
+/**
+ * @summary (AI-4b) Text the fixed test line to the caller's verified number (3 per day).
+ */
+export const useSendRecapTest = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendRecapTest>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendRecapTest>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSendRecapTestMutationOptions(options));
+};
+
+/**
+ * @summary (AI-4b) Pause recap texts until the given time (null or a past time resumes).
+ */
+export const getPauseRecapUrl = () => {
+  return `/api/recap/pause`;
+};
+
+export const pauseRecap = async (
+  recapPauseInput: RecapPauseInput,
+  options?: RequestInit,
+): Promise<RecapSettings> => {
+  return customFetch<RecapSettings>(getPauseRecapUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(recapPauseInput),
+  });
+};
+
+export const getPauseRecapMutationOptions = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pauseRecap>>,
+    TError,
+    { data: BodyType<RecapPauseInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof pauseRecap>>,
+  TError,
+  { data: BodyType<RecapPauseInput> },
+  TContext
+> => {
+  const mutationKey = ["pauseRecap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof pauseRecap>>,
+    { data: BodyType<RecapPauseInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return pauseRecap(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PauseRecapMutationResult = NonNullable<
+  Awaited<ReturnType<typeof pauseRecap>>
+>;
+export type PauseRecapMutationBody = BodyType<RecapPauseInput>;
+export type PauseRecapMutationError = ErrorType<RecapError>;
+
+/**
+ * @summary (AI-4b) Pause recap texts until the given time (null or a past time resumes).
+ */
+export const usePauseRecap = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pauseRecap>>,
+    TError,
+    { data: BodyType<RecapPauseInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof pauseRecap>>,
+  TError,
+  { data: BodyType<RecapPauseInput> },
+  TContext
+> => {
+  return useMutation(getPauseRecapMutationOptions(options));
+};
+
+/**
+ * @summary (AI-4b) Opt out of recap texts and turn the recap off.
+ */
+export const getUnsubscribeRecapUrl = () => {
+  return `/api/recap/unsubscribe`;
+};
+
+export const unsubscribeRecap = async (
+  options?: RequestInit,
+): Promise<RecapSettings> => {
+  return customFetch<RecapSettings>(getUnsubscribeRecapUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getUnsubscribeRecapMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsubscribeRecap>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unsubscribeRecap>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["unsubscribeRecap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unsubscribeRecap>>,
+    void
+  > = () => {
+    return unsubscribeRecap(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnsubscribeRecapMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unsubscribeRecap>>
+>;
+
+export type UnsubscribeRecapMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (AI-4b) Opt out of recap texts and turn the recap off.
+ */
+export const useUnsubscribeRecap = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsubscribeRecap>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unsubscribeRecap>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getUnsubscribeRecapMutationOptions(options));
+};
+
+/**
+ * @summary (AI-4b) The caller's most recent text deliveries (newest first, at most 30).
+ */
+export const getListRecapDeliveriesUrl = (
+  params?: ListRecapDeliveriesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/recap/deliveries?${stringifiedParams}`
+    : `/api/recap/deliveries`;
+};
+
+export const listRecapDeliveries = async (
+  params?: ListRecapDeliveriesParams,
+  options?: RequestInit,
+): Promise<RecapDeliveryItem[]> => {
+  return customFetch<RecapDeliveryItem[]>(getListRecapDeliveriesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRecapDeliveriesQueryKey = (
+  params?: ListRecapDeliveriesParams,
+) => {
+  return [`/api/recap/deliveries`, ...(params ? [params] : [])] as const;
+};
+
+export const getListRecapDeliveriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRecapDeliveries>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListRecapDeliveriesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRecapDeliveries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListRecapDeliveriesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listRecapDeliveries>>
+  > = ({ signal }) =>
+    listRecapDeliveries(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRecapDeliveries>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRecapDeliveriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRecapDeliveries>>
+>;
+export type ListRecapDeliveriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary (AI-4b) The caller's most recent text deliveries (newest first, at most 30).
+ */
+
+export function useListRecapDeliveries<
+  TData = Awaited<ReturnType<typeof listRecapDeliveries>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListRecapDeliveriesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRecapDeliveries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRecapDeliveriesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Dashboard summary

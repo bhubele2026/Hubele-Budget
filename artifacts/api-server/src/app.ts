@@ -78,6 +78,14 @@ app.use(
   "/api/plaid/webhook",
   express.raw({ type: () => true, limit: "1mb" }),
 );
+// (AI-4b) Twilio posts its webhooks as flat application/x-www-form-urlencoded
+// and signs the exact parameter set, so these two paths get a flat,
+// size-limited parse BEFORE the general parsers (which then skip a body that
+// is already parsed). extended:false keeps keys exactly as Twilio sent them.
+app.use(
+  ["/api/sms/status", "/api/sms/inbound"],
+  express.urlencoded({ extended: false, limit: "100kb" }),
+);
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
@@ -98,7 +106,12 @@ app.use(
     max: rateMax,
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => req.path === "/plaid/webhook" || req.path === "/health",
+    skip: (req) =>
+      req.path === "/plaid/webhook" ||
+      req.path === "/health" ||
+      // (AI-4b) Twilio webhooks: signed, and a 429 would drop a STOP.
+      req.path === "/sms/status" ||
+      req.path === "/sms/inbound",
   }),
 );
 

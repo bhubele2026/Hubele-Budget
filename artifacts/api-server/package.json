@@ -22,7 +22,7 @@
     "@workspace/api-zod": "workspace:*",
     "@workspace/avalanche-core": "workspace:*",
     "@workspace/db": "workspace:*",
-    "compression": "^1.8.1",
+    "compression": "^1.8.2",
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
@@ -34,6 +34,7 @@
     "pino": "^9",
     "pino-http": "^10",
     "plaid": "^42.2.0",
+    "twilio": "6.1.2",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "catalog:"
   },

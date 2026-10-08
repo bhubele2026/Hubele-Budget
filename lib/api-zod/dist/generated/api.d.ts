@@ -214,6 +214,348 @@ export declare const RetryOpsJobResponse: zod.ZodObject<{
     retried: boolean;
 }>;
 /**
+ * @summary (AI-4b) The caller's own daily-recap text settings (created with defaults
+on first read). Never carries the full phone number: only its last four digits.
+
+ */
+export declare const GetRecapSettingsResponse: zod.ZodObject<{
+    enabled: zod.ZodBoolean;
+    sendTimeLocal: zod.ZodString;
+    timezone: zod.ZodString;
+    phoneLast4: zod.ZodNullable<zod.ZodString>;
+    verified: zod.ZodBoolean;
+    pausedUntil: zod.ZodNullable<zod.ZodString>;
+    skipWeekends: zod.ZodBoolean;
+    extraAlerts: zod.ZodBoolean;
+    consentedAt: zod.ZodNullable<zod.ZodString>;
+    optedOutAt: zod.ZodNullable<zod.ZodString>;
+    consentText: zod.ZodString;
+    consentTextVersion: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    enabled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    phoneLast4: string | null;
+    verified: boolean;
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    consentedAt: string | null;
+    optedOutAt: string | null;
+    consentText: string;
+    consentTextVersion: string;
+}, {
+    enabled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    phoneLast4: string | null;
+    verified: boolean;
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    consentedAt: string | null;
+    optedOutAt: string | null;
+    consentText: string;
+    consentTextVersion: string;
+}>;
+/**
+ * @summary (AI-4b) Change the caller's recap settings. Turning the recap on needs a
+verified phone number and recorded consent, and not an opt-out.
+
+ */
+export declare const UpdateRecapSettingsBody: zod.ZodObject<{
+    enabled: zod.ZodOptional<zod.ZodBoolean>;
+    sendTimeLocal: zod.ZodOptional<zod.ZodString>;
+    timezone: zod.ZodOptional<zod.ZodString>;
+    skipWeekends: zod.ZodOptional<zod.ZodBoolean>;
+    extraAlerts: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    enabled?: boolean | undefined;
+    sendTimeLocal?: string | undefined;
+    timezone?: string | undefined;
+    skipWeekends?: boolean | undefined;
+    extraAlerts?: boolean | undefined;
+}, {
+    enabled?: boolean | undefined;
+    sendTimeLocal?: string | undefined;
+    timezone?: string | undefined;
+    skipWeekends?: boolean | undefined;
+    extraAlerts?: boolean | undefined;
+}>;
+export declare const UpdateRecapSettingsResponse: zod.ZodObject<{
+    enabled: zod.ZodBoolean;
+    sendTimeLocal: zod.ZodString;
+    timezone: zod.ZodString;
+    phoneLast4: zod.ZodNullable<zod.ZodString>;
+    verified: zod.ZodBoolean;
+    pausedUntil: zod.ZodNullable<zod.ZodString>;
+    skipWeekends: zod.ZodBoolean;
+    extraAlerts: zod.ZodBoolean;
+    consentedAt: zod.ZodNullable<zod.ZodString>;
+    optedOutAt: zod.ZodNullable<zod.ZodString>;
+    consentText: zod.ZodString;
+    consentTextVersion: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    enabled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    phoneLast4: string | null;
+    verified: boolean;
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    consentedAt: string | null;
+    optedOutAt: string | null;
+    consentText: string;
+    consentTextVersion: string;
+}, {
+    enabled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    phoneLast4: string | null;
+    verified: boolean;
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    consentedAt: string | null;
+    optedOutAt: string | null;
+    consentText: string;
+    consentTextVersion: string;
+}>;
+/**
+ * @summary (AI-4b) Record consent and text a 6-digit code (valid 10 minutes, at most
+3 starts per day) to the given US mobile number.
+
+ */
+export declare const StartRecapVerificationBody: zod.ZodObject<{
+    phoneE164: zod.ZodString;
+    consent: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    phoneE164: string;
+    consent: boolean;
+}, {
+    phoneE164: string;
+    consent: boolean;
+}>;
+export declare const StartRecapVerificationResponse: zod.ZodObject<{
+    sent: zod.ZodBoolean;
+    expiresAt: zod.ZodString;
+    devCode: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    sent: boolean;
+    expiresAt: string;
+    devCode?: string | undefined;
+}, {
+    sent: boolean;
+    expiresAt: string;
+    devCode?: string | undefined;
+}>;
+/**
+ * @summary (AI-4b) Confirm the 6-digit code (5 tries per code). Marks the number verified.
+ */
+export declare const ConfirmRecapVerificationBody: zod.ZodObject<{
+    code: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    code: string;
+}, {
+    code: string;
+}>;
+export declare const ConfirmRecapVerificationResponse: zod.ZodObject<{
+    enabled: zod.ZodBoolean;
+    sendTimeLocal: zod.ZodString;
+    timezone: zod.ZodString;
+    phoneLast4: zod.ZodNullable<zod.ZodString>;
+    verified: zod.ZodBoolean;
+    pausedUntil: zod.ZodNullable<zod.ZodString>;
+    skipWeekends: zod.ZodBoolean;
+    extraAlerts: zod.ZodBoolean;
+    consentedAt: zod.ZodNullable<zod.ZodString>;
+    optedOutAt: zod.ZodNullable<zod.ZodString>;
+    consentText: zod.ZodString;
+    consentTextVersion: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    enabled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    phoneLast4: string | null;
+    verified: boolean;
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    consentedAt: string | null;
+    optedOutAt: string | null;
+    consentText: string;
+    consentTextVersion: string;
+}, {
+    enabled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    phoneLast4: string | null;
+    verified: boolean;
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    consentedAt: string | null;
+    optedOutAt: string | null;
+    consentText: string;
+    consentTextVersion: string;
+}>;
+/**
+ * @summary (AI-4b) Text the fixed test line to the caller's verified number (3 per day).
+ */
+export declare const SendRecapTestResponse: zod.ZodObject<{
+    status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+    deliveryId: zod.ZodNullable<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    deliveryId: string | null;
+}, {
+    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    deliveryId: string | null;
+}>;
+/**
+ * @summary (AI-4b) Pause recap texts until the given time (null or a past time resumes).
+ */
+export declare const PauseRecapBody: zod.ZodObject<{
+    until: zod.ZodNullable<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    until: string | null;
+}, {
+    until: string | null;
+}>;
+export declare const PauseRecapResponse: zod.ZodObject<{
+    enabled: zod.ZodBoolean;
+    sendTimeLocal: zod.ZodString;
+    timezone: zod.ZodString;
+    phoneLast4: zod.ZodNullable<zod.ZodString>;
+    verified: zod.ZodBoolean;
+    pausedUntil: zod.ZodNullable<zod.ZodString>;
+    skipWeekends: zod.ZodBoolean;
+    extraAlerts: zod.ZodBoolean;
+    consentedAt: zod.ZodNullable<zod.ZodString>;
+    optedOutAt: zod.ZodNullable<zod.ZodString>;
+    consentText: zod.ZodString;
+    consentTextVersion: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    enabled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    phoneLast4: string | null;
+    verified: boolean;
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    consentedAt: string | null;
+    optedOutAt: string | null;
+    consentText: string;
+    consentTextVersion: string;
+}, {
+    enabled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    phoneLast4: string | null;
+    verified: boolean;
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    consentedAt: string | null;
+    optedOutAt: string | null;
+    consentText: string;
+    consentTextVersion: string;
+}>;
+/**
+ * @summary (AI-4b) Opt out of recap texts and turn the recap off.
+ */
+export declare const UnsubscribeRecapResponse: zod.ZodObject<{
+    enabled: zod.ZodBoolean;
+    sendTimeLocal: zod.ZodString;
+    timezone: zod.ZodString;
+    phoneLast4: zod.ZodNullable<zod.ZodString>;
+    verified: zod.ZodBoolean;
+    pausedUntil: zod.ZodNullable<zod.ZodString>;
+    skipWeekends: zod.ZodBoolean;
+    extraAlerts: zod.ZodBoolean;
+    consentedAt: zod.ZodNullable<zod.ZodString>;
+    optedOutAt: zod.ZodNullable<zod.ZodString>;
+    consentText: zod.ZodString;
+    consentTextVersion: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    enabled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    phoneLast4: string | null;
+    verified: boolean;
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    consentedAt: string | null;
+    optedOutAt: string | null;
+    consentText: string;
+    consentTextVersion: string;
+}, {
+    enabled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    phoneLast4: string | null;
+    verified: boolean;
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    consentedAt: string | null;
+    optedOutAt: string | null;
+    consentText: string;
+    consentTextVersion: string;
+}>;
+/**
+ * @summary (AI-4b) The caller's most recent text deliveries (newest first, at most 30).
+ */
+export declare const listRecapDeliveriesQueryLimitMax = 30;
+export declare const ListRecapDeliveriesQueryParams: zod.ZodObject<{
+    limit: zod.ZodOptional<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    limit?: number | undefined;
+}, {
+    limit?: number | undefined;
+}>;
+export declare const ListRecapDeliveriesResponseItem: zod.ZodObject<{
+    id: zod.ZodString;
+    kind: zod.ZodEnum<["scheduled", "test", "verification", "alert", "reply"]>;
+    forDate: zod.ZodNullable<zod.ZodString>;
+    status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+    createdAt: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    id: string;
+    kind: "scheduled" | "test" | "verification" | "alert" | "reply";
+    forDate: string | null;
+    createdAt: string;
+}, {
+    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    id: string;
+    kind: "scheduled" | "test" | "verification" | "alert" | "reply";
+    forDate: string | null;
+    createdAt: string;
+}>;
+export declare const ListRecapDeliveriesResponse: zod.ZodArray<zod.ZodObject<{
+    id: zod.ZodString;
+    kind: zod.ZodEnum<["scheduled", "test", "verification", "alert", "reply"]>;
+    forDate: zod.ZodNullable<zod.ZodString>;
+    status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+    createdAt: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    id: string;
+    kind: "scheduled" | "test" | "verification" | "alert" | "reply";
+    forDate: string | null;
+    createdAt: string;
+}, {
+    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    id: string;
+    kind: "scheduled" | "test" | "verification" | "alert" | "reply";
+    forDate: string | null;
+    createdAt: string;
+}>, "many">;
+/**
  * @summary Dashboard summary
  */
 export declare const GetDashboardResponse: zod.ZodObject<{
@@ -350,9 +692,9 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         amountKind: zod.ZodEnum<["fixed", "estimate"]>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
+        kind: string;
         amount: string;
         name: string;
-        kind: string;
         frequency: string;
         active: string;
         amountKind: "fixed" | "estimate";
@@ -362,9 +704,9 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         anchorDate?: string | null | undefined;
     }, {
         id: string;
+        kind: string;
         amount: string;
         name: string;
-        kind: string;
         frequency: string;
         active: string;
         amountKind: "fixed" | "estimate";
@@ -423,9 +765,9 @@ export declare const GetDashboardResponse: zod.ZodObject<{
     }[];
     upcomingBills: {
         id: string;
+        kind: string;
         amount: string;
         name: string;
-        kind: string;
         frequency: string;
         active: string;
         amountKind: "fixed" | "estimate";
@@ -484,9 +826,9 @@ export declare const GetDashboardResponse: zod.ZodObject<{
     }[];
     upcomingBills: {
         id: string;
+        kind: string;
         amount: string;
         name: string;
-        kind: string;
         frequency: string;
         active: string;
         amountKind: "fixed" | "estimate";
@@ -509,24 +851,24 @@ export declare const ListTransactionsQueryParams: zod.ZodObject<{
     maxAmount: zod.ZodOptional<zod.ZodString>;
     categoryId: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
+    limit?: number | undefined;
     categoryId?: string | undefined;
     reimbursable?: boolean | undefined;
     source?: string | undefined;
     from?: string | undefined;
     to?: string | undefined;
-    limit?: number | undefined;
     uncategorized?: boolean | undefined;
     excludeTransfers?: boolean | undefined;
     search?: string | undefined;
     minAmount?: string | undefined;
     maxAmount?: string | undefined;
 }, {
+    limit?: number | undefined;
     categoryId?: string | undefined;
     reimbursable?: boolean | undefined;
     source?: string | undefined;
     from?: string | undefined;
     to?: string | undefined;
-    limit?: number | undefined;
     uncategorized?: boolean | undefined;
     excludeTransfers?: boolean | undefined;
     search?: string | undefined;
@@ -1686,6 +2028,7 @@ export declare const GetTransactionsLedgerQueryParams: zod.ZodObject<{
     search?: string | undefined;
     cursor?: string | undefined;
 }, {
+    limit?: number | undefined;
     account?: string | undefined;
     categoryId?: string | undefined;
     reviewed?: string | undefined;
@@ -1694,7 +2037,6 @@ export declare const GetTransactionsLedgerQueryParams: zod.ZodObject<{
     pending?: string | undefined;
     from?: string | undefined;
     to?: string | undefined;
-    limit?: number | undefined;
     uncategorized?: string | undefined;
     search?: string | undefined;
     cursor?: string | undefined;
@@ -1890,11 +2232,11 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         plaidAccountIds: string[];
     }>;
 }, "strip", zod.ZodTypeAny, {
+    limit: number;
     account: {
         via: string;
         plaidAccountIds: string[];
     };
-    limit: number;
     rows: ({
         id: string;
         occurredOn: string;
@@ -1962,11 +2304,11 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         snapshotDay: string | null;
     };
 }, {
+    limit: number;
     account: {
         via: string;
         plaidAccountIds: string[];
     };
-    limit: number;
     rows: ({
         id: string;
         occurredOn: string;
@@ -3643,9 +3985,9 @@ export declare const ListRecurringItemsResponseItem: zod.ZodObject<{
     amountKind: zod.ZodEnum<["fixed", "estimate"]>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
+    kind: string;
     amount: string;
     name: string;
-    kind: string;
     frequency: string;
     active: string;
     amountKind: "fixed" | "estimate";
@@ -3655,9 +3997,9 @@ export declare const ListRecurringItemsResponseItem: zod.ZodObject<{
     anchorDate?: string | null | undefined;
 }, {
     id: string;
+    kind: string;
     amount: string;
     name: string;
-    kind: string;
     frequency: string;
     active: string;
     amountKind: "fixed" | "estimate";
@@ -3680,9 +4022,9 @@ export declare const ListRecurringItemsResponse: zod.ZodArray<zod.ZodObject<{
     amountKind: zod.ZodEnum<["fixed", "estimate"]>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
+    kind: string;
     amount: string;
     name: string;
-    kind: string;
     frequency: string;
     active: string;
     amountKind: "fixed" | "estimate";
@@ -3692,9 +4034,9 @@ export declare const ListRecurringItemsResponse: zod.ZodArray<zod.ZodObject<{
     anchorDate?: string | null | undefined;
 }, {
     id: string;
+    kind: string;
     amount: string;
     name: string;
-    kind: string;
     frequency: string;
     active: string;
     amountKind: "fixed" | "estimate";
@@ -3716,10 +4058,10 @@ export declare const CreateRecurringItemBody: zod.ZodObject<{
     amountKind: zod.ZodOptional<zod.ZodEnum<["fixed", "estimate"]>>;
 }, "strip", zod.ZodTypeAny, {
     name: string;
+    kind?: string | undefined;
     amount?: string | undefined;
     categoryId?: string | null | undefined;
     debtId?: string | null | undefined;
-    kind?: string | undefined;
     frequency?: string | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
@@ -3727,10 +4069,10 @@ export declare const CreateRecurringItemBody: zod.ZodObject<{
     amountKind?: "fixed" | "estimate" | undefined;
 }, {
     name: string;
+    kind?: string | undefined;
     amount?: string | undefined;
     categoryId?: string | null | undefined;
     debtId?: string | null | undefined;
-    kind?: string | undefined;
     frequency?: string | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
@@ -3757,10 +4099,10 @@ export declare const UpdateRecurringItemBody: zod.ZodObject<{
     amountKind: zod.ZodOptional<zod.ZodEnum<["fixed", "estimate"]>>;
 }, "strip", zod.ZodTypeAny, {
     name: string;
+    kind?: string | undefined;
     amount?: string | undefined;
     categoryId?: string | null | undefined;
     debtId?: string | null | undefined;
-    kind?: string | undefined;
     frequency?: string | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
@@ -3768,10 +4110,10 @@ export declare const UpdateRecurringItemBody: zod.ZodObject<{
     amountKind?: "fixed" | "estimate" | undefined;
 }, {
     name: string;
+    kind?: string | undefined;
     amount?: string | undefined;
     categoryId?: string | null | undefined;
     debtId?: string | null | undefined;
-    kind?: string | undefined;
     frequency?: string | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
@@ -3792,9 +4134,9 @@ export declare const UpdateRecurringItemResponse: zod.ZodIntersection<zod.ZodObj
     amountKind: zod.ZodEnum<["fixed", "estimate"]>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
+    kind: string;
     amount: string;
     name: string;
-    kind: string;
     frequency: string;
     active: string;
     amountKind: "fixed" | "estimate";
@@ -3804,9 +4146,9 @@ export declare const UpdateRecurringItemResponse: zod.ZodIntersection<zod.ZodObj
     anchorDate?: string | null | undefined;
 }, {
     id: string;
+    kind: string;
     amount: string;
     name: string;
-    kind: string;
     frequency: string;
     active: string;
     amountKind: "fixed" | "estimate";
@@ -3858,16 +4200,16 @@ export declare const ListCategoriesResponseItem: zod.ZodObject<{
     excludeFromBudget: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
-    name: string;
     kind: string;
+    name: string;
     sortOrder: number;
     groupName: string;
     sourceKind: "manual" | "auto_bills" | "auto_debts";
     excludeFromBudget?: boolean | undefined;
 }, {
     id: string;
-    name: string;
     kind: string;
+    name: string;
     sortOrder: number;
     groupName: string;
     sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -3883,16 +4225,16 @@ export declare const ListCategoriesResponse: zod.ZodArray<zod.ZodObject<{
     excludeFromBudget: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
-    name: string;
     kind: string;
+    name: string;
     sortOrder: number;
     groupName: string;
     sourceKind: "manual" | "auto_bills" | "auto_debts";
     excludeFromBudget?: boolean | undefined;
 }, {
     id: string;
-    name: string;
     kind: string;
+    name: string;
     sortOrder: number;
     groupName: string;
     sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -3947,16 +4289,16 @@ export declare const UpdateCategoryResponse: zod.ZodObject<{
     excludeFromBudget: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
-    name: string;
     kind: string;
+    name: string;
     sortOrder: number;
     groupName: string;
     sourceKind: "manual" | "auto_bills" | "auto_debts";
     excludeFromBudget?: boolean | undefined;
 }, {
     id: string;
-    name: string;
     kind: string;
+    name: string;
     sortOrder: number;
     groupName: string;
     sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -4050,9 +4392,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             }[];
         }>>;
     }, "strip", zod.ZodTypeAny, {
+        kind: string;
         categoryId: string;
         categoryName: string;
-        kind: string;
         sortOrder: number;
         groupName: string;
         sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -4081,9 +4423,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             }[];
         } | undefined;
     }, {
+        kind: string;
         categoryId: string;
         categoryName: string;
-        kind: string;
         sortOrder: number;
         groupName: string;
         sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -4186,9 +4528,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 }[];
             }>>;
         }, "strip", zod.ZodTypeAny, {
+            kind: string;
             categoryId: string;
             categoryName: string;
-            kind: string;
             sortOrder: number;
             groupName: string;
             sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -4217,9 +4559,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 }[];
             } | undefined;
         }, {
+            kind: string;
             categoryId: string;
             categoryName: string;
-            kind: string;
             sortOrder: number;
             groupName: string;
             sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -4251,9 +4593,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         groupName: string;
         lines: {
+            kind: string;
             categoryId: string;
             categoryName: string;
-            kind: string;
             sortOrder: number;
             groupName: string;
             sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -4287,9 +4629,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
     }, {
         groupName: string;
         lines: {
+            kind: string;
             categoryId: string;
             categoryName: string;
-            kind: string;
             sortOrder: number;
             groupName: string;
             sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -4615,9 +4957,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
     monthStart: string;
     monthPinned: boolean;
     lines: {
+        kind: string;
         categoryId: string;
         categoryName: string;
-        kind: string;
         sortOrder: number;
         groupName: string;
         sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -4649,9 +4991,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
     groups: {
         groupName: string;
         lines: {
+            kind: string;
             categoryId: string;
             categoryName: string;
-            kind: string;
             sortOrder: number;
             groupName: string;
             sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -4758,9 +5100,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
     monthStart: string;
     monthPinned: boolean;
     lines: {
+        kind: string;
         categoryId: string;
         categoryName: string;
-        kind: string;
         sortOrder: number;
         groupName: string;
         sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -4792,9 +5134,9 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
     groups: {
         groupName: string;
         lines: {
+            kind: string;
             categoryId: string;
             categoryName: string;
-            kind: string;
             sortOrder: number;
             groupName: string;
             sourceKind: "manual" | "auto_bills" | "auto_debts";
@@ -5889,14 +6231,14 @@ export declare const GetForecastResponse: zod.ZodObject<{
         amount: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         date: string;
-        amount: number;
         kind: string;
+        amount: number;
         itemId: string;
         label: string;
     }, {
         date: string;
-        amount: number;
         kind: string;
+        amount: number;
         itemId: string;
         label: string;
     }>, "many">;
@@ -6517,8 +6859,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
     toDate: string;
     events: {
         date: string;
-        amount: number;
         kind: string;
+        amount: number;
         itemId: string;
         label: string;
     }[];
@@ -6699,8 +7041,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
     toDate: string;
     events: {
         date: string;
-        amount: number;
         kind: string;
+        amount: number;
         itemId: string;
         label: string;
     }[];
@@ -11219,6 +11561,7 @@ export declare const RefreshPlaidConsentExpirationsResponse: zod.ZodObject<{
         consentExpirationLastRefreshedAt?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
+    failed: number;
     updated: number;
     items: {
         itemId: string;
@@ -11230,8 +11573,8 @@ export declare const RefreshPlaidConsentExpirationsResponse: zod.ZodObject<{
         consentExpirationLastRefreshedAt?: string | null | undefined;
     }[];
     scanned: number;
-    failed: number;
 }, {
+    failed: number;
     updated: number;
     items: {
         itemId: string;
@@ -11243,7 +11586,6 @@ export declare const RefreshPlaidConsentExpirationsResponse: zod.ZodObject<{
         consentExpirationLastRefreshedAt?: string | null | undefined;
     }[];
     scanned: number;
-    failed: number;
 }>;
 /**
  * @summary (#397, #550) Owner-only manual trigger for the daily Plaid
@@ -11288,6 +11630,12 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
         recipient: string | null;
     }>, zod.ZodNull]>;
 }, "strip", zod.ZodTypeAny, {
+    alert: {
+        error: string | null;
+        channel: "email" | "log" | "skipped";
+        reason: string | null;
+        recipient: string | null;
+    } | null;
     scanned: number;
     flagged: number;
     flaggedItems: {
@@ -11295,13 +11643,13 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
         institutionName: string | null;
         itemRowId: string;
     }[];
-    alert: {
-        error: string | null;
-        channel: "email" | "log" | "skipped";
-        reason: string | null;
-        recipient: string | null;
-    } | null;
 }, {
+    alert: {
+        error: string | null;
+        channel: "email" | "log" | "skipped";
+        reason: string | null;
+        recipient: string | null;
+    } | null;
     scanned: number;
     flagged: number;
     flaggedItems: {
@@ -11309,12 +11657,6 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
         institutionName: string | null;
         itemRowId: string;
     }[];
-    alert: {
-        error: string | null;
-        channel: "email" | "log" | "skipped";
-        reason: string | null;
-        recipient: string | null;
-    } | null;
 }>;
 export declare const CleanupNonProdPlaidItemsResponse: zod.ZodObject<{
     removed: zod.ZodNumber;
@@ -11346,9 +11688,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             amountKind: zod.ZodEnum<["fixed", "estimate"]>;
         }, "strip", zod.ZodTypeAny, {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11358,9 +11700,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             anchorDate?: string | null | undefined;
         }, {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11376,9 +11718,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         actualAmount: string;
         item: {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11393,9 +11735,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         actualAmount: string;
         item: {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11422,9 +11764,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             amountKind: zod.ZodEnum<["fixed", "estimate"]>;
         }, "strip", zod.ZodTypeAny, {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11434,9 +11776,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             anchorDate?: string | null | undefined;
         }, {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11452,9 +11794,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         actualAmount: string;
         item: {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11469,9 +11811,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         actualAmount: string;
         item: {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11550,9 +11892,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         actualAmount: string;
         item: {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11568,9 +11910,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         actualAmount: string;
         item: {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11609,9 +11951,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         actualAmount: string;
         item: {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11627,9 +11969,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         actualAmount: string;
         item: {
             id: string;
+            kind: string;
             amount: string;
             name: string;
-            kind: string;
             frequency: string;
             active: string;
             amountKind: "fixed" | "estimate";
@@ -11794,16 +12136,16 @@ export declare const ListInvitationsResponseItem: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
-    emailAddress: string;
     createdAt: number;
+    emailAddress: string;
     updatedAt: number;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
 }, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
-    emailAddress: string;
     createdAt: number;
+    emailAddress: string;
     updatedAt: number;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
@@ -11819,16 +12161,16 @@ export declare const ListInvitationsResponse: zod.ZodArray<zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
-    emailAddress: string;
     createdAt: number;
+    emailAddress: string;
     updatedAt: number;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
 }, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
-    emailAddress: string;
     createdAt: number;
+    emailAddress: string;
     updatedAt: number;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
@@ -11864,16 +12206,16 @@ export declare const RevokeInvitationResponse: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
-    emailAddress: string;
     createdAt: number;
+    emailAddress: string;
     updatedAt: number;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
 }, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
-    emailAddress: string;
     createdAt: number;
+    emailAddress: string;
     updatedAt: number;
     url?: string | null | undefined;
     revoked?: boolean | null | undefined;
@@ -11922,17 +12264,17 @@ export declare const ListMembersResponseItem: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     id: string;
     isOwner: boolean;
+    createdAt?: number | null | undefined;
     displayName?: string | null | undefined;
     email?: string | null | undefined;
-    createdAt?: number | null | undefined;
     imageUrl?: string | null | undefined;
     lastSignInAt?: number | null | undefined;
 }, {
     id: string;
     isOwner: boolean;
+    createdAt?: number | null | undefined;
     displayName?: string | null | undefined;
     email?: string | null | undefined;
-    createdAt?: number | null | undefined;
     imageUrl?: string | null | undefined;
     lastSignInAt?: number | null | undefined;
 }>;
@@ -11947,17 +12289,17 @@ export declare const ListMembersResponse: zod.ZodArray<zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     id: string;
     isOwner: boolean;
+    createdAt?: number | null | undefined;
     displayName?: string | null | undefined;
     email?: string | null | undefined;
-    createdAt?: number | null | undefined;
     imageUrl?: string | null | undefined;
     lastSignInAt?: number | null | undefined;
 }, {
     id: string;
     isOwner: boolean;
+    createdAt?: number | null | undefined;
     displayName?: string | null | undefined;
     email?: string | null | undefined;
-    createdAt?: number | null | undefined;
     imageUrl?: string | null | undefined;
     lastSignInAt?: number | null | undefined;
 }>, "many">;
@@ -12323,18 +12665,18 @@ export declare const ListAllowancePlansResponse: zod.ZodObject<{
         createdAt: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
         id: string;
+        createdAt: string;
         amount: string;
         source: "derived" | "owner";
-        createdAt: string;
         memberUserId: string | null;
         period: "weekly" | "monthly";
         effectiveFrom: string;
         derivation?: unknown;
     }, {
         id: string;
+        createdAt: string;
         amount: string;
         source: "derived" | "owner";
-        createdAt: string;
         memberUserId: string | null;
         period: "weekly" | "monthly";
         effectiveFrom: string;
@@ -12388,9 +12730,9 @@ export declare const ListAllowancePlansResponse: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     plans: {
         id: string;
+        createdAt: string;
         amount: string;
         source: "derived" | "owner";
-        createdAt: string;
         memberUserId: string | null;
         period: "weekly" | "monthly";
         effectiveFrom: string;
@@ -12410,9 +12752,9 @@ export declare const ListAllowancePlansResponse: zod.ZodObject<{
 }, {
     plans: {
         id: string;
+        createdAt: string;
         amount: string;
         source: "derived" | "owner";
-        createdAt: string;
         memberUserId: string | null;
         period: "weekly" | "monthly";
         effectiveFrom: string;
@@ -12463,18 +12805,18 @@ export declare const UpdateAllowancePlanResponse: zod.ZodObject<{
     createdAt: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     id: string;
+    createdAt: string;
     amount: string;
     source: "derived" | "owner";
-    createdAt: string;
     memberUserId: string | null;
     period: "weekly" | "monthly";
     effectiveFrom: string;
     derivation?: unknown;
 }, {
     id: string;
+    createdAt: string;
     amount: string;
     source: "derived" | "owner";
-    createdAt: string;
     memberUserId: string | null;
     period: "weekly" | "monthly";
     effectiveFrom: string;

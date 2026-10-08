@@ -116,6 +116,21 @@ services:
         value: "on"
       - key: PGBOSS_SCHEMA
         value: pgboss
+      # --- SMS (AI-4b) ---
+      # Console mode (nothing is sent) until the owner finishes Twilio A2P
+      # registration and flips SMS_PROVIDER to twilio in the dashboard.
+      - key: SMS_PROVIDER
+        value: console
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_MESSAGING_SERVICE_SID
+        sync: false
+      - key: SMS_WEBHOOK_BASE_URL
+        sync: false
+      - key: SMS_DAILY_SEND_CAP
+        value: "50"
       # Per-task model/effort overrides (ai_task_config rows beat these):
       # - key: AI_MODEL_CATEGORIZE
       #   value: claude-sonnet-5-5

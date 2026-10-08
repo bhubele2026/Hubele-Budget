@@ -25,6 +25,8 @@ import bankBalanceExplainRouter from "./bankBalanceExplain";
 import opsRouter from "./ops";
 import moneyRouter from "./money";
 import agentRouter from "./agent";
+import recapRouter from "./recap";
+import smsRouter from "./sms";
 
 const router: IRouter = Router();
 
@@ -54,5 +56,7 @@ router.use(spineRouter);
 router.use(opsRouter);
 router.use(moneyRouter);
 router.use(agentRouter);
+router.use(recapRouter);
+router.use(smsRouter);
 
 export default router;

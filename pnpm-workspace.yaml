@@ -193,3 +193,22 @@ overrides:
   # a real sign-in. Remove it once every Clerk package we hold requires
   # >=3.0.7 itself.
   js-cookie: "^3.0.8"
+  # SECURITY pin. proxy-addr reaches us only transitively, via express@5
+  # (`proxy-addr: ^2.0.7`). 2.0.7 and older are vulnerable to GHSA-jqcg-44mw-7w3h
+  # (critical, IP spoofing via an IPv4-mapped IPv6 address that slips past a
+  # trust-proxy subnet check). 2.0.8 is the patched line and satisfies express'
+  # own range, so this pin fixes it without moving express. Remove it once
+  # express requires >=2.0.8 itself.
+  proxy-addr: "^2.0.8"
+
+# SECURITY: audited and accepted advisories. `pnpm audit --prod` honours this
+# list, so the CI/Render gate "0 high" stays meaningful for everything else.
+auditConfig:
+  ignoreGhsas:
+    # braces <=3.0.3, high, stack exhaustion on deeply nested brace patterns.
+    # NO fixed release exists (3.0.3 is the latest braces; the advisory lists
+    # no patched version). Reaches us via http-proxy-middleware > micromatch,
+    # used only for the Clerk proxy, whose patterns are fixed in our code; no
+    # request data ever reaches `braces()`. Re-check on every dependency
+    # review and delete this entry as soon as braces ships a fix.
+    - GHSA-vfj7-8cjw-p6xm
