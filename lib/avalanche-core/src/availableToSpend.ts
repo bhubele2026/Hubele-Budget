@@ -19,7 +19,14 @@
 //      so leaving it out would read HIGH by that bill.
 //   2. THE WEEK'S PLAN. The weekly cap minus what this Sunday–Saturday week has
 //      already spent from it:
-//          remainingWeek = weekCap − spentWeekDiscretionary
+//          remainingWeek = weekCap + weekAdjustment − spentWeekDiscretionary
+//      ⭐ (V5) `weekAdjustment` is the household's OWN choice to start this
+//      week lower (last week's overage carried over; `plan_adjustments`). It
+//      is whole cents and never positive — a positive value throws — so it can
+//      only lower the week, never raise it. Absent, it is 0 and every figure is
+//      exactly what it was before V5. `withinPlan` reads the adjusted week
+//      (over = remainingWeek below zero); `weekCap` and `paceAllowedToday`
+//      stay the cap the household set.
 //
 //   safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday))
 //
@@ -115,6 +122,29 @@ export interface PositionInputs {
   freshness: PositionFreshness;
   /** `computeCashSignal().status`. */
   status: PositionStatus;
+  /**
+   * (V5) This week's carry-over, in whole cents: ≤ 0, the household's own
+   * choice (`plan_adjustments`). It lowers `remainingWeek`; a positive or
+   * fractional value throws. Absent / null / 0: no adjustment.
+   */
+  weekAdjustmentCents?: number | null;
+  /** (V5) The reason the household gave for this week's adjustment. */
+  weekAdjustmentReason?: string | null;
+  /**
+   * (V5) NEXT week's carry-over, in whole cents (≤ 0; positive throws). It
+   * moves no figure this week — it only adds the assumption that next week
+   * starts lower.
+   */
+  nextWeekAdjustmentCents?: number | null;
+}
+
+/** (V5) The week the household chose to start lower, as the position reports it. */
+export interface PositionWeekAdjustment {
+  /** Signed two-decimal dollars, never positive (e.g. "-40.00"). */
+  amount: string;
+  reason: string | null;
+  /** The Sunday of the week it lowers (this week). */
+  weekStart: string;
 }
 
 export type WithinPlan = "over" | "tight" | "yes";
@@ -156,6 +186,11 @@ export interface MoneyPosition {
   weekEnd: string;
   /** This week's cap, or null when none is set. */
   weekCap: string | null;
+  /**
+   * (V5) The carry-over the household chose for this week, or null. It
+   * lowers `remainingWeek` (and so `safeToSpendNow`); `weekCap` stays the cap.
+   */
+  weekAdjustment: PositionWeekAdjustment | null;
   /** Weekly-allowance spend plus spend not yet filed: what counts against the cap. */
   spentWeekDiscretionary: string;
   /** The part of `spentWeekDiscretionary` not yet filed. */
@@ -164,7 +199,7 @@ export interface MoneyPosition {
   unplannedWeek: string;
   /** Spend filed to the monthly allowance this week. */
   monthlyWeek: string;
-  /** weekCap − spentWeekDiscretionary (negative when over); null with no cap. */
+  /** weekCap + weekAdjustment − spentWeekDiscretionary (negative when over); null with no cap. */
   remainingWeek: string | null;
   /** How much of the cap an even pace allows by the end of today; null with no cap. */
   paceAllowedToday: string | null;
@@ -187,7 +222,22 @@ export const POSITION_ASSUMPTIONS = {
   noPayday: `no payday in the next ${PAYDAY_MAX_DAYS} days: counted to Saturday`,
   paydayBillsFirst: "bills due on payday are counted before the paycheck",
   unfiledCounts: "spending not yet filed counts against the weekly cap",
+  /** (V5) This week carries the household's own carry-over. */
+  thisWeekLower: (dollars: string) => `This week starts $${dollars} lower (you chose this)`,
+  /** (V5) Next week carries the household's own carry-over. */
+  nextWeekLower: (dollars: string) => `Next week starts $${dollars} lower (you chose this)`,
 } as const;
+
+/**
+ * (V5) A week adjustment in whole cents, checked: null/undefined/0 → 0; a
+ * positive or fractional value throws (an adjustment may only LOWER a week).
+ */
+export function checkedAdjustmentCents(v: number | null | undefined, field: string): number {
+  if (v == null || v === 0) return 0;
+  if (!Number.isInteger(v)) throw new RangeError(`${field} must be whole cents`);
+  if (v > 0) throw new RangeError(`${field} must not be positive: an adjustment only lowers a week`);
+  return v;
+}
 
 const toCents = (v: number | string | null | undefined): number | null => {
   if (v == null) return null;
@@ -235,6 +285,9 @@ export function selectPayday(
 export function computePosition(inputs: PositionInputs): MoneyPosition {
   const { todayISO } = inputs;
   const week = weekBounds(todayISO);
+  // (V5) Checked first, so a bad adjustment never produces a figure.
+  const adjustmentCents = checkedAdjustmentCents(inputs.weekAdjustmentCents, "weekAdjustmentCents");
+  const nextAdjustmentCents = checkedAdjustmentCents(inputs.nextWeekAdjustmentCents, "nextWeekAdjustmentCents");
 
   // ── The window: today through payday, or through Saturday when no payday is near.
   const payday = selectPayday(todayISO, inputs.events, inputs.incomeItems);
@@ -306,14 +359,17 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
   let paceCents: number | null = null;
   let withinPlan: WithinPlan | null = null;
   if (capCents != null) {
-    remainingCents = capCents - discretionary;
+    // (V5) The household's own carry-over lowers the week (0 when none).
+    remainingCents = capCents + adjustmentCents - discretionary;
     const dow = dayOfWeekISO(todayISO); // 0 = Sunday
     const elapsedDaysInclToday = dow + 1;
     const daysLeftInclToday = 7 - dow;
     paceCents = Math.round((capCents * elapsedDaysInclToday) / 7);
     // tight: less left than an even share of the cap for the days left (today included).
     // Compared ×7 so no cent is rounded away at the boundary.
-    if (discretionary > capCents) withinPlan = "over";
+    // (V5) Over = below zero on the adjusted week (with no adjustment this is
+    // exactly `spent > cap`, as before).
+    if (remainingCents < 0) withinPlan = "over";
     else if (remainingCents * 7 < capCents * daysLeftInclToday) withinPlan = "tight";
     else withinPlan = "yes";
   }
@@ -333,6 +389,9 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
   );
   assumptions.push(payday ? POSITION_ASSUMPTIONS.paydayBillsFirst : POSITION_ASSUMPTIONS.noPayday);
   if (unfiled > 0 && capCents != null) assumptions.push(POSITION_ASSUMPTIONS.unfiledCounts);
+  // (V5) Said only where there is a cap for it to lower.
+  if (adjustmentCents < 0 && capCents != null) assumptions.push(POSITION_ASSUMPTIONS.thisWeekLower(money(-adjustmentCents)));
+  if (nextAdjustmentCents < 0 && capCents != null) assumptions.push(POSITION_ASSUMPTIONS.nextWeekLower(money(-nextAdjustmentCents)));
 
   return {
     todayISO,
@@ -349,6 +408,10 @@ export function computePosition(inputs: PositionInputs): MoneyPosition {
     weekStart: week.start,
     weekEnd: week.end,
     weekCap: capCents == null ? null : money(capCents),
+    weekAdjustment:
+      adjustmentCents < 0
+        ? { amount: money(adjustmentCents), reason: inputs.weekAdjustmentReason ?? null, weekStart: week.start }
+        : null,
     spentWeekDiscretionary: money(discretionary),
     needsClassificationWeek: money(unfiled),
     unplannedWeek: money(unplanned),

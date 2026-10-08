@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { PositionWeekAdjustment } from "./positionWeekAdjustment";
 import type { SpinePositionConfidence } from "./spinePositionConfidence";
 import type { SpinePositionHorizonKind } from "./spinePositionHorizonKind";
 import type { SpinePositionWithinPlan } from "./spinePositionWithinPlan";
@@ -43,4 +44,6 @@ export interface SpinePosition {
   confidence: SpinePositionConfidence;
   /** The bank data is stale; every figure is from the last good snapshot */
   degraded: boolean;
+  /** MoneyPosition.weekAdjustment */
+  weekAdjustment: PositionWeekAdjustment | null;
 }

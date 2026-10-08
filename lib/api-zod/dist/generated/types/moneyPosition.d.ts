@@ -12,8 +12,9 @@ import type { MoneyPositionHorizon } from "./moneyPositionHorizon";
 import type { MoneyPositionPayday } from "./moneyPositionPayday";
 import type { MoneyPositionStatus } from "./moneyPositionStatus";
 import type { MoneyPositionWithinPlan } from "./moneyPositionWithinPlan";
+import type { PositionWeekAdjustment } from "./positionWeekAdjustment";
 /**
- * (PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).
+ * (PR-B1) computePosition's answer. Money is a two-decimal string. Payday is the first income plan on the forecast curve after today, within 45 days, of at least 25% of the largest active income plan; the window runs from today through payday, and on payday the bills count before the paycheck (that day reads its balance less every income plan dated payday). Without a payday the window runs through this week's Saturday. availableUntilPayday = max(0, lowest end-of-day balance in the window − cash buffer − reserves held), null — never a false zero — with no bank data or no curve. remainingWeek = weekCap + weekAdjustment − spentWeekDiscretionary (weekly-allowance spend plus spend not yet filed; weekAdjustment is the household's own carry-over for this week, never positive, 0 when none). safeToSpendNow = max(0, min(remainingWeek, availableUntilPayday)).
  */
 export interface MoneyPosition {
     todayISO: string;
@@ -41,6 +42,8 @@ export interface MoneyPosition {
      * @nullable
      */
     weekCap: string | null;
+    /** (V5) The household's own carry-over for this week, or null */
+    weekAdjustment: PositionWeekAdjustment | null;
     spentWeekDiscretionary: string;
     /** The part of spentWeekDiscretionary not yet filed — it counts against the cap until it is */
     needsClassificationWeek: string;

@@ -79,7 +79,7 @@ const SPINE: Spine = {
   nextBill: { name: "Electric", amount: "142.18", dueDate: "2026-10-12" },
   billsDueCount: 3,
   forecast: { lowPoint: "800.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "ready" },
-  debt: { payoffPct: 41.3, nextMilestone: null, paidDownMtd: 0 },
+  debt: { payoffPct: 41.3, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0 },
   reviewCount: 0,
   position: {
     safeToSpendNow: "144.50",
@@ -90,6 +90,7 @@ const SPINE: Spine = {
     withinPlan: "yes",
     confidence: "firm",
     degraded: false,
+    weekAdjustment: null,
   },
 };
 
@@ -578,7 +579,7 @@ describe("Today — debt, and the no-amount-owed law", () => {
   });
 
   it("no anchored debt is '—' with a reason, not 0%", async () => {
-    mocks.spine = readSpine({ data: { ...SPINE, debt: { payoffPct: null, nextMilestone: null, paidDownMtd: 0 } } });
+    mocks.spine = readSpine({ data: { ...SPINE, debt: { payoffPct: null, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0 } } });
     await renderToday();
     const debt = await screen.findByTestId("figure-debt");
     expect(debt.textContent).toContain("—");

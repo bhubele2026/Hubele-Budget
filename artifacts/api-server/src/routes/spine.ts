@@ -48,6 +48,9 @@ const router: IRouter = Router();
  *                                   over withPendingPayments() rows [lib/debtPending]
  *   debt.nextMilestone / .paidDownMtd → computeDebtHeadline(signal)  [lib/debtPlan]
  *                                   (also GET /debt-plan .milestones.next / .paidDownGenuineMtd)
+ *   debt.confirmedPaymentsMtd / .newChargesMtd → computeDebtHeadline(signal)
+ *                                   (V5; also GET /debt-plan .confirmedMtd / .newChargesMtd)
+ *                                   — amounts PAID and CHARGED, never a balance
  *   reviewCount                   → computeReviewCount()  [lib/reviewCount]
  *   position.*                    → buildMoneyPosition()  [lib/moneyPosition]
  *                                   (also GET /money/position), handed THIS
@@ -175,6 +178,10 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       payoffPct: payoffPct(debtRowsWithPending),
       nextMilestone: debtHeadline.nextMilestone,
       paidDownMtd: debtHeadline.paidDownMtd,
+      // (V5) The honest other half: gross confirmed payments and new charges
+      // this month. Amounts paid and charged — never a balance or credit.
+      confirmedPaymentsMtd: debtHeadline.confirmedPaymentsMtd,
+      newChargesMtd: debtHeadline.newChargesMtd,
     },
     reviewCount,
     // ⭐ (PR-B1) The money position's headline. Every field is the
@@ -189,6 +196,8 @@ router.get("/spine", requireAuth, async (req, res): Promise<void> => {
       withinPlan: position.withinPlan,
       confidence: position.confidence,
       degraded: position.degraded,
+      // (V5) The household's own carry-over for this week, or null.
+      weekAdjustment: position.weekAdjustment,
     },
   });
 });

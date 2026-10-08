@@ -13134,6 +13134,7 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
     }>, "many">;
     confirmedMtd: zod.ZodNumber;
     paidDownGenuineMtd: zod.ZodNumber;
+    newChargesMtd: zod.ZodNumber;
     assumptions: zod.ZodArray<zod.ZodObject<{
         key: zod.ZodString;
         text: zod.ZodString;
@@ -13237,6 +13238,7 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
     }[];
     confirmedMtd: number;
     paidDownGenuineMtd: number;
+    newChargesMtd: number;
 }, {
     strategy: "avalanche" | "snowball";
     asOf: string;
@@ -13330,6 +13332,7 @@ export declare const GetDebtPlanResponse: zod.ZodObject<{
     }[];
     confirmedMtd: number;
     paidDownGenuineMtd: number;
+    newChargesMtd: number;
 }>;
 /**
  * @summary (Owner) Re-run the liability ledger and claim confirmation passes
@@ -13421,10 +13424,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
                 accountsSilentDays: number | null;
             }>;
         }, "strip", zod.ZodTypeAny, {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13439,10 +13442,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
                 accountsSilentDays: number | null;
             };
         }, {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13462,10 +13465,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         asOf: string;
         computedAt: string;
         metrics: {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13485,10 +13488,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         asOf: string;
         computedAt: string;
         metrics: {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13535,10 +13538,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
                 accountsSilentDays: number | null;
             }>;
         }, "strip", zod.ZodTypeAny, {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13553,10 +13556,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
                 accountsSilentDays: number | null;
             };
         }, {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13576,10 +13579,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         asOf: string;
         computedAt: string;
         metrics: {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13599,10 +13602,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         asOf: string;
         computedAt: string;
         metrics: {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13626,10 +13629,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         asOf: string;
         computedAt: string;
         metrics: {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13650,10 +13653,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         asOf: string;
         computedAt: string;
         metrics: {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13677,10 +13680,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         asOf: string;
         computedAt: string;
         metrics: {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13701,10 +13704,10 @@ export declare const GetMetricsResponse: zod.ZodObject<{
         asOf: string;
         computedAt: string;
         metrics: {
+            newChargesMtd: number;
             totalDebtEffective: number | null;
             debtPaidDownGenuineMtd: number;
             interestChargedMtd: number;
-            newChargesMtd: number;
             discretionaryWtd: number | null;
             discretionaryMtd: number | null;
             weeklyCap: number | null;
@@ -13827,7 +13830,11 @@ export declare const GetSpineResponse: zod.ZodObject<{
             estimatedMonth: string;
         }>, zod.ZodNull]>;
         paidDownMtd: zod.ZodNumber;
+        confirmedPaymentsMtd: zod.ZodNumber;
+        newChargesMtd: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
+        newChargesMtd: number;
+        confirmedPaymentsMtd: number;
         payoffPct: number | null;
         nextMilestone: {
             label: string;
@@ -13835,6 +13842,8 @@ export declare const GetSpineResponse: zod.ZodObject<{
         } | null;
         paidDownMtd: number;
     }, {
+        newChargesMtd: number;
+        confirmedPaymentsMtd: number;
         payoffPct: number | null;
         nextMilestone: {
             label: string;
@@ -13852,6 +13861,19 @@ export declare const GetSpineResponse: zod.ZodObject<{
         withinPlan: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"over">, zod.ZodLiteral<"tight">, zod.ZodLiteral<"yes">, zod.ZodLiteral<null>]>>;
         confidence: zod.ZodEnum<["firm", "estimated"]>;
         degraded: zod.ZodBoolean;
+        weekAdjustment: zod.ZodUnion<[zod.ZodObject<{
+            amount: zod.ZodString;
+            reason: zod.ZodNullable<zod.ZodString>;
+            weekStart: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            amount: string;
+            weekStart: string;
+            reason: string | null;
+        }, {
+            amount: string;
+            weekStart: string;
+            reason: string | null;
+        }>, zod.ZodNull]>;
     }, "strip", zod.ZodTypeAny, {
         confidence: "firm" | "estimated";
         withinPlan: "tight" | "over" | "yes" | null;
@@ -13861,6 +13883,11 @@ export declare const GetSpineResponse: zod.ZodObject<{
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
         degraded: boolean;
+        weekAdjustment: {
+            amount: string;
+            weekStart: string;
+            reason: string | null;
+        } | null;
     }, {
         confidence: "firm" | "estimated";
         withinPlan: "tight" | "over" | "yes" | null;
@@ -13870,10 +13897,17 @@ export declare const GetSpineResponse: zod.ZodObject<{
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
         degraded: boolean;
+        weekAdjustment: {
+            amount: string;
+            weekStart: string;
+            reason: string | null;
+        } | null;
     }>;
 }, "strip", zod.ZodTypeAny, {
     asOf: string;
     debt: {
+        newChargesMtd: number;
+        confirmedPaymentsMtd: number;
         payoffPct: number | null;
         nextMilestone: {
             label: string;
@@ -13915,10 +13949,17 @@ export declare const GetSpineResponse: zod.ZodObject<{
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
         degraded: boolean;
+        weekAdjustment: {
+            amount: string;
+            weekStart: string;
+            reason: string | null;
+        } | null;
     };
 }, {
     asOf: string;
     debt: {
+        newChargesMtd: number;
+        confirmedPaymentsMtd: number;
         payoffPct: number | null;
         nextMilestone: {
             label: string;
@@ -13960,6 +14001,11 @@ export declare const GetSpineResponse: zod.ZodObject<{
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
         degraded: boolean;
+        weekAdjustment: {
+            amount: string;
+            weekStart: string;
+            reason: string | null;
+        } | null;
     };
 }>;
 /**
@@ -14005,6 +14051,19 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     weekStart: zod.ZodString;
     weekEnd: zod.ZodString;
     weekCap: zod.ZodNullable<zod.ZodString>;
+    weekAdjustment: zod.ZodUnion<[zod.ZodObject<{
+        amount: zod.ZodString;
+        reason: zod.ZodNullable<zod.ZodString>;
+        weekStart: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string;
+        weekStart: string;
+        reason: string | null;
+    }, {
+        amount: string;
+        weekStart: string;
+        reason: string | null;
+    }>, zod.ZodNull]>;
     spentWeekDiscretionary: zod.ZodString;
     needsClassificationWeek: zod.ZodString;
     unplannedWeek: zod.ZodString;
@@ -14051,6 +14110,11 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
         label: string;
     } | null;
     degraded: boolean;
+    weekAdjustment: {
+        amount: string;
+        weekStart: string;
+        reason: string | null;
+    } | null;
     todayISO: string;
     horizon: {
         kind: "payday" | "week_end";
@@ -14092,6 +14156,11 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
         label: string;
     } | null;
     degraded: boolean;
+    weekAdjustment: {
+        amount: string;
+        weekStart: string;
+        reason: string | null;
+    } | null;
     todayISO: string;
     horizon: {
         kind: "payday" | "week_end";
@@ -14527,6 +14596,181 @@ export declare const UpdateAllowancePlanResponse: zod.ZodObject<{
     period: "weekly" | "monthly";
     effectiveFrom: string;
     derivation?: unknown;
+}>;
+/**
+ * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement. Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
+ * @summary A way back when the week is over — how far over, what is left per day, what to trim, next week carried
+ */
+export declare const getWaysBackResponseOverByMin = 0;
+export declare const getWaysBackResponseDaysLeftMax = 7;
+export declare const GetWaysBackResponse: zod.ZodObject<{
+    weekStart: zod.ZodString;
+    weekEnd: zod.ZodString;
+    overBy: zod.ZodNumber;
+    daysLeft: zod.ZodNumber;
+    hold: zod.ZodObject<{
+        perDay: zod.ZodNullable<zod.ZodNumber>;
+        leavesUntilPayday: zod.ZodNullable<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        perDay: number | null;
+        leavesUntilPayday: number | null;
+    }, {
+        perDay: number | null;
+        leavesUntilPayday: number | null;
+    }>;
+    trims: zod.ZodArray<zod.ZodObject<{
+        categoryId: zod.ZodString;
+        name: zod.ZodString;
+        spentWeek: zod.ZodNumber;
+        usualWeek: zod.ZodNullable<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        categoryId: string;
+        name: string;
+        spentWeek: number;
+        usualWeek: number | null;
+    }, {
+        categoryId: string;
+        name: string;
+        spentWeek: number;
+        usualWeek: number | null;
+    }>, "many">;
+    carryOver: zod.ZodObject<{
+        nextWeekStart: zod.ZodString;
+        nextWeekCap: zod.ZodNullable<zod.ZodNumber>;
+        applied: zod.ZodBoolean;
+        adjustment: zod.ZodUnion<[zod.ZodObject<{
+            weekStart: zod.ZodString;
+            amountCents: zod.ZodNumber;
+            reason: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            weekStart: string;
+            reason: string | null;
+            amountCents: number;
+        }, {
+            weekStart: string;
+            reason: string | null;
+            amountCents: number;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        nextWeekStart: string;
+        nextWeekCap: number | null;
+        applied: boolean;
+        adjustment: {
+            weekStart: string;
+            reason: string | null;
+            amountCents: number;
+        } | null;
+    }, {
+        nextWeekStart: string;
+        nextWeekCap: number | null;
+        applied: boolean;
+        adjustment: {
+            weekStart: string;
+            reason: string | null;
+            amountCents: number;
+        } | null;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    weekStart: string;
+    weekEnd: string;
+    overBy: number;
+    daysLeft: number;
+    hold: {
+        perDay: number | null;
+        leavesUntilPayday: number | null;
+    };
+    trims: {
+        categoryId: string;
+        name: string;
+        spentWeek: number;
+        usualWeek: number | null;
+    }[];
+    carryOver: {
+        nextWeekStart: string;
+        nextWeekCap: number | null;
+        applied: boolean;
+        adjustment: {
+            weekStart: string;
+            reason: string | null;
+            amountCents: number;
+        } | null;
+    };
+}, {
+    weekStart: string;
+    weekEnd: string;
+    overBy: number;
+    daysLeft: number;
+    hold: {
+        perDay: number | null;
+        leavesUntilPayday: number | null;
+    };
+    trims: {
+        categoryId: string;
+        name: string;
+        spentWeek: number;
+        usualWeek: number | null;
+    }[];
+    carryOver: {
+        nextWeekStart: string;
+        nextWeekCap: number | null;
+        applied: boolean;
+        adjustment: {
+            weekStart: string;
+            reason: string | null;
+            amountCents: number;
+        } | null;
+    };
+}>;
+/**
+ * Upserts the household's carry-over for one week (unique on household, week and kind). amountCents is whole cents and must be negative: an adjustment can only LOWER a week. weekStart must be a Sunday, this week or later. The money position subtracts it from that week's remainingWeek.
+ * @summary Start a week lower — carry an overage into it (household owner only)
+ */
+export declare const createWeekAdjustmentBodyWeekStartRegExp: RegExp;
+export declare const createWeekAdjustmentBodyAmountCentsMin = -10000000;
+export declare const createWeekAdjustmentBodyAmountCentsMax = -1;
+export declare const createWeekAdjustmentBodyReasonMax = 200;
+export declare const CreateWeekAdjustmentBody: zod.ZodObject<{
+    weekStart: zod.ZodString;
+    amountCents: zod.ZodNumber;
+    reason: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    weekStart: string;
+    amountCents: number;
+    reason?: string | undefined;
+}, {
+    weekStart: string;
+    amountCents: number;
+    reason?: string | undefined;
+}>;
+export declare const CreateWeekAdjustmentResponse: zod.ZodObject<{
+    weekStart: zod.ZodString;
+    kind: zod.ZodEnum<["carry_over"]>;
+    amountCents: zod.ZodNumber;
+    reason: zod.ZodNullable<zod.ZodString>;
+    createdAt: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    kind: "carry_over";
+    createdAt: string;
+    weekStart: string;
+    reason: string | null;
+    amountCents: number;
+}, {
+    kind: "carry_over";
+    createdAt: string;
+    weekStart: string;
+    reason: string | null;
+    amountCents: number;
+}>;
+/**
+ * @summary Remove a week's carry-over (household owner only)
+ */
+export declare const deleteWeekAdjustmentPathWeekStartRegExp: RegExp;
+export declare const DeleteWeekAdjustmentParams: zod.ZodObject<{
+    weekStart: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    weekStart: string;
+}, {
+    weekStart: string;
 }>;
 /**
  * (AI-3) Findings are written by deterministic detectors over the money position, the bills, the budget and the recent rows — no model call. The payload carries ids (refs) and numbers (figures), never a merchant name. `open` = not resolved and not dismissed.
@@ -15995,10 +16239,10 @@ export declare const ListAgentProposalsQueryParams: zod.ZodObject<{
     status: zod.ZodDefault<zod.ZodEnum<["proposed", "approved", "rejected", "applied", "expired", "all"]>>;
     limit: zod.ZodDefault<zod.ZodNumber>;
 }, "strip", zod.ZodTypeAny, {
-    status: "expired" | "proposed" | "all" | "applied" | "approved" | "rejected";
+    status: "expired" | "proposed" | "applied" | "all" | "approved" | "rejected";
     limit: number;
 }, {
-    status?: "expired" | "proposed" | "all" | "applied" | "approved" | "rejected" | undefined;
+    status?: "expired" | "proposed" | "applied" | "all" | "approved" | "rejected" | undefined;
     limit?: number | undefined;
 }>;
 export declare const ListAgentProposalsResponse: zod.ZodObject<{
