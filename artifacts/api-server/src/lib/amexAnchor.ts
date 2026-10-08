@@ -15,7 +15,7 @@ import { loadSupersededPendingIds } from "./supersededPending";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
-import { classifyOutflow, normalizeCardAmount } from "@workspace/avalanche-core";
+import { classifyOutflow, classifyRefund, creditAmount, normalizeCardAmount } from "@workspace/avalanche-core";
 import {
   classifyAmexBrand,
   discoverAmexCards,
@@ -252,6 +252,13 @@ export function lastCompletedWeekStart(today: Date = householdTodayDate()): stri
  * `isRealSpend` / `spendAmount` definition the Spending report uses — card
  * payments, transfers, and debt-category rows are excluded, never recomputed
  * here.
+ *
+ * ⭐ (B6) Refunds net: a credit on the card that `classifyRefund` calls a
+ * refund (with `reimbursableIsSpend`, as the charges) takes its amount off that
+ * card's charges for the window it is DATED in, filed or not — the card owes
+ * that much less — and never below zero. A refund dated after a week closed is
+ * in the next week's window, so it nets that week, never the closed one.
+ * `chargeCount` and `topMerchant` stay the charges themselves.
  */
 export async function computeWeeklyPayoff(
   householdId: string,
@@ -387,9 +394,9 @@ export async function computeWeeklyPayoff(
   const replacedPendingIds =
     externalIds.length > 0 ? await loadSupersededPendingIds(householdId) : new Set<string>();
 
-  type Agg = { charges: number; count: number; top: { name: string; amount: number } | null };
+  type Agg = { charges: number; refunds: number; count: number; top: { name: string; amount: number } | null };
   const byCard = new Map<string, Agg>();
-  for (const ext of externalIds) byCard.set(ext, { charges: 0, count: 0, top: null });
+  for (const ext of externalIds) byCard.set(ext, { charges: 0, refunds: 0, count: 0, top: null });
   for (const t of txns) {
     if (!t.plaidAccountId) continue;
     const agg = byCard.get(t.plaidAccountId);
@@ -406,6 +413,8 @@ export async function computeWeeklyPayoff(
       ? classifyOutflow(t, ctx, { reimbursableIsSpend: true }).kind === "spend"
       : isRealSpend(t, ctx, { reimbursableIsSpend: true });
     if (!owed) {
+      // (B6) Money back on the card, filed or not, on the page and the payoff alike.
+      if (classifyRefund(t, ctx, { reimbursableIsSpend: true })) agg.refunds += creditAmount(t);
       continue;
     }
     const amt = spendAmount(t);
@@ -418,7 +427,13 @@ export async function computeWeeklyPayoff(
 
   // --- Assemble per-card payoff rows ---------------------------------------
   const cards: AmexWeeklyPayoffCard[] = cardRows.map((c) => {
-    const agg = byCard.get(c.accountId) ?? { charges: 0, count: 0, top: null };
+    const raw = byCard.get(c.accountId) ?? { charges: 0, refunds: 0, count: 0, top: null };
+    // (B6) Charges less refunds, in whole cents, never below zero. A card with
+    // no refund keeps its charges exactly as before.
+    const agg =
+      raw.refunds > 0
+        ? { ...raw, charges: Math.max(0, Math.round(raw.charges * 100) - Math.round(raw.refunds * 100)) / 100 }
+        : raw;
     const debt = debtByInternalId.get(c.internalId) ?? null;
     const liability = c.liabilityBalance != null ? Number(c.liabilityBalance) : NaN;
     const statementBalance = Number.isFinite(liability)

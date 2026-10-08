@@ -4654,7 +4654,7 @@ export const GetReportsSpendingFactsResponse = zod.object({
       transactionCount: zod.number(),
     })
     .describe(
-      "Every purchase on any account, categorized or not — realSpend plus uncategorized — through the one spending rule (spendingFilter.ts classifyOutflow). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth.",
+      "Every purchase on any account, categorized or not, through the one spending rule (spendingFilter.ts classifyOutflow), less the refunds on the same account (B6, classifyRefund), never below zero per account: realSpend + uncategorized − (refunds.total − refunds.fromCategories). Transfers, debt payments, card payments, reimbursable charges, excluded categories and income are out. The spine's spentWeek and spentMonth. transactionCount counts purchases.",
     ),
   unplanned: zod
     .object({
@@ -4678,7 +4678,16 @@ export const GetReportsSpendingFactsResponse = zod.object({
       transactionCount: zod.number(),
     })
     .describe(
-      "The categorized part of householdSpend; the basis of byCategory, byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends.",
+      "The categorized part of householdSpend, less the refunds filed to the same category on the same account (B6, never below zero there); the basis of byCategory. byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends stay purchases. transactionCount counts purchases.",
+    ),
+  refunds: zod
+    .object({
+      total: zod.number(),
+      transactionCount: zod.number(),
+      fromCategories: zod.number(),
+    })
+    .describe(
+      "(B6) Refunds in the range (classifyRefund): money back on a card, or a credit whose description says REFUND on another account — never a transfer, a card payment, income or a reimbursable credit. Each nets its own account's spending, never below zero. total is what they took off householdSpend; fromCategories the part of it also taken off realSpend and byCategory; transactionCount the refund rows.",
     ),
   realIncome: zod
     .object({

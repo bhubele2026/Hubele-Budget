@@ -619,3 +619,136 @@ export function isRealIncome(
   if (cat.debtId || ctx.debtCategoryIds.has(tx.categoryId)) return false;
   return true;
 }
+
+// ── (B6) REFUNDS ────────────────────────────────────────────────────────────
+//
+// A refund is money coming BACK on an account the household buys on — the
+// owner's rule: "a credit on a spending account that is not a transfer, not
+// income, not a card payment". It reduces the spend of its own window and
+// account (and its category, when it has one), never below zero; the callers
+// do the netting (`allowanceTotals` in householdMoney.ts, `buildSpendingFacts`,
+// `computeWeeklyPayoff`). This module only says WHICH credits are refunds.
+//
+// ⚠️ "The forecast may read low, never high." Netting a refund raises the room
+// left, so a credit counts as a refund only on evidence:
+//   - on a CARD's own ledger (`CARD_LEDGER_SOURCES`) every credit that nothing
+//     below rules out is money back on the card — what the card owes drops by
+//     exactly that much;
+//   - on any OTHER account (checking, a manual row) the description must say so:
+//     a whole word REFUND / REFUNDS / REFUNDED / RFND, and no tax word (TAX,
+//     IRS, TREAS — a tax refund is not money back from a purchase). An
+//     unfiled paycheck, an ACH return or a transfer in is never netted.
+// Ruled out everywhere: a transfer (`isTransfer`), a debt row (`debtId`, a debt
+// category), the user's card-payment flag, an excluded category (Transfer,
+// Ignore, Reimbursement, …), an income category, Plaid's card-payment /
+// transfer / loan-payment / income categories, a card-payment or bank-noise
+// description (`matchesCardPaymentPattern`, `matchesTransferPattern`), a
+// description that reads as a payment ("ONLINE PAYMENT - THANK YOU", "AUTOPAY",
+// "PYMT"), and — unless `reimbursableIsSpend`, exactly like rule 7 — a credit
+// flagged reimbursable.
+
+/**
+ * Ledger-source values that are an Amex card's own rows, never cash. Defined
+ * here (B6: the refund rule reads it) and re-exported by householdMoney.ts,
+ * where it has always been documented; `moneyContext.test.ts` pins it equal to
+ * `AMEX_TXN_SOURCES` (`artifacts/api-server/src/lib/amexAnchor.ts`).
+ */
+export const CARD_LEDGER_SOURCES = ["amex", "plaid:amex"] as const;
+const CARD_SOURCES: ReadonlySet<string> = new Set(CARD_LEDGER_SOURCES);
+
+/** Plaid detailed categories that are never a refund: card payments, transfers, loans, income (tax refunds included). */
+const NOT_A_REFUND_PFC = /^(TRANSFER_IN|TRANSFER_OUT|LOAN_PAYMENTS|INCOME)/;
+
+/** Words that make a credit a payment, not a refund. */
+const PAYMENT_WORDS: ReadonlySet<string> = new Set(["payment", "payments", "pymt", "pmt", "autopay"]);
+
+/** Off a card ledger, a credit is a refund only when its description carries one of these words. */
+export const REFUND_MARKER_WORDS: readonly string[] = ["refund", "refunds", "refunded", "rfnd"];
+const REFUND_MARKERS: ReadonlySet<string> = new Set(REFUND_MARKER_WORDS);
+/** …and none of these: a tax refund is not money back from a purchase. */
+const TAX_WORDS: ReadonlySet<string> = new Set(["tax", "taxes", "irs", "treas"]);
+
+/**
+ * The mirror of `spendAmount()`: positive dollars for money coming back to the
+ * account, 0 otherwise. A manual-workbook Amex credit is NEGATIVE; a bank or
+ * Plaid credit is POSITIVE.
+ */
+export function creditAmount(tx: Pick<SpendTxn, "amount" | "source">): number {
+  const a = typeof tx.amount === "number" ? tx.amount : parseFloat(tx.amount);
+  if (!Number.isFinite(a)) return 0;
+  if (tx.source === "amex") return a < 0 ? -a : 0;
+  return a > 0 ? a : 0;
+}
+
+/** Does a description read as a payment ("ONLINE PAYMENT - THANK YOU", "AUTOPAY PYMT")? */
+function readsAsPayment(description: string | null | undefined): boolean {
+  const words = normalizeDescription(description).split(" ");
+  for (let i = 0; i < words.length; i += 1) {
+    if (PAYMENT_WORDS.has(words[i]!)) return true;
+    if (words[i] === "thank" && words[i + 1] === "you") return true;
+  }
+  return false;
+}
+
+/** Does a description say it is a refund (and not a tax refund)? */
+export function hasRefundMarker(description: string | null | undefined): boolean {
+  const words = normalizeDescription(description).split(" ");
+  return words.some((w) => REFUND_MARKERS.has(w)) && !words.some((w) => TAX_WORDS.has(w));
+}
+
+/**
+ * (B6) The exclusions alone: a credit (`creditAmount` > 0) that is not a
+ * transfer, a debt row, a card payment, an excluded or income category, a
+ * Plaid transfer/loan/income category, bank noise or a payment, nor (spending
+ * only) reimbursable. Says nothing about the account; `classifyRefund` adds
+ * the evidence rule. The categorizer's refund linking reads this directly: a
+ * matched earlier purchase is its evidence.
+ */
+export function isRefundCandidate(
+  tx: SpendTxn,
+  ctx: SpendContext,
+  opts: ClassifyOptions = {},
+): boolean {
+  if (creditAmount(tx) <= 0) return false;
+  if (tx.isTransfer === true) return false;
+  if (tx.debtId) return false;
+  if (tx.isExternalCardPayment === true) return false;
+  const cat = tx.categoryId ? ctx.categoriesById.get(tx.categoryId) : undefined;
+  if (cat) {
+    if (isDebtCategory(tx, ctx)) return false;
+    if (isExcludedCategoryName(cat.name)) return false;
+    if (cat.kind === "income") return false;
+  }
+  if (tx.reimbursable === true && !opts.reimbursableIsSpend) return false;
+  if (NOT_A_REFUND_PFC.test((tx.pfcDetailed ?? "").toUpperCase())) return false;
+  if (matchesCardPaymentPattern(tx.description)) return false;
+  if (matchesTransferPattern(tx.description)) return false;
+  if (readsAsPayment(tx.description)) return false;
+  return true;
+}
+
+export interface RefundClassification {
+  /** Why it counts: a credit on a card's own ledger, or a refund word on another account. */
+  rule: "card-credit" | "refund-marker";
+  /** The row sits in a category that still exists (it nets that category too). */
+  categorized: boolean;
+}
+
+/**
+ * ⭐ (B6) Is this credit a refund — money back that nets spending? Null when it
+ * is not. See the section header for every rule. `reimbursableIsSpend`
+ * mirrors `classifyOutflow`'s option: what the CARD owes (the payoff) nets a
+ * reimbursable refund; household spending never does, because it never
+ * counted the reimbursable charge.
+ */
+export function classifyRefund(
+  tx: SpendTxn,
+  ctx: SpendContext,
+  opts: ClassifyOptions = {},
+): RefundClassification | null {
+  if (!isRefundCandidate(tx, ctx, opts)) return null;
+  const categorized = !!(tx.categoryId && ctx.categoriesById.get(tx.categoryId));
+  if (CARD_SOURCES.has((tx.source ?? "").toLowerCase())) return { rule: "card-credit", categorized };
+  if (hasRefundMarker(tx.description)) return { rule: "refund-marker", categorized };
+  return null;
+}

@@ -16,7 +16,7 @@
 //                  `loadMoneyContext` (PR-H's loader — this is its first
 //                  production caller) with the ledger's tier-2 off-curve pairs
 //                  as `tier2PairedTxnIds`, classified by `classifyMovement` and
-//                  sized by `spendAmount`.
+//                  sized by `allowanceRowOf` (B6: a refund nets its account).
 //   the cap        `allowance_plans` through `everydayPlanFromRows`, with the
 //                  week's override from `preferences.weeklyAllowanceOverrides`.
 //   freshness      `computeBankFreshness` — the spine's own bank verdict.
@@ -37,10 +37,10 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, planAdjustmentsTable, recurringItemsTable } from "@workspace/db";
 import {
   addDaysISO,
+  allowanceRowOf,
   classifyMovement,
   computePosition,
   everydayPlanFromRows,
-  spendAmount,
   weekBounds,
   type MoneyPosition,
   type PositionEvent,
@@ -193,7 +193,9 @@ export async function loadPositionInputs(
     },
   );
   const rows = await loadMovementRows(householdId, from, week.end, money);
-  const weekRows = rows.map((r) => ({ coverage: classifyMovement(r, money).coverage, spend: spendAmount(r) }));
+  // (B6) `allowanceRowOf`: a refund carries the coverage it nets and a negative
+  // amount, and its account, so `computePosition` nets it there.
+  const weekRows = rows.map((r) => allowanceRowOf(r, classifyMovement(r, money)));
 
   const plan = everydayPlanFromRows(week.start, planRowsOf(planRows), money.settings.weeklyAllowanceOverrides);
   // (Lead's ruling on PR-B1 Q2) A $0 week — no plan, a $0 plan, or a $0

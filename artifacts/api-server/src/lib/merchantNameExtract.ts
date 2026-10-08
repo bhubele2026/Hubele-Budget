@@ -114,6 +114,45 @@ export function merchantSignature(rawDescription: string): string {
   return out;
 }
 
+/**
+ * (B6) Words that only say "money came back". Refund linking drops them, so a
+ * credit signs as the merchant it came from.
+ */
+export const REFUND_SIGNATURE_MARKERS: readonly string[] = [
+  "refund",
+  "refunds",
+  "refunded",
+  "rfnd",
+  "credit",
+  "credits",
+  "credited",
+  "return",
+  "returns",
+  "returned",
+];
+const REFUND_SIGNATURE_MARKER_SET: ReadonlySet<string> = new Set(REFUND_SIGNATURE_MARKERS);
+
+/**
+ * ⭐ (B6) The signature refund linking keys on: `merchantSignature` with the
+ * refund / credit / return markers removed as whole words, so "KROGER #442
+ * REFUND" signs as `kroger` — the purchase "KROGER #442" does too. Both sides
+ * of the link use it (the credit, and the earlier purchases it may point back
+ * to: `groupOutflows` in categorizer/context.ts). A description that is
+ * nothing but markers signs as "" and links to nothing.
+ *
+ * Merchant memory keeps `merchantSignature` as it is: memory rows are stored
+ * under it, and dropping "credit" there would orphan every memory of "CREDIT
+ * ONE BANK" or "CREDIT KARMA" and let a learned purchase category auto-file a
+ * refund. A recognised refund is a question for a person (categorizer
+ * `refundStage`).
+ */
+export function refundSignature(rawDescription: string): string {
+  return merchantSignature(rawDescription)
+    .split(" ")
+    .filter((w) => w !== "" && !REFUND_SIGNATURE_MARKER_SET.has(w))
+    .join(" ");
+}
+
 // Inline documentation of the patterns this normalizer is expected to handle.
 // (Per personal-app policy we keep these as in-file fixtures rather than a
 // separate jest spec.) Each `out` is the expected cleanMerchant(input).

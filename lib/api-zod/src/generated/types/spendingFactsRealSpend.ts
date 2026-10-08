@@ -7,7 +7,7 @@
  */
 
 /**
- * The categorized part of householdSpend; the basis of byCategory, byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends.
+ * The categorized part of householdSpend, less the refunds filed to the same category on the same account (B6, never below zero there); the basis of byCategory. byMerchant, dailyBuckets, dailyNet, dayOfWeek and monthlyTrends stay purchases. transactionCount counts purchases.
  */
 export type SpendingFactsRealSpend = {
   total: number;

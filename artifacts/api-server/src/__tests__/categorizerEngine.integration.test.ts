@@ -278,12 +278,13 @@ describe("runCategorizationBatch", () => {
     const buy = await txn({ description: "SHOPCO STORE 0101", amount: "-40.00", occurredOn: "2026-09-01", categoryId: cats.Shopping });
     const back = await txn({ description: "SHOPCO STORE 0101", amount: "15.00", occurredOn: "2026-09-20" });
     const tooBig = await txn({ description: "SHOPCO STORE 0101", amount: "55.00", occurredOn: "2026-09-21" });
-    const tooLate = await txn({ description: "SHOPCO STORE 0101", amount: "5.00", occurredOn: "2026-11-15" });
+    // (B6) The window is 90 days: 11/30 is the last day a 9/01 purchase is refunded.
+    const tooLate = await txn({ description: "SHOPCO STORE 0101", amount: "5.00", occurredOn: "2026-12-01" });
     await run();
     expect((await row(back)).refundOfTxnId).toBe(buy);
     expect((await row(back)).categoryId).toBeNull();
     const [d] = await decisionsOf(back);
-    expect(d).toMatchObject({ source: "refund", band: "queue", categoryId: cats.Shopping });
+    expect(d).toMatchObject({ source: "refund", band: "queue", categoryId: cats.Shopping, explanation: "Refund of SHOPCO STORE 0101 on 2026-09-01" });
     expect((await row(tooBig)).refundOfTxnId).toBeNull();
     expect((await row(tooLate)).refundOfTxnId).toBeNull();
   });

@@ -5,6 +5,13 @@
 // What it calls spend is household spending (`householdSpend`), split into
 // categorized (`realSpend`, which feeds every breakdown) and uncategorized.
 // Everything else is surfaced under `excluded` for transparency.
+//
+// (B6) A refund (`classifyRefund`: money back on an account the household buys
+// on) nets the range's spending on ITS OWN account, never below zero there,
+// and — when it is filed to a category — that category's spending on that
+// account too (`realSpend`, `byCategory`). The breakdowns by merchant, day,
+// weekday and month stay purchases. `refunds` reports what was netted:
+//   householdSpend = realSpend + uncategorized − (refunds.total − refunds.fromCategories)
 
 import { and, eq, gte, lte } from "drizzle-orm";
 import { db, transactionsTable, budgetCategoriesTable } from "@workspace/db";
@@ -12,8 +19,11 @@ import { cleanMerchant } from "./merchantNameExtract";
 import {
   classifyMovement,
   classifyOutflow,
+  classifyRefund,
+  creditAmount,
   isRealIncome,
   incomeAmount,
+  netAccountOf,
   spendAmount,
   type MovementContext,
   type MovementRow,
@@ -48,12 +58,24 @@ export interface SpendingFacts {
     floorApplied: boolean;
   };
   /**
-   * Every purchase on any account, categorized or not:
-   * `realSpend` + `uncategorized`. The spine's spent week/month.
+   * Every purchase on any account, categorized or not, (B6) less the refunds
+   * on the same account, never below zero per account:
+   * `realSpend` + `uncategorized` − (`refunds.total` − `refunds.fromCategories`).
+   * The spine's spent week/month. `transactionCount` counts purchases.
    */
   householdSpend: { total: number; transactionCount: number };
-  /** Categorized purchases only; the basis of every breakdown below. */
+  /**
+   * Categorized purchases only, (B6) less the refunds filed to the same
+   * category on the same account (never below zero there); the basis of
+   * `byCategory`. `transactionCount` counts purchases.
+   */
   realSpend: { total: number; transactionCount: number };
+  /**
+   * (B6) Refunds in the range (`classifyRefund`). `total`: what they took off
+   * `householdSpend`; `fromCategories`: the part of it also taken off
+   * `realSpend` / `byCategory`; `transactionCount`: refund rows.
+   */
+  refunds: { total: number; transactionCount: number; fromCategories: number };
   realIncome: { total: number; transactionCount: number };
   unplanned: { total: number; transactionCount: number; transactions: { id: string; date: string; description: string; amount: number }[] };
   uncategorized: {
@@ -116,6 +138,11 @@ function isoDate(d: Date): string {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** Dollars to whole cents. */
+function toCents(n: number): number {
+  return Math.round(n * 100);
 }
 
 function topByTotal<T extends { total: number }>(arr: T[], n: number): T[] {
@@ -234,8 +261,20 @@ export async function buildSpendingFacts(
   const splitParts = expandSplits(txns, await loadSplitsByTxn(householdId, { from: start, to: end }));
 
   // --- Accumulators -------------------------------------------------------
-  let householdTotal = 0;
   let householdCount = 0;
+  // (B6) Whole cents per account (and per account and category): purchases and
+  // refunds, netted after the loop.
+  const spendByAcct = new Map<string, number>();
+  const refundByAcct = new Map<string, number>();
+  const catSpendByAcct = new Map<string, Map<string, number>>();
+  const catRefundByAcct = new Map<string, Map<string, number>>();
+  const add = (m: Map<string, number>, k: string, c: number) => m.set(k, (m.get(k) ?? 0) + c);
+  const addIn = (m: Map<string, Map<string, number>>, a: string, k: string, c: number) => {
+    let inner = m.get(a);
+    if (!inner) m.set(a, (inner = new Map()));
+    add(inner, k, c);
+  };
+  let refundCount = 0;
 
   let realTotal = 0;
   let realCount = 0;
@@ -310,6 +349,21 @@ export async function buildSpendingFacts(
         incomeTotal += inc;
         incomeCount += 1;
         dailyIncome.set(t.occurredOn, (dailyIncome.get(t.occurredOn) ?? 0) + inc);
+      } else {
+        // (B6) A refund nets its account's spending (and its category's), below.
+        const rf = classifyRefund(tx, ctx);
+        if (rf) {
+          const acct = netAccountOf(t);
+          refundCount += 1;
+          add(refundByAcct, acct, toCents(creditAmount(tx)));
+          if (rf.categorized) {
+            const parts = splitParts.get(row.id);
+            const shares = parts
+              ? parts.map((p) => ({ cid: p.categoryId, cents: toCents(creditAmount({ amount: p.amount, source: t.source })) }))
+              : [{ cid: t.categoryId as string, cents: toCents(creditAmount(tx)) }];
+            for (const sh of shares) addIn(catRefundByAcct, acct, sh.cid, sh.cents);
+          }
+        }
       }
       continue; // nothing below this line applies to a non-outflow
     }
@@ -349,7 +403,8 @@ export async function buildSpendingFacts(
     }
 
     // ── Household spending ────────────────────────────────────────────────
-    householdTotal += spend;
+    const acct = netAccountOf(t);
+    add(spendByAcct, acct, toCents(spend));
     householdCount += 1;
 
     // Unplanned means explicitly assigned to UN, not merely uncategorized.
@@ -376,6 +431,7 @@ export async function buildSpendingFacts(
         cat.total += sh.spend;
         cat.txnCount += 1;
         byCat.set(sh.cid, cat);
+        addIn(catSpendByAcct, acct, sh.cid, toCents(sh.spend));
       }
 
       const name = cleanMerchant(t.description) || "Unknown";
@@ -407,6 +463,24 @@ export async function buildSpendingFacts(
       um.total += spend;
       um.count += 1;
       uncatMerchants.set(name, um);
+    }
+  }
+
+  // --- (B6) Refunds net: per account, never below zero ---------------------
+  // household_a = max(0, spend_a − refunds_a); a category on an account the
+  // same way. A purchase-only ledger takes nothing off anything.
+  let householdCents = 0;
+  for (const [a, c] of spendByAcct) householdCents += Math.max(0, c - (refundByAcct.get(a) ?? 0));
+  let refundTakenCents = 0;
+  for (const [a, r] of refundByAcct) refundTakenCents += Math.min(spendByAcct.get(a) ?? 0, r);
+  let fromCategoriesCents = 0;
+  for (const [a, refunds] of catRefundByAcct) {
+    for (const [cid, r] of refunds) {
+      const off = Math.min(catSpendByAcct.get(a)?.get(cid) ?? 0, r);
+      if (off <= 0) continue;
+      fromCategoriesCents += off;
+      realTotal -= off / 100;
+      byCat.get(cid)!.total -= off / 100;
     }
   }
 
@@ -516,10 +590,15 @@ export async function buildSpendingFacts(
       trackingStart: TRACKING_START,
       floorApplied,
     },
-    householdSpend: { total: round2(householdTotal), transactionCount: householdCount },
+    householdSpend: { total: householdCents / 100, transactionCount: householdCount },
     unplanned: { total: round2(unplannedTotal), transactionCount: unplannedCount, transactions: unplannedRows.sort((a, b) => b.amount - a.amount || b.date.localeCompare(a.date)).slice(0, 20) },
     realSpend: { total: round2(realTotal), transactionCount: realCount },
     realIncome: { total: round2(incomeTotal), transactionCount: incomeCount },
+    refunds: {
+      total: refundTakenCents / 100,
+      transactionCount: refundCount,
+      fromCategories: fromCategoriesCents / 100,
+    },
     uncategorized: {
       total: round2(uncatTotal),
       transactionCount: uncatCount,
@@ -574,6 +653,9 @@ export async function buildSpendingFacts(
  *     carries: today's rule 7 fires before either is looked at, while
  *     `classifyMovement` lets a confirmed match (step 2) outrank `reimbursable`
  *     (step 3; PR-B2 moved it ahead of the flags).
+ * (B6) Both modes net refunds as `householdSpend` does: a refund takes its
+ * credit off its own account when the coverage it nets counts, and each
+ * account floors at zero.
  * mode "forward" is coverage alone — what switching the figure onto
  * `classifyMovement`, as section A specifies it, would do:
  *   1. a confirmed match (carried to its posted row) stops counting —
@@ -593,21 +675,28 @@ export function classifierHouseholdSpend(
   opts: { mode?: "today" | "forward" } = {},
 ): { total: number; transactionCount: number } {
   const mode = opts.mode ?? "today";
-  let total = 0;
+  const counted = (coverage: string) =>
+    coverage === "unplanned" ||
+    coverage === "allowance_monthly" ||
+    coverage === "allowance_weekly" ||
+    coverage === "needs_classification" ||
+    (coverage === "bill_matched" && mode === "today");
+  // (B6) Signed whole cents per account: a purchase adds, a refund (in the
+  // coverage it nets) takes off; each account floors at zero, as
+  // `buildSpendingFacts` nets `householdSpend`.
+  const byAcct = new Map<string, number>();
   let count = 0;
   for (const row of rows) {
-    const { coverage } = classifyMovement(row, ctx);
-    const counts =
-      coverage === "unplanned" ||
-      coverage === "allowance_monthly" ||
-      coverage === "allowance_weekly" ||
-      coverage === "needs_classification" ||
-      (coverage === "bill_matched" && mode === "today");
+    const m = classifyMovement(row, ctx);
+    const refund = m.coverage === "refund";
     // Today's rule 7: reimbursable is out before any flag or match counts.
-    if (counts && !(mode === "today" && row.reimbursable)) {
-      total += spendAmount(row);
-      count += 1;
-    }
+    if (!counted(refund ? (m.nets ?? "") : m.coverage) || (mode === "today" && row.reimbursable)) continue;
+    const acct = netAccountOf(row);
+    const cents = refund ? -toCents(creditAmount(row)) : toCents(spendAmount(row));
+    byAcct.set(acct, (byAcct.get(acct) ?? 0) + cents);
+    if (!refund) count += 1;
   }
-  return { total: round2(total), transactionCount: count };
+  let total = 0;
+  for (const c of byAcct.values()) total += Math.max(0, c);
+  return { total: total / 100, transactionCount: count };
 }

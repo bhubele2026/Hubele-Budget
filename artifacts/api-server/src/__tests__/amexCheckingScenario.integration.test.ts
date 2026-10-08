@@ -521,6 +521,13 @@ describe("B4 · Amex + checking — Sun 10/4 to Mon 10/12, 2026", () => {
     const refund = await rowOf(PLAID.amexRefund.id);
     // Not auto-filed as groceries.
     expect(refund).toMatchObject({ amount: "20.00", categoryId: null, categoryLockedByUser: false });
+    // (B6, D2) Linked to the Amex charge it returns — the card's own, not the
+    // Chase one — and queued, proposing that charge's category.
+    expect(refund!.refundOfTxnId).toBe(amexPendingRowId);
+    const decisions = await db.select().from(categoryDecisionsTable).where(eq(categoryDecisionsTable.transactionId, refund!.id));
+    expect(decisions.map((d) => ({ source: d.source, band: d.band, categoryId: d.categoryId, explanation: d.explanation }))).toEqual([
+      { source: "refund", band: "queue", categoryId: cat.groceries, explanation: "Refund of KROGER #442 on 2026-10-06" },
+    ]);
     await expectStep("S4");
   });
 

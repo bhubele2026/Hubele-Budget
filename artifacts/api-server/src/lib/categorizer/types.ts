@@ -96,6 +96,10 @@ export interface OutflowRef {
   occurredOn: string;
   amountAbs: number;
   categoryId: string | null;
+  /** (B6) For the decision's explanation: "Refund of <description> on <date>". */
+  description: string;
+  /** (B6) A purchase on the refund's own account is preferred. */
+  plaidAccountId: string | null;
 }
 
 /** Everything the stages read. Loaded once per batch (context.ts) or built by a test. */
@@ -110,7 +114,7 @@ export interface EngineContext {
   replacedBy: Map<string, ReplacedPending>;
   uncategorizedIds: ReadonlySet<string>;
   spendCtx: SpendContext;
-  /** Outflows by merchant signature, for refund linking. */
+  /** Outflows by refund-link signature (`refundSignature`), for refund linking. */
   outflowsBySignature: Map<string, OutflowRef[]>;
   /** Content versions folded into every input hash. */
   versions: { rules: string; memory: string; recurring: string };

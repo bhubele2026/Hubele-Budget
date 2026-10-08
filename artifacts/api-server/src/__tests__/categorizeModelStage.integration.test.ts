@@ -101,6 +101,26 @@ describe("confidence bands", () => {
   });
 });
 
+describe("(B6) a refund is a question for a person, never the model's", () => {
+  it("a credit linked to an earlier purchase keeps its refund decision: the model is not asked, even behind an open gate", async () => {
+    const buy = await addTxn(HH, OWNER, { description: "GREEN GROCER 0012", amount: "-54.00", occurredOn: daysAgo(6), categoryId: C.Groceries });
+    const back = await addTxn(HH, OWNER, { description: "GREEN GROCER 0012 REFUND", amount: "4.00", occurredOn: daysAgo(2) });
+    const unmatched = await addTxn(HH, OWNER, { description: "MOSS CAFE REFUND", amount: "6.00", source: "plaid:amex", plaidAccountId: "acct-ai1-amex" });
+    registerFakeFixture("categorize", fixtureBy([["GREEN GROCER", { cat: C.Groceries, confidence: "high" }], ["MOSS CAFE", { cat: C.Coffee, confidence: "high" }]]));
+    // The run does reach the model: an ordinary purchase is asked.
+    const plain = await addTxn(HH, OWNER, { description: "MOSS CAFE 77" });
+    const { out } = await run([buy, back, unmatched, plain], { autoAllowed: true });
+    expect(await modelDecisions(plain)).toHaveLength(1);
+    expect(JSON.stringify(fakeCalls)).not.toMatch(/REFUND/);
+    expect(out.ambiguous).not.toContain(back);
+    expect(out.ambiguous).not.toContain(unmatched);
+    expect(await modelDecisions(back)).toHaveLength(0);
+    expect(await modelDecisions(unmatched)).toHaveLength(0);
+    expect(await txnRow(back)).toMatchObject({ categoryId: null, refundOfTxnId: buy });
+    expect(await txnRow(unmatched)).toMatchObject({ categoryId: null });
+  });
+});
+
 describe("the opt-in gate (modelGate)", () => {
   // (V1) The rules themselves are tested in categorizationEligibility.integration.test.ts;
   // this checks the job's projection (`loadModelGate`) of the same record.

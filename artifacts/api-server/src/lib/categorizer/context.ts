@@ -10,7 +10,7 @@ import {
 } from "@workspace/db";
 import { addDaysISO, type SpendContext } from "@workspace/avalanche-core";
 import { loadUserRules } from "../autoCategorize";
-import { merchantSignature } from "../merchantNameExtract";
+import { refundSignature } from "../merchantNameExtract";
 import { uncategorizedCategoryIds } from "../pendingFiling";
 import { findSupersededPending } from "../supersededPending";
 import { isOutflow, REFUND_WINDOW_DAYS } from "./stages/heuristic";
@@ -122,16 +122,32 @@ export function spendContextOf(
   return { categoriesById, debtCategoryIds };
 }
 
+/** Earlier purchases by their refund-link signature (B6: `refundSignature`, the same key a credit looks up). */
 export function groupOutflows(
-  rows: { id: string; description: string; amount: string; source: string; occurredOn: string; categoryId: string | null }[],
+  rows: {
+    id: string;
+    description: string;
+    amount: string;
+    source: string;
+    occurredOn: string;
+    categoryId: string | null;
+    plaidAccountId?: string | null;
+  }[],
 ): Map<string, OutflowRef[]> {
   const out = new Map<string, OutflowRef[]>();
   for (const r of rows) {
     if (!isOutflow(r)) continue;
-    const sig = merchantSignature(r.description);
+    const sig = refundSignature(r.description);
     if (!sig) continue;
     const list = out.get(sig) ?? [];
-    list.push({ id: r.id, occurredOn: r.occurredOn, amountAbs: Math.abs(Number(r.amount) || 0), categoryId: r.categoryId });
+    list.push({
+      id: r.id,
+      occurredOn: r.occurredOn,
+      amountAbs: Math.abs(Number(r.amount) || 0),
+      categoryId: r.categoryId,
+      description: r.description,
+      plaidAccountId: r.plaidAccountId ?? null,
+    });
     out.set(sig, list);
   }
   return out;
@@ -202,6 +218,7 @@ export async function loadEngineContext(
           source: transactionsTable.source,
           occurredOn: transactionsTable.occurredOn,
           categoryId: transactionsTable.categoryId,
+          plaidAccountId: transactionsTable.plaidAccountId,
         })
         .from(transactionsTable)
         .where(

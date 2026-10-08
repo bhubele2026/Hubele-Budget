@@ -22,19 +22,21 @@
 //   spent         the open period's rows, classified by `classifyMovement` with
 //                 the ledger's own tier-2 pairs — exactly as the money position
 //                 sizes `remainingWeek` (weekly: allowance_weekly + unfiled;
-//                 monthly: allowance_monthly).
+//                 monthly: allowance_monthly), (B6) refunds netted per account
+//                 by the same `allowanceTotals`.
 //
 // ⚠️ READ-ONLY, like the ledger that calls it.
 
 import { eq } from "drizzle-orm";
 import { db, settingsTable } from "@workspace/db";
 import {
+  allowanceRowOf,
+  allowanceTotals,
   classifyMovement,
   everydayPlanFromRows,
   hookPeriodOf,
   payoffFor,
   readEverydayHooks,
-  spendAmount,
   type EverydayHooks,
   type HookCadence,
   type Payoff,
@@ -171,17 +173,14 @@ export async function loadHookPayoffs(args: {
     const rangeStart = from < TRACKING_START ? TRACKING_START : from;
     const money = await loadMoneyContext(householdId, { start: rangeStart, end: to }, { tier2PairedTxnIds: args.tier2PairedTxnIds });
     const rows = await loadMovementRows(householdId, rangeStart, to, money);
-    const classified = rows.map((r) => ({ date: r.occurredOn, coverage: classifyMovement(r, money).coverage, cents: toCents(spendAmount(r)) }));
+    // (B6) `allowanceRowOf` + `allowanceTotals` — the money position's own
+    // netting: a refund gives back exactly what `computeWeeklyPayoff` takes off
+    // the card's charges, so the open period's payoff holds.
+    const classified = rows.map((r) => ({ date: r.occurredOn, row: allowanceRowOf(r, classifyMovement(r, money)) }));
     for (const p of open) {
       const lo = p.start < TRACKING_START ? TRACKING_START : p.start;
-      let c = 0;
-      for (const r of classified) {
-        if (r.date < lo || r.date > p.end) continue;
-        if (p.cadence === "weekly" ? r.coverage === "allowance_weekly" || r.coverage === "needs_classification" : r.coverage === "allowance_monthly") {
-          c += r.cents;
-        }
-      }
-      spent.set(`${p.cadence}|${p.start}`, c);
+      const totals = allowanceTotals(classified.filter((r) => r.date >= lo && r.date <= p.end).map((r) => r.row));
+      spent.set(`${p.cadence}|${p.start}`, p.cadence === "weekly" ? totals.discretionaryCents : totals.monthlyCents);
     }
   }
 
