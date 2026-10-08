@@ -15,7 +15,7 @@ function at(path: string, ui: ReactNode) {
 }
 
 describe("Dock — four destinations, one tab stop, arrow keys between them", () => {
-  it("every item has an icon and a label; Today and Plan are live, the rest say soon", () => {
+  it("every item has an icon and a label; Today, Activity and Plan are live, the rest say soon", () => {
     at("/", <Dock location="/" />);
     for (const key of ["today", "activity", "plan", "ask"]) {
       const item = screen.getByTestId(`dock-${key}`);
@@ -23,11 +23,22 @@ describe("Dock — four destinations, one tab stop, arrow keys between them", ()
       expect(item.textContent).toMatch(/Today|Activity|Plan|Ask/);
     }
     expect(screen.getByTestId("dock-today").getAttribute("aria-current")).toBe("page");
-    for (const key of ["activity", "ask"]) {
+    expect(screen.getByTestId("dock-activity").getAttribute("href")).toBe("/activity");
+    expect(screen.getByTestId("dock-activity").getAttribute("aria-disabled")).toBeNull();
+    for (const key of ["ask"]) {
       const item = screen.getByTestId(`dock-${key}`);
       expect(item.getAttribute("aria-disabled")).toBe("true");
       expect(item.textContent).toContain("soon");
     }
+  });
+
+  it("the Activity badge shows the count and is part of the link's name; zero shows nothing", () => {
+    at("/", <Dock location="/" badges={{ activity: 4 }} />);
+    expect(screen.getByTestId("dock-badge-activity").textContent).toBe("4");
+    expect(screen.getByTestId("dock-activity").getAttribute("aria-label")).toBe("Activity, 4 to review");
+    cleanup();
+    at("/", <Dock location="/" badges={{ activity: 0 }} />);
+    expect(screen.queryByTestId("dock-badge-activity")).toBeNull();
   });
 
   it("roving tabindex: exactly one item is in the tab order, the current one", () => {
@@ -73,10 +84,12 @@ describe("Dock — four destinations, one tab stop, arrow keys between them", ()
 });
 
 describe("Masthead", () => {
-  it("marks Today current and the other destinations disabled, with 'soon'", () => {
-    at("/", <Masthead location="/" />);
+  it("marks Today current, Activity a link, and the rest disabled, with 'soon'", () => {
+    at("/", <Masthead location="/" badges={{ activity: 3 }} />);
     expect(screen.getByTestId("masthead-today").getAttribute("aria-current")).toBe("page");
-    for (const key of ["activity", "ask"]) {
+    expect(screen.getByTestId("masthead-activity").getAttribute("href")).toBe("/activity");
+    expect(screen.getByTestId("masthead-badge-activity").textContent).toBe("3");
+    for (const key of ["ask"]) {
       const item = screen.getByTestId(`masthead-${key}`);
       expect(item.getAttribute("aria-disabled")).toBe("true");
       expect(item.getAttribute("href")).toBeNull();

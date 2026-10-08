@@ -1,4 +1,5 @@
 import type {
+  AgentActionList,
   AllowancePlans,
   BillsSummary,
   Category,
@@ -147,6 +148,14 @@ const SAMPLE: TodayData = {
   bills: loaded(BILLS),
   ledger: loaded(LEDGER),
   categories: loaded(CATEGORIES),
+  trail: loaded({
+    actions: [
+      { id: "a1", runId: "r1", type: "set_category", targetKind: "transaction", targetId: "t1", outcome: "applied", reversible: true, undoneAt: null, createdAt: "2026-10-07T14:10:00Z" },
+      { id: "a2", runId: "r1", type: "set_category", targetKind: "transaction", targetId: "t3", outcome: "applied", reversible: true, undoneAt: null, createdAt: "2026-10-07T14:10:00Z" },
+      { id: "a3", runId: "r2", type: "finding", targetKind: "finding", targetId: "f1", outcome: "needs_attention", reversible: false, undoneAt: null, createdAt: "2026-10-06T22:00:00Z" },
+    ],
+  } as AgentActionList),
+  unfiled: loaded({ rows: [], nextCursor: null, limit: 1, matchingCount: 2 } as unknown as LedgerPage),
 };
 
 export default function DesignToday() {

@@ -28,6 +28,7 @@ vi.mock("@clerk/react", () => ({
   UserButton: () => <div data-testid="user-button" />,
 }));
 vi.mock("@clerk/react/internal", () => ({ publishableKeyFromHost: () => "pk_test_routes" }));
+vi.mock("./data/activityBadge", () => ({ useActivityBadge: () => 0 }));
 vi.mock("@workspace/api-client-react", () => ({
   getSpine: vi.fn(() => new Promise(() => {})),
   getGetSpineQueryKey: () => ["/api/spine"],
@@ -40,6 +41,11 @@ vi.mock("./lib/routePrefetch", () => {
   return {
     importDesign: page("design"),
     importDesignToday: page("design-today"),
+    importDesignActivity: page("design-activity"),
+    importActivity: () =>
+      Promise.resolve({
+        default: ({ view }: { view: string }) => <div data-testid={`page-activity-${view}`} />,
+      }),
     importPlaidOAuth: page("plaid-oauth"),
     importPlanWeek: page("plan-week"),
     importPlanBills: page("plan-bills"),
@@ -80,6 +86,10 @@ const ROUTES: Row[] = [
   { from: "/", lands: "/", page: "today", shell: true },
   { from: "/design", lands: "/design", page: "design", shell: true },
   { from: "/design/today", lands: "/design/today", page: "design-today", shell: true },
+  { from: "/design/activity", lands: "/design/activity", page: "design-activity", shell: true },
+  { from: "/activity", lands: "/activity", page: "activity-ledger", shell: true },
+  { from: "/activity/review", lands: "/activity/review", page: "activity-review", shell: true },
+  { from: "/activity/rules", lands: "/activity/rules", page: "activity-rules", shell: true },
   { from: "/plaid-oauth", lands: "/plaid-oauth", page: "plaid-oauth", shell: true },
   { from: "/plan", lands: "/plan", page: "plan-week", shell: true },
   { from: "/plan/bills", lands: "/plan/bills", page: "plan-bills", shell: true },
@@ -144,7 +154,7 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
 
   it("has a row for every path App.tsx declares, and no row for a path it does not", () => {
     const covered = new Set(ROUTES.map((r) => r.from));
-    expect(declared.length).toBeGreaterThanOrEqual(12);
+    expect(declared.length).toBeGreaterThanOrEqual(15);
     expect(declared.filter((p) => !covered.has(p))).toEqual([]);
     expect([...covered].filter((p) => !declared.includes(p))).toEqual([]);
   });
@@ -164,7 +174,11 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
     const keys = Object.keys(real.routeImporters);
     expect(keys.filter((k) => !declared.includes(k))).toEqual([]);
     expect(keys.sort()).toEqual([
+      "/activity",
+      "/activity/review",
+      "/activity/rules",
       "/design",
+      "/design/activity",
       "/design/plan",
       "/design/today",
       "/plaid-oauth",

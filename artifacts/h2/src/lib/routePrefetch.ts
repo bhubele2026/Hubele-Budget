@@ -13,6 +13,8 @@
  */
 export const importDesign = () => import("../screens/design/Design");
 export const importDesignToday = () => import("../screens/design/DesignToday");
+export const importDesignActivity = () => import("../screens/design/DesignActivity");
+export const importActivity = () => import("../screens/activity/Activity");
 export const importPlaidOAuth = () => import("../screens/plaid-oauth/PlaidOAuth");
 // (S3) Plan: five lazy pages and its public sample page. They share one chunk of
 // frame/parts; none is on the open path.
@@ -27,6 +29,10 @@ export const importDesignPlan = () => import("../screens/design/DesignPlan");
 export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/design": importDesign,
   "/design/today": importDesignToday,
+  "/design/activity": importDesignActivity,
+  "/activity": importActivity,
+  "/activity/review": importActivity,
+  "/activity/rules": importActivity,
   "/plaid-oauth": importPlaidOAuth,
   "/plan": importPlanWeek,
   "/plan/bills": importPlanBills,

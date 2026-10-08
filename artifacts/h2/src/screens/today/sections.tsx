@@ -1,14 +1,18 @@
 import { useState } from "react";
+import { Link } from "wouter";
+import type { AgentActionList } from "@workspace/api-client-react";
 import type { Category, Spine } from "@workspace/api-client-react";
 import type { LedgerPage, LedgerRow as LedgerRowData } from "@workspace/api-client-react/ledger";
 import { ActionCard } from "@/kit/ActionCard";
 import { buttonClass } from "@/kit/Button";
 import { Figure } from "@/kit/Figure";
 import { LedgerRow } from "@/kit/LedgerRow";
+import { TrailItem } from "@/kit/TrailItem";
 import { Note } from "@/kit/Note";
 import { Section } from "@/kit/Section";
 import { SkeletonLine } from "@/kit/Skeleton";
-import { dayWord } from "@/lib/dates";
+import { dayWord, relativeTime } from "@/lib/dates";
+import { groupTrail } from "@/screens/activity/trailWords";
 import { centsValue, fmtMoney, toAmount } from "@/lib/money";
 import type { DataState } from "@/lib/queryState";
 import type { Read } from "@/data/todayData";
@@ -92,12 +96,35 @@ export function ActivitySection({
       label="Yesterday and today"
       data-testid="section-activity"
       action={
-        <a href="/classic/transactions" className={link}>
+        <Link href="/activity" className={link}>
           All activity →
-        </a>
+        </Link>
       }
     >
       {body}
+    </Section>
+  );
+}
+
+/** The last four things H2 did on its own. Nothing to show, nothing drawn. */
+export function HandledSection({ trail, now }: { trail: Read<AgentActionList>; now?: Date }) {
+  const groups = groupTrail(trail.data?.actions ?? []).slice(0, 4);
+  if (groups.length === 0) return null;
+  return (
+    <Section
+      label="Handled"
+      data-testid="section-handled"
+      action={
+        <Link href="/activity" className={link}>
+          See details →
+        </Link>
+      }
+    >
+      <ul data-testid="handled-rows">
+        {groups.map((g) => (
+          <TrailItem key={g.key} title={g.title} when={relativeTime(g.at, now)} undone={g.undone} data-testid="handled-row" />
+        ))}
+      </ul>
     </Section>
   );
 }

@@ -1,4 +1,6 @@
+import { Link } from "wouter";
 import type { AllowancePlans, MoneyPosition, Settings, Spine } from "@workspace/api-client-react";
+import type { LedgerPage } from "@workspace/api-client-react/ledger";
 import { Disclosure } from "@/kit/Disclosure";
 import { Figure } from "@/kit/Figure";
 import { Meter, type MeterStatus } from "@/kit/Meter";
@@ -90,18 +92,21 @@ export function WeekSection({
   position,
   plans,
   settings,
+  unfiled,
 }: {
   spine: Spine | undefined;
   position: Read<MoneyPosition>;
   plans: Read<AllowancePlans>;
   settings: Read<Settings>;
+  unfiled: Read<LedgerPage>;
 }) {
   const pos = position.data;
   const within = spine?.position.withinPlan ?? pos?.withinPlan ?? null;
   const { limit, plan } = weeklyLimit(pos, plans.data, settings.data);
   const spent = toAmount(pos?.spentWeekDiscretionary);
   const unplanned = toAmount(pos?.unplannedWeek);
-  const unfiled = toAmount(pos?.needsClassificationWeek);
+  // A COUNT OF CHARGES, from the ledger's own filter (uncategorized, this week).
+  const filing = unfiled.data?.matchingCount ?? 0;
   const remaining = toAmount(spine?.position.remainingWeek ?? pos?.remainingWeek);
   const cold = !spine || position.state === "cold" || settings.state === "cold";
 
@@ -145,15 +150,15 @@ export function WeekSection({
             unplanned on top
           </p>
         )}
-        {unfiled != null && unfiled > 0 && (
+        {filing > 0 && (
           <p className="mt-2 type-caption text-ink-2" data-testid="needs-filing">
-            <data value={centsValue(unfiled)} className="tnum">
-              {fmtMoney(unfiled)}
+            <data value={String(filing)} className="tnum">
+              {filing}
             </data>{" "}
-            needs filing ·{" "}
-            <a href="/classic/review" className={buttonClass({ variant: "link", size: "sm" })}>
-              File it
-            </a>
+            {filing === 1 ? "charge needs" : "charges need"} filing ·{" "}
+            <Link href="/activity?unfiled=1" className={buttonClass({ variant: "link", size: "sm" })}>
+              {filing === 1 ? "File it" : "File them"}
+            </Link>
           </p>
         )}
       </>

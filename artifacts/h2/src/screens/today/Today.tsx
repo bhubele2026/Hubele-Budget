@@ -10,7 +10,7 @@ import { longDate } from "@/lib/dates";
 import { toAmount } from "@/lib/money";
 import { attentionItems, billsDueSoon, upcomingBills } from "./attention";
 import { Hero } from "./Hero";
-import { ActivitySection, ComingUp, DebtSection, OneThing } from "./sections";
+import { ActivitySection, ComingUp, DebtSection, HandledSection, OneThing } from "./sections";
 import { WeekSection } from "./WeekSection";
 
 // The What's-new sheet carries Radix Dialog and the preferences client. It is
@@ -36,8 +36,8 @@ const WhatsNew = lazy(() => import("./WhatsNew"));
  * a Note with Retry while the last figures stay; a degraded position → the
  * hero says which bank date it is from.
  *
- * TODO(AI-1): a "Handled" section (what the agent filed on its own) joins once
- * the agent trail endpoint exists. Nothing here stands in for it.
+ * "Handled" shows the last four things H2 did on its own (hidden when there is
+ * nothing); Why and Undo live in Activity.
  */
 export function TodaySkeleton({ now }: { now?: Date }) {
   return (
@@ -96,7 +96,7 @@ export function TodayView({
   now?: Date;
   live: boolean;
 }) {
-  const { spine, position, plans, settings, bills, ledger, categories } = data;
+  const { spine, position, plans, settings, bills, ledger, categories, trail, unfiled } = data;
   const today = householdToday(now);
 
   if (spine.state === "cold") return <TodaySkeleton now={now} />;
@@ -174,11 +174,14 @@ export function TodayView({
         position={position}
         plans={plans}
         settings={settings}
+        unfiled={unfiled}
       />
 
       <OneThing items={items} loading={s == null && spine.state !== "failed"} />
 
       <ActivitySection ledger={ledger} categories={categories} today={today} />
+
+      <HandledSection trail={trail} now={now} />
 
       <ComingUp spine={s} upcoming={upcoming} bills={bills} today={today} />
 

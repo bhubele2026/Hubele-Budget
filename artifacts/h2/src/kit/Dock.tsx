@@ -1,7 +1,7 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "wouter";
 import { cx } from "@/lib/cx";
-import { DESTINATIONS, isActive } from "./destinations";
+import { DESTINATIONS, isActive, type Destination } from "./destinations";
 
 /**
  * ⭐ THE DOCK — the four destinations along the bottom of a phone.
@@ -11,7 +11,7 @@ import { DESTINATIONS, isActive } from "./destinations";
  * yet shipped stay focusable (so they can be discovered) but are
  * `aria-disabled` and say "soon".
  */
-export function Dock({ location }: { location: string }) {
+export function Dock({ location, badges }: { location: string; badges?: Partial<Record<Destination["key"], number>> }) {
   const activeIndex = Math.max(
     0,
     DESTINATIONS.findIndex((d) => d.live && isActive(location, d.href)),
@@ -51,10 +51,12 @@ export function Dock({ location }: { location: string }) {
         {DESTINATIONS.map((d, i) => {
           const Icon = d.icon;
           const active = d.live && isActive(location, d.href);
+          const badge = badges?.[d.key] ?? 0;
           const shared = {
             tabIndex: i === focusIndex ? 0 : -1,
             onFocus: () => setFocusIndex(i),
             "data-testid": `dock-${d.key}`,
+            ...(badge > 0 ? { "aria-label": `${d.label}, ${badge} to review` } : {}),
           };
           // Every item stacks from the top (icon, label, then "soon" where it
           // applies) and sizes to its content, so icons and labels line up
@@ -63,6 +65,11 @@ export function Dock({ location }: { location: string }) {
             <>
               <Icon size={20} strokeWidth={1.75} aria-hidden className="shrink-0" />
               <span className="type-caption">{d.label}</span>
+              {badge > 0 && (
+                <span className="absolute top-1 left-1/2 ml-2 min-w-4 rounded-full bg-clay px-1 text-center type-caption tnum text-paper-0" data-testid={`dock-badge-${d.key}`}>
+                  {badge}
+                </span>
+              )}
               {!d.live && <span className="type-caption text-ink-3">soon</span>}
             </>
           );

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { cx } from "@/lib/cx";
 import { prefetchRoute } from "@/lib/routePrefetch";
-import { DESTINATIONS, isActive } from "./destinations";
+import { DESTINATIONS, isActive, type Destination } from "./destinations";
 
 /**
  * ⭐ THE MASTHEAD — the wordmark and, on a desktop, the four destinations as
@@ -12,7 +12,15 @@ import { DESTINATIONS, isActive } from "./destinations";
  * Destinations that have not shipped are plain text marked "soon" with
  * `aria-disabled`, not links that lead nowhere.
  */
-export function Masthead({ location, account }: { location: string; account?: ReactNode }) {
+export function Masthead({
+  location,
+  account,
+  badges,
+}: {
+  location: string;
+  account?: ReactNode;
+  badges?: Partial<Record<Destination["key"], number>>;
+}) {
   return (
     <header className="border-b border-rule bg-paper-0" data-testid="masthead">
       <div className="mx-auto flex h-14 w-full max-w-read items-center gap-8 px-4 sm:px-8">
@@ -34,12 +42,18 @@ export function Masthead({ location, account }: { location: string; account?: Re
                     <Link
                       href={d.href}
                       aria-current={active ? "page" : undefined}
+                      aria-label={(badges?.[d.key] ?? 0) > 0 ? `${d.label}, ${badges![d.key]} to review` : undefined}
                       onMouseEnter={() => prefetchRoute(d.href)}
                       onFocus={() => prefetchRoute(d.href)}
                       className={cx("type-label", active ? "text-ink" : "text-ink-2 hover:text-ink")}
                       data-testid={`masthead-${d.key}`}
                     >
                       {d.label}
+                      {(badges?.[d.key] ?? 0) > 0 && (
+                        <span className="ml-1 tnum text-clay" data-testid={`masthead-badge-${d.key}`}>
+                          {badges![d.key]}
+                        </span>
+                      )}
                     </Link>
                   ) : (
                     <span

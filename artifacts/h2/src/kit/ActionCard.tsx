@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Check } from "lucide-react";
+import { Link } from "wouter";
 import { Button, buttonClass } from "./Button";
 
 /**
@@ -40,9 +41,17 @@ export function ActionCard({
       {(action || onNext) && (
         <div className="flex flex-wrap items-center gap-3">
           {action && (
-            <a href={action.href} className={buttonClass({ variant: "primary", size: "md" })}>
-              {action.label}
-            </a>
+            // An in-app route moves within the SPA (the cache stays warm); the
+            // classic app and the bank links are whole-page navigations.
+            action.href.startsWith("/") && !action.href.startsWith("/classic") ? (
+              <Link href={action.href} className={buttonClass({ variant: "primary", size: "md" })}>
+                {action.label}
+              </Link>
+            ) : (
+              <a href={action.href} className={buttonClass({ variant: "primary", size: "md" })}>
+                {action.label}
+              </a>
+            )
           )}
           {onNext && (
             <Button variant="quiet" onClick={onNext}>

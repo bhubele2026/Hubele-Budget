@@ -1,9 +1,9 @@
 import { List, MessageCircle, Sun, Target, type LucideIcon } from "lucide-react";
 
 /**
- * The four destinations, in order. Today (S0) and Plan (S3) are live; the
- * others are shown (so the shape of the app is visible from day one) but
- * disabled and marked "soon" until their stage lands.
+ * The four destinations, in order. Today (S0), Activity (S2) and Plan (S3) are
+ * live; Ask is shown (so the shape of the app is visible from day one) but
+ * disabled and marked "soon" until its stage lands.
  */
 export interface Destination {
   key: "today" | "activity" | "plan" | "ask";
@@ -15,7 +15,7 @@ export interface Destination {
 
 export const DESTINATIONS: readonly Destination[] = [
   { key: "today", label: "Today", href: "/", icon: Sun, live: true },
-  { key: "activity", label: "Activity", href: "/activity", icon: List, live: false },
+  { key: "activity", label: "Activity", href: "/activity", icon: List, live: true },
   { key: "plan", label: "Plan", href: "/plan", icon: Target, live: true },
   { key: "ask", label: "Ask", href: "/ask", icon: MessageCircle, live: false },
 ];

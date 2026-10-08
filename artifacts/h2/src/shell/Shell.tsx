@@ -9,7 +9,14 @@ import { Dock } from "@/kit/Dock";
  * 16 px gutters on a phone and 32 px on a desktop, and the dock on a phone.
  * It reads no data, so it can paint before anything has loaded.
  */
-export function Shell({ children }: { children: ReactNode }) {
+export function Shell({
+  children,
+  activityBadge = 0,
+}: {
+  children: ReactNode;
+  /** Charges waiting on a person; shown beside Activity in the masthead and the dock. */
+  activityBadge?: number;
+}) {
   const [location] = useLocation();
   return (
     <div className="min-h-dvh bg-paper-0 text-ink" data-testid="shell">
@@ -21,16 +28,22 @@ export function Shell({ children }: { children: ReactNode }) {
       </a>
       <Masthead
         location={location}
+        badges={{ activity: activityBadge }}
         account={
           <Show when="signed-in">
             <UserButton />
           </Show>
         }
       />
-      <main id="main" className="mx-auto w-full max-w-read px-4 pt-6 pb-28 sm:px-8 sm:pt-8 md:pb-16">
+      {/* ⚠️ The bottom padding clears the fixed dock (about 64 px) plus the phone's
+          safe-area inset, so the dock never covers the last control on a page. */}
+      <main
+        id="main"
+        className="mx-auto w-full max-w-read px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-8 md:pb-16"
+      >
         {children}
       </main>
-      <Dock location={location} />
+      <Dock location={location} badges={{ activity: activityBadge }} />
     </div>
   );
 }
