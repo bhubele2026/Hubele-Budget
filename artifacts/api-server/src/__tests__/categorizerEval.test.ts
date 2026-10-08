@@ -1,4 +1,6 @@
-// (PR-A) Synthetic eval of the deterministic stages (locked → heuristic).
+// (PR-A) Synthetic eval of the deterministic stages (memory → heuristic).
+// (Round 2) Locked rows are the person's own filing: the engine skips them, so
+// they are reported apart and left out of precision.
 // precision ≥ 0.97 on the rows they decide (auto + provisional write a
 // category); "queue rather than wrong" ≥ 0.95 over every labelled row.
 import { describe, it, expect } from "vitest";
@@ -19,7 +21,9 @@ describe("categorizer eval (synthetic)", () => {
     let untouched = 0;
     const nullBefore = EVAL_CASES.filter((c) => c.row.categoryId == null).length;
     const misses: string[] = [];
-    for (const k of EVAL_CASES) {
+    const cases = EVAL_CASES.filter((k) => !k.row.categoryLockedByUser);
+    const lockedSkipped = EVAL_CASES.length - cases.length;
+    for (const k of cases) {
       const res = decideRow(k.row, ctx);
       const band = res ? (res.source === "locked" ? "auto" : bandFor(res.confidence)) : null;
       const writes = !!res && band !== "queue" && res.categoryId != null;
@@ -47,13 +51,13 @@ describe("categorizer eval (synthetic)", () => {
       if (k.label === null) expect(writes).toBe(false);
     }
     const precision = correct / decided;
-    const queueRatherThanWrong = (EVAL_CASES.length - wrong) / EVAL_CASES.length;
+    const queueRatherThanWrong = (cases.length - wrong) / cases.length;
     const table = [...confusion.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([label, preds]) => `${label.padEnd(14)} ${[...preds.entries()].map(([p, n]) => `${p}:${n}`).join("  ")}`)
       .join("\n");
     console.log(
-      `\n[categorizer eval] rows=${EVAL_CASES.length} decided=${decided} correct=${correct} wrong=${wrong} ` +
+      `\n[categorizer eval] rows=${EVAL_CASES.length} lockedSkipped=${lockedSkipped} scored=${cases.length} decided=${decided} correct=${correct} wrong=${wrong} ` +
         `precision=${precision.toFixed(3)} queueRatherThanWrong=${queueRatherThanWrong.toFixed(3)}\n` +
         `[categorizer eval] uncategorized before=${nullBefore} filled auto=${filledAuto} filled provisional=${filledProvisional} ` +
         `queued=${queued} untouched=${untouched}\n` +

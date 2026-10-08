@@ -13,9 +13,9 @@ Branch `reinvent/pra-categorization-v2` · base `origin/main` 5bee6756 (PR-0 mer
 
 | # | Stage | Evidence | Confidence | Band |
 |---|---|---|---|---|
-| 1 | locked | `category_locked_by_user` | 1.00 | auto — one `locked` decision, then skipped |
-| 2 | rule | household `mapping_rules`; order priority ↓, pattern length ↓, created_at ↑, id | 0.95 (≥ 2 words) · 0.85 (1 word) | auto · provisional |
-| 3 | memory | `merchant_memory` by `merchantSignature`; merchant_amount > merchant_account > merchant; only memory learned before the row arrived | 0.92 (count ≥ 3) · 0.75 | auto · provisional |
+| 1 | locked | `category_locked_by_user` | — | skipped entirely; no decision row (round 2: the flag is the audit) |
+| 2 | memory | `merchant_memory` by `merchantSignature`; merchant_amount > merchant_account > merchant; only memory learned before the row arrived | 0.92 (count ≥ 3) · 0.75 | auto · provisional |
+| 3 | rule | household `mapping_rules`; order priority ↓, pattern length ↓, created_at ↑, id | 0.95 (≥ 2 words) · 0.85 (1 word) | auto · provisional |
 | 4 | recurring | active `recurring_items`, `descriptionsFuzzyEqual` name, amount within max($25, 25%) | 0.90 (within max($1, 1%)) · 0.70 | auto · provisional |
 | 5 | inherited | posted row paired with a replaced pending row (`pairPendingWithPosted`) → `effectiveFiling` written | 0.95 | auto |
 | 6 | heuristic / refund | card payment (rules 8/9), transfer / bank noise (9b, PFC TRANSFER_*), refund (same signature, ≤ 60 days, ≤ the outflow) | 0.50 / 0.55 | queue only; `is_transfer` never written |
@@ -24,6 +24,8 @@ Branch `reinvent/pra-categorization-v2` · base `origin/main` 5bee6756 (PR-0 mer
 Bands: auto ≥ 0.9 writes `category_id`; provisional 0.6–0.9 writes it, sets `category_provisional` and queues; < 0.6 writes nothing and queues.
 
 **What the engine may write** (`engineMayWrite`, tested): never a locked row; a row with no category; a row this sync just inserted (its category is the sync's own insert-time rule fill — detected with `xmax = 0` on the upsert's `RETURNING`); or a row whose current category came from an engine decision that nobody accepted and that is more than 30 days old. A category with no decision on record (pre-PR-0 hand pick, import, legacy rule fill) is never moved — we cannot tell who chose it.
+
+**Round 2 order: memory before rule.** A memory row exists only because a person corrected or confirmed that merchant, so it is the more specific, more recent signal; a rule is a broad pattern. Memory keeps its gate: it applies only to rows that arrived after it was learned.
 
 **Inherited order.** `inherited` runs fifth but overrides an earlier automatic pick exactly where the read-time `effectiveFiling` would (a hand-filed pending row beats a rule — owner decision 14). This keeps stored = counted (test: write ≡ read). It writes the filing (category, allowance flags, bucket, reimbursable, debt) but never `is_transfer`; the read-time helper stays.
 
@@ -47,7 +49,7 @@ Bands: auto ≥ 0.9 writes `category_id`; provisional 0.6–0.9 writes it, sets 
 
 ## Must not change
 
-- Locked rows (property test: 40 random steps of PATCH / run / undo / apply-retroactively / queue-correct; every locked row keeps its category). `applyDecision` refuses a locked row; the row UPDATE also carries `category_locked_by_user = false`.
+- Locked rows (skipped by the batch; property test: 40 random steps of PATCH / run / undo / apply-retroactively / queue-correct; every locked row keeps its category). `applyDecision` refuses a locked row; the row UPDATE also carries `category_locked_by_user = false`.
 - Spine spend totals and the golden ledger: `spineParity` and `forecastLedger.golden` green under `CI=true` (no splits, no memory in their fixtures; the engine never moves a legacy category).
 - `is_transfer`: never written by the engine.
 
@@ -74,7 +76,7 @@ Bands: auto ≥ 0.9 writes `category_id`; provisional 0.6–0.9 writes it, sets 
 
 ## Tests
 
-New: `categorizerEngine.integration.test.ts` (17: bands, tie-break pure + DB order, band writes, idempotency, `applyDecision` refuses locked, 30-day / legacy rule, refund linking, inherited write ≡ read, PATCH → user decision + memory + retroactive-never-implicit + explicit apply, memory scope evolution, undo exact, accept/skip/409, locked-never-move property, household isolation 404, member corrects / owner-only run, household-scoped system categories), `transactionSplits.integration.test.ts` (6), `categorizerEval.test.ts` (1, prints the confusion table), `categorizerCarries.test.ts` (4), two new cases in `plaidSyncPreservesManualWork` (removed guard: stamp + queue, split parent kept, idempotent notice; end-of-sync engine: rule + memory). Changed: `categorization.integration.test.ts` — the nine tests that pinned the removed auto-learn flow are replaced by three (no rule created or repointed; #479 transfer flag still clears; recategorize-by-pattern still bulk-flips); `supersededPendingWindow` (filing now carries `categoryLockedByUser`); `schemaMigrations` / `bootMigrations` (scratch copies keep indexes so 0020's FKs resolve; new columns listed; file list read from disk).
+New: `categorizerEngine.integration.test.ts` (18: bands, correction beats rule (round 2), tie-break pure + DB order, band writes, idempotency, `applyDecision` refuses locked, 30-day / legacy rule, refund linking, inherited write ≡ read, PATCH → user decision + memory + retroactive-never-implicit + explicit apply, memory scope evolution, undo exact, accept/skip/409, locked-never-move property, household isolation 404, member corrects / owner-only run, household-scoped system categories), `transactionSplits.integration.test.ts` (6), `categorizerEval.test.ts` (1, prints the confusion table), `categorizerCarries.test.ts` (4), two new cases in `plaidSyncPreservesManualWork` (removed guard: stamp + queue, split parent kept, idempotent notice; end-of-sync engine: rule + memory). Changed: `categorization.integration.test.ts` — the nine tests that pinned the removed auto-learn flow are replaced by three (no rule created or repointed; #479 transfer flag still clears; recategorize-by-pattern still bulk-flips); `supersededPendingWindow` (filing now carries `categoryLockedByUser`); `schemaMigrations` / `bootMigrations` (scratch copies keep indexes so 0020's FKs resolve; new columns listed; file list read from disk).
 
 **Fails before (parent 5bee6756):** every new file imports modules that do not exist on the parent. Behaviourally: the PATCH no-rule test fails (parent inserts/repoints a rule); the member Transfer test fails (parent looks the category up by actor → `isTransfer` stays false); the DB tie-break test fails (parent sorts by priority only → insertion order); the removed-guard split test fails (parent deletes a split parent with no category); `supersededPendingWindow` fails on this branch's code without its updated expectation.
 
@@ -105,11 +107,11 @@ New: `categorizerEngine.integration.test.ts` (17: bands, tie-break pure + DB ord
 
 | Gate | Result |
 |---|---|
-| `pnpm run typecheck` | green |
-| codegen (`pnpm --filter @workspace/api-spec run codegen`) | no drift (generated files committed) |
+| `pnpm run typecheck` | green (round 2) |
+| codegen (`pnpm --filter @workspace/api-spec run codegen`) | no drift (round 2) |
 | classic web suite | 140 files passed, 1 skipped · 1248 tests passed, 4 skipped |
-| API suite on `h2budget_test_pra`, serial, `CI=true` | 160 files · 1662 passed, 7 todo, 0 failed |
-| golden + spine parity + classifier parity (`CI=true`) | 3 files · 42 passed |
+| API suite on `h2budget_test_pra`, serial, `CI=true` | 160 files · 1663 passed, 7 todo, 0 failed (round 2) |
+| golden + spine parity + classifier parity (`CI=true`) | 3 files · 42 passed (round 2) |
 | `pnpm run build` + `check-entry-graph.mjs` | green · classic landing 575.7 KB / 580 KB; no new hook reaches the classic dist |
 | `pnpm audit --prod` | **3 pre-existing advisories** (critical `proxy-addr` via express, high `braces` via http-proxy-middleware, high `compression`); this branch changes no dependency or lockfile — needs its own override PR |
 
@@ -121,8 +123,27 @@ New: `categorizerEngine.integration.test.ts` (17: bands, tie-break pure + DB ord
 - `effectiveFiling` still decides hand-vs-automatic from `isTransferUserOverridden`; a posted row locked by the importer but never overridden could, in theory, read a hand-filed pending category while storing its own (no Plaid twins come from the importer).
 - The review flags read up to 20 signature scans per page (fine at `limit ≤ 100`).
 
-## Questions for the owner
+## Round 2 (coordinator's routine decisions; the owner was unavailable)
 
-1. Should a correction beat an existing **rule** for that merchant? Today the order is rule → memory, so correcting a rule-filed row teaches memory that the rule keeps overriding; the fix is to edit the rule (the Learned rules / Mapping pages). Alternative: a memory row more specific than a 1-word rule wins.
-2. `POST /categorization/run` fills uncategorized rows from **rules** created after those rows arrived (memory is gated to rows that arrived after it was learned). Gate rules the same way?
-3. The first run records one `locked` decision per locked row in its window (audit trail). Keep, or skip locked rows entirely?
+- **Q1 → a correction beats a rule.** Precedence is now locked → memory → rule → recurring → inherited → heuristic → model (`decide.ts`). Memory's "rows that arrived after it was learned" gate is unchanged. New test: after a person files "MOSS CAFE" as Coffee, the next MOSS CAFE row is a `memory` decision (Coffee, provisional) despite the 1-word rule `MOSS` → Dining; the rule still files other merchants, and the older row of the merchant stays where it was.
+- **Q2 → no date gate on rules.** `POST /categorization/run` filling older uncategorized rows from newer rules is what a person asks for when they run it. Kept as built.
+- **Q3 → locked rows are skipped entirely.** No `locked` decision rows; the flag is the audit. The idempotency test now asserts a locked row has zero decisions. (`'locked'` stays in the `source` check constraint, unused, so a later package can use it without a migration.)
+
+**Figures that moved on the fixture.** One case was added to exercise Q1 ("PIZZA OVEN SUPPLY", which the household corrected to Shopping once, so memory count is 1). Under the round-1 order it would have been a second miss (1-word rule → Dining). Locked rows are now left out of scoring: they are the person's filing, not the engine's.
+
+| | Round 1 | Round 2 |
+|---|---|---|
+| rows / scored (locked skipped) | 62 / 62 | 63 / 61 (2) |
+| decided · correct · wrong | 40 · 39 · 1 | 39 · 38 · 1 |
+| precision | 0.975 | 0.974 |
+| queue rather than wrong | 0.984 | 0.984 |
+| uncategorized filled auto · provisional | 25 · 13 | 25 · 14 |
+| queued · untouched | 12 · 10 | 12 · 10 |
+
+The remaining miss is the same honest one: "PIZZA STONE SUPPLY" (no correction yet) → Dining by the 1-word rule, provisional and queued. No production figure moves differently: memory exists only after a person's correction, and it still never moves a row that arrived before it.
+
+## Questions for the owner (answered in round 2 by the coordinator)
+
+1. ~~Should a correction beat a rule?~~ Yes — memory runs before rule.
+2. ~~Gate rules by date?~~ No.
+3. ~~Keep `locked` decision rows?~~ No — skipped entirely.

@@ -1,9 +1,9 @@
 // (PR-A) ⭐ Categorization engine v2 — the batch.
 //
 // Stages (stages/, first that yields wins; see decide.ts):
-//   locked     category_locked_by_user → one `locked` decision, then skipped    1.00
+//   locked     category_locked_by_user → skipped entirely (the flag is the audit)
+//   memory     merchant_memory by merchantSignature (a correction beats a rule) 0.92 / 0.75
 //   rule       household mapping_rules (user-authored), deterministic order     0.95 / 0.85
-//   memory     merchant_memory by merchantSignature                             0.92 / 0.75
 //   recurring  an active recurring item, name + amount                           0.90 / 0.70
 //   inherited  the pending row's filing via effectiveFiling (write ≡ read)       0.95
 //   heuristic  card payment / transfer / refund evidence → QUEUE only            0.50 / 0.55
@@ -32,7 +32,6 @@ import { inputHash, loadEngineContext, loadEngineRows, sha256 } from "./context"
 import { decideRow } from "./decide";
 import { ENGINE_ACTOR, type Exec } from "./db";
 import type { ModelStage } from "./modelStage";
-import { lockedStage } from "./stages/locked";
 import type { Band, Decision, DecisionSource, EngineRow, StageResult } from "./types";
 
 export { decideRow } from "./decide";
@@ -283,12 +282,8 @@ export async function runCategorizationBatch(
     const hash = inputHash(row, ctx);
     hashes.set(row.id, hash);
     if (hist.some((h) => h.inputHash === hash)) continue;
-    if (row.categoryLockedByUser) {
-      if (hist.some((h) => (h.source === "locked" || h.source === "user") && !h.undoneAt)) continue;
-      const out = await applyDecision(householdId, row, lockedStage(row)!, hash, now);
-      if ("decision" in out) decisions.push(out.decision);
-      continue;
-    }
+    // (Round 2) A locked row is skipped entirely: no decision row, the flag is the audit.
+    if (row.categoryLockedByUser) continue;
     if (!engineMayWrite(row, hist, { freshIds: opts.freshIds, now })) continue;
     const result = decideRow(row, ctx);
     if (!result || bandFor(result.confidence) === "queue") ambiguous.push(row);

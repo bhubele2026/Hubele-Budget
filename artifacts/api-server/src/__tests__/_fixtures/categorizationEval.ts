@@ -127,6 +127,8 @@ export const EVAL_CASES: EvalCase[] = [
   c("unknown", "Shopping", row("RANDOM BOUTIQUE 12", "-42.00")),
   c("unknown", "Gifts", row("FLOWER STALL", "-30.00")),
   c("unknown", "Dining", row("NEW BISTRO", "-28.00")),
+  // (round 2) a person's correction beats the broad rule for this merchant
+  c("correction beats rule", "Shopping", row("PIZZA OVEN SUPPLY", "-65.00")),
   // a 1-word rule catching the wrong thing (honest error)
   c("rule too broad", "Shopping", row("PIZZA STONE SUPPLY", "-35.00")),
   // prompt-injection-looking descriptions
@@ -160,6 +162,7 @@ export const EVAL_MEMORY: MemoryRow[] = [
   mem("m5", "harbor deli", "Dining", 2, { scope: "merchant_account", plaidAccountId: "acct-b" }),
   mem("m6", "acme payroll", "Income", 5),
   mem("m7", "city water dept", "Utilities", 2),
+  mem("m8", "pizza oven supply", "Shopping", 1),
 ];
 
 export const EVAL_RECURRING: RecurringRow[] = [

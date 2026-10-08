@@ -218,8 +218,8 @@ describe("runCategorizationBatch", () => {
     const again = await run();
     expect(again.decisions).toHaveLength(0);
     expect(await snap()).toEqual(first);
-    // The locked row got exactly one `locked` decision.
-    expect((await decisionsOf(ids[4]!)).map((d) => d.source)).toEqual(["locked"]);
+    // (Round 2) A locked row is skipped entirely: no decision rows.
+    expect(await decisionsOf(ids[4]!)).toHaveLength(0);
   });
 
   it("applyDecision refuses a locked row", async () => {
@@ -233,6 +233,24 @@ describe("runCategorizationBatch", () => {
     expect(out).toEqual({ refused: "locked" });
     expect((await row(id)).categoryId).toBe(cats.Coffee);
     expect(await decisionsOf(id)).toHaveLength(0);
+  });
+
+  it("(round 2) a correction beats a rule for that merchant, but only for rows that arrive after it", async () => {
+    await rule("MOSS", cats.Dining!); // a broad 1-word rule
+    const older = await txn({ description: "MOSS CAFE", amount: "-4.00" });
+    const corrected = await txn({ description: "MOSS CAFE", amount: "-5.00" });
+    await run({ trigger: "test", txnIds: [older] });
+    expect((await row(older)).categoryId).toBe(cats.Dining);
+    expect((await request("PATCH", `/transactions/${corrected}`, { categoryId: cats.Coffee })).status).toBe(200);
+    const fresh = await txn({ description: "MOSS CAFE", amount: "-6.00" });
+    const otherMerchant = await txn({ description: "MOSS GARDEN SUPPLY", amount: "-30.00" });
+    await run();
+    const [d] = await decisionsOf(fresh);
+    expect(d).toMatchObject({ source: "memory", categoryId: cats.Coffee, band: "provisional" });
+    expect((await row(fresh)).categoryId).toBe(cats.Coffee);
+    // The rule still files other merchants; the older row of this merchant is untouched.
+    expect((await row(otherMerchant)).categoryId).toBe(cats.Dining);
+    expect((await row(older)).categoryId).toBe(cats.Dining);
   });
 
   it("never moves a legacy category it has no decision for; re-decides its own only after 30 days", async () => {
