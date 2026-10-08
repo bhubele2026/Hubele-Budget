@@ -1241,6 +1241,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     debtId?: string | null | undefined;
     rememberPattern?: string | null | undefined;
 }>;
+export declare const updateTransactionResponseTwoRetroactiveCandidatesOneSampleMax = 5;
 export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObject<{
     id: zod.ZodString;
     occurredOn: zod.ZodString;
@@ -1430,6 +1431,46 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         genericPattern?: string | null | undefined;
         previousCategoryId?: string | null | undefined;
     }>;
+    retroactiveCandidates: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        count: zod.ZodNumber;
+        sample: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            occurredOn: zod.ZodDate;
+            description: zod.ZodString;
+            amount: zod.ZodString;
+            categoryId: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }, {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    }, {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     repointedRules: {
         ruleId: string;
@@ -1456,6 +1497,16 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         genericPattern?: string | null | undefined;
         previousCategoryId?: string | null | undefined;
     };
+    retroactiveCandidates?: {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    } | null | undefined;
 }, {
     repointedRules: {
         ruleId: string;
@@ -1482,6 +1533,16 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         genericPattern?: string | null | undefined;
         previousCategoryId?: string | null | undefined;
     };
+    retroactiveCandidates?: {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    } | null | undefined;
 }>>;
 export declare const DeleteTransactionParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -13861,6 +13922,787 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
  * @summary Undo a reversible agent action
  */
 export declare const UndoAgentActionParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+/**
+ * @summary Owner only. Run the deterministic categorization stages over the
+household's rows dated on/after `since` (default: the last 90 days).
+Idempotent: a second run with nothing changed records nothing.
+
+ */
+export declare const RunCategorizationBody: zod.ZodObject<{
+    since: zod.ZodOptional<zod.ZodDate>;
+}, "strip", zod.ZodTypeAny, {
+    since?: Date | undefined;
+}, {
+    since?: Date | undefined;
+}>;
+export declare const RunCategorizationResponse: zod.ZodObject<{
+    decided: zod.ZodNumber;
+    queued: zod.ZodNumber;
+    ambiguous: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    queued: number;
+    ambiguous: number;
+    decided: number;
+}, {
+    queued: number;
+    ambiguous: number;
+    decided: number;
+}>;
+/**
+ * @summary Open decisions (provisional or queued), oldest first.
+ */
+export declare const listCategorizationReviewQueryLimitDefault = 20;
+export declare const listCategorizationReviewQueryLimitMax = 100;
+export declare const ListCategorizationReviewQueryParams: zod.ZodObject<{
+    limit: zod.ZodDefault<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    limit: number;
+}, {
+    limit?: number | undefined;
+}>;
+export declare const ListCategorizationReviewResponse: zod.ZodObject<{
+    items: zod.ZodArray<zod.ZodObject<{
+        decisionId: zod.ZodString;
+        transactionId: zod.ZodString;
+        occurredOn: zod.ZodDate;
+        description: zod.ZodString;
+        amount: zod.ZodString;
+        account: zod.ZodNullable<zod.ZodString>;
+        currentCategoryId: zod.ZodNullable<zod.ZodString>;
+        suggestedCategoryId: zod.ZodNullable<zod.ZodString>;
+        confidence: zod.ZodNumber;
+        band: zod.ZodEnum<["provisional", "queue"]>;
+        source: zod.ZodString;
+        explanation: zod.ZodString;
+        createdAt: zod.ZodDate;
+        flags: zod.ZodObject<{
+            novelMerchant: zod.ZodBoolean;
+            amountAnomaly: zod.ZodBoolean;
+            splitNeedsRebalance: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            novelMerchant: boolean;
+            amountAnomaly: boolean;
+            splitNeedsRebalance: boolean;
+        }, {
+            novelMerchant: boolean;
+            amountAnomaly: boolean;
+            splitNeedsRebalance: boolean;
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        createdAt: Date;
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        account: string | null;
+        source: string;
+        transactionId: string;
+        confidence: number;
+        decisionId: string;
+        currentCategoryId: string | null;
+        suggestedCategoryId: string | null;
+        band: "queue" | "provisional";
+        explanation: string;
+        flags: {
+            novelMerchant: boolean;
+            amountAnomaly: boolean;
+            splitNeedsRebalance: boolean;
+        };
+    }, {
+        createdAt: Date;
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        account: string | null;
+        source: string;
+        transactionId: string;
+        confidence: number;
+        decisionId: string;
+        currentCategoryId: string | null;
+        suggestedCategoryId: string | null;
+        band: "queue" | "provisional";
+        explanation: string;
+        flags: {
+            novelMerchant: boolean;
+            amountAnomaly: boolean;
+            splitNeedsRebalance: boolean;
+        };
+    }>, "many">;
+    total: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    total: number;
+    items: {
+        createdAt: Date;
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        account: string | null;
+        source: string;
+        transactionId: string;
+        confidence: number;
+        decisionId: string;
+        currentCategoryId: string | null;
+        suggestedCategoryId: string | null;
+        band: "queue" | "provisional";
+        explanation: string;
+        flags: {
+            novelMerchant: boolean;
+            amountAnomaly: boolean;
+            splitNeedsRebalance: boolean;
+        };
+    }[];
+}, {
+    total: number;
+    items: {
+        createdAt: Date;
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        account: string | null;
+        source: string;
+        transactionId: string;
+        confidence: number;
+        decisionId: string;
+        currentCategoryId: string | null;
+        suggestedCategoryId: string | null;
+        band: "queue" | "provisional";
+        explanation: string;
+        flags: {
+            novelMerchant: boolean;
+            amountAnomaly: boolean;
+            splitNeedsRebalance: boolean;
+        };
+    }[];
+}>;
+export declare const AcceptCategorizationDecisionParams: zod.ZodObject<{
+    decisionId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    decisionId: string;
+}, {
+    decisionId: string;
+}>;
+export declare const acceptCategorizationDecisionResponseRetroactiveCandidatesOneSampleMax = 5;
+export declare const AcceptCategorizationDecisionResponse: zod.ZodObject<{
+    decisionId: zod.ZodString;
+    transactionId: zod.ZodString;
+    resolution: zod.ZodEnum<["accepted", "corrected", "skipped"]>;
+    categoryId: zod.ZodNullable<zod.ZodString>;
+    userDecisionId: zod.ZodNullable<zod.ZodString>;
+    retroactiveCandidates: zod.ZodUnion<[zod.ZodObject<{
+        count: zod.ZodNumber;
+        sample: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            occurredOn: zod.ZodDate;
+            description: zod.ZodString;
+            amount: zod.ZodString;
+            categoryId: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }, {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    }, {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    }>, zod.ZodNull]>;
+}, "strip", zod.ZodTypeAny, {
+    categoryId: string | null;
+    retroactiveCandidates: {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    } | null;
+    transactionId: string;
+    decisionId: string;
+    resolution: "skipped" | "accepted" | "corrected";
+    userDecisionId: string | null;
+}, {
+    categoryId: string | null;
+    retroactiveCandidates: {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    } | null;
+    transactionId: string;
+    decisionId: string;
+    resolution: "skipped" | "accepted" | "corrected";
+    userDecisionId: string | null;
+}>;
+export declare const SkipCategorizationDecisionParams: zod.ZodObject<{
+    decisionId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    decisionId: string;
+}, {
+    decisionId: string;
+}>;
+export declare const skipCategorizationDecisionResponseRetroactiveCandidatesOneSampleMax = 5;
+export declare const SkipCategorizationDecisionResponse: zod.ZodObject<{
+    decisionId: zod.ZodString;
+    transactionId: zod.ZodString;
+    resolution: zod.ZodEnum<["accepted", "corrected", "skipped"]>;
+    categoryId: zod.ZodNullable<zod.ZodString>;
+    userDecisionId: zod.ZodNullable<zod.ZodString>;
+    retroactiveCandidates: zod.ZodUnion<[zod.ZodObject<{
+        count: zod.ZodNumber;
+        sample: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            occurredOn: zod.ZodDate;
+            description: zod.ZodString;
+            amount: zod.ZodString;
+            categoryId: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }, {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    }, {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    }>, zod.ZodNull]>;
+}, "strip", zod.ZodTypeAny, {
+    categoryId: string | null;
+    retroactiveCandidates: {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    } | null;
+    transactionId: string;
+    decisionId: string;
+    resolution: "skipped" | "accepted" | "corrected";
+    userDecisionId: string | null;
+}, {
+    categoryId: string | null;
+    retroactiveCandidates: {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    } | null;
+    transactionId: string;
+    decisionId: string;
+    resolution: "skipped" | "accepted" | "corrected";
+    userDecisionId: string | null;
+}>;
+/**
+ * @summary File the row by hand (locked), learn merchant memory, and return the
+retroactive candidates. Never applies them.
+
+ */
+export declare const CorrectCategorizationDecisionParams: zod.ZodObject<{
+    decisionId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    decisionId: string;
+}, {
+    decisionId: string;
+}>;
+export declare const CorrectCategorizationDecisionBody: zod.ZodObject<{
+    categoryId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    categoryId: string;
+}, {
+    categoryId: string;
+}>;
+export declare const correctCategorizationDecisionResponseRetroactiveCandidatesOneSampleMax = 5;
+export declare const CorrectCategorizationDecisionResponse: zod.ZodObject<{
+    decisionId: zod.ZodString;
+    transactionId: zod.ZodString;
+    resolution: zod.ZodEnum<["accepted", "corrected", "skipped"]>;
+    categoryId: zod.ZodNullable<zod.ZodString>;
+    userDecisionId: zod.ZodNullable<zod.ZodString>;
+    retroactiveCandidates: zod.ZodUnion<[zod.ZodObject<{
+        count: zod.ZodNumber;
+        sample: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            occurredOn: zod.ZodDate;
+            description: zod.ZodString;
+            amount: zod.ZodString;
+            categoryId: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }, {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    }, {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    }>, zod.ZodNull]>;
+}, "strip", zod.ZodTypeAny, {
+    categoryId: string | null;
+    retroactiveCandidates: {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    } | null;
+    transactionId: string;
+    decisionId: string;
+    resolution: "skipped" | "accepted" | "corrected";
+    userDecisionId: string | null;
+}, {
+    categoryId: string | null;
+    retroactiveCandidates: {
+        count: number;
+        sample: {
+            id: string;
+            occurredOn: Date;
+            description: string;
+            amount: string;
+            categoryId: string | null;
+        }[];
+    } | null;
+    transactionId: string;
+    decisionId: string;
+    resolution: "skipped" | "accepted" | "corrected";
+    userDecisionId: string | null;
+}>;
+/**
+ * @summary Restore the decision's previous category, clear provisional, stamp
+undone_at and disable the memory it created.
+
+ */
+export declare const UndoCategoryDecisionParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const UndoCategoryDecisionResponse: zod.ZodObject<{
+    decisionId: zod.ZodString;
+    transactionId: zod.ZodString;
+    categoryId: zod.ZodNullable<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    categoryId: string | null;
+    transactionId: string;
+    decisionId: string;
+}, {
+    categoryId: string | null;
+    transactionId: string;
+    decisionId: string;
+}>;
+/**
+ * @summary Merchant memory, with its evidence counts.
+ */
+export declare const ListLearnedRulesResponseItem: zod.ZodObject<{
+    id: zod.ZodString;
+    signature: zod.ZodString;
+    scope: zod.ZodEnum<["merchant", "merchant_account", "merchant_amount"]>;
+    plaidAccountId: zod.ZodNullable<zod.ZodString>;
+    amountBandLo: zod.ZodNullable<zod.ZodString>;
+    amountBandHi: zod.ZodNullable<zod.ZodString>;
+    categoryId: zod.ZodString;
+    count: zod.ZodNumber;
+    lastConfirmedAt: zod.ZodNullable<zod.ZodDate>;
+    disabled: zod.ZodBoolean;
+    source: zod.ZodString;
+    createdAt: zod.ZodDate;
+}, "strip", zod.ZodTypeAny, {
+    count: number;
+    id: string;
+    createdAt: Date;
+    categoryId: string;
+    source: string;
+    plaidAccountId: string | null;
+    signature: string;
+    scope: "merchant" | "merchant_account" | "merchant_amount";
+    amountBandLo: string | null;
+    amountBandHi: string | null;
+    lastConfirmedAt: Date | null;
+    disabled: boolean;
+}, {
+    count: number;
+    id: string;
+    createdAt: Date;
+    categoryId: string;
+    source: string;
+    plaidAccountId: string | null;
+    signature: string;
+    scope: "merchant" | "merchant_account" | "merchant_amount";
+    amountBandLo: string | null;
+    amountBandHi: string | null;
+    lastConfirmedAt: Date | null;
+    disabled: boolean;
+}>;
+export declare const ListLearnedRulesResponse: zod.ZodArray<zod.ZodObject<{
+    id: zod.ZodString;
+    signature: zod.ZodString;
+    scope: zod.ZodEnum<["merchant", "merchant_account", "merchant_amount"]>;
+    plaidAccountId: zod.ZodNullable<zod.ZodString>;
+    amountBandLo: zod.ZodNullable<zod.ZodString>;
+    amountBandHi: zod.ZodNullable<zod.ZodString>;
+    categoryId: zod.ZodString;
+    count: zod.ZodNumber;
+    lastConfirmedAt: zod.ZodNullable<zod.ZodDate>;
+    disabled: zod.ZodBoolean;
+    source: zod.ZodString;
+    createdAt: zod.ZodDate;
+}, "strip", zod.ZodTypeAny, {
+    count: number;
+    id: string;
+    createdAt: Date;
+    categoryId: string;
+    source: string;
+    plaidAccountId: string | null;
+    signature: string;
+    scope: "merchant" | "merchant_account" | "merchant_amount";
+    amountBandLo: string | null;
+    amountBandHi: string | null;
+    lastConfirmedAt: Date | null;
+    disabled: boolean;
+}, {
+    count: number;
+    id: string;
+    createdAt: Date;
+    categoryId: string;
+    source: string;
+    plaidAccountId: string | null;
+    signature: string;
+    scope: "merchant" | "merchant_account" | "merchant_amount";
+    amountBandLo: string | null;
+    amountBandHi: string | null;
+    lastConfirmedAt: Date | null;
+    disabled: boolean;
+}>, "many">;
+export declare const UpdateLearnedRuleParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const UpdateLearnedRuleBody: zod.ZodObject<{
+    categoryId: zod.ZodOptional<zod.ZodString>;
+    scope: zod.ZodOptional<zod.ZodEnum<["merchant", "merchant_account", "merchant_amount"]>>;
+    disabled: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    categoryId?: string | undefined;
+    scope?: "merchant" | "merchant_account" | "merchant_amount" | undefined;
+    disabled?: boolean | undefined;
+}, {
+    categoryId?: string | undefined;
+    scope?: "merchant" | "merchant_account" | "merchant_amount" | undefined;
+    disabled?: boolean | undefined;
+}>;
+export declare const UpdateLearnedRuleResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    signature: zod.ZodString;
+    scope: zod.ZodEnum<["merchant", "merchant_account", "merchant_amount"]>;
+    plaidAccountId: zod.ZodNullable<zod.ZodString>;
+    amountBandLo: zod.ZodNullable<zod.ZodString>;
+    amountBandHi: zod.ZodNullable<zod.ZodString>;
+    categoryId: zod.ZodString;
+    count: zod.ZodNumber;
+    lastConfirmedAt: zod.ZodNullable<zod.ZodDate>;
+    disabled: zod.ZodBoolean;
+    source: zod.ZodString;
+    createdAt: zod.ZodDate;
+}, "strip", zod.ZodTypeAny, {
+    count: number;
+    id: string;
+    createdAt: Date;
+    categoryId: string;
+    source: string;
+    plaidAccountId: string | null;
+    signature: string;
+    scope: "merchant" | "merchant_account" | "merchant_amount";
+    amountBandLo: string | null;
+    amountBandHi: string | null;
+    lastConfirmedAt: Date | null;
+    disabled: boolean;
+}, {
+    count: number;
+    id: string;
+    createdAt: Date;
+    categoryId: string;
+    source: string;
+    plaidAccountId: string | null;
+    signature: string;
+    scope: "merchant" | "merchant_account" | "merchant_amount";
+    amountBandLo: string | null;
+    amountBandHi: string | null;
+    lastConfirmedAt: Date | null;
+    disabled: boolean;
+}>;
+export declare const DeleteLearnedRuleParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+/**
+ * @summary Explicit request: file every unlocked row of this merchant (within the
+rule's scope) into its category. Each write is a `user` decision.
+
+ */
+export declare const ApplyLearnedRuleRetroactivelyParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const ApplyLearnedRuleRetroactivelyResponse: zod.ZodObject<{
+    updated: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    updated: number;
+}, {
+    updated: number;
+}>;
+export declare const GetTransactionSplitsParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const GetTransactionSplitsResponse: zod.ZodObject<{
+    transactionId: zod.ZodString;
+    amount: zod.ZodString;
+    invalid: zod.ZodBoolean;
+    splits: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        categoryId: zod.ZodString;
+        amount: zod.ZodString;
+        member: zod.ZodNullable<zod.ZodString>;
+        note: zod.ZodNullable<zod.ZodString>;
+        source: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        amount: string;
+        categoryId: string;
+        source: string;
+        member: string | null;
+        note: string | null;
+    }, {
+        id: string;
+        amount: string;
+        categoryId: string;
+        source: string;
+        member: string | null;
+        note: string | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    amount: string;
+    transactionId: string;
+    invalid: boolean;
+    splits: {
+        id: string;
+        amount: string;
+        categoryId: string;
+        source: string;
+        member: string | null;
+        note: string | null;
+    }[];
+}, {
+    amount: string;
+    transactionId: string;
+    invalid: boolean;
+    splits: {
+        id: string;
+        amount: string;
+        categoryId: string;
+        source: string;
+        member: string | null;
+        note: string | null;
+    }[];
+}>;
+/**
+ * @summary Replace-all. The parts must add up to the charge's amount to the cent;
+the charge keeps its own category and becomes locked.
+
+ */
+export declare const ReplaceTransactionSplitsParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const replaceTransactionSplitsBodySplitsItemAmountRegExp: RegExp;
+export declare const replaceTransactionSplitsBodySplitsMin = 2;
+export declare const replaceTransactionSplitsBodySplitsMax = 20;
+export declare const ReplaceTransactionSplitsBody: zod.ZodObject<{
+    splits: zod.ZodArray<zod.ZodObject<{
+        categoryId: zod.ZodString;
+        amount: zod.ZodString;
+        member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        note: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string;
+        categoryId: string;
+        member?: string | null | undefined;
+        note?: string | null | undefined;
+    }, {
+        amount: string;
+        categoryId: string;
+        member?: string | null | undefined;
+        note?: string | null | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    splits: {
+        amount: string;
+        categoryId: string;
+        member?: string | null | undefined;
+        note?: string | null | undefined;
+    }[];
+}, {
+    splits: {
+        amount: string;
+        categoryId: string;
+        member?: string | null | undefined;
+        note?: string | null | undefined;
+    }[];
+}>;
+export declare const ReplaceTransactionSplitsResponse: zod.ZodObject<{
+    transactionId: zod.ZodString;
+    amount: zod.ZodString;
+    invalid: zod.ZodBoolean;
+    splits: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        categoryId: zod.ZodString;
+        amount: zod.ZodString;
+        member: zod.ZodNullable<zod.ZodString>;
+        note: zod.ZodNullable<zod.ZodString>;
+        source: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        amount: string;
+        categoryId: string;
+        source: string;
+        member: string | null;
+        note: string | null;
+    }, {
+        id: string;
+        amount: string;
+        categoryId: string;
+        source: string;
+        member: string | null;
+        note: string | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    amount: string;
+    transactionId: string;
+    invalid: boolean;
+    splits: {
+        id: string;
+        amount: string;
+        categoryId: string;
+        source: string;
+        member: string | null;
+        note: string | null;
+    }[];
+}, {
+    amount: string;
+    transactionId: string;
+    invalid: boolean;
+    splits: {
+        id: string;
+        amount: string;
+        categoryId: string;
+        source: string;
+        member: string | null;
+        note: string | null;
+    }[];
+}>;
+export declare const DeleteTransactionSplitsParams: zod.ZodObject<{
     id: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     id: string;

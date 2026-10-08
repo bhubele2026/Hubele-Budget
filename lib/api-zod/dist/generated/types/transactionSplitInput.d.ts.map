@@ -1,0 +1,1 @@
+{"version":3,"file":"transactionSplitInput.d.ts","sourceRoot":"","sources":["../../../src/generated/types/transactionSplitInput.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,qBAAqB;IACpC,UAAU,EAAE,MAAM,CAAC;IACnB;;;OAGG;IACH,MAAM,EAAE,MAAM,CAAC;IACf,gBAAgB;IAChB,MAAM,CAAC,EAAE,MAAM,GAAG,IAAI,CAAC;IACvB,gBAAgB;IAChB,IAAI,CAAC,EAAE,MAAM,GAAG,IAAI,CAAC;CACtB"}

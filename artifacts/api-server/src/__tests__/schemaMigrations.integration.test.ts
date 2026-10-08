@@ -34,7 +34,17 @@ const DATABASE_URL = process.env.DATABASE_URL!;
 // shape. A package whose migration alters an existing table adds its columns
 // here; a table a migration CREATES needs nothing — it is compared anyway.
 const ADDED_COLUMNS: Record<string, string[]> = {
-  transactions: ["category_locked_by_user", "payment_state", "confirmed_by_txn_id"],
+  transactions: [
+    "category_locked_by_user",
+    // PR-D (0060)
+    "payment_state",
+    "confirmed_by_txn_id",
+    // PR-A (0020)
+    "category_provisional",
+    "refund_of_txn_id",
+    "plaid_removed_at",
+    "splits_invalid",
+  ],
 };
 
 type ColumnShape = {

@@ -30,6 +30,7 @@ import {
   type FilingContext,
 } from "./pendingFiling";
 import { addDaysISO, householdTodayISO } from "./householdClock";
+import { expandSplits, loadSplitsByTxn } from "./categorizer/splits";
 
 // The household only started tracking transactions on this date; ranges that
 // reach further back are clamped so day/total math is not diluted by empty
@@ -229,6 +230,8 @@ export async function buildSpendingFacts(
   // `isTransferUserOverridden` flag, never by re-reading mapping rules.
   const uncategorizedIds = uncategorizedCategoryIds(cats);
   const filingCtx: FilingContext = { uncategorizedIds };
+  // (PR-A) Splits, for the category totals only (`expandSplits`).
+  const splitParts = expandSplits(txns, await loadSplitsByTxn(householdId, { from: start, to: end }));
 
   // --- Accumulators -------------------------------------------------------
   let householdTotal = 0;
@@ -362,10 +365,18 @@ export async function buildSpendingFacts(
       realCount += 1;
 
       const cid = t.categoryId as string;
-      const cat = byCat.get(cid) ?? { total: 0, txnCount: 0 };
-      cat.total += spend;
-      cat.txnCount += 1;
-      byCat.set(cid, cat);
+      // (PR-A) A row with splits that add up files its category totals from
+      // its splits; every other figure still counts the row whole.
+      const parts = splitParts.get(row.id);
+      const shares = parts
+        ? parts.map((p) => ({ cid: p.categoryId, spend: spendAmount({ amount: p.amount, source: t.source }) }))
+        : [{ cid, spend }];
+      for (const sh of shares) {
+        const cat = byCat.get(sh.cid) ?? { total: 0, txnCount: 0 };
+        cat.total += sh.spend;
+        cat.txnCount += 1;
+        byCat.set(sh.cid, cat);
+      }
 
       const name = cleanMerchant(t.description) || "Unknown";
       const m = byMerch.get(name) ?? { total: 0, count: 0, catCounts: new Map() };
@@ -386,7 +397,7 @@ export async function buildSpendingFacts(
       const month = t.occurredOn.slice(0, 7);
       const mo = monthly.get(month) ?? { total: 0, byCat: new Map() };
       mo.total += spend;
-      mo.byCat.set(cid, (mo.byCat.get(cid) ?? 0) + spend);
+      for (const sh of shares) mo.byCat.set(sh.cid, (mo.byCat.get(sh.cid) ?? 0) + sh.spend);
       monthly.set(month, mo);
     } else {
       uncatTotal += spend;

@@ -93,9 +93,10 @@ describe("startServer with the real runner", () => {
     const schema = `pr0_boot_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
     await pool.query(`CREATE SCHEMA ${schema}`);
     // (PR-D) INCLUDING INDEXES copies the primary key: 0060 adds foreign keys
-    // that point at transactions(id), which need one.
+    // that point at transactions(id), which need one. Every column a later
+    // migration adds is dropped first so each ADD COLUMN is exercised.
     await pool.query(`CREATE TABLE ${schema}.transactions (LIKE public.transactions INCLUDING DEFAULTS INCLUDING INDEXES)`);
-    for (const col of ["category_locked_by_user", "payment_state", "confirmed_by_txn_id"]) {
+    for (const col of ["category_locked_by_user", "payment_state", "confirmed_by_txn_id", "category_provisional", "refund_of_txn_id", "plaid_removed_at", "splits_invalid"]) {
       await pool.query(`ALTER TABLE ${schema}.transactions DROP COLUMN ${col}`);
     }
     const dir = await mkdtemp(path.join(os.tmpdir(), "pr0-boot-"));

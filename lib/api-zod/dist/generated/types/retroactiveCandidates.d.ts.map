@@ -1,0 +1,1 @@
+{"version":3,"file":"retroactiveCandidates.d.ts","sourceRoot":"","sources":["../../../src/generated/types/retroactiveCandidates.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,iBAAiB,EAAE,MAAM,qBAAqB,CAAC;AAE7D;;GAEG;AACH,MAAM,WAAW,qBAAqB;IACpC,KAAK,EAAE,MAAM,CAAC;IACd,kBAAkB;IAClB,MAAM,EAAE,iBAAiB,EAAE,CAAC;CAC7B"}

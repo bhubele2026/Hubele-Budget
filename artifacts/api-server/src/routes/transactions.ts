@@ -6,7 +6,6 @@ import {
   transactionsTable,
   forecastResolutionsTable,
   mappingRulesTable,
-  upsertMappingRule,
   debtsTable,
   merchantAliasesTable,
 } from "@workspace/db";
@@ -14,11 +13,12 @@ import { requireAuth } from "../middlewares/requireAuth";
 import {
   categorize,
   findMatchedRuleId,
-  findMatchingRules,
   isHeuristicTransfer,
   loadUserRules,
 } from "../lib/autoCategorize";
 import { selectPatternCandidates } from "../lib/patternCandidates";
+import { recordHandFiling, recordUserDecisions } from "../lib/categorizer/userDecisions";
+import type { RetroactiveCandidates } from "../lib/categorizer/memory";
 import { forecastTodayISO } from "../lib/forecastInclusion";
 import { cleanMerchant, merchantSignature } from "../lib/merchantNameExtract";
 import {
@@ -154,37 +154,6 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
 });
 
 /**
- * Cleans a raw transaction description into a short, stable pattern suitable
- * for a `contains` mapping rule. Strips trailing reference suffixes (after
- * `#` / `*`), takes the first couple of meaningful tokens, and caps length.
- * Mirrors the client-side `defaultRememberPattern` so the auto-created rule
- * matches the user's mental model.
- */
-function derivePatternFromDescription(description: string | null | undefined): string {
-  if (!description) return "";
-  const cleaned = description.replace(/[#*].*$/, "").trim();
-  const tokens = cleaned.split(/\s+/).filter(Boolean);
-  const head = tokens.slice(0, 2).join(" ");
-  return (head || cleaned).slice(0, 40);
-}
-
-/**
- * A mapping-rule pattern is considered "specific" — i.e. safe to silently
- * auto-repoint when the user manually picks a category for a transaction it
- * matches — when it has at least two whitespace-separated tokens. This is the
- * shape of every debt-payment seed rule we ship ("AMERICAN EXPRESS ACH",
- * "AMEX EPAYMENT", "DISCOVER E-PAYMENT", etc.) so the auto-relearn behavior
- * from Task #177 still fires for them. One-token catch-all patterns the user
- * tends to author by hand ("AMAZON", "TARGET", "WALMART") are treated as
- * generic and left alone — those are typically broadly-used routing rules
- * and silently re-aiming them when the user picks Groceries for an
- * "AMAZON FRESH 123" charge would break their general behavior.
- */
-function isPatternSpecific(pattern: string): boolean {
-  return pattern.trim().split(/\s+/).filter(Boolean).length >= 2;
-}
-
-/**
  * (#642) Error code returned to the client when a write would tag a
  * transfer-looking row as Unplanned. Surfaced as a short toast/inline
  * message so the user understands why nothing happened. Kept as a
@@ -278,7 +247,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   if (
     bodyHasCategoryId &&
     parsed.data.categoryId &&
-    (await isTransferCategory(req.userId!, parsed.data.categoryId))
+    (await isTransferCategory(req.householdId!, parsed.data.categoryId))
   ) {
     insertValues.isTransfer = true;
     insertValues.isTransferUserOverridden = true;
@@ -313,6 +282,12 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     .insert(transactionsTable)
     .values(insertValues as typeof transactionsTable.$inferInsert)
     .returning();
+  // (PR-A) A category a person named is a `user` decision on the new row.
+  if (row && row.categoryLockedByUser) {
+    await recordUserDecisions(db, req.householdId!, req.userId!, [
+      { transactionId: row.id, previousCategoryId: null, categoryId: row.categoryId },
+    ]);
+  }
   res.status(201).json({ ...row, autoCategorizedRuleId });
 });
 
@@ -372,7 +347,7 @@ router.patch(
     // never participate in Weekly/Monthly/Unplanned roll-ups.
     const pickingTransfer =
       pickingCategory &&
-      (await isTransferCategory(req.userId!, patch.categoryId as string));
+      (await isTransferCategory(req.householdId!, patch.categoryId as string));
     const patchToApply: Record<string, unknown> = { ...patch };
     if (bodyHasIsTransfer || pickingCategory) {
       patchToApply.isTransferUserOverridden = true;
@@ -382,6 +357,8 @@ router.patch(
     // clears the lock and hands the row back to the categorizer.
     if (bodyHasCategoryId) {
       patchToApply.categoryLockedByUser = pickingCategory;
+      // (PR-A) A person answered it: no longer the engine's provisional pick.
+      patchToApply.categoryProvisional = false;
     }
     // When the user manually moves a row to a different day (e.g. pulling a
     // "paid Saturday, posted Sunday" charge back into the correct Sun→Sat
@@ -435,6 +412,18 @@ router.patch(
         return;
       }
     }
+    // (PR-A) The category before this write, for the `user` decision.
+    const [before] = bodyHasCategoryId
+      ? await db
+          .select({ categoryId: transactionsTable.categoryId })
+          .from(transactionsTable)
+          .where(
+            and(
+              eq(transactionsTable.id, params.data.id),
+              eq(transactionsTable.householdId, req.householdId!),
+            ),
+          )
+      : [];
     const [row] = await db
       .update(transactionsTable)
       .set(patchToApply)
@@ -449,364 +438,21 @@ router.patch(
       res.status(404).json({ error: "Not found" });
       return;
     }
-    // Whenever a category is assigned via the quick-categorize flow, learn a
-    // mapping_rule from the txn's description so future matching transactions
-    // auto-categorize the same way. The user no longer needs to opt in via
-    // `rememberPattern`. Internal transfers are skipped because they
-    // wouldn't form a useful pattern.
-    //
-    // Two-step learning:
-    //   1. AUTO-RELEARN — repoint any *specific* matching rule (≥ 2 tokens,
-    //      see `isPatternSpecific`) whose pattern matches this description
-    //      but currently aims at a different category. The seed mapping
-    //      rules for debt-payment patterns (Amex / Cap One / Apple / PayPal
-    //      / Discover / Citi / etc.) are all 2+ tokens and pre-pointed at
-    //      "Misc / Buffer" because the per-debt budget categories are
-    //      created lazily by syncAutoDebtCategories only after the user
-    //      adds the debt to the tracker. The first time the user manually
-    //      picks the real debt category for a payment txn, every matching
-    //      seed rule snaps onto it. Generic 1-token rules ("AMAZON",
-    //      "TARGET") are deliberately *not* repointed — they're typically
-    //      broadly-used routing the user authored, and silently re-aiming
-    //      them when the user picks Groceries for an "AMAZON FRESH 123"
-    //      charge would break their general behavior. Each repointed
-    //      specific rule is tracked in `repointedRules` along with a count
-    //      of older transactions still sitting in the rule's old category
-    //      AND a small `sampleTransactions` preview list (most-recent
-    //      first, capped at 10), so the client can offer a "apply to
-    //      past transactions too" prompt with a "Show matches" link
-    //      instead of making the user touch every prior payment.
-    //   2. INSERT — derive a fresh pattern from the description and upsert
-    //      a more-specific rule, *unless* a specific matching rule already
-    //      points at the new category (the repoint in step 1 is sufficient
-    //      and we avoid duplicates like seed "AMERICAN EXPRESS ACH"
-    //      alongside an auto "AMERICAN EXPRESS"). When a generic matching
-    //      rule was deliberately left in step 1, the new specific rule
-    //      gets a priority bump so it wins on future similar charges. The
-    //      auto-derive path also refuses to upsert a pattern that would
-    //      collide with — and silently overwrite — one of those left-alone
-    //      generic rules; an explicit `rememberPattern` body field
-    //      (legacy UI affordance) still bypasses that guard since it
-    //      represents user-stated intent.
-    type RepointedRuleSample = {
-      id: string;
-      description: string;
-      occurredOn: string;
-      amount: string;
-      // Id of the mapping rule that auto-categorize currently attributes
-      // for this sample in its *present* (pre-bulk-flip) category, or
-      // null when no rule matches. Surfaces the same MatchedRuleChip
-      // affordance in the "Show matches" preview dialog as the
-      // Transactions / Amex / Dashboard surfaces. Note: by the time we
-      // compute this the originating rule has *already* been repointed
-      // away from `fromCategoryId`, so for samples whose only matching
-      // rule was the one we just moved this is null — i.e. the chip
-      // reads "manually categorized" until the user clicks Apply, which
-      // moves the row into the rule's new category and restores
-      // attribution.
-      matchedRuleId: string | null;
-    };
-    type RepointedRule = {
-      ruleId: string;
-      pattern: string;
-      matchType: ReturnType<typeof normalizeMatchType>;
-      fromCategoryId: string;
-      toCategoryId: string;
-      candidateCount: number;
-      sampleTransactions: RepointedRuleSample[];
-    };
-    // `ruleId` and `previousCategoryId` are populated for the kinds that
-    // have an undoable side-effect on the user's mapping rules:
-    //   - `created` / `created_priority_bump` → `ruleId` of the new rule
-    //     so the client's Undo button can DELETE it.
-    //   - `repointed` → `ruleId` of the touched rule + `previousCategoryId`
-    //     (the rule's old aim) so Undo can PATCH the rule back to its
-    //     previous category. The transaction's own categoryId is left
-    //     alone — Undo only reverts the rule, not the user's manual pick.
-    type RuleAction =
-      | {
-          kind: "none";
-          pattern: null;
-          genericPattern: null;
-          ruleId: null;
-          previousCategoryId: null;
-          matchType: null;
-          toCategoryId: null;
-          candidateCount: null;
-        }
-      | {
-          kind: "created";
-          pattern: string;
-          genericPattern: null;
-          ruleId: string | null;
-          previousCategoryId: null;
-          matchType: "contains";
-          toCategoryId: string;
-          candidateCount: number;
-        }
-      | {
-          kind: "created_priority_bump";
-          pattern: string;
-          genericPattern: string;
-          ruleId: string | null;
-          previousCategoryId: null;
-          matchType: "contains";
-          toCategoryId: string;
-          candidateCount: number;
-        }
-      | {
-          kind: "skipped_generic";
-          pattern: string;
-          genericPattern: string;
-          ruleId: null;
-          previousCategoryId: null;
-          matchType: null;
-          toCategoryId: null;
-          candidateCount: null;
-        }
-      | {
-          kind: "repointed";
-          pattern: string;
-          genericPattern: null;
-          ruleId: string;
-          previousCategoryId: string | null;
-          matchType: null;
-          toCategoryId: null;
-          candidateCount: null;
-        };
-    const repointedRules: RepointedRule[] = [];
-    let ruleAction: RuleAction = {
-      kind: "none",
-      pattern: null,
-      genericPattern: null,
-      ruleId: null,
-      previousCategoryId: null,
-      matchType: null,
-      toCategoryId: null,
-      candidateCount: null,
-    };
-    // (#474) When the user picks an `exclude_from_budget` category
-    // (today: just the system-managed "Uncategorized") on a row, the
-    // transaction is updated as a manual triage marker but NO mapping
-    // rule is created or repointed. Auto-categorize must never sweep
-    // future charges into Uncategorized — that surface exists only as
-    // a manual pick from the picker. Same effect as the explicit guard
-    // in routes/mapping.ts, just enforced here at the auto-learn site.
-    const targetIsExcluded =
-      patch.categoryId && (await isExcludedCategory(req.userId!, patch.categoryId));
-    if (patch.categoryId && !row.isTransfer && !targetIsExcluded) {
-      const userId = req.userId!;
-      const householdId = req.householdId!;
-      const description = row.description ?? "";
-      const allRules = await loadUserRules(householdId);
-      const matching = findMatchingRules(description, allRules);
-      const matchingSpecific = matching.filter((r) =>
-        isPatternSpecific(r.pattern),
-      );
-      const matchingGeneric = matching.filter(
-        (r) => !isPatternSpecific(r.pattern),
-      );
-
-      // Track each repointed rule's pre-PATCH categoryId so we can hand
-      // it back to the client for the Undo affordance on the toast.
-      const repointedPrev = new Map<string, string | null>();
-      for (const r of matchingSpecific) {
-        if (r.categoryId === patch.categoryId) continue;
-        repointedPrev.set(r.id, r.categoryId);
-        await db
-          .update(mappingRulesTable)
-          .set({ categoryId: patch.categoryId })
-          .where(
-            and(
-              eq(mappingRulesTable.id, r.id),
-              eq(mappingRulesTable.householdId, householdId),
-            ),
-          );
-        // Count older transactions still sitting in the rule's old
-        // category that match this rule's pattern. Surfacing this count
-        // (and a small preview list) lets the client offer a "apply to
-        // past transactions too" prompt — with a "Show matches" link
-        // that opens a small dialog — so the user doesn't have to touch
-        // every prior payment one at a time. We scope to rows currently
-        // in `fromCategoryId` so manual edits to a different category
-        // are preserved.
-        const fromCategoryId = r.categoryId as string;
-        const candidates = await selectPatternCandidates(
-          householdId,
-          r,
-          fromCategoryId,
-        );
-        const remaining = candidates.filter((c) => c.id !== row.id);
-        // Re-load rules *after* the repoint so `matchedRuleId` reflects
-        // the post-PATCH world the user will see in the preview dialog.
-        // Cheap (handful of rows) and keeps the chip's semantics
-        // consistent with GET /transactions.
-        const rulesAfterRepoint = await loadUserRules(householdId);
-        const sampleTransactions: RepointedRuleSample[] = remaining
-          .slice(0, 10)
-          .map((c) => ({
-            id: c.id,
-            description: c.description ?? "",
-            occurredOn: c.occurredOn,
-            amount: c.amount,
-            matchedRuleId: findMatchedRuleId(
-              c.description,
-              fromCategoryId,
-              rulesAfterRepoint,
-            ),
-          }));
-        repointedRules.push({
-          ruleId: r.id,
-          pattern: r.pattern,
-          matchType: normalizeMatchType(r.matchType),
-          fromCategoryId,
-          toCategoryId: patch.categoryId,
-          candidateCount: remaining.length,
-          sampleTransactions,
-        });
-      }
-
-      const isCovered = matchingSpecific.length > 0;
-      if (!isCovered) {
-        const isExplicit =
-          typeof rememberPattern === "string" && rememberPattern.length > 0;
-        const source = isExplicit
-          ? rememberPattern!
-          : derivePatternFromDescription(row.description);
-        const pattern = (source ?? "").trim().slice(0, 60);
-        const collidingGeneric = !isExplicit
-          ? matchingGeneric.find(
-              (r) => r.pattern.trim().toLowerCase() === pattern.toLowerCase(),
-            )
-          : undefined;
-        if (pattern && !collidingGeneric) {
-          const maxGenericPriority = matchingGeneric.reduce(
-            (acc, r) => Math.max(acc, r.priority),
-            0,
-          );
-          const newPriority = Math.max(100, maxGenericPriority + 1);
-          // Look up any pre-existing rule for this pattern *before* the
-          // upsert so we can capture its previous categoryId for the
-          // explicit-remember repoint branch below.
-          const existingForPattern = matching.find(
-            (r) => r.pattern === pattern,
-          );
-          const previousCategoryId = existingForPattern?.categoryId ?? null;
-          const upsertResult = await upsertMappingRule(db, {
-            userId,
-            householdId,
-            pattern,
-            matchType: "contains",
-            categoryId: patch.categoryId,
-            priority: newPriority,
-          });
-          // `upsertMappingRule` is keyed on (userId, pattern). If it
-          // returned "updated"/"noop" the pattern already had a rule —
-          // the explicit-remember case where the user re-categorizes a
-          // single-token merchant they previously remembered. That's
-          // semantically a repoint of the same rule, not a "new specific
-          // alongside a different generic", so report it as such even
-          // when the pre-existing rule was classified generic.
-          if (upsertResult.status !== "inserted") {
-            // Repoint via the upsert path — only emit a `repointed`
-            // RuleAction when the upsert actually moved the rule (i.e.
-            // we have a ruleId AND the previous category differs from
-            // the new pick). A pure noop has nothing to undo, so leave
-            // ruleAction at "none" and let the client suppress the
-            // toast description.
-            if (upsertResult.ruleId && previousCategoryId !== patch.categoryId) {
-              ruleAction = {
-                kind: "repointed",
-                pattern,
-                genericPattern: null,
-                ruleId: upsertResult.ruleId,
-                previousCategoryId,
-                matchType: null,
-                toCategoryId: null,
-                candidateCount: null,
-              };
-            }
-          } else {
-            // A brand-new specific rule was inserted. Count older
-            // *uncategorized* rows that match this pattern (excluding
-            // the row that triggered the auto-learn) so the client
-            // can offer the same "apply to past charges?" prompt
-            // already used for repointed rules. We deliberately scope
-            // to uncategorized rows: any row the user previously
-            // categorized by hand reflects explicit intent and should
-            // be left alone (the bulk endpoint enforces the same
-            // guard). The freshly-edited row itself is already on
-            // `patch.categoryId` after the UPDATE above, so it falls
-            // out of the uncategorized candidate pool naturally —
-            // we only need to defensively exclude its id in case a
-            // future change moves the categorize step.
-            const candidates = await selectPatternCandidates(
-              householdId,
-              { pattern, matchType: "contains" },
-              null,
-            );
-            const candidateCount = candidates.filter(
-              (c) => c.id !== row.id,
-            ).length;
-            if (matchingGeneric.length > 0) {
-              // A different (non-colliding) generic rule still matches —
-              // we left it alone and gave the new specific rule a higher
-              // priority. Tell the user so they understand both rules
-              // coexist and which one wins on future similar charges.
-              const generic = matchingGeneric[0]!;
-              ruleAction = {
-                kind: "created_priority_bump",
-                pattern,
-                genericPattern: generic.pattern,
-                ruleId: upsertResult.ruleId,
-                previousCategoryId: null,
-                matchType: "contains",
-                toCategoryId: patch.categoryId,
-                candidateCount,
-              };
-            } else {
-              ruleAction = {
-                kind: "created",
-                pattern,
-                genericPattern: null,
-                ruleId: upsertResult.ruleId,
-                previousCategoryId: null,
-                matchType: "contains",
-                toCategoryId: patch.categoryId,
-                candidateCount,
-              };
-            }
-          }
-        } else if (pattern && collidingGeneric) {
-          ruleAction = {
-            kind: "skipped_generic",
-            pattern,
-            genericPattern: collidingGeneric.pattern,
-            ruleId: null,
-            previousCategoryId: null,
-            matchType: null,
-            toCategoryId: null,
-            candidateCount: null,
-          };
-        }
-      } else if (repointedRules.length > 0) {
-        // At least one specific matching rule was repointed onto the
-        // chosen category. The "apply to past" prompt covers the
-        // candidate-count side; this summary just lets the client tell
-        // the user which existing rule was reused — and now also lets
-        // the client offer Undo to restore the rule's previous aim.
-        const first = repointedRules[0]!;
-        ruleAction = {
-          kind: "repointed",
-          pattern: first.pattern,
-          genericPattern: null,
-          ruleId: first.ruleId,
-          previousCategoryId: repointedPrev.get(first.ruleId) ?? null,
-          matchType: null,
-          toCategoryId: null,
-          candidateCount: null,
-        };
-      }
+    // (PR-A) mapping_rules are user-authored only: the 2-token auto-rule this
+    // handler used to create (and the repoint of matching rules) is gone. A
+    // category picked here is a `user` decision and teaches merchant memory
+    // (the same path as POST /categorization/review/:id/correct); the rows it
+    // would also fit come back as `retroactiveCandidates` and are NEVER moved
+    // unless a person asks (POST /learned-rules/:id/apply-retroactively).
+    // `repointedRules` / `ruleAction` stay in the response, always empty, so
+    // the classic app's toasts simply do not fire.
+    let retroactiveCandidates: RetroactiveCandidates | null = null;
+    if (bodyHasCategoryId) {
+      const filed = await recordHandFiling(req.householdId!, req.userId!, row.id, {
+        previousCategoryId: before?.categoryId ?? null,
+        categoryId: row.categoryId,
+      });
+      retroactiveCandidates = filed?.retroactiveCandidates ?? null;
     }
     // If forecast_flag was turned off on a FUTURE row, drop any forecast
     // resolution that points to it so the Forecast inbox/bucket stays
@@ -826,7 +472,21 @@ router.patch(
           ),
         );
     }
-    res.json({ ...row, repointedRules, ruleAction });
+    res.json({
+      ...row,
+      repointedRules: [],
+      ruleAction: {
+        kind: "none",
+        pattern: null,
+        genericPattern: null,
+        ruleId: null,
+        previousCategoryId: null,
+        matchType: null,
+        toCategoryId: null,
+        candidateCount: null,
+      },
+      retroactiveCandidates,
+    });
   },
 );
 
@@ -891,7 +551,7 @@ router.post(
     // future charges into Uncategorized — exactly what mapping.ts
     // forbids on direct CRUD. Guard only when a ruleId is supplied so
     // the row-only path keeps working.
-    if (ruleId && (await isExcludedCategory(userId, toCategoryId))) {
+    if (ruleId && (await isExcludedCategory(req.householdId!, toCategoryId))) {
       res.status(400).json({ error: EXCLUDED_CATEGORY_RULE_ERROR });
       return;
     }
@@ -985,6 +645,7 @@ router.post(
       .update(transactionsTable)
       .set({
         categoryId: toCategoryId,
+        categoryProvisional: false,
         isTransferUserOverridden: true,
         // (PR-0) A person re-filed these rows, so they are locked — unless
         // this is an Undo carrying `lockedIds`, which restores each row's
@@ -1006,6 +667,13 @@ router.post(
         ),
       )
       .returning({ id: transactionsTable.id });
+    // (PR-A) Each moved row is a `user` decision.
+    await recordUserDecisions(
+      db,
+      req.householdId!,
+      req.userId!,
+      updated.map((r) => ({ transactionId: r.id, previousCategoryId: fromCategoryId, categoryId: toCategoryId })),
+    );
     res.json({
       updated: updated.length,
       affectedMonths: Array.from(monthSet).sort(),
@@ -1106,9 +774,11 @@ router.post(
     }
     // (PR-0) Same lock rule as PATCH: a bulk category pick locks the rows; a
     // bulk clear (`categoryId: null`) unlocks them.
-    if (Object.prototype.hasOwnProperty.call(patch, "categoryId")) {
+    const bulkSetsCategory = Object.prototype.hasOwnProperty.call(patch, "categoryId");
+    if (bulkSetsCategory) {
       (drizzlePatch as Record<string, unknown>).categoryLockedByUser =
         bulkPickingCategory;
+      (drizzlePatch as Record<string, unknown>).categoryProvisional = false;
     }
     if (
       drizzlePatch.debtId &&
@@ -1187,6 +857,23 @@ router.post(
       return;
     }
     const rejectedSet = new Set(bulkRejectedIds);
+    // (PR-A) Categories before the write, for the `user` decisions.
+    const bulkBefore =
+      bulkSetsCategory && safeIds.length > 0
+        ? new Map(
+            (
+              await db
+                .select({ id: transactionsTable.id, categoryId: transactionsTable.categoryId })
+                .from(transactionsTable)
+                .where(
+                  and(
+                    eq(transactionsTable.householdId, req.householdId!),
+                    inArray(transactionsTable.id, safeIds),
+                  ),
+                )
+            ).map((r) => [r.id, r.categoryId] as const),
+          )
+        : null;
     const updated =
       safeIds.length === 0
         ? []
@@ -1203,6 +890,18 @@ router.post(
               id: transactionsTable.id,
               occurredOn: transactionsTable.occurredOn,
             });
+    if (bulkBefore) {
+      await recordUserDecisions(
+        db,
+        req.householdId!,
+        req.userId!,
+        updated.map((r) => ({
+          transactionId: r.id,
+          previousCategoryId: bulkBefore.get(r.id) ?? null,
+          categoryId: (drizzlePatch.categoryId as string | null | undefined) ?? null,
+        })),
+      );
+    }
     const okIds = new Set(updated.map((r) => r.id));
     // Mirror per-row PATCH cleanup: if forecast_flag was flipped off on a
     // FUTURE row, drop any forecast_resolutions pointing at it so the
@@ -1289,7 +988,7 @@ router.post(
     const updated = await db
       .update(transactionsTable)
       // (PR-0) No category, no lock: the row goes back to the categorizer.
-      .set({ categoryId: null, categoryLockedByUser: false })
+      .set({ categoryId: null, categoryLockedByUser: false, categoryProvisional: false })
       .where(
         and(
           eq(transactionsTable.householdId, req.householdId!),
@@ -1303,6 +1002,13 @@ router.post(
         id: transactionsTable.id,
         occurredOn: transactionsTable.occurredOn,
       });
+    // (PR-A) Each cleared row is a `user` decision (category null, unlocked).
+    await recordUserDecisions(
+      db,
+      req.householdId!,
+      req.userId!,
+      updated.map((r) => ({ transactionId: r.id, previousCategoryId: fromCategoryId, categoryId: null })),
+    );
     const monthSet = new Set<string>();
     for (const r of updated) {
       monthSet.add(`${r.occurredOn.slice(0, 7)}-01`);

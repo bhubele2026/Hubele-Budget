@@ -1667,6 +1667,24 @@ preserved.
   candidateCount?: number | null;
 }
 
+export interface RetroactiveSample {
+  id: string;
+  occurredOn: string;
+  description: string;
+  amount: string;
+  /** @nullable */
+  categoryId: string | null;
+}
+
+/**
+ * Unlocked rows of the same merchant. Reported, never applied.
+ */
+export interface RetroactiveCandidates {
+  count: number;
+  /** @maxItems 5 */
+  sample: RetroactiveSample[];
+}
+
 export type UpdateTransactionResponse = Transaction & {
   /** Empty unless this PATCH triggered the auto-learn flow to
 repoint one or more existing mapping rules onto a new
@@ -1675,6 +1693,10 @@ transactions too" prompt.
  */
   repointedRules: RepointedRule[];
   ruleAction: RuleAction;
+  /** (PR-A) When this PATCH set a category: unlocked rows of the same
+merchant it would also fit. Reported, never applied.
+ */
+  retroactiveCandidates?: RetroactiveCandidates | null;
 };
 
 export type CreateTransactionResponse = Transaction & {
@@ -4804,6 +4826,180 @@ export interface AgentMonitorRunResult {
   /** Open findings closed because their cause cleared */
   autoResolved: number;
   summary: string;
+}
+
+export interface RunCategorizationInput {
+  since?: string;
+}
+
+export interface CategorizationRunResult {
+  /** Decisions that wrote a category (auto or provisional). */
+  decided: number;
+  /** Decisions placed in the review queue. */
+  queued: number;
+  /** Rows no deterministic stage decided at 0.6 or more. */
+  ambiguous: number;
+}
+
+export interface ReviewFlags {
+  novelMerchant: boolean;
+  amountAnomaly: boolean;
+  splitNeedsRebalance: boolean;
+}
+
+export type ReviewItemBand =
+  (typeof ReviewItemBand)[keyof typeof ReviewItemBand];
+
+export const ReviewItemBand = {
+  provisional: "provisional",
+  queue: "queue",
+} as const;
+
+export interface ReviewItem {
+  decisionId: string;
+  transactionId: string;
+  occurredOn: string;
+  description: string;
+  amount: string;
+  /** @nullable */
+  account: string | null;
+  /** @nullable */
+  currentCategoryId: string | null;
+  /** @nullable */
+  suggestedCategoryId: string | null;
+  confidence: number;
+  band: ReviewItemBand;
+  source: string;
+  explanation: string;
+  createdAt: string;
+  flags: ReviewFlags;
+}
+
+export interface ReviewQueue {
+  items: ReviewItem[];
+  total: number;
+}
+
+export interface CorrectDecisionInput {
+  categoryId: string;
+}
+
+export type ReviewResolutionResolution =
+  (typeof ReviewResolutionResolution)[keyof typeof ReviewResolutionResolution];
+
+export const ReviewResolutionResolution = {
+  accepted: "accepted",
+  corrected: "corrected",
+  skipped: "skipped",
+} as const;
+
+export interface ReviewResolution {
+  decisionId: string;
+  transactionId: string;
+  resolution: ReviewResolutionResolution;
+  /** @nullable */
+  categoryId: string | null;
+  /**
+   * The `user` decision this wrote; pass it to undo.
+   * @nullable
+   */
+  userDecisionId: string | null;
+  retroactiveCandidates: RetroactiveCandidates | null;
+}
+
+export interface UndoDecisionResult {
+  decisionId: string;
+  transactionId: string;
+  /** @nullable */
+  categoryId: string | null;
+}
+
+export type LearnedRuleScope =
+  (typeof LearnedRuleScope)[keyof typeof LearnedRuleScope];
+
+export const LearnedRuleScope = {
+  merchant: "merchant",
+  merchant_account: "merchant_account",
+  merchant_amount: "merchant_amount",
+} as const;
+
+export interface LearnedRule {
+  id: string;
+  signature: string;
+  scope: LearnedRuleScope;
+  /** @nullable */
+  plaidAccountId: string | null;
+  /** @nullable */
+  amountBandLo: string | null;
+  /** @nullable */
+  amountBandHi: string | null;
+  categoryId: string;
+  /** Times a person confirmed it. */
+  count: number;
+  /** @nullable */
+  lastConfirmedAt: string | null;
+  disabled: boolean;
+  source: string;
+  createdAt: string;
+}
+
+export type UpdateLearnedRuleInputScope =
+  (typeof UpdateLearnedRuleInputScope)[keyof typeof UpdateLearnedRuleInputScope];
+
+export const UpdateLearnedRuleInputScope = {
+  merchant: "merchant",
+  merchant_account: "merchant_account",
+  merchant_amount: "merchant_amount",
+} as const;
+
+export interface UpdateLearnedRuleInput {
+  categoryId?: string;
+  scope?: UpdateLearnedRuleInputScope;
+  disabled?: boolean;
+}
+
+export interface ApplyRetroactivelyResult {
+  updated: number;
+}
+
+export interface TransactionSplitInput {
+  categoryId: string;
+  /**
+   * Signed like the charge itself.
+   * @pattern ^-?\d+(\.\d{1,2})?$
+   */
+  amount: string;
+  /** @nullable */
+  member?: string | null;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface ReplaceTransactionSplitsInput {
+  /**
+   * @minItems 2
+   * @maxItems 20
+   */
+  splits: TransactionSplitInput[];
+}
+
+export interface TransactionSplit {
+  id: string;
+  categoryId: string;
+  amount: string;
+  /** @nullable */
+  member: string | null;
+  /** @nullable */
+  note: string | null;
+  source: string;
+}
+
+export interface TransactionSplits {
+  transactionId: string;
+  amount: string;
+  /** The charge's amount moved by $1 or more; it counts whole until rebalanced. */
+  invalid: boolean;
+  splits: TransactionSplit[];
 }
 
 export type GetTransactionsLedgerParams = {

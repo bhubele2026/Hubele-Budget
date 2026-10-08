@@ -27,7 +27,7 @@ import {
   vi,
 } from "vitest";
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `preserve-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -81,6 +81,10 @@ import {
   plaidAccountsTable,
   plaidItemsTable,
   transactionsTable,
+  categoryDecisionsTable,
+  mappingRulesTable,
+  merchantMemoryTable,
+  transactionSplitsTable,
 } from "@workspace/db";
 import { syncPlaidItem } from "../lib/plaidSync";
 
@@ -95,6 +99,10 @@ async function cleanup(): Promise<void> {
     .delete(plaidAccountsTable)
     .where(eq(plaidAccountsTable.userId, TEST_USER));
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
+  if (TEST_HOUSEHOLD_ID) {
+    await db.delete(mappingRulesTable).where(eq(mappingRulesTable.householdId, TEST_HOUSEHOLD_ID));
+    await db.delete(merchantMemoryTable).where(eq(merchantMemoryTable.householdId, TEST_HOUSEHOLD_ID));
+  }
 }
 
 beforeAll(async () => {
@@ -327,5 +335,54 @@ describe("`removed` never hard-deletes a user-touched row", () => {
         ),
       );
     expect(gone).toHaveLength(0);
+  });
+
+  it("(PR-A) a kept row is stamped plaid_removed_at and queued; a locked or split row is kept too", async () => {
+    const { itemRowId, externalAcctId } = await seedChaseAccount();
+    const base = { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, occurredOn: "2026-05-11", source: "plaid:chase", plaidAccountId: externalAcctId };
+    const [kept] = await db.insert(transactionsTable).values({ ...base, description: "KEPT", amount: "-30.00", plaidTransactionId: "KEPT1", categoryId: CAT_ID }).returning();
+    // A split parent with no category of its own used to be deleted.
+    const [split] = await db.insert(transactionsTable).values({ ...base, description: "SPLITP", amount: "-40.00", plaidTransactionId: "SPLT1" }).returning();
+    await db.insert(transactionSplitsTable).values([
+      { householdId: TEST_HOUSEHOLD_ID, transactionId: split!.id, categoryId: CAT_ID, amount: "-25.00" },
+      { householdId: TEST_HOUSEHOLD_ID, transactionId: split!.id, categoryId: CAT_ID, amount: "-15.00" },
+    ]);
+    await db.insert(transactionsTable).values({ ...base, description: "GONE", amount: "-5.00", plaidTransactionId: "GONE1" });
+    nextSyncResponse = { added: [], modified: [], removed: [{ transaction_id: "KEPT1" }, { transaction_id: "SPLT1" }, { transaction_id: "GONE1" }] };
+    await syncPlaidItem(TEST_USER, itemRowId);
+    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, TEST_USER));
+    const byPtid = new Map(rows.map((r) => [r.plaidTransactionId, r]));
+    expect(byPtid.has("GONE1")).toBe(false);
+    expect(byPtid.get("KEPT1")!.plaidRemovedAt).not.toBeNull();
+    expect(byPtid.get("SPLT1")!.plaidRemovedAt).not.toBeNull();
+    const notices = await db.select().from(categoryDecisionsTable).where(inArray(categoryDecisionsTable.transactionId, [kept!.id, split!.id]));
+    expect(notices.map((d) => [d.band, d.explanation])).toEqual([
+      ["queue", "The bank removed this charge."],
+      ["queue", "The bank removed this charge."],
+    ]);
+    // A second sync naming the same ids queues nothing new.
+    await syncPlaidItem(TEST_USER, itemRowId);
+    expect(await db.select().from(categoryDecisionsTable).where(inArray(categoryDecisionsTable.transactionId, [kept!.id, split!.id]))).toHaveLength(2);
+  });
+
+  it("(PR-A) the sync runs the engine over the rows it upserted: a rule fills a new row, memory a new merchant", async () => {
+    const { itemRowId, externalAcctId } = await seedChaseAccount();
+    await db.insert(mappingRulesTable).values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, pattern: "QUARRY HARDWARE", matchType: "contains", categoryId: CAT_ID, priority: 0 });
+    await db.insert(merchantMemoryTable).values({ householdId: TEST_HOUSEHOLD_ID, signature: "brightside cafe", scope: "merchant", categoryId: CAT_ID, count: 3, createdAt: new Date(Date.now() - 60_000) });
+    nextSyncResponse = {
+      added: [
+        { transaction_id: "ENG1", account_id: externalAcctId, date: "2026-05-12", amount: 22, name: "QUARRY HARDWARE 0099" },
+        { transaction_id: "ENG2", account_id: externalAcctId, date: "2026-05-12", amount: 6, name: "BRIGHTSIDE CAFE" },
+      ],
+      modified: [],
+      removed: [],
+    };
+    await syncPlaidItem(TEST_USER, itemRowId);
+    const rows = await db.select().from(transactionsTable).where(inArray(transactionsTable.plaidTransactionId, ["ENG1", "ENG2"]));
+    const byPtid = new Map(rows.map((r) => [r.plaidTransactionId, r]));
+    expect(byPtid.get("ENG1")).toMatchObject({ categoryId: CAT_ID, categoryProvisional: false, categoryLockedByUser: false });
+    expect(byPtid.get("ENG2")).toMatchObject({ categoryId: CAT_ID, categoryProvisional: false });
+    const sources = await db.select({ s: categoryDecisionsTable.source }).from(categoryDecisionsTable).where(inArray(categoryDecisionsTable.transactionId, rows.map((r) => r.id)));
+    expect(sources.map((x) => x.s).sort()).toEqual(["memory", "rule"]);
   });
 });

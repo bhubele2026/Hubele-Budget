@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RepointedRule } from "./repointedRule";
+import type { RetroactiveCandidates } from "./retroactiveCandidates";
 import type { RuleAction } from "./ruleAction";
 import type { Transaction } from "./transaction";
 
@@ -17,4 +18,8 @@ transactions too" prompt.
  */
   repointedRules: RepointedRule[];
   ruleAction: RuleAction;
+  /** (PR-A) When this PATCH set a category: unlocked rows of the same
+merchant it would also fit. Reported, never applied.
+ */
+  retroactiveCandidates?: RetroactiveCandidates | null;
 };

@@ -28,6 +28,8 @@ import agentRouter from "./agent";
 import recapRouter from "./recap";
 import smsRouter from "./sms";
 import debtPlanRouter from "./debtPlan";
+import categorizationRouter from "./categorization";
+import learnedRulesRouter from "./learnedRules";
 
 const router: IRouter = Router();
 
@@ -60,5 +62,7 @@ router.use(agentRouter);
 router.use(recapRouter);
 router.use(smsRouter);
 router.use(debtPlanRouter);
+router.use(categorizationRouter);
+router.use(learnedRulesRouter);
 
 export default router;

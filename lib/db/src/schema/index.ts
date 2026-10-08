@@ -18,6 +18,7 @@ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 
 export * from "./migrations";
+export * from "./categorization";
 
 // (#623) HOUSEHOLD DATA MODEL
 //
@@ -345,6 +346,19 @@ export const transactionsTable = pgTable(
     categoryLockedByUser: boolean("category_locked_by_user")
       .notNull()
       .default(false),
+    // (PR-A) Categorization engine v2 — added by
+    // lib/db/migrations/0020_categorization_v2.sql (keep them equal).
+    // True while the row's category was written by the engine in the
+    // provisional band (0.6–0.9) and nobody has confirmed it yet.
+    categoryProvisional: boolean("category_provisional").notNull().default(false),
+    // The earlier purchase this inflow refunds (engine's refund heuristic).
+    refundOfTxnId: uuid("refund_of_txn_id"),
+    // Plaid sent this row in `removed`, but a person had worked it, so it was
+    // kept and queued instead of deleted.
+    plaidRemovedAt: timestamp("plaid_removed_at", { withTimezone: true }),
+    // A Plaid upsert moved the amount of a split parent by $1 or more: its
+    // splits no longer add up and the parent counts whole until rebalanced.
+    splitsInvalid: boolean("splits_invalid").notNull().default(false),
     isExternalCardPayment: boolean("is_external_card_payment")
       .notNull()
       .default(false),

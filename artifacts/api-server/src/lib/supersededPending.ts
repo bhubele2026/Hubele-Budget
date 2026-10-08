@@ -265,6 +265,8 @@ export function supersedeCandidatesQuery(
       // (round 4, review H1/H2) The signal `effectiveFiling` decides hand-vs-
       // automatic and transfer inheritance from — never re-read mapping rules.
       pIsTransferUserOverridden: pendingRow.isTransferUserOverridden,
+      // (PR-A) The pending row's lock, carried with its category.
+      pCategoryLockedByUser: pendingRow.categoryLockedByUser,
       qId: postedRow.id,
       qAccount: postedRow.plaidAccountId,
       qOn: postedRow.occurredOn,
@@ -356,6 +358,7 @@ function pairCandidates(
         debtId: c.pDebtId,
         isTransfer: c.pIsTransfer,
         isTransferUserOverridden: c.pIsTransferUserOverridden,
+        categoryLockedByUser: c.pCategoryLockedByUser,
       });
     }
     rowOf(postedRowOf(c));
