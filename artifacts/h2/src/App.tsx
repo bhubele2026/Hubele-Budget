@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef , type ComponentType } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClientProvider, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ClerkProvider, useAuth, useClerk } from "@clerk/react";
@@ -14,6 +14,10 @@ import {
   importDesign,
   importDesignActivity,
   importDesignPlan,
+  importDesignRecap,
+  importHousehold,
+  importHouseholdMembers,
+  importRecap,
   importDesignToday,
   importPlaidOAuth,
   importPlanBills,
@@ -48,6 +52,10 @@ const PlanDebtPage = lazy(importPlanDebt);
 const PlanCategoriesPage = lazy(importPlanCategories);
 const PlanWishlistPage = lazy(importPlanWishlist);
 const DesignPlanPage = lazy(importDesignPlan);
+const HouseholdPage = lazy(importHousehold);
+const HouseholdMembersPage = lazy(importHouseholdMembers);
+const RecapPage = lazy(importRecap);
+const DesignRecapPage = lazy(importDesignRecap);
 
 const queryClient = createQueryClient();
 
@@ -153,6 +161,15 @@ function ProtectedShell() {
             <Route path="/plan/wishlist">
               <PlanWishlistPage />
             </Route>
+            <Route path="/household">
+              <HouseholdPage />
+            </Route>
+            <Route path="/household/members">
+              <HouseholdMembersPage />
+            </Route>
+            <Route path="/recap">
+              <RecapPage />
+            </Route>
             <Route>
               <NotFound />
             </Route>
@@ -180,47 +197,26 @@ function PublicDesign() {
   );
 }
 
-/** Today on made-up data: public, no network, so the composition can be judged signed out. */
-function PublicDesignToday() {
+/** A sample page on made-up data: public, so a composition can be judged signed out. */
+function PublicDesignPage({ page: Page }: { page: ComponentType }) {
   const [location] = useLocation();
   return (
     <Shell>
       <PageErrorBoundary resetKey={location}>
         <Suspense fallback={<RouteFallback />}>
-          <DesignTodayPage />
+          <Page />
         </Suspense>
       </PageErrorBoundary>
     </Shell>
   );
 }
+const PublicDesignToday = () => <PublicDesignPage page={DesignTodayPage} />;
+const PublicDesignPlan = () => <PublicDesignPage page={DesignPlanPage} />;
+const PublicDesignActivity = () => <PublicDesignPage page={DesignActivityPage} />;
+const PublicDesignRecap = () => <PublicDesignPage page={DesignRecapPage} />;
 
-/** Plan on made-up data: public, so the composition can be judged signed out. */
-function PublicDesignPlan() {
-  const [location] = useLocation();
-  return (
-    <Shell>
-      <PageErrorBoundary resetKey={location}>
-        <Suspense fallback={<RouteFallback />}>
-          <DesignPlanPage />
-        </Suspense>
-      </PageErrorBoundary>
-    </Shell>
-  );
-}
 
-/** Activity on made-up data: public, no network, so the screens can be judged signed out. */
-function PublicDesignActivity() {
-  const [location] = useLocation();
-  return (
-    <Shell>
-      <PageErrorBoundary resetKey={location}>
-        <Suspense fallback={<RouteFallback />}>
-          <DesignActivityPage />
-        </Suspense>
-      </PageErrorBoundary>
-    </Shell>
-  );
-}
+
 
 /** Drops every cached figure when the signed-in user changes (ported). */
 function ClerkQueryClientCacheInvalidator() {
@@ -260,6 +256,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/design/today" component={PublicDesignToday} />
           <Route path="/design/plan" component={PublicDesignPlan} />
           <Route path="/design/activity/*?" component={PublicDesignActivity} />
+          <Route path="/design/recap" component={PublicDesignRecap} />
           <Route path="/design" component={PublicDesign} />
           <Route component={ProtectedShell} />
         </Switch>

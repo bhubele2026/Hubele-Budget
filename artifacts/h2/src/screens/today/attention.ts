@@ -70,14 +70,14 @@ export function attentionItems(i: {
       kind: "reconnect",
       title: "Reconnect your bank",
       detail: "The last sync did not go through.",
-      action: { label: "Reconnect", href: "/classic/settings" },
+      action: { label: "Reconnect", href: "/household" },
     });
   }
   if (i.bank?.stale && i.bank.staleReason === "old") {
     out.push({
       kind: "stale",
       title: "The bank balance is out of date",
-      action: { label: "Sync", href: "/classic/settings" },
+      action: { label: "Sync", href: "/household" },
     });
   }
   if (i.withinPlan === "over") {

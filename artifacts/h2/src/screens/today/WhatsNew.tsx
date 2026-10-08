@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetUiPreferencesQueryKey,
@@ -93,9 +94,9 @@ export default function WhatsNew({ bank, spentWeek }: { bank: number | null; spe
         {step === 2 && (
           <>
             <p className="type-headline text-ink">A morning text at 7:00 can be turned on in Recap.</p>
-            <a href="/classic/settings" className={buttonClass({ variant: "link", size: "md" })}>
-              Open settings
-            </a>
+            <Link href="/recap" onClick={finish} className={buttonClass({ variant: "link", size: "md" })}>
+              Open Recap
+            </Link>
           </>
         )}
         <div className="flex items-center gap-3 pt-2">

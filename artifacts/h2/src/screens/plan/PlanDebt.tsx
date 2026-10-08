@@ -536,7 +536,7 @@ export function DebtView({ data, now }: { data: DebtData; now?: Date }) {
         }
         foot={
           <>
-            Linking a bank account for debts is coming to{" "}
+            Link a bank to bring in your cards and loans on{" "}
             <Link href="/household" className="text-moss underline decoration-1 underline-offset-4 hover:text-moss-ink">
               Household
             </Link>

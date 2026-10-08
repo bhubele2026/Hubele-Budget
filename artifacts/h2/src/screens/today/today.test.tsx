@@ -344,18 +344,18 @@ describe("Today — this week", () => {
     expect(screen.queryByTestId("needs-filing")).toBeNull();
   });
 
-  it("explains the limit: owner-set, and the suggestion", () => {
+  it("explains the limit: owner-set, and the suggestion", async () => {
     renderToday();
-    expect(screen.getByTestId("limit-source").textContent).toBe("$600 a week, set by you.");
-    expect(screen.getByTestId("limit-suggested").textContent).toBe("H2 suggests $430 a week.");
+    expect((await screen.findByTestId("limit-source")).textContent).toBe("$600 a week, set by you.");
+    expect((await screen.findByTestId("limit-suggested")).textContent).toBe("H2 suggests $430 a week.");
     expect(screen.queryByTestId("limit-derivation")).toBeNull();
   });
 
-  it("explains a derived limit with its working", () => {
+  it("explains a derived limit with its working", async () => {
     mocks.plans = q({ ...PLANS, plans: [{ ...PLANS.plans[0], source: "derived" }] });
     renderToday();
-    expect(screen.getByTestId("limit-source").textContent).toContain("suggested from your income");
-    expect(screen.getByTestId("limit-derivation").textContent).toContain("Take-home $4,333 a month");
+    expect((await screen.findByTestId("limit-source")).textContent).toContain("suggested from your income");
+    expect((await screen.findByTestId("limit-derivation")).textContent).toContain("Take-home $4,333 a month");
   });
 
   it("with no cap anywhere, says so rather than inventing one", () => {
@@ -431,7 +431,7 @@ describe("Today — one thing, in a fixed order", () => {
     renderToday();
     const title = () => screen.getByTestId("action-title").textContent;
     expect(title()).toBe("Reconnect your bank");
-    expect(within(screen.getByTestId("action-card")).getByRole("link", { name: "Reconnect" }).getAttribute("href")).toBe("/classic/settings");
+    expect(within(screen.getByTestId("action-card")).getByRole("link", { name: "Reconnect" }).getAttribute("href")).toBe("/household");
     await user.click(screen.getByRole("button", { name: "Next" }));
     expect(title()).toBe("You're over this week by $55");
     expect(screen.getByTestId("action-card").textContent).toContain("Nothing to decide. Just know it.");
@@ -620,7 +620,7 @@ describe("Today — What's new", () => {
     await user.click(sw);
     await user.click(within(dialog).getByRole("button", { name: "Next" }));
     expect(dialog.textContent).toContain("A morning text at 7:00 can be turned on in Recap.");
-    expect(within(dialog).getByRole("link", { name: "Open settings" }).getAttribute("href")).toBe("/classic/settings");
+    expect(within(dialog).getByRole("link", { name: "Open Recap" }).getAttribute("href")).toBe("/recap");
     expect(mocks.save).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole("button", { name: "Done" }));
     expect(mocks.save).toHaveBeenCalledTimes(1);
@@ -711,7 +711,7 @@ describe("Today — states", () => {
     expect(screen.getByTestId("freshness-badge").textContent).toMatch(/Out of date.*last updated 3 days ago/);
     const note = screen.getByTestId("stale-note");
     expect(note.textContent).toContain("The bank balance may be out of date.");
-    expect(within(note).getByRole("link", { name: "Sync" }).getAttribute("href")).toBe("/classic/settings");
+    expect(within(note).getByRole("link", { name: "Sync" }).getAttribute("href")).toBe("/household");
   });
 
   it("a failed refresh keeps the last figures, says how old they are, offers Retry", () => {
@@ -725,5 +725,7 @@ describe("Today — states", () => {
     renderToday();
     const row = screen.getByTestId("classic-row");
     expect(within(row).getByRole("link", { name: "Classic app" }).getAttribute("href")).toBe("/classic/");
+    expect(row.textContent).toContain("Workbook import still lives in the classic app.");
+    expect(row.textContent).not.toMatch(/bank links|settings/);
   });
 });

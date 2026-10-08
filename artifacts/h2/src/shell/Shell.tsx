@@ -1,8 +1,11 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { useLocation } from "wouter";
-import { Show, UserButton } from "@clerk/react";
+import { Show } from "@clerk/react";
 import { Masthead } from "@/kit/Masthead";
 import { Dock } from "@/kit/Dock";
+// The account menu is off the open path: it loads when the shell first paints
+// signed in, behind a placeholder the size of the avatar.
+const AccountMenu = lazy(() => import("./AccountMenu").then((m) => ({ default: m.AccountMenu })));
 
 /**
  * The frame every screen sits in: masthead, a 720 px reading column with
@@ -31,7 +34,9 @@ export function Shell({
         badges={{ activity: activityBadge }}
         account={
           <Show when="signed-in">
-            <UserButton />
+            <Suspense fallback={<i className="block h-8 w-8 rounded-full bg-paper-2" />}>
+              <AccountMenu />
+            </Suspense>
           </Show>
         }
       />

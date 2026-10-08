@@ -24,6 +24,12 @@ export const importPlanDebt = () => import("../screens/plan/PlanDebt");
 export const importPlanCategories = () => import("../screens/plan/PlanCategories");
 export const importPlanWishlist = () => import("../screens/plan/PlanWishlist");
 export const importDesignPlan = () => import("../screens/design/DesignPlan");
+// (S4) Household (banks, members), Recap and the sample page. Each is lazy; the Plaid link
+// code rides with Household and is never on the open path.
+export const importHousehold = () => import("../screens/household/Household");
+export const importHouseholdMembers = () => import("../screens/household/Members");
+export const importRecap = () => import("../screens/recap/Recap");
+export const importDesignRecap = () => import("../screens/design/DesignRecap");
 
 /** href → importer, keyed exactly as the routes are declared in App.tsx. */
 export const routeImporters: Record<string, () => Promise<unknown>> = {
@@ -40,6 +46,10 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/plan/categories": importPlanCategories,
   "/plan/wishlist": importPlanWishlist,
   "/design/plan": importDesignPlan,
+  "/household": importHousehold,
+  "/household/members": importHouseholdMembers,
+  "/recap": importRecap,
+  "/design/recap": importDesignRecap,
 };
 
 const prefetched = new Set<string>();

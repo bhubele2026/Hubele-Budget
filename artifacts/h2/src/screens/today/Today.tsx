@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { Link } from "wouter";
 import { householdToday } from "@workspace/avalanche-core/householdTime";
 import { useTodayData, type TodayData } from "@/data/todayData";
 import { buttonClass } from "@/kit/Button";
@@ -153,12 +154,9 @@ export function TodayView({
               kind="stale"
               data-testid="stale-note"
               action={
-                <a
-                  href="/classic/settings"
-                  className={buttonClass({ variant: "link", size: "sm" })}
-                >
+                <Link href="/household" className={buttonClass({ variant: "link", size: "sm" })}>
                   Sync
-                </a>
+                </Link>
               }
             >
               The bank balance may be out of date.
@@ -198,8 +196,7 @@ export function TodayView({
           Classic app
         </a>
         <p className="type-caption text-ink-2">
-          Bills, debts, settings and bank links still live in the classic app
-          for now.
+          Workbook import still lives in the classic app.
         </p>
       </div>
 
