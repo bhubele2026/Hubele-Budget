@@ -419,10 +419,12 @@ describe("GET /debt-plan", () => {
       planned60d: Array<{ itemId: string; amount: number }>;
       confirmedMtd: number;
       paidDownGenuineMtd: number;
+      newChargesMtd: number;
       assumptions: Array<{ key: string }>;
     };
     expect(Object.keys(plan).sort()).toEqual(
-      ["asOf", "assumptions", "comparison", "confirmedMtd", "extraMonthly", "milestones", "paidDownGenuineMtd", "planned60d", "range", "strategy"].sort(),
+      // (V5) + newChargesMtd — the spine's `debt.newChargesMtd`, an amount charged, never a balance.
+      ["asOf", "assumptions", "comparison", "confirmedMtd", "extraMonthly", "milestones", "newChargesMtd", "paidDownGenuineMtd", "planned60d", "range", "strategy"].sort(),
     );
     expect(plan.strategy).toBe("avalanche");
     expect(plan.extraMonthly).toBe(200);
