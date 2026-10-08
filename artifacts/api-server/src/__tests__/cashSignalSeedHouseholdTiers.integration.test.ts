@@ -221,6 +221,13 @@ async function augustOnTime(): Promise<void> {
 }
 
 describe("decision 13 — the seed household (hand-worked figures)", () => {
+  // ⭐ (PR-B2) Every figure here is $900 lower than before PR-B2: this household has
+  // no everyday hooks, and `keepsPreSnapshotRule` (PR6's temporary carve-out for
+  // weekly-cadence expenses) is deleted, so the two Weekly Spend occurrences of the
+  // last 14 days ($450 each, unpaid — no row ever pays a reserve bill) drag to the
+  // next business day like any bill. Before, the pre-snapshot drop (#666) hid them.
+  // Reading LOW, as the law allows; with hooks (0042 sets them for this name) the
+  // reserve is the Amex payoff instead (everydayHooks.integration.test.ts).
   // Fri 08-21, horizon 3 (to Mon 08-24). Unpaid within 14 days: Kwik Trip 08-09 (an
   // allowance, no row) drags onto 08-24. On the curve: Weekly Spend 08-22 −450,
   // Water 08-24 −101.02, Kwik Trip 08-24 −200. Brad's 08-21 paycheck is due today:
@@ -228,25 +235,25 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
   // row is evidence.
   //   all paid: 10,000 − 450 − 200 − 101.02 − 200 = 9,048.98 → max safe 8,548.98.
 
-  it("A0 08-21, all on time, MGE never confirmed: 'MADISON GAS EL' names no one — tier 3, MGE drags (8,807.98 / 8,307.98)", async () => {
+  it("A0 08-21, all on time, MGE never confirmed: 'MADISON GAS EL' names no one — tier 3, MGE drags (7,907.98 / 7,407.98)", async () => {
     await household("2026-08-21");
     await augustOnTime();
     const sig = await signal(3);
     // 9,048.98 − 241.00.
-    expect(figures(sig)).toEqual({ lowest: "8807.98", maxSafeExtra: "8307.98" });
+    expect(figures(sig)).toEqual({ lowest: "7907.98", maxSafeExtra: "7407.98" });
     expect(pairOf(sig, "mge", "2026-08-20")).toMatchObject({ confidence: "low", tier: 3, offCurve: false });
   });
 
-  it("A 08-21, all on time, July's MGE confirmed: (fix 2) the confirmed descriptor makes August tier 2 (9,048.98 / 8,548.98)", async () => {
+  it("A 08-21, all on time, July's MGE confirmed: (fix 2) the confirmed descriptor makes August tier 2 (8,148.98 / 7,648.98)", async () => {
     await household("2026-08-21");
     await confirmed("mge", "2026-07-20", "-241.00");
     await augustOnTime();
     const sig = await signal(3);
-    expect(figures(sig)).toEqual({ lowest: "9048.98", maxSafeExtra: "8548.98" });
+    expect(figures(sig)).toEqual({ lowest: "8148.98", maxSafeExtra: "7648.98" });
     expect(pairOf(sig, "mge", "2026-08-20")).toMatchObject({ tier: 2, offCurve: true });
   });
 
-  it("B 08-21, Toyota +6, TruStage +5, Mortgage +3, Verizon +2: (fix 1) Toyota's exact 'TOYOTA' six days late is tier 2 (9,048.98 / 8,548.98)", async () => {
+  it("B 08-21, Toyota +6, TruStage +5, Mortgage +3, Verizon +2: (fix 1) Toyota's exact 'TOYOTA' six days late is tier 2 (8,148.98 / 7,648.98)", async () => {
     await household("2026-08-21");
     await confirmed("mge", "2026-07-20", "-241.00");
     await paid("toyota", "2026-08-13", "-672.80");
@@ -256,7 +263,7 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
     await paid("psn16", "2026-08-16", "-18.98");
     await paid("mge", "2026-08-20", "-241.00");
     const sig = await signal(3);
-    expect(figures(sig)).toEqual({ lowest: "9048.98", maxSafeExtra: "8548.98" });
+    expect(figures(sig)).toEqual({ lowest: "8148.98", maxSafeExtra: "7648.98" });
     expect(pairOf(sig, "toyota", "2026-08-07")).toMatchObject({ dayDelta: 6, tier: 2, offCurve: true });
     expect(pairOf(sig, "trustage", "2026-08-15")).toMatchObject({ dayDelta: 5, tier: 2 });
   });
@@ -272,7 +279,7 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
   // where round 2 dragged only the $5.00 gap. Owner trade-off: this is more
   // conservative (never overstates) but now needs a confirm click for a shortfall
   // this small, same as any other unnamed row.
-  it("C 08-21, Verizon $425.00 on the $430 bill, July's Verizon confirmed: (round 3) outside the confirmed amount's range, not sole in its category — a suggestion, the whole $430 drags (8,618.98 / 8,118.98)", async () => {
+  it("C 08-21, Verizon $425.00 on the $430 bill, July's Verizon confirmed: (round 3) outside the confirmed amount's range, not sole in its category — a suggestion, the whole $430 drags (7,718.98 / 7,218.98)", async () => {
     await household("2026-08-21");
     await confirmed("mge", "2026-07-20", "-241.00");
     await confirmed("verizon", "2026-07-16", "-430.00");
@@ -284,7 +291,7 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
     await paid("mge", "2026-08-20", "-241.00");
     const sig = await signal(3);
     // 9,048.98 − 430.00 (round 2: 9,048.98 − 5.00 = 9,043.98).
-    expect(figures(sig)).toEqual({ lowest: "8618.98", maxSafeExtra: "8118.98" });
+    expect(figures(sig)).toEqual({ lowest: "7718.98", maxSafeExtra: "7218.98" });
     expect(pairOf(sig, "verizon", "2026-08-16")).toMatchObject({ txnId: verizon, difference: "-5.00", tier: 3, offCurve: false });
     expect(sig.overdueAssumedPaid?.find((p) => p.planKey === `${ids.verizon}|2026-08-16`)).toBeUndefined();
     expect((sig.events ?? []).filter((e) => e.assumption === "overdue_remainder_assumed_unpaid")).toEqual([]);
@@ -325,10 +332,10 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
     return july;
   }
 
-  it("D 08-05, July Toyota +6, State Farm renewed at $165, Water exact: (round 3) the $165 renewal is outside its confirmed range — the whole $180 drags (8,528.00 / 8,028.00)", async () => {
+  it("D 08-05, July Toyota +6, State Farm renewed at $165, Water exact: (round 3) the $165 renewal is outside its confirmed range — the whole $180 drags (7,628.00 / 7,128.00)", async () => {
     await earlyAugust("-672.80");
     const sig = await signal(2);
-    expect({ ...figures(sig), ending: sig.endingBalance }).toEqual({ lowest: "8528.00", maxSafeExtra: "8028.00", ending: "16628.00" });
+    expect({ ...figures(sig), ending: sig.endingBalance }).toEqual({ lowest: "7628.00", maxSafeExtra: "7128.00", ending: "15728.00" });
     expect(pairOf(sig, "water", "2026-07-24")).toMatchObject({ tier: 2 });
     expect(pairOf(sig, "sfIns", "2026-08-03")).toMatchObject({ difference: "-15.00", tier: 3, offCurve: false });
     expect(pairOf(sig, "toyota", "2026-07-07")).toMatchObject({ dayDelta: 6, tier: 2 });
@@ -345,10 +352,10 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
   // high.
   //   08-06 is unchanged: 8,528.00 / 8,028.00 (Toyota is due 08-07, the paycheck's day).
   //   08-07: 8,528.00 + 8,100.00 − 672.80 = 15,955.20 (was 16,628.00).
-  it("D2 08-05, July Toyota paid $685.00 (a late fee: tier 3): (PR-B2) a tier-3 July is not proof, so August's early exact payment is held back and drags until July is confirmed (8,528.00 / 8,028.00, ending 15,955.20)", async () => {
+  it("D2 08-05, July Toyota paid $685.00 (a late fee: tier 3): (PR-B2) a tier-3 July is not proof, so August's early exact payment is held back and drags until July is confirmed (7,628.00 / 7,128.00, ending 15,055.20)", async () => {
     await earlyAugust("-685.00");
     const sig = await signal(2);
-    expect({ ...figures(sig), ending: sig.endingBalance }).toEqual({ lowest: "8528.00", maxSafeExtra: "8028.00", ending: "15955.20" });
+    expect({ ...figures(sig), ending: sig.endingBalance }).toEqual({ lowest: "7628.00", maxSafeExtra: "7128.00", ending: "15055.20" });
     expect(pairOf(sig, "toyota", "2026-07-07")).toMatchObject({ difference: "12.20", ambiguous: false, tier: 3, offCurve: false });
     expect(pairOf(sig, "toyota", "2026-08-07")).toMatchObject({ dayDelta: -3, tier: 3, offCurve: false });
   });
@@ -357,20 +364,20 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
   // evidence, and an answered occurrence never reaches the matcher, so July no longer
   // holds anything back. August's exact payment is free again and clears August —
   // back to D's figures. Read twice on one household so the answer is the only change.
-  it("D3 08-05, the D2 household, then July's $685.00 confirmed as matched (tier 1): August drags before the answer and clears after it (ending 15,955.20 → 16,628.00)", async () => {
+  it("D3 08-05, the D2 household, then July's $685.00 confirmed as matched (tier 1): August drags before the answer and clears after it (ending 15,055.20 → 15,728.00)", async () => {
     const julyRow = await earlyAugust("-685.00");
     const before = await signal(2);
-    expect(before.endingBalance).toBe("15955.20");
+    expect(before.endingBalance).toBe("15055.20");
     expect(pairOf(before, "toyota", "2026-08-07")).toMatchObject({ tier: 3, offCurve: false });
 
     await answerMatched("toyota", "2026-07-07", julyRow);
     const after = await signal(2);
-    expect({ ...figures(after), ending: after.endingBalance }).toEqual({ lowest: "8528.00", maxSafeExtra: "8028.00", ending: "16628.00" });
+    expect({ ...figures(after), ending: after.endingBalance }).toEqual({ lowest: "7628.00", maxSafeExtra: "7128.00", ending: "15728.00" });
     expect(pairOf(after, "toyota", "2026-07-07")).toBeUndefined();
     expect(pairOf(after, "toyota", "2026-08-07")).toMatchObject({ dayDelta: -3, tier: 2, offCurve: true });
   });
 
-  it("E 08-10, both State Farm policies +6 (July confirmed), HELOC +6, UW car +4: 9,359.55 / 8,859.55", async () => {
+  it("E 08-10, both State Farm policies +6 (July confirmed), HELOC +6, UW car +4: 8,459.55 / 7,959.55", async () => {
     // Mon 08-10, horizon 1 (to Tue 08-11). Unpaid within 14 days: Monthly Spend 08-01
     // −440.45 and Kwik Trip 08-09 −200 drag onto 08-11. Everything else is paid.
     //   10,000 − 440.45 − 200 = 9,359.55 → max safe 8,859.55.
@@ -386,14 +393,14 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
     await paid("uw", "2026-08-10", "-651.55");
     await paid("toyota", "2026-08-07", "-672.80");
     const sig = await signal(1);
-    expect(figures(sig)).toEqual({ lowest: "9359.55", maxSafeExtra: "8859.55" });
+    expect(figures(sig)).toEqual({ lowest: "8459.55", maxSafeExtra: "7959.55" });
     expect(pairOf(sig, "sf", "2026-08-03")).toMatchObject({ dayDelta: 6, tier: 2 });
     expect(pairOf(sig, "sfIns", "2026-08-03")).toMatchObject({ dayDelta: 6, tier: 2 });
     expect(pairOf(sig, "heloc", "2026-08-03")).toMatchObject({ dayDelta: 6, tier: 2 });
     expect(pairOf(sig, "uw", "2026-08-06")).toMatchObject({ dayDelta: 4, tier: 2 });
   });
 
-  it("F1 08-20, Brad's $8,100 KFI paycheck deposited a day early: (fix 5) its own category makes it tier 2 — counted once (ending 9,800.00, lowest 9,800.00 / 9,300.00)", async () => {
+  it("F1 08-20, Brad's $8,100 KFI paycheck deposited a day early: (fix 5) its own category makes it tier 2 — counted once (ending 8,900.00, lowest 8,900.00 / 8,400.00)", async () => {
     // Thu 08-20, horizon 1 (to Fri 08-21). Kwik Trip 08-09 −200 drags onto 08-21; every
     // other bill is paid (MGE due today, July confirmed). Brad's earlier paychecks all
     // arrived, so none of them holds the 08-21 one back.
@@ -410,11 +417,11 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
     await paid("psn16", "2026-08-16", "-18.98");
     await paid("mge", "2026-08-20", "-241.00");
     const sig = await signal(1);
-    expect({ ending: sig.endingBalance, ...figures(sig) }).toEqual({ ending: "9800.00", lowest: "9800.00", maxSafeExtra: "9300.00" });
+    expect({ ending: sig.endingBalance, ...figures(sig) }).toEqual({ ending: "8900.00", lowest: "8900.00", maxSafeExtra: "8400.00" });
     expect(pairOf(sig, "bradPay", "2026-08-21")).toMatchObject({ txnId: early, dayDelta: -1, tier: 2, offCurve: true });
   });
 
-  it("F2 08-27, Hannah's $4,499.99 paycheck deposited a day early on a MANUAL row: (fix 4) a manual checking row is cash and evidence — counted once (ending 9,800.00, lowest 9,800.00 / 9,300.00)", async () => {
+  it("F2 08-27, Hannah's $4,499.99 paycheck deposited a day early on a MANUAL row: (fix 4) a manual checking row is cash and evidence — counted once (ending 8,900.00, lowest 8,900.00 / 8,400.00)", async () => {
     // Thu 08-27, horizon 1 (to Fri 08-28). Kwik Trip 08-24 −200 drags onto 08-28; every
     // other bill is paid (MGE and Water July confirmed). Hannah's earlier paychecks
     // all arrived.
@@ -431,7 +438,7 @@ describe("decision 13 — the seed household (hand-worked figures)", () => {
     await paid("mge", "2026-08-20", "-241.00");
     await paid("water", "2026-08-24", "-101.02");
     const sig = await signal(1);
-    expect({ ending: sig.endingBalance, ...figures(sig) }).toEqual({ ending: "9800.00", lowest: "9800.00", maxSafeExtra: "9300.00" });
+    expect({ ending: sig.endingBalance, ...figures(sig) }).toEqual({ ending: "8900.00", lowest: "8900.00", maxSafeExtra: "8400.00" });
     expect(pairOf(sig, "hannahPay", "2026-08-28")).toMatchObject({ txnId: early, dayDelta: -1, tier: 2, offCurve: true });
   });
 });

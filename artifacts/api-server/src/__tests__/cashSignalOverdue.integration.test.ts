@@ -471,21 +471,26 @@ describe("PR6 — one-time bills stay until resolved", () => {
 });
 
 /**
- * ⚠️ WEEKLY-CADENCE EXPENSES KEEP THE PRE-PR6 RULE UNTIL PR8 (`keepsPreSnapshotRule`).
- * The Weekly Spend reserve is a plain weekly bill no bank row ever pays; the
- * overdue rule would drag two weeks of it onto one day. Sunday 2026-05-17,
- * balance 1,000.00 read at 10:00 CT; Weekly Spend $300 anchored Saturday 05-09.
- * The 05-16 occurrence (the day before the snapshot, #688) drags to Mon 05-18;
- * everything earlier is dropped (#666). These are the figures `f40c4b0` gives.
+ * ⭐ (PR-B2) WEEKLY-CADENCE EXPENSES FOLLOW THE OVERDUE RULE LIKE ANY BILL.
+ * PR6 kept a temporary carve-out (`keepsPreSnapshotRule`: the pre-snapshot drop
+ * #666 with its one-day exception #688) because the Weekly Spend reserve was a
+ * plain weekly bill no bank row ever pays. Decision 7 (PR-B2) makes that bill a
+ * date hook — the forecast replaces it with the Amex payoff
+ * (`everydayHooks.integration.test.ts`) — so the carve-out is deleted. A weekly
+ * bill that is NOT a hook is a bill: unpaid occurrences in the last 14 days drag
+ * to the next business day. Sunday 2026-05-17, balance 1,000.00 read at 10:00 CT;
+ * a $300 weekly expense anchored Saturday 05-09, no hooks. Before PR-B2 only the
+ * 05-16 occurrence dragged (05-18: 700.00) and 05-09 was dropped; now both drag
+ * (05-18: 400.00) — $300 LOWER, never higher.
  */
-describe("⚠️ weekly-cadence expenses keep the pre-snapshot rule until PR8", () => {
+describe("(PR-B2) a weekly-cadence expense that is not a hook follows the overdue rule", () => {
   async function weeklySpend(): Promise<string> {
     vi.setSystemTime(new Date("2026-05-17T18:00:00Z"));
     await snapshot(new Date("2026-05-17T15:00:00Z"));
     return bill({ name: "Weekly Spend", frequency: "weekly", dayOfMonth: null, anchorDate: "2026-05-09", amount: "300" });
   }
 
-  it("a Sunday snapshot with an unresolved weekly $300 expense: the same daily figures as before PR6", async () => {
+  it("a Sunday snapshot with an unresolved weekly $300 expense: 05-09 and 05-16 both drag to Mon 05-18 (before PR-B2: only 05-16)", async () => {
     await weeklySpend();
     const sig = await signal(); // 05-17 … 06-16
     expect(sig.bankToday).toBe("1000.00");
@@ -493,16 +498,17 @@ describe("⚠️ weekly-cadence expenses keep the pre-snapshot rule until PR8", 
     const moves = (sig.daily ?? []).filter((d, i, all) => i === 0 || d.balance !== all[i - 1]!.balance);
     expect(moves).toEqual([
       { date: "2026-05-17", balance: "1000.00" },
-      { date: "2026-05-18", balance: "700.00" },
-      { date: "2026-05-23", balance: "400.00" },
-      { date: "2026-05-30", balance: "100.00" },
-      { date: "2026-06-06", balance: "-200.00" },
-      { date: "2026-06-13", balance: "-500.00" },
+      { date: "2026-05-18", balance: "400.00" },
+      { date: "2026-05-23", balance: "100.00" },
+      { date: "2026-05-30", balance: "-200.00" },
+      { date: "2026-06-06", balance: "-500.00" },
+      { date: "2026-06-13", balance: "-800.00" },
     ]);
-    expect(sig.endingBalance).toBe("-500.00");
-    expect(sig.lowestProjected).toBe("-500.00");
+    expect(sig.endingBalance).toBe("-800.00");
+    expect(sig.lowestProjected).toBe("-800.00");
     expect(sig.lowestDate).toBe("2026-06-13");
     expect((sig.events ?? []).map((e) => [e.date, e.amount, e.originalDate])).toEqual([
+      ["2026-05-18", "-300.00", "2026-05-09"],
       ["2026-05-18", "-300.00", "2026-05-16"],
       ["2026-05-23", "-300.00", "2026-05-23"],
       ["2026-05-30", "-300.00", "2026-05-30"],
@@ -511,11 +517,12 @@ describe("⚠️ weekly-cadence expenses keep the pre-snapshot rule until PR8", 
     ]);
   });
 
-  it("…tagged dragged_past_due, and never dragged or listed as overdue", async () => {
+  it("…tagged overdue_assumed_unpaid like any bill (dragged_past_due is retired), and nothing older is listed", async () => {
     const spend = await weeklySpend();
     const sig = await signal();
-    expect(sig.events?.[0]).toMatchObject({ assumption: "dragged_past_due", occurrenceKey: `${spend}|2026-05-16` });
-    expect((sig.events ?? []).slice(1).map((e) => e.assumption)).toEqual([null, null, null, null]);
+    expect(sig.events?.[0]).toMatchObject({ assumption: "overdue_assumed_unpaid", occurrenceKey: `${spend}|2026-05-09` });
+    expect(sig.events?.[1]).toMatchObject({ assumption: "overdue_assumed_unpaid", occurrenceKey: `${spend}|2026-05-16` });
+    expect((sig.events ?? []).slice(2).map((e) => e.assumption)).toEqual([null, null, null, null]);
     expect(sig.overdueOutsideForecast).toEqual([]);
   });
 });

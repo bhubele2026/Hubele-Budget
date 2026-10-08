@@ -7,8 +7,9 @@ reconciling every displayed number without guessing which hidden rule produced i
 - **The test:** `artifacts/api-server/src/__tests__/householdScenario.integration.test.ts`.
   - It asserts the three columns the app computes today, and (PR-B1, 2026-10-07) the money position's
     columns from `GET /money/position`: remaining, unplanned and needs classification this week and safe
-    to spend now at every step. Lowest before payday and available until payday are pinned at today's
-    values (lower than this contract) until the funding-bill hooks land; see "PR-B1 delivery".
+    to spend now at every step. (PR-B2, 2026-10-07) With the funding bills now date hooks, lowest before
+    payday, available until payday and the expected balance on Fri 10/16 are asserted at every step too;
+    see "PR-B2 delivery".
   - Every other column is an `it.todo` naming the PR that switches it on. Switching it on is part of
     that PR's definition of done.
   - A PR that legitimately changes a rule updates this document, the fixture and the test together —
@@ -28,6 +29,8 @@ same in Chicago and in UTC.
 | | **Bills:** Mortgage −$1,800 on the 12th. Electric −$140 on the 13th. Phone −$95 on the 8th. |
 | | **Spend plans:** Weekly Spend −$300 on Saturdays (the Platinum payoff). Monthly Spend −$400 on the 28th (Blue). |
 | | **Weekly cap (PR-B1):** $300 — the household pool's allowance plan (`allowance_plans`, from 2026-05-01), the allowance the Weekly Spend bill funds. |
+| | **Monthly cap (PR-B2):** $400 — the pool's monthly plan, the allowance the Monthly Spend hook pays out on the Blue. |
+| | **Hooks (PR-B2, decision 7):** `preferences.everydayHooks` names Weekly Spend (weekly) and Monthly Spend (monthly), as `0042_everyday_hooks.sql` sets them. Each occurrence is the card payoff; the bills' stored $300 / $400 are ignored. |
 | **Last week** | Amex Platinum groceries $180.00 on Tue 9/29 — the payoff that posts this Tuesday. |
 
 ## Rules the expected values assume
@@ -54,8 +57,11 @@ column on here.
   - **Plus:** income, bills and the Amex payoffs dated from today through 10/16. Today's plans count; a
     plan matched or probably matched to a real row is removed.
   - **Payoff for a week:** that week's Platinum charges plus the remaining allowance, dated on the plan's
-    Saturday.
-  - **Closed week not yet paid:** the payoff lands on the next business day.
+    Saturday. (PR-B2) Every charge counts, filed or not; the Weekly Spend bill's own $300 is ignored.
+  - **Closed week not yet paid:** the payoff lands on the next business day. A closed week owes its charges
+    alone (nothing is left to spend in it). (PR-B2) It counts as paid only on evidence: a checking payment
+    naming Amex of that amount (within max($1, 1%)), dated from the Saturday up to the next one — here the
+    $180 on Tue 10/6.
 - **Lowest before payday (PR9):** the lowest end-of-day expected balance from today until the day
   before the next income that hasn't already been matched away.
 - **Available until payday (PR-B1):** lowest before payday less the $500 cash buffer (and any money
@@ -69,9 +75,8 @@ column on here.
 ## The week
 
 **Asserted now:** cash, spent this week, review count; (PR-B1) remaining, unplanned, needs classification
-and safe to spend now at every step. **Contract for later work:** expected on 10/16, Chase to review, stale;
-lowest before payday and available until payday at every step (pinned at today's lower values meanwhile;
-see "PR-B1 delivery" below).
+and safe to spend now at every step; (PR-B2) expected on 10/16, lowest before payday and available until
+payday at every step. **Contract for later work:** Chase to review, stale.
 
 | # | When | Event | Cash | Spent week | Review | Remaining | Unplanned | Needs class. | Expected Fri 10/16 | Lowest before payday | Available until payday | Safe to spend now | Chase to review | Stale |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -79,7 +84,7 @@ see "PR-B1 delivery" below).
 | S2 | Mon 10/5 12:00 | Amex Plat: groceries 96.60, gas 45.00 (weekly) | 2,500.00 | 141.60 | 0 | 158.40 | 0.00 | 0.00 | 3,485.00 | 2,225.00 Thu 10/8 | 1,725.00 | 158.40 | 0 | — |
 | S3 | Tue 10/6 12:00 | Amex Plat: hardware 85.00 (unplanned). Chase: 200.00 to savings; Amex payoff 180.00 posts | 2,120.00 | 226.60 | 2 | 158.40 | 85.00 | 0.00 | 3,200.00 | 2,025.00 Thu 10/8 | 1,525.00 | 158.40 | 2 | — |
 | S4 | Wed 10/7 12:00 | Chase debit: Shell 45.00 pending (weekly) | 2,075.00 | 271.60 | 3 | 113.40 | 85.00 | 0.00 | 3,200.00 | 1,980.00 Thu 10/8 | 1,480.00 | 113.40 | 3 | — |
-| S5 | Thu 10/8 09:00 | Shell posts at 47.40 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,200.00 | 1,977.60 Thu 10/8 | 1,477.60 | 111.00 | 3 | — |
+| S5 | Thu 10/8 09:00 | Shell posts at 47.40 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,200.00 | 1,977.60 Fri 10/9 | 1,477.60 | 111.00 | 3 | — |
 | S6 | Thu 10/8 12:00 | Phone moved 10/8 → 10/14 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,200.00 | 2,072.60 Thu 10/8 | 1,572.60 | 111.00 | 3 | — |
 | S7 | Thu 10/8 15:00 | Electric 140 → 165 | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,175.00 | 2,072.60 Thu 10/8 | 1,572.60 | 111.00 | 3 | — |
 | S8 | Thu 10/8 16:00 | Chase refresh fails | 2,072.60 | 274.00 | 3 | 111.00 | 85.00 | 0.00 | 3,175.00 | 2,072.60 Thu 10/8 | 1,572.60 | 111.00 | 3 | refresh_failed |
@@ -169,7 +174,7 @@ real $180 payment is in cash and the plan is matched away.
 | S2 | Paycheck A, Fri 10/9 | 10/6 2,320 · 10/8 2,225 | $2,225.00 Thu 10/8 |
 | S3 | Paycheck A, Fri 10/9 | 10/8: 2,120 − 95 | $2,025.00 Thu 10/8 |
 | S4 | Paycheck A, Fri 10/9 | 10/8: 2,075 − 95 | $1,980.00 Thu 10/8 |
-| S5 | Paycheck A, Fri 10/9 | 10/8: 2,072.60 − 95 | $1,977.60 Thu 10/8 |
+| S5 | Paycheck A, Fri 10/9 | The $95 phone is due today, so it lands on the next business day — payday — and counts before the paycheck: 10/9 2,072.60 − 95 | $1,977.60 Fri 10/9 |
 | S6–S8 | Paycheck A, Fri 10/9 | The phone bill moved out, so only 10/8 remains | $2,072.60 Thu 10/8 |
 | S9 | Paycheck B, 10/15 (Paycheck A matched away) | 10/10 3,735 · 10/12 1,935 · 10/13 1,770 · 10/14 1,675 | $1,675.00 Wed 10/14 |
 | S10 | Paycheck B, 10/15 | 10/10 3,585 · 10/12 1,785 · 10/13 1,620 · 10/14 1,525 | $1,525.00 Wed 10/14 |
@@ -205,19 +210,9 @@ that and remaining this week. The week binds at every step, so safe to spend now
 
 - **Switched on, every step:** remaining, unplanned and needs classification this week, and safe to spend
   now — read from `GET /money/position`, whose figures the spine's `position` carries.
-- **Lowest before payday and available until payday: pending at every step** (`it.todo`, one line each),
-  and pinned meanwhile at what the app reports today, which is lower than this table at every step and never
-  higher:
-
-  | Step | Today's ledger (lowest / available) | Why | Turns on with |
-  |---|---|---|---|
-  | S1, S2 | 2,105.00 Thu 10/8 / 1,605.00 | Last Saturday's $300 Weekly Spend bill is dragged to Mon 10/5; the contract has the $180 Amex payoff | the funding-bill hooks (decision 7, next package) |
-  | S3 | 1,725.00 Thu 10/8 / 1,225.00 | The $180 payoff posted, but the $300 Weekly Spend bill due 10/3 is still dragged, to Wed 10/7 | the funding-bill hooks |
-  | S4 | 1,680.00 Thu 10/8 / 1,180.00 | The same $300 bill, dragged to Thu 10/8 | the funding-bill hooks |
-  | S5 | 1,677.60 Fri 10/9 / 1,177.60 | The $95 phone (due today, landed on payday) now counts before the paycheck, as this table says; the $300 Weekly Spend bill dragged onto payday counts too | the funding-bill hooks |
-  | S6–S8 | 1,772.60 Fri 10/9 / 1,272.60 | The $300 Weekly Spend bill due 10/3 is dragged onto payday and counts before the paycheck | the funding-bill hooks |
-  | S9, S10 | 1,412.60 / 1,262.60 Wed 10/14 / 912.60 / 762.60 | Two $300 Weekly Spend bills (10/3 dragged to Mon 10/12, and 10/10) instead of the $337.60 payoff | the funding-bill hooks |
-
+- Lowest before payday and available until payday were pinned at the lower values the ledger gave while the
+  $300 Weekly Spend bill was still a bill (S1–S2 1,605.00; S3 1,225.00; S4 1,180.00; S5 1,177.60; S6–S8
+  1,272.60; S9 912.60; S10 762.60). PR-B2 switched them on — see "PR-B2 delivery".
 - **Round 2 (lead's ruling on the S5 question):** the window runs through payday, and on payday the bills
   count before the paycheck. Round 1 asserted S6–S8 at 2,072.60 because it stopped the day before payday;
   that same rule left the $95 phone out at S5 and read high. Counting payday's bills fixes S5's phone and,
@@ -228,3 +223,22 @@ that and remaining this week. The week binds at every step, so safe to spend now
 - **Stale stays pending.** At S3–S7 today's freshness rule already reads `old` (a Plaid balance read
   Sun 08:00 with no sync for over 48 hours), where this table says fresh; the money position reports that
   as `degraded`. The column predates the 48-hour rule and is left for PR3's owner to reconcile.
+
+## PR-B2 delivery (2026-10-07)
+
+Decision 7 landed: the Weekly Spend and Monthly Spend bills are date hooks, each occurrence the card payoff.
+Every column but Chase to review and stale is now asserted at every step, through `GET /money/position`
+and `GET /forecast/cash-signal`; the spine's `position` equals the route at every step.
+
+| Step | Available until payday, PR-B1 pin → PR-B2 | Why it moved |
+|---|---|---|
+| S1, S2 | 1,605.00 → **1,725.00** | Last Saturday's $300 Weekly Spend bill is now the $180 payoff for that closed week (charges only), still on Mon 10/5 / Tue 10/6 |
+| S3 | 1,225.00 → **1,525.00** | The $180 Amex payment on 10/6 pays the closed week (evidence); nothing drags |
+| S4 | 1,180.00 → **1,480.00** | The same |
+| S5 | 1,177.60 → **1,477.60** | The same; the $95 phone still lands on payday before the paycheck (the date is Fri 10/9, not Thu 10/8: due today → next business day) |
+| S6–S8 | 1,272.60 → **1,572.60** | Nothing is left in the window but cash; the lowest is Thu 10/8, tied with Fri 10/9 (first day reached) |
+| S9, S10 | 912.60 / 762.60 → **1,175.00 / 1,025.00** | One $337.60 payoff for this week replaces two $300 bills |
+
+Every move is up by exactly the funding bill the ledger used to carry in place of a payoff that was paid,
+or by the bill's excess over the real payoff; never past this contract. The expected balance on Fri 10/16
+reads the contract at every step (3,485.00 / 3,200.00 / 3,175.00 / 3,025.00).

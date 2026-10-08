@@ -29,6 +29,13 @@ export const SNAPSHOT = {
  */
 export const WEEKLY_CAP = { amount: "300.00", effectiveFrom: "2026-05-01" };
 
+/**
+ * (PR-B2, decision 7) The monthly allowance the Monthly Spend hook pays out on
+ * the Blue: $400 from 2026-05-01. With the hooks, the allowance — not the bill's
+ * stored amount — is the reserve, so the household's $400 lives here now.
+ */
+export const MONTHLY_CAP = { amount: "400.00", effectiveFrom: "2026-05-01" };
+
 export const ACCOUNTS = {
   chase: { accountId: "hs-chase-5526", mask: "5526", name: "Chase Checking" },
   savings: { accountId: "hs-savings-8801", mask: "8801", name: "Chase Savings" },
@@ -71,20 +78,15 @@ export type StepExpectation = {
   unplannedWeek: string;
   /** Real spend that is neither planned nor unplanned (it counts against the cap). */
   needsClassificationWeek: string;
-  // ── Contract for later PRs (it.todo until the named PR ships) ──────────
-  /** Expected end-of-day checking balance on Fri 10/16. PR8 + PR9. */
+  // ── (PR-B2) Asserted at every step, now that the funding bills are hooks ──
+  /** Expected end-of-day checking balance on Fri 10/16 (`GET /forecast/cash-signal`). */
   expectedFri1016: string;
-  /**
-   * Lowest expected end-of-day balance from today until the next payday. PR9;
-   * (PR-B1) asserted at the steps not in `POSITION_LEDGER_NOT_YET`.
-   */
+  /** Lowest expected end-of-day balance from today through payday (its bills before its paycheck). */
   lowBeforePayday: { balance: string; date: string };
+  // ── Contract for later PRs (it.todo until the named PR ships) ──────────
   /** Chase ledger rows this month not yet marked reviewed. PR13 / PR14. */
   chaseToReview: number;
-  /**
-   * (PR-B1) Lowest before payday less the $500 buffer: what is free until
-   * payday. Asserted with `lowBeforePayday`.
-   */
+  /** (PR-B1) Lowest before payday less the $500 buffer: what is free until payday. Asserted (PR-B2). */
   availableUntilPayday: string;
   /** (PR-B1) The smaller of remaining this week and available until payday. Asserted at every step. */
   safeToSpendNow: string;
@@ -168,7 +170,9 @@ export const EXPECTED: Record<StepId, StepExpectation> = {
     unplannedWeek: "85.00",
     needsClassificationWeek: "0.00",
     expectedFri1016: "3200.00",
-    lowBeforePayday: { balance: "1977.60", date: "2026-10-08" },
+    // (PR-B2) Fri 10/9: the $95 phone is due today, so it lands on the next
+    // business day — payday — and counts before the paycheck (PR-B1 round 2).
+    lowBeforePayday: { balance: "1977.60", date: "2026-10-09" },
     chaseToReview: 3,
     availableUntilPayday: "1477.60",
     safeToSpendNow: "111.00",
@@ -264,85 +268,21 @@ export const CONTRACT_COLUMNS: Array<{
   turnsOnIn: string;
 }> = [
   { key: "bankStale", label: "bank freshness flag", turnsOnIn: "PR3" },
-  { key: "expectedFri1016", label: "expected balance on Fri 10/16", turnsOnIn: "PR8 + PR9" },
   { key: "chaseToReview", label: "Chase rows to review", turnsOnIn: "PR13 + PR14" },
 ];
 
 /**
- * ⭐ (PR-B1) The money position's columns, read from `GET /money/position`
- * (the spine's `position` is the same call). Switched on at every step:
- * `remainingWeek`, `unplannedWeek`, `needsClassificationWeek` and
- * `safeToSpendNow`. `lowBeforePayday` and `availableUntilPayday` are switched
- * on at the steps NOT listed in `POSITION_LEDGER_NOT_YET` — since round 2
- * (bills on payday count before the paycheck) that is none of them: today's
- * ledger still carries the $300 Weekly Spend bill where the contract has the
- * Amex payoff. At a listed step the test pins what the app reports today
- * (reading LOW, as the law allows) so the hooks package notices the change.
+ * ⭐ (PR-B1, PR-B2) The money position's columns, read from `GET /money/position`
+ * (the spine's `position` is the same call), asserted at every step. PR-B2's
+ * hooks took the $300 Weekly Spend bill off the curve and put the Amex payoff
+ * there, so the lowest before payday (asserted beside these) and available
+ * until payday now read the contract at every step — PR-B1's pinned lower
+ * values (`POSITION_LEDGER_NOT_YET`) are gone.
  */
 export const POSITION_COLUMNS = [
   "remainingWeek",
   "unplannedWeek",
   "needsClassificationWeek",
+  "availableUntilPayday",
   "safeToSpendNow",
 ] as const;
-
-/**
- * Steps where today's forecast ledger does not yet yield the contract's lowest
- * before payday (and so its available until payday), with the one-line reason
- * and what the app reports today (pinned). `it.todo` until the named package.
- */
-export const POSITION_LEDGER_NOT_YET: Partial<
-  Record<StepId, { turnsOnIn: string; reason: string; appReportsToday: { lowBeforePayday: string; availableUntilPayday: string } }>
-> = {
-  S1: {
-    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
-    reason: "the ledger drags last Saturday's $300 Weekly Spend bill to Mon 10/5 instead of the $180 Amex payoff",
-    appReportsToday: { lowBeforePayday: "2105.00 2026-10-08", availableUntilPayday: "1605.00" },
-  },
-  S2: {
-    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
-    reason: "the ledger drags last Saturday's $300 Weekly Spend bill instead of the $180 Amex payoff",
-    appReportsToday: { lowBeforePayday: "2105.00 2026-10-08", availableUntilPayday: "1605.00" },
-  },
-  S3: {
-    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
-    reason: "the $180 payoff posted, but the ledger still drags the $300 Weekly Spend bill due 10/3 to Wed 10/7",
-    appReportsToday: { lowBeforePayday: "1725.00 2026-10-08", availableUntilPayday: "1225.00" },
-  },
-  S4: {
-    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
-    reason: "the ledger drags the $300 Weekly Spend bill due 10/3 to Thu 10/8",
-    appReportsToday: { lowBeforePayday: "1680.00 2026-10-08", availableUntilPayday: "1180.00" },
-  },
-  S5: {
-    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
-    reason:
-      "the $95 phone (due today, landed on payday) now counts before the paycheck as the contract says, but so does the $300 Weekly Spend bill due 10/3, dragged onto payday where the contract has nothing left to pay",
-    appReportsToday: { lowBeforePayday: "1677.60 2026-10-09", availableUntilPayday: "1177.60" },
-  },
-  S6: {
-    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
-    reason: "the $300 Weekly Spend bill due 10/3 is dragged onto payday Fri 10/9 and counts before the paycheck; the contract's $180 payoff posted 10/6",
-    appReportsToday: { lowBeforePayday: "1772.60 2026-10-09", availableUntilPayday: "1272.60" },
-  },
-  S7: {
-    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
-    reason: "the $300 Weekly Spend bill due 10/3 is dragged onto payday Fri 10/9 and counts before the paycheck",
-    appReportsToday: { lowBeforePayday: "1772.60 2026-10-09", availableUntilPayday: "1272.60" },
-  },
-  S8: {
-    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
-    reason: "the $300 Weekly Spend bill due 10/3 is dragged onto payday Fri 10/9 and counts before the paycheck",
-    appReportsToday: { lowBeforePayday: "1772.60 2026-10-09", availableUntilPayday: "1272.60" },
-  },
-  S9: {
-    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
-    reason: "the ledger counts two $300 Weekly Spend bills (10/3 dragged to 10/12, and 10/10) instead of the $337.60 payoff",
-    appReportsToday: { lowBeforePayday: "1412.60 2026-10-14", availableUntilPayday: "912.60" },
-  },
-  S10: {
-    turnsOnIn: "the funding-bill hooks (decision 7, next package)",
-    reason: "the ledger counts two $300 Weekly Spend bills (10/3 dragged to 10/12, and 10/10) instead of the $337.60 payoff",
-    appReportsToday: { lowBeforePayday: "1262.60 2026-10-14", availableUntilPayday: "762.60" },
-  },
-};

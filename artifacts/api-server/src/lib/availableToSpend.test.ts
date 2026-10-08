@@ -368,14 +368,14 @@ describe("confidence, assumptions, freshness", () => {
   });
 });
 
-describe("(Round 2, Q6) a reimbursable charge flagged weekly — TODAY'S behaviour, pinned", () => {
-  // ⚠️ PINNED, NOT ENDORSED. The owner's 2026-09-15 rule: a reimbursable charge
-  // is excluded regardless of flags. `classifyMovement` still lets an allowance
-  // flag outrank `reimbursable` (PR-H's step order), so today this row reads
-  // `allowance_weekly` and counts against the cap. PR-B2 moves `reimbursable`
-  // ahead of the flags inside `classifyMovement`; when it does, this row leaves
-  // the sum and THIS TEST MUST FLIP (expect "reimbursable" and 0.00).
-  it("counts against the weekly cap today", () => {
+describe("(Round 2, Q6 → PR-B2) a reimbursable charge flagged weekly — the owner's rule", () => {
+  // The owner's 2026-09-15 rule: a reimbursable charge is excluded regardless of
+  // flags. PR-H's step order let the weekly flag outrank `reimbursable`, so this
+  // row read `allowance_weekly` and counted $35.00 against the cap (remaining
+  // 665.00). ⭐ PR-B2 moved `reimbursable` ahead of the flags inside
+  // `classifyMovement`: the row leaves the sum (remaining 700.00) — the flip this
+  // pin was written to force.
+  it("(PR-B2) no longer counts against the weekly cap", () => {
     const row: MovementRow = {
       id: "r1",
       occurredOn: "2026-10-06",
@@ -400,10 +400,10 @@ describe("(Round 2, Q6) a reimbursable charge flagged weekly — TODAY'S behavio
       matchedTxnIds: new Set(),
     };
     const coverage = classifyMovement(row, ctx).coverage;
-    expect(coverage).toBe("allowance_weekly");
+    expect(coverage).toBe("reimbursable");
     const p = computePosition(inputs({ weekRows: [{ coverage, spend: spendAmount(row) }] }));
-    expect(p.spentWeekDiscretionary).toBe("35.00");
-    expect(p.remainingWeek).toBe("665.00");
+    expect(p.spentWeekDiscretionary).toBe("0.00");
+    expect(p.remainingWeek).toBe("700.00");
   });
 });
 

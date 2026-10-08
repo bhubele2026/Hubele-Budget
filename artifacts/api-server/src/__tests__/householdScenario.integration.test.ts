@@ -10,10 +10,11 @@
 // numbers back through the real /spine route.
 //
 // Asserted now: cash today, spent this week, review count — the three columns
-// the app computes today — and (PR-B1) the money position's columns from
-// GET /money/position: remaining, unplanned and needs classification this week
-// and safe to spend now at every step; lowest before payday and available
-// until payday where today's ledger already yields the contract's value. A
+// the app computes today — and (PR-B1, PR-B2) the money position's columns from
+// GET /money/position at every step: remaining, unplanned and needs
+// classification this week, lowest before payday, available until payday and
+// safe to spend now; and (PR-B2) the expected balance on Fri 10/16 from
+// GET /forecast/cash-signal, now that the funding bills are hooks. A
 // column the app still gets wrong at a step is marked pending with the PR that
 // fixes it, rather than pinning a wrong value.
 // Every later column is an it.todo naming its PR; switching it on is part of
@@ -64,6 +65,7 @@ import {
   plaidAccountsTable,
   plaidItemsTable,
   recurringItemsTable,
+  settingsTable,
   transactionsTable,
 } from "@workspace/db";
 import spineRouter from "../routes/spine";
@@ -75,8 +77,8 @@ import {
   ACCOUNTS,
   CONTRACT_COLUMNS,
   EXPECTED,
+  MONTHLY_CAP,
   POSITION_COLUMNS,
-  POSITION_LEDGER_NOT_YET,
   SNAPSHOT,
   WEEKLY_CAP,
   type StepId,
@@ -100,6 +102,11 @@ type Spine = {
   spentWeek: number;
   reviewCount: number;
   position: { safeToSpendNow: string | null; remainingWeek: string | null; availableUntilPayday: string | null };
+};
+
+type CashSignalRead = {
+  daily: Array<{ date: string; balance: string }>;
+  hookAmountIgnored?: Array<{ itemId: string; cadence: string; storedAmount: string }>;
 };
 
 type Position = {
@@ -147,6 +154,7 @@ async function cleanup(): Promise<void> {
     .delete(plaidAccountsTable)
     .where(eq(plaidAccountsTable.userId, TEST_USER));
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
+  await db.delete(settingsTable).where(eq(settingsTable.userId, TEST_USER));
   if (TEST_HOUSEHOLD_ID) {
     await db.delete(allowancePlansTable).where(eq(allowancePlansTable.householdId, TEST_HOUSEHOLD_ID));
   }
@@ -218,25 +226,20 @@ async function expectToday(id: StepId): Promise<void> {
   for (const column of POSITION_COLUMNS) {
     expect(pos[column], `${id} ${column}`).toBe(e[column]);
   }
-  const pending = POSITION_LEDGER_NOT_YET[id];
-  if (!pending) {
-    expect(
-      { balance: pos.lowestUntilPayday, date: pos.lowestUntilPaydayDate },
-      `${id} lowest before payday`,
-    ).toEqual(e.lowBeforePayday);
-    expect(pos.availableUntilPayday, `${id} available until payday`).toBe(e.availableUntilPayday);
-  } else {
-    // Not the contract yet (it.todo below): pinned at what the app reports
-    // today — lower than the contract, never higher — so the package that
-    // closes the gap notices the change.
-    expect(`${pos.lowestUntilPayday} ${pos.lowestUntilPaydayDate}`, `${id} lowest before payday (today's value)`).toBe(
-      pending.appReportsToday.lowBeforePayday,
-    );
-    expect(pos.availableUntilPayday, `${id} available until payday (today's value)`).toBe(
-      pending.appReportsToday.availableUntilPayday,
-    );
-    expect(Number(pos.availableUntilPayday), `${id} reads low, never high`).toBeLessThanOrEqual(Number(e.availableUntilPayday));
-  }
+  // ⭐ (PR-B2) The hooks put the Amex payoff on the curve where the $300 Weekly
+  // Spend bill was: the lowest before payday reads the contract at every step.
+  expect(
+    { balance: pos.lowestUntilPayday, date: pos.lowestUntilPaydayDate },
+    `${id} lowest before payday`,
+  ).toEqual(e.lowBeforePayday);
+  // ⭐ (PR-B2) Expected end-of-day balance on Fri 10/16, off the forecast's own curve.
+  const sig = await get<CashSignalRead>("/forecast/cash-signal");
+  expect(sig.daily.find((d) => d.date === "2026-10-16")?.balance, `${id} expected Fri 10/16`).toBe(e.expectedFri1016);
+  // The banner data: both hooks, each item's stored amount ignored.
+  expect(sig.hookAmountIgnored, `${id} hooks`).toEqual([
+    { itemId: plan.weeklySpend, cadence: "weekly", storedAmount: "300.00" },
+    { itemId: plan.monthlySpend, cadence: "monthly", storedAmount: "400.00" },
+  ]);
   // The spine's headline is the same call.
   expect(spine.position.safeToSpendNow, `${id} spine safe to spend`).toBe(pos.safeToSpendNow);
   expect(spine.position.remainingWeek, `${id} spine remaining`).toBe(pos.remainingWeek);
@@ -353,6 +356,27 @@ beforeAll(async () => {
     amount: WEEKLY_CAP.amount,
     effectiveFrom: WEEKLY_CAP.effectiveFrom,
     source: "owner",
+  });
+  // ── (PR-B2, decision 7) The monthly allowance the Monthly Spend hook pays out.
+  await db.insert(allowancePlansTable).values({
+    householdId: TEST_HOUSEHOLD_ID,
+    memberUserId: null,
+    period: "monthly",
+    amount: MONTHLY_CAP.amount,
+    effectiveFrom: MONTHLY_CAP.effectiveFrom,
+    source: "owner",
+  });
+  // ── (PR-B2, decision 7) The everyday hooks, as 0042_everyday_hooks.sql writes
+  // them for a household with "Weekly Spend" and "Monthly Spend" bills.
+  await db.insert(settingsTable).values({
+    userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
+    preferences: {
+      everydayHooks: {
+        weekly: { recurringItemId: plan.weeklySpend },
+        monthly: { recurringItemId: plan.monthlySpend },
+      },
+    },
   });
 
   // ── Last week on Amex Platinum (Sun 9/27 – Sat 10/3): the $180 its payoff covers.
@@ -567,15 +591,5 @@ describe("household scenario — Sun 10/4 to Sat 10/10, 2026", () => {
       .map((id) => `${id} ${JSON.stringify(EXPECTED[id][column.key])}`)
       .join(" · ");
     it.todo(`${column.turnsOnIn}: ${column.label} — ${perStep}`);
-  }
-  // (PR-B1) Lowest before payday / available until payday, step by step, where
-  // today's ledger does not yet yield the contract.
-  for (const [id, pending] of Object.entries(POSITION_LEDGER_NOT_YET) as Array<
-    [StepId, NonNullable<(typeof POSITION_LEDGER_NOT_YET)[StepId]>]
-  >) {
-    const e = EXPECTED[id];
-    it.todo(
-      `${pending.turnsOnIn}: ${id} lowest before payday ${e.lowBeforePayday.balance} ${e.lowBeforePayday.date} / available ${e.availableUntilPayday} — ${pending.reason} (today: ${pending.appReportsToday.lowBeforePayday} / ${pending.appReportsToday.availableUntilPayday})`,
-    );
   }
 });

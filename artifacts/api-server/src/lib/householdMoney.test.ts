@@ -142,6 +142,24 @@ describe("classifyMovement — precedence", () => {
     expect(classifyMovement(row({ reimbursable: true }), ctx()).coverage).toBe("reimbursable");
   });
 
+  // ⭐ (PR-B2, the owner's rule of 2026-09-15) A reimbursable charge is its own row:
+  // it outranks every allowance flag, so it never counts against the week or month.
+  it.each([
+    ["weekly", { weeklyAllowance: true }],
+    ["monthly", { monthlyAllowance: true }],
+    ["unplanned", { unplannedAllowance: true }],
+    ["weekly + unplanned", { weeklyAllowance: true, unplannedAllowance: true }],
+  ] as const)("(PR-B2) reimbursable and flagged %s reads reimbursable, never its flag", (_name, flags) => {
+    expect(classifyMovement(row({ reimbursable: true, ...flags }), ctx()).coverage).toBe("reimbursable");
+  });
+
+  it("(PR-B2) a confirmed match still outranks reimbursable (step 2 runs first)", () => {
+    expect(classifyMovement(row({ id: "m", reimbursable: true, weeklyAllowance: true }), ctx({ matchedTxnIds: new Set(["m"]) }))).toMatchObject({
+      coverage: "bill_matched",
+      conflict: "flag_ignored_matched",
+    });
+  });
+
   it("nothing matched, no flags: needs_classification", () => {
     expect(classifyMovement(row(), ctx()).coverage).toBe("needs_classification");
   });
@@ -332,12 +350,12 @@ function specClassification(r: MovementRow, c: MovementContext): MovementClassif
     return conflict ? { coverage: "bill_matched", timing, conflict } : { coverage: "bill_matched", timing };
   }
   if (!anyFlag && (c.tier2PairedTxnIds ?? new Set()).has(r.id)) return { coverage: "bill_matched", timing };
-  // 3-7.
+  // 3-7. (PR-B2, owner's rule 2026-09-15) A reimbursable charge is its own row: ahead of every flag.
   const ladder: [boolean, MovementCoverage][] = [
+    [r.reimbursable, "reimbursable"],
     [flags.unplanned, "unplanned"],
     [flags.monthly, "allowance_monthly"],
     [flags.weekly, "allowance_weekly"],
-    [r.reimbursable, "reimbursable"],
   ];
   for (const [on, coverage] of ladder) if (on) return { coverage, timing };
   return { coverage: "needs_classification", timing };
@@ -444,7 +462,7 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       } else {
         if (tier2) hit("tier2-ignored:flagged");
         hit(`step3-7:${got.coverage}`);
-        if (r.reimbursable && anyFlag) hit("step3-5:flag-over-reimbursable");
+        if (r.reimbursable && anyFlag) hit("step3:reimbursable-over-flag");
         if (r.unplannedAllowance && (r.monthlyAllowance || r.weeklyAllowance)) hit("step3:unplanned-over-other-flag");
         if (!r.unplannedAllowance && r.monthlyAllowance && r.weeklyAllowance) hit("step4:monthly-over-weekly");
       }
@@ -476,7 +494,7 @@ describe("classifyMovement — property: exactly one coverage, the spec's preced
       "step3-7:allowance_monthly",
       "step4:monthly-over-weekly",
       "step3-7:allowance_weekly",
-      "step3-5:flag-over-reimbursable",
+      "step3:reimbursable-over-flag",
       "step3-7:reimbursable",
       "step3-7:needs_classification",
     ];

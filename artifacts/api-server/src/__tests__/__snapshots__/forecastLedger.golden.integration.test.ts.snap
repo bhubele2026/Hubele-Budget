@@ -1,5 +1,252 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`PR-B2 golden — the everyday hooks > a Weekly Spend hook: every occurrence is the Amex payoff, the stored amount ignored 1`] = `
+{
+  "acceptedImpact": "0.00",
+  "account": {
+    "mask": "1111",
+    "name": "Chase Checking",
+    "subtype": "checking",
+    "via": "pointer",
+  },
+  "bankToday": "1500.00",
+  "cashBuffer": "200.00",
+  "daily": [
+    {
+      "balance": "1500.00",
+      "date": "2026-05-14",
+    },
+    {
+      "balance": "1380.00",
+      "date": "2026-05-15",
+    },
+    {
+      "balance": "1105.00",
+      "date": "2026-05-16",
+    },
+    {
+      "balance": "1105.00",
+      "date": "2026-05-17",
+    },
+    {
+      "balance": "1105.00",
+      "date": "2026-05-18",
+    },
+    {
+      "balance": "1105.00",
+      "date": "2026-05-19",
+    },
+    {
+      "balance": "965.00",
+      "date": "2026-05-20",
+    },
+    {
+      "balance": "965.00",
+      "date": "2026-05-21",
+    },
+    {
+      "balance": "965.00",
+      "date": "2026-05-22",
+    },
+    {
+      "balance": "715.00",
+      "date": "2026-05-23",
+    },
+    {
+      "balance": "715.00",
+      "date": "2026-05-24",
+    },
+    {
+      "balance": "715.00",
+      "date": "2026-05-25",
+    },
+    {
+      "balance": "715.00",
+      "date": "2026-05-26",
+    },
+    {
+      "balance": "715.00",
+      "date": "2026-05-27",
+    },
+    {
+      "balance": "715.00",
+      "date": "2026-05-28",
+    },
+    {
+      "balance": "715.00",
+      "date": "2026-05-29",
+    },
+    {
+      "balance": "465.00",
+      "date": "2026-05-30",
+    },
+    {
+      "balance": "465.00",
+      "date": "2026-05-31",
+    },
+    {
+      "balance": "465.00",
+      "date": "2026-06-01",
+    },
+    {
+      "balance": "465.00",
+      "date": "2026-06-02",
+    },
+    {
+      "balance": "465.00",
+      "date": "2026-06-03",
+    },
+    {
+      "balance": "465.00",
+      "date": "2026-06-04",
+    },
+    {
+      "balance": "465.00",
+      "date": "2026-06-05",
+    },
+    {
+      "balance": "215.00",
+      "date": "2026-06-06",
+    },
+    {
+      "balance": "215.00",
+      "date": "2026-06-07",
+    },
+    {
+      "balance": "215.00",
+      "date": "2026-06-08",
+    },
+    {
+      "balance": "215.00",
+      "date": "2026-06-09",
+    },
+    {
+      "balance": "215.00",
+      "date": "2026-06-10",
+    },
+    {
+      "balance": "215.00",
+      "date": "2026-06-11",
+    },
+    {
+      "balance": "215.00",
+      "date": "2026-06-12",
+    },
+    {
+      "balance": "-35.00",
+      "date": "2026-06-13",
+    },
+  ],
+  "endingBalance": "-35.00",
+  "endingDate": "2026-06-13",
+  "events": [
+    {
+      "amount": "-120.00",
+      "assumption": "overdue_assumed_unpaid",
+      "date": "2026-05-15",
+      "itemId": "<uuid>",
+      "label": "Weekly Spend",
+      "occurrenceDate": "2026-05-09",
+      "occurrenceKey": "<uuid>|2026-05-09",
+      "originalDate": "2026-05-09",
+    },
+    {
+      "amount": "-275.00",
+      "assumption": null,
+      "date": "2026-05-16",
+      "itemId": "<uuid>",
+      "label": "Weekly Spend",
+      "occurrenceDate": "2026-05-16",
+      "occurrenceKey": "<uuid>|2026-05-16",
+      "originalDate": "2026-05-16",
+    },
+    {
+      "amount": "-140.00",
+      "assumption": null,
+      "date": "2026-05-20",
+      "itemId": "<uuid>",
+      "label": "Electric",
+      "occurrenceDate": "2026-05-20",
+      "occurrenceKey": "<uuid>|2026-05-20",
+      "originalDate": "2026-05-20",
+    },
+    {
+      "amount": "-250.00",
+      "assumption": null,
+      "date": "2026-05-23",
+      "itemId": "<uuid>",
+      "label": "Weekly Spend",
+      "occurrenceDate": "2026-05-23",
+      "occurrenceKey": "<uuid>|2026-05-23",
+      "originalDate": "2026-05-23",
+    },
+    {
+      "amount": "-250.00",
+      "assumption": null,
+      "date": "2026-05-30",
+      "itemId": "<uuid>",
+      "label": "Weekly Spend",
+      "occurrenceDate": "2026-05-30",
+      "occurrenceKey": "<uuid>|2026-05-30",
+      "originalDate": "2026-05-30",
+    },
+    {
+      "amount": "-250.00",
+      "assumption": null,
+      "date": "2026-06-06",
+      "itemId": "<uuid>",
+      "label": "Weekly Spend",
+      "occurrenceDate": "2026-06-06",
+      "occurrenceKey": "<uuid>|2026-06-06",
+      "originalDate": "2026-06-06",
+    },
+    {
+      "amount": "-250.00",
+      "assumption": null,
+      "date": "2026-06-13",
+      "itemId": "<uuid>",
+      "label": "Weekly Spend",
+      "occurrenceDate": "2026-06-13",
+      "occurrenceKey": "<uuid>|2026-06-13",
+      "originalDate": "2026-06-13",
+    },
+  ],
+  "fromDate": "2026-05-14",
+  "hookAmountIgnored": [
+    {
+      "cadence": "weekly",
+      "itemId": "<uuid>",
+      "storedAmount": "300.00",
+    },
+  ],
+  "horizonDays": 30,
+  "incomeNotArrived": [],
+  "lowestDate": "2026-06-13",
+  "lowestProjected": "-35.00",
+  "matches": [],
+  "maxSafeExtra": "0.00",
+  "overdueAssumedPaid": [],
+  "overdueOutsideForecast": [
+    {
+      "amount": "-140.00",
+      "daysOverdue": 24,
+      "dueDate": "2026-04-20",
+      "itemId": "<uuid>",
+      "label": "Electric",
+      "occurrenceDate": "2026-04-20",
+      "planKey": "<uuid>|2026-04-20",
+    },
+  ],
+  "projectedExpenses": "1535.00",
+  "projectedIncome": "0.00",
+  "snapshotAt": "2026-05-08T15:00:00.000Z",
+  "snapshotSource": "plaid",
+  "startingBalance": "1500.00",
+  "status": "not_yet",
+  "toDate": "2026-06-13",
+}
+`;
+
 exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot time with no balance, and a balance with no time 1`] = `
 {
   "balanceOnly": {

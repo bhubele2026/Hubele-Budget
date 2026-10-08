@@ -98,10 +98,14 @@ const ONE_RULE_CLASSES = [
   "card_payment_description", // rule 9: an issuer payment phrase (CRCARDPMT, …)
   "bank_noise_description", // rule 9b: AUTOPAY, EPAY, WEB ID:, ONLINE TRANSFER, ACH PMT, …
 ] as const;
-/** Forward mode only (PR8r/PR10), on top of the classes above. */
+/**
+ * Forward mode only (PR8r/PR10), on top of the classes above. (PR-B2) The
+ * `reimbursable_flagged` class is gone: `reimbursable` now outranks every flag
+ * (the owner's rule of 2026-09-15), so the classifier buckets such a row
+ * nowhere — exactly as today does.
+ */
 const FORWARD_ONLY_CLASSES = [
   "bill_matched_flagged", // decision 12: a confirmed match buckets nowhere
-  "reimbursable_flagged", // steps 3-5 outrank step 6: the classifier buckets it, today does not
 ] as const;
 type DivergenceClass = (typeof ONE_RULE_CLASSES)[number] | (typeof FORWARD_ONLY_CLASSES)[number];
 
@@ -139,10 +143,6 @@ function forwardClass(t: Filed, ctx: MovementContext): DivergenceClass | null {
   if (!flagBucket(t)) return null;
   if (passesTodaysScreens(t)) {
     return oneRuleClass(t, ctx) ?? (ctx.matchedTxnIds.has(t.id) ? "bill_matched_flagged" : null);
-  }
-  const onlyReimbursable = t.reimbursable && !t.isTransfer && !t.isExternalCardPayment && !t.debtId;
-  if (onlyReimbursable && oneRuleClass(t, ctx) === null && !ctx.matchedTxnIds.has(t.id)) {
-    return "reimbursable_flagged";
   }
   return null;
 }
@@ -298,16 +298,6 @@ describe("classifierAllowanceRows vs aggregateBudgetMonth — seeded randomized 
       bump(forwardHits, fc ?? "equal");
       if (fc === null) {
         expect(classifierForward, `unit ${i} (forward mode)`).toEqual(today);
-      } else if (fc === "reimbursable_flagged") {
-        expect(today, `unit ${i}`).toEqual([]);
-        const expected: AllowanceAggregateRow = {
-          bucket: flagBucket(t)!,
-          subBucket: t.weeklyBucket,
-          pending: u.counted.pending,
-          spend: (spendCents(u.counted.source, Math.round(Number(u.counted.amount) * 100)) / 100).toFixed(2),
-          cnt: "1",
-        };
-        expect(classifierForward, `unit ${i}`).toEqual([expected]);
       } else {
         expect(today, `unit ${i}`).toHaveLength(1);
         expect(classifierForward, `unit ${i}`).toEqual([]);
@@ -361,18 +351,16 @@ describe("classifierAllowanceRows vs aggregateBudgetMonth — seeded randomized 
   }
 });
 
-describe("classifierAllowanceRows — reimbursable + a flag (forward-only difference)", () => {
-  // Today's rule gates on `!reimbursable` before looking at a flag. The
-  // classifier's precedence (flags, steps 3-5, before reimbursable, step 6)
-  // buckets such a row — so mode "today" keeps today's gate, and only mode
-  // "forward" shows the difference.
-  it("today and the classifier's today mode bucket it nowhere; forward mode buckets it under its flag", () => {
+describe("classifierAllowanceRows — reimbursable + a flag (PR-B2: no longer a difference)", () => {
+  // Today's rule gates on `!reimbursable` before looking at a flag. (PR-B2) The
+  // classifier now agrees: `reimbursable` outranks every flag (the owner's rule
+  // of 2026-09-15), so neither mode buckets such a row. Before PR-B2 forward
+  // mode bucketed it weekly ($25.00).
+  it("today, the classifier's today mode and forward mode all bucket it nowhere", () => {
     const rows = [row({ id: "reimb-flag-1", weeklyAllowance: true, reimbursable: true, amount: "-25.00" })];
     expect(aggregateBudgetMonth(rows, noSupersede, filingCtx).allowanceRows).toEqual([]);
     expect(classifierAllowanceRows(rows, noSupersede, filingCtx, movementCtx())).toEqual([]);
-    expect(classifierAllowanceRows(rows, noSupersede, filingCtx, movementCtx(), { mode: "forward" })).toEqual([
-      { bucket: "weekly", subBucket: null, pending: false, spend: "25.00", cnt: "1" },
-    ]);
+    expect(classifierAllowanceRows(rows, noSupersede, filingCtx, movementCtx(), { mode: "forward" })).toEqual([]);
   });
 
   it("a matched reimbursable flagged row: nowhere today, nowhere in either mode", () => {

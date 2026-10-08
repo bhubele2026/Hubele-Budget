@@ -618,25 +618,20 @@ describe("(PR-B2 rounds 2–3) the hold-back reads income by its arrival rule, s
     expect(balanceOn(sig, "2026-05-15")).toBe("3000.00");
   });
 
-  // ⚠️ KNOWN ISSUE — pre-existing on main `2731077`, NOT fixed in PR-B2; for PR9 (income
-  // states). This test pins TODAY'S WRONG VALUE so the repro stays checked; PR9 should
-  // flip it to 3,000.00.
-  // A BIWEEKLY paycheck deposited early counts twice when the previous paycheck arrived
-  // off-amount. Mechanism, in `matchPlansToRows` (planMatch.ts), not in the hold-back:
+  // ⭐ (PR-B2, PR9's pin R2-2 — FIXED) A BIWEEKLY paycheck deposited early used to count
+  // twice when the previous paycheck arrived off-amount. Mechanism, in `matchPlansToRows`
+  // (planMatch.ts):
   //   - the 05-14 deposit is 13 days after the 05-01 occurrence, inside its +14-day
   //     window, so it is a candidate for BOTH 05-01 and 05-15; it pairs with 05-15
   //     (the better score);
   //   - 05-01 then pairs with its own $1,900 deposit, which cannot be tier 2 ($100
-  //     short), so it ranks below the 05-14 candidate — and a pair is marked
-  //     `ambiguous` whenever a same-or-better-ranked candidate for its plan scores
-  //     better, even though that candidate's row already went to 05-15;
-  //   - ambiguous means not arrived (`incomeNotArrived` lists 05-01) and — round 3, the
-  //     same `isEvidence` rule — not received for the hold-back, so 05-15's pair is held
-  //     back: +$2,000 stays on the curve while the deposit is already in cash.
-  // The fix belongs in the matcher's ambiguity flag: a better-scoring candidate whose row
-  // is already taken must not make a pair ambiguous. That fix must not let any bill pair
-  // leave the curve (an un-flagged bill pair can become tier 2 and read high).
-  it("(KNOWN ISSUE, PR9) biweekly: 05-01 arrived $100 short, 05-15 deposited a day early — pinned at today's value, counted twice (05-15: 5,000.00; right answer 3,000.00)", async () => {
+  //     short). Before PR-B2 the 05-14 candidate — whose row 05-15 had already taken —
+  //     still marked that pair `ambiguous`, so 05-01 read "not arrived", the hold-back
+  //     kept 05-15's pair on the curve, and +$2,000 counted twice (05-15: 5,000.00).
+  // The fix (income pairs only): a runner-up whose row or plan an earlier pair of the
+  // pass already took casts no doubt. 05-01 is not ambiguous, so it arrived; 05-15 is
+  // not held back and leaves the curve: 3,000.00.
+  it("(PR-B2, was PR9's known issue) biweekly: 05-01 arrived $100 short, 05-15 deposited a day early — counted once (05-15: 3,000.00, was 5,000.00)", async () => {
     await snapshotOnChase();
     const pay = await paycheck("biweekly", "2026-04-17");
     await row("2026-04-17", "2000", "ACME PAYROLL");
@@ -645,11 +640,44 @@ describe("(PR-B2 rounds 2–3) the hold-back reads income by its arrival rule, s
 
     const sig = await signal();
 
-    expect(matchFor(sig, `${pay}|2026-05-01`)).toMatchObject({ txnId: short, confidence: "medium", ambiguous: true, tier: 3 });
-    expect(sig.incomeNotArrived?.find((p) => p.planKey === `${pay}|2026-05-01`)).toBeDefined();
-    expect(matchFor(sig, `${pay}|2026-05-15`)).toMatchObject({ txnId: early, tier: 3, offCurve: false });
+    expect(matchFor(sig, `${pay}|2026-05-01`)).toMatchObject({ txnId: short, confidence: "medium", ambiguous: false, tier: 3 });
+    expect(sig.incomeNotArrived?.find((p) => p.planKey === `${pay}|2026-05-01`)).toBeUndefined();
+    expect(matchFor(sig, `${pay}|2026-05-15`)).toMatchObject({ txnId: early, tier: 2, offCurve: true });
     expect(sig.bankToday).toBe("3000.00");
-    expect(balanceOn(sig, "2026-05-15")).toBe("5000.00");
+    expect(balanceOn(sig, "2026-05-15")).toBe("3000.00");
+  });
+
+  // ⭐ (PR-B2) THE OUTFLOW MIRROR — the same shape as a $2,000 biweekly BILL. The fix is
+  // limited to income, so the bill's earlier pair stays ambiguous (tier 3), the later
+  // pair is held back (tier 3, on the curve), and the curve is exactly the parent's:
+  // no bill pair's tier or `offCurve` moves.
+  it("(PR-B2 mirror) the same shape as an outflow is unchanged: 05-01's pair stays ambiguous and 05-15's stays on the curve", async () => {
+    await snapshotOnChase("5000");
+    const [loan] = await db
+      .insert(recurringItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        name: "Acme Loan",
+        kind: "bill",
+        amount: "2000",
+        frequency: "biweekly",
+        anchorDate: "2026-04-17",
+        active: "true",
+      })
+      .returning();
+    await row("2026-04-17", "-2000", "ACME LOAN");
+    const short = await row("2026-05-01", "-1900", "ACME LOAN");
+    const early = await row("2026-05-14", "-2000", "ACME LOAN");
+
+    const sig = await signal();
+
+    expect(matchFor(sig, `${loan!.id}|2026-05-01`)).toMatchObject({ txnId: short, ambiguous: true, tier: 3, offCurve: false });
+    expect(matchFor(sig, `${loan!.id}|2026-05-15`)).toMatchObject({ txnId: early, tier: 3, offCurve: false });
+    expect(sig.bankToday).toBe("3000.00");
+    // The parent's figure, to the cent: 05-01's $2,000 drags (its pair is only a
+    // suggestion) and 05-15's stays on the curve (held back) — reading low, never high.
+    expect(balanceOn(sig, "2026-05-15")).toBe("-1000.00");
   });
 
   it("(control for the known issue) the same biweekly household with 05-01 paid exactly: no pair is ambiguous, and 05-15 counts once (3,000.00)", async () => {
@@ -863,7 +891,8 @@ describe("(PR-B2 round 4) a tagged income deposit counts as received even when a
 });
 
 // ⭐ (PR-B2 round 4, review LOW) THE INCOME HOLD-BACK IS THE ARRIVAL RULE — a direct guard,
-// independent of the PR9 known-issue pin. For each shape of April's deposit, April is
+// independent of the PR9 pin (fixed by PR-B2's matcher change; the ambiguous shape below,
+// whose runner-up row is still free, keeps guarding the rule). For each shape of April's deposit, April is
 // listed in `incomeNotArrived` exactly when May's early deposit is held back (its pair
 // demoted to tier 3 and kept on the curve). If PR9 flips the biweekly pin, the ambiguous
 // shape below still guards the rule.
