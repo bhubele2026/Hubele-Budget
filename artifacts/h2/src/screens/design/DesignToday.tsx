@@ -9,6 +9,7 @@ import type {
   MoneyPosition,
   Settings,
   Spine,
+  WaysBack,
 } from "@workspace/api-client-react";
 import type { LedgerPage } from "@workspace/api-client-react/ledger";
 import type { Read, TodayData } from "@/data/todayData";
@@ -39,7 +40,13 @@ const SPINE = {
   nextBill: { name: "Electric", amount: "142.18", dueDate: "2026-10-08" },
   billsDueCount: 3,
   forecast: { lowPoint: "800.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "ready" },
-  debt: { payoffPct: 41.3 },
+  debt: {
+    payoffPct: 41.3,
+    nextMilestone: { label: "Card One paid off", estimatedMonth: "2027-03" },
+    paidDownMtd: 812,
+    confirmedPaymentsMtd: 1050,
+    newChargesMtd: 240,
+  },
   reviewCount: 2,
   position: {
     safeToSpendNow: "144.50",
@@ -50,6 +57,7 @@ const SPINE = {
     withinPlan: "yes",
     confidence: "estimated",
     degraded: false,
+    weekAdjustment: null,
   },
 } as Spine;
 
@@ -81,6 +89,7 @@ const POSITION = {
   assumptions: ["Available credit is not counted.", "Bank data from Oct 7.", "Bills due on payday are counted before the paycheck."],
   degraded: false,
   degradedReason: null,
+  weekAdjustment: null,
 } as unknown as MoneyPosition;
 
 const PLANS = {
@@ -162,6 +171,38 @@ const SAMPLE: TodayData = {
   unfiled: loaded({ rows: [], nextCursor: null, limit: 1, matchingCount: 2 } as unknown as LedgerPage),
 };
 
+// `?state=over`: the same page with the week past its limit, and the way-back sheet openable from
+// the card. Every figure is made up; no request is made.
+const OVER_SPINE = {
+  ...SPINE,
+  position: { ...SPINE.position, safeToSpendNow: "0.00", remainingWeek: "-55.20", withinPlan: "over" },
+} as Spine;
+const OVER_POSITION = {
+  ...POSITION,
+  spentWeekDiscretionary: "305.20",
+  remainingWeek: "-55.20",
+  withinPlan: "over",
+  safeToSpendNow: "0.00",
+} as unknown as MoneyPosition;
+const OVER_SAMPLE: TodayData = {
+  ...SAMPLE,
+  spine: { ...SAMPLE.spine, data: OVER_SPINE },
+  position: loaded(OVER_POSITION),
+};
+const WAYS_BACK = {
+  weekStart: "2026-10-04",
+  weekEnd: "2026-10-10",
+  overBy: 5520,
+  daysLeft: 4,
+  hold: { perDay: 0, leavesUntilPayday: 212450 },
+  trims: [
+    { categoryId: "c1", name: "Groceries", spentWeek: 18000, usualWeek: 8500 },
+    { categoryId: "c2", name: "Fuel", spentWeek: 9000, usualWeek: 6000 },
+    { categoryId: "c3", name: "Dining", spentWeek: 6520, usualWeek: null },
+  ],
+  carryOver: { nextWeekStart: "2026-10-11", nextWeekCap: 19480, applied: false, adjustment: null },
+} as WaysBack;
+
 const AffordSheet = lazy(importAfford);
 
 // The Afford sheet's open state on made-up figures: `?afford=fits|tight|dip|overdraw|later`
@@ -195,14 +236,21 @@ function affordSample(kind: string): AffordResult {
 }
 
 export default function DesignToday() {
-  const kind = new URLSearchParams(useSearch()).get("afford");
+  const params = new URLSearchParams(useSearch());
+  const kind = params.get("afford");
+  const over = params.get("state") === "over";
   const [open, setOpen] = useState(kind != null);
   return (
     <div className="flex flex-col gap-6" data-testid="page-design-today">
       <Note kind="empty" data-testid="sample-note">
         Sample — every figure on this page is made up.
       </Note>
-      <TodayView data={SAMPLE} now={NOW} live={false} />
+      <TodayView
+        data={over ? OVER_SAMPLE : SAMPLE}
+        now={NOW}
+        live={false}
+        sampleWaysBack={over ? WAYS_BACK : undefined}
+      />
       {kind != null && (
         <Suspense fallback={null}>
         <AffordSheet

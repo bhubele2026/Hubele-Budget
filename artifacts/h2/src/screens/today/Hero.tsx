@@ -5,6 +5,7 @@ import { shortDateOfInstant, weekdayDate } from "@/lib/dates";
 import { fmtMoney, toAmount } from "@/lib/money";
 import type { DataState } from "@/lib/queryState";
 import type { Read } from "@/data/todayData";
+import { weekdayName } from "./words";
 
 // The sheet carries Radix Dialog; it loads the first time the hero is opened
 // (and is prefetched below on hover/focus), never on the open path.
@@ -19,7 +20,7 @@ export function noFigureReason(p: Spine["position"] | undefined): string {
 }
 
 /**
- * ⭐ FREE UNTIL PAYDAY — the one figure-xl. It is the spine's
+ * ⭐ ROOM IN THE PLAN — the one figure-xl. It is the spine's
  * `position.safeToSpendNow`, read, never worked out here. The hero is a
  * button: it opens the assumptions sheet that shows how the figure is made.
  *
@@ -42,11 +43,20 @@ export function Hero({
 
   const amount = toAmount(p?.safeToSpendNow);
   const weekEnd = p?.horizonKind === "week_end";
-  const label = weekEnd ? "Free until Saturday" : "Free until payday";
+  const label = "Room in the plan";
+  // (V4) Which line is the tighter one: the payday line or the week's limit. Two server figures, compared, not worked out.
+  const available = toAmount(p?.availableUntilPayday);
+  const week = toAmount(p?.remainingWeek);
+  const weekBinds = available != null && week != null && week < available;
   const committed = toAmount(position.data?.committedUntilPayday);
 
   const lines: string[] = [];
   if (amount == null && spine) lines.push(noFigureReason(p));
+  if (p && amount != null) {
+    if (weekBinds) lines.push("this week's limit is the tighter line");
+    else if (weekEnd) lines.push("until Saturday, after bills, your buffer and goals");
+    else if (p.paydayDate) lines.push(`until ${weekdayName(p.paydayDate)}, after bills, your buffer and goals`);
+  }
   if (p) {
     if (weekEnd) lines.push("No payday on file in the next 45 days");
     else if (p.paydayDate) {

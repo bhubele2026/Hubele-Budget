@@ -4,7 +4,7 @@ import type { LedgerPage, LedgerRow as LedgerRowData } from "@workspace/api-clie
 import { buttonClass } from "@/kit/Button";
 import { Figure } from "@/kit/Figure";
 import { LedgerRow } from "@/kit/LedgerRow";
-import { Note } from "@/kit/Note";
+import { Note, RefreshNote } from "@/kit/Note";
 import { Section } from "@/kit/Section";
 import { TrailItem } from "@/kit/TrailItem";
 import { SkeletonLine } from "@/kit/Skeleton";
@@ -21,6 +21,42 @@ import type { DueBill } from "./attention";
  * behind a skeleton the size of the section.
  */
 const link = buttonClass({ variant: "link", size: "sm" });
+
+/** (V4) The failed-refresh and stale-bank notes: only drawn when something is wrong, so off the open path. */
+export function TopNotes({
+  state,
+  updatedAt,
+  refetch,
+  fetching,
+  showStale,
+  now,
+}: {
+  state: React.ComponentProps<typeof RefreshNote>["state"];
+  updatedAt: React.ComponentProps<typeof RefreshNote>["updatedAt"];
+  refetch: () => void;
+  fetching: boolean;
+  showStale: boolean;
+  now?: Date;
+}) {
+  return (
+    <div className="mb-6 flex flex-col gap-3">
+      <RefreshNote state={state} updatedAt={updatedAt} onRetry={refetch} retrying={fetching} now={now} />
+      {showStale && (
+        <Note
+          kind="stale"
+          data-testid="stale-note"
+          action={
+            <Link href="/household" className={buttonClass({ variant: "link", size: "sm" })}>
+              Sync
+            </Link>
+          }
+        >
+          The bank balance may be out of date.
+        </Note>
+      )}
+    </div>
+  );
+}
 
 /** The last four things H2 did on its own. Nothing to show, nothing drawn. */
 export function HandledSection({ trail, now }: { trail: Read<AgentActionList>; now?: Date }) {
@@ -53,6 +89,8 @@ function pct(n: number): string {
 /** The debt fields PR-D may add. Read only if the server sends them. */
 interface DebtExtras {
   paidDownMtd?: string | number | null;
+  confirmedPaymentsMtd?: string | number | null;
+  newChargesMtd?: string | number | null;
   nextMilestone?: { label: string; estimatedMonth: string } | null;
 }
 
@@ -62,13 +100,25 @@ function monthWords(ym: string): string {
   return m ? `${MONTHS[Number(m[2]) - 1] ?? ""} ${m[1]}` : ym;
 }
 
+const DEBT_ROW = "border-t border-rule py-2 first:border-t-0";
+const positive = (n: number | null): n is number => n != null && n > 0;
+function Amount({ n }: { n: number }) {
+  return (
+    <data value={centsValue(n)} className="tnum">
+      {fmtMoney(n)}
+    </data>
+  );
+}
+
 /**
  * ⚠️ DEBT IS A PERCENTAGE PAID AND (WHEN THE SERVER SENDS THEM) WHAT WAS PAID
- * DOWN THIS MONTH AND THE NEXT MILESTONE. NEVER AN AMOUNT OWED.
+ * DOWN, PAID AND NEWLY CHARGED THIS MONTH, AND THE NEXT MILESTONE. NEVER AN AMOUNT OWED.
  */
 export function DebtSection({ spine, state }: { spine: Spine | undefined; state: DataState }) {
   const extras = (spine?.debt ?? {}) as DebtExtras;
   const down = toAmount(extras.paidDownMtd);
+  const charges = toAmount(extras.newChargesMtd);
+  const payments = toAmount(extras.confirmedPaymentsMtd);
   const milestone = extras.nextMilestone ?? null;
   return (
     <Section label="Debt" data-testid="section-debt">
@@ -82,19 +132,25 @@ export function DebtSection({ spine, state }: { spine: Spine | undefined; state:
         sub={spine && spine.debt?.payoffPct == null ? "No debt has a starting balance yet." : undefined}
         data-testid="figure-debt"
       />
-      {((down != null && down > 0) || milestone) && (
-        <div className="mt-3 flex flex-col gap-1 type-body text-ink-2">
-          {down != null && down > 0 && (
-            <p data-testid="debt-paid-down">
-              Paid down{" "}
-              <data value={centsValue(down)} className="tnum">
-                {fmtMoney(down)}
-              </data>{" "}
-              this month
+      {(positive(down) || positive(charges) || positive(payments) || milestone) && (
+        <div className="mt-3 flex flex-col type-body text-ink-2">
+          {positive(down) && (
+            <p className={DEBT_ROW} data-testid="debt-paid-down">
+              Paid down <Amount n={down} /> this month, confirmed by the bank
+            </p>
+          )}
+          {positive(charges) && (
+            <p className={`${DEBT_ROW} text-clay`} data-testid="debt-new-charges">
+              New charges <Amount n={charges} /> this month
+            </p>
+          )}
+          {positive(payments) && payments > (down ?? 0) && (
+            <p className={`${DEBT_ROW} type-caption`} data-testid="debt-payments">
+              Payments <Amount n={payments} />, of which <Amount n={down ?? 0} /> reduced debt
             </p>
           )}
           {milestone && (
-            <p data-testid="debt-milestone">
+            <p className={DEBT_ROW} data-testid="debt-milestone">
               Next: {milestone.label} · {monthWords(milestone.estimatedMonth)}
             </p>
           )}

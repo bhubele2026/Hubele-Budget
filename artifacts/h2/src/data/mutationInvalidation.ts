@@ -3,6 +3,7 @@ import {
   getGetSpineQueryKey,
   getGetForecastBankBalanceExplainQueryKey,
   getGetMoneyPositionQueryKey,
+  getGetWaysBackQueryKey,
 } from "@workspace/api-client-react";
 
 /**
@@ -25,6 +26,8 @@ export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: getGetForecastBankBalanceExplainQueryKey() });
   // (S1) The money position is the spine's `position` in full; it moves with it.
   void queryClient.invalidateQueries({ queryKey: getGetMoneyPositionQueryKey() });
+  // (V4) The ways back read the same week; a carry-over (or any spend) moves them.
+  void queryClient.invalidateQueries({ queryKey: getGetWaysBackQueryKey() });
   void queryClient.invalidateQueries({
     predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/"),
   });

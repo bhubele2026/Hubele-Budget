@@ -1,5 +1,4 @@
 import { lazy, Suspense } from "react";
-import { Link } from "wouter";
 import type { AllowancePlans, MoneyPosition, Settings, Spine } from "@workspace/api-client-react";
 import type { LedgerPage } from "@workspace/api-client-react/ledger";
 import { Figure } from "@/kit/Figure";
@@ -7,11 +6,13 @@ import { Meter, type MeterStatus } from "@/kit/Meter";
 import { Note } from "@/kit/Note";
 import { Section } from "@/kit/Section";
 import { SkeletonMeter } from "@/kit/Skeleton";
-import { buttonClass } from "@/kit/Button";
 import { centsValue, fmtMoney, toAmount } from "@/lib/money";
 import type { Read } from "@/data/todayData";
 
-const LimitSource = lazy(() => import("./LimitSource"));
+const limitSource = () => import("./LimitSource");
+const LimitSource = lazy(limitSource);
+// (V4) The lines under the meter (the household's choice, unplanned spend, charges to file) load right behind it.
+const WeekNotes = lazy(() => limitSource().then((m) => ({ default: m.WeekNotes })));
 
 const STATUS: Record<"yes" | "tight" | "over", MeterStatus> = { yes: "on", tight: "tight", over: "over" };
 
@@ -47,12 +48,15 @@ export function WeekSection({
   plans,
   settings,
   unfiled,
+  today,
 }: {
   spine: Spine | undefined;
   position: Read<MoneyPosition>;
   plans: Read<AllowancePlans>;
   settings: Read<Settings>;
   unfiled: Read<LedgerPage>;
+  /** The household's date, to tell this week's adjustment from next week's. */
+  today: string;
 }) {
   const pos = position.data;
   const within = spine?.position.withinPlan ?? pos?.withinPlan ?? null;
@@ -64,6 +68,7 @@ export function WeekSection({
   const remaining = toAmount(spine?.position.remainingWeek ?? pos?.remainingWeek);
   const cold = !spine || position.state === "cold" || settings.state === "cold";
 
+  const adjustment = spine?.position.weekAdjustment ?? pos?.weekAdjustment ?? null;
   let body;
   if (cold && !pos) {
     body = <SkeletonMeter />;
@@ -92,29 +97,9 @@ export function WeekSection({
           words={words}
           data-testid="meter-week"
         />
-        {unplanned != null && unplanned > 0 && (
-          <p className="mt-3 type-caption text-ink-3" data-testid="week-caption">
-            <data value={centsValue(spent)} className="tnum">
-              {fmtMoney(spent)}
-            </data>{" "}
-            so far ·{" "}
-            <data value={centsValue(unplanned)} className="tnum">
-              {fmtMoney(unplanned)}
-            </data>{" "}
-            unplanned on top
-          </p>
-        )}
-        {filing > 0 && (
-          <p className="mt-2 type-caption text-ink-2" data-testid="needs-filing">
-            <data value={String(filing)} className="tnum">
-              {filing}
-            </data>{" "}
-            {filing === 1 ? "charge needs" : "charges need"} filing ·{" "}
-            <Link href="/activity?unfiled=1" className={buttonClass({ variant: "link", size: "sm" })}>
-              {filing === 1 ? "File it" : "File them"}
-            </Link>
-          </p>
-        )}
+        <Suspense fallback={null}>
+          <WeekNotes spent={spent} unplanned={unplanned} filing={filing} adjustment={adjustment} today={today} />
+        </Suspense>
       </>
     );
   }

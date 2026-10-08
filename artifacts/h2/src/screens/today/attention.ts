@@ -21,6 +21,8 @@ export interface Attention {
   title: string;
   detail?: string;
   action?: { label: string; href: string };
+  /** (V4) The card opens the "way back" sheet instead of going to a route. */
+  wayBack?: boolean;
 }
 
 export interface DueBill {
@@ -85,7 +87,8 @@ export function attentionItems(i: {
     out.push({
       kind: "over",
       title: `You're over this week${by}`,
-      detail: "Nothing to decide. Just know it.",
+      detail: "Pick a way back. No lecture.",
+      wayBack: true,
     });
   }
   if (i.dueSoon.length > 0) {
