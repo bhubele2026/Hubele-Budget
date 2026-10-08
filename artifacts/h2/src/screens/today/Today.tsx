@@ -1,10 +1,8 @@
 import { lazy, Suspense } from "react";
-import { Link } from "wouter";
+import type { WaysBack } from "@workspace/api-client-react";
 import { householdToday } from "@workspace/avalanche-core/householdTime";
 import { useTodayData, type TodayData } from "@/data/todayData";
-import { buttonClass } from "@/kit/Button";
-import { FreshnessBadge } from "@/kit/FreshnessBadge";
-import { Note, RefreshNote } from "@/kit/Note";
+import { Note } from "@/kit/Note";
 import { Section } from "@/kit/Section";
 import { SkeletonFigure, SkeletonLine, SkeletonMeter } from "@/kit/Skeleton";
 import { longDate } from "@/lib/dates";
@@ -25,10 +23,21 @@ const lower = () => import("./lowerSections");
 // Start the download now, in parallel with the spine request, so the sections are there
 // by the time the first figures land. A failure is retried by the lazy() itself.
 if (typeof window !== "undefined") lower().catch(() => {});
-const ActivitySection = lazy(() => lower().then((m) => ({ default: m.ActivitySection })));
-const HandledSection = lazy(() => lower().then((m) => ({ default: m.HandledSection })));
-const ComingUp = lazy(() => lower().then((m) => ({ default: m.ComingUp })));
-const DebtSection = lazy(() => lower().then((m) => ({ default: m.DebtSection })));
+
+// (V4) The freshness badge (and its minute tick) is not the first paint: it loads right behind
+// the page, in the space its skeleton line holds, to keep the open path inside its cap.
+const freshness = () => import("@/kit/FreshnessBadge");
+if (typeof window !== "undefined") freshness().catch(() => {});
+const FreshnessBadge = lazy(() => freshness().then((m) => ({ default: m.FreshnessBadge })));
+
+type Lower = typeof import("./lowerSections");
+const fromLower = <K extends "ActivitySection" | "HandledSection" | "ComingUp" | "TopNotes" | "DebtSection">(k: K) =>
+  lazy(() => lower().then((m) => ({ default: m[k] as Lower[K] })));
+const ActivitySection = fromLower("ActivitySection");
+const HandledSection = fromLower("HandledSection");
+const ComingUp = fromLower("ComingUp");
+const TopNotes = fromLower("TopNotes");
+const DebtSection = fromLower("DebtSection");
 
 function SectionSkeleton({ label, figure = false }: { label: string; figure?: boolean }) {
   return (
@@ -40,9 +49,9 @@ function SectionSkeleton({ label, figure = false }: { label: string; figure?: bo
 
 /**
  * ⭐ TODAY — the morning paper. Top to bottom: the date and how fresh the bank
- * is; FREE UNTIL PAYDAY (the one figure-xl); this week against its limit; the
- * one thing that wants a look; yesterday and today; what is coming up; debt as
- * % paid; the way to the classic app.
+ * is; ROOM IN THE PLAN (the one figure-xl); this week against its limit; the
+ * one thing that wants a look; debt as % paid; yesterday and today; what is
+ * coming up.
  *
  * ⚠️ EVERY NUMBER HERE IS READ, NONE IS WORKED OUT. They come from `useSpine()`
  * and the generated hooks in `data/todayData.ts`, as the server sent them. The
@@ -84,14 +93,14 @@ export function TodaySkeleton({ now }: { now?: Date }) {
       <Section label="One thing">
         <SkeletonLine className="w-56" />
       </Section>
+      <Section label="Debt">
+        <SkeletonFigure size="md" />
+      </Section>
       <Section label="Yesterday and today">
         <SkeletonLine className="w-64" />
       </Section>
       <Section label="Coming up">
         <SkeletonLine className="w-56" />
-      </Section>
-      <Section label="Debt">
-        <SkeletonFigure size="md" />
       </Section>
     </div>
   );
@@ -112,10 +121,13 @@ export function TodayView({
   data,
   now,
   live,
+  sampleWaysBack,
 }: {
   data: TodayData;
   now?: Date;
   live: boolean;
+  /** The sample page's made-up ways back, so its sheet opens with no network. */
+  sampleWaysBack?: WaysBack;
 }) {
   const { spine, position, plans, settings, bills, ledger, categories, trail, unfiled } = data;
   const today = householdToday(now);
@@ -155,34 +167,15 @@ export function TodayView({
         <h1 className="type-headline text-ink" data-testid="dateline">
           {longDate(today)}
         </h1>
-        <FreshnessBadge bank={bank} state={spine.state} now={now} />
+        <Suspense fallback={<SkeletonLine className="w-32" />}>
+          <FreshnessBadge bank={bank} state={spine.state} now={now} />
+        </Suspense>
       </header>
 
-      {(spine.state === "failed" ||
-        spine.state === "refresh-failed" ||
-        showStale) && (
-        <div className="mb-6 flex flex-col gap-3">
-          <RefreshNote
-            state={spine.state}
-            updatedAt={spine.updatedAt}
-            onRetry={spine.refetch}
-            retrying={spine.isFetching}
-            now={now}
-          />
-          {showStale && (
-            <Note
-              kind="stale"
-              data-testid="stale-note"
-              action={
-                <Link href="/household" className={buttonClass({ variant: "link", size: "sm" })}>
-                  Sync
-                </Link>
-              }
-            >
-              The bank balance may be out of date.
-            </Note>
-          )}
-        </div>
+      {(spine.state === "failed" || spine.state === "refresh-failed" || showStale) && (
+        <Suspense fallback={null}>
+          <TopNotes state={spine.state} updatedAt={spine.updatedAt} refetch={spine.refetch} fetching={spine.isFetching} showStale={showStale} now={now} />
+        </Suspense>
       )}
 
       <Hero spine={s} state={spine.state} position={position} />
@@ -193,11 +186,16 @@ export function TodayView({
         plans={plans}
         settings={settings}
         unfiled={unfiled}
+        today={today}
       />
 
-      {live && <AffordLauncher variant="quiet" className="-mt-4 mb-8 w-full" />}
+      <OneThing items={items} loading={s == null && spine.state !== "failed"} sampleWaysBack={sampleWaysBack} />
 
-      <OneThing items={items} loading={s == null && spine.state !== "failed"} />
+      <Suspense fallback={<SectionSkeleton label="Debt" figure />}>
+        <DebtSection spine={s} state={spine.state} />
+      </Suspense>
+
+      {live && <AffordLauncher variant="quiet" className="mb-8 w-full" />}
 
       <Suspense fallback={<SectionSkeleton label="Yesterday and today" />}>
         <ActivitySection ledger={ledger} categories={categories} today={today} />
@@ -212,25 +210,6 @@ export function TodayView({
       <Suspense fallback={<SectionSkeleton label="Coming up" />}>
         <ComingUp spine={s} upcoming={upcoming} bills={bills} today={today} />
       </Suspense>
-
-      <Suspense fallback={<SectionSkeleton label="Debt" figure />}>
-        <DebtSection spine={s} state={spine.state} />
-      </Suspense>
-
-      <div
-        className="flex flex-col gap-1 border-t border-rule pt-4 pb-4"
-        data-testid="classic-row"
-      >
-        <a
-          href="/classic/"
-          className="self-start type-label text-moss underline decoration-1 underline-offset-4 hover:text-moss-ink"
-        >
-          Classic app
-        </a>
-        <p className="type-caption text-ink-2">
-          Workbook import still lives in the classic app.
-        </p>
-      </div>
 
       {live && existing && s != null && (
         <Suspense fallback={null}>

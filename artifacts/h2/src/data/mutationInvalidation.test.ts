@@ -4,6 +4,7 @@ import {
   getGetSpineQueryKey,
   getGetForecastBankBalanceExplainQueryKey,
   getGetMoneyPositionQueryKey,
+  getGetWaysBackQueryKey,
 } from "@workspace/api-client-react";
 import {
   getGetTransactionsBalancesQueryKey,
@@ -25,6 +26,7 @@ import {
 const SPINE = getGetSpineQueryKey();
 const EXPLAIN = getGetForecastBankBalanceExplainQueryKey();
 const POSITION = getGetMoneyPositionQueryKey();
+const WAYS_BACK = getGetWaysBackQueryKey();
 const REPORTS = ["/api/reports/spending-facts", { from: "2026-09-01", to: "2026-09-30" }];
 const UNRELATED = ["/api/debts"];
 // (PR14) The Chase list's pages and the balances behind its charts.
@@ -33,7 +35,7 @@ const LEDGER_BALANCES = getGetTransactionsBalancesQueryKey({ dates: "2026-09-05,
 
 function seeded() {
   const qc = new QueryClient();
-  for (const key of [SPINE, EXPLAIN, POSITION, REPORTS, UNRELATED, LEDGER_PAGES, LEDGER_BALANCES]) {
+  for (const key of [SPINE, EXPLAIN, POSITION, WAYS_BACK, REPORTS, UNRELATED, LEDGER_PAGES, LEDGER_BALANCES]) {
     qc.setQueryData(key, { seeded: true });
   }
   return qc;
@@ -53,6 +55,12 @@ describe("invalidateAfterWrite", () => {
     const qc = seeded();
     invalidateAfterWrite(qc);
     expect(invalidated(qc, POSITION)).toBe(true);
+  });
+
+  it("(V4) marks the ways back stale: a carry-over or any spend moves them", () => {
+    const qc = seeded();
+    invalidateAfterWrite(qc);
+    expect(invalidated(qc, WAYS_BACK)).toBe(true);
   });
 
   it("marks 'Why this number?' stale, so it is never older than the tile", () => {

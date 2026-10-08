@@ -174,7 +174,7 @@ describe("Banks — the list, in words", () => {
   it("the classic app is named for what is not ported", () => {
     mount(<BanksView data={banks([OK])} now={NOW} />);
     const link = screen.getByTestId("classic-settings");
-    expect(link.getAttribute("href")).toBe("/classic/settings");
+    expect(link.getAttribute("href")).toBe("/classic/");
     expect(link.textContent).toBe("classic app");
   });
 });

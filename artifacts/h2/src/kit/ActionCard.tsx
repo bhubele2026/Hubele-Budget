@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Check } from "lucide-react";
 import { Link } from "wouter";
 import { Button, buttonClass } from "./Button";
@@ -19,6 +19,7 @@ export function ActionCard({
   detail,
   action,
   onNext,
+  onAction,
   done = false,
   "data-testid": testId,
 }: {
@@ -27,6 +28,8 @@ export function ActionCard({
   action?: { label: string; href: string };
   /** Present only when there is another item to step to. */
   onNext?: () => void;
+  /** A button that acts in place (opens a sheet) instead of going to a route. . */
+  onAction?: { label: string; onClick: (e: MouseEvent<HTMLButtonElement>) => void };
   /** Nothing needs the person: the title is drawn with a check. */
   done?: boolean;
   "data-testid"?: string;
@@ -38,7 +41,7 @@ export function ActionCard({
         <span>{title}</span>
       </p>
       {detail && <p className="type-body text-ink-2">{detail}</p>}
-      {(action || onNext) && (
+      {(action || onAction || onNext) && (
         <div className="flex flex-wrap items-center gap-3">
           {action && (
             // An in-app route moves within the SPA (the cache stays warm); the
@@ -52,6 +55,15 @@ export function ActionCard({
                 {action.label}
               </a>
             )
+          )}
+          {onAction && (
+            <Button
+              variant="primary"
+              onClick={onAction.onClick}
+              data-testid="action-button"
+            >
+              {onAction.label}
+            </Button>
           )}
           {onNext && (
             <Button variant="quiet" onClick={onNext}>

@@ -321,10 +321,10 @@ export function BanksView({ data, now, pollDelays = POST_LINK_POLL_DELAYS_MS }: 
         />
       </Section>
 
-      <Section label="Other tools" data-testid="section-classic">
+      <Section label="Classic tools" data-testid="section-classic">
         <p className="type-body text-ink-2">
-          Workbook import, duplicate cleanup and non-production link cleanup still live in the{" "}
-          <a href="/classic/settings" className={buttonClass({ variant: "link", size: "sm" })} data-testid="classic-settings">
+          Workbook import, duplicate clean-up and link clean-up still live in the{" "}
+          <a href="/classic/" className={buttonClass({ variant: "link", size: "sm" })} data-testid="classic-settings">
             classic app
           </a>
           .

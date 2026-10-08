@@ -29,6 +29,10 @@ const mocks = vi.hoisted(() => ({
   unfiled: {} as Hook,
   prefs: {} as Hook,
   save: vi.fn(),
+  ways: {} as Hook,
+  me: {} as Hook,
+  carry: vi.fn(),
+  undo: vi.fn(),
 }));
 
 vi.mock("@/data/useSpine", () => ({ useSpine: () => mocks.spine }));
@@ -47,6 +51,12 @@ vi.mock("@workspace/api-client-react", () => ({
   getListAgentActionsQueryKey: (p: unknown) => ["/api/agent/actions", p],
   getGetSpineQueryKey: () => ["/api/spine"],
   getGetForecastBankBalanceExplainQueryKey: () => ["/api/forecast/bank-balance/explain"],
+  getGetWaysBackQueryKey: () => ["/api/money/ways-back"],
+  getGetMeQueryKey: () => ["/api/me"],
+  useGetWaysBack: () => mocks.ways,
+  useGetMe: () => mocks.me,
+  useCreateWeekAdjustment: () => ({ mutate: mocks.carry, isPending: false }),
+  useDeleteWeekAdjustment: () => ({ mutate: mocks.undo, isPending: false }),
 }));
 vi.mock("@workspace/api-client-react/ledger", () => ({
   // The unfiled count and the activity rows are two requests; `uncategorized` tells them apart.
@@ -191,6 +201,21 @@ function withPosition(over: Record<string, unknown>): Spine {
   return { ...SPINE, position: { ...SPINE.position, ...over } } as Spine;
 }
 
+// (V4) The server's ways back for a week $55.20 over (whole cents).
+const WAYS = {
+  weekStart: "2026-10-04",
+  weekEnd: "2026-10-10",
+  overBy: 5520,
+  daysLeft: 4,
+  hold: { perDay: 0, leavesUntilPayday: 212450 },
+  trims: [
+    { categoryId: "c1", name: "Groceries", spentWeek: 18000, usualWeek: 8500 },
+    { categoryId: "c2", name: "Fuel", spentWeek: 9000, usualWeek: null },
+  ],
+  carryOver: { nextWeekStart: "2026-10-11", nextWeekCap: 19480, applied: false, adjustment: null },
+};
+const OVER = { withinPlan: "over", remainingWeek: "-55.20", safeToSpendNow: "0.00" };
+
 beforeEach(() => {
   mocks.spine = readSpine();
   mocks.position = q(POSITION);
@@ -204,6 +229,10 @@ beforeEach(() => {
   // Seen already: the sheet stays out of the way unless a test asks for it.
   mocks.prefs = q({ sidebarCollapsed: true, whatsNewSeen: "h2-1" });
   mocks.save = vi.fn();
+  mocks.ways = q(WAYS);
+  mocks.me = q({ userId: "u1", isOwner: true });
+  mocks.carry = vi.fn((_v: unknown, o: { onSuccess?: () => void }) => o.onSuccess?.());
+  mocks.undo = vi.fn((_v: unknown, o: { onSuccess?: () => void }) => o.onSuccess?.());
 });
 afterEach(cleanup);
 
@@ -216,7 +245,7 @@ async function renderToday() {
     </QueryClientProvider>,
   );
   await waitFor(() => expect(screen.queryAllByTestId("section-skeleton")).toHaveLength(0));
-  return out;
+  return Object.assign(out, { client });
 }
 
 /** Every <data> in a region, as [face, exact value]. */
@@ -224,13 +253,14 @@ function figuresIn(el: HTMLElement): Array<[string | null, string | null]> {
   return Array.from(el.querySelectorAll("data"), (d) => [d.textContent, d.getAttribute("value")]);
 }
 
-describe("Today — the hero: free until payday", () => {
+describe("Today — the hero: room in the plan", () => {
   it("is the spine's safeToSpendNow, exact to the cent, the one figure-xl", async () => {
     const { container } = await renderToday();
     expect(container.querySelectorAll("[data-size='xl']")).toHaveLength(1);
     const hero = screen.getByTestId("figure-hero");
     expect(figuresIn(hero)).toEqual([["$145", "144.50"]]);
-    expect(hero.textContent).toContain("Free until payday");
+    expect(hero.textContent).toContain("Room in the plan");
+    expect(hero.textContent).not.toContain("Free until");
     expect(hero.textContent).not.toContain("estimated");
   });
 
@@ -254,11 +284,23 @@ describe("Today — the hero: free until payday", () => {
     expect(screen.getByTestId("figure-hero").textContent).toMatch(/\$145\s*estimated/);
   });
 
-  it("no payday in 45 days: 'Free until Saturday' and why", async () => {
+  it("captions: the payday line binds, or the week's limit is the tighter line", async () => {
+    // The fixture's week limit ($145) is below the payday line ($2,125): the week binds.
+    await renderToday();
+    expect(screen.getByTestId("figure-hero").textContent).toContain("this week's limit is the tighter line");
+    cleanup();
+    mocks.spine = readSpine({ data: withPosition({ remainingWeek: "900.00", availableUntilPayday: "500.00", safeToSpendNow: "500.00" }) });
+    await renderToday();
+    const text = screen.getByTestId("figure-hero").textContent ?? "";
+    expect(text).toContain("until Friday, after bills, your buffer and goals");
+    expect(text).not.toContain("tighter line");
+  });
+
+  it("no payday in 45 days: the label stays, and why", async () => {
     mocks.spine = readSpine({ data: withPosition({ horizonKind: "week_end", paydayDate: null }) });
     await renderToday();
     const hero = screen.getByTestId("figure-hero");
-    expect(hero.textContent).toContain("Free until Saturday");
+    expect(hero.textContent).toContain("Room in the plan");
     expect(hero.textContent).toContain("No payday on file in the next 45 days");
   });
 
@@ -282,10 +324,11 @@ describe("Today — the assumptions sheet", () => {
       estimates: [{ itemId: "e1", label: "Electric", amount: "-340.00", date: "2026-10-08" }],
     });
     await renderToday();
-    const hero = screen.getByRole("button", { name: /Free until payday: \$145/ });
+    const hero = screen.getByRole("button", { name: /Room in the plan: \$145/ });
     hero.focus();
     await user.keyboard("{Enter}");
-    const dialog = await screen.findByRole("dialog", { name: "Free until payday" });
+    const dialog = await screen.findByRole("dialog", { name: "Room in the plan" });
+    expect(dialog.textContent).toContain("Room is the smaller of the last two. It is not a target to spend.");
     const text = dialog.textContent ?? "";
     expect(text).toContain("Bank balance");
     expect(text).toContain("as of Oct 7 · bank sync");
@@ -306,11 +349,11 @@ describe("Today — the assumptions sheet", () => {
 });
 
 describe("Today — this week", () => {
-  it("the Afford button sits directly under This week, quiet and full width; the sheet is not mounted until it is pressed", async () => {
+  it("the Afford button sits directly under Debt, quiet and full width; the sheet is not mounted until it is pressed", async () => {
     await renderToday();
-    const week = screen.getByTestId("section-week");
+    const debt = screen.getByTestId("section-debt");
     const button = screen.getByRole("button", { name: "Can we afford something?" });
-    expect(week.nextElementSibling).toBe(button);
+    expect(debt.nextElementSibling).toBe(button);
     expect(button.className).toContain("w-full");
     expect(button.className).toContain("border-rule-strong");
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -448,7 +491,7 @@ describe("Today — one thing, in a fixed order", () => {
     expect(within(screen.getByTestId("action-card")).getByRole("link", { name: "Reconnect" }).getAttribute("href")).toBe("/household");
     await user.click(screen.getByRole("button", { name: "Next" }));
     expect(title()).toBe("You're over this week by $55");
-    expect(screen.getByTestId("action-card").textContent).toContain("Nothing to decide. Just know it.");
+    expect(screen.getByTestId("action-card").textContent).toContain("Pick a way back. No lecture.");
     await user.click(screen.getByRole("button", { name: "Next" }));
     expect(title()).toBe("2 charges need a look");
     await user.click(screen.getByRole("button", { name: "Next" }));
@@ -571,10 +614,10 @@ describe("Today — debt, and the no-amount-owed law", () => {
 
   it("paid down this month and the next milestone, when the server sends them", async () => {
     mocks.spine = readSpine({
-      data: { ...SPINE, debt: { payoffPct: 41.3, paidDownMtd: "812.00", nextMilestone: { label: "Card One paid off", estimatedMonth: "2027-03" } } } as unknown as Spine,
+      data: { ...SPINE, debt: { payoffPct: 41.3, paidDownMtd: "812.00", confirmedPaymentsMtd: "812.00", newChargesMtd: 0, nextMilestone: { label: "Card One paid off", estimatedMonth: "2027-03" } } } as unknown as Spine,
     });
     await renderToday();
-    expect((await screen.findByTestId("debt-paid-down")).textContent).toBe("Paid down $812 this month");
+    expect((await screen.findByTestId("debt-paid-down")).textContent).toBe("Paid down $812 this month, confirmed by the bank");
     expect(screen.getByTestId("debt-milestone").textContent).toBe("Next: Card One paid off · Mar 2027");
   });
 
@@ -737,11 +780,143 @@ describe("Today — states", () => {
     expect(figuresIn(screen.getByTestId("figure-hero"))).toEqual([["$145", "144.50"]]);
   });
 
-  it("the classic app is one quiet row away", async () => {
+  it("the classic app row moved to Household", async () => {
     await renderToday();
-    const row = screen.getByTestId("classic-row");
-    expect(within(row).getByRole("link", { name: "Classic app" }).getAttribute("href")).toBe("/classic/");
-    expect(row.textContent).toContain("Workbook import still lives in the classic app.");
-    expect(row.textContent).not.toMatch(/bank links|settings/);
+    expect(screen.queryByTestId("classic-row")).toBeNull();
+  });
+});
+
+describe("Today — the order", () => {
+  it("dateline, hero, this week, one thing, debt, afford, yesterday and today, coming up", async () => {
+    await renderToday();
+    const ids = ["dateline", "figure-hero", "section-week", "section-one-thing", "section-debt", "section-activity", "section-coming-up"];
+    const els = ids.map((id) => screen.getByTestId(id));
+    const afford = screen.getByRole("button", { name: "Can we afford something?" });
+    els.splice(5, 0, afford);
+    for (let i = 1; i < els.length; i++) {
+      expect(els[i - 1]!.compareDocumentPosition(els[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+});
+
+describe("Today — debt rows", () => {
+  const withDebt = (d: Record<string, unknown>) =>
+    readSpine({ data: { ...SPINE, debt: { payoffPct: 41.3, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0, ...d } } as Spine });
+
+  it("paid down, new charges (clay, own row) and payments-of-which, each only when its figure is not 0", async () => {
+    mocks.spine = withDebt({ paidDownMtd: 300, confirmedPaymentsMtd: 1050, newChargesMtd: 240 });
+    await renderToday();
+    expect((await screen.findByTestId("debt-paid-down")).textContent).toBe("Paid down $300 this month, confirmed by the bank");
+    const charges = screen.getByTestId("debt-new-charges");
+    expect(charges.textContent).toBe("New charges $240 this month");
+    expect(charges.className).toContain("text-clay");
+    expect(charges.className).toContain("border-t");
+    expect(screen.getByTestId("debt-payments").textContent).toBe("Payments $1,050, of which $300 reduced debt");
+  });
+
+  it("zero rows are not drawn; payments equal to paid down add nothing", async () => {
+    mocks.spine = withDebt({ paidDownMtd: 300, confirmedPaymentsMtd: 300, newChargesMtd: 0 });
+    await renderToday();
+    await screen.findByTestId("debt-paid-down");
+    expect(screen.queryByTestId("debt-new-charges")).toBeNull();
+    expect(screen.queryByTestId("debt-payments")).toBeNull();
+  });
+});
+
+describe("Today — the week adjustment, in words", () => {
+  const adj = (weekStart: string) => ({ weekAdjustment: { amount: "-40.00", reason: "carry_over", weekStart } });
+  it("next week's, then this week's", async () => {
+    mocks.spine = readSpine({ data: withPosition(adj("2026-10-11")) });
+    await renderToday();
+    expect(screen.getByTestId("week-adjustment").textContent).toBe("Next week starts $40 lower (you chose this)");
+    cleanup();
+    mocks.spine = readSpine({ data: withPosition(adj("2026-10-04")) });
+    await renderToday();
+    expect(screen.getByTestId("week-adjustment").textContent).toBe("This week started $40 lower (you chose this)");
+  });
+  it("none: nothing drawn", async () => {
+    await renderToday();
+    expect(screen.queryByTestId("week-adjustment")).toBeNull();
+  });
+});
+
+describe("Today — the way back", () => {
+  async function openSheet() {
+    const user = userEvent.setup();
+    mocks.spine = readSpine({ data: withPosition(OVER) });
+    const out = await renderToday();
+    expect(screen.getByTestId("action-title").textContent).toBe("You're over this week by $55");
+    await user.click(screen.getByRole("button", { name: "Pick a way back" }));
+    const dialog = await screen.findByRole("dialog", { name: "A way back" });
+    return { user, dialog, out };
+  }
+
+  it("the card offers it; the sheet shows three options from the response only", async () => {
+    const { dialog } = await openSheet();
+    expect(within(dialog).getByTestId("way-hold").textContent).toContain("Nothing non-essential until Saturday. That keeps $2,125 until payday.");
+    const rows = within(dialog).getAllByTestId("way-trim-row");
+    expect(rows.map((r) => r.textContent)).toEqual(["Groceriesspent $180 this week · usually $85", "Fuelspent $90 this week"]);
+    for (const r of rows) expect(within(r).getByRole("link").getAttribute("href")).toBe("/plan/categories");
+    expect(within(dialog).getByTestId("way-carry").textContent).toContain("Next week starts $55 lower, at $195.");
+  });
+
+  it("the owner carries it over: the POST payload, then the spine, position and ways back are marked stale", async () => {
+    const { user, dialog, out } = await openSheet();
+    const spy = vi.spyOn(out.client, "invalidateQueries");
+    await user.click(within(dialog).getByRole("button", { name: "Carry it over" }));
+    expect(mocks.carry).toHaveBeenCalledTimes(1);
+    expect(mocks.carry.mock.calls[0]![0]).toEqual({ data: { weekStart: "2026-10-11", amountCents: -5520, reason: "carry_over" } });
+    const keys = spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey?: unknown }).queryKey));
+    expect(keys).toContain(JSON.stringify(["/api/spine"]));
+    expect(keys).toContain(JSON.stringify(["/api/money/position"]));
+    expect(keys).toContain(JSON.stringify(["/api/money/ways-back"]));
+  });
+
+  it("a member sees the option disabled, naming whom to ask", async () => {
+    mocks.me = q({ userId: "u2", isOwner: false });
+    const { dialog } = await openSheet();
+    const ask = within(dialog).getByRole("button", { name: "Ask the owner to carry it over" }) as HTMLButtonElement;
+    expect(ask.disabled).toBe(true);
+    expect(within(dialog).queryByRole("button", { name: "Carry it over" })).toBeNull();
+  });
+
+  it("applied: says so, and Undo removes it", async () => {
+    mocks.ways = q({
+      ...WAYS,
+      carryOver: { nextWeekStart: "2026-10-11", nextWeekCap: 19480, applied: true, adjustment: { weekStart: "2026-10-11", amountCents: -5520, reason: "carry_over" } },
+    });
+    const { user, dialog } = await openSheet();
+    expect(within(dialog).getByTestId("carry-applied").textContent).toBe("Carried over. Next week starts $55 lower.");
+    await user.click(within(dialog).getByRole("button", { name: "Undo" }));
+    expect(mocks.undo.mock.calls[0]![0]).toEqual({ weekStart: "2026-10-11" });
+  });
+
+  it("not over: the card carries no way-back button", async () => {
+    await renderToday();
+    expect(screen.queryByRole("button", { name: "Pick a way back" })).toBeNull();
+  });
+});
+
+describe("The sample page", () => {
+  it("renders the default and the over state; the over sheet opens and carries over on made-up data", async () => {
+    const { default: DesignToday } = await import("../design/DesignToday");
+    const user = userEvent.setup();
+    window.history.pushState({}, "", "/design/today");
+    const a = render(<QueryClientProvider client={new QueryClient()}><DesignToday /></QueryClientProvider>);
+    expect((await screen.findByTestId("sample-note")).textContent).toBe("Sample — every figure on this page is made up.");
+    await waitFor(() => expect(screen.queryAllByTestId("section-skeleton")).toHaveLength(0));
+    expect(screen.getByTestId("debt-new-charges").textContent).toBe("New charges $240 this month");
+    expect(screen.queryByRole("button", { name: "Pick a way back" })).toBeNull();
+    a.unmount();
+    window.history.pushState({}, "", "/design/today?state=over");
+    render(<QueryClientProvider client={new QueryClient()}><DesignToday /></QueryClientProvider>);
+    await waitFor(() => expect(screen.queryAllByTestId("section-skeleton")).toHaveLength(0));
+    expect(screen.getByTestId("action-title").textContent).toBe("You're over this week by $55");
+    await user.click(screen.getByRole("button", { name: "Pick a way back" }));
+    const dialog = await screen.findByRole("dialog", { name: "A way back" });
+    await user.click(within(dialog).getByRole("button", { name: "Carry it over" }));
+    expect(within(dialog).getByTestId("carry-applied").textContent).toBe("Carried over. Next week starts $55 lower.");
+    expect(mocks.carry).not.toHaveBeenCalled();
+    window.history.pushState({}, "", "/");
   });
 });

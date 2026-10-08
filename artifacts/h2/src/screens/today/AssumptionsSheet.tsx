@@ -27,7 +27,7 @@ function Row({ label, amount, note }: { label: string; amount: number | null; no
 }
 
 /**
- * ⭐ HOW "FREE UNTIL PAYDAY" IS WORKED OUT — the bank balance, the payday, the
+ * ⭐ HOW "ROOM IN THE PLAN" IS WORKED OUT — the bank balance, the payday, the
  * bills before it, the buffer and the reserves, then the server's own
  * assumptions and estimates word for word. Every figure is read from the spine
  * or `GET /money/position`; none is added up here.
@@ -59,7 +59,7 @@ export default function AssumptionsSheet({
       open={open}
       onOpenChange={onOpenChange}
       returnFocusRef={returnFocusRef}
-      title={weekEnd ? "Free until Saturday" : "Free until payday"}
+      title="Room in the plan"
       description="What H2 counted to get this figure."
     >
       <dl className="flex flex-col" data-testid="assumptions">
@@ -86,7 +86,7 @@ export default function AssumptionsSheet({
         <Row label="Available until payday" amount={toAmount(p.availableUntilPayday)} />
         <Row label="Left under this week's limit" amount={toAmount(p.remainingWeek)} />
       </dl>
-      <p className="mt-3 type-caption text-ink-2">Free now is the smaller of the last two.</p>
+      <p className="mt-3 type-caption text-ink-2">Room is the smaller of the last two. It is not a target to spend.</p>
 
       {position && position.estimates.length > 0 && (
         <ul className="mt-5 flex flex-col gap-1" data-testid="estimates">
