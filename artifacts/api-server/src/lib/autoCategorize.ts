@@ -12,7 +12,24 @@ export type RuleRow = {
   matchType: string;
   categoryId: string | null;
   priority: number;
+  /** (PR-A) Third key of the deterministic tie-break (`compareRules`). */
+  createdAt?: Date | null;
 };
+
+/**
+ * (PR-A) Deterministic rule order: priority desc, pattern length desc (the
+ * more specific pattern first), created_at asc, id asc. Equal priorities used
+ * to fall back to whatever order Postgres returned the rows in, so two
+ * overlapping rules could swap winners between requests.
+ */
+export function compareRules(a: RuleRow, b: RuleRow): number {
+  return (
+    b.priority - a.priority ||
+    b.pattern.length - a.pattern.length ||
+    (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) ||
+    a.id.localeCompare(b.id)
+  );
+}
 
 /**
  * (#623) Load mapping rules scoped by householdId so a member sees the
@@ -23,7 +40,7 @@ export async function loadUserRules(householdId: string): Promise<RuleRow[]> {
     .select()
     .from(mappingRulesTable)
     .where(eq(mappingRulesTable.householdId, householdId));
-  return [...rows].sort((a, b) => b.priority - a.priority);
+  return [...rows].sort(compareRules);
 }
 
 function ruleMatchesDescription(rule: RuleRow, hay: string): boolean {

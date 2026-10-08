@@ -249,6 +249,8 @@ describe("findSupersededPendingForRange — the whole-ledger answer inside the r
         debtId: null,
         isTransfer: false,
         isTransferUserOverridden: false,
+        // (PR-A) The pending row's lock travels with its category.
+        categoryLockedByUser: false,
       },
     });
   });

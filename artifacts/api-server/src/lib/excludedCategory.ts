@@ -2,6 +2,9 @@ import { and, eq } from "drizzle-orm";
 import { db, budgetCategoriesTable } from "@workspace/db";
 import { TRANSFER_CATEGORY_NAME } from "./budgetSeed";
 
+// (PR-A) Both lookups are scoped by HOUSEHOLD, not by the actor: a member's
+// session used to miss every category the owner created (member-session test).
+//
 // (#474, #607, #624) Shared guard: returns true when `categoryId` belongs
 // to a budget category flagged `exclude_from_budget` (today: the
 // system-managed "Uncategorized", "Transfer", and "Ignore" rows). Mapping
@@ -11,7 +14,7 @@ import { TRANSFER_CATEGORY_NAME } from "./budgetSeed";
 // so every rule-mutating endpoint (mapping CRUD, transactions auto-learn,
 // recategorize-by-pattern Undo repoint) shares the same check.
 export async function isExcludedCategory(
-  userId: string,
+  householdId: string,
   categoryId: string | null | undefined,
 ): Promise<boolean> {
   if (!categoryId) return false;
@@ -21,7 +24,7 @@ export async function isExcludedCategory(
     .where(
       and(
         eq(budgetCategoriesTable.id, categoryId),
-        eq(budgetCategoriesTable.userId, userId),
+        eq(budgetCategoriesTable.householdId, householdId),
       ),
     );
   return Boolean(cat?.excludeFromBudget);
@@ -34,7 +37,7 @@ export async function isExcludedCategory(
 // up by name so it survives the Uncategorized-style lazy-seed flow
 // without needing a stable id.
 export async function isTransferCategory(
-  userId: string,
+  householdId: string,
   categoryId: string | null | undefined,
 ): Promise<boolean> {
   if (!categoryId) return false;
@@ -44,7 +47,7 @@ export async function isTransferCategory(
     .where(
       and(
         eq(budgetCategoriesTable.id, categoryId),
-        eq(budgetCategoriesTable.userId, userId),
+        eq(budgetCategoriesTable.householdId, householdId),
       ),
     );
   return cat?.name === TRANSFER_CATEGORY_NAME;

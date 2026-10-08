@@ -25,6 +25,7 @@ tags:
   - name: invitations
   - name: members
   - name: spine
+  - name: categorization
 paths:
   /healthz:
     get:
@@ -2094,8 +2095,383 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Spine" }
 
+  # ── (PR-A) Categorization engine v2 ────────────────────────────────────────
+  /categorization/run:
+    post:
+      operationId: runCategorization
+      tags: [categorization]
+      summary: |
+        Owner only. Run the deterministic categorization stages over the
+        household's rows dated on/after `since` (default: the last 90 days).
+        Idempotent: a second run with nothing changed records nothing.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunCategorizationInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategorizationRunResult" }
+        "403": { description: Owner only }
+
+  /categorization/review:
+    get:
+      operationId: listCategorizationReview
+      tags: [categorization]
+      summary: Open decisions (provisional or queued), oldest first.
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewQueue" }
+
+  /categorization/review/{decisionId}/accept:
+    post:
+      operationId: acceptCategorizationDecision
+      tags: [categorization]
+      parameters:
+        - { in: path, name: decisionId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewResolution" }
+        "404": { description: Not found }
+        "409": { description: Already resolved }
+
+  /categorization/review/{decisionId}/skip:
+    post:
+      operationId: skipCategorizationDecision
+      tags: [categorization]
+      parameters:
+        - { in: path, name: decisionId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewResolution" }
+        "404": { description: Not found }
+        "409": { description: Already resolved }
+
+  /categorization/review/{decisionId}/correct:
+    post:
+      operationId: correctCategorizationDecision
+      tags: [categorization]
+      summary: |
+        File the row by hand (locked), learn merchant memory, and return the
+        retroactive candidates. Never applies them.
+      parameters:
+        - { in: path, name: decisionId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectDecisionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewResolution" }
+        "400": { description: Unknown category }
+        "404": { description: Not found }
+        "409": { description: Already resolved }
+
+  /category-decisions/{id}/undo:
+    post:
+      operationId: undoCategoryDecision
+      tags: [categorization]
+      summary: |
+        Restore the decision's previous category, clear provisional, stamp
+        undone_at and disable the memory it created.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UndoDecisionResult" }
+        "400": { description: Nothing to undo }
+        "404": { description: Not found }
+        "409": { description: The row is locked or changed since }
+
+  /learned-rules:
+    get:
+      operationId: listLearnedRules
+      tags: [categorization]
+      summary: Merchant memory, with its evidence counts.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LearnedRule" }
+
+  /learned-rules/{id}:
+    patch:
+      operationId: updateLearnedRule
+      tags: [categorization]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateLearnedRuleInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LearnedRule" }
+        "400": { description: Invalid }
+        "404": { description: Not found }
+        "409": { description: A rule with that scope already exists }
+    delete:
+      operationId: deleteLearnedRule
+      tags: [categorization]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+
+  /learned-rules/{id}/apply-retroactively:
+    post:
+      operationId: applyLearnedRuleRetroactively
+      tags: [categorization]
+      summary: |
+        Explicit request: file every unlocked row of this merchant (within the
+        rule's scope) into its category. Each write is a `user` decision.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApplyRetroactivelyResult" }
+        "404": { description: Not found }
+
+  /transactions/{id}/splits:
+    get:
+      operationId: getTransactionSplits
+      tags: [categorization]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionSplits" }
+        "404": { description: Not found }
+    post:
+      operationId: replaceTransactionSplits
+      tags: [categorization]
+      summary: |
+        Replace-all. The parts must add up to the charge's amount to the cent;
+        the charge keeps its own category and becomes locked.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReplaceTransactionSplitsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionSplits" }
+        "400": { description: Invalid split }
+        "404": { description: Not found }
+    delete:
+      operationId: deleteTransactionSplits
+      tags: [categorization]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+
 components:
   schemas:
+    # ── (PR-A) Categorization engine v2 ──────────────────────────────────────
+    RunCategorizationInput:
+      type: object
+      properties:
+        since: { type: string, format: date }
+    CategorizationRunResult:
+      type: object
+      required: [decided, queued, ambiguous]
+      properties:
+        decided: { type: integer, description: Decisions that wrote a category (auto or provisional). }
+        queued: { type: integer, description: Decisions placed in the review queue. }
+        ambiguous: { type: integer, description: Rows no deterministic stage decided at 0.6 or more. }
+    ReviewFlags:
+      type: object
+      required: [novelMerchant, amountAnomaly, splitNeedsRebalance]
+      properties:
+        novelMerchant: { type: boolean }
+        amountAnomaly: { type: boolean }
+        splitNeedsRebalance: { type: boolean }
+    ReviewItem:
+      type: object
+      required: [decisionId, transactionId, occurredOn, description, amount, account, currentCategoryId, suggestedCategoryId, confidence, band, source, explanation, createdAt, flags]
+      properties:
+        decisionId: { type: string }
+        transactionId: { type: string }
+        occurredOn: { type: string, format: date }
+        description: { type: string }
+        amount: { type: string }
+        account: { type: ["string", "null"] }
+        currentCategoryId: { type: ["string", "null"] }
+        suggestedCategoryId: { type: ["string", "null"] }
+        confidence: { type: number }
+        band: { type: string, enum: [provisional, queue] }
+        source: { type: string }
+        explanation: { type: string }
+        createdAt: { type: string, format: date-time }
+        flags: { $ref: "#/components/schemas/ReviewFlags" }
+    ReviewQueue:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReviewItem" }
+        total: { type: integer }
+    CorrectDecisionInput:
+      type: object
+      required: [categoryId]
+      properties:
+        categoryId: { type: string, format: uuid }
+    RetroactiveSample:
+      type: object
+      required: [id, occurredOn, description, amount, categoryId]
+      properties:
+        id: { type: string }
+        occurredOn: { type: string, format: date }
+        description: { type: string }
+        amount: { type: string }
+        categoryId: { type: ["string", "null"] }
+    RetroactiveCandidates:
+      type: object
+      required: [count, sample]
+      description: Unlocked rows of the same merchant. Reported, never applied.
+      properties:
+        count: { type: integer }
+        sample:
+          type: array
+          maxItems: 5
+          items: { $ref: "#/components/schemas/RetroactiveSample" }
+    ReviewResolution:
+      type: object
+      required: [decisionId, transactionId, resolution, categoryId, userDecisionId, retroactiveCandidates]
+      properties:
+        decisionId: { type: string }
+        transactionId: { type: string }
+        resolution: { type: string, enum: [accepted, corrected, skipped] }
+        categoryId: { type: ["string", "null"] }
+        userDecisionId:
+          type: ["string", "null"]
+          description: The `user` decision this wrote; pass it to undo.
+        retroactiveCandidates:
+          oneOf:
+            - { $ref: "#/components/schemas/RetroactiveCandidates" }
+            - { type: "null" }
+    UndoDecisionResult:
+      type: object
+      required: [decisionId, transactionId, categoryId]
+      properties:
+        decisionId: { type: string }
+        transactionId: { type: string }
+        categoryId: { type: ["string", "null"] }
+    LearnedRule:
+      type: object
+      required: [id, signature, scope, plaidAccountId, amountBandLo, amountBandHi, categoryId, count, lastConfirmedAt, disabled, source, createdAt]
+      properties:
+        id: { type: string }
+        signature: { type: string }
+        scope: { type: string, enum: [merchant, merchant_account, merchant_amount] }
+        plaidAccountId: { type: ["string", "null"] }
+        amountBandLo: { type: ["string", "null"] }
+        amountBandHi: { type: ["string", "null"] }
+        categoryId: { type: string }
+        count: { type: integer, description: Times a person confirmed it. }
+        lastConfirmedAt: { type: ["string", "null"], format: date-time }
+        disabled: { type: boolean }
+        source: { type: string }
+        createdAt: { type: string, format: date-time }
+    UpdateLearnedRuleInput:
+      type: object
+      properties:
+        categoryId: { type: string, format: uuid }
+        scope: { type: string, enum: [merchant, merchant_account, merchant_amount] }
+        disabled: { type: boolean }
+    ApplyRetroactivelyResult:
+      type: object
+      required: [updated]
+      properties:
+        updated: { type: integer }
+    TransactionSplitInput:
+      type: object
+      required: [categoryId, amount]
+      properties:
+        categoryId: { type: string, format: uuid }
+        amount:
+          type: string
+          pattern: '^-?\d+(\.\d{1,2})?$'
+          description: Signed like the charge itself.
+        member: { type: ["string", "null"] }
+        note: { type: ["string", "null"] }
+    ReplaceTransactionSplitsInput:
+      type: object
+      required: [splits]
+      properties:
+        splits:
+          type: array
+          minItems: 2
+          maxItems: 20
+          items: { $ref: "#/components/schemas/TransactionSplitInput" }
+    TransactionSplit:
+      type: object
+      required: [id, categoryId, amount, member, note, source]
+      properties:
+        id: { type: string }
+        categoryId: { type: string }
+        amount: { type: string }
+        member: { type: ["string", "null"] }
+        note: { type: ["string", "null"] }
+        source: { type: string }
+    TransactionSplits:
+      type: object
+      required: [transactionId, amount, invalid, splits]
+      properties:
+        transactionId: { type: string }
+        amount: { type: string }
+        invalid:
+          type: boolean
+          description: The charge's amount moved by $1 or more; it counts whole until rebalanced.
+        splits:
+          type: array
+          items: { $ref: "#/components/schemas/TransactionSplit" }
     HealthStatus:
       type: object
       required: [status]
@@ -2833,6 +3209,13 @@ components:
                 transactions too" prompt.
             ruleAction:
               $ref: "#/components/schemas/RuleAction"
+            retroactiveCandidates:
+              description: |
+                (PR-A) When this PATCH set a category: unlocked rows of the same
+                merchant it would also fit. Reported, never applied.
+              oneOf:
+                - { $ref: "#/components/schemas/RetroactiveCandidates" }
+                - { type: "null" }
 
     CreateTransactionResponse:
       allOf:

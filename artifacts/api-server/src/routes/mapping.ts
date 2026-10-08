@@ -36,11 +36,11 @@ function normalizeMatchType(
 // `isExcludedCategory` helper so all rule-mutating endpoints stay
 // in lockstep.
 async function rejectIfExcludedCategory(
-  userId: string,
+  householdId: string,
   categoryId: string | null | undefined,
   res: import("express").Response,
 ): Promise<boolean> {
-  if (await isExcludedCategory(userId, categoryId)) {
+  if (await isExcludedCategory(householdId, categoryId)) {
     res.status(400).json({ error: EXCLUDED_CATEGORY_RULE_ERROR });
     return true;
   }
@@ -66,7 +66,7 @@ router.post("/mapping-rules", requireAuth, async (req, res): Promise<void> => {
   }
   const userId = req.userId!;
   const householdId = req.householdId!;
-  if (await rejectIfExcludedCategory(userId, parsed.data.categoryId, res)) {
+  if (await rejectIfExcludedCategory(householdId, parsed.data.categoryId, res)) {
     return;
   }
   const [row] = await db
@@ -421,7 +421,7 @@ router.patch(
       return;
     }
     if (
-      await rejectIfExcludedCategory(req.userId!, parsed.data.categoryId, res)
+      await rejectIfExcludedCategory(req.householdId!, parsed.data.categoryId, res)
     ) {
       return;
     }

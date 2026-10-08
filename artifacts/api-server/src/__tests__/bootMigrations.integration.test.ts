@@ -92,7 +92,7 @@ describe("startServer with the real runner", () => {
   it("a real failing migration file keeps the server from listening", async () => {
     const schema = `pr0_boot_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
     await pool.query(`CREATE SCHEMA ${schema}`);
-    await pool.query(`CREATE TABLE ${schema}.transactions (LIKE public.transactions INCLUDING DEFAULTS)`);
+    await pool.query(`CREATE TABLE ${schema}.transactions (LIKE public.transactions INCLUDING DEFAULTS INCLUDING INDEXES)`);
     await pool.query(`ALTER TABLE ${schema}.transactions DROP COLUMN category_locked_by_user`);
     const dir = await mkdtemp(path.join(os.tmpdir(), "pr0-boot-"));
     cleanup.push(async () => {
@@ -114,9 +114,9 @@ describe("startServer with the real runner", () => {
     expect(String(h.errors[0])).toMatch(/9990_broken\.sql failed and was rolled back/);
     // The files before it did apply, each in its own transaction.
     const { rows } = await pool.query(`SELECT name FROM ${schema}.schema_migrations ORDER BY name`);
-    expect(rows.map((r: { name: string }) => r.name)).toEqual([
-      "0001_schema_migrations.sql",
-      "0002_category_locked_by_user.sql",
-    ]);
+    // (PR-A) Every real file, whatever later packages add.
+    const realFiles = (await readdir(real)).filter((f) => f.endsWith(".sql")).sort();
+    expect(realFiles).toEqual(expect.arrayContaining(["0001_schema_migrations.sql", "0002_category_locked_by_user.sql"]));
+    expect(rows.map((r: { name: string }) => r.name)).toEqual(realFiles);
   });
 });

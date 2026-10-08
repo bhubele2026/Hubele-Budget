@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, ApplyRetroactivelyResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListCategorizationReviewParams, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewQueue, ReviewResolution, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -2611,5 +2611,336 @@ export declare function useGetSpine<TData = Awaited<ReturnType<typeof getSpine>>
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * @summary Owner only. Run the deterministic categorization stages over the
+household's rows dated on/after `since` (default: the last 90 days).
+Idempotent: a second run with nothing changed records nothing.
+
+ */
+export declare const getRunCategorizationUrl: () => string;
+export declare const runCategorization: (runCategorizationInput?: RunCategorizationInput, options?: RequestInit) => Promise<CategorizationRunResult>;
+export declare const getRunCategorizationMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof runCategorization>>, TError, {
+        data: BodyType<RunCategorizationInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof runCategorization>>, TError, {
+    data: BodyType<RunCategorizationInput>;
+}, TContext>;
+export type RunCategorizationMutationResult = NonNullable<Awaited<ReturnType<typeof runCategorization>>>;
+export type RunCategorizationMutationBody = BodyType<RunCategorizationInput>;
+export type RunCategorizationMutationError = ErrorType<void>;
+/**
+ * @summary Owner only. Run the deterministic categorization stages over the
+household's rows dated on/after `since` (default: the last 90 days).
+Idempotent: a second run with nothing changed records nothing.
+
+ */
+export declare const useRunCategorization: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof runCategorization>>, TError, {
+        data: BodyType<RunCategorizationInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof runCategorization>>, TError, {
+    data: BodyType<RunCategorizationInput>;
+}, TContext>;
+/**
+ * @summary Open decisions (provisional or queued), oldest first.
+ */
+export declare const getListCategorizationReviewUrl: (params?: ListCategorizationReviewParams) => string;
+export declare const listCategorizationReview: (params?: ListCategorizationReviewParams, options?: RequestInit) => Promise<ReviewQueue>;
+export declare const getListCategorizationReviewQueryKey: (params?: ListCategorizationReviewParams) => readonly ["/api/categorization/review", ...ListCategorizationReviewParams[]];
+export declare const getListCategorizationReviewQueryOptions: <TData = Awaited<ReturnType<typeof listCategorizationReview>>, TError = ErrorType<unknown>>(params?: ListCategorizationReviewParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listCategorizationReview>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listCategorizationReview>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListCategorizationReviewQueryResult = NonNullable<Awaited<ReturnType<typeof listCategorizationReview>>>;
+export type ListCategorizationReviewQueryError = ErrorType<unknown>;
+/**
+ * @summary Open decisions (provisional or queued), oldest first.
+ */
+export declare function useListCategorizationReview<TData = Awaited<ReturnType<typeof listCategorizationReview>>, TError = ErrorType<unknown>>(params?: ListCategorizationReviewParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listCategorizationReview>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+export declare const getAcceptCategorizationDecisionUrl: (decisionId: string) => string;
+export declare const acceptCategorizationDecision: (decisionId: string, options?: RequestInit) => Promise<ReviewResolution>;
+export declare const getAcceptCategorizationDecisionMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof acceptCategorizationDecision>>, TError, {
+        decisionId: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof acceptCategorizationDecision>>, TError, {
+    decisionId: string;
+}, TContext>;
+export type AcceptCategorizationDecisionMutationResult = NonNullable<Awaited<ReturnType<typeof acceptCategorizationDecision>>>;
+export type AcceptCategorizationDecisionMutationError = ErrorType<void>;
+export declare const useAcceptCategorizationDecision: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof acceptCategorizationDecision>>, TError, {
+        decisionId: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof acceptCategorizationDecision>>, TError, {
+    decisionId: string;
+}, TContext>;
+export declare const getSkipCategorizationDecisionUrl: (decisionId: string) => string;
+export declare const skipCategorizationDecision: (decisionId: string, options?: RequestInit) => Promise<ReviewResolution>;
+export declare const getSkipCategorizationDecisionMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof skipCategorizationDecision>>, TError, {
+        decisionId: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof skipCategorizationDecision>>, TError, {
+    decisionId: string;
+}, TContext>;
+export type SkipCategorizationDecisionMutationResult = NonNullable<Awaited<ReturnType<typeof skipCategorizationDecision>>>;
+export type SkipCategorizationDecisionMutationError = ErrorType<void>;
+export declare const useSkipCategorizationDecision: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof skipCategorizationDecision>>, TError, {
+        decisionId: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof skipCategorizationDecision>>, TError, {
+    decisionId: string;
+}, TContext>;
+/**
+ * @summary File the row by hand (locked), learn merchant memory, and return the
+retroactive candidates. Never applies them.
+
+ */
+export declare const getCorrectCategorizationDecisionUrl: (decisionId: string) => string;
+export declare const correctCategorizationDecision: (decisionId: string, correctDecisionInput: CorrectDecisionInput, options?: RequestInit) => Promise<ReviewResolution>;
+export declare const getCorrectCategorizationDecisionMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof correctCategorizationDecision>>, TError, {
+        decisionId: string;
+        data: BodyType<CorrectDecisionInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof correctCategorizationDecision>>, TError, {
+    decisionId: string;
+    data: BodyType<CorrectDecisionInput>;
+}, TContext>;
+export type CorrectCategorizationDecisionMutationResult = NonNullable<Awaited<ReturnType<typeof correctCategorizationDecision>>>;
+export type CorrectCategorizationDecisionMutationBody = BodyType<CorrectDecisionInput>;
+export type CorrectCategorizationDecisionMutationError = ErrorType<void>;
+/**
+ * @summary File the row by hand (locked), learn merchant memory, and return the
+retroactive candidates. Never applies them.
+
+ */
+export declare const useCorrectCategorizationDecision: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof correctCategorizationDecision>>, TError, {
+        decisionId: string;
+        data: BodyType<CorrectDecisionInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof correctCategorizationDecision>>, TError, {
+    decisionId: string;
+    data: BodyType<CorrectDecisionInput>;
+}, TContext>;
+/**
+ * @summary Restore the decision's previous category, clear provisional, stamp
+undone_at and disable the memory it created.
+
+ */
+export declare const getUndoCategoryDecisionUrl: (id: string) => string;
+export declare const undoCategoryDecision: (id: string, options?: RequestInit) => Promise<UndoDecisionResult>;
+export declare const getUndoCategoryDecisionMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof undoCategoryDecision>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof undoCategoryDecision>>, TError, {
+    id: string;
+}, TContext>;
+export type UndoCategoryDecisionMutationResult = NonNullable<Awaited<ReturnType<typeof undoCategoryDecision>>>;
+export type UndoCategoryDecisionMutationError = ErrorType<void>;
+/**
+ * @summary Restore the decision's previous category, clear provisional, stamp
+undone_at and disable the memory it created.
+
+ */
+export declare const useUndoCategoryDecision: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof undoCategoryDecision>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof undoCategoryDecision>>, TError, {
+    id: string;
+}, TContext>;
+/**
+ * @summary Merchant memory, with its evidence counts.
+ */
+export declare const getListLearnedRulesUrl: () => string;
+export declare const listLearnedRules: (options?: RequestInit) => Promise<LearnedRule[]>;
+export declare const getListLearnedRulesQueryKey: () => readonly ["/api/learned-rules"];
+export declare const getListLearnedRulesQueryOptions: <TData = Awaited<ReturnType<typeof listLearnedRules>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listLearnedRules>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listLearnedRules>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListLearnedRulesQueryResult = NonNullable<Awaited<ReturnType<typeof listLearnedRules>>>;
+export type ListLearnedRulesQueryError = ErrorType<unknown>;
+/**
+ * @summary Merchant memory, with its evidence counts.
+ */
+export declare function useListLearnedRules<TData = Awaited<ReturnType<typeof listLearnedRules>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listLearnedRules>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+export declare const getUpdateLearnedRuleUrl: (id: string) => string;
+export declare const updateLearnedRule: (id: string, updateLearnedRuleInput: UpdateLearnedRuleInput, options?: RequestInit) => Promise<LearnedRule>;
+export declare const getUpdateLearnedRuleMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateLearnedRule>>, TError, {
+        id: string;
+        data: BodyType<UpdateLearnedRuleInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof updateLearnedRule>>, TError, {
+    id: string;
+    data: BodyType<UpdateLearnedRuleInput>;
+}, TContext>;
+export type UpdateLearnedRuleMutationResult = NonNullable<Awaited<ReturnType<typeof updateLearnedRule>>>;
+export type UpdateLearnedRuleMutationBody = BodyType<UpdateLearnedRuleInput>;
+export type UpdateLearnedRuleMutationError = ErrorType<void>;
+export declare const useUpdateLearnedRule: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateLearnedRule>>, TError, {
+        id: string;
+        data: BodyType<UpdateLearnedRuleInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof updateLearnedRule>>, TError, {
+    id: string;
+    data: BodyType<UpdateLearnedRuleInput>;
+}, TContext>;
+export declare const getDeleteLearnedRuleUrl: (id: string) => string;
+export declare const deleteLearnedRule: (id: string, options?: RequestInit) => Promise<void>;
+export declare const getDeleteLearnedRuleMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteLearnedRule>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof deleteLearnedRule>>, TError, {
+    id: string;
+}, TContext>;
+export type DeleteLearnedRuleMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLearnedRule>>>;
+export type DeleteLearnedRuleMutationError = ErrorType<void>;
+export declare const useDeleteLearnedRule: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteLearnedRule>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof deleteLearnedRule>>, TError, {
+    id: string;
+}, TContext>;
+/**
+ * @summary Explicit request: file every unlocked row of this merchant (within the
+rule's scope) into its category. Each write is a `user` decision.
+
+ */
+export declare const getApplyLearnedRuleRetroactivelyUrl: (id: string) => string;
+export declare const applyLearnedRuleRetroactively: (id: string, options?: RequestInit) => Promise<ApplyRetroactivelyResult>;
+export declare const getApplyLearnedRuleRetroactivelyMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>, TError, {
+    id: string;
+}, TContext>;
+export type ApplyLearnedRuleRetroactivelyMutationResult = NonNullable<Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>>;
+export type ApplyLearnedRuleRetroactivelyMutationError = ErrorType<void>;
+/**
+ * @summary Explicit request: file every unlocked row of this merchant (within the
+rule's scope) into its category. Each write is a `user` decision.
+
+ */
+export declare const useApplyLearnedRuleRetroactively: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>, TError, {
+    id: string;
+}, TContext>;
+export declare const getGetTransactionSplitsUrl: (id: string) => string;
+export declare const getTransactionSplits: (id: string, options?: RequestInit) => Promise<TransactionSplits>;
+export declare const getGetTransactionSplitsQueryKey: (id: string) => readonly [`/api/transactions/${string}/splits`];
+export declare const getGetTransactionSplitsQueryOptions: <TData = Awaited<ReturnType<typeof getTransactionSplits>>, TError = ErrorType<void>>(id: string, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getTransactionSplits>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getTransactionSplits>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetTransactionSplitsQueryResult = NonNullable<Awaited<ReturnType<typeof getTransactionSplits>>>;
+export type GetTransactionSplitsQueryError = ErrorType<void>;
+export declare function useGetTransactionSplits<TData = Awaited<ReturnType<typeof getTransactionSplits>>, TError = ErrorType<void>>(id: string, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getTransactionSplits>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary Replace-all. The parts must add up to the charge's amount to the cent;
+the charge keeps its own category and becomes locked.
+
+ */
+export declare const getReplaceTransactionSplitsUrl: (id: string) => string;
+export declare const replaceTransactionSplits: (id: string, replaceTransactionSplitsInput: ReplaceTransactionSplitsInput, options?: RequestInit) => Promise<TransactionSplits>;
+export declare const getReplaceTransactionSplitsMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof replaceTransactionSplits>>, TError, {
+        id: string;
+        data: BodyType<ReplaceTransactionSplitsInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof replaceTransactionSplits>>, TError, {
+    id: string;
+    data: BodyType<ReplaceTransactionSplitsInput>;
+}, TContext>;
+export type ReplaceTransactionSplitsMutationResult = NonNullable<Awaited<ReturnType<typeof replaceTransactionSplits>>>;
+export type ReplaceTransactionSplitsMutationBody = BodyType<ReplaceTransactionSplitsInput>;
+export type ReplaceTransactionSplitsMutationError = ErrorType<void>;
+/**
+ * @summary Replace-all. The parts must add up to the charge's amount to the cent;
+the charge keeps its own category and becomes locked.
+
+ */
+export declare const useReplaceTransactionSplits: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof replaceTransactionSplits>>, TError, {
+        id: string;
+        data: BodyType<ReplaceTransactionSplitsInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof replaceTransactionSplits>>, TError, {
+    id: string;
+    data: BodyType<ReplaceTransactionSplitsInput>;
+}, TContext>;
+export declare const getDeleteTransactionSplitsUrl: (id: string) => string;
+export declare const deleteTransactionSplits: (id: string, options?: RequestInit) => Promise<void>;
+export declare const getDeleteTransactionSplitsMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteTransactionSplits>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof deleteTransactionSplits>>, TError, {
+    id: string;
+}, TContext>;
+export type DeleteTransactionSplitsMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTransactionSplits>>>;
+export type DeleteTransactionSplitsMutationError = ErrorType<void>;
+export declare const useDeleteTransactionSplits: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteTransactionSplits>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof deleteTransactionSplits>>, TError, {
+    id: string;
+}, TContext>;
 export {};
 //# sourceMappingURL=api.d.ts.map

@@ -1,0 +1,1 @@
+{"version":3,"file":"transactionSplits.d.ts","sourceRoot":"","sources":["../../../src/generated/types/transactionSplits.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,gBAAgB,EAAE,MAAM,oBAAoB,CAAC;AAE3D,MAAM,WAAW,iBAAiB;IAChC,aAAa,EAAE,MAAM,CAAC;IACtB,MAAM,EAAE,MAAM,CAAC;IACf,iFAAiF;IACjF,OAAO,EAAE,OAAO,CAAC;IACjB,MAAM,EAAE,gBAAgB,EAAE,CAAC;CAC5B"}

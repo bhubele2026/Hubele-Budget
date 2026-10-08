@@ -3,6 +3,7 @@ import { and, eq, ne, sql, asc, desc, lt, gte, inArray, isNull, notInArray } fro
 import { findSupersededPendingForRange } from "../lib/supersededPending";
 import { uncategorizedCategoryIds } from "../lib/pendingFiling";
 import { aggregateBudgetMonth } from "../lib/budgetActuals";
+import { expandSplits, loadSplitsByTxn } from "../lib/categorizer/splits";
 import {
   db,
   avalancheSettingsTable,
@@ -2016,9 +2017,17 @@ router.get(
     // posted row, decided from the stored `isTransferUserOverridden` flag —
     // never by re-reading mapping rules (review H1).
     const uncategorizedIds = uncategorizedCategoryIds(allCats);
-    const monthSpend = aggregateBudgetMonth(snapshot.monthRows, snapshot.supersede, {
-      uncategorizedIds,
-    });
+    // (PR-A) Category totals of split rows come from their splits.
+    const splitParts = expandSplits(
+      snapshot.monthRows,
+      await loadSplitsByTxn(householdId, { from: monthStart, to: addDaysISO(monthEndStr, -1) }),
+    );
+    const monthSpend = aggregateBudgetMonth(
+      snapshot.monthRows,
+      snapshot.supersede,
+      { uncategorizedIds },
+      splitParts,
+    );
     const replacedInMonth = monthSpend.replacedPendingIds;
 
     type SourceBucket = { source: string; count: number; amount: number };

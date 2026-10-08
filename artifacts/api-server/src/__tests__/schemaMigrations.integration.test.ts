@@ -34,7 +34,14 @@ const DATABASE_URL = process.env.DATABASE_URL!;
 // shape. A package whose migration alters an existing table adds its columns
 // here; a table a migration CREATES needs nothing — it is compared anyway.
 const ADDED_COLUMNS: Record<string, string[]> = {
-  transactions: ["category_locked_by_user"],
+  transactions: [
+    "category_locked_by_user",
+    // PR-A (0020)
+    "category_provisional",
+    "refund_of_txn_id",
+    "plaid_removed_at",
+    "splits_invalid",
+  ],
 };
 
 type ColumnShape = {
@@ -79,7 +86,7 @@ async function makeScratch(): Promise<{ name: string; url: string }> {
   await pool.query(`CREATE SCHEMA ${name}`);
   for (const [table, added] of Object.entries(ADDED_COLUMNS)) {
     await pool.query(
-      `CREATE TABLE ${name}.${table} (LIKE public.${table} INCLUDING DEFAULTS)`,
+      `CREATE TABLE ${name}.${table} (LIKE public.${table} INCLUDING DEFAULTS INCLUDING INDEXES)`,
     );
     for (const col of added) {
       await pool.query(`ALTER TABLE ${name}.${table} DROP COLUMN ${col}`);

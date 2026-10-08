@@ -15,6 +15,22 @@ export type DedupeTxnReport = {
 
 type TxnRow = typeof transactionsTable.$inferSelect;
 
+/** (PR-A) Re-point the first loser's splits onto the survivor when it has none. */
+async function carrySplitsToSurvivor(
+  exec: Pick<typeof db, "execute">,
+  survivorId: string,
+  loserIds: readonly string[],
+): Promise<void> {
+  if (loserIds.length === 0) return;
+  await exec.execute(sql`
+    UPDATE transaction_splits SET transaction_id = ${survivorId}
+     WHERE transaction_id = (
+             SELECT transaction_id FROM transaction_splits
+              WHERE transaction_id IN (${sql.join(loserIds.map((id) => sql`${id}::uuid`), sql`, `)})
+              ORDER BY created_at, id LIMIT 1)
+       AND NOT EXISTS (SELECT 1 FROM transaction_splits WHERE transaction_id = ${survivorId})`);
+}
+
 // (#452 / #800) `descriptionsFuzzyEqual` now lives in @workspace/avalanche-core
 // (descriptionMatch.ts), shared with the pending→posted supersede rule (PR4c).
 
@@ -88,7 +104,7 @@ function userStateScore(
  * in fields the survivor has left blank — never clobbers a survivor
  * value with a loser value.
  */
-function mergeStatePatch(
+export function mergeStatePatch(
   survivor: TxnRow,
   loser: TxnRow,
 ): Partial<typeof transactionsTable.$inferInsert> {
@@ -132,6 +148,12 @@ function mergeStatePatch(
     loser.isTransferUserOverridden
   ) {
     patch.isTransferUserOverridden = true;
+  }
+  // (PR-A, PR-0 residual) The category lock travels the same way, but only with
+  // a category the merge actually carried: a lock says "a person chose THIS
+  // category", so it never relabels the survivor's own automatic one.
+  if (categoryCarried && !survivor.categoryLockedByUser && loser.categoryLockedByUser) {
+    patch.categoryLockedByUser = true;
   }
   if (
     (!survivor.notes || survivor.notes === "[pending]") &&
@@ -287,6 +309,9 @@ export async function dedupeTransactionsForAccount(
       // may include a `plaidTransactionId` adopted from a loser, and
       // `transactions_plaid_txn_uq` would fire if the loser still
       // owned that id at update time.
+      // (PR-A) A loser's splits move to a survivor that has none, instead of
+      // cascading away with the loser row.
+      await carrySplitsToSurvivor(tx, survivor.id, loserIds);
       await tx
         .delete(transactionsTable)
         .where(
@@ -574,6 +599,9 @@ export async function dedupeTransactionsAcrossAccountsForUser(
         report.resolutionsRepointed += updated.length;
       }
 
+      // (PR-A) A loser's splits move to a survivor that has none, instead of
+      // cascading away with the loser row.
+      await carrySplitsToSurvivor(tx, survivor.id, loserIds);
       await tx
         .delete(transactionsTable)
         .where(

@@ -336,6 +336,8 @@ export const UpdateTransactionBody = zod.object({
     ),
 });
 
+export const updateTransactionResponseTwoRetroactiveCandidatesOneSampleMax = 5;
+
 export const UpdateTransactionResponse = zod
   .object({
     id: zod.string(),
@@ -527,6 +529,34 @@ export const UpdateTransactionResponse = zod
         })
         .describe(
           'Summary of what the auto-learn flow did to the user\'s mapping\nrules in response to this PATCH. Surfaced as a small toast\/note\nso the user understands why future similar charges will (or\nwon\'t) auto-categorize. The repoint case is also reported in\nmore detail via `repointedRules` (which drives the \"apply to\npast transactions too\" prompt). For the `created` \/\n`created_priority_bump` cases, the action also carries the\nmatch metadata + candidate count needed to drive the same\n\"apply to past charges?\" prompt against older \*uncategorized\*\nrows that match the freshly created rule.\n',
+        ),
+      retroactiveCandidates: zod
+        .union([
+          zod
+            .object({
+              count: zod.number(),
+              sample: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    occurredOn: zod.coerce.date(),
+                    description: zod.string(),
+                    amount: zod.string(),
+                    categoryId: zod.string().nullable(),
+                  }),
+                )
+                .max(
+                  updateTransactionResponseTwoRetroactiveCandidatesOneSampleMax,
+                ),
+            })
+            .describe(
+              "Unlocked rows of the same merchant. Reported, never applied.",
+            ),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "(PR-A) When this PATCH set a category: unlocked rows of the same\nmerchant it would also fit. Reported, never applied.\n",
         ),
     }),
   );
@@ -5342,4 +5372,345 @@ export const GetSpineResponse = zod.object({
     .describe(
       "computeReviewCount() — unmatched forecast-flagged bank txns this month",
     ),
+});
+
+/**
+ * @summary Owner only. Run the deterministic categorization stages over the
+household's rows dated on/after `since` (default: the last 90 days).
+Idempotent: a second run with nothing changed records nothing.
+
+ */
+export const RunCategorizationBody = zod.object({
+  since: zod.coerce.date().optional(),
+});
+
+export const RunCategorizationResponse = zod.object({
+  decided: zod
+    .number()
+    .describe("Decisions that wrote a category (auto or provisional)."),
+  queued: zod.number().describe("Decisions placed in the review queue."),
+  ambiguous: zod
+    .number()
+    .describe("Rows no deterministic stage decided at 0.6 or more."),
+});
+
+/**
+ * @summary Open decisions (provisional or queued), oldest first.
+ */
+export const listCategorizationReviewQueryLimitDefault = 20;
+export const listCategorizationReviewQueryLimitMax = 100;
+
+export const ListCategorizationReviewQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listCategorizationReviewQueryLimitMax)
+    .default(listCategorizationReviewQueryLimitDefault),
+});
+
+export const ListCategorizationReviewResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      decisionId: zod.string(),
+      transactionId: zod.string(),
+      occurredOn: zod.coerce.date(),
+      description: zod.string(),
+      amount: zod.string(),
+      account: zod.string().nullable(),
+      currentCategoryId: zod.string().nullable(),
+      suggestedCategoryId: zod.string().nullable(),
+      confidence: zod.number(),
+      band: zod.enum(["provisional", "queue"]),
+      source: zod.string(),
+      explanation: zod.string(),
+      createdAt: zod.coerce.date(),
+      flags: zod.object({
+        novelMerchant: zod.boolean(),
+        amountAnomaly: zod.boolean(),
+        splitNeedsRebalance: zod.boolean(),
+      }),
+    }),
+  ),
+  total: zod.number(),
+});
+
+export const AcceptCategorizationDecisionParams = zod.object({
+  decisionId: zod.coerce.string().uuid(),
+});
+
+export const acceptCategorizationDecisionResponseRetroactiveCandidatesOneSampleMax = 5;
+
+export const AcceptCategorizationDecisionResponse = zod.object({
+  decisionId: zod.string(),
+  transactionId: zod.string(),
+  resolution: zod.enum(["accepted", "corrected", "skipped"]),
+  categoryId: zod.string().nullable(),
+  userDecisionId: zod
+    .string()
+    .nullable()
+    .describe("The `user` decision this wrote; pass it to undo."),
+  retroactiveCandidates: zod.union([
+    zod
+      .object({
+        count: zod.number(),
+        sample: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              occurredOn: zod.coerce.date(),
+              description: zod.string(),
+              amount: zod.string(),
+              categoryId: zod.string().nullable(),
+            }),
+          )
+          .max(
+            acceptCategorizationDecisionResponseRetroactiveCandidatesOneSampleMax,
+          ),
+      })
+      .describe("Unlocked rows of the same merchant. Reported, never applied."),
+    zod.null(),
+  ]),
+});
+
+export const SkipCategorizationDecisionParams = zod.object({
+  decisionId: zod.coerce.string().uuid(),
+});
+
+export const skipCategorizationDecisionResponseRetroactiveCandidatesOneSampleMax = 5;
+
+export const SkipCategorizationDecisionResponse = zod.object({
+  decisionId: zod.string(),
+  transactionId: zod.string(),
+  resolution: zod.enum(["accepted", "corrected", "skipped"]),
+  categoryId: zod.string().nullable(),
+  userDecisionId: zod
+    .string()
+    .nullable()
+    .describe("The `user` decision this wrote; pass it to undo."),
+  retroactiveCandidates: zod.union([
+    zod
+      .object({
+        count: zod.number(),
+        sample: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              occurredOn: zod.coerce.date(),
+              description: zod.string(),
+              amount: zod.string(),
+              categoryId: zod.string().nullable(),
+            }),
+          )
+          .max(
+            skipCategorizationDecisionResponseRetroactiveCandidatesOneSampleMax,
+          ),
+      })
+      .describe("Unlocked rows of the same merchant. Reported, never applied."),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary File the row by hand (locked), learn merchant memory, and return the
+retroactive candidates. Never applies them.
+
+ */
+export const CorrectCategorizationDecisionParams = zod.object({
+  decisionId: zod.coerce.string().uuid(),
+});
+
+export const CorrectCategorizationDecisionBody = zod.object({
+  categoryId: zod.string().uuid(),
+});
+
+export const correctCategorizationDecisionResponseRetroactiveCandidatesOneSampleMax = 5;
+
+export const CorrectCategorizationDecisionResponse = zod.object({
+  decisionId: zod.string(),
+  transactionId: zod.string(),
+  resolution: zod.enum(["accepted", "corrected", "skipped"]),
+  categoryId: zod.string().nullable(),
+  userDecisionId: zod
+    .string()
+    .nullable()
+    .describe("The `user` decision this wrote; pass it to undo."),
+  retroactiveCandidates: zod.union([
+    zod
+      .object({
+        count: zod.number(),
+        sample: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              occurredOn: zod.coerce.date(),
+              description: zod.string(),
+              amount: zod.string(),
+              categoryId: zod.string().nullable(),
+            }),
+          )
+          .max(
+            correctCategorizationDecisionResponseRetroactiveCandidatesOneSampleMax,
+          ),
+      })
+      .describe("Unlocked rows of the same merchant. Reported, never applied."),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary Restore the decision's previous category, clear provisional, stamp
+undone_at and disable the memory it created.
+
+ */
+export const UndoCategoryDecisionParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const UndoCategoryDecisionResponse = zod.object({
+  decisionId: zod.string(),
+  transactionId: zod.string(),
+  categoryId: zod.string().nullable(),
+});
+
+/**
+ * @summary Merchant memory, with its evidence counts.
+ */
+export const ListLearnedRulesResponseItem = zod.object({
+  id: zod.string(),
+  signature: zod.string(),
+  scope: zod.enum(["merchant", "merchant_account", "merchant_amount"]),
+  plaidAccountId: zod.string().nullable(),
+  amountBandLo: zod.string().nullable(),
+  amountBandHi: zod.string().nullable(),
+  categoryId: zod.string(),
+  count: zod.number().describe("Times a person confirmed it."),
+  lastConfirmedAt: zod.coerce.date().nullable(),
+  disabled: zod.boolean(),
+  source: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListLearnedRulesResponse = zod.array(ListLearnedRulesResponseItem);
+
+export const UpdateLearnedRuleParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const UpdateLearnedRuleBody = zod.object({
+  categoryId: zod.string().uuid().optional(),
+  scope: zod
+    .enum(["merchant", "merchant_account", "merchant_amount"])
+    .optional(),
+  disabled: zod.boolean().optional(),
+});
+
+export const UpdateLearnedRuleResponse = zod.object({
+  id: zod.string(),
+  signature: zod.string(),
+  scope: zod.enum(["merchant", "merchant_account", "merchant_amount"]),
+  plaidAccountId: zod.string().nullable(),
+  amountBandLo: zod.string().nullable(),
+  amountBandHi: zod.string().nullable(),
+  categoryId: zod.string(),
+  count: zod.number().describe("Times a person confirmed it."),
+  lastConfirmedAt: zod.coerce.date().nullable(),
+  disabled: zod.boolean(),
+  source: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+
+export const DeleteLearnedRuleParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+/**
+ * @summary Explicit request: file every unlocked row of this merchant (within the
+rule's scope) into its category. Each write is a `user` decision.
+
+ */
+export const ApplyLearnedRuleRetroactivelyParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const ApplyLearnedRuleRetroactivelyResponse = zod.object({
+  updated: zod.number(),
+});
+
+export const GetTransactionSplitsParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const GetTransactionSplitsResponse = zod.object({
+  transactionId: zod.string(),
+  amount: zod.string(),
+  invalid: zod
+    .boolean()
+    .describe(
+      "The charge's amount moved by $1 or more; it counts whole until rebalanced.",
+    ),
+  splits: zod.array(
+    zod.object({
+      id: zod.string(),
+      categoryId: zod.string(),
+      amount: zod.string(),
+      member: zod.string().nullable(),
+      note: zod.string().nullable(),
+      source: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Replace-all. The parts must add up to the charge's amount to the cent;
+the charge keeps its own category and becomes locked.
+
+ */
+export const ReplaceTransactionSplitsParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const replaceTransactionSplitsBodySplitsItemAmountRegExp = new RegExp(
+  "^-?\\d+(\\.\\d{1,2})?$",
+);
+export const replaceTransactionSplitsBodySplitsMin = 2;
+export const replaceTransactionSplitsBodySplitsMax = 20;
+
+export const ReplaceTransactionSplitsBody = zod.object({
+  splits: zod
+    .array(
+      zod.object({
+        categoryId: zod.string().uuid(),
+        amount: zod
+          .string()
+          .regex(replaceTransactionSplitsBodySplitsItemAmountRegExp)
+          .describe("Signed like the charge itself."),
+        member: zod.string().nullish(),
+        note: zod.string().nullish(),
+      }),
+    )
+    .min(replaceTransactionSplitsBodySplitsMin)
+    .max(replaceTransactionSplitsBodySplitsMax),
+});
+
+export const ReplaceTransactionSplitsResponse = zod.object({
+  transactionId: zod.string(),
+  amount: zod.string(),
+  invalid: zod
+    .boolean()
+    .describe(
+      "The charge's amount moved by $1 or more; it counts whole until rebalanced.",
+    ),
+  splits: zod.array(
+    zod.object({
+      id: zod.string(),
+      categoryId: zod.string(),
+      amount: zod.string(),
+      member: zod.string().nullable(),
+      note: zod.string().nullable(),
+      source: zod.string(),
+    }),
+  ),
+});
+
+export const DeleteTransactionSplitsParams = zod.object({
+  id: zod.coerce.string().uuid(),
 });

@@ -68,6 +68,11 @@ export function aggregateBudgetMonth(
   rows: readonly BudgetMonthRow[],
   supersede: Pick<SupersededPending, "replacedIds" | "replacedBy">,
   ctx: FilingContext,
+  /**
+   * (PR-A) `expandSplits` output: a row listed here files its category totals
+   * from its splits (they add up to the row, to the cent). Nothing else moves.
+   */
+  splitParts: ReadonlyMap<string, readonly { categoryId: string; amount: string }[]> = new Map(),
 ): BudgetMonthSpend {
   const byCategory = new Map<string, CategoryActual>();
   const allowanceRows: AllowanceAggregateRow[] = [];
@@ -90,8 +95,12 @@ export function aggregateBudgetMonth(
     const spend = spendCents(row.source, cents);
     const inflow = inflowCents(row.source, cents);
 
-    if (!t.isTransfer && t.categoryId) {
-      const a = byCategory.get(t.categoryId) ?? {
+    const shares = splitParts.get(row.id)?.map((p) => {
+      const c = centsOf(p.amount);
+      return { categoryId: p.categoryId, spend: spendCents(row.source, c), inflow: inflowCents(row.source, c) };
+    }) ?? (t.categoryId ? [{ categoryId: t.categoryId, spend, inflow }] : []);
+    if (!t.isTransfer) for (const { categoryId, spend, inflow } of shares) {
+      const a = byCategory.get(categoryId) ?? {
         spend: { posted: 0, pending: 0 },
         inflow: { posted: 0, pending: 0 },
         sources: new Map(),
@@ -108,7 +117,7 @@ export function aggregateBudgetMonth(
       s.spend += spend;
       s.inflow += inflow;
       a.sources.set(row.source, s);
-      byCategory.set(t.categoryId, a);
+      byCategory.set(categoryId, a);
     }
 
     if (!t.isTransfer && !row.isExternalCardPayment && !t.reimbursable && !t.debtId) {

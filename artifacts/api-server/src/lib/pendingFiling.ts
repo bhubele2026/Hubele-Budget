@@ -79,6 +79,14 @@ export interface Filing {
    * it never re-reads the household's mapping rules (round 3 → round 4 above).
    */
   isTransferUserOverridden: boolean;
+  /**
+   * (PR-A) A person chose this row's category (`category_locked_by_user`).
+   * Optional: readers that never select it leave it undefined. It does NOT
+   * decide hand-vs-automatic (that is still `isTransferUserOverridden`, round
+   * 4); it only travels with a category the posted row takes from the
+   * pending row, exactly as dedupe carries `isTransferUserOverridden`.
+   */
+  categoryLockedByUser?: boolean;
 }
 
 /** The pending row a posted row replaced, as far as inheritance needs it. */
@@ -130,6 +138,10 @@ export function effectiveFiling<T extends Filing & { description: string }>(
       from.isTransferUserOverridden
     ) {
       out.categoryId = from.categoryId;
+    }
+    // (PR-A) The lock travels with the category it came with.
+    if (out.categoryId !== posted.categoryId && from.categoryLockedByUser) {
+      out.categoryLockedByUser = true;
     }
   }
 

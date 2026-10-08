@@ -26,6 +26,8 @@ import {
   dedupeTransactionsForAccount,
   dedupeTransactionsAcrossAccountsForUser,
 } from "./dedupeTransactions";
+import { markRemovedRowsKept, runCategorizationBatch } from "./categorizer";
+import { reconcileSplitsAfterSync } from "./categorizer/splits";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
@@ -1342,6 +1344,10 @@ export async function syncPlaidItem(
       batchRows,
       await plaidIdsOnFile(batchRows.map((r) => r.transaction_id)),
     );
+    // (PR-A) Every row the upsert below wrote, and which of them it INSERTED —
+    // the categorization engine runs over them at the end of the sync.
+    const syncedTxnIds: string[] = [];
+    const insertedTxnIds = new Set<string>();
     for (const [batchIndex, t] of batchRows.entries()) {
       const description = t.merchant_name || t.name || "(no description)";
       // `personal_finance_category` is the modern Plaid taxonomy used to
@@ -1823,7 +1829,11 @@ export async function syncPlaidItem(
               : {}),
           },
         })
-        .returning({ id: transactionsTable.id });
+        .returning({ id: transactionsTable.id, inserted: sql<boolean>`(xmax = 0)` });
+      if (row) {
+        syncedTxnIds.push(row.id);
+        if (row.inserted) insertedTxnIds.add(row.id);
+      }
       if (isChecking && row) {
         insertedCheckingTxns.push({
           id: row.id,
@@ -1993,8 +2003,34 @@ export async function syncPlaidItem(
             eq(transactionsTable.reviewed, false),
             eq(transactionsTable.isTransferUserOverridden, false),
             eq(transactionsTable.occurredOnUserOverridden, false),
+            // (PR-A) …nor a row a person locked or split.
+            eq(transactionsTable.categoryLockedByUser, false),
+            sql`NOT EXISTS (SELECT 1 FROM transaction_splits s WHERE s.transaction_id = ${transactionsTable.id})`,
           ),
         );
+    }
+    // (PR-A) A removed row that survived the delete above was worked by a
+    // person: stamp `plaid_removed_at` and queue "the bank removed this charge"
+    // instead of silently keeping it.
+    try {
+      await markRemovedRowsKept(householdId, removed.map((r) => r.transaction_id));
+    } catch (e) {
+      logger.warn({ householdId, itemRowId, err: e }, "[plaid-sync] removed-row notice failed (non-fatal)");
+    }
+    // (PR-A) Categorization engine v2, deterministic stages only, over every
+    // row this sync upserted (all accounts), after dedupe. Split parents whose
+    // amount moved are rescaled (< $1) or flagged and queued first. Non-fatal:
+    // a failure leaves rows as the upsert wrote them, for the next run.
+    try {
+      const alive = [...new Set(syncedTxnIds)];
+      await reconcileSplitsAfterSync(householdId, alive);
+      await runCategorizationBatch(householdId, {
+        txnIds: alive,
+        trigger: "sync",
+        freshIds: insertedTxnIds,
+      });
+    } catch (e) {
+      logger.warn({ householdId, itemRowId, err: e }, "[plaid-sync] categorization batch failed (non-fatal)");
     }
 
     // (#732) NOTE: vanished-pending reconciliation deliberately does

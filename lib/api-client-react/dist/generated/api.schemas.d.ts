@@ -5,6 +5,169 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+export interface RunCategorizationInput {
+    since?: string;
+}
+export interface CategorizationRunResult {
+    /** Decisions that wrote a category (auto or provisional). */
+    decided: number;
+    /** Decisions placed in the review queue. */
+    queued: number;
+    /** Rows no deterministic stage decided at 0.6 or more. */
+    ambiguous: number;
+}
+export interface ReviewFlags {
+    novelMerchant: boolean;
+    amountAnomaly: boolean;
+    splitNeedsRebalance: boolean;
+}
+export type ReviewItemBand = (typeof ReviewItemBand)[keyof typeof ReviewItemBand];
+export declare const ReviewItemBand: {
+    readonly provisional: "provisional";
+    readonly queue: "queue";
+};
+export interface ReviewItem {
+    decisionId: string;
+    transactionId: string;
+    occurredOn: string;
+    description: string;
+    amount: string;
+    /** @nullable */
+    account: string | null;
+    /** @nullable */
+    currentCategoryId: string | null;
+    /** @nullable */
+    suggestedCategoryId: string | null;
+    confidence: number;
+    band: ReviewItemBand;
+    source: string;
+    explanation: string;
+    createdAt: string;
+    flags: ReviewFlags;
+}
+export interface ReviewQueue {
+    items: ReviewItem[];
+    total: number;
+}
+export interface CorrectDecisionInput {
+    categoryId: string;
+}
+export interface RetroactiveSample {
+    id: string;
+    occurredOn: string;
+    description: string;
+    amount: string;
+    /** @nullable */
+    categoryId: string | null;
+}
+/**
+ * Unlocked rows of the same merchant. Reported, never applied.
+ */
+export interface RetroactiveCandidates {
+    count: number;
+    /** @maxItems 5 */
+    sample: RetroactiveSample[];
+}
+export type ReviewResolutionResolution = (typeof ReviewResolutionResolution)[keyof typeof ReviewResolutionResolution];
+export declare const ReviewResolutionResolution: {
+    readonly accepted: "accepted";
+    readonly corrected: "corrected";
+    readonly skipped: "skipped";
+};
+export interface ReviewResolution {
+    decisionId: string;
+    transactionId: string;
+    resolution: ReviewResolutionResolution;
+    /** @nullable */
+    categoryId: string | null;
+    /**
+     * The `user` decision this wrote; pass it to undo.
+     * @nullable
+     */
+    userDecisionId: string | null;
+    retroactiveCandidates: RetroactiveCandidates | null;
+}
+export interface UndoDecisionResult {
+    decisionId: string;
+    transactionId: string;
+    /** @nullable */
+    categoryId: string | null;
+}
+export type LearnedRuleScope = (typeof LearnedRuleScope)[keyof typeof LearnedRuleScope];
+export declare const LearnedRuleScope: {
+    readonly merchant: "merchant";
+    readonly merchant_account: "merchant_account";
+    readonly merchant_amount: "merchant_amount";
+};
+export interface LearnedRule {
+    id: string;
+    signature: string;
+    scope: LearnedRuleScope;
+    /** @nullable */
+    plaidAccountId: string | null;
+    /** @nullable */
+    amountBandLo: string | null;
+    /** @nullable */
+    amountBandHi: string | null;
+    categoryId: string;
+    /** Times a person confirmed it. */
+    count: number;
+    /** @nullable */
+    lastConfirmedAt: string | null;
+    disabled: boolean;
+    source: string;
+    createdAt: string;
+}
+export type UpdateLearnedRuleInputScope = (typeof UpdateLearnedRuleInputScope)[keyof typeof UpdateLearnedRuleInputScope];
+export declare const UpdateLearnedRuleInputScope: {
+    readonly merchant: "merchant";
+    readonly merchant_account: "merchant_account";
+    readonly merchant_amount: "merchant_amount";
+};
+export interface UpdateLearnedRuleInput {
+    categoryId?: string;
+    scope?: UpdateLearnedRuleInputScope;
+    disabled?: boolean;
+}
+export interface ApplyRetroactivelyResult {
+    updated: number;
+}
+export interface TransactionSplitInput {
+    categoryId: string;
+    /**
+     * Signed like the charge itself.
+     * @pattern ^-?\d+(\.\d{1,2})?$
+     */
+    amount: string;
+    /** @nullable */
+    member?: string | null;
+    /** @nullable */
+    note?: string | null;
+}
+export interface ReplaceTransactionSplitsInput {
+    /**
+     * @minItems 2
+     * @maxItems 20
+     */
+    splits: TransactionSplitInput[];
+}
+export interface TransactionSplit {
+    id: string;
+    categoryId: string;
+    amount: string;
+    /** @nullable */
+    member: string | null;
+    /** @nullable */
+    note: string | null;
+    source: string;
+}
+export interface TransactionSplits {
+    transactionId: string;
+    amount: string;
+    /** The charge's amount moved by $1 or more; it counts whole until rebalanced. */
+    invalid: boolean;
+    splits: TransactionSplit[];
+}
 export interface HealthStatus {
     status: string;
 }
@@ -879,6 +1042,10 @@ export type UpdateTransactionResponse = Transaction & {
    */
     repointedRules: RepointedRule[];
     ruleAction: RuleAction;
+    /** (PR-A) When this PATCH set a category: unlocked rows of the same
+  merchant it would also fit. Reported, never applied.
+   */
+    retroactiveCandidates?: RetroactiveCandidates | null;
 };
 export type CreateTransactionResponse = Transaction & {
     /**
@@ -3589,5 +3756,12 @@ export type GetBillsSummaryParams = {
 };
 export type ImportWorkbookBody = {
     file: Blob;
+};
+export type ListCategorizationReviewParams = {
+    /**
+     * @minimum 1
+     * @maximum 100
+     */
+    limit?: number;
 };
 //# sourceMappingURL=api.schemas.d.ts.map
