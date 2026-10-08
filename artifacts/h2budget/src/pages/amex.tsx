@@ -204,7 +204,15 @@ function ExternalCardChip({
   );
 }
 
-export default function AmexPage() {
+/**
+ * `embedded` + `accountId` are used by `/next/accounts/:plaidAccountId`: the
+ * page drops its own title (the account page owns it) and opens on one card
+ * (external Plaid account_id). Without props it behaves exactly as before.
+ */
+export default function AmexPage({
+  embedded = false,
+  accountId,
+}: { embedded?: boolean; accountId?: string; params?: unknown } = {}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
@@ -227,12 +235,16 @@ export default function AmexPage() {
   // Honor `?accountId=<external Plaid account_id>` deep-links (per-card
   // drills land here pre-filtered to one card).
   const [cardFilter, setCardFilter] = useState<string>(() => {
+    if (accountId) return accountId;
     if (typeof window !== "undefined") {
       const a = new URLSearchParams(window.location.search).get("accountId");
       if (a) return a;
     }
     return "all";
   });
+  useEffect(() => {
+    if (embedded) setCardFilter(accountId ?? "all");
+  }, [embedded, accountId]);
   // (#495) "Hide reviewed" filter — once a row is marked reviewed via the
   // RV bubble it's just clutter, so let users collapse the list down to
   // what's still pending. Persisted to localStorage so it survives a
@@ -1806,9 +1818,21 @@ export default function AmexPage() {
       <PostLinkProgressBanner viewTransactionsPath="/amex" />
       <div
         ref={paneRef}
-        className="sticky top-0 z-30 -mx-4 -mt-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pt-3 pb-3 md:-mx-8 md:-mt-8 md:px-8 md:pt-4"
+        className={embedded ? "sticky top-0 z-30 space-y-3 border-b border-brand-line bg-platinum-1 pb-3" : "sticky top-0 z-30 -mx-4 -mt-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pt-3 pb-3 md:-mx-8 md:-mt-8 md:px-8 md:pt-4"}
       >
-        <AccountPageHeader
+        {embedded ? (
+          <div className="flex flex-wrap items-start justify-end gap-2">
+            <>
+              <SyncButton relevantItemIds={relevantPlaidItemIds} />
+              <PlaidLinkButton
+                label="Connect a card"
+                viewTransactionsPath="/amex"
+                inlineProgress={false}
+              />
+            </>
+          </div>
+        ) : (
+          <AccountPageHeader
           title="American Express"
           icon={<AmexLogo className="h-6 w-7" />}
           actions={
@@ -1822,6 +1846,7 @@ export default function AmexPage() {
             </>
           }
         />
+        )}
 
       {/* (#748 → drill) The card switcher is no longer a tablist — the
           per-card brand tiles (AmexCardBand, below) ARE the selector now;
