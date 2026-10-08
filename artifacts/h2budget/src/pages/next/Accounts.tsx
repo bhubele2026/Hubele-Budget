@@ -103,16 +103,23 @@ export default function NextAccountsPage() {
                 payoffCard={(payoff?.cards ?? []).find((c) => c.plaidAccountId === selected.plaidAccountId) ?? null}
                 snapshot={selected.identity.isCard ? null : snapshotFor(selected.rowId)}
               />
-              <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" data-testid="account-activity">
-                <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
-                  {selected.identity.isCard ? (
-                    <AmexLedger embedded accountId={selected.plaidAccountId} />
-                  ) : selected.identity.kind === "checking" ? (
-                    <ChaseLedger embedded accountKey={selected.rowId} />
-                  ) : (
-                    <p className={emptyNote}>This account type has no activity view yet.</p>
-                  )}
-                </Suspense>
+              {/* (C0) Sticky-safe so the ledger's sticky pane and bulk bar
+                  stick to <main> (an `overflow: hidden` panel held them in
+                  place); flush, with the padding moved inside, so the pane
+                  can bleed back over it (`-mx-4 px-4` in the embedded pane)
+                  and span the panel when it sticks. */}
+              <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" variant={["sticky-safe", "flush"]} data-testid="account-activity">
+                <div className="p-4">
+                  <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
+                    {selected.identity.isCard ? (
+                      <AmexLedger embedded accountId={selected.plaidAccountId} />
+                    ) : selected.identity.kind === "checking" ? (
+                      <ChaseLedger embedded accountKey={selected.rowId} />
+                    ) : (
+                      <p className={emptyNote}>This account type has no activity view yet.</p>
+                    )}
+                  </Suspense>
+                </div>
               </Panel>
             </>
           ) : (

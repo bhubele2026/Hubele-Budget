@@ -1,16 +1,17 @@
 import { CHART_ANIM } from "@/lib/chartAnim";
+// (C0) Through the kit, never from "recharts" directly (`chartsDoor.test.ts`).
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ReferenceDot,
-  ReferenceLine,
-  Label as RechartsLabel,
-} from "recharts";
+  RcResponsiveContainer as ResponsiveContainer,
+  RcLineChart as LineChart,
+  RcLine as Line,
+  RcXAxis as XAxis,
+  RcYAxis as YAxis,
+  RcCartesianGrid as CartesianGrid,
+  RcTooltip as RechartsTooltip,
+  RcReferenceDot as ReferenceDot,
+  RcReferenceLine as ReferenceLine,
+  RcLabel as RechartsLabel,
+} from "@/lib/charts";
 import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";

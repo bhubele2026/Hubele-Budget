@@ -1800,7 +1800,7 @@ export default function AmexPage({
   return (
     <div
       className="space-y-6"
-      style={{ ["--pinned-pane-h" as string]: `${paneH}px` } as React.CSSProperties}
+      style={{ ["--page-sticky-top" as string]: `${paneH}px` } as React.CSSProperties}
     >
       {/* (#373) Suppress the global Plaid re-auth banner on the Amex
           page and instead render it filtered to just the Amex card's
@@ -1816,9 +1816,13 @@ export default function AmexPage({
           progresses visibly through "waiting on bank → syncing →
           done — N imported" (or failed + Retry). */}
       <PostLinkProgressBanner viewTransactionsPath="/amex" />
+      {/* Embedded, the pane bleeds over the p-4 that /next/accounts puts
+          around this ledger inside its flush, sticky-safe panel, so it spans
+          the panel's width when it sticks to <main>. Full page, it is the
+          page's sticky head (`.page-sticky-head`, index.css). */}
       <div
         ref={paneRef}
-        className={embedded ? "sticky top-0 z-30 space-y-3 border-b border-brand-line bg-platinum-1 pb-3" : "sticky top-0 z-30 -mx-4 -mt-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pt-3 pb-3 md:-mx-8 md:-mt-8 md:px-8 md:pt-4"}
+        className={embedded ? "sticky top-0 z-30 -mx-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pb-3" : "page-sticky-head sticky top-0 z-30 space-y-3 border-b border-brand-line bg-platinum-1 pt-3 pb-3 md:pt-4"}
       >
         {embedded ? (
           <div className="flex flex-wrap items-start justify-end gap-2">
@@ -1901,7 +1905,7 @@ export default function AmexPage({
       {selected.size > 0 && (
         <div
           className="surface sticky z-20 flex items-center gap-3 rounded-control px-4 py-2 ring-1 ring-brand-navy/25"
-          style={{ top: "var(--pinned-pane-h, 0px)" }}
+          style={{ top: "var(--page-sticky-top, 0px)" }}
         >
           <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
             {selected.size} selected

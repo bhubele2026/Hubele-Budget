@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { offsetWithinScroller, shellScrollerOf } from "@/lib/shellScroll";
 import type { PlanLine } from "@/lib/forecastMatch";
 import type { PayoffInfo, PayoffTransition } from "@/lib/forecastDebts";
 import { CashFreedBanner } from "./CashFreedBanner";
@@ -20,14 +21,22 @@ export type PlannedItem =
  * (#618) Virtualized renderer for the planned forecast items list. The
  * old implementation mounted every row at once, which made switching to
  * 1 YEAR (hundreds of DnD-enabled rows) hang the main thread for several
- * hundred milliseconds. Using `useWindowVirtualizer` keeps the rendered
- * row count bounded by the viewport regardless of horizon.
+ * hundred milliseconds. Virtualizing keeps the rendered row count bounded
+ * by the viewport regardless of horizon.
+ *
+ * ⚠️ (C0, parity review D7) IT VIRTUALIZES AGAINST THE SHELL'S `<main>`, NOT
+ * THE WINDOW. The shell's `<main>` is the only scroller (`lib/shellScroll.ts`);
+ * the window never scrolls, so the old `useWindowVirtualizer` computed its
+ * range from `window.scrollY` = 0 forever and left every row below the first
+ * screen blank on long horizons. `scrollMargin` is the list's offset inside
+ * `<main>`'s content, re-measured whenever that content resizes.
  *
  * Drag-and-drop (`PlanDropRow` registers via `useDroppable`) keeps
  * working because:
  *  - the user only ever drops on rows visible in the viewport, and
- *  - dnd-kit auto-scrolls the window during a drag so newly-revealed
- *    rows mount and register as droppable just-in-time.
+ *  - dnd-kit auto-scrolls the nearest scrollable ancestor (`<main>`) during
+ *    a drag, so newly-revealed rows mount and register as droppable
+ *    just-in-time.
  */
 export function PlannedItemsList({
   items,
@@ -55,23 +64,9 @@ export function PlannedItemsList({
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
-  useEffect(() => {
-    const el = parentRef.current;
-    if (!el) return;
-    const measure = () => {
-      const rect = el.getBoundingClientRect();
-      setScrollMargin(rect.top + window.scrollY);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(document.body);
-    window.addEventListener("resize", measure);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, []);
-
+  // undefined until mounted; null when there is no shell scroller (outside
+  // the shell — then the list renders in full rather than blank).
+  const [scroller, setScroller] = useState<HTMLElement | null | undefined>(undefined);
   // (#618) Only virtualize when the list is actually long enough that
   // mounting every row hurts. Short horizons (default 90D usually has
   // a few dozen plan rows) render the whole list in normal flow so
@@ -79,10 +74,35 @@ export function PlannedItemsList({
   // pre-virtualization behavior expected by the e2e suite and also
   // avoids any virtualization overhead when it would be wasted work.
   const VIRTUALIZE_THRESHOLD = 120;
-  const shouldVirtualize = items.length > VIRTUALIZE_THRESHOLD;
+  const longList = items.length > VIRTUALIZE_THRESHOLD;
+  // A layout effect, so the scroller is known before the first paint. Re-run
+  // when the list switches between the full and the virtual branch: each
+  // branch mounts its own box, and the offset must be read off the live one.
+  useLayoutEffect(() => {
+    const main = shellScrollerOf(parentRef.current);
+    setScroller(main);
+    if (!main) return;
+    const measure = () => {
+      const el = parentRef.current;
+      if (el) setScrollMargin(offsetWithinScroller(el, main));
+    };
+    measure();
+    // Anything above the list that grows or shrinks (the inbox, a banner)
+    // resizes the scroller's content, so watching that box catches it.
+    const ro = new ResizeObserver(measure);
+    ro.observe(main.firstElementChild ?? main);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [longList]);
 
-  const virtualizer = useWindowVirtualizer({
+  const shouldVirtualize = longList && scroller !== null;
+
+  const virtualizer = useVirtualizer({
     count: items.length,
+    getScrollElement: () => scroller ?? null,
     // Plan rows render ~73px; banner rows render a bit taller. The exact
     // height is measured via `measureElement` once mounted, so this
     // estimate only governs the initial scrollbar size.
@@ -223,12 +243,15 @@ export function PlannedItemsList({
     );
   }
 
+  // `getTotalSize()` already excludes `scrollMargin` (virtual-core 3.x), so
+  // it IS the list's height; subtracting the margin again cut the box short
+  // and let the rows run over whatever follows the list.
   return (
-    <div ref={parentRef}>
+    <div ref={parentRef} data-testid="planned-items-virtual">
       <div
         style={{
           position: "relative",
-          height: totalSize > 0 ? totalSize - scrollMargin : 0,
+          height: totalSize,
           width: "100%",
         }}
       >

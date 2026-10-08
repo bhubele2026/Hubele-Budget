@@ -64,6 +64,45 @@ import {
 export * from "@/lib/chartTokens";
 export { CssBars, type CssBarRow } from "@/lib/cssBars";
 
+// ── The raw recharts primitives (C0) ──────────────────────────────────────
+// For the charts the kit's own components do not draw yet — the Reports
+// family's typed wrappers (`reportsShared.tsx`) and the account balance trend.
+// They come through HERE, never from "recharts" directly, so this module stays
+// the one door to the chart library (`chartsDoor.test.ts`). Every name below
+// must also be in `src/test-recharts-stub.tsx`.
+export {
+  ResponsiveContainer as RcResponsiveContainer,
+  LineChart as RcLineChart,
+  Line as RcLine,
+  AreaChart as RcAreaChart,
+  Area as RcArea,
+  BarChart as RcBarChart,
+  Bar as RcBar,
+  ComposedChart as RcComposedChart,
+  XAxis as RcXAxis,
+  YAxis as RcYAxis,
+  CartesianGrid as RcCartesianGrid,
+  Tooltip as RcTooltip,
+  Legend as RcLegend,
+  PieChart as RcPieChart,
+  Pie as RcPie,
+  Cell as RcCell,
+  ReferenceLine as RcReferenceLine,
+  ReferenceDot as RcReferenceDot,
+  Label as RcLabel,
+} from "recharts";
+export type {
+  AreaProps as RcAreaProps,
+  BarProps as RcBarProps,
+  LegendProps as RcLegendProps,
+  LineProps as RcLineProps,
+  PieProps as RcPieProps,
+  ReferenceLineProps as RcReferenceLineProps,
+  TooltipProps as RcTooltipProps,
+  XAxisProps as RcXAxisProps,
+  YAxisProps as RcYAxisProps,
+} from "recharts";
+
 // ── Shared formatting ──────────────────────────────────────────────────────
 /** "2026-03" / "2026-03-14" → "Mar 26". Anything else passes through. */
 const shortMonth = (ym: string): string =>

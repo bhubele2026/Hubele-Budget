@@ -157,6 +157,16 @@ export default defineConfig({
             return "vendor-react";
           }
           if (id.includes("@clerk")) return "vendor-clerk";
+          // (C0) The virtualizer gets its OWN chunk, ahead of the @tanstack
+          // rule below. Left in vendor-query it rode the open path (16.3 KB)
+          // although only lazy pages (the forecast's planned list) use it.
+          // check-entry-graph.mjs fails if it reaches a landing chunk again.
+          if (
+            id.includes("@tanstack/react-virtual") ||
+            id.includes("@tanstack/virtual-core")
+          ) {
+            return "vendor-virtual";
+          }
           if (id.includes("@tanstack")) return "vendor-query";
           if (id.includes("@dnd-kit")) return "vendor-dnd";
           return undefined;

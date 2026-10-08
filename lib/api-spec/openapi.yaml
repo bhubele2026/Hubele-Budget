@@ -46,11 +46,17 @@ tags:
     description: (AI-2) The wish list and its waiting period.
   - name: goals
     description: (PR-C) Savings, buffer, sinking and debt-payoff goals, and the money a goal holds back in checking.
+  - name: features
+    description: >-
+      (C0) The fold-in operations (parity review F1-F10, plus the money position and allowance plans they read).
+      Also generated into @workspace/api-client-react/features, which only lazy pages may import, so using one
+      never grows the landing chunk. The main module still carries them only because the frozen h2 app imports
+      them from it; the h2budget app must import them from /features (h2budget featuresImportGraph.test.ts).
 paths:
   /healthz:
     get:
       operationId: healthCheck
-      tags: [health]
+      tags: [health, features]
       summary: |
         Health check. Always 200 while the process serves; job, AI and SMS
         state are reported as booleans and counts (never secrets) and never
@@ -81,7 +87,7 @@ paths:
   /ops/jobs:
     get:
       operationId: getOpsJobs
-      tags: [ops]
+      tags: [ops, features]
       summary: |
         (AI-0, owner only) Job counts per queue and state, plus the 50 most
         recent failed jobs. Read straight from the pg-boss tables, so it works
@@ -98,7 +104,7 @@ paths:
   /ops/jobs/{id}/retry:
     post:
       operationId: retryOpsJob
-      tags: [ops]
+      tags: [ops, features]
       summary: (AI-0, owner only) Put a failed job back in its queue.
       parameters:
         - in: path
@@ -125,7 +131,7 @@ paths:
   /recap/settings:
     get:
       operationId: getRecapSettings
-      tags: [recap]
+      tags: [recap, features]
       summary: |
         (AI-4b) The caller's own daily-recap text settings (created with defaults
         on first read). Never carries the full phone number: only its last four digits.
@@ -137,7 +143,7 @@ paths:
               schema: { $ref: "#/components/schemas/RecapSettings" }
     put:
       operationId: updateRecapSettings
-      tags: [recap]
+      tags: [recap, features]
       summary: |
         (AI-4b) Change the caller's recap settings. Turning the recap on needs a
         verified phone number and recorded consent, and not an opt-out.
@@ -161,7 +167,7 @@ paths:
   /recap/verify/start:
     post:
       operationId: startRecapVerification
-      tags: [recap]
+      tags: [recap, features]
       summary: |
         (AI-4b) Record consent and text a 6-digit code (valid 10 minutes, at most
         3 starts per day) to the given US mobile number.
@@ -195,7 +201,7 @@ paths:
   /recap/verify/confirm:
     post:
       operationId: confirmRecapVerification
-      tags: [recap]
+      tags: [recap, features]
       summary: (AI-4b) Confirm the 6-digit code (5 tries per code). Marks the number verified.
       requestBody:
         required: true
@@ -222,7 +228,7 @@ paths:
   /recap/test-send:
     post:
       operationId: sendRecapTest
-      tags: [recap]
+      tags: [recap, features]
       summary: (AI-4b) Text the fixed test line to the caller's verified number (3 per day).
       responses:
         "200":
@@ -249,7 +255,7 @@ paths:
   /recap/pause:
     post:
       operationId: pauseRecap
-      tags: [recap]
+      tags: [recap, features]
       summary: (AI-4b) Pause recap texts until the given time (null or a past time resumes).
       requestBody:
         required: true
@@ -271,7 +277,7 @@ paths:
   /recap/unsubscribe:
     post:
       operationId: unsubscribeRecap
-      tags: [recap]
+      tags: [recap, features]
       summary: (AI-4b) Opt out of recap texts and turn the recap off.
       responses:
         "200":
@@ -283,7 +289,7 @@ paths:
   /recap/deliveries:
     get:
       operationId: listRecapDeliveries
-      tags: [recap]
+      tags: [recap, features]
       summary: (AI-4b) The caller's most recent text deliveries (newest first, at most 30).
       parameters:
         - in: query
@@ -302,7 +308,7 @@ paths:
   /recap/preview:
     post:
       operationId: previewRecap
-      tags: [recap]
+      tags: [recap, features]
       summary: (AI-4a) Draft the morning recap for a day without storing or sending it (model draft and template).
       description: |
         Builds the facts for the caller and returns both drafts. The model draft counts against the
@@ -329,7 +335,7 @@ paths:
   /recap/history:
     get:
       operationId: listRecapHistory
-      tags: [recap]
+      tags: [recap, features]
       summary: (AI-4a) The caller's most recent recaps, newest first (at most 30), with their delivery status.
       parameters:
         - in: query
@@ -2507,7 +2513,7 @@ paths:
   /money/position:
     get:
       operationId: getMoneyPosition
-      tags: [money]
+      tags: [money, features]
       summary: How much is safe to spend now, until payday and this week (the money position)
       description: >-
         computePosition (avalanche-core) over one read of the household: the
@@ -2526,7 +2532,7 @@ paths:
   /money/afford:
     post:
       operationId: evaluateAfford
-      tags: [money]
+      tags: [money, features]
       summary: Can we afford this? One purchase against the money position, before and after
       description: >-
         evaluateAfford (avalanche-core) over one read of the household — the same
@@ -2554,7 +2560,7 @@ paths:
   /allowance-plans:
     get:
       operationId: listAllowancePlans
-      tags: [money]
+      tags: [money, features]
       summary: The household's allowance plans and the suggested weekly cap with its working
       responses:
         "200":
@@ -2597,7 +2603,7 @@ paths:
   /money/ways-back:
     get:
       operationId: getWaysBack
-      tags: [money]
+      tags: [money, features]
       summary: A way back when the week is over — how far over, what is left per day, what to trim, next week carried
       description: >-
         computeWaysBack (avalanche-core) over the money position (the same read
@@ -2614,7 +2620,7 @@ paths:
   /money/week-adjustments:
     post:
       operationId: createWeekAdjustment
-      tags: [money]
+      tags: [money, features]
       summary: Start a week lower — carry an overage into it (household owner only)
       description: >-
         Upserts the household's carry-over for one week (unique on household,
@@ -2639,7 +2645,7 @@ paths:
   /money/week-adjustments/{weekStart}:
     delete:
       operationId: deleteWeekAdjustment
-      tags: [money]
+      tags: [money, features]
       summary: Remove a week's carry-over (household owner only)
       parameters:
         - in: path
@@ -2655,7 +2661,7 @@ paths:
   /agent/findings:
     get:
       operationId: listAgentFindings
-      tags: [agent]
+      tags: [agent, features]
       summary: What the proactive monitor noticed (open by default), newest first
       description: >-
         (AI-3) Findings are written by deterministic detectors over the money
@@ -2679,7 +2685,7 @@ paths:
   /agent/findings/{id}/dismiss:
     post:
       operationId: dismissAgentFinding
-      tags: [agent]
+      tags: [agent, features]
       summary: Dismiss a finding (it stays in the ledger, out of the open list)
       parameters:
         - in: path
@@ -2698,7 +2704,7 @@ paths:
   /agent/findings/{id}/resolve:
     post:
       operationId: resolveAgentFinding
-      tags: [agent]
+      tags: [agent, features]
       summary: Mark a finding resolved (it will not re-fire for 7 days unless it gets more severe)
       parameters:
         - in: path
@@ -2717,7 +2723,7 @@ paths:
   /agent/monitor/run:
     post:
       operationId: runAgentMonitor
-      tags: [agent]
+      tags: [agent, features]
       summary: Run the monitor for this household now (owner only)
       responses:
         "200":
@@ -2731,7 +2737,7 @@ paths:
   /agent/runs:
     get:
       operationId: listAgentRuns
-      tags: [agent]
+      tags: [agent, features]
       summary: The agent's recent runs, newest first
       parameters:
         - in: query
@@ -2747,7 +2753,7 @@ paths:
   /agent/actions:
     get:
       operationId: listAgentActions
-      tags: [agent]
+      tags: [agent, features]
       summary: The Activity trail — what the agent did, newest first
       parameters:
         - in: query
@@ -2763,7 +2769,7 @@ paths:
   /agent/actions/{id}/undo:
     post:
       operationId: undoAgentAction
-      tags: [agent]
+      tags: [agent, features]
       summary: Undo a reversible agent action
       description: >-
         Only reversible action types can be undone. `set_category` (the
@@ -2790,7 +2796,7 @@ paths:
   /categorization/run:
     post:
       operationId: runCategorization
-      tags: [categorization]
+      tags: [categorization, features]
       summary: |
         Owner only. Run the deterministic categorization stages over the
         household's rows dated on/after `since` (default: the last 90 days).
@@ -2816,7 +2822,7 @@ paths:
   /categorization/settings:
     get:
       operationId: getCategorizationSettings
-      tags: [categorization]
+      tags: [categorization, features]
       summary: |
         (V1) What files the household's charges and how far the model may go:
         the owner's two switches, AI status, the deterministic engine's
@@ -2834,7 +2840,7 @@ paths:
               schema: { $ref: "#/components/schemas/CategorizationSettings" }
     put:
       operationId: updateCategorizationSettings
-      tags: [categorization]
+      tags: [categorization, features]
       summary: |
         (V1) Owner only. Set `autoCategorize` and/or `modelAutoCategorize` in
         the owner's settings preferences (created when missing; every other
@@ -2873,7 +2879,7 @@ paths:
   /categorization/review/{decisionId}/accept:
     post:
       operationId: acceptCategorizationDecision
-      tags: [categorization]
+      tags: [categorization, features]
       parameters:
         - { in: path, name: decisionId, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -2888,7 +2894,7 @@ paths:
   /categorization/review/{decisionId}/skip:
     post:
       operationId: skipCategorizationDecision
-      tags: [categorization]
+      tags: [categorization, features]
       parameters:
         - { in: path, name: decisionId, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -2903,7 +2909,7 @@ paths:
   /categorization/review/{decisionId}/correct:
     post:
       operationId: correctCategorizationDecision
-      tags: [categorization]
+      tags: [categorization, features]
       summary: |
         File the row by hand (locked), learn merchant memory, and return the
         retroactive candidates. Never applies them.
@@ -2927,7 +2933,7 @@ paths:
   /category-decisions:
     get:
       operationId: listCategoryDecisions
-      tags: [categorization]
+      tags: [categorization, features]
       summary: |
         (PR-A2) How one charge was filed: its decisions, newest first, at most
         20. A charge outside the household answers 404.
@@ -2948,7 +2954,7 @@ paths:
   /category-decisions/{id}/undo:
     post:
       operationId: undoCategoryDecision
-      tags: [categorization]
+      tags: [categorization, features]
       summary: |
         Restore the decision's previous category, clear provisional, stamp
         undone_at and disable the memory it created.
@@ -2967,7 +2973,7 @@ paths:
   /learned-rules:
     get:
       operationId: listLearnedRules
-      tags: [categorization]
+      tags: [categorization, features]
       summary: Merchant memory, with its evidence counts.
       responses:
         "200":
@@ -2981,7 +2987,7 @@ paths:
   /learned-rules/{id}:
     patch:
       operationId: updateLearnedRule
-      tags: [categorization]
+      tags: [categorization, features]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       requestBody:
@@ -3000,7 +3006,7 @@ paths:
         "409": { description: A rule with that scope already exists }
     delete:
       operationId: deleteLearnedRule
-      tags: [categorization]
+      tags: [categorization, features]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -3010,7 +3016,7 @@ paths:
   /learned-rules/{id}/apply-retroactively:
     post:
       operationId: applyLearnedRuleRetroactively
-      tags: [categorization]
+      tags: [categorization, features]
       summary: |
         Explicit request: file every unlocked row of this merchant (within the
         rule's scope) into its category. Each write is a `user` decision.
@@ -3032,7 +3038,7 @@ paths:
   /transactions/{id}/splits:
     get:
       operationId: getTransactionSplits
-      tags: [categorization]
+      tags: [categorization, features]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -3044,7 +3050,7 @@ paths:
         "404": { description: Not found }
     post:
       operationId: replaceTransactionSplits
-      tags: [categorization]
+      tags: [categorization, features]
       summary: |
         Replace-all. The parts must add up to the charge's amount to the cent;
         the charge keeps its own category and becomes locked.
@@ -3065,7 +3071,7 @@ paths:
         "404": { description: Not found }
     delete:
       operationId: deleteTransactionSplits
-      tags: [categorization]
+      tags: [categorization, features]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -3076,7 +3082,7 @@ paths:
   /ai/conversations:
     post:
       operationId: createAiConversation
-      tags: [ai]
+      tags: [ai, features]
       summary: Start a conversation with Ask
       responses:
         "201":
@@ -3086,7 +3092,7 @@ paths:
               schema: { $ref: "#/components/schemas/AiConversation" }
     get:
       operationId: listAiConversations
-      tags: [ai]
+      tags: [ai, features]
       summary: The signed-in person's conversations, newest first
       parameters:
         - in: query
@@ -3102,7 +3108,7 @@ paths:
   /ai/conversations/{id}:
     get:
       operationId: getAiConversation
-      tags: [ai]
+      tags: [ai, features]
       summary: One conversation with its messages (the polling fallback after a dropped stream)
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -3148,7 +3154,7 @@ paths:
   /agent/proposals:
     get:
       operationId: listAgentProposals
-      tags: [agent]
+      tags: [agent, features]
       summary: Changes Ask proposed, newest first (open by default)
       parameters:
         - in: query
@@ -3167,7 +3173,7 @@ paths:
   /agent/proposals/{id}/approve:
     post:
       operationId: approveAgentProposal
-      tags: [agent]
+      tags: [agent, features]
       summary: Approve a proposal and apply it through the app's own writer
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -3184,7 +3190,7 @@ paths:
   /agent/proposals/{id}/reject:
     post:
       operationId: rejectAgentProposal
-      tags: [agent]
+      tags: [agent, features]
       summary: Reject a proposal
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -3200,7 +3206,7 @@ paths:
   /memory:
     get:
       operationId: listMemory
-      tags: [memory]
+      tags: [memory, features]
       summary: What the household (or Ask, visibly) keeps in memory
       responses:
         "200":
@@ -3212,7 +3218,7 @@ paths:
   /memory/{scope}/{key}:
     put:
       operationId: putMemory
-      tags: [memory]
+      tags: [memory, features]
       summary: State a preference or decision (replaces what the key held)
       parameters:
         - { in: path, name: scope, required: true, schema: { type: string, enum: [categorization, spending, debt, general] } }
@@ -3234,7 +3240,7 @@ paths:
   /memory/{id}:
     delete:
       operationId: deleteMemory
-      tags: [memory]
+      tags: [memory, features]
       summary: Forget one memory (it leaves every list and every prompt)
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -3245,7 +3251,7 @@ paths:
   /wishlist:
     get:
       operationId: listWishlist
-      tags: [wishlist]
+      tags: [wishlist, features]
       summary: The wish list, with each item's waiting period
       responses:
         "200":
@@ -3255,7 +3261,7 @@ paths:
               schema: { $ref: "#/components/schemas/WishlistList" }
     post:
       operationId: createWishlistItem
-      tags: [wishlist]
+      tags: [wishlist, features]
       summary: Add something to the wish list (starts a waiting period)
       requestBody:
         required: true
@@ -3273,7 +3279,7 @@ paths:
   /wishlist/{id}:
     patch:
       operationId: updateWishlistItem
-      tags: [wishlist]
+      tags: [wishlist, features]
       summary: Edit an item or decide it (a yes waits out the waiting period)
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -3295,7 +3301,7 @@ paths:
   /wishlist/{id}/evaluate:
     post:
       operationId: evaluateWishlistItem
-      tags: [wishlist]
+      tags: [wishlist, features]
       summary: Evaluate one wish-list item now, as if bought today, and store the answer
       description: >-
         The nightly wishlist.evaluate job's work for one item: evaluateAfford with
@@ -3315,7 +3321,7 @@ paths:
   /ai/usage/summary:
     get:
       operationId: getAiUsageSummary
-      tags: [ai]
+      tags: [ai, features]
       summary: This month's AI cost, calls, caps and the latest runs
       responses:
         "200":
@@ -3327,7 +3333,7 @@ paths:
   /ai/budget:
     put:
       operationId: updateAiBudget
-      tags: [ai]
+      tags: [ai, features]
       summary: Owner sets the monthly caps and the pause
       requestBody:
         required: true

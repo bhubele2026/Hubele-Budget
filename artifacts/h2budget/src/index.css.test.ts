@@ -152,3 +152,94 @@ describe("index.css — the literal-duration kills stay, because dials cannot re
     expect(kills).toMatch(/animation-duration:\s*0\.01ms\s*!important/);
   });
 });
+
+/** Every declaration of `prop` with its value and enclosing block headers. */
+function valuesOf(prop: string): { stack: string[]; value: string; at: number }[] {
+  const out: { stack: string[]; value: string; at: number }[] = [];
+  const stack: string[] = [];
+  let header = "";
+  for (let i = 0; i < SRC.length; i++) {
+    const ch = SRC[i]!;
+    if (ch === "{") {
+      stack.push(header.trim());
+      header = "";
+    } else if (ch === "}") {
+      stack.pop();
+      header = "";
+    } else if (ch === ";") {
+      const decl = header.trim();
+      if (decl.startsWith(`${prop}:`)) out.push({ stack: [...stack], value: decl.slice(prop.length + 1).trim(), at: i });
+      header = "";
+    } else {
+      header += ch;
+    }
+  }
+  return out;
+}
+
+/** "0.75rem" → 12, "12px" → 12 (the app's root font size is the browser's 16px). */
+const px = (v: string) => (v.endsWith("rem") ? parseFloat(v) * 16 : parseFloat(v));
+const MD = /@media\s*\(width >= 48rem\)/;
+
+describe("index.css — the shell scroll contract (C0)", () => {
+  const at = (prop: string, md: boolean) => {
+    const hits = valuesOf(prop).filter((d) => d.stack[d.stack.length - 1] === ":root" && MD.test(d.stack.join(" ")) === md);
+    expect(hits, `${prop} ${md ? "md" : "base"}`).toHaveLength(1);
+    expect(isLayered(hits[0]!.stack)).toBe(false);
+    return hits[0]!.value;
+  };
+
+  it("publishes the shell padding: p-3 below md, md:p-5 from md (Tailwind's 48rem)", () => {
+    expect(px(at("--shell-pad-x", false))).toBe(12);
+    expect(px(at("--shell-pad-y", false))).toBe(12);
+    expect(px(at("--shell-pad-x", true))).toBe(20);
+    expect(px(at("--shell-pad-y", true))).toBe(20);
+    expect(at("--page-sticky-top", false)).toBe("0px");
+  });
+
+  /**
+   * ⚠️ PIXEL PARITY. The three sticky heads used `-mx-4 -mt-4 px-4` and
+   * `md:-mx-8 md:-mt-8 md:px-8` — 16 px and 32 px. Shell pad + the legacy
+   * overshoot must add up to exactly those, at both sizes, or every page under
+   * those heads moves (measured: the content below a head sits 4/12 px higher
+   * because of the overshoot; see the note on `:root`).
+   */
+  it("pad + overshoot = the heads' old 16 px / 32 px bleed, so no pixel moves", () => {
+    expect(px(at("--shell-pad-x", false)) + px(at("--page-head-overshoot", false))).toBe(16);
+    expect(px(at("--shell-pad-y", false)) + px(at("--page-head-overshoot", false))).toBe(16);
+    expect(px(at("--shell-pad-x", true)) + px(at("--page-head-overshoot", true))).toBe(32);
+    expect(px(at("--shell-pad-y", true)) + px(at("--page-head-overshoot", true))).toBe(32);
+  });
+
+  it("the head and bleed classes are built from the variables, in @layer utilities (so a parent's space-y-* cannot zero the margin)", () => {
+    const of = (cls: string, prop: string) =>
+      valuesOf(prop).filter((d) => d.stack[d.stack.length - 1] === cls);
+    const bleedX = "calc(var(--shell-pad-x) + var(--page-head-overshoot))";
+    for (const cls of [".page-sticky-head", ".page-bleed-x"]) {
+      const mi = of(cls, "margin-inline");
+      expect(mi, cls).toHaveLength(1);
+      expect(mi[0]!.value).toBe(`calc(-1 * (var(--shell-pad-x) + var(--page-head-overshoot)))`);
+      expect(of(cls, "padding-inline")[0]!.value).toBe(bleedX);
+      expect(mi[0]!.stack.some((h) => h === "@layer utilities")).toBe(true);
+    }
+    expect(of(".page-sticky-head", "margin-top")[0]!.value).toBe(`calc(-1 * (var(--shell-pad-y) + var(--page-head-overshoot)))`);
+    expect(of(".shell-pad", "padding")[0]!.value).toBe("var(--shell-pad-y) var(--shell-pad-x)");
+    expect(of(".shell-scroller", "scrollbar-gutter")[0]!.value).toBe("stable");
+  });
+
+  it("a sticky-safe panel clips without becoming a scroll container", () => {
+    const clip = valuesOf("overflow").filter((d) => d.stack[d.stack.length - 1] === ".panel-sticky-safe");
+    expect(clip).toHaveLength(1);
+    expect(clip[0]!.value).toBe("clip");
+    // Same layer as .panel and AFTER its `overflow: hidden`, so it wins the tie.
+    const base = valuesOf("overflow").find((d) => d.stack[d.stack.length - 1] === ".panel")!;
+    expect(base.value).toBe("hidden");
+    expect(clip[0]!.stack.slice(0, -1)).toEqual(base.stack.slice(0, -1));
+    expect(clip[0]!.at).toBeGreaterThan(base.at);
+  });
+
+  it("no longer claims html is the scroller", () => {
+    expect(CSS).not.toMatch(/`html` IS THE SOLE VERTICAL SCROLLER/);
+    expect(CSS).toMatch(/Inside the signed-in shell that scroller is `<main>`/);
+  });
+});

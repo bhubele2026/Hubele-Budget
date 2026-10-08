@@ -2304,7 +2304,7 @@ export default function TransactionsPage({
   return (
     <div
       className="space-y-3"
-      style={{ ["--pinned-pane-h" as string]: `${paneH}px` } as React.CSSProperties}
+      style={{ ["--page-sticky-top" as string]: `${paneH}px` } as React.CSSProperties}
     >
       {/* (#357) Suppress the global Plaid re-auth banner while the user
           is viewing a Manual account — the failing item isn't this view's
@@ -2318,9 +2318,13 @@ export default function TransactionsPage({
           link toast. */}
       <PostLinkProgressBanner viewTransactionsPath="/transactions" />
       {register.isRefetchError && <div role="alert" className={errorBanner}>Chase refresh failed. Showing the last loaded transactions. <button className={btnLink} onClick={() => void register.refetch()}>Retry transactions</button></div>}
+      {/* Embedded, the pane bleeds over the p-4 that /next/accounts puts
+          around this ledger inside its flush, sticky-safe panel, so it spans
+          the panel's width when it sticks to <main>. Full page, it is the
+          page's sticky head (`.page-sticky-head`, index.css). */}
       <div
         ref={paneRef}
-        className={embedded ? "sticky top-0 z-30 space-y-3 border-b border-brand-line bg-platinum-1 pb-3" : "sticky top-0 z-30 -mx-4 -mt-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pt-3 pb-3 md:-mx-8 md:-mt-8 md:px-8 md:pt-4"}
+        className={embedded ? "sticky top-0 z-30 -mx-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pb-3" : "page-sticky-head sticky top-0 z-30 space-y-3 border-b border-brand-line bg-platinum-1 pt-3 pb-3 md:pt-4"}
       >
       {embedded ? (
         <div className="flex flex-wrap items-start justify-end gap-2">
@@ -2679,7 +2683,7 @@ export default function TransactionsPage({
       {(selected.size > 0 || allMatching) && (
         <div
           className="surface sticky z-20 flex flex-wrap items-center gap-3 rounded-control px-4 py-2 ring-1 ring-brand-navy/25"
-          style={{ top: "var(--pinned-pane-h, 0px)" }}
+          style={{ top: "var(--page-sticky-top, 0px)" }}
           data-testid="bulk-bar"
         >
           <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">

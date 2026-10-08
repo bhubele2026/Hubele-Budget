@@ -15,6 +15,9 @@ type ToasterToast = Omit<ToastProps, "title"> & {
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  // (C0) A second button beside `action` — "Undo" + "Apply to 12 similar".
+  // Build both with `toastWithActions` (components/ui/action-toast.tsx).
+  secondaryAction?: ToastActionElement
 }
 
 const actionTypes = {
