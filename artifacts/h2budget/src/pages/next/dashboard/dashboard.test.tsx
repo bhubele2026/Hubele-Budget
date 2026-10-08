@@ -47,7 +47,7 @@ import ForecastPanel from "./ForecastPanel";
 import DebtPanel from "./DebtPanel";
 import ActivityPanel from "./ActivityPanel";
 import ReviewPanel from "./ReviewPanel";
-import BriefingPanel from "./BriefingPanel";
+import BriefingPanel, { cleanRecap } from "./BriefingPanel";
 
 const spine = (o: Record<string, unknown> = {}) => ({
   asOf: "2026-10-08T15:00:00Z",
@@ -93,7 +93,6 @@ describe("accounts row", () => {
     const cards = screen.getAllByTestId("dash-account");
     expect(cards).toHaveLength(4);
     expect(within(cards[0]!).getByTestId("dash-account-balance").textContent).toBe("$4,200.50");
-    expect(within(cards[0]!).getByText(/Data through Oct 8/)).toBeTruthy();
     expect(within(cards[1]!).getByTestId("dash-account-balance").textContent).toBe("$1,500.00");
     expect(within(cards[1]!).getByText("$1,200.00")).toBeTruthy();
     expect(within(cards[1]!).getByText("$35.00")).toBeTruthy();
@@ -110,8 +109,15 @@ describe("accounts row", () => {
     expect(cards[2]!.getAttribute("data-state")).toBe("stale");
     expect(within(cards[2]!).getByTestId("dash-account-state").textContent).toBe("Out of date");
     expect(cards[3]!.getAttribute("data-state")).toBe("reauth");
-    expect(within(cards[3]!).getByText("Needs reconnecting")).toBeTruthy();
+    expect(within(cards[3]!).getAllByText(/Needs reconnecting/)).toHaveLength(1);
     expect(within(cards[3]!).getByTestId("dash-account-reason").textContent!.length).toBeGreaterThan(10);
+  });
+  it("checking uses the bank freshness words even when the item has never synced", () => {
+    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "4821" })], { lastSyncedAt: null })]);
+    wrap(<AccountsRow />);
+    const card = screen.getByTestId("dash-account");
+    expect(card.textContent).not.toContain("Not synced yet");
+    expect(within(card).getByTestId("dash-account-state").textContent).toBe("fresh");
   });
   it("links each account to its page and has a Sync button per bank", () => {
     wrap(<AccountsRow />);
@@ -339,6 +345,14 @@ describe("briefing", () => {
     expect(screen.getByTestId("dash-recap-badge").textContent).toBe("Template");
     expect(screen.getByTestId("dash-action").getAttribute("data-kind")).toBe("review");
     expect(screen.getByTestId("dash-action-link").getAttribute("href")).toBe("/review");
+  });
+  it("strips the trailing link and shows the date quietly", () => {
+    h.Q.recap = ok({ model: null, template: { text: "You spent $40.\nhttps://h2budget.onrender.com/?d=2026-10-04" }, facts: {} });
+    h.Q.bills = ok({ bills: [], debtMins: [], income: [], monthly: {} });
+    wrap(<BriefingPanel />);
+    expect(screen.getByTestId("dash-recap-text").textContent).toBe("You spent $40.");
+    expect(screen.getByTestId("dash-recap-for").textContent).toBe("for Oct 4");
+    expect(cleanRecap("No link here.").forDate).toBeNull();
   });
   it("badges a demo model draft and prefers its text", () => {
     h.Q.recap = recap({ text: "Model words.", source: "model", demo: true });
