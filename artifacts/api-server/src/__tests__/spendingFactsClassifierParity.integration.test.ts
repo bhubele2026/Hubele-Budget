@@ -270,6 +270,8 @@ describe("mode 'today' IS buildSpendingFacts().householdSpend — seeded randomi
       "reimbursable",
       "needs_classification",
       "excluded",
+      // (B6) Card credits are refunds: the parity above nets them on both sides.
+      "refund",
     ] as const) {
       expect(coverage.get(c) ?? 0, c).toBeGreaterThanOrEqual(2);
     }
