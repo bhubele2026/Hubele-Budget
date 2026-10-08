@@ -1040,3 +1040,4 @@ export * from "./agent";
 export * from "./recap";
 export * from "./debt";
 export * from "./metrics";
+export * from "./goals";

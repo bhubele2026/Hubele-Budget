@@ -30,7 +30,7 @@ export interface MoneyPosition {
     /** Sum of the planned outflows landing in the window, payday's own bills included */
     committedUntilPayday: string;
     cashBuffer: string;
-    /** Money held back for goals; 0.00 until goals ship */
+    /** Money the active goals hold back in checking (reserved in checking, not backed by an account) */
     reservesHeld: string;
     /** @nullable */
     availableUntilPayday: string | null;

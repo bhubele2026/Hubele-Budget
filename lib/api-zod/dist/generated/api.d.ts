@@ -16681,4 +16681,336 @@ export declare const UpdateAiBudgetResponse: zod.ZodObject<{
     hardCapUsd: number;
     dailyCaps: Record<string, number>;
 }>;
+/**
+ * (PR-C) A goal's current amount is the backing savings account's balance when an account backs it (null until that balance is known), else the amount the household typed. monthsToTargetLow/High are a range at the contribution rate, never a date promise. Archived goals are left out unless include=archived. A buffer goal's target sits beside the cash buffer; it never changes it. Read-only.
+ * @summary The household's goals with progress, the money they hold back in checking, and the cash buffer beside them
+ */
+export declare const ListGoalsQueryParams: zod.ZodObject<{
+    include: zod.ZodOptional<zod.ZodEnum<["archived"]>>;
+}, "strip", zod.ZodTypeAny, {
+    include?: "archived" | undefined;
+}, {
+    include?: "archived" | undefined;
+}>;
+export declare const ListGoalsResponse: zod.ZodObject<{
+    goals: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        name: zod.ZodString;
+        kind: zod.ZodEnum<["savings", "buffer", "sinking", "debt_payoff"]>;
+        status: zod.ZodEnum<["active", "paused", "reached", "archived"]>;
+        targetAmount: zod.ZodNullable<zod.ZodString>;
+        manualCurrentAmount: zod.ZodString;
+        plaidAccountId: zod.ZodNullable<zod.ZodString>;
+        monthlyContribution: zod.ZodString;
+        targetDate: zod.ZodNullable<zod.ZodString>;
+        reservedInChecking: zod.ZodBoolean;
+        priority: zod.ZodNumber;
+        currentAmount: zod.ZodNullable<zod.ZodString>;
+        currentSource: zod.ZodEnum<["manual", "account"]>;
+        percent: zod.ZodNullable<zod.ZodNumber>;
+        remaining: zod.ZodNullable<zod.ZodString>;
+        monthsToTargetLow: zod.ZodNullable<zod.ZodNumber>;
+        monthsToTargetHigh: zod.ZodNullable<zod.ZodNumber>;
+        requiredMonthly: zod.ZodNullable<zod.ZodString>;
+        onTrack: zod.ZodNullable<zod.ZodBoolean>;
+        reserveHeld: zod.ZodString;
+        cashBuffer: zod.ZodNullable<zod.ZodString>;
+        createdAt: zod.ZodString;
+        updatedAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        status: "active" | "archived" | "paused" | "reached";
+        id: string;
+        kind: "savings" | "buffer" | "sinking" | "debt_payoff";
+        createdAt: string;
+        plaidAccountId: string | null;
+        name: string;
+        priority: number;
+        cashBuffer: string | null;
+        updatedAt: string;
+        targetDate: string | null;
+        targetAmount: string | null;
+        manualCurrentAmount: string;
+        monthlyContribution: string;
+        reservedInChecking: boolean;
+        currentAmount: string | null;
+        currentSource: "account" | "manual";
+        percent: number | null;
+        remaining: string | null;
+        monthsToTargetLow: number | null;
+        monthsToTargetHigh: number | null;
+        requiredMonthly: string | null;
+        onTrack: boolean | null;
+        reserveHeld: string;
+    }, {
+        status: "active" | "archived" | "paused" | "reached";
+        id: string;
+        kind: "savings" | "buffer" | "sinking" | "debt_payoff";
+        createdAt: string;
+        plaidAccountId: string | null;
+        name: string;
+        priority: number;
+        cashBuffer: string | null;
+        updatedAt: string;
+        targetDate: string | null;
+        targetAmount: string | null;
+        manualCurrentAmount: string;
+        monthlyContribution: string;
+        reservedInChecking: boolean;
+        currentAmount: string | null;
+        currentSource: "account" | "manual";
+        percent: number | null;
+        remaining: string | null;
+        monthsToTargetLow: number | null;
+        monthsToTargetHigh: number | null;
+        requiredMonthly: string | null;
+        onTrack: boolean | null;
+        reserveHeld: string;
+    }>, "many">;
+    reservesHeld: zod.ZodString;
+    goalsMonthly: zod.ZodString;
+    cashBuffer: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    cashBuffer: string;
+    reservesHeld: string;
+    goalsMonthly: string;
+    goals: {
+        status: "active" | "archived" | "paused" | "reached";
+        id: string;
+        kind: "savings" | "buffer" | "sinking" | "debt_payoff";
+        createdAt: string;
+        plaidAccountId: string | null;
+        name: string;
+        priority: number;
+        cashBuffer: string | null;
+        updatedAt: string;
+        targetDate: string | null;
+        targetAmount: string | null;
+        manualCurrentAmount: string;
+        monthlyContribution: string;
+        reservedInChecking: boolean;
+        currentAmount: string | null;
+        currentSource: "account" | "manual";
+        percent: number | null;
+        remaining: string | null;
+        monthsToTargetLow: number | null;
+        monthsToTargetHigh: number | null;
+        requiredMonthly: string | null;
+        onTrack: boolean | null;
+        reserveHeld: string;
+    }[];
+}, {
+    cashBuffer: string;
+    reservesHeld: string;
+    goalsMonthly: string;
+    goals: {
+        status: "active" | "archived" | "paused" | "reached";
+        id: string;
+        kind: "savings" | "buffer" | "sinking" | "debt_payoff";
+        createdAt: string;
+        plaidAccountId: string | null;
+        name: string;
+        priority: number;
+        cashBuffer: string | null;
+        updatedAt: string;
+        targetDate: string | null;
+        targetAmount: string | null;
+        manualCurrentAmount: string;
+        monthlyContribution: string;
+        reservedInChecking: boolean;
+        currentAmount: string | null;
+        currentSource: "account" | "manual";
+        percent: number | null;
+        remaining: string | null;
+        monthsToTargetLow: number | null;
+        monthsToTargetHigh: number | null;
+        requiredMonthly: string | null;
+        onTrack: boolean | null;
+        reserveHeld: string;
+    }[];
+}>;
+/**
+ * @summary Add a goal
+ */
+export declare const createGoalBodyNameMax = 80;
+export declare const createGoalBodyTargetAmountRegExp: RegExp;
+export declare const createGoalBodyManualCurrentAmountRegExp: RegExp;
+export declare const createGoalBodyMonthlyContributionRegExp: RegExp;
+export declare const createGoalBodyTargetDateRegExp: RegExp;
+export declare const createGoalBodyPriorityMin = 0;
+export declare const createGoalBodyPriorityMax = 1000;
+export declare const CreateGoalBody: zod.ZodObject<{
+    name: zod.ZodString;
+    kind: zod.ZodEnum<["savings", "buffer", "sinking", "debt_payoff"]>;
+    targetAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    manualCurrentAmount: zod.ZodOptional<zod.ZodString>;
+    plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    monthlyContribution: zod.ZodOptional<zod.ZodString>;
+    targetDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    reservedInChecking: zod.ZodOptional<zod.ZodBoolean>;
+    priority: zod.ZodOptional<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    kind: "savings" | "buffer" | "sinking" | "debt_payoff";
+    name: string;
+    plaidAccountId?: string | null | undefined;
+    priority?: number | undefined;
+    targetDate?: string | null | undefined;
+    targetAmount?: string | null | undefined;
+    manualCurrentAmount?: string | undefined;
+    monthlyContribution?: string | undefined;
+    reservedInChecking?: boolean | undefined;
+}, {
+    kind: "savings" | "buffer" | "sinking" | "debt_payoff";
+    name: string;
+    plaidAccountId?: string | null | undefined;
+    priority?: number | undefined;
+    targetDate?: string | null | undefined;
+    targetAmount?: string | null | undefined;
+    manualCurrentAmount?: string | undefined;
+    monthlyContribution?: string | undefined;
+    reservedInChecking?: boolean | undefined;
+}>;
+/**
+ * @summary Edit a goal
+ */
+export declare const UpdateGoalParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const updateGoalBodyNameMax = 80;
+export declare const updateGoalBodyTargetAmountRegExp: RegExp;
+export declare const updateGoalBodyManualCurrentAmountRegExp: RegExp;
+export declare const updateGoalBodyMonthlyContributionRegExp: RegExp;
+export declare const updateGoalBodyTargetDateRegExp: RegExp;
+export declare const updateGoalBodyPriorityMin = 0;
+export declare const updateGoalBodyPriorityMax = 1000;
+export declare const UpdateGoalBody: zod.ZodObject<{
+    name: zod.ZodOptional<zod.ZodString>;
+    kind: zod.ZodOptional<zod.ZodEnum<["savings", "buffer", "sinking", "debt_payoff"]>>;
+    status: zod.ZodOptional<zod.ZodEnum<["active", "paused", "reached", "archived"]>>;
+    targetAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    manualCurrentAmount: zod.ZodOptional<zod.ZodString>;
+    plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    monthlyContribution: zod.ZodOptional<zod.ZodString>;
+    targetDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    reservedInChecking: zod.ZodOptional<zod.ZodBoolean>;
+    priority: zod.ZodOptional<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    status?: "active" | "archived" | "paused" | "reached" | undefined;
+    kind?: "savings" | "buffer" | "sinking" | "debt_payoff" | undefined;
+    plaidAccountId?: string | null | undefined;
+    name?: string | undefined;
+    priority?: number | undefined;
+    targetDate?: string | null | undefined;
+    targetAmount?: string | null | undefined;
+    manualCurrentAmount?: string | undefined;
+    monthlyContribution?: string | undefined;
+    reservedInChecking?: boolean | undefined;
+}, {
+    status?: "active" | "archived" | "paused" | "reached" | undefined;
+    kind?: "savings" | "buffer" | "sinking" | "debt_payoff" | undefined;
+    plaidAccountId?: string | null | undefined;
+    name?: string | undefined;
+    priority?: number | undefined;
+    targetDate?: string | null | undefined;
+    targetAmount?: string | null | undefined;
+    manualCurrentAmount?: string | undefined;
+    monthlyContribution?: string | undefined;
+    reservedInChecking?: boolean | undefined;
+}>;
+export declare const UpdateGoalResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    name: zod.ZodString;
+    kind: zod.ZodEnum<["savings", "buffer", "sinking", "debt_payoff"]>;
+    status: zod.ZodEnum<["active", "paused", "reached", "archived"]>;
+    targetAmount: zod.ZodNullable<zod.ZodString>;
+    manualCurrentAmount: zod.ZodString;
+    plaidAccountId: zod.ZodNullable<zod.ZodString>;
+    monthlyContribution: zod.ZodString;
+    targetDate: zod.ZodNullable<zod.ZodString>;
+    reservedInChecking: zod.ZodBoolean;
+    priority: zod.ZodNumber;
+    currentAmount: zod.ZodNullable<zod.ZodString>;
+    currentSource: zod.ZodEnum<["manual", "account"]>;
+    percent: zod.ZodNullable<zod.ZodNumber>;
+    remaining: zod.ZodNullable<zod.ZodString>;
+    monthsToTargetLow: zod.ZodNullable<zod.ZodNumber>;
+    monthsToTargetHigh: zod.ZodNullable<zod.ZodNumber>;
+    requiredMonthly: zod.ZodNullable<zod.ZodString>;
+    onTrack: zod.ZodNullable<zod.ZodBoolean>;
+    reserveHeld: zod.ZodString;
+    cashBuffer: zod.ZodNullable<zod.ZodString>;
+    createdAt: zod.ZodString;
+    updatedAt: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    status: "active" | "archived" | "paused" | "reached";
+    id: string;
+    kind: "savings" | "buffer" | "sinking" | "debt_payoff";
+    createdAt: string;
+    plaidAccountId: string | null;
+    name: string;
+    priority: number;
+    cashBuffer: string | null;
+    updatedAt: string;
+    targetDate: string | null;
+    targetAmount: string | null;
+    manualCurrentAmount: string;
+    monthlyContribution: string;
+    reservedInChecking: boolean;
+    currentAmount: string | null;
+    currentSource: "account" | "manual";
+    percent: number | null;
+    remaining: string | null;
+    monthsToTargetLow: number | null;
+    monthsToTargetHigh: number | null;
+    requiredMonthly: string | null;
+    onTrack: boolean | null;
+    reserveHeld: string;
+}, {
+    status: "active" | "archived" | "paused" | "reached";
+    id: string;
+    kind: "savings" | "buffer" | "sinking" | "debt_payoff";
+    createdAt: string;
+    plaidAccountId: string | null;
+    name: string;
+    priority: number;
+    cashBuffer: string | null;
+    updatedAt: string;
+    targetDate: string | null;
+    targetAmount: string | null;
+    manualCurrentAmount: string;
+    monthlyContribution: string;
+    reservedInChecking: boolean;
+    currentAmount: string | null;
+    currentSource: "account" | "manual";
+    percent: number | null;
+    remaining: string | null;
+    monthsToTargetLow: number | null;
+    monthsToTargetHigh: number | null;
+    requiredMonthly: string | null;
+    onTrack: boolean | null;
+    reserveHeld: string;
+}>;
+/**
+ * @summary Remove a goal (archived, not deleted, when it holds money back in checking)
+ */
+export declare const DeleteGoalParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const DeleteGoalResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    outcome: zod.ZodEnum<["deleted", "archived"]>;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    outcome: "deleted" | "archived";
+}, {
+    id: string;
+    outcome: "deleted" | "archived";
+}>;
 //# sourceMappingURL=api.d.ts.map

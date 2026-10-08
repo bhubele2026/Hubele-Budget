@@ -32,6 +32,7 @@ import metricsRouter from "./metrics";
 import categorizationRouter from "./categorization";
 import learnedRulesRouter from "./learnedRules";
 import aiRouter from "./ai";
+import goalsRouter from "./goals";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(metricsRouter);
 router.use(categorizationRouter);
 router.use(learnedRulesRouter);
 router.use(aiRouter);
+router.use(goalsRouter);
 
 export default router;

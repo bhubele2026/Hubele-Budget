@@ -1,0 +1,1 @@
+{"version":3,"file":"goalList.d.ts","sourceRoot":"","sources":["../../../src/generated/types/goalList.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,IAAI,EAAE,MAAM,QAAQ,CAAC;AAEnC,MAAM,WAAW,QAAQ;IACvB,KAAK,EAAE,IAAI,EAAE,CAAC;IACd,uDAAuD;IACvD,YAAY,EAAE,MAAM,CAAC;IACrB,0FAA0F;IAC1F,YAAY,EAAE,MAAM,CAAC;IACrB,UAAU,EAAE,MAAM,CAAC;CACpB"}
