@@ -177,3 +177,8 @@ week's window — the ruling accepts that a full-statement payment pays the week
 
 **Mutants added:** M14 "no allowance → $0" (round 1's rule) — caught by T9b; M15 "upper bound restored" —
 caught by T7b and the unit test (the round-2 fails-before run above is exactly these two).
+
+**Round 2 gates.** `pnpm run typecheck` 0 · codegen drift, CI style (`lib/api-zod/dist`,
+`lib/api-client-react/dist` and both `tsconfig.tsbuildinfo` deleted, regenerated): no diff, no untracked
+file · API suite 2,218 passed, 0 failed, 2 todo (2,220 tests, 205 files; round 1 + T7b, T9b) · golden under
+`CI=true` 12 / 12, no regeneration · `pnpm run build` 0; entry graph OK for both apps.
