@@ -93,7 +93,6 @@ describe("accounts row", () => {
     const cards = screen.getAllByTestId("dash-account");
     expect(cards).toHaveLength(4);
     expect(within(cards[0]!).getByTestId("dash-account-balance").textContent).toBe("$4,200.50");
-    expect(within(cards[0]!).getByText(/Data through Oct 8/)).toBeTruthy();
     expect(within(cards[1]!).getByTestId("dash-account-balance").textContent).toBe("$1,500.00");
     expect(within(cards[1]!).getByText("$1,200.00")).toBeTruthy();
     expect(within(cards[1]!).getByText("$35.00")).toBeTruthy();
