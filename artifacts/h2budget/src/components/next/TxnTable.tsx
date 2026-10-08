@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { AccountIdentity } from "@/lib/accountIdentity";
 import { AccountChip } from "./AccountChip";
+import { formatDisplayAmount } from "@/lib/amountDisplay";
 import { th, td, tdNum, emptyNote } from "@/ui";
 
 export interface TxnRow {
@@ -67,7 +68,7 @@ export function TxnTable({ rows, dense = true }: { rows: TxnRow[]; dense?: boole
                 <td className={cn(td, "py-1 text-neutral-600")}>{r.category || "Uncategorized"}</td>
                 <td className={cn(td, "py-1 text-neutral-600")}>{r.pending ? "Pending" : "Posted"}</td>
                 <td className={cn(tdNum, "py-1", r.amount < 0 ? "text-brand-ink" : "text-brand-navy")}>
-                  {r.amount > 0 ? "+" : ""}{formatCurrency(r.amount)}
+                  {formatDisplayAmount(r.amount)}
                 </td>
               </tr>
             );
