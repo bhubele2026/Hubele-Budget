@@ -31,6 +31,7 @@ import {
   itemStatus,
   itemsNeedingReconnect,
   lastSyncedWords,
+  autoUpdatesWords,
   postLinkWords,
   syncResultWords,
   type PostLinkStatus,
@@ -243,6 +244,11 @@ export function BanksView({ data, now, pollDelays = POST_LINK_POLL_DELAYS_MS }: 
                         <span className="type-caption text-ink-3" data-testid="bank-synced">
                           {lastSyncedWords(it, now)}
                         </span>
+                        {autoUpdatesWords(it) && (
+                          <span className="type-caption text-ink-3 border-t border-rule pt-1" data-testid="bank-auto-updates">
+                            {autoUpdatesWords(it)}
+                          </span>
+                        )}
                       </div>
                       <StatusWord tone={st.tone} data-testid="bank-status">
                         {st.word}

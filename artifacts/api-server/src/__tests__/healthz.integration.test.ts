@@ -33,10 +33,21 @@ describe("GET /healthz", () => {
       jobs: { mode: "off", started: false, failedLast24h: 0, dlq: 0 },
       ai: { enabled: true, configured: true, provider: "fake" },
       sms: { provider: "twilio", configured: false },
+      plaid: { webhookUrlSet: false },
     });
     const body = JSON.stringify(json);
     expect(body).not.toContain("sk-ant");
     expect(body).not.toContain("AC-secret");
+  });
+
+  it("reports whether a Plaid webhook address is set as a boolean, never the address", async () => {
+    const saved = process.env.PLAID_WEBHOOK_URL;
+    process.env.PLAID_WEBHOOK_URL = "https://secret-host.example.test/api/plaid/webhook";
+    const { json } = await request("GET", "/healthz");
+    if (saved === undefined) delete process.env.PLAID_WEBHOOK_URL;
+    else process.env.PLAID_WEBHOOK_URL = saved;
+    expect((json as { plaid: unknown }).plaid).toEqual({ webhookUrlSet: true });
+    expect(JSON.stringify(json)).not.toContain("secret-host");
   });
 
   it("stays 200 with null counts when the job tables cannot be read", async () => {

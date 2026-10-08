@@ -7,8 +7,9 @@ import { listReviewQueue } from "./lib/categorizer/review";
 import { migrateOnBootEnabled, startServer } from "./boot";
 import { findMigrationsDir } from "./lib/migrationsDir";
 import { logger } from "./lib/logger";
-import { getPlaidEnv } from "./lib/plaid";
-import { markJobsFailed, startJobs, stopJobs } from "./jobs/boss";
+import { getPlaidEnv, isPlaidConfigured } from "./lib/plaid";
+import { getJobsMode, markJobsFailed, startJobs, stopJobs } from "./jobs/boss";
+import { ensureAllItemWebhooks } from "./lib/plaidWebhookEnsure";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
@@ -141,9 +142,12 @@ function onListening(err?: Error): void {
   // The automatic Plaid sync crons (hourly cursor sync, */10 forced refresh,
   // daily consent refresh) are gone entirely rather than sitting dead behind a
   // kill-switch: they were hard-disabled in code after Plaid billed the
-  // household ~$500 for background pulls. Banks sync ONLY when the owner
-  // clicks Sync (POST /plaid/sync, untouched). No job registered in
-  // jobs/register.ts may call Plaid.
+  // household ~$500 for background pulls. Banks now sync in two ways only: on
+  // the owner's Sync click (POST /plaid/sync) and on Plaid webhooks
+  // (POST /plaid/webhook -> the free /transactions/sync). The billable
+  // /transactions/refresh runs only behind the explicit Force confirm. No job
+  // registered in jobs/register.ts may call Plaid. The one Plaid call added at
+  // boot is the free /item/webhook/update, below.
   //
   // (AI-0) Jobs run on pg-boss (jobs/), started AFTER listen. A failure to
   // start never stops the server serving: it is logged and /api/healthz shows
@@ -153,6 +157,13 @@ function onListening(err?: Error): void {
     markJobsFailed(jobsErr);
     logger.error({ err: jobsErr }, "Jobs failed to start — serving without them");
   });
+
+  // (V3) Tell Plaid where to send webhooks for banks linked before
+  // PLAID_WEBHOOK_URL was set. Free, once per boot, fire-and-forget, and it
+  // never throws. Skipped when jobs are off (tests, local without a database).
+  if (getJobsMode() !== "off" && isPlaidConfigured()) {
+    void ensureAllItemWebhooks();
+  }
 }
 
 // Graceful shutdown (Render sends SIGTERM, then SIGKILL ~30 s later): stop

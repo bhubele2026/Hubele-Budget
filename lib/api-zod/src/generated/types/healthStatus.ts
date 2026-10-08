@@ -7,6 +7,7 @@
  */
 import type { HealthAi } from "./healthAi";
 import type { HealthJobs } from "./healthJobs";
+import type { HealthPlaid } from "./healthPlaid";
 import type { HealthSms } from "./healthSms";
 
 export interface HealthStatus {
@@ -15,4 +16,5 @@ export interface HealthStatus {
   jobs: HealthJobs;
   ai: HealthAi;
   sms: HealthSms;
+  plaid: HealthPlaid;
 }

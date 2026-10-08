@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PlaidAccount } from "./plaidAccount";
+import type { PlaidItemDetailAutoUpdates } from "./plaidItemDetailAutoUpdates";
 
 export interface PlaidItemDetail {
   id: string;
@@ -49,5 +50,10 @@ sync chip.
   lastBankTxOn?: string | null;
   /** @nullable */
   refreshProductDisabledAt?: string | null;
+  /** (V3) Whether this bank tells H2 when something changes. `on` only
+when the webhook address Plaid holds equals the server's current
+PLAID_WEBHOOK_URL.
+ */
+  autoUpdates?: PlaidItemDetailAutoUpdates;
   accounts: PlaidAccount[];
 }

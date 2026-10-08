@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { PlaidItemDetail, PlaidSyncResult } from "@workspace/api-client-react";
 import {
   accountLine,
+  autoUpdatesWords,
   apiMessage,
   bankErrorWords,
   isReauthCode,
@@ -94,4 +95,19 @@ describe("post-link words", () => {
   it("a bank that still needs a sign-in is never called ready", () => {
     expect(postLinkWords({ ...base, phase: "ready", added: 5, needsReconnect: true }).title).toBe("Sample Bank still needs reconnecting");
   });
+});
+
+describe("autoUpdatesWords — does the bank tell H2 when something changes", () => {
+  const au = (reason: "ok" | "no_url" | "not_registered" | "error", error: string | null = null) =>
+    item({ autoUpdates: { on: reason === "ok", reason, checkedAt: null, error } });
+  it("on", () => expect(autoUpdatesWords(au("ok"))).toBe("Automatic updates: On — the bank tells H2 when something changes."));
+  it("no address on the server", () => expect(autoUpdatesWords(au("no_url"))).toBe("Automatic updates: Off — no webhook address on the server."));
+  it("not registered yet", () =>
+    expect(autoUpdatesWords(au("not_registered"))).toBe("Automatic updates: Off — not registered yet; the next sync will register it."));
+  it("refused, with the bank's short reason and no Plaid: prefix", () =>
+    expect(autoUpdatesWords(au("error", "Plaid: webhook address not allowed"))).toBe(
+      "Automatic updates: Off — the bank refused the address: webhook address not allowed",
+    ));
+  it("a long refusal is cut short", () => expect(autoUpdatesWords(au("error", "x".repeat(400)))!.length).toBeLessThan(200));
+  it("an older server that sends nothing says nothing", () => expect(autoUpdatesWords(item())).toBeNull());
 });
