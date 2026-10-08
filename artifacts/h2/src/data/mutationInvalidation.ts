@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   getGetSpineQueryKey,
   getGetForecastBankBalanceExplainQueryKey,
+  getGetMoneyPositionQueryKey,
 } from "@workspace/api-client-react";
 
 /**
@@ -22,6 +23,8 @@ import {
 export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: getGetSpineQueryKey() });
   void queryClient.invalidateQueries({ queryKey: getGetForecastBankBalanceExplainQueryKey() });
+  // (S1) The money position is the spine's `position` in full; it moves with it.
+  void queryClient.invalidateQueries({ queryKey: getGetMoneyPositionQueryKey() });
   void queryClient.invalidateQueries({
     predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/"),
   });

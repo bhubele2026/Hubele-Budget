@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { buttonClass } from "./Button";
@@ -17,6 +17,7 @@ export function Sheet({
   trigger,
   title,
   description,
+  returnFocusRef,
   children,
 }: {
   open?: boolean;
@@ -25,6 +26,8 @@ export function Sheet({
   trigger?: ReactNode;
   title: string;
   description?: string;
+  /** Where focus goes on close when there is no `trigger` (a lazy sheet opened from a control already on screen). */
+  returnFocusRef?: RefObject<HTMLElement | null>;
   children: ReactNode;
 }) {
   return (
@@ -35,6 +38,11 @@ export function Sheet({
         <Dialog.Content
           className="sheet-panel fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-3 border-t border-rule bg-paper-0 text-ink md:inset-y-0 md:right-0 md:left-auto md:h-dvh md:max-h-none md:w-[420px] md:rounded-none md:border-t-0 md:border-l"
           {...(description ? {} : { "aria-describedby": undefined })}
+          onCloseAutoFocus={(event) => {
+            if (!returnFocusRef) return;
+            event.preventDefault();
+            returnFocusRef.current?.focus();
+          }}
         >
           <div className="flex items-start justify-between gap-4 border-b border-rule px-4 pt-4 pb-3">
             <div className="min-w-0">

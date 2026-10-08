@@ -16,4 +16,15 @@ reviewed=false filter). A view setting only: no total or balance
 depends on it.
  */
   chaseHideReviewed?: boolean;
+  /**
+   * (S1) The id of the last "What's new" sheet this user dismissed
+("h2-1"). A view setting only.
+
+   * @maxLength 32
+   */
+  whatsNewSeen?: string;
+  /** (S1) The user's choice that H2 files new charges on its own.
+A preference only; the categorizer reads it in a later package.
+ */
+  autoCategorize?: boolean;
 }

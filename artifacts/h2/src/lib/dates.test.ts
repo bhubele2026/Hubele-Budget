@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { longDate, relativeTime, shortDate, shortDateOfInstant } from "./dates";
+import { dayWord, longDate, relativeTime, shortDate, shortDateOfInstant, weekdayDate } from "./dates";
 
 /** Runs under four TZs in CI; every answer here must be the same in all four. */
 describe("dates — words for household calendar dates, in any device zone", () => {
@@ -35,5 +35,19 @@ describe("relativeTime — ported words", () => {
   });
   it("nothing for nothing", () => {
     expect(relativeTime(null, now)).toBe("");
+  });
+});
+
+describe("dates — weekday forms and today/tomorrow words (S1)", () => {
+  it("'Fri, Oct 9' for a date, in any device zone", () => {
+    expect(weekdayDate("2026-10-09")).toBe("Fri, Oct 9");
+  });
+
+  it("today, tomorrow and yesterday are words; anything else is the date", () => {
+    expect(dayWord("2026-10-07", "2026-10-07")).toBe("today");
+    expect(dayWord("2026-10-08", "2026-10-07")).toBe("tomorrow");
+    expect(dayWord("2026-10-06", "2026-10-07")).toBe("yesterday");
+    expect(dayWord("2026-10-12", "2026-10-07")).toBe("Mon, Oct 12");
+    expect(dayWord("2026-11-01", "2026-10-31")).toBe("tomorrow");
   });
 });

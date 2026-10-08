@@ -5222,6 +5222,8 @@ export const GetMeResponse = zod.object({
 /**
  * @summary Returns the signed-in user's per-user UI preferences.
  */
+export const getUiPreferencesResponseWhatsNewSeenMax = 32;
+
 export const GetUiPreferencesResponse = zod
   .object({
     sidebarCollapsed: zod.boolean().optional(),
@@ -5231,6 +5233,19 @@ export const GetUiPreferencesResponse = zod
       .describe(
         "(PR14) The Chase list leaves out reviewed rows (the ledger's\nreviewed=false filter). A view setting only: no total or balance\ndepends on it.\n",
       ),
+    whatsNewSeen: zod
+      .string()
+      .max(getUiPreferencesResponseWhatsNewSeenMax)
+      .optional()
+      .describe(
+        '(S1) The id of the last \"What\'s new\" sheet this user dismissed\n(\"h2-1\"). A view setting only.\n',
+      ),
+    autoCategorize: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(S1) The user's choice that H2 files new charges on its own.\nA preference only; the categorizer reads it in a later package.\n",
+      ),
   })
   .describe(
     "Per-user (not per-household) UI preferences for the signed-in user.",
@@ -5239,6 +5254,8 @@ export const GetUiPreferencesResponse = zod
 /**
  * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
  */
+export const updateUiPreferencesBodyWhatsNewSeenMax = 32;
+
 export const UpdateUiPreferencesBody = zod
   .object({
     sidebarCollapsed: zod.boolean().optional(),
@@ -5248,10 +5265,25 @@ export const UpdateUiPreferencesBody = zod
       .describe(
         "(PR14) The Chase list leaves out reviewed rows (the ledger's\nreviewed=false filter). A view setting only: no total or balance\ndepends on it.\n",
       ),
+    whatsNewSeen: zod
+      .string()
+      .max(updateUiPreferencesBodyWhatsNewSeenMax)
+      .optional()
+      .describe(
+        '(S1) The id of the last \"What\'s new\" sheet this user dismissed\n(\"h2-1\"). A view setting only.\n',
+      ),
+    autoCategorize: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(S1) The user's choice that H2 files new charges on its own.\nA preference only; the categorizer reads it in a later package.\n",
+      ),
   })
   .describe(
     "Per-user (not per-household) UI preferences for the signed-in user.",
   );
+
+export const updateUiPreferencesResponseWhatsNewSeenMax = 32;
 
 export const UpdateUiPreferencesResponse = zod
   .object({
@@ -5261,6 +5293,19 @@ export const UpdateUiPreferencesResponse = zod
       .optional()
       .describe(
         "(PR14) The Chase list leaves out reviewed rows (the ledger's\nreviewed=false filter). A view setting only: no total or balance\ndepends on it.\n",
+      ),
+    whatsNewSeen: zod
+      .string()
+      .max(updateUiPreferencesResponseWhatsNewSeenMax)
+      .optional()
+      .describe(
+        '(S1) The id of the last \"What\'s new\" sheet this user dismissed\n(\"h2-1\"). A view setting only.\n',
+      ),
+    autoCategorize: zod
+      .boolean()
+      .optional()
+      .describe(
+        "(S1) The user's choice that H2 files new charges on its own.\nA preference only; the categorizer reads it in a later package.\n",
       ),
   })
   .describe(

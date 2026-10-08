@@ -69,3 +69,28 @@ export function relativeTime(iso: string | null | undefined, now: Date = new Dat
   const yr = Math.floor(day / 365);
   return `${yr} ${yr === 1 ? "year" : "years"} ago`;
 }
+
+const WEEKDAY_SHORT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+});
+
+/** "Fri, Oct 9" for a YYYY-MM-DD date. */
+export function weekdayDate(iso: string): string {
+  const d = utcDate(iso);
+  return d ? WEEKDAY_SHORT.format(d) : "";
+}
+
+/** "today" / "tomorrow" / "yesterday", else "Fri, Oct 9" — `today` is the household's date. */
+export function dayWord(iso: string, today: string): string {
+  const a = utcDate(iso);
+  const b = utcDate(today);
+  if (!a || !b) return "";
+  const diff = Math.round((a.getTime() - b.getTime()) / 86_400_000);
+  if (diff === 0) return "today";
+  if (diff === 1) return "tomorrow";
+  if (diff === -1) return "yesterday";
+  return weekdayDate(iso);
+}

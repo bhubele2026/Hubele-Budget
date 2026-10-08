@@ -50,12 +50,15 @@ export function Meter({
   limit,
   status,
   label,
+  words: wordsOverride,
   "data-testid": testId,
 }: {
   spent: number;
   limit: number | null;
   status: MeterStatus;
   label: string;
+  /** The status in words when the server has already said it ("Over by $55"). */
+  words?: string;
   "data-testid"?: string;
 }) {
   const hasLimit = limit != null && limit > 0;
@@ -69,7 +72,7 @@ export function Meter({
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const words = hasLimit ? meterWords(status, spent, limit) : null;
+  const words = hasLimit ? (wordsOverride ?? meterWords(status, spent, limit)) : null;
 
   return (
     <div data-testid={testId} data-status={hasLimit ? status : "no-limit"}>

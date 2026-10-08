@@ -39,6 +39,7 @@ vi.mock("./lib/routePrefetch", () => {
     Promise.resolve({ default: () => <div data-testid={`page-${id}`} /> });
   return {
     importDesign: page("design"),
+    importDesignToday: page("design-today"),
     importPlaidOAuth: page("plaid-oauth"),
     routeImporters: {},
     prefetchRoute: () => {},
@@ -72,6 +73,7 @@ type Row = {
 const ROUTES: Row[] = [
   { from: "/", lands: "/", page: "today", shell: true },
   { from: "/design", lands: "/design", page: "design", shell: true },
+  { from: "/design/today", lands: "/design/today", page: "design-today", shell: true },
   { from: "/plaid-oauth", lands: "/plaid-oauth", page: "plaid-oauth", shell: true },
   { from: "/sign-in", lands: "/sign-in", page: "sign-in", shell: false },
   { from: "/sign-up", lands: "/sign-up", page: "sign-up", shell: false },
@@ -130,7 +132,7 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
 
   it("has a row for every path App.tsx declares, and no row for a path it does not", () => {
     const covered = new Set(ROUTES.map((r) => r.from));
-    expect(declared.length).toBeGreaterThanOrEqual(5);
+    expect(declared.length).toBeGreaterThanOrEqual(6);
     expect(declared.filter((p) => !covered.has(p))).toEqual([]);
     expect([...covered].filter((p) => !declared.includes(p))).toEqual([]);
   });
@@ -149,6 +151,6 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
     const real = await vi.importActual<typeof import("./lib/routePrefetch")>("./lib/routePrefetch");
     const keys = Object.keys(real.routeImporters);
     expect(keys.filter((k) => !declared.includes(k))).toEqual([]);
-    expect(keys.sort()).toEqual(["/design", "/plaid-oauth"]);
+    expect(keys.sort()).toEqual(["/design", "/design/today", "/plaid-oauth"]);
   });
 });
