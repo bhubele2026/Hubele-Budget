@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { render, screen, cleanup, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Spine } from "@workspace/api-client-react";
@@ -206,13 +206,16 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function renderToday() {
+/** Renders Today and waits for its lazily loaded lower sections (S5: they load after first paint). */
+async function renderToday() {
   const client = new QueryClient();
-  return render(
+  const out = render(
     <QueryClientProvider client={client}>
       <Today now={NOW} />
     </QueryClientProvider>,
   );
+  await waitFor(() => expect(screen.queryAllByTestId("section-skeleton")).toHaveLength(0));
+  return out;
 }
 
 /** Every <data> in a region, as [face, exact value]. */
@@ -221,8 +224,8 @@ function figuresIn(el: HTMLElement): Array<[string | null, string | null]> {
 }
 
 describe("Today — the hero: free until payday", () => {
-  it("is the spine's safeToSpendNow, exact to the cent, the one figure-xl", () => {
-    const { container } = renderToday();
+  it("is the spine's safeToSpendNow, exact to the cent, the one figure-xl", async () => {
+    const { container } = await renderToday();
     expect(container.querySelectorAll("[data-size='xl']")).toHaveLength(1);
     const hero = screen.getByTestId("figure-hero");
     expect(figuresIn(hero)).toEqual([["$145", "144.50"]]);
@@ -230,42 +233,42 @@ describe("Today — the hero: free until payday", () => {
     expect(hero.textContent).not.toContain("estimated");
   });
 
-  it("the sub-line names payday and the bills before it, read from the position", () => {
-    renderToday();
+  it("the sub-line names payday and the bills before it, read from the position", async () => {
+    await renderToday();
     expect(screen.getByTestId("figure-hero").textContent).toContain("Payday Fri, Oct 9 · $340 in bills before then");
   });
 
-  it("a null safeToSpendNow is '—' with a reason, never $0", () => {
+  it("a null safeToSpendNow is '—' with a reason, never $0", async () => {
     mocks.spine = readSpine({ data: withPosition({ safeToSpendNow: null, availableUntilPayday: null }) });
-    renderToday();
+    await renderToday();
     const hero = screen.getByTestId("figure-hero");
     expect(hero.textContent).toContain("—");
     expect(hero.querySelector("data")).toBeNull();
     expect(hero.textContent).toContain("Not enough on file to work this out yet.");
   });
 
-  it("estimated: the word sits beside the figure, in the page itself", () => {
+  it("estimated: the word sits beside the figure, in the page itself", async () => {
     mocks.spine = readSpine({ data: withPosition({ confidence: "estimated" }) });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("figure-hero").textContent).toMatch(/\$145\s*estimated/);
   });
 
-  it("no payday in 45 days: 'Free until Saturday' and why", () => {
+  it("no payday in 45 days: 'Free until Saturday' and why", async () => {
     mocks.spine = readSpine({ data: withPosition({ horizonKind: "week_end", paydayDate: null }) });
-    renderToday();
+    await renderToday();
     const hero = screen.getByTestId("figure-hero");
     expect(hero.textContent).toContain("Free until Saturday");
     expect(hero.textContent).toContain("No payday on file in the next 45 days");
   });
 
-  it("degraded: says which bank date the figure is from", () => {
+  it("degraded: says which bank date the figure is from", async () => {
     mocks.spine = readSpine({
       data: {
         ...withPosition({ degraded: true }),
         bank: { ...SPINE.bank, asOfDate: "2026-10-04T13:00:00Z", stale: true, staleReason: "old" },
       } as Spine,
     });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("figure-hero").textContent).toContain("from bank data as of Oct 4");
   });
 });
@@ -277,7 +280,7 @@ describe("Today — the assumptions sheet", () => {
       ...POSITION,
       estimates: [{ itemId: "e1", label: "Electric", amount: "-340.00", date: "2026-10-08" }],
     });
-    renderToday();
+    await renderToday();
     const hero = screen.getByRole("button", { name: /Free until payday: \$145/ });
     hero.focus();
     await user.keyboard("{Enter}");
@@ -302,8 +305,8 @@ describe("Today — the assumptions sheet", () => {
 });
 
 describe("Today — this week", () => {
-  it("spent of the limit from the position; status word from withinPlan", () => {
-    renderToday();
+  it("spent of the limit from the position; status word from withinPlan", async () => {
+    await renderToday();
     const week = screen.getByTestId("section-week");
     expect(figuresIn(week)).toContainEqual(["$456", "455.50"]);
     expect(figuresIn(week)).toContainEqual(["$600", "600.00"]);
@@ -311,20 +314,20 @@ describe("Today — this week", () => {
     expect(screen.queryByTestId("week-caption")).toBeNull();
   });
 
-  it("tight and over read as words; over names the server's remainingWeek", () => {
+  it("tight and over read as words; over names the server's remainingWeek", async () => {
     mocks.spine = readSpine({ data: withPosition({ withinPlan: "tight" }) });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("meter-status").textContent).toBe("Tight");
     cleanup();
     mocks.spine = readSpine({ data: withPosition({ withinPlan: "over", remainingWeek: "-55.20", safeToSpendNow: "0.00" }) });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("meter-status").textContent).toBe("Over by $55");
   });
 
-  it("unplanned on top and unfiled charges are said, with a way to file", () => {
+  it("unplanned on top and unfiled charges are said, with a way to file", async () => {
     mocks.position = q({ ...POSITION, unplannedWeek: "40.00", needsClassificationWeek: "25.50" });
     mocks.unfiled = q({ ...LEDGER, rows: [], matchingCount: 3 });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("week-caption").textContent).toBe("$456 so far · $40 unplanned on top");
     const filing = screen.getByTestId("needs-filing");
     // A COUNT OF CHARGES, never dollars.
@@ -333,19 +336,19 @@ describe("Today — this week", () => {
     expect(within(filing).getByRole("link", { name: "File them" }).getAttribute("href")).toBe("/activity?unfiled=1");
   });
 
-  it("one unfiled charge reads in the singular; none draws nothing", () => {
+  it("one unfiled charge reads in the singular; none draws nothing", async () => {
     mocks.position = q({ ...POSITION, needsClassificationWeek: "25.50" });
     mocks.unfiled = q({ ...LEDGER, rows: [], matchingCount: 1 });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("needs-filing").textContent).toContain("1 charge needs filing");
     cleanup();
     mocks.unfiled = q({ ...LEDGER, rows: [], matchingCount: 0 });
-    renderToday();
+    await renderToday();
     expect(screen.queryByTestId("needs-filing")).toBeNull();
   });
 
   it("explains the limit: owner-set, and the suggestion", async () => {
-    renderToday();
+    await renderToday();
     expect((await screen.findByTestId("limit-source")).textContent).toBe("$600 a week, set by you.");
     expect((await screen.findByTestId("limit-suggested")).textContent).toBe("H2 suggests $430 a week.");
     expect(screen.queryByTestId("limit-derivation")).toBeNull();
@@ -353,24 +356,24 @@ describe("Today — this week", () => {
 
   it("explains a derived limit with its working", async () => {
     mocks.plans = q({ ...PLANS, plans: [{ ...PLANS.plans[0], source: "derived" }] });
-    renderToday();
+    await renderToday();
     expect((await screen.findByTestId("limit-source")).textContent).toContain("suggested from your income");
     expect((await screen.findByTestId("limit-derivation")).textContent).toContain("Take-home $4,333 a month");
   });
 
-  it("with no cap anywhere, says so rather than inventing one", () => {
+  it("with no cap anywhere, says so rather than inventing one", async () => {
     mocks.position = q({ ...POSITION, weekCap: null });
     mocks.plans = q({ ...PLANS, plans: [] });
     mocks.settings = q({ weeklyAllowanceAmount: "0.00", monthlyAllowanceAmount: "0", unplannedAllowanceAmount: "0" });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("section-week").textContent).toContain("No weekly limit set yet.");
     expect(screen.queryByTestId("meter-status")).toBeNull();
   });
 
-  it("a position that failed shows '—' and Retry, not $0", () => {
+  it("a position that failed shows '—' and Retry, not $0", async () => {
     const refetch = vi.fn();
     mocks.position = q(undefined, { isLoadingError: true, refetch });
-    renderToday();
+    await renderToday();
     const week = screen.getByTestId("section-week");
     expect(week.querySelector("data")).toBeNull();
     within(week).getByRole("button", { name: "Retry" }).click();
@@ -383,7 +386,7 @@ describe("Today — one thing, in a fixed order", () => {
   const base = { bank: BANK, withinPlan: "yes" as const, overBy: null, dueSoon: [], today: "2026-10-07", reviewCount: 0 };
   const kinds = (o: Partial<Parameters<typeof attentionItems>[0]>) => attentionItems({ ...base, ...o }).map((a) => a.kind);
 
-  it("orders reconnect, stale, over, bill, review; nothing only when none match", () => {
+  it("orders reconnect, stale, over, bill, review; nothing only when none match", async () => {
     const all = kinds({
       bank: { ...BANK, stale: true, staleReason: "refresh_failed" },
       withinPlan: "over",
@@ -396,7 +399,7 @@ describe("Today — one thing, in a fixed order", () => {
     expect(kinds({})).toEqual(["nothing"]);
   });
 
-  it("every title is 60 characters or fewer, however long the bill's name", () => {
+  it("every title is 60 characters or fewer, however long the bill's name", async () => {
     const longName = "An Extremely Long Bill Name From A Utility Company Somewhere";
     const items = attentionItems({
       ...base,
@@ -410,8 +413,8 @@ describe("Today — one thing, in a fixed order", () => {
     for (const a of items) expect(a.title.length).toBeLessThanOrEqual(60);
   });
 
-  it("nothing: a plain line with a check, no buttons", () => {
-    renderToday();
+  it("nothing: a plain line with a check, no buttons", async () => {
+    await renderToday();
     const card = screen.getByTestId("action-card");
     expect(card.textContent).toContain("Nothing needs you today");
     expect(card.getAttribute("data-done")).not.toBeNull();
@@ -428,7 +431,7 @@ describe("Today — one thing, in a fixed order", () => {
         bank: { ...SPINE.bank, stale: true, staleReason: "refresh_failed" },
       } as Spine,
     });
-    renderToday();
+    await renderToday();
     const title = () => screen.getByTestId("action-title").textContent;
     expect(title()).toBe("Reconnect your bank");
     expect(within(screen.getByTestId("action-card")).getByRole("link", { name: "Reconnect" }).getAttribute("href")).toBe("/household");
@@ -441,23 +444,23 @@ describe("Today — one thing, in a fixed order", () => {
     expect(title()).toBe("Reconnect your bank");
   });
 
-  it("a bill due tomorrow is named with its amount", () => {
+  it("a bill due tomorrow is named with its amount", async () => {
     mocks.bills = q({ ...BILLS, bills: [{ item: item("b1", "Electric", "142.18"), nextOccurrence: "2026-10-08" }] });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("action-title").textContent).toBe("Electric $142 is due tomorrow");
   });
 
-  it("charges to review link to the Activity review queue", () => {
+  it("charges to review link to the Activity review queue", async () => {
     mocks.spine = readSpine({ data: { ...SPINE, reviewCount: 1 } });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("action-title").textContent).toBe("1 charge needs a look");
     expect(screen.getByRole("link", { name: "Open review" }).getAttribute("href")).toBe("/activity/review");
   });
 });
 
 describe("Today — yesterday and today", () => {
-  it("rows from the ledger: name, amount, day, category chip, pending word", () => {
-    renderToday();
+  it("rows from the ledger: name, amount, day, category chip, pending word", async () => {
+    await renderToday();
     const rows = within(screen.getByTestId("activity-rows")).getAllByRole("listitem");
     expect(rows).toHaveLength(3);
     expect(rows[0]!.textContent).toContain("Corner Market");
@@ -471,9 +474,9 @@ describe("Today — yesterday and today", () => {
     expect(screen.getByRole("link", { name: /All activity/ }).getAttribute("href")).toBe("/activity");
   });
 
-  it("empty: 'No charges yet today.'", () => {
+  it("empty: 'No charges yet today.'", async () => {
     mocks.ledger = q({ ...LEDGER, rows: [], matchingCount: 0 });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("section-activity").textContent).toContain("No charges yet today.");
   });
 });
@@ -484,12 +487,12 @@ describe("Today — handled", () => {
     createdAt: "2026-10-07T14:30:00Z", ...over,
   });
 
-  it("hidden when H2 handled nothing", () => {
-    renderToday();
+  it("hidden when H2 handled nothing", async () => {
+    await renderToday();
     expect(screen.queryByTestId("section-handled")).toBeNull();
   });
 
-  it("shows the last four lines, grouped by run, linking to Activity", () => {
+  it("shows the last four lines, grouped by run, linking to Activity", async () => {
     mocks.trail = q({
       actions: [
         action("a1", "r1", "set_category"),
@@ -501,8 +504,8 @@ describe("Today — handled", () => {
         action("a7", "r5", "wishlist"),
       ],
     });
-    renderToday();
-    const rows = within(screen.getByTestId("handled-rows")).getAllByTestId("handled-row");
+    await renderToday();
+    const rows = within(await screen.findByTestId("handled-rows")).getAllByTestId("handled-row");
     expect(rows).toHaveLength(4);
     expect(rows[0]!.textContent).toContain("Filed 3 charges");
     expect(rows[1]!.textContent).toContain("Remembered 1 merchant");
@@ -511,8 +514,8 @@ describe("Today — handled", () => {
 });
 
 describe("Today — coming up", () => {
-  it("the next three from the bills summary, past ones left out, with the month's count", () => {
-    renderToday();
+  it("the next three from the bills summary, past ones left out, with the month's count", async () => {
+    await renderToday();
     const rows = screen.getAllByTestId("coming-up-row");
     expect(rows.map((r) => r.textContent)).toEqual([
       "$142Electric" + "Mon, Oct 12",
@@ -523,7 +526,7 @@ describe("Today — coming up", () => {
     expect(screen.getByTestId("bills-due").textContent).toBe("3 bills due this month");
   });
 
-  it("says today and tomorrow in words", () => {
+  it("says today and tomorrow in words", async () => {
     mocks.bills = q({
       ...BILLS,
       bills: [
@@ -531,15 +534,15 @@ describe("Today — coming up", () => {
         { item: item("b2", "Internet", "70.00"), nextOccurrence: "2026-10-08" },
       ],
     });
-    renderToday();
+    await renderToday();
     const rows = screen.getAllByTestId("coming-up-row");
     expect(rows[0]!.textContent).toContain("today");
     expect(rows[1]!.textContent).toContain("tomorrow");
   });
 
-  it("empty: a Note with a link to the bills", () => {
+  it("empty: a Note with a link to the bills", async () => {
     mocks.bills = q({ ...BILLS, bills: [] });
-    renderToday();
+    await renderToday();
     const section = screen.getByTestId("section-coming-up");
     expect(section.textContent).toContain("Nothing scheduled.");
     expect(within(section).getByRole("link", { name: "Open bills" }).getAttribute("href")).toBe("/classic/bills/all");
@@ -547,27 +550,27 @@ describe("Today — coming up", () => {
 });
 
 describe("Today — debt, and the no-amount-owed law", () => {
-  it("a percentage paid, rounded as the classic landing rounds it", () => {
-    renderToday();
-    const debt = screen.getByTestId("figure-debt");
+  it("a percentage paid, rounded as the classic landing rounds it", async () => {
+    await renderToday();
+    const debt = await screen.findByTestId("figure-debt");
     expect(figuresIn(debt)).toEqual([["41%", "41.30"]]);
     expect(debt.textContent).toContain("paid");
     expect(screen.queryByTestId("debt-paid-down")).toBeNull();
   });
 
-  it("paid down this month and the next milestone, when the server sends them", () => {
+  it("paid down this month and the next milestone, when the server sends them", async () => {
     mocks.spine = readSpine({
       data: { ...SPINE, debt: { payoffPct: 41.3, paidDownMtd: "812.00", nextMilestone: { label: "Card One paid off", estimatedMonth: "2027-03" } } } as unknown as Spine,
     });
-    renderToday();
-    expect(screen.getByTestId("debt-paid-down").textContent).toBe("Paid down $812 this month");
+    await renderToday();
+    expect((await screen.findByTestId("debt-paid-down")).textContent).toBe("Paid down $812 this month");
     expect(screen.getByTestId("debt-milestone").textContent).toBe("Next: Card One paid off · Mar 2027");
   });
 
-  it("no anchored debt is '—' with a reason, not 0%", () => {
+  it("no anchored debt is '—' with a reason, not 0%", async () => {
     mocks.spine = readSpine({ data: { ...SPINE, debt: { payoffPct: null, nextMilestone: null, paidDownMtd: 0 } } });
-    renderToday();
-    const debt = screen.getByTestId("figure-debt");
+    await renderToday();
+    const debt = await screen.findByTestId("figure-debt");
     expect(debt.textContent).toContain("—");
     expect(debt.textContent).not.toContain("0%");
     expect(debt.textContent).toContain("No debt has a starting balance yet.");
@@ -584,7 +587,8 @@ describe("Today — debt, and the no-amount-owed law", () => {
       unplannedWeek: "40.00",
       needsClassificationWeek: "25.50",
     });
-    const { container } = renderToday();
+    const { container } = await renderToday();
+    await screen.findByTestId("figure-debt");
     await user.click(screen.getByTestId("hero"));
     await screen.findByRole("dialog");
     const text = (container.textContent ?? "") + (document.body.textContent ?? "");
@@ -607,7 +611,7 @@ describe("Today — What's new", () => {
 
   it("shows three steps once, names both figures, and saves the choice merged", async () => {
     const user = userEvent.setup();
-    renderToday();
+    await renderToday();
     const dialog = await screen.findByRole("dialog", { name: "What's new in H2" });
     expect(dialog.textContent).toContain("Your numbers haven't changed — they're just read from a new page.");
     expect(figuresIn(dialog)).toEqual([["$12,346", "12345.67"], ["$412", "412.40"]]);
@@ -630,7 +634,7 @@ describe("Today — What's new", () => {
 
   it("closing it any other way also counts as seen, with the switch as left", async () => {
     const user = userEvent.setup();
-    renderToday();
+    await renderToday();
     await screen.findByRole("dialog");
     await user.keyboard("{Escape}");
     expect(mocks.save).toHaveBeenCalledWith({ data: { sidebarCollapsed: true, whatsNewSeen: "h2-1", autoCategorize: true } });
@@ -638,7 +642,7 @@ describe("Today — What's new", () => {
 
   it("does not show again once seen", async () => {
     mocks.prefs = q({ whatsNewSeen: "h2-1" });
-    renderToday();
+    await renderToday();
     await screen.findByTestId("today");
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -649,7 +653,7 @@ describe("Today — What's new", () => {
       data: { ...SPINE, spentMonth: 0, bank: { ...SPINE.bank, asOfDate: null, source: null } } as Spine,
     });
     mocks.ledger = q({ ...LEDGER, rows: [], matchingCount: 0 });
-    renderToday();
+    await renderToday();
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(mocks.save).not.toHaveBeenCalled();
@@ -657,7 +661,7 @@ describe("Today — What's new", () => {
 });
 
 describe("Today — the dateline is the household's date", () => {
-  it("reads 'Wednesday, October 7' at 10 pm Chicago, when UTC is already the 8th", () => {
+  it("reads 'Wednesday, October 7' at 10 pm Chicago, when UTC is already the 8th", async () => {
     const client = new QueryClient();
     render(
       <QueryClientProvider client={client}>
@@ -669,22 +673,23 @@ describe("Today — the dateline is the household's date", () => {
 });
 
 describe("Today — states", () => {
-  it("cold: skeleton shapes, the date, and no figure at all", () => {
+  it("cold: skeleton shapes, the date, and no figure at all", async () => {
     mocks.spine = readSpine({ data: undefined, state: "cold", isLoading: true, isFetching: true, updatedAt: null });
-    const { container } = renderToday();
+    const { container } = await renderToday();
     expect(screen.getByTestId("today-skeleton")).toBeTruthy();
     expect(container.querySelector("data")).toBeNull();
     expect(container.textContent).not.toContain("$");
     expect(container.textContent).toContain("Wednesday, October 7");
   });
 
-  it("a failed first load: every figure '—', the error said, Retry offered", () => {
+  it("a failed first load: every figure '—', the error said, Retry offered", async () => {
     const refetch = vi.fn();
     mocks.spine = readSpine({ data: undefined, state: "failed", updatedAt: null, refetch });
     mocks.position = q(undefined, { isLoadingError: true });
     mocks.ledger = q(undefined, { isLoadingError: true });
     mocks.bills = q(undefined, { isLoadingError: true });
-    const { container } = renderToday();
+    const { container } = await renderToday();
+    await screen.findByTestId("figure-debt");
     expect(container.textContent).not.toMatch(/\$\d/);
     expect(container.textContent).not.toContain("Nothing needs you");
     expect(screen.getByTestId("section-one-thing").textContent).toContain("Can't check until the numbers load.");
@@ -696,33 +701,33 @@ describe("Today — states", () => {
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
-  it("refreshing: the figures stay and the badge says Updating", () => {
+  it("refreshing: the figures stay and the badge says Updating", async () => {
     mocks.spine = readSpine({ state: "refreshing", isFetching: true });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("freshness-badge").textContent).toBe("Updating");
     expect(figuresIn(screen.getByTestId("figure-hero"))).toEqual([["$145", "144.50"]]);
   });
 
-  it("stale bank: the badge words, and a Note offering Sync", () => {
+  it("stale bank: the badge words, and a Note offering Sync", async () => {
     mocks.spine = readSpine({
       data: { ...SPINE, bank: { ...SPINE.bank, asOfDate: "2026-10-04T13:00:00Z", lastContactAt: null, stale: true, staleReason: "old" } },
     });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("freshness-badge").textContent).toMatch(/Out of date.*last updated 3 days ago/);
     const note = screen.getByTestId("stale-note");
     expect(note.textContent).toContain("The bank balance may be out of date.");
     expect(within(note).getByRole("link", { name: "Sync" }).getAttribute("href")).toBe("/household");
   });
 
-  it("a failed refresh keeps the last figures, says how old they are, offers Retry", () => {
+  it("a failed refresh keeps the last figures, says how old they are, offers Retry", async () => {
     mocks.spine = readSpine({ state: "refresh-failed", updatedAt: "2026-10-07T14:40:00Z" });
-    renderToday();
+    await renderToday();
     expect(screen.getByTestId("refresh-note").textContent).toContain("Couldn't refresh. Showing numbers from 20 minutes ago.");
     expect(figuresIn(screen.getByTestId("figure-hero"))).toEqual([["$145", "144.50"]]);
   });
 
-  it("the classic app is one quiet row away", () => {
-    renderToday();
+  it("the classic app is one quiet row away", async () => {
+    await renderToday();
     const row = screen.getByTestId("classic-row");
     expect(within(row).getByRole("link", { name: "Classic app" }).getAttribute("href")).toBe("/classic/");
     expect(row.textContent).toContain("Workbook import still lives in the classic app.");

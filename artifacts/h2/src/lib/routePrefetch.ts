@@ -11,6 +11,9 @@
  * in the entry; splitting it would only buy an extra round trip on the one
  * screen that must feel instant.
  */
+// (S5) Not a route: the "a new version is out" banner and its version check load after first paint,
+// so their hook and icon stay off the open path.
+export const importVersionUpdatePrompt = () => import("../shell/VersionUpdatePrompt").then((m) => ({ default: m.VersionUpdatePrompt }));
 export const importDesign = () => import("../screens/design/Design");
 export const importDesignToday = () => import("../screens/design/DesignToday");
 export const importDesignActivity = () => import("../screens/design/DesignActivity");
@@ -31,6 +34,14 @@ export const importHouseholdMembers = () => import("../screens/household/Members
 export const importRecap = () => import("../screens/recap/Recap");
 export const importDesignRecap = () => import("../screens/design/DesignRecap");
 
+// (S5) Ask: the question screen, its memory page, the proposals page (in Plan), the AI cost
+// page (in Household) and the sample page. All lazy; none is on the open path.
+export const importAsk = () => import("../screens/ask/Ask");
+export const importAskMemory = () => import("../screens/ask/AskMemory");
+export const importPlanProposals = () => import("../screens/ask/Proposals");
+export const importHouseholdAi = () => import("../screens/household/AiCost");
+export const importDesignAsk = () => import("../screens/design/DesignAsk");
+
 /** href → importer, keyed exactly as the routes are declared in App.tsx. */
 export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/design": importDesign,
@@ -50,6 +61,11 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/household/members": importHouseholdMembers,
   "/recap": importRecap,
   "/design/recap": importDesignRecap,
+  "/ask": importAsk,
+  "/ask/memory": importAskMemory,
+  "/plan/proposals": importPlanProposals,
+  "/household/ai": importHouseholdAi,
+  "/design/ask": importDesignAsk,
 };
 
 const prefetched = new Set<string>();

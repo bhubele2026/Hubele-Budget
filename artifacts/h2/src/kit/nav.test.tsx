@@ -15,7 +15,7 @@ function at(path: string, ui: ReactNode) {
 }
 
 describe("Dock — four destinations, one tab stop, arrow keys between them", () => {
-  it("every item has an icon and a label; Today, Activity and Plan are live, the rest say soon", () => {
+  it("every item has an icon and a label, and all four are live links", () => {
     at("/", <Dock location="/" />);
     for (const key of ["today", "activity", "plan", "ask"]) {
       const item = screen.getByTestId(`dock-${key}`);
@@ -25,10 +25,11 @@ describe("Dock — four destinations, one tab stop, arrow keys between them", ()
     expect(screen.getByTestId("dock-today").getAttribute("aria-current")).toBe("page");
     expect(screen.getByTestId("dock-activity").getAttribute("href")).toBe("/activity");
     expect(screen.getByTestId("dock-activity").getAttribute("aria-disabled")).toBeNull();
-    for (const key of ["ask"]) {
+    expect(screen.getByTestId("dock-ask").getAttribute("href")).toBe("/ask");
+    for (const key of ["today", "activity", "plan", "ask"]) {
       const item = screen.getByTestId(`dock-${key}`);
-      expect(item.getAttribute("aria-disabled")).toBe("true");
-      expect(item.textContent).toContain("soon");
+      expect(item.getAttribute("aria-disabled")).toBeNull();
+      expect(item.textContent).not.toContain("soon");
     }
   });
 
@@ -84,17 +85,18 @@ describe("Dock — four destinations, one tab stop, arrow keys between them", ()
 });
 
 describe("Masthead", () => {
-  it("marks Today current, Activity a link, and the rest disabled, with 'soon'", () => {
+  it("marks Today current and every destination a link; none says soon", () => {
     at("/", <Masthead location="/" badges={{ activity: 3 }} />);
     expect(screen.getByTestId("masthead-today").getAttribute("aria-current")).toBe("page");
     expect(screen.getByTestId("masthead-activity").getAttribute("href")).toBe("/activity");
     expect(screen.getByTestId("masthead-badge-activity").textContent).toBe("3");
-    for (const key of ["ask"]) {
+    for (const key of ["today", "activity", "plan", "ask"]) {
       const item = screen.getByTestId(`masthead-${key}`);
-      expect(item.getAttribute("aria-disabled")).toBe("true");
-      expect(item.getAttribute("href")).toBeNull();
-      expect(item.textContent).toContain("soon");
+      expect(item.getAttribute("aria-disabled")).toBeNull();
+      expect(item.getAttribute("href")).not.toBeNull();
+      expect(item.textContent).not.toContain("soon");
     }
+    expect(screen.getByTestId("masthead-ask").getAttribute("href")).toBe("/ask");
   });
 
   it("Plan is a live link, current on every Plan page", () => {

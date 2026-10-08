@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { Link } from "wouter";
 import { cx } from "@/lib/cx";
 import { prefetchRoute } from "@/lib/routePrefetch";
+import { useOpenProposals } from "@/screens/ask/askData";
 
 /**
  * The small pieces the Plan screens share. Plan-local on purpose: S2 builds
@@ -9,7 +10,7 @@ import { prefetchRoute } from "@/lib/routePrefetch";
  * lead folds the ones both want into `kit/`.
  */
 
-export type PlanSection = "week" | "bills" | "debt" | "categories" | "wishlist";
+export type PlanSection = "week" | "bills" | "debt" | "categories" | "wishlist" | "proposals";
 
 const SECTIONS: ReadonlyArray<{ key: PlanSection; href: string; label: string }> = [
   { key: "week", href: "/plan", label: "The week" },
@@ -17,6 +18,7 @@ const SECTIONS: ReadonlyArray<{ key: PlanSection; href: string; label: string }>
   { key: "debt", href: "/plan/debt", label: "Debt" },
   { key: "categories", href: "/plan/categories", label: "Categories" },
   { key: "wishlist", href: "/plan/wishlist", label: "Wish list" },
+  { key: "proposals", href: "/plan/proposals", label: "Proposals" },
 ];
 
 /**
@@ -24,6 +26,9 @@ const SECTIONS: ReadonlyArray<{ key: PlanSection; href: string; label: string }>
  * under the current one; on a phone the same links become one segmented bar.
  */
 export function PlanNav({ current }: { current: PlanSection }) {
+  // (S5) How many changes Ask has suggested and nobody has decided yet: the
+  // server's list, counted by its length, nothing more.
+  const open = useOpenProposals().data?.proposals.length ?? 0;
   return (
     <nav aria-label="Plan sections" data-testid="plan-nav">
       <ul className="flex overflow-hidden rounded-1 border border-rule-strong md:gap-6 md:overflow-visible md:rounded-none md:border-0">
@@ -38,13 +43,19 @@ export function PlanNav({ current }: { current: PlanSection }) {
                 onFocus={() => prefetchRoute(s.href)}
                 data-testid={`plan-nav-${s.key}`}
                 className={cx(
-                  "block whitespace-nowrap px-2 py-2 text-center type-label md:p-0 md:pb-1 md:text-left",
+                  "block whitespace-nowrap px-1 py-2 text-center type-label md:p-0 md:pb-1 md:text-left",
                   active
                     ? "bg-moss-wash text-moss-ink md:border-b-2 md:border-moss md:bg-transparent md:text-ink"
                     : "text-ink-2 hover:text-ink",
                 )}
               >
-                {s.label}
+                {s.key === "proposals" && open > 0 ? (
+                  <>
+                    {s.label} (<span className="tnum" data-testid="proposals-count">{open}</span>)
+                  </>
+                ) : (
+                  s.label
+                )}
               </Link>
             </li>
           );

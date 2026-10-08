@@ -3,11 +3,12 @@ import { Link } from "wouter";
 import { cx } from "@/lib/cx";
 import { prefetchRoute } from "@/lib/routePrefetch";
 
-export type HouseholdSection = "banks" | "members";
+export type HouseholdSection = "banks" | "members" | "ai";
 
 const SECTIONS: ReadonlyArray<{ key: HouseholdSection; href: string; label: string }> = [
   { key: "banks", href: "/household", label: "Banks" },
   { key: "members", href: "/household/members", label: "Members" },
+  { key: "ai", href: "/household/ai", label: "AI cost" },
 ];
 
 /** The two Household pages as text links; on a phone a two-part bar. */

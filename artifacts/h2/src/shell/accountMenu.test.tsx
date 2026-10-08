@@ -39,9 +39,10 @@ describe("the account menu", () => {
     expect(screen.queryByRole("menu")).toBeNull();
     await user.click(btn);
     expect(btn.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Household", "Recap", "Account", "Sign out"]);
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Household", "Recap", "AI cost", "Account", "Sign out"]);
     expect(screen.getByTestId("menu-household").getAttribute("href")).toBe("/household");
     expect(screen.getByTestId("menu-recap").getAttribute("href")).toBe("/recap");
+    expect(screen.getByTestId("menu-ai").getAttribute("href")).toBe("/household/ai");
   });
 
   it("focus goes to the first item; arrows move; Escape closes and returns focus to the avatar", async () => {

@@ -11,6 +11,12 @@ import { prefetchTodayOnIdle } from "@/data/todayData";
 import { useActivityBadge } from "@/data/activityBadge";
 import {
   importActivity,
+  importAsk,
+  importAskMemory,
+  importDesignAsk,
+  importHouseholdAi,
+  importVersionUpdatePrompt,
+  importPlanProposals,
   importDesign,
   importDesignActivity,
   importDesignPlan,
@@ -30,7 +36,6 @@ import { SkeletonFigure, SkeletonLine } from "@/kit/Skeleton";
 import { BootFrame, Shell } from "@/shell/Shell";
 import { NotFound } from "@/shell/NotFound";
 import { PageErrorBoundary } from "@/shell/PageErrorBoundary";
-import { VersionUpdatePrompt } from "@/shell/VersionUpdatePrompt";
 import { clerkAppearance } from "@/shell/clerkAppearance";
 // The front door's screens are eager: they are on the signed-out critical
 // path, and a chunk fetch there only delays the form.
@@ -56,6 +61,12 @@ const HouseholdPage = lazy(importHousehold);
 const HouseholdMembersPage = lazy(importHouseholdMembers);
 const RecapPage = lazy(importRecap);
 const DesignRecapPage = lazy(importDesignRecap);
+const VersionUpdatePrompt = lazy(importVersionUpdatePrompt);
+const AskPage = lazy(importAsk);
+const AskMemoryPage = lazy(importAskMemory);
+const PlanProposalsPage = lazy(importPlanProposals);
+const HouseholdAiPage = lazy(importHouseholdAi);
+const DesignAskPage = lazy(importDesignAsk);
 
 const queryClient = createQueryClient();
 
@@ -161,6 +172,18 @@ function ProtectedShell() {
             <Route path="/plan/wishlist">
               <PlanWishlistPage />
             </Route>
+            <Route path="/plan/proposals">
+              <PlanProposalsPage />
+            </Route>
+            <Route path="/ask">
+              <AskPage />
+            </Route>
+            <Route path="/ask/memory">
+              <AskMemoryPage />
+            </Route>
+            <Route path="/household/ai">
+              <HouseholdAiPage />
+            </Route>
             <Route path="/household">
               <HouseholdPage />
             </Route>
@@ -214,6 +237,7 @@ const PublicDesignToday = () => <PublicDesignPage page={DesignTodayPage} />;
 const PublicDesignPlan = () => <PublicDesignPage page={DesignPlanPage} />;
 const PublicDesignActivity = () => <PublicDesignPage page={DesignActivityPage} />;
 const PublicDesignRecap = () => <PublicDesignPage page={DesignRecapPage} />;
+const PublicDesignAsk = () => <PublicDesignPage page={DesignAskPage} />;
 
 
 
@@ -257,10 +281,13 @@ function ClerkProviderWithRoutes() {
           <Route path="/design/plan" component={PublicDesignPlan} />
           <Route path="/design/activity/*?" component={PublicDesignActivity} />
           <Route path="/design/recap" component={PublicDesignRecap} />
+          <Route path="/design/ask" component={PublicDesignAsk} />
           <Route path="/design" component={PublicDesign} />
           <Route component={ProtectedShell} />
         </Switch>
-        <VersionUpdatePrompt />
+        <Suspense fallback={null}>
+          <VersionUpdatePrompt />
+        </Suspense>
       </QueryClientProvider>
     </ClerkProvider>
   );
