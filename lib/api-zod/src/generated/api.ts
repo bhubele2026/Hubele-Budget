@@ -6850,7 +6850,18 @@ export const GetCategorizationSettingsResponse = zod.object({
       ),
     requirements: zod.array(
       zod.object({
-        key: zod.enum(["ai", "owner_switch", "judged", "accuracy", "floor"]),
+        key: zod
+          .enum([
+            "ai",
+            "owner_switch",
+            "judged",
+            "accuracy",
+            "holding",
+            "floor",
+          ])
+          .describe(
+            "The first four always, in order. `holding` (met) while the gate is\nopen only because the last 20 hold 8 in 10; `floor` (not met) while\na slip below 8 in 10 holds it closed.\n",
+          ),
         label: zod.string().describe("A plain sentence for the screen."),
         met: zod.boolean(),
         current: zod.number(),
@@ -6978,7 +6989,18 @@ export const UpdateCategorizationSettingsResponse = zod.object({
       ),
     requirements: zod.array(
       zod.object({
-        key: zod.enum(["ai", "owner_switch", "judged", "accuracy", "floor"]),
+        key: zod
+          .enum([
+            "ai",
+            "owner_switch",
+            "judged",
+            "accuracy",
+            "holding",
+            "floor",
+          ])
+          .describe(
+            "The first four always, in order. `holding` (met) while the gate is\nopen only because the last 20 hold 8 in 10; `floor` (not met) while\na slip below 8 in 10 holds it closed.\n",
+          ),
         label: zod.string().describe("A plain sentence for the screen."),
         met: zod.boolean(),
         current: zod.number(),

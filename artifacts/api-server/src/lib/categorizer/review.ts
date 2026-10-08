@@ -31,37 +31,53 @@ export const SILENT_ACCEPT_DAYS = 14;
  * ⭐ (V1) Silent acceptance. A model decision that is provisional (written and
  * flagged), unresolved and not undone, decided at least SILENT_ACCEPT_DAYS ago,
  * whose transaction STILL carries that category and is NOT locked by a person,
- * becomes resolution 'accepted', resolved_via 'silent'. Nothing else moves: the
- * transaction is not written, no memory is learned (memory is a person's act),
- * the lock stays off. A changed category or a locked row is never settled.
+ * becomes resolution 'accepted', resolved_via 'silent', and its row stops being
+ * provisional (it is accepted now; the screen must not say "Provisional"
+ * forever). Nothing else moves: the category stays, the lock stays off, no
+ * memory is learned (memory is a person's act), and modelPriors.ts never uses
+ * it as a prior. A changed category or a locked row is never settled.
  * Idempotent: a settled decision is no longer open. Returns how many settled.
  */
 export async function settleSilentAcceptances(householdId: string, now: Date = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - SILENT_ACCEPT_DAYS * 86_400_000);
-  const rows = await db
-    .update(categoryDecisionsTable)
-    .set({ resolution: "accepted", resolvedAt: now, resolvedVia: "silent" })
-    .where(
-      and(
-        eq(categoryDecisionsTable.householdId, householdId),
-        eq(categoryDecisionsTable.source, "model"),
-        eq(categoryDecisionsTable.band, "provisional"),
-        isNull(categoryDecisionsTable.resolution),
-        isNull(categoryDecisionsTable.resolvedAt),
-        isNull(categoryDecisionsTable.undoneAt),
-        lte(categoryDecisionsTable.createdAt, cutoff),
-        sql`${categoryDecisionsTable.categoryId} IS NOT NULL`,
-        sql`EXISTS (
-          SELECT 1 FROM ${transactionsTable}
-           WHERE ${transactionsTable.id} = ${categoryDecisionsTable.transactionId}
-             AND ${transactionsTable.householdId} = ${householdId}
-             AND ${transactionsTable.categoryId} = ${categoryDecisionsTable.categoryId}
-             AND ${transactionsTable.categoryLockedByUser} = false
-        )`,
-      ),
-    )
-    .returning({ id: categoryDecisionsTable.id });
-  return rows.length;
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(categoryDecisionsTable)
+      .set({ resolution: "accepted", resolvedAt: now, resolvedVia: "silent" })
+      .where(
+        and(
+          eq(categoryDecisionsTable.householdId, householdId),
+          eq(categoryDecisionsTable.source, "model"),
+          eq(categoryDecisionsTable.band, "provisional"),
+          isNull(categoryDecisionsTable.resolution),
+          isNull(categoryDecisionsTable.resolvedAt),
+          isNull(categoryDecisionsTable.undoneAt),
+          lte(categoryDecisionsTable.createdAt, cutoff),
+          sql`${categoryDecisionsTable.categoryId} IS NOT NULL`,
+          sql`EXISTS (
+            SELECT 1 FROM ${transactionsTable}
+             WHERE ${transactionsTable.id} = ${categoryDecisionsTable.transactionId}
+               AND ${transactionsTable.householdId} = ${householdId}
+               AND ${transactionsTable.categoryId} = ${categoryDecisionsTable.categoryId}
+               AND ${transactionsTable.categoryLockedByUser} = false
+          )`,
+        ),
+      )
+      .returning({ id: categoryDecisionsTable.id, transactionId: categoryDecisionsTable.transactionId });
+    if (rows.length > 0) {
+      await tx
+        .update(transactionsTable)
+        .set({ categoryProvisional: false })
+        .where(
+          and(
+            eq(transactionsTable.householdId, householdId),
+            eq(transactionsTable.categoryLockedByUser, false),
+            inArray(transactionsTable.id, rows.map((r) => r.transactionId)),
+          ),
+        );
+    }
+    return rows.length;
+  });
 }
 
 export interface ReviewItem {

@@ -7,6 +7,10 @@
  */
 import type { CategorizationRequirementKey } from "./categorizationRequirementKey";
 export interface CategorizationRequirement {
+    /** The first four always, in order. `holding` (met) while the gate is
+  open only because the last 20 hold 8 in 10; `floor` (not met) while
+  a slip below 8 in 10 holds it closed.
+   */
     key: CategorizationRequirementKey;
     /** A plain sentence for the screen. */
     label: string;

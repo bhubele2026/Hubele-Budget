@@ -23,8 +23,12 @@ Branch `finish/v1-categorization` · base `origin/main` 2b664f6c · migration `0
 - **Hysteresis:** once open, it stays open while the last 20 hold 8 in 10. (`MODEL_AUTO_FLOOR_RATE = 0.8`)
 - Below that it closes. It reopens only at 9 in 10 among the last 20 (and the two rules above).
 - **Silent acceptance:** a provisional model suggestion standing 14 days, its row still carrying it, not locked → accepted, `resolved_via = 'silent'`. (`SILENT_ACCEPT_DAYS = 14`)
-  - Nothing else moves: no row write, no lock, no merchant memory (memory stays a person's act).
+  - The row stops being provisional (it is accepted; the screen must not say "Provisional" forever). Its category stays, no lock, no merchant memory (memory stays a person's act).
+  - It counts toward the gate record, but **never as a prior**: `modelPriors.ts` skips `resolved_via = 'silent'`, so the model is never fed back its own unverified guess.
   - Runs at the start of every categorize job and in the nightly `monitor.household` pass. Idempotent.
+- **Requirement rows:** AI on · owner's switch · 30 judged · 9 in 10 of the last 50 — always, in order.
+  - `holding` (met) while the gate is open only because the last 20 hold 8 in 10 (the last-50 row unmet).
+  - `floor` (not met) while a slip below 8 in 10 holds it closed.
 - **Mode:** `off` (AI off, or `autoCategorize` false) · `suggest` (answers stay provisional) · `auto` (owner's switch on AND eligible).
 
 ## How "was it open?" is derived
@@ -36,7 +40,8 @@ Branch `finish/v1-categorization` · base `origin/main` 2b664f6c · migration `0
 ## What changed
 
 - `lib/categorizer/modelGate.ts` — `evaluateModelGate`, `replayGate`, `modeFor`, `requirementsFor`, constants. `loadModelGate` keeps its shape (`autoAllowed = mode === "auto"`).
-- `lib/categorizer/review.ts` — `settleSilentAcceptances`, `openReviewCount`, `undoRefusal` (one undo rule for `undoDecision` and the view's `undoable`); skip stamps `resolved_via = 'user'`.
+- `lib/categorizer/modelPriors.ts` — a silent acceptance is never a prior (one WHERE line; owner's decision 2026-10-08).
+- `lib/categorizer/review.ts` — `settleSilentAcceptances` (also clears the row's `category_provisional`), `openReviewCount`, `undoRefusal` (one undo rule for `undoDecision` and the view's `undoable`); skip stamps `resolved_via = 'user'`.
 - `lib/categorizer/userDecisions.ts` — hand filings and the answered queue item stamp `'user'`.
 - `jobs/handlers/categorize.ts` — settles first, then `evaluateModelGate`.
 - `jobs/handlers/monitor.ts` — settles before each household's monitor pass.
@@ -60,16 +65,16 @@ Branch `finish/v1-categorization` · base `origin/main` 2b664f6c · migration `0
 
 | File | Cases |
 |---|---|
-| `categorizationEligibility.integration.test.ts` (new) | 16: constants; 29/30; 44/50 vs 45/50; window slides; 16/20 holds, 15/20 closes; 17/20 stays closed, 18/20 reopens; hysteresis vs never-opened; modes; row filters (undone, skipped, non-model, future, other household); requirement rows + fifth row; AI/pref modes; silent 14-day boundary; locked / changed / cleared / queue / non-model / other household never settled; idempotent; job settles; monitor settles |
+| `categorizationEligibility.integration.test.ts` (new) | 17: `holding` row; constants; 29/30; 44/50 vs 45/50; window slides; 16/20 holds, 15/20 closes; 17/20 stays closed, 18/20 reopens; hysteresis vs never-opened; modes; row filters (undone, skipped, non-model, future, other household); requirement rows + fifth row; AI/pref modes; silent 14-day boundary (row no longer provisional; the younger one still is); locked / changed / cleared / queue / non-model / other household never settled; idempotent; job settles; monitor settles |
 | `categorizationSettingsRoute.integration.test.ts` (new) | 8: member GET + spec shape + defaults; engine counts scoped; recent (newest first, ≤ 20, other household never, undoable, resolvedBy); member PUT 403; body 400s; row created then merged; classic PUT keeps switches; screen and job agree (suggest → provisional, auto → auto, off → provisional) |
 | `categorizationJourney.integration.test.ts` (new) | 1, counts at every step: sync → rule + 3 ambiguous → `txn.arrived` → `categorize.batch` → 3 provisional → queue 3 → 3 corrections → memory count 1/2/3 → next charge memory/auto → re-sent rows unchanged → pending posts, keeps locked filing → re-run adds 0 decisions, 1 model call total → undo memory (back to none) and undo a correction (back to the suggestion, unlocked) |
-| `categorizeModelStage.integration.test.ts` (changed) | gate block rewritten for the cumulative rule (old window test removed) |
+| `categorizeModelStage.integration.test.ts` (changed) | gate block rewritten for the cumulative rule (old window test removed); a person-accepted suggestion is a prior, a silent one never |
 
 ## Fails-before
 
-New tests on the parent's sources (2b664f6c): **4 of 4 files fail** (18 failed, 17 passed; the route file cannot load its router). On this branch: 4 of 4 pass (43 tests).
+New tests on the parent's sources (2b664f6c): **4 of 4 files fail** (18 failed, 17 passed; the route file cannot load its router). On this branch: 4 of 4 pass (45 tests).
 
-## Mutants (16 / 16 killed)
+## Mutants (19 / 19 killed)
 
 | # | Mutation | Killed by |
 |---|---|---|
@@ -89,6 +94,9 @@ New tests on the parent's sources (2b664f6c): **4 of 4 files fail** (18 failed, 
 | M14 | PUT replaces preferences | merge keeps other keys |
 | M15 | `undoable` ignores the lock | recent list |
 | M16 | correction not stamped `'user'` | journey |
+| M17 | priors take silent acceptances | silent never a prior |
+| M18 | settlement leaves the row provisional | 14-day boundary |
+| M19 | no `holding` row | holding row |
 
 ## Gates
 
@@ -96,8 +104,8 @@ New tests on the parent's sources (2b664f6c): **4 of 4 files fail** (18 failed, 
 |---|---|
 | `pnpm run typecheck` | green |
 | codegen (CI style) | no drift |
-| API suite, `h2budget_test_v1`, serial, `CI=true` | 223 files · 2416 passed, 2 todo, 0 failed |
-| golden `forecastLedger.golden` under `CI=true` | 12 passed, snapshots unchanged |
+| API suite, `h2budget_test_v1`, serial, `CI=true` | 223 files · 2418 passed, 2 todo, 0 failed |
+| golden `forecastLedger.golden` under `CI=true` (in the suite) | passed, snapshots unchanged |
 | h2 web | 30 files passed, 1 skipped · 475 passed, 4 skipped |
 | classic web | 140 files passed, 1 skipped · 1248 passed, 4 skipped |
 | `pnpm run build` + entry graphs | green · classic 576.1 / 580 KB · h2 399.9 / 400 KB |
@@ -107,10 +115,10 @@ New tests on the parent's sources (2b664f6c): **4 of 4 files fail** (18 failed, 
 
 - **Money: none.** No amount, total, balance or budget is read or written differently.
 - Decisions that may newly auto-file: only after the owner turns `modelAutoCategorize` on AND the record is eligible. Before this package no route could write it (PUT /settings strips it).
-- What moves without the switch: provisional model suggestions older than 14 days leave the review queue as silently accepted (their rows keep the category, the provisional flag and no lock). The engine already never re-decides an accepted row.
+- What moves without the switch: provisional model suggestions older than 14 days leave the review queue as silently accepted; their rows keep the category, lose the provisional flag, stay unlocked. The engine already never re-decides an accepted row.
 
-## Open questions
+## Decided (owner, 2026-10-08)
 
-- Silent acceptances now count as "accepted" priors in `modelPriors.ts` (it reads `resolution = 'accepted'`). The model can learn from its own unchallenged guesses. Exclude `resolved_via = 'silent'` there? (Outside this package's files.)
-- Should a silent acceptance also clear `category_provisional` on the row? Left alone here (the brief names the decision fields only).
-- The accuracy requirement row shows the opening condition. While hysteresis holds the gate open it can read "not met" with `eligible: true`.
+- Silent acceptances count toward the gate, never as priors.
+- Silent acceptance clears `category_provisional`.
+- Hysteresis kept as built; the `holding` row explains an open gate whose last-50 row is unmet.

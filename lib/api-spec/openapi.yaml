@@ -8146,7 +8146,13 @@ components:
       type: object
       required: [key, label, met, current, target]
       properties:
-        key: { type: string, enum: [ai, owner_switch, judged, accuracy, floor] }
+        key:
+          type: string
+          enum: [ai, owner_switch, judged, accuracy, holding, floor]
+          description: |
+            The first four always, in order. `holding` (met) while the gate is
+            open only because the last 20 hold 8 in 10; `floor` (not met) while
+            a slip below 8 in 10 holds it closed.
         label: { type: string, description: A plain sentence for the screen. }
         met: { type: boolean }
         current: { type: integer }

@@ -14967,20 +14967,20 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         eligible: zod.ZodBoolean;
         judged: zod.ZodNumber;
         requirements: zod.ZodArray<zod.ZodObject<{
-            key: zod.ZodEnum<["ai", "owner_switch", "judged", "accuracy", "floor"]>;
+            key: zod.ZodEnum<["ai", "owner_switch", "judged", "accuracy", "holding", "floor"]>;
             label: zod.ZodString;
             met: zod.ZodBoolean;
             current: zod.ZodNumber;
             target: zod.ZodNumber;
         }, "strip", zod.ZodTypeAny, {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
         }, {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
@@ -15031,7 +15031,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         judged: number;
         requirements: {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
@@ -15052,7 +15052,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         judged: number;
         requirements: {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
@@ -15123,7 +15123,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         judged: number;
         requirements: {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
@@ -15174,7 +15174,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         judged: number;
         requirements: {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
@@ -15266,20 +15266,20 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         eligible: zod.ZodBoolean;
         judged: zod.ZodNumber;
         requirements: zod.ZodArray<zod.ZodObject<{
-            key: zod.ZodEnum<["ai", "owner_switch", "judged", "accuracy", "floor"]>;
+            key: zod.ZodEnum<["ai", "owner_switch", "judged", "accuracy", "holding", "floor"]>;
             label: zod.ZodString;
             met: zod.ZodBoolean;
             current: zod.ZodNumber;
             target: zod.ZodNumber;
         }, "strip", zod.ZodTypeAny, {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
         }, {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
@@ -15330,7 +15330,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         judged: number;
         requirements: {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
@@ -15351,7 +15351,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         judged: number;
         requirements: {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
@@ -15422,7 +15422,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         judged: number;
         requirements: {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;
@@ -15473,7 +15473,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         judged: number;
         requirements: {
             label: string;
-            key: "ai" | "judged" | "owner_switch" | "accuracy" | "floor";
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
             met: boolean;
             current: number;
             target: number;

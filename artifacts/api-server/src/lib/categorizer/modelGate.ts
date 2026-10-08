@@ -20,7 +20,8 @@
 //   3. Hysteresis: once open, the record stays open while the last 20 judged
 //      hold MODEL_AUTO_FLOOR_RATE; below it the floor closes it, and it reopens
 //      only when (1) and (2) hold AND the last 20 are back to
-//      MODEL_AUTO_MIN_ACCEPT_RATE.
+//      MODEL_AUTO_MIN_ACCEPT_RATE. While it holds open with (2) unmet, the
+//      requirements list carries a "holding" row so the screen can say why.
 //
 // "Was it open?" is DERIVED, not stored: `replayGate` walks the judged record
 // oldest first and applies the three rules after every judgment. The same rows
@@ -50,7 +51,7 @@ export const MODEL_AUTO_FLOOR_RATE = 0.8;
 export type ModelMode = "off" | "suggest" | "auto";
 
 export interface GateRequirement {
-  key: "ai" | "owner_switch" | "judged" | "accuracy" | "floor";
+  key: "ai" | "owner_switch" | "judged" | "accuracy" | "holding" | "floor";
   label: string;
   met: boolean;
   current: number;
@@ -161,6 +162,16 @@ export function requirementsFor(
       target: neededRight(rec.last50 || MODEL_AUTO_ACCURACY_WINDOW, MODEL_AUTO_MIN_ACCEPT_RATE),
     },
   ];
+  // Open, but the last 50 are below 9 in 10: hysteresis holds it. Say so.
+  if (rec.eligible && !out[3]!.met) {
+    out.push({
+      key: "holding",
+      label: `Holding: the last ${MODEL_AUTO_FLOOR_WINDOW} are at least 8 in 10.`,
+      met: true,
+      current: rec.accurateOfLast20,
+      target: neededRight(MODEL_AUTO_FLOOR_WINDOW, MODEL_AUTO_FLOOR_RATE),
+    });
+  }
   if (rec.heldByFloor) {
     out.push({
       key: "floor",

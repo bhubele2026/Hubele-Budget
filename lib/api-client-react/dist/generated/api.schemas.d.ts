@@ -4620,15 +4620,26 @@ export interface CategorizationSettingsInput {
     /** The owner lets the model's sure answers file on their own, once the record is eligible. */
     modelAutoCategorize?: boolean;
 }
+/**
+ * The first four always, in order. `holding` (met) while the gate is
+open only because the last 20 hold 8 in 10; `floor` (not met) while
+a slip below 8 in 10 holds it closed.
+
+ */
 export type CategorizationRequirementKey = (typeof CategorizationRequirementKey)[keyof typeof CategorizationRequirementKey];
 export declare const CategorizationRequirementKey: {
     readonly ai: "ai";
     readonly owner_switch: "owner_switch";
     readonly judged: "judged";
     readonly accuracy: "accuracy";
+    readonly holding: "holding";
     readonly floor: "floor";
 };
 export interface CategorizationRequirement {
+    /** The first four always, in order. `holding` (met) while the gate is
+  open only because the last 20 hold 8 in 10; `floor` (not met) while
+  a slip below 8 in 10 holds it closed.
+   */
     key: CategorizationRequirementKey;
     /** A plain sentence for the screen. */
     label: string;

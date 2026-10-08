@@ -223,6 +223,19 @@ describe("evaluateModelGate (the rows)", () => {
     expect(reopened.requirements).toHaveLength(4);
   });
 
+  it("while hysteresis holds it open with the last 50 below 9 in 10, a 'holding' row explains it", async () => {
+    await seedJudged(HH, OWNER, [...rep(T, 30), ...cycle([F, T, T, T, T], 10)]);
+    const g = await evaluateModelGate(HH, OWNER, NOW);
+    expect(g.eligible).toBe(true);
+    expect(g.requirements.map((r) => r.key)).toEqual(["ai", "owner_switch", "judged", "accuracy", "holding"]);
+    expect(g.requirements[3]).toMatchObject({ met: false, current: 40, target: 45 });
+    expect(g.requirements[4]).toEqual({ key: "holding", label: "Holding: the last 20 are at least 8 in 10.", met: true, current: 16, target: 16 });
+    // Not shown when the last 50 meet the bar on their own.
+    await wipeHousehold(HH);
+    await seedJudged(HH, OWNER, rep(T, 30));
+    expect((await evaluateModelGate(HH, OWNER, NOW)).requirements.map((r) => r.key)).toEqual(["ai", "owner_switch", "judged", "accuracy"]);
+  });
+
   it("mode follows the AI switch and the owner's preferences; loadModelGate is its projection", async () => {
     await seedJudged(HH, OWNER, rep(T, 30));
     expect((await evaluateModelGate(HH, OWNER, NOW)).mode).toBe("suggest");
@@ -254,8 +267,9 @@ describe("silent acceptance", () => {
     expect(await decision(due.decisionId)).toMatchObject({ resolution: "accepted", resolvedVia: "silent", resolvedAt: NOW, undoneAt: null });
     expect(await decision(young.decisionId)).toMatchObject({ resolution: null, resolvedAt: null, resolvedVia: null });
     expect(await openReviewCount(HH)).toBe(1);
-    // Nothing else moves: the row keeps its category, flag and lock; no memory is learned.
-    expect(await txnRow(due.txn)).toMatchObject({ categoryId: C.Groceries, categoryProvisional: true, categoryLockedByUser: false });
+    // The settled row stops being provisional; it keeps its category and stays unlocked; no memory is learned.
+    expect(await txnRow(due.txn)).toMatchObject({ categoryId: C.Groceries, categoryProvisional: false, categoryLockedByUser: false });
+    expect(await txnRow(young.txn)).toMatchObject({ categoryId: C.Groceries, categoryProvisional: true });
     expect(await db.select().from(merchantMemoryTable).where(eq(merchantMemoryTable.householdId, HH))).toHaveLength(0);
     // And it counts as judged.
     expect((await evaluateModelGate(HH, OWNER, NOW)).judged).toBe(1);
@@ -279,6 +293,8 @@ describe("silent acceptance", () => {
       expect(await decision(s.decisionId)).toMatchObject({ resolution: null, resolvedVia: null });
     }
     expect(await decision(td!.id)).toMatchObject({ resolution: null });
+    // Their rows keep the provisional flag.
+    for (const s of [locked, changed, cleared, queued, memory]) expect((await txnRow(s.txn)).categoryProvisional).toBe(true);
   });
 
   it("is idempotent: a second pass settles nothing and leaves the first stamp", async () => {

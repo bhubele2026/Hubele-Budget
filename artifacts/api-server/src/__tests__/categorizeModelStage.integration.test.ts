@@ -274,6 +274,23 @@ describe("what the model sees", () => {
     }
   });
 
+  it("(V1) a suggestion a person accepted is a prior; one accepted silently never is", async () => {
+    const accepted = async (description: string, cat: string, resolvedVia: "user" | "silent") => {
+      const t = await addTxn(HH, OWNER, { description, categoryId: cat, occurredOn: daysAgo(5), amount: "-7.00" });
+      await db.insert(categoryDecisionsTable).values({
+        householdId: HH, transactionId: t, source: "model", categoryId: cat, confidence: "0.850", band: "provisional",
+        explanation: "x", inputHash: randomUUID(), resolution: "accepted", resolvedAt: new Date(), resolvedVia,
+      });
+    };
+    await accepted("KESTREL BAKERY #1", C.Coffee, "user");
+    await accepted("KESTREL BAKERY #2", C.Income, "silent");
+    const ask = await addTxn(HH, OWNER, { description: "KESTREL BAKERY #3", amount: "-7.10" });
+    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.id, ask));
+    const names = (await loadPriors(HH, rows as never)).get(ask)!.map((p) => p.categoryName);
+    expect(names.some((n) => n.startsWith("Coffee"))).toBe(true);
+    expect(names.some((n) => n.startsWith("Income"))).toBe(false);
+  });
+
   it("priors are category names with amount, weekday and source: 4 by signature, 3 by tokens, 1 by amount; never raw text", async () => {
     const fileBy = async (o: Partial<typeof transactionsTable.$inferInsert>, cat: string, source = "user", extra: Partial<typeof categoryDecisionsTable.$inferInsert> = {}) => {
       const t = await addTxn(HH, OWNER, { categoryId: cat, ...o });
