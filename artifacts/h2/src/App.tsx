@@ -8,7 +8,17 @@ import { createQueryClient, prefetchSpineOnHint } from "@/data/queryClient";
 import { askForSpineAgainIfFailed } from "@/data/spineRecovery";
 import { readAuthHint, writeAuthHint } from "@/lib/authHint";
 import { prefetchTodayOnIdle } from "@/data/todayData";
-import { importDesign, importDesignToday, importPlaidOAuth } from "@/lib/routePrefetch";
+import {
+  importDesign,
+  importDesignPlan,
+  importDesignToday,
+  importPlaidOAuth,
+  importPlanBills,
+  importPlanCategories,
+  importPlanDebt,
+  importPlanWeek,
+  importPlanWishlist,
+} from "@/lib/routePrefetch";
 import { SkeletonFigure, SkeletonLine } from "@/kit/Skeleton";
 import { BootFrame, Shell } from "@/shell/Shell";
 import { NotFound } from "@/shell/NotFound";
@@ -25,6 +35,12 @@ import Today, { TodaySkeleton } from "@/screens/today/Today";
 const DesignPage = lazy(importDesign);
 const DesignTodayPage = lazy(importDesignToday);
 const PlaidOAuthPage = lazy(importPlaidOAuth);
+const PlanWeekPage = lazy(importPlanWeek);
+const PlanBillsPage = lazy(importPlanBills);
+const PlanDebtPage = lazy(importPlanDebt);
+const PlanCategoriesPage = lazy(importPlanCategories);
+const PlanWishlistPage = lazy(importPlanWishlist);
+const DesignPlanPage = lazy(importDesignPlan);
 
 const queryClient = createQueryClient();
 
@@ -105,6 +121,21 @@ function ProtectedShell() {
             <Route path="/plaid-oauth">
               <PlaidOAuthPage />
             </Route>
+            <Route path="/plan">
+              <PlanWeekPage />
+            </Route>
+            <Route path="/plan/bills">
+              <PlanBillsPage />
+            </Route>
+            <Route path="/plan/debt">
+              <PlanDebtPage />
+            </Route>
+            <Route path="/plan/categories">
+              <PlanCategoriesPage />
+            </Route>
+            <Route path="/plan/wishlist">
+              <PlanWishlistPage />
+            </Route>
             <Route>
               <NotFound />
             </Route>
@@ -140,6 +171,20 @@ function PublicDesignToday() {
       <PageErrorBoundary resetKey={location}>
         <Suspense fallback={<RouteFallback />}>
           <DesignTodayPage />
+        </Suspense>
+      </PageErrorBoundary>
+    </Shell>
+  );
+}
+
+/** Plan on made-up data: public, so the composition can be judged signed out. */
+function PublicDesignPlan() {
+  const [location] = useLocation();
+  return (
+    <Shell>
+      <PageErrorBoundary resetKey={location}>
+        <Suspense fallback={<RouteFallback />}>
+          <DesignPlanPage />
         </Suspense>
       </PageErrorBoundary>
     </Shell>
@@ -182,6 +227,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/design/today" component={PublicDesignToday} />
+          <Route path="/design/plan" component={PublicDesignPlan} />
           <Route path="/design" component={PublicDesign} />
           <Route component={ProtectedShell} />
         </Switch>

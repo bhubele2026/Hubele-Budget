@@ -14,12 +14,26 @@
 export const importDesign = () => import("../screens/design/Design");
 export const importDesignToday = () => import("../screens/design/DesignToday");
 export const importPlaidOAuth = () => import("../screens/plaid-oauth/PlaidOAuth");
+// (S3) Plan: five lazy pages and its public sample page. They share one chunk of
+// frame/parts; none is on the open path.
+export const importPlanWeek = () => import("../screens/plan/PlanWeek");
+export const importPlanBills = () => import("../screens/plan/PlanBills");
+export const importPlanDebt = () => import("../screens/plan/PlanDebt");
+export const importPlanCategories = () => import("../screens/plan/PlanCategories");
+export const importPlanWishlist = () => import("../screens/plan/PlanWishlist");
+export const importDesignPlan = () => import("../screens/design/DesignPlan");
 
 /** href → importer, keyed exactly as the routes are declared in App.tsx. */
 export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/design": importDesign,
   "/design/today": importDesignToday,
   "/plaid-oauth": importPlaidOAuth,
+  "/plan": importPlanWeek,
+  "/plan/bills": importPlanBills,
+  "/plan/debt": importPlanDebt,
+  "/plan/categories": importPlanCategories,
+  "/plan/wishlist": importPlanWishlist,
+  "/design/plan": importDesignPlan,
 };
 
 const prefetched = new Set<string>();

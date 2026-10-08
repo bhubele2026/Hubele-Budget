@@ -15,7 +15,7 @@ function at(path: string, ui: ReactNode) {
 }
 
 describe("Dock — four destinations, one tab stop, arrow keys between them", () => {
-  it("every item has an icon and a label; only Today is live, the rest say soon", () => {
+  it("every item has an icon and a label; Today and Plan are live, the rest say soon", () => {
     at("/", <Dock location="/" />);
     for (const key of ["today", "activity", "plan", "ask"]) {
       const item = screen.getByTestId(`dock-${key}`);
@@ -23,7 +23,7 @@ describe("Dock — four destinations, one tab stop, arrow keys between them", ()
       expect(item.textContent).toMatch(/Today|Activity|Plan|Ask/);
     }
     expect(screen.getByTestId("dock-today").getAttribute("aria-current")).toBe("page");
-    for (const key of ["activity", "plan", "ask"]) {
+    for (const key of ["activity", "ask"]) {
       const item = screen.getByTestId(`dock-${key}`);
       expect(item.getAttribute("aria-disabled")).toBe("true");
       expect(item.textContent).toContain("soon");
@@ -76,12 +76,20 @@ describe("Masthead", () => {
   it("marks Today current and the other destinations disabled, with 'soon'", () => {
     at("/", <Masthead location="/" />);
     expect(screen.getByTestId("masthead-today").getAttribute("aria-current")).toBe("page");
-    for (const key of ["activity", "plan", "ask"]) {
+    for (const key of ["activity", "ask"]) {
       const item = screen.getByTestId(`masthead-${key}`);
       expect(item.getAttribute("aria-disabled")).toBe("true");
       expect(item.getAttribute("href")).toBeNull();
       expect(item.textContent).toContain("soon");
     }
+  });
+
+  it("Plan is a live link, current on every Plan page", () => {
+    at("/plan/debt", <Masthead location="/plan/debt" />);
+    const plan = screen.getByTestId("masthead-plan");
+    expect(plan.getAttribute("href")).toBe("/plan");
+    expect(plan.getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("masthead-today").getAttribute("aria-current")).toBeNull();
   });
 
   it("off Today, nothing is marked current", () => {

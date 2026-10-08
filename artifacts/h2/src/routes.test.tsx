@@ -41,6 +41,12 @@ vi.mock("./lib/routePrefetch", () => {
     importDesign: page("design"),
     importDesignToday: page("design-today"),
     importPlaidOAuth: page("plaid-oauth"),
+    importPlanWeek: page("plan-week"),
+    importPlanBills: page("plan-bills"),
+    importPlanDebt: page("plan-debt"),
+    importPlanCategories: page("plan-categories"),
+    importPlanWishlist: page("plan-wishlist"),
+    importDesignPlan: page("design-plan"),
     routeImporters: {},
     prefetchRoute: () => {},
   };
@@ -75,6 +81,12 @@ const ROUTES: Row[] = [
   { from: "/design", lands: "/design", page: "design", shell: true },
   { from: "/design/today", lands: "/design/today", page: "design-today", shell: true },
   { from: "/plaid-oauth", lands: "/plaid-oauth", page: "plaid-oauth", shell: true },
+  { from: "/plan", lands: "/plan", page: "plan-week", shell: true },
+  { from: "/plan/bills", lands: "/plan/bills", page: "plan-bills", shell: true },
+  { from: "/plan/debt", lands: "/plan/debt", page: "plan-debt", shell: true },
+  { from: "/plan/categories", lands: "/plan/categories", page: "plan-categories", shell: true },
+  { from: "/plan/wishlist", lands: "/plan/wishlist", page: "plan-wishlist", shell: true },
+  { from: "/design/plan", lands: "/design/plan", page: "design-plan", shell: true },
   { from: "/sign-in", lands: "/sign-in", page: "sign-in", shell: false },
   { from: "/sign-up", lands: "/sign-up", page: "sign-up", shell: false },
 ];
@@ -132,7 +144,7 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
 
   it("has a row for every path App.tsx declares, and no row for a path it does not", () => {
     const covered = new Set(ROUTES.map((r) => r.from));
-    expect(declared.length).toBeGreaterThanOrEqual(6);
+    expect(declared.length).toBeGreaterThanOrEqual(12);
     expect(declared.filter((p) => !covered.has(p))).toEqual([]);
     expect([...covered].filter((p) => !declared.includes(p))).toEqual([]);
   });
@@ -151,6 +163,16 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
     const real = await vi.importActual<typeof import("./lib/routePrefetch")>("./lib/routePrefetch");
     const keys = Object.keys(real.routeImporters);
     expect(keys.filter((k) => !declared.includes(k))).toEqual([]);
-    expect(keys.sort()).toEqual(["/design", "/design/today", "/plaid-oauth"]);
+    expect(keys.sort()).toEqual([
+      "/design",
+      "/design/plan",
+      "/design/today",
+      "/plaid-oauth",
+      "/plan",
+      "/plan/bills",
+      "/plan/categories",
+      "/plan/debt",
+      "/plan/wishlist",
+    ]);
   });
 });
