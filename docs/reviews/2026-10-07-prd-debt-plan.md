@@ -78,21 +78,67 @@ New: `lib/debtPlan.test.ts` (32: 20 parent pins, strategies, range, milestones),
 the tolerance edge; one-to-one + revert on delete; `payoffPct` unmoved; liability ledger idempotent + pending +
 cascade; statements upsert; snapshot to the cent + idempotent + transfer pair; milestones insert-only; owner gates;
 `/debt-plan` shape + no-balance walk; household isolation; transfer pair not genuine; reconcile).
-Changed: `spineParity` (+1 parity row for both new fields, law extended to any key under `debt` matching
-`/balance|owed|remaining/i`), `amexAnchor` (115 → 85 with the reason, +2 cases), `schemaMigrations` (the replay
-covers the two new columns; the scratch copy now includes indexes so the self-FK has a key to point at).
+Changed: `spineParity` (+1 parity row for both new fields; the law now walks every key under `debt` against
+`/balance|owed|remaining/i`; the fixture's checking account is typed `depository` and gains one tagged Visa bank
+payment so `paidDownMtd` is 150.00, not 0 — hence the fixed review count +1), `amexAnchor` (115 → 85 with the
+reason, +2 cases), `schemaMigrations` and `bootMigrations` (their pre-migration scratch copy of `transactions` now
+includes indexes — 0060's foreign keys need its primary key — and drops the two new columns so the replay covers
+them).
 
 ### Fails before
 
-FAILS_BEFORE_TABLE
+New tests run on the parent `0352c748` (the DB pushed from the parent schema for the integration files):
+
+| Test file | On the parent | Symptom |
+|---|---|---|
+| `lib/debtPlan.test.ts` (32) | 12 fail, **20 pass** | `compareStrategies` / `debtFreeRange` / `milestonesFor is not a function`. The 20 that pass are the `simulate` pins — taken FROM the parent, so they must pass there; on this branch they prove the engine did not move. |
+| `lib/debtProgress.test.ts` (11) | 11 / 11 fail | `decomposeDelta` / `isTransferPair` / `pairTransfers` / `normalizeCardAmount is not a function` |
+| `lib/debtLedger.test.ts` (7) | 7 / 7 fail | `classifyLiabilityRow is not a function` |
+| `lib/cashRows.test.ts` (+4) | 1 of the 4 fails | "confirmed … 250.00 once": the parent counts the claim (−500 ≠ −250). The other three pin behaviour that must not change (an unconfirmed claim counts; a held one is held) and pass on both. |
+| `__tests__/debtPlan.integration.test.ts` (17) | file fails to load | `routes/debtPlan` does not exist |
+| `__tests__/spineParity.integration.test.ts` | file fails to load | `routes/debtPlan` does not exist (the two new parity rows need it) |
+| `__tests__/amexAnchor.integration.test.ts` (+2, 1 changed) | 2 fail | mixed: 115 ≠ 85; Plaid-only: −60 ≠ 60 (workbook-only passes on both — it must not move) |
 
 ### Mutants (each applied alone on this branch, then reverted)
 
-MUTANTS_TABLE
+| Mutant | Caught by |
+|---|---|
+| M1 a transfer-pair payment counted as genuine (`decomposeDelta`) | debtProgress "nets to zero across the household" |
+| M2 transfer pairs not subtracted from `paidDownGenuineMtd` | integration "a transfer pair is confirmed but not genuine" |
+| M3 interest classified as a payment | debtLedger "INTEREST_CHARGE is interest" |
+| M4 confirmed claim counted twice (the `claim_confirmed` branch removed) | cashRows "250.00 once" + integration "cash counts the 250.00 once" |
+| M5 snowball = avalanche | debtPlan ×3 (identity, ordering, "snowball ≠ avalanche") |
+| M6 card sign ignores the source | debtProgress ×3 + amexAnchor ×5 |
+| M7 milestones deleted and re-derived (not insert-only) | integration "insert-only" |
+| M8 tolerance widened to max($5, 5%) | integration "no match" |
+| M9 window 10 → 11 days | integration "no match" |
+| M10 a row tagged to ANOTHER debt is evidence | integration "no match" |
+| M11 farthest candidate wins | integration "two candidates → the closest" + "at most one claim" |
+| M12 range ignores a run that never finishes | debtPlan "open-ended" |
+| M13 `newCharges > CENTS` → `>= 0` | **survives — equivalent**: with 0 charges it adds 0.00 to a balance, which `round2` leaves unchanged; the pins prove no schedule moved |
+| M14 new charges never added | debtPlan "new charges push the latest month out" |
+| M15 % milestones on the run's starting total instead of `payoffPct` anchors | debtPlan milestones ×2 |
+| M16 a feed debt's confirmed claim counted beside its card-side payment | integration snapshot "to the cent" |
+| M17 spine `paidDownMtd` = confirmed instead of genuine | integration "transfer pair … not genuine" |
+| M18 amex anchor sums the raw column again | amexAnchor ×2 |
+
+17 of 18 killed; the survivor is equivalent.
 
 ## Gates
 
-GATES_TABLE
+Local, Node 24, pnpm 10.34.3, Postgres.app, DB `h2budget_test_prd` (the parent baseline ran on the same DB from a
+detached worktree before any change).
+
+| Gate | Parent `0352c748` | This branch |
+|---|---|---|
+| `pnpm run typecheck` | — | pass |
+| codegen, CI's exact step (dist + tsbuildinfo deleted, codegen, `git diff --exit-code`, untracked check) | — | clean, 0 untracked |
+| classic web `pnpm --filter h2budget exec vitest run` | — | 141 files (140 passed, 1 skipped), 1248 passed, 4 skipped |
+| API `pnpm --filter api-server exec vitest run` (serial, `CI=true`) | 166 files, 1700 passed, 7 todo | **170 files, 1774 passed, 7 todo** (+4 files, +74 tests) |
+| golden `forecastLedger.golden` with `CI=true` | 11 passed | 11 passed — snapshot not regenerated |
+| household scenario (`householdScenario.integration`) | pass | pass, unchanged |
+| `pnpm run build` + `node scripts/check-entry-graph.mjs` | 575.7 KB / 580 KB | 575.7 KB / 580 KB, OK |
+| `pnpm audit --prod` | 3 (1 critical, 2 high) | 3, identical — being fixed in another PR, not touched here |
 
 ## Residuals
 
