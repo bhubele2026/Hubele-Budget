@@ -15,6 +15,8 @@ export const QUEUES = {
   smsInbound: "sms.inbound",
   metricsSnapshot: "metrics.snapshot",
   maintenancePruneSyncAttempts: "maintenance.prune-sync-attempts",
+  // (PR-F1) The nightly wish-list re-evaluation.
+  wishlistEvaluate: "wishlist.evaluate",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

@@ -57,7 +57,7 @@ describe("the registry", () => {
   it("lists every tool with a tier, and the write tools are exactly four", () => {
     const cat = toolCatalog();
     expect(cat.filter((t) => t.tier === "read").map((t) => t.name).sort()).toEqual(
-      ["explain_transaction", "get_bills_and_income", "get_debt_plan", "get_position", "get_recap_facts", "get_spending_summary", "list_findings", "list_memory", "list_transactions"],
+      ["evaluate_scenario", "explain_transaction", "get_bills_and_income", "get_debt_plan", "get_position", "get_recap_facts", "get_spending_summary", "list_findings", "list_memory", "list_transactions"],
     );
     expect(cat.filter((t) => t.tier === "write").map((t) => t.name).sort()).toEqual(
       ["add_wishlist_item", "propose_plan_change", "remember_preference", "set_category"],
@@ -72,6 +72,7 @@ describe("the registry", () => {
       explain_transaction: { txnId: A.txns.kroger },
       get_bills_and_income: {},
       get_debt_plan: {},
+      evaluate_scenario: { extraSpend: { amount: 300 } },
       get_recap_facts: { forDate: TO },
       list_memory: {},
       list_findings: {},

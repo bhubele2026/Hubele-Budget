@@ -33,6 +33,7 @@ import {
   weekBounds,
   type MoneyPosition,
   type PositionEvent,
+  type PositionInputs,
 } from "@workspace/avalanche-core";
 import { computeCashSignalDetailed, type DetailedCashSignal } from "./cashSignal";
 import { computeBankFreshness, type BankFreshness } from "./bankFreshness";
@@ -83,11 +84,24 @@ export function tier2PairedTxnIdsOf(ledger: DetailedCashSignal["ledger"]): Set<s
   return new Set(ledger.matches.filter((m) => m.tier === 2 && m.offCurve).map((m) => m.txnId));
 }
 
-export async function buildMoneyPosition(
+/** (PR-F1) One read of the household: `computePosition`'s exact inputs, and the curve they came from. */
+export interface MoneyPositionRead {
+  inputs: PositionInputs;
+  cash: DetailedCashSignal;
+}
+
+/**
+ * (PR-F1) Everything `buildMoneyPosition` reads, before `computePosition` runs:
+ * "Can we afford this?" (`afford.ts`) re-runs the position on these SAME
+ * inputs, so the two can never read the household differently.
+ * `buildMoneyPosition` is `computePosition(loadPositionInputs(...).inputs)` —
+ * `GET /money/position` is byte-identical (afford.integration.test.ts).
+ */
+export async function loadPositionInputs(
   householdId: string,
   ownerUserId: string,
   opts: BuildMoneyPositionOptions = {},
-): Promise<MoneyPosition> {
+): Promise<MoneyPositionRead> {
   const cashRead = Promise.resolve(
     opts.cash ?? computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: POSITION_HORIZON_DAYS }),
   );
@@ -129,7 +143,7 @@ export async function buildMoneyPosition(
   // override — means no cap was set: null, never a $0 cap.
   const weekCap = plan.weeklySource === "none" || plan.weeklyCents === 0 ? null : plan.weeklyCents / 100;
 
-  return computePosition({
+  const inputs: PositionInputs = {
     todayISO,
     daily: signal.daily ?? [],
     events: positionEventsOf(ledger),
@@ -146,5 +160,14 @@ export async function buildMoneyPosition(
       asOfBank: signal.snapshotAt,
     },
     status: signal.status,
-  });
+  };
+  return { inputs, cash: { signal, ledger } };
+}
+
+export async function buildMoneyPosition(
+  householdId: string,
+  ownerUserId: string,
+  opts: BuildMoneyPositionOptions = {},
+): Promise<MoneyPosition> {
+  return computePosition((await loadPositionInputs(householdId, ownerUserId, opts)).inputs);
 }

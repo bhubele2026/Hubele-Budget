@@ -11,6 +11,7 @@ import { handleRecapGenerate, handleRecapSend } from "./handlers/recapJobs";
 import { RECAP_TICK_CRON, RECAP_TICK_KEY, RECAP_TICK_TZ, handleRecapTick } from "./handlers/recapTick";
 import { handleSmsInbound } from "./handlers/smsInbound";
 import { handleTxnArrived } from "./handlers/txnArrived";
+import { WISHLIST_EVALUATE_CRON, WISHLIST_EVALUATE_TZ, handleWishlistEvaluateJobs } from "./handlers/wishlistEvaluate";
 import { ALL_QUEUES, QUEUES, dlqName, queueOptions } from "./queues";
 
 // (AI-0) Create every queue (dead-letter queue first — a queue's deadLetter
@@ -49,4 +50,7 @@ export async function registerJobs(boss: PgBoss): Promise<void> {
   await boss.schedule(QUEUES.recapTick, RECAP_TICK_CRON, null, { tz: RECAP_TICK_TZ, singletonKey: RECAP_TICK_KEY });
   await boss.work(QUEUES.recapGenerate, handleRecapGenerate);
   await boss.work(QUEUES.recapSend, handleRecapSend);
+  // (PR-F1) The wish list, re-read every night against the money position.
+  await boss.work(QUEUES.wishlistEvaluate, handleWishlistEvaluateJobs);
+  await boss.schedule(QUEUES.wishlistEvaluate, WISHLIST_EVALUATE_CRON, { fanout: true }, { tz: WISHLIST_EVALUATE_TZ });
 }

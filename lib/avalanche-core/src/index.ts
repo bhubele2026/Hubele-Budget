@@ -176,6 +176,28 @@ export {
   type WithinPlan,
 } from "./availableToSpend";
 export {
+  AFFORD_ASSUMPTIONS,
+  AFFORD_PURCHASE_ITEM_ID,
+  AFFORD_TIGHT_PERCENT,
+  AffordInputError,
+  composeCutRun,
+  debtFreeRangeWithCut,
+  evaluateAfford,
+  simulateWithCut,
+  type AffordBaseline,
+  type AffordCategoryPlan,
+  type AffordDebtEffect,
+  type AffordDelta,
+  type AffordFigures,
+  type AffordInputErrorCode,
+  type AffordPurchase,
+  type AffordResult,
+  type AffordVerdict,
+  type CutRange,
+  type CutRun,
+  type CutRunOptions,
+} from "./affordScenario";
+export {
   EVERYDAY_FUNDING_ITEM_NAMES,
   MONTHLY_FACTORS,
   deriveWeeklyLimit,

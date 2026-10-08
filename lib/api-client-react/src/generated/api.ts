@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AffordResult,
   AgentAction,
   AgentActionList,
   AgentFinding,
@@ -93,6 +94,7 @@ import type {
   DeleteMerchantAliasParams,
   DeleteMerchantAliasResult,
   DuplicateTransactionCount,
+  EvaluateAffordBody,
   ForecastBundle,
   ForecastClosedMonth,
   ForecastResolution,
@@ -211,6 +213,7 @@ import type {
   VersionInfo,
   WeeklySettlement,
   WeeklySettlementInput,
+  WishlistEvaluationResult,
   WishlistItem,
   WishlistList,
 } from "./api.schemas";
@@ -10958,6 +10961,93 @@ export function useGetMoneyPosition<
 }
 
 /**
+ * evaluateAfford (avalanche-core) over one read of the household — the same read GET /money/position makes, plus the debt plan's debts and settings and this month's category plans. The purchase is one more outflow on the same curve: the curve is re-walked, the position re-computed (a purchase this week counts against this week's cap) and the debt-free range re-run with that month's extra cut when what is left until payday falls under it. A $0 purchase reproduces the baseline to the cent, and a purchase never shows a higher figure than the baseline. Stateless; nothing is written.
+ * @summary Can we afford this? One purchase against the money position, before and after
+ */
+export const getEvaluateAffordUrl = () => {
+  return `/api/money/afford`;
+};
+
+export const evaluateAfford = async (
+  evaluateAffordBody: EvaluateAffordBody,
+  options?: RequestInit,
+): Promise<AffordResult> => {
+  return customFetch<AffordResult>(getEvaluateAffordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(evaluateAffordBody),
+  });
+};
+
+export const getEvaluateAffordMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof evaluateAfford>>,
+    TError,
+    { data: BodyType<EvaluateAffordBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof evaluateAfford>>,
+  TError,
+  { data: BodyType<EvaluateAffordBody> },
+  TContext
+> => {
+  const mutationKey = ["evaluateAfford"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof evaluateAfford>>,
+    { data: BodyType<EvaluateAffordBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return evaluateAfford(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EvaluateAffordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof evaluateAfford>>
+>;
+export type EvaluateAffordMutationBody = BodyType<EvaluateAffordBody>;
+export type EvaluateAffordMutationError = ErrorType<void>;
+
+/**
+ * @summary Can we afford this? One purchase against the money position, before and after
+ */
+export const useEvaluateAfford = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof evaluateAfford>>,
+    TError,
+    { data: BodyType<EvaluateAffordBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof evaluateAfford>>,
+  TError,
+  { data: BodyType<EvaluateAffordBody> },
+  TContext
+> => {
+  return useMutation(getEvaluateAffordMutationOptions(options));
+};
+
+/**
  * @summary The household's allowance plans and the suggested weekly cap with its working
  */
 export const getListAllowancePlansUrl = () => {
@@ -14032,6 +14122,91 @@ export const useUpdateWishlistItem = <
   TContext
 > => {
   return useMutation(getUpdateWishlistItemMutationOptions(options));
+};
+
+/**
+ * The nightly wishlist.evaluate job's work for one item: evaluateAfford with the item's amount (and category) today, stored in the item's last_evaluation.
+ * @summary Evaluate one wish-list item now, as if bought today, and store the answer
+ */
+export const getEvaluateWishlistItemUrl = (id: string) => {
+  return `/api/wishlist/${id}/evaluate`;
+};
+
+export const evaluateWishlistItem = async (
+  id: string,
+  options?: RequestInit,
+): Promise<WishlistEvaluationResult> => {
+  return customFetch<WishlistEvaluationResult>(getEvaluateWishlistItemUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getEvaluateWishlistItemMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof evaluateWishlistItem>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof evaluateWishlistItem>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["evaluateWishlistItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof evaluateWishlistItem>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return evaluateWishlistItem(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EvaluateWishlistItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof evaluateWishlistItem>>
+>;
+
+export type EvaluateWishlistItemMutationError = ErrorType<void>;
+
+/**
+ * @summary Evaluate one wish-list item now, as if bought today, and store the answer
+ */
+export const useEvaluateWishlistItem = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof evaluateWishlistItem>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof evaluateWishlistItem>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getEvaluateWishlistItemMutationOptions(options));
 };
 
 /**

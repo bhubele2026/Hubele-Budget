@@ -497,6 +497,58 @@ describe("household scenario — Sun 10/4 to Sat 10/10, 2026", () => {
     await expectToday("S4");
   });
 
+  // ⭐ (PR-F1) "Can we afford $300 on Saturday?" — asked at S4 (Wed 10/7 noon),
+  // stateless, so no later step moves. Worked by hand in
+  // docs/reviews/2026-10-08-prf1-afford.md:
+  //   the curve 10/7 2,075.00 · 10/8 1,980.00 (Phone) · 10/9 3,980.00 (Paycheck A) ·
+  //   10/10 3,640.00 (the Platinum payoff) · 10/12 1,840.00 (Mortgage) ·
+  //   10/13 1,700.00 (Electric) — its lowest — · 10/15 3,200.00 (Paycheck B)
+  //   Saturday is after payday (Fri 10/9), so until payday holds at 1,480.00;
+  //   this week: 113.40 − 300 = −186.60 → safe now 0.00; every day from 10/10
+  //   is $300 lower: the lowest becomes 1,400.00 on 10/13, still above the
+  //   $500 buffer. Verdict: tight (the week goes over its cap).
+  it("S4 · Can we afford $300 on Saturday? (PR-F1, stateless)", async () => {
+    vi.setSystemTime(EXPECTED.S4.when);
+    const r = await fetch(`${baseUrl}/money/afford`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ amount: 300, date: "2026-10-10" }),
+    });
+    expect(r.status).toBe(200);
+    const res = (await r.json()) as Record<string, unknown>;
+    const noDebt = { debtFreeEarliest: null, debtFreeLatest: null, totalInterestLow: "0.00" };
+    expect(res.baseline).toEqual({
+      safeToSpendNow: EXPECTED.S4.safeToSpendNow,
+      remainingWeek: EXPECTED.S4.remainingWeek,
+      availableUntilPayday: EXPECTED.S4.availableUntilPayday,
+      lowest: "1700.00",
+      lowestDate: "2026-10-13",
+      ...noDebt,
+    });
+    expect(res.proposed).toEqual({
+      safeToSpendNow: "0.00",
+      remainingWeek: "-186.60",
+      availableUntilPayday: "1480.00",
+      lowest: "1400.00",
+      lowestDate: "2026-10-13",
+      ...noDebt,
+    });
+    expect(res.delta).toEqual({
+      safeToSpendNow: "-113.40",
+      remainingWeek: "-300.00",
+      availableUntilPayday: "0.00",
+      lowest: "-300.00",
+      lowestDate: null,
+      debtFreeEarliest: null,
+      debtFreeLatest: null,
+      totalInterestLow: "0.00",
+    });
+    expect(res.verdict).toBe("tight");
+    // Nothing was written: the position reads exactly as before.
+    const pos = await get<Position>("/money/position");
+    expect(pos.safeToSpendNow).toBe(EXPECTED.S4.safeToSpendNow);
+  });
+
   it(`S5 · ${EXPECTED.S5.event}`, async () => {
     vi.setSystemTime(EXPECTED.S5.when);
     // What sync does when the posted row links to the pending one.

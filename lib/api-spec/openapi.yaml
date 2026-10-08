@@ -2521,6 +2521,34 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MoneyPosition" }
 
+  /money/afford:
+    post:
+      operationId: evaluateAfford
+      tags: [money]
+      summary: Can we afford this? One purchase against the money position, before and after
+      description: >-
+        evaluateAfford (avalanche-core) over one read of the household — the same
+        read GET /money/position makes, plus the debt plan's debts and settings
+        and this month's category plans. The purchase is one more outflow on the
+        same curve: the curve is re-walked, the position re-computed (a purchase
+        this week counts against this week's cap) and the debt-free range re-run
+        with that month's extra cut when what is left until payday falls under it.
+        A $0 purchase reproduces the baseline to the cent, and a purchase never
+        shows a higher figure than the baseline. Stateless; nothing is written.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EvaluateAffordBody" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AffordResult" }
+        "400": { description: "Invalid purchase, or a date past the forecast window" }
+        "404": { description: The category or member is not in this household }
+
   /allowance-plans:
     get:
       operationId: listAllowancePlans
@@ -3157,6 +3185,26 @@ paths:
         "400": { description: Invalid edit }
         "404": { description: No such item in this household }
         "409": { description: Still in the waiting period }
+
+  /wishlist/{id}/evaluate:
+    post:
+      operationId: evaluateWishlistItem
+      tags: [wishlist]
+      summary: Evaluate one wish-list item now, as if bought today, and store the answer
+      description: >-
+        The nightly wishlist.evaluate job's work for one item: evaluateAfford with
+        the item's amount (and category) today, stored in the item's
+        last_evaluation.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Evaluated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WishlistEvaluationResult" }
+        "400": { description: The item has no amount to evaluate }
+        "404": { description: No such item in this household }
 
   /ai/usage/summary:
     get:
@@ -3886,6 +3934,100 @@ components:
         label: { type: string }
         amount: { type: string, description: Signed like the plan (negative is money out) }
         date: { type: string }
+
+    EvaluateAffordBody:
+      type: object
+      additionalProperties: false
+      required: [amount]
+      properties:
+        amount: { type: number, exclusiveMinimum: 0, maximum: 100000, description: "Dollars." }
+        date: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Today when omitted; a past date is counted today." }
+        categoryId: { type: string }
+        member: { type: string, maxLength: 200, description: "The member making the purchase (the shared weekly cap is used)." }
+
+    AffordFigures:
+      type: object
+      additionalProperties: false
+      required: [safeToSpendNow, remainingWeek, availableUntilPayday, lowest, lowestDate, debtFreeEarliest, debtFreeLatest, totalInterestLow]
+      properties:
+        safeToSpendNow: { type: ["string", "null"] }
+        remainingWeek: { type: ["string", "null"] }
+        availableUntilPayday: { type: ["string", "null"] }
+        lowest: { type: string, description: "The curve's lowest end-of-day balance over its window." }
+        lowestDate: { type: ["string", "null"] }
+        debtFreeEarliest: { type: ["string", "null"], description: "YYYY-MM." }
+        debtFreeLatest: { type: ["string", "null"], description: "YYYY-MM; null when open-ended." }
+        totalInterestLow: { type: ["string", "null"] }
+
+    AffordDelta:
+      type: object
+      additionalProperties: false
+      required: [safeToSpendNow, remainingWeek, availableUntilPayday, lowest, lowestDate, debtFreeEarliest, debtFreeLatest, totalInterestLow]
+      properties:
+        safeToSpendNow: { type: ["string", "null"] }
+        remainingWeek: { type: ["string", "null"] }
+        availableUntilPayday: { type: ["string", "null"] }
+        lowest: { type: string }
+        lowestDate: { type: ["string", "null"], description: "The proposed lowest day when the purchase moved it." }
+        debtFreeEarliest: { type: ["integer", "null"], description: "Months later." }
+        debtFreeLatest: { type: ["integer", "null"], description: "Months later." }
+        totalInterestLow: { type: ["string", "null"] }
+
+    AffordCategoryEffect:
+      type: object
+      additionalProperties: false
+      required: [categoryId, remainingBefore, remainingAfter]
+      properties:
+        categoryId: { type: string }
+        remainingBefore: { type: ["string", "null"] }
+        remainingAfter: { type: ["string", "null"] }
+
+    AffordDebtEffect:
+      type: object
+      additionalProperties: false
+      required: [affected, cut, cutMonth, debtFreeMonthShift, interestDelta]
+      properties:
+        affected: { type: boolean }
+        cut: { type: string }
+        cutMonth: { type: ["string", "null"] }
+        debtFreeMonthShift: { type: ["integer", "null"] }
+        interestDelta: { type: ["string", "null"] }
+
+    AffordResult:
+      type: object
+      additionalProperties: false
+      required: [amount, dateISO, baseline, proposed, delta, category, debt, verdict, assumptions]
+      properties:
+        amount: { type: string }
+        dateISO: { type: string }
+        baseline: { $ref: "#/components/schemas/AffordFigures" }
+        proposed: { $ref: "#/components/schemas/AffordFigures" }
+        delta: { $ref: "#/components/schemas/AffordDelta" }
+        category:
+          oneOf:
+            - { $ref: "#/components/schemas/AffordCategoryEffect" }
+            - { type: "null" }
+        debt: { $ref: "#/components/schemas/AffordDebtEffect" }
+        verdict: { type: string, enum: [fits, tight, breaks_buffer, breaks_zero] }
+        assumptions: { type: array, items: { type: string } }
+
+    WishlistEvaluation:
+      type: object
+      additionalProperties: false
+      required: [evaluatedAt, verdict, safeToSpendNowAfter, availableUntilPaydayAfter]
+      properties:
+        evaluatedAt: { type: string, format: date-time }
+        verdict: { type: string, enum: [fits, tight, breaks_buffer, breaks_zero] }
+        safeToSpendNowAfter: { type: ["string", "null"] }
+        availableUntilPaydayAfter: { type: ["string", "null"] }
+
+    WishlistEvaluationResult:
+      type: object
+      additionalProperties: false
+      required: [itemId, lastEvaluation]
+      properties:
+        itemId: { type: string }
+        lastEvaluation: { $ref: "#/components/schemas/WishlistEvaluation" }
 
     MoneyPosition:
       type: object

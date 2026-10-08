@@ -42,7 +42,7 @@ describe("emit in off mode", () => {
 });
 
 describe("queue catalogue", () => {
-  it("names the ten program queues, each with retries, a 5-minute expiry and its own DLQ", () => {
+  it("names the eleven program queues, each with retries, a 5-minute expiry and its own DLQ", () => {
     expect([...ALL_QUEUES]).toEqual([
       "txn.arrived",
       "categorize.batch",
@@ -54,6 +54,7 @@ describe("queue catalogue", () => {
       "sms.inbound",
       "metrics.snapshot",
       "maintenance.prune-sync-attempts",
+      "wishlist.evaluate",
     ]);
     expect(SHARED_QUEUE_OPTIONS).toEqual({ expireInSeconds: 300, retryLimit: 3, retryBackoff: true });
     expect(queueOptions(QUEUES.recapSend)).toEqual({ ...SHARED_QUEUE_OPTIONS, deadLetter: "recap.send.dlq" });

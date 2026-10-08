@@ -801,6 +801,129 @@ export interface MoneyPositionEstimate {
     amount: string;
     date: string;
 }
+export interface EvaluateAffordBody {
+    /**
+     * Dollars.
+     * @maximum 100000
+     * @exclusiveMinimum 0
+     */
+    amount: number;
+    /**
+     * Today when omitted; a past date is counted today.
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+    date?: string;
+    categoryId?: string;
+    /**
+     * The member making the purchase (the shared weekly cap is used).
+     * @maxLength 200
+     */
+    member?: string;
+}
+export interface AffordFigures {
+    /** @nullable */
+    safeToSpendNow: string | null;
+    /** @nullable */
+    remainingWeek: string | null;
+    /** @nullable */
+    availableUntilPayday: string | null;
+    /** The curve's lowest end-of-day balance over its window. */
+    lowest: string;
+    /** @nullable */
+    lowestDate: string | null;
+    /**
+     * YYYY-MM.
+     * @nullable
+     */
+    debtFreeEarliest: string | null;
+    /**
+     * YYYY-MM; null when open-ended.
+     * @nullable
+     */
+    debtFreeLatest: string | null;
+    /** @nullable */
+    totalInterestLow: string | null;
+}
+export interface AffordDelta {
+    /** @nullable */
+    safeToSpendNow: string | null;
+    /** @nullable */
+    remainingWeek: string | null;
+    /** @nullable */
+    availableUntilPayday: string | null;
+    lowest: string;
+    /**
+     * The proposed lowest day when the purchase moved it.
+     * @nullable
+     */
+    lowestDate: string | null;
+    /**
+     * Months later.
+     * @nullable
+     */
+    debtFreeEarliest: number | null;
+    /**
+     * Months later.
+     * @nullable
+     */
+    debtFreeLatest: number | null;
+    /** @nullable */
+    totalInterestLow: string | null;
+}
+export interface AffordCategoryEffect {
+    categoryId: string;
+    /** @nullable */
+    remainingBefore: string | null;
+    /** @nullable */
+    remainingAfter: string | null;
+}
+export interface AffordDebtEffect {
+    affected: boolean;
+    cut: string;
+    /** @nullable */
+    cutMonth: string | null;
+    /** @nullable */
+    debtFreeMonthShift: number | null;
+    /** @nullable */
+    interestDelta: string | null;
+}
+export type AffordResultVerdict = (typeof AffordResultVerdict)[keyof typeof AffordResultVerdict];
+export declare const AffordResultVerdict: {
+    readonly fits: "fits";
+    readonly tight: "tight";
+    readonly breaks_buffer: "breaks_buffer";
+    readonly breaks_zero: "breaks_zero";
+};
+export interface AffordResult {
+    amount: string;
+    dateISO: string;
+    baseline: AffordFigures;
+    proposed: AffordFigures;
+    delta: AffordDelta;
+    category: AffordCategoryEffect | null;
+    debt: AffordDebtEffect;
+    verdict: AffordResultVerdict;
+    assumptions: string[];
+}
+export type WishlistEvaluationVerdict = (typeof WishlistEvaluationVerdict)[keyof typeof WishlistEvaluationVerdict];
+export declare const WishlistEvaluationVerdict: {
+    readonly fits: "fits";
+    readonly tight: "tight";
+    readonly breaks_buffer: "breaks_buffer";
+    readonly breaks_zero: "breaks_zero";
+};
+export interface WishlistEvaluation {
+    evaluatedAt: string;
+    verdict: WishlistEvaluationVerdict;
+    /** @nullable */
+    safeToSpendNowAfter: string | null;
+    /** @nullable */
+    availableUntilPaydayAfter: string | null;
+}
+export interface WishlistEvaluationResult {
+    itemId: string;
+    lastEvaluation: WishlistEvaluation;
+}
 /**
  * computeCashSignal().status
  */
