@@ -179,8 +179,8 @@ describe("prompt registry", () => {
     expect(resolvePrompt("recap", reg)).toBeNull();
   });
 
-  it("ships no business prompts in this package, and no prompt carries a date in its system text", () => {
-    expect(Object.keys(PROMPTS)).toEqual([]);
+  it("ships only the categorize prompt, and no prompt carries a date in its system text", () => {
+    expect(Object.keys(PROMPTS)).toEqual(["categorize"]);
     expect(pingV1.system).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     expect(pingV1.build({ word: "hello" })[0]!.content).toBe('<untrusted source="word">hello</untrusted>');
   });

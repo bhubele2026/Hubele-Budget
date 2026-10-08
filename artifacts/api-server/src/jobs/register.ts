@@ -4,8 +4,10 @@ import {
   PRUNE_SYNC_ATTEMPTS_TZ,
   handlePruneSyncAttempts,
 } from "./handlers/maintenance";
+import { handleCategorizeJobs } from "./handlers/categorize";
 import { MONITOR_CRON, MONITOR_TZ, handleMonitorJobs } from "./handlers/monitor";
 import { handleSmsInbound } from "./handlers/smsInbound";
+import { handleTxnArrived } from "./handlers/txnArrived";
 import { ALL_QUEUES, QUEUES, dlqName, queueOptions } from "./queues";
 
 // (AI-0) Create every queue (dead-letter queue first — a queue's deadLetter
@@ -31,6 +33,9 @@ export async function registerJobs(boss: PgBoss): Promise<void> {
   // (AI-3) The proactive monitor: a worker, and one daily fan-out tick.
   await boss.work(QUEUES.monitorHousehold, handleMonitorJobs);
   await boss.schedule(QUEUES.monitorHousehold, MONITOR_CRON, { fanout: true }, { tz: MONITOR_TZ });
+  // (AI-1) A sync landed rows → categorize the ambiguous ones and run the monitor.
+  await boss.work(QUEUES.txnArrived, handleTxnArrived);
+  await boss.work(QUEUES.categorizeBatch, handleCategorizeJobs);
   // (AI-4b) Inbound texts that are not STOP / START / HELP.
   await boss.work(QUEUES.smsInbound, handleSmsInbound);
 }

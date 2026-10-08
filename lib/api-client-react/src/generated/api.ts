@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AgentAction,
   AgentActionList,
   AgentFinding,
   AgentFindingList,
@@ -11161,7 +11162,7 @@ export function useListAgentActions<
 }
 
 /**
- * Only reversible action types can be undone; today none are (the first, set_category, arrives with the categorizer).
+ * Only reversible action types can be undone. `set_category` (the categorizer's model pass) undoes the decision it recorded and stamps the action.
  * @summary Undo a reversible agent action
  */
 export const getUndoAgentActionUrl = (id: string) => {
@@ -11171,8 +11172,8 @@ export const getUndoAgentActionUrl = (id: string) => {
 export const undoAgentAction = async (
   id: string,
   options?: RequestInit,
-): Promise<unknown> => {
-  return customFetch<unknown>(getUndoAgentActionUrl(id), {
+): Promise<AgentAction> => {
+  return customFetch<AgentAction>(getUndoAgentActionUrl(id), {
     ...options,
     method: "POST",
   });

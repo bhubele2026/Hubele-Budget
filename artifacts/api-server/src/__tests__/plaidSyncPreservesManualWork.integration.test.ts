@@ -27,6 +27,7 @@ import {
   vi,
 } from "vitest";
 import { randomUUID } from "node:crypto";
+import { _emittedForTests } from "../jobs/emit";
 import { and, eq, inArray } from "drizzle-orm";
 import { createTestHousehold } from "./_helpers/testHousehold";
 
@@ -384,5 +385,24 @@ describe("`removed` never hard-deletes a user-touched row", () => {
     expect(byPtid.get("ENG2")).toMatchObject({ categoryId: CAT_ID, categoryProvisional: false });
     const sources = await db.select({ s: categoryDecisionsTable.source }).from(categoryDecisionsTable).where(inArray(categoryDecisionsTable.transactionId, rows.map((r) => r.id)));
     expect(sources.map((x) => x.s).sort()).toEqual(["memory", "rule"]);
+  });
+  it("(AI-1) after the engine pass the sync emits txn.arrived with only the rows it could not decide", async () => {
+    const { itemRowId, externalAcctId } = await seedChaseAccount();
+    await db.insert(mappingRulesTable).values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, pattern: "FLINT TOOLS", matchType: "contains", categoryId: CAT_ID, priority: 0 });
+    nextSyncResponse = {
+      added: [
+        { transaction_id: "ARR1", account_id: externalAcctId, date: "2026-05-13", amount: 31, name: "FLINT TOOLS 12" },
+        { transaction_id: "ARR2", account_id: externalAcctId, date: "2026-05-13", amount: 9, name: "MYSTERY SHOP 4" },
+      ],
+      modified: [],
+      removed: [],
+    };
+    _emittedForTests.length = 0;
+    await syncPlaidItem(TEST_USER, itemRowId);
+    const rows = await db.select().from(transactionsTable).where(inArray(transactionsTable.plaidTransactionId, ["ARR1", "ARR2"]));
+    const mystery = rows.find((r) => r.plaidTransactionId === "ARR2")!;
+    const arrived = _emittedForTests.filter((e) => e.queue === "txn.arrived");
+    expect(arrived).toHaveLength(1);
+    expect(arrived[0]!.data).toMatchObject({ householdId: TEST_HOUSEHOLD_ID, ownerUserId: TEST_USER, txnIds: [mystery.id], arrived: 2 });
   });
 });

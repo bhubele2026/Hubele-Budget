@@ -12,5 +12,7 @@ export interface CategorizationRunResult {
     queued: number;
     /** Rows no deterministic stage decided at 0.6 or more. */
     ambiguous: number;
+    /** Rows handed to the model pass (a background job); 0 when AI is off. */
+    modelQueued?: number;
 }
 //# sourceMappingURL=categorizationRunResult.d.ts.map

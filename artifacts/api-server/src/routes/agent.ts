@@ -18,6 +18,7 @@ import {
   UndoAgentActionParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
+import { undoDecision } from "../lib/categorizer/review";
 import { runMonitor } from "../monitor/run";
 
 // (AI-3) The agent's trail, household-scoped: findings (what the monitor
@@ -187,9 +188,32 @@ router.post("/agent/actions/:id/undo", requireAuth, async (req, res): Promise<vo
     res.status(409).json({ error: row.undoneAt ? "Already undone" : "This action cannot be undone" });
     return;
   }
-  // A reversible type (set_category) arrives with the categorizer, which
-  // brings its own undo; until then nothing is reversible and this is
-  // unreachable in production.
+  if (row.type === "set_category") {
+    // (AI-1) The categorizer's own undo: the decision this action recorded.
+    const decisionId = (row.after as { decisionId?: unknown } | null)?.decisionId;
+    if (typeof decisionId !== "string" || !UUID_RE.test(decisionId)) {
+      res.status(409).json({ error: "Nothing to undo" });
+      return;
+    }
+    const out = await undoDecision(req.householdId!, decisionId);
+    const gone = out.status === 409 && out.body.error === "Already undone.";
+    if (out.status !== 200 && !gone) {
+      res.status(out.status).json(out.body);
+      return;
+    }
+    const [updated] = await db
+      .update(agentActionsTable)
+      .set({ undoneAt: new Date(), undoneBy: req.userId ?? null })
+      .where(and(eq(agentActionsTable.id, row.id), eq(agentActionsTable.householdId, req.householdId!), isNull(agentActionsTable.undoneAt)))
+      .returning();
+    if (!updated) {
+      res.status(409).json({ error: "Already undone" });
+      return;
+    }
+    res.json(actionView(updated));
+    return;
+  }
+  // Any other reversible type brings its own undo with its package.
   res.status(501).json({ error: "Undo for this action type has not shipped yet" });
 });
 

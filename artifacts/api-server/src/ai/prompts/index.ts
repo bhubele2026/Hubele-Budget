@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { logger } from "../../lib/logger";
 import type { AiTask } from "../config";
+import { categorizeV1 } from "./categorize.v1";
 
 // (AI-0) Versioned prompts. Each task maps version keys ("v1", "v2", …) to a
 // prompt; the newest runs unless AI_PROMPT_<TASK> names another version (an
@@ -8,8 +9,8 @@ import type { AiTask } from "../config";
 // per-call values in it — so prompt caching can hit; per-call facts go in
 // `build`'s messages, outside text wrapped with `untrusted()`.
 //
-// No business prompts live in this package: each arrives with the package
-// that owns its task. `ping.v1` exists for the tests only.
+// Each business prompt arrives with the package that owns its task (AI-1:
+// categorize.v1). `ping.v1` exists for the tests only.
 
 export interface PromptDef<I = any> {
   /** Recorded on every ai_usage row, e.g. "categorize.v2". */
@@ -20,7 +21,10 @@ export interface PromptDef<I = any> {
 
 export type PromptRegistry = Partial<Record<AiTask, Record<string, PromptDef>>>;
 
-export const PROMPTS: PromptRegistry = {};
+export const PROMPTS: PromptRegistry = {
+  // (AI-1) The categorization prompt.
+  categorize: { v1: categorizeV1 },
+};
 
 function versionNumber(key: string): number {
   const m = /^v(\d+)$/.exec(key);

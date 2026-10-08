@@ -12189,16 +12189,19 @@ export declare const GetUiPreferencesResponse: zod.ZodObject<{
     chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
     whatsNewSeen: zod.ZodOptional<zod.ZodString>;
     autoCategorize: zod.ZodOptional<zod.ZodBoolean>;
+    modelAutoCategorize: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
     autoCategorize?: boolean | undefined;
+    modelAutoCategorize?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
     autoCategorize?: boolean | undefined;
+    modelAutoCategorize?: boolean | undefined;
 }>;
 /**
  * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
@@ -12209,16 +12212,19 @@ export declare const UpdateUiPreferencesBody: zod.ZodObject<{
     chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
     whatsNewSeen: zod.ZodOptional<zod.ZodString>;
     autoCategorize: zod.ZodOptional<zod.ZodBoolean>;
+    modelAutoCategorize: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
     autoCategorize?: boolean | undefined;
+    modelAutoCategorize?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
     autoCategorize?: boolean | undefined;
+    modelAutoCategorize?: boolean | undefined;
 }>;
 export declare const updateUiPreferencesResponseWhatsNewSeenMax = 32;
 export declare const UpdateUiPreferencesResponse: zod.ZodObject<{
@@ -12226,16 +12232,19 @@ export declare const UpdateUiPreferencesResponse: zod.ZodObject<{
     chaseHideReviewed: zod.ZodOptional<zod.ZodBoolean>;
     whatsNewSeen: zod.ZodOptional<zod.ZodString>;
     autoCategorize: zod.ZodOptional<zod.ZodBoolean>;
+    modelAutoCategorize: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
     autoCategorize?: boolean | undefined;
+    modelAutoCategorize?: boolean | undefined;
 }, {
     sidebarCollapsed?: boolean | undefined;
     chaseHideReviewed?: boolean | undefined;
     whatsNewSeen?: string | undefined;
     autoCategorize?: boolean | undefined;
+    modelAutoCategorize?: boolean | undefined;
 }>;
 /**
  * @summary List all invitations (owner only).
@@ -13918,7 +13927,7 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
     }[];
 }>;
 /**
- * Only reversible action types can be undone; today none are (the first, set_category, arrives with the categorizer).
+ * Only reversible action types can be undone. `set_category` (the categorizer's model pass) undoes the decision it recorded and stamps the action.
  * @summary Undo a reversible agent action
  */
 export declare const UndoAgentActionParams: zod.ZodObject<{
@@ -13927,6 +13936,37 @@ export declare const UndoAgentActionParams: zod.ZodObject<{
     id: string;
 }, {
     id: string;
+}>;
+export declare const UndoAgentActionResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    runId: zod.ZodString;
+    type: zod.ZodEnum<["set_category", "remember", "propose", "wishlist", "finding", "recap"]>;
+    targetKind: zod.ZodString;
+    targetId: zod.ZodNullable<zod.ZodString>;
+    outcome: zod.ZodEnum<["applied", "proposed", "needs_attention"]>;
+    reversible: zod.ZodBoolean;
+    undoneAt: zod.ZodNullable<zod.ZodDate>;
+    createdAt: zod.ZodDate;
+}, "strip", zod.ZodTypeAny, {
+    type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
+    id: string;
+    createdAt: Date;
+    runId: string;
+    targetKind: string;
+    targetId: string | null;
+    outcome: "applied" | "proposed" | "needs_attention";
+    reversible: boolean;
+    undoneAt: Date | null;
+}, {
+    type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
+    id: string;
+    createdAt: Date;
+    runId: string;
+    targetKind: string;
+    targetId: string | null;
+    outcome: "applied" | "proposed" | "needs_attention";
+    reversible: boolean;
+    undoneAt: Date | null;
 }>;
 /**
  * @summary Owner only. Run the deterministic categorization stages over the
@@ -13945,14 +13985,17 @@ export declare const RunCategorizationResponse: zod.ZodObject<{
     decided: zod.ZodNumber;
     queued: zod.ZodNumber;
     ambiguous: zod.ZodNumber;
+    modelQueued: zod.ZodOptional<zod.ZodNumber>;
 }, "strip", zod.ZodTypeAny, {
     queued: number;
     ambiguous: number;
     decided: number;
+    modelQueued?: number | undefined;
 }, {
     queued: number;
     ambiguous: number;
     decided: number;
+    modelQueued?: number | undefined;
 }>;
 /**
  * @summary Open decisions (provisional or queued), oldest first.

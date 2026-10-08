@@ -2541,14 +2541,20 @@ paths:
       tags: [agent]
       summary: Undo a reversible agent action
       description: >-
-        Only reversible action types can be undone; today none are (the first,
-        set_category, arrives with the categorizer).
+        Only reversible action types can be undone. `set_category` (the
+        categorizer's model pass) undoes the decision it recorded and stamps the
+        action.
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
       responses:
+        "200":
+          description: Undone; the updated action
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentAction" }
         "404":
           description: No such action in this household
         "409":
@@ -5395,7 +5401,15 @@ components:
           type: boolean
           description: |
             (S1) The user's choice that H2 files new charges on its own.
-            A preference only; the categorizer reads it in a later package.
+            (AI-1) The categorizer's model pass reads it: false skips the model
+            entirely (the deterministic stages still run). Absent means true.
+        modelAutoCategorize:
+          type: boolean
+          description: |
+            (AI-1) The owner lets the model's high-confidence answers write a
+            category outright. Only counts once the household has at least 50
+            model filings accepted in the last 30 days (and 9 in 10 of the ones
+            judged); until then the model stays provisional. Absent means false.
     Settings:
       type: object
       required: [weeklyAllowanceAmount, monthlyAllowanceAmount, unplannedAllowanceAmount]
@@ -7191,6 +7205,7 @@ components:
         decided: { type: integer, description: Decisions that wrote a category (auto or provisional). }
         queued: { type: integer, description: Decisions placed in the review queue. }
         ambiguous: { type: integer, description: Rows no deterministic stage decided at 0.6 or more. }
+        modelQueued: { type: integer, description: Rows handed to the model pass (a background job); 0 when AI is off. }
 
     ReviewFlags:
       type: object
