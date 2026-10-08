@@ -54,8 +54,8 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
     useRevokeInvitation: hook("revoke"),
     useResendInvitation: hook("resend"),
     useRemoveMember: hook("removeMember"),
-    listPlaidLiabilityAccounts: (...a: unknown[]) => mocks.liabilities(...a),
-    listPlaidItems: (...a: unknown[]) => mocks.liveItems(...a),
+    listPlaidLiabilityAccounts: (...a: unknown[]) => (mocks.liabilities as (...x: unknown[]) => unknown)(...a),
+    listPlaidItems: (...a: unknown[]) => (mocks.liveItems as (...x: unknown[]) => unknown)(...a),
   };
 });
 vi.mock("@workspace/api-client-react/ledger", async (importOriginal) => {
