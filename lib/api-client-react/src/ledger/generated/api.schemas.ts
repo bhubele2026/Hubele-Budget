@@ -51,9 +51,22 @@ export const HealthSmsProvider = {
   fake: "fake",
 } as const;
 
+/**
+ * live only when Twilio is the provider and every credential is present; console and fake are preview.
+ */
+export type HealthSmsMode = (typeof HealthSmsMode)[keyof typeof HealthSmsMode];
+
+export const HealthSmsMode = {
+  live: "live",
+  preview: "preview",
+} as const;
+
 export interface HealthSms {
   provider: HealthSmsProvider;
+  /** True only when the provider can really send (console is never configured). */
   configured: boolean;
+  /** live only when Twilio is the provider and every credential is present; console and fake are preview. */
+  mode: HealthSmsMode;
 }
 
 export interface HealthPlaid {
@@ -77,8 +90,45 @@ export interface RecapError {
   code?: string;
 }
 
+/**
+ * preview = texts are written to the server log and never sent
+ */
+export type RecapDeliveryStateMode =
+  (typeof RecapDeliveryStateMode)[keyof typeof RecapDeliveryStateMode];
+
+export const RecapDeliveryStateMode = {
+  live: "live",
+  preview: "preview",
+} as const;
+
+export type RecapDeliveryStateLastDelivery = {
+  /** previewed = a console row */
+  status:
+    | "queued"
+    | "sent"
+    | "delivered"
+    | "undelivered"
+    | "failed"
+    | "previewed";
+  provider: "twilio" | "console" | "fake";
+  at: string;
+} | null;
+
+export interface RecapDeliveryState {
+  /** preview = texts are written to the server log and never sent */
+  mode: RecapDeliveryStateMode;
+  providerConfigured: boolean;
+  phoneVerified: boolean;
+  /** enabled */
+  scheduled: boolean;
+  sendTimeLocal: string;
+  timezone: string;
+  lastDelivery: RecapDeliveryStateLastDelivery;
+}
+
 export interface RecapSettings {
   enabled: boolean;
+  delivery: RecapDeliveryState;
   /** HH:MM, 24-hour, in `timezone` */
   sendTimeLocal: string;
   /** IANA zone */
@@ -134,21 +184,36 @@ export interface RecapVerifyConfirmInput {
   code: string;
 }
 
+/**
+ * previewed = no text was sent
+ */
 export type RecapTestSendResultStatus =
   (typeof RecapTestSendResultStatus)[keyof typeof RecapTestSendResultStatus];
 
 export const RecapTestSendResultStatus = {
-  queued: "queued",
   sent: "sent",
-  delivered: "delivered",
-  undelivered: "undelivered",
-  failed: "failed",
+  previewed: "previewed",
+} as const;
+
+export type RecapTestSendResultMode =
+  (typeof RecapTestSendResultMode)[keyof typeof RecapTestSendResultMode];
+
+export const RecapTestSendResultMode = {
+  live: "live",
+  preview: "preview",
 } as const;
 
 export interface RecapTestSendResult {
+  /** previewed = no text was sent */
   status: RecapTestSendResultStatus;
+  mode: RecapTestSendResultMode;
   /** @nullable */
   deliveryId: string | null;
+  /**
+   * The text that would have been sent; present in preview.
+   * @nullable
+   */
+  text?: string | null;
 }
 
 export interface RecapPauseInput {
@@ -179,6 +244,16 @@ export const RecapDeliveryItemStatus = {
   delivered: "delivered",
   undelivered: "undelivered",
   failed: "failed",
+  previewed: "previewed",
+} as const;
+
+export type RecapDeliveryItemProvider =
+  (typeof RecapDeliveryItemProvider)[keyof typeof RecapDeliveryItemProvider];
+
+export const RecapDeliveryItemProvider = {
+  twilio: "twilio",
+  console: "console",
+  fake: "fake",
 } as const;
 
 export interface RecapDeliveryItem {
@@ -187,6 +262,7 @@ export interface RecapDeliveryItem {
   /** @nullable */
   forDate: string | null;
   status: RecapDeliveryItemStatus;
+  provider: RecapDeliveryItemProvider;
   createdAt: string;
 }
 
@@ -234,10 +310,18 @@ export const RecapHistoryItemStatus = {
   sent: "sent",
   failed: "failed",
   skipped: "skipped",
+  previewed: "previewed",
 } as const;
 
 export type RecapHistoryItemDelivery = {
-  status: "queued" | "sent" | "delivered" | "undelivered" | "failed";
+  status:
+    | "queued"
+    | "sent"
+    | "delivered"
+    | "undelivered"
+    | "failed"
+    | "previewed";
+  provider: "twilio" | "console" | "fake";
   createdAt: string;
 } | null;
 

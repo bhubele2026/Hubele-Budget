@@ -47,10 +47,13 @@ export declare const HealthCheckResponse: zod.ZodObject<{
     sms: zod.ZodObject<{
         provider: zod.ZodEnum<["twilio", "console", "fake"]>;
         configured: zod.ZodBoolean;
+        mode: zod.ZodEnum<["live", "preview"]>;
     }, "strip", zod.ZodTypeAny, {
+        mode: "live" | "preview";
         configured: boolean;
         provider: "fake" | "twilio" | "console";
     }, {
+        mode: "live" | "preview";
         configured: boolean;
         provider: "fake" | "twilio" | "console";
     }>;
@@ -76,6 +79,7 @@ export declare const HealthCheckResponse: zod.ZodObject<{
         provider: "anthropic" | "fake";
     };
     sms: {
+        mode: "live" | "preview";
         configured: boolean;
         provider: "fake" | "twilio" | "console";
     };
@@ -97,6 +101,7 @@ export declare const HealthCheckResponse: zod.ZodObject<{
         provider: "anthropic" | "fake";
     };
     sms: {
+        mode: "live" | "preview";
         configured: boolean;
         provider: "fake" | "twilio" | "console";
     };
@@ -233,6 +238,51 @@ on first read). Never carries the full phone number: only its last four digits.
  */
 export declare const GetRecapSettingsResponse: zod.ZodObject<{
     enabled: zod.ZodBoolean;
+    delivery: zod.ZodObject<{
+        mode: zod.ZodEnum<["live", "preview"]>;
+        providerConfigured: zod.ZodBoolean;
+        phoneVerified: zod.ZodBoolean;
+        scheduled: zod.ZodBoolean;
+        sendTimeLocal: zod.ZodString;
+        timezone: zod.ZodString;
+        lastDelivery: zod.ZodUnion<[zod.ZodObject<{
+            status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed", "previewed"]>;
+            provider: zod.ZodEnum<["twilio", "console", "fake"]>;
+            at: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        }, {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    }, {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    }>;
     sendTimeLocal: zod.ZodString;
     timezone: zod.ZodString;
     phoneLast4: zod.ZodNullable<zod.ZodString>;
@@ -246,6 +296,19 @@ export declare const GetRecapSettingsResponse: zod.ZodObject<{
     consentTextVersion: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     enabled: boolean;
+    delivery: {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    };
     sendTimeLocal: string;
     timezone: string;
     phoneLast4: string | null;
@@ -259,6 +322,19 @@ export declare const GetRecapSettingsResponse: zod.ZodObject<{
     consentTextVersion: string;
 }, {
     enabled: boolean;
+    delivery: {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    };
     sendTimeLocal: string;
     timezone: string;
     phoneLast4: string | null;
@@ -297,6 +373,51 @@ export declare const UpdateRecapSettingsBody: zod.ZodObject<{
 }>;
 export declare const UpdateRecapSettingsResponse: zod.ZodObject<{
     enabled: zod.ZodBoolean;
+    delivery: zod.ZodObject<{
+        mode: zod.ZodEnum<["live", "preview"]>;
+        providerConfigured: zod.ZodBoolean;
+        phoneVerified: zod.ZodBoolean;
+        scheduled: zod.ZodBoolean;
+        sendTimeLocal: zod.ZodString;
+        timezone: zod.ZodString;
+        lastDelivery: zod.ZodUnion<[zod.ZodObject<{
+            status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed", "previewed"]>;
+            provider: zod.ZodEnum<["twilio", "console", "fake"]>;
+            at: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        }, {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    }, {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    }>;
     sendTimeLocal: zod.ZodString;
     timezone: zod.ZodString;
     phoneLast4: zod.ZodNullable<zod.ZodString>;
@@ -310,6 +431,19 @@ export declare const UpdateRecapSettingsResponse: zod.ZodObject<{
     consentTextVersion: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     enabled: boolean;
+    delivery: {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    };
     sendTimeLocal: string;
     timezone: string;
     phoneLast4: string | null;
@@ -323,6 +457,19 @@ export declare const UpdateRecapSettingsResponse: zod.ZodObject<{
     consentTextVersion: string;
 }, {
     enabled: boolean;
+    delivery: {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    };
     sendTimeLocal: string;
     timezone: string;
     phoneLast4: string | null;
@@ -375,6 +522,51 @@ export declare const ConfirmRecapVerificationBody: zod.ZodObject<{
 }>;
 export declare const ConfirmRecapVerificationResponse: zod.ZodObject<{
     enabled: zod.ZodBoolean;
+    delivery: zod.ZodObject<{
+        mode: zod.ZodEnum<["live", "preview"]>;
+        providerConfigured: zod.ZodBoolean;
+        phoneVerified: zod.ZodBoolean;
+        scheduled: zod.ZodBoolean;
+        sendTimeLocal: zod.ZodString;
+        timezone: zod.ZodString;
+        lastDelivery: zod.ZodUnion<[zod.ZodObject<{
+            status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed", "previewed"]>;
+            provider: zod.ZodEnum<["twilio", "console", "fake"]>;
+            at: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        }, {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    }, {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    }>;
     sendTimeLocal: zod.ZodString;
     timezone: zod.ZodString;
     phoneLast4: zod.ZodNullable<zod.ZodString>;
@@ -388,6 +580,19 @@ export declare const ConfirmRecapVerificationResponse: zod.ZodObject<{
     consentTextVersion: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     enabled: boolean;
+    delivery: {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    };
     sendTimeLocal: string;
     timezone: string;
     phoneLast4: string | null;
@@ -401,6 +606,19 @@ export declare const ConfirmRecapVerificationResponse: zod.ZodObject<{
     consentTextVersion: string;
 }, {
     enabled: boolean;
+    delivery: {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    };
     sendTimeLocal: string;
     timezone: string;
     phoneLast4: string | null;
@@ -417,14 +635,20 @@ export declare const ConfirmRecapVerificationResponse: zod.ZodObject<{
  * @summary (AI-4b) Text the fixed test line to the caller's verified number (3 per day).
  */
 export declare const SendRecapTestResponse: zod.ZodObject<{
-    status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+    status: zod.ZodEnum<["sent", "previewed"]>;
+    mode: zod.ZodEnum<["live", "preview"]>;
     deliveryId: zod.ZodNullable<zod.ZodString>;
+    text: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
-    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    status: "sent" | "previewed";
+    mode: "live" | "preview";
     deliveryId: string | null;
+    text?: string | null | undefined;
 }, {
-    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    status: "sent" | "previewed";
+    mode: "live" | "preview";
     deliveryId: string | null;
+    text?: string | null | undefined;
 }>;
 /**
  * @summary (AI-4b) Pause recap texts until the given time (null or a past time resumes).
@@ -438,6 +662,51 @@ export declare const PauseRecapBody: zod.ZodObject<{
 }>;
 export declare const PauseRecapResponse: zod.ZodObject<{
     enabled: zod.ZodBoolean;
+    delivery: zod.ZodObject<{
+        mode: zod.ZodEnum<["live", "preview"]>;
+        providerConfigured: zod.ZodBoolean;
+        phoneVerified: zod.ZodBoolean;
+        scheduled: zod.ZodBoolean;
+        sendTimeLocal: zod.ZodString;
+        timezone: zod.ZodString;
+        lastDelivery: zod.ZodUnion<[zod.ZodObject<{
+            status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed", "previewed"]>;
+            provider: zod.ZodEnum<["twilio", "console", "fake"]>;
+            at: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        }, {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    }, {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    }>;
     sendTimeLocal: zod.ZodString;
     timezone: zod.ZodString;
     phoneLast4: zod.ZodNullable<zod.ZodString>;
@@ -451,6 +720,19 @@ export declare const PauseRecapResponse: zod.ZodObject<{
     consentTextVersion: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     enabled: boolean;
+    delivery: {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    };
     sendTimeLocal: string;
     timezone: string;
     phoneLast4: string | null;
@@ -464,6 +746,19 @@ export declare const PauseRecapResponse: zod.ZodObject<{
     consentTextVersion: string;
 }, {
     enabled: boolean;
+    delivery: {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    };
     sendTimeLocal: string;
     timezone: string;
     phoneLast4: string | null;
@@ -481,6 +776,51 @@ export declare const PauseRecapResponse: zod.ZodObject<{
  */
 export declare const UnsubscribeRecapResponse: zod.ZodObject<{
     enabled: zod.ZodBoolean;
+    delivery: zod.ZodObject<{
+        mode: zod.ZodEnum<["live", "preview"]>;
+        providerConfigured: zod.ZodBoolean;
+        phoneVerified: zod.ZodBoolean;
+        scheduled: zod.ZodBoolean;
+        sendTimeLocal: zod.ZodString;
+        timezone: zod.ZodString;
+        lastDelivery: zod.ZodUnion<[zod.ZodObject<{
+            status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed", "previewed"]>;
+            provider: zod.ZodEnum<["twilio", "console", "fake"]>;
+            at: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        }, {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    }, {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    }>;
     sendTimeLocal: zod.ZodString;
     timezone: zod.ZodString;
     phoneLast4: zod.ZodNullable<zod.ZodString>;
@@ -494,6 +834,19 @@ export declare const UnsubscribeRecapResponse: zod.ZodObject<{
     consentTextVersion: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     enabled: boolean;
+    delivery: {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    };
     sendTimeLocal: string;
     timezone: string;
     phoneLast4: string | null;
@@ -507,6 +860,19 @@ export declare const UnsubscribeRecapResponse: zod.ZodObject<{
     consentTextVersion: string;
 }, {
     enabled: boolean;
+    delivery: {
+        mode: "live" | "preview";
+        providerConfigured: boolean;
+        phoneVerified: boolean;
+        scheduled: boolean;
+        sendTimeLocal: string;
+        timezone: string;
+        lastDelivery: {
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            at: string;
+            provider: "fake" | "twilio" | "console";
+        } | null;
+    };
     sendTimeLocal: string;
     timezone: string;
     phoneLast4: string | null;
@@ -534,16 +900,19 @@ export declare const ListRecapDeliveriesResponseItem: zod.ZodObject<{
     id: zod.ZodString;
     kind: zod.ZodEnum<["scheduled", "test", "verification", "alert", "reply"]>;
     forDate: zod.ZodNullable<zod.ZodString>;
-    status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+    status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed", "previewed"]>;
+    provider: zod.ZodEnum<["twilio", "console", "fake"]>;
     createdAt: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
-    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+    provider: "fake" | "twilio" | "console";
     id: string;
     kind: "scheduled" | "test" | "verification" | "alert" | "reply";
     forDate: string | null;
     createdAt: string;
 }, {
-    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+    provider: "fake" | "twilio" | "console";
     id: string;
     kind: "scheduled" | "test" | "verification" | "alert" | "reply";
     forDate: string | null;
@@ -553,16 +922,19 @@ export declare const ListRecapDeliveriesResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
     kind: zod.ZodEnum<["scheduled", "test", "verification", "alert", "reply"]>;
     forDate: zod.ZodNullable<zod.ZodString>;
-    status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+    status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed", "previewed"]>;
+    provider: zod.ZodEnum<["twilio", "console", "fake"]>;
     createdAt: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
-    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+    provider: "fake" | "twilio" | "console";
     id: string;
     kind: "scheduled" | "test" | "verification" | "alert" | "reply";
     forDate: string | null;
     createdAt: string;
 }, {
-    status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+    status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+    provider: "fake" | "twilio" | "console";
     id: string;
     kind: "scheduled" | "test" | "verification" | "alert" | "reply";
     forDate: string | null;
@@ -642,80 +1014,90 @@ export declare const ListRecapHistoryResponseItem: zod.ZodObject<{
     forDate: zod.ZodString;
     text: zod.ZodString;
     source: zod.ZodEnum<["model", "template"]>;
-    status: zod.ZodEnum<["drafted", "sent", "failed", "skipped"]>;
+    status: zod.ZodEnum<["drafted", "sent", "failed", "skipped", "previewed"]>;
     generatedAt: zod.ZodString;
     delivery: zod.ZodUnion<[zod.ZodObject<{
-        status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+        status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed", "previewed"]>;
+        provider: zod.ZodEnum<["twilio", "console", "fake"]>;
         createdAt: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
-        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+        provider: "fake" | "twilio" | "console";
         createdAt: string;
     }, {
-        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+        provider: "fake" | "twilio" | "console";
         createdAt: string;
     }>, zod.ZodNull]>;
 }, "strip", zod.ZodTypeAny, {
-    status: "sent" | "failed" | "drafted" | "skipped";
+    status: "sent" | "failed" | "previewed" | "drafted" | "skipped";
     id: string;
-    forDate: string;
-    text: string;
-    source: "model" | "template";
-    generatedAt: string;
     delivery: {
-        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+        provider: "fake" | "twilio" | "console";
         createdAt: string;
     } | null;
+    text: string;
+    forDate: string;
+    source: "model" | "template";
+    generatedAt: string;
 }, {
-    status: "sent" | "failed" | "drafted" | "skipped";
+    status: "sent" | "failed" | "previewed" | "drafted" | "skipped";
     id: string;
-    forDate: string;
-    text: string;
-    source: "model" | "template";
-    generatedAt: string;
     delivery: {
-        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+        provider: "fake" | "twilio" | "console";
         createdAt: string;
     } | null;
+    text: string;
+    forDate: string;
+    source: "model" | "template";
+    generatedAt: string;
 }>;
 export declare const ListRecapHistoryResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
     forDate: zod.ZodString;
     text: zod.ZodString;
     source: zod.ZodEnum<["model", "template"]>;
-    status: zod.ZodEnum<["drafted", "sent", "failed", "skipped"]>;
+    status: zod.ZodEnum<["drafted", "sent", "failed", "skipped", "previewed"]>;
     generatedAt: zod.ZodString;
     delivery: zod.ZodUnion<[zod.ZodObject<{
-        status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+        status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed", "previewed"]>;
+        provider: zod.ZodEnum<["twilio", "console", "fake"]>;
         createdAt: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
-        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+        provider: "fake" | "twilio" | "console";
         createdAt: string;
     }, {
-        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+        provider: "fake" | "twilio" | "console";
         createdAt: string;
     }>, zod.ZodNull]>;
 }, "strip", zod.ZodTypeAny, {
-    status: "sent" | "failed" | "drafted" | "skipped";
+    status: "sent" | "failed" | "previewed" | "drafted" | "skipped";
     id: string;
-    forDate: string;
-    text: string;
-    source: "model" | "template";
-    generatedAt: string;
     delivery: {
-        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+        provider: "fake" | "twilio" | "console";
         createdAt: string;
     } | null;
+    text: string;
+    forDate: string;
+    source: "model" | "template";
+    generatedAt: string;
 }, {
-    status: "sent" | "failed" | "drafted" | "skipped";
+    status: "sent" | "failed" | "previewed" | "drafted" | "skipped";
     id: string;
-    forDate: string;
-    text: string;
-    source: "model" | "template";
-    generatedAt: string;
     delivery: {
-        status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+        status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+        provider: "fake" | "twilio" | "console";
         createdAt: string;
     } | null;
+    text: string;
+    forDate: string;
+    source: "model" | "template";
+    generatedAt: string;
 }>, "many">;
 /**
  * @summary (AI-4a) Owner only. Generate and store a member's recap for a day now (ops); does not send it.
@@ -740,68 +1122,75 @@ export declare const GenerateRecapNowResponse: zod.ZodObject<{
         forDate: zod.ZodString;
         text: zod.ZodString;
         source: zod.ZodEnum<["model", "template"]>;
-        status: zod.ZodEnum<["drafted", "sent", "failed", "skipped"]>;
+        status: zod.ZodEnum<["drafted", "sent", "failed", "skipped", "previewed"]>;
         generatedAt: zod.ZodString;
         delivery: zod.ZodUnion<[zod.ZodObject<{
-            status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed"]>;
+            status: zod.ZodEnum<["queued", "sent", "delivered", "undelivered", "failed", "previewed"]>;
+            provider: zod.ZodEnum<["twilio", "console", "fake"]>;
             createdAt: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            provider: "fake" | "twilio" | "console";
             createdAt: string;
         }, {
-            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            provider: "fake" | "twilio" | "console";
             createdAt: string;
         }>, zod.ZodNull]>;
     }, "strip", zod.ZodTypeAny, {
-        status: "sent" | "failed" | "drafted" | "skipped";
+        status: "sent" | "failed" | "previewed" | "drafted" | "skipped";
         id: string;
-        forDate: string;
-        text: string;
-        source: "model" | "template";
-        generatedAt: string;
         delivery: {
-            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            provider: "fake" | "twilio" | "console";
             createdAt: string;
         } | null;
+        text: string;
+        forDate: string;
+        source: "model" | "template";
+        generatedAt: string;
     }, {
-        status: "sent" | "failed" | "drafted" | "skipped";
+        status: "sent" | "failed" | "previewed" | "drafted" | "skipped";
         id: string;
-        forDate: string;
-        text: string;
-        source: "model" | "template";
-        generatedAt: string;
         delivery: {
-            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            provider: "fake" | "twilio" | "console";
             createdAt: string;
         } | null;
+        text: string;
+        forDate: string;
+        source: "model" | "template";
+        generatedAt: string;
     }>;
 }, "strip", zod.ZodTypeAny, {
     created: boolean;
     recap: {
-        status: "sent" | "failed" | "drafted" | "skipped";
+        status: "sent" | "failed" | "previewed" | "drafted" | "skipped";
         id: string;
-        forDate: string;
-        text: string;
-        source: "model" | "template";
-        generatedAt: string;
         delivery: {
-            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            provider: "fake" | "twilio" | "console";
             createdAt: string;
         } | null;
+        text: string;
+        forDate: string;
+        source: "model" | "template";
+        generatedAt: string;
     };
 }, {
     created: boolean;
     recap: {
-        status: "sent" | "failed" | "drafted" | "skipped";
+        status: "sent" | "failed" | "previewed" | "drafted" | "skipped";
         id: string;
-        forDate: string;
-        text: string;
-        source: "model" | "template";
-        generatedAt: string;
         delivery: {
-            status: "sent" | "queued" | "delivered" | "undelivered" | "failed";
+            status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+            provider: "fake" | "twilio" | "console";
             createdAt: string;
         } | null;
+        text: string;
+        forDate: string;
+        source: "model" | "template";
+        generatedAt: string;
     };
 }>;
 /**

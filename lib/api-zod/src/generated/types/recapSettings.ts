@@ -5,9 +5,11 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { RecapDeliveryState } from "./recapDeliveryState";
 
 export interface RecapSettings {
   enabled: boolean;
+  delivery: RecapDeliveryState;
   /** HH:MM, 24-hour, in `timezone` */
   sendTimeLocal: string;
   /** IANA zone */

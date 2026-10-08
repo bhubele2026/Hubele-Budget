@@ -6,13 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * previewed = no text was sent
+ */
 export type RecapTestSendResultStatus =
   (typeof RecapTestSendResultStatus)[keyof typeof RecapTestSendResultStatus];
 
 export const RecapTestSendResultStatus = {
-  queued: "queued",
   sent: "sent",
-  delivered: "delivered",
-  undelivered: "undelivered",
-  failed: "failed",
+  previewed: "previewed",
 } as const;

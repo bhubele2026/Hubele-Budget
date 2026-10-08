@@ -5,10 +5,18 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { RecapTestSendResultMode } from "./recapTestSendResultMode";
 import type { RecapTestSendResultStatus } from "./recapTestSendResultStatus";
 export interface RecapTestSendResult {
+    /** previewed = no text was sent */
     status: RecapTestSendResultStatus;
+    mode: RecapTestSendResultMode;
     /** @nullable */
     deliveryId: string | null;
+    /**
+     * The text that would have been sent; present in preview.
+     * @nullable
+     */
+    text?: string | null;
 }
 //# sourceMappingURL=recapTestSendResult.d.ts.map

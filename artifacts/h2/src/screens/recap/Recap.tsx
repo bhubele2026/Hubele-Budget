@@ -36,7 +36,7 @@ import { shortDate, shortDateOfInstant } from "@/lib/dates";
 import { apiMessage } from "@/screens/household/words";
 import { SwitchRow } from "@/screens/household/parts";
 import { Field, inputClass, useToast } from "@/screens/plan/parts";
-import { TIMEZONES, clockWords, historyWords, isClock, isListedZone, isSixDigits, maskedPhone, testsLeft, toE164 } from "./recapWords";
+import { TIMEZONES, clockWords, historyWords, isClock, isListedZone, isSixDigits, ladderRows, maskedPhone, statusLabel, testsLeft, toE164 } from "./recapWords";
 
 export interface RecapData {
   settings: Read<RecapSettings>;
@@ -60,7 +60,7 @@ export default function Recap() {
   return <RecapView data={useRecapData()} />;
 }
 
-const STATUS_TONE: Record<string, StatusTone> = { sent: "on", delivered: "fresh", failed: "over", skipped: "stale", drafted: "neutral" };
+const STATUS_TONE: Record<string, StatusTone> = { sent: "on", delivered: "fresh", failed: "over", skipped: "stale", drafted: "neutral", previewed: "stale" };
 
 interface Draft {
   sendTimeLocal: string;
@@ -115,7 +115,7 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
   // Preview step
   const [shown, setShown] = useState<RecapPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [testNote, setTestNote] = useState<{ text: string; kind: "ok" | "error" } | null>(null);
+  const [testNote, setTestNote] = useState<{ text: string; kind: "ok" | "error"; shown?: string } | null>(null);
   const [pauseDate, setPauseDate] = useState("");
   const [pauseError, setPauseError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -151,7 +151,6 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
   const timeBad = !isClock(cur.sendTimeLocal);
   const paused = s.pausedUntil && new Date(s.pausedUntil).getTime() > (now ?? new Date()).getTime() ? s.pausedUntil : null;
   const left = testsLeft(deliveries.data, now);
-  const smsOff = health.data ? !health.data.sms.configured : false;
   const aiOff = health.data ? !health.data.ai.enabled : false;
 
   const sendCode = () => {
@@ -239,9 +238,14 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
   const runTest = () => {
     setTestNote(null);
     testSend.mutate(undefined, {
-      onSuccess: () => {
+      onSuccess: (r) => {
         void qc.invalidateQueries({ queryKey: getListRecapDeliveriesQueryKey(HISTORY_PARAMS) });
-        setTestNote({ text: "Test text sent.", kind: "ok" });
+        void qc.invalidateQueries({ queryKey: getGetRecapSettingsQueryKey() });
+        setTestNote(
+          r?.mode === "preview"
+            ? { text: "Preview shown. No text was sent.", kind: "ok", shown: r.text ?? undefined }
+            : { text: "Test text sent.", kind: "ok" },
+        );
       },
       onError: (e) => {
         void qc.invalidateQueries({ queryKey: getListRecapDeliveriesQueryKey(HISTORY_PARAMS) });
@@ -269,11 +273,25 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
 
   return (
     <Frame>
-      {smsOff && (
-        <p className="mb-6 type-caption text-ink-3" data-testid="sms-preview-mode">
-          Texts are in preview mode until SMS is configured.
-        </p>
-      )}
+      <Section label="Status" data-testid="status-ladder">
+        <ul className="flex flex-col">
+          {ladderRows(s.delivery, s.phoneLast4).map((row) => (
+            <li key={row.key} className="flex flex-col gap-1 border-t border-rule py-2 first:border-t-0" data-testid="ladder-row" data-row={row.key}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="type-body text-ink">{row.label}</span>
+                <StatusWord tone={row.tone} data-testid="ladder-word">
+                  {row.word}
+                </StatusWord>
+              </div>
+              {row.note && (
+                <span className="type-caption text-ink-3" data-testid="preview-note">
+                  {row.note}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </Section>
       {s.optedOutAt && (
         <div className="mb-6">
           <Note kind="stale" data-testid="opted-out">
@@ -505,6 +523,11 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
                 {testNote.text}
               </p>
             )}
+            {testNote?.shown && (
+              <p className="type-body text-ink" data-testid="test-shown">
+                {testNote.shown}
+              </p>
+            )}
           </div>
           <div className="flex flex-col gap-3 border-t border-rule pt-4" data-testid="pause-block">
             {paused ? (
@@ -558,7 +581,7 @@ export function RecapView({ data, now }: { data: RecapData; now?: Date }) {
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="type-body text-ink">{shortDate(h.forDate)}</span>
                     <StatusWord tone={STATUS_TONE[w.status] ?? "neutral"} data-testid="history-status">
-                      {w.status === "drafted" ? "Drafted" : w.status[0]!.toUpperCase() + w.status.slice(1)}
+                      {statusLabel(w.status)}
                     </StatusWord>
                   </div>
                   <span className="type-caption text-ink-3" data-testid="history-source">

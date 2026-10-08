@@ -12,5 +12,6 @@ export declare const RecapDeliveryItemStatus: {
     readonly delivered: "delivered";
     readonly undelivered: "undelivered";
     readonly failed: "failed";
+    readonly previewed: "previewed";
 };
 //# sourceMappingURL=recapDeliveryItemStatus.d.ts.map

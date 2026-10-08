@@ -3358,10 +3358,14 @@ components:
 
     HealthSms:
       type: object
-      required: [provider, configured]
+      required: [provider, configured, mode]
       properties:
         provider: { type: string, enum: [twilio, console, fake] }
-        configured: { type: boolean }
+        configured: { type: boolean, description: True only when the provider can really send (console is never configured). }
+        mode:
+          type: string
+          enum: [live, preview]
+          description: live only when Twilio is the provider and every credential is present; console and fake are preview.
 
     RecapError:
       type: object
@@ -3385,8 +3389,10 @@ components:
         - optedOutAt
         - consentText
         - consentTextVersion
+        - delivery
       properties:
         enabled: { type: boolean }
+        delivery: { $ref: "#/components/schemas/RecapDeliveryState" }
         sendTimeLocal: { type: string, description: "HH:MM, 24-hour, in `timezone`" }
         timezone: { type: string, description: IANA zone }
         phoneLast4: { type: ["string", "null"] }
@@ -3398,6 +3404,26 @@ components:
         optedOutAt: { type: ["string", "null"], description: ISO-8601 instant }
         consentText: { type: string, description: The exact sentence the member agrees to }
         consentTextVersion: { type: string }
+
+    RecapDeliveryState:
+      type: object
+      required: [mode, providerConfigured, phoneVerified, scheduled, sendTimeLocal, timezone, lastDelivery]
+      properties:
+        mode: { type: string, enum: [live, preview], description: preview = texts are written to the server log and never sent }
+        providerConfigured: { type: boolean }
+        phoneVerified: { type: boolean }
+        scheduled: { type: boolean, description: enabled, verified, not opted out and not paused }
+        sendTimeLocal: { type: string }
+        timezone: { type: string }
+        lastDelivery:
+          oneOf:
+            - type: object
+              required: [status, provider, at]
+              properties:
+                status: { type: string, enum: [queued, sent, delivered, undelivered, failed, previewed], description: previewed = a console row, never sent }
+                provider: { type: string, enum: [twilio, console, fake] }
+                at: { type: string }
+            - type: "null"
 
     RecapSettingsInput:
       type: object
@@ -3433,10 +3459,12 @@ components:
 
     RecapTestSendResult:
       type: object
-      required: [status, deliveryId]
+      required: [status, mode, deliveryId]
       properties:
-        status: { type: string, enum: [queued, sent, delivered, undelivered, failed] }
+        status: { type: string, enum: [sent, previewed], description: previewed = no text was sent }
+        mode: { type: string, enum: [live, preview] }
         deliveryId: { type: ["string", "null"] }
+        text: { type: ["string", "null"], description: The text that would have been sent; present in preview. }
 
     RecapPauseInput:
       type: object
@@ -3446,12 +3474,13 @@ components:
 
     RecapDeliveryItem:
       type: object
-      required: [id, kind, forDate, status, createdAt]
+      required: [id, kind, forDate, status, provider, createdAt]
       properties:
         id: { type: string }
         kind: { type: string, enum: [scheduled, test, verification, alert, reply] }
         forDate: { type: ["string", "null"] }
-        status: { type: string, enum: [queued, sent, delivered, undelivered, failed] }
+        status: { type: string, enum: [queued, sent, delivered, undelivered, failed, previewed] }
+        provider: { type: string, enum: [twilio, console, fake] }
         createdAt: { type: string }
 
     RecapPreviewInput:
@@ -3490,14 +3519,15 @@ components:
         forDate: { type: string }
         text: { type: string }
         source: { type: string, enum: [model, template] }
-        status: { type: string, enum: [drafted, sent, failed, skipped] }
+        status: { type: string, enum: [drafted, sent, failed, skipped, previewed] }
         generatedAt: { type: string }
         delivery:
           oneOf:
             - type: object
-              required: [status, createdAt]
+              required: [status, provider, createdAt]
               properties:
-                status: { type: string, enum: [queued, sent, delivered, undelivered, failed] }
+                status: { type: string, enum: [queued, sent, delivered, undelivered, failed, previewed] }
+                provider: { type: string, enum: [twilio, console, fake] }
                 createdAt: { type: string }
             - type: "null"
 

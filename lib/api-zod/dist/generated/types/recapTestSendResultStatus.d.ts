@@ -5,12 +5,12 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * previewed = no text was sent
+ */
 export type RecapTestSendResultStatus = (typeof RecapTestSendResultStatus)[keyof typeof RecapTestSendResultStatus];
 export declare const RecapTestSendResultStatus: {
-    readonly queued: "queued";
     readonly sent: "sent";
-    readonly delivered: "delivered";
-    readonly undelivered: "undelivered";
-    readonly failed: "failed";
+    readonly previewed: "previewed";
 };
 //# sourceMappingURL=recapTestSendResultStatus.d.ts.map

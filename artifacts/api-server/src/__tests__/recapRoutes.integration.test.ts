@@ -33,7 +33,7 @@ import { _resetSmsProviderForTests } from "../lib/sms";
 
 let server: Server;
 let base = "";
-let A: TestMember, B: TestMember, C: TestMember, D: TestMember;
+let A: TestMember, B: TestMember, C: TestMember, D: TestMember, E: TestMember;
 
 async function call(as: TestMember, method: string, path: string, body?: unknown) {
   current = as;
@@ -52,7 +52,7 @@ async function call(as: TestMember, method: string, path: string, body?: unknown
 }
 
 beforeAll(async () => {
-  [A, B, C, D] = await makeMembers(4);
+  [A, B, C, D, E] = await makeMembers(5);
   const app = express();
   app.use(express.json());
   app.use(recapRouter);
@@ -62,7 +62,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await new Promise<void>((r) => server.close(() => r()));
-  await dropMembers([A, B, C, D]);
+  await dropMembers([A, B, C, D, E]);
 });
 beforeEach(() => {
   _resetFakeSmsForTests();
@@ -110,6 +110,54 @@ describe("settings", () => {
     expect(ok.json).toMatchObject({ sendTimeLocal: "06:30", timezone: "America/New_York", skipWeekends: true, enabled: false });
     // Change it back so the test-send template below starts from the defaults.
     await call(A, "PUT", "/recap/settings", { sendTimeLocal: "07:00", timezone: "America/Chicago", skipWeekends: false });
+  });
+});
+
+describe("settings delivery block", () => {
+  it("scheduled needs enabled, verified, not opted out and not paused; preview mode under the fake provider", async () => {
+    const fresh = await call(E, "GET", "/recap/settings");
+    expect(fresh.json.delivery).toEqual({
+      mode: "preview",
+      providerConfigured: true, // fake outside production
+      phoneVerified: false,
+      scheduled: false,
+      sendTimeLocal: "07:00",
+      timezone: "America/Chicago",
+      lastDelivery: null,
+    });
+    await db
+      .update(recapSettingsTable)
+      .set({ phoneE164: "+15555550104", verifiedAt: new Date(), consentedAt: new Date(), enabled: true })
+      .where(eq(recapSettingsTable.userId, E.userId));
+    expect((await call(E, "GET", "/recap/settings")).json.delivery).toMatchObject({ phoneVerified: true, scheduled: true });
+    const paused = await call(E, "POST", "/recap/pause", { until: new Date(Date.now() + 3 * 86_400_000).toISOString() });
+    expect(paused.json.delivery).toMatchObject({ phoneVerified: true, scheduled: false });
+    await call(E, "POST", "/recap/pause", { until: null });
+    expect((await call(E, "GET", "/recap/settings")).json.delivery.scheduled).toBe(true);
+  });
+
+  it("a console test text is previewed (never sent) and the settings and deliveries say so; live says sent", async () => {
+    process.env.SMS_PROVIDER = "console";
+    _resetSmsProviderForTests();
+    try {
+      const r = await call(E, "POST", "/recap/test-send");
+      expect(r.status).toBe(200);
+      expect(r.json).toMatchObject({ status: "previewed", mode: "preview", text: expect.stringContaining("H2 test:") });
+      const s = await call(E, "GET", "/recap/settings");
+      expect(s.json.delivery).toMatchObject({ mode: "preview", providerConfigured: false });
+      expect(s.json.delivery.lastDelivery).toMatchObject({ status: "previewed", provider: "console" });
+      const rows = (await call(E, "GET", "/recap/deliveries")).json;
+      expect(rows[0]).toMatchObject({ kind: "test", provider: "console", status: "previewed" });
+      // The DB value is unchanged: the mapping is the API's.
+      const [row] = await db.select().from(recapDeliveriesTable).where(eq(recapDeliveriesTable.id, rows[0].id));
+      expect(row!.status).toBe("sent");
+    } finally {
+      process.env.SMS_PROVIDER = "fake";
+      _resetSmsProviderForTests();
+    }
+    const live = await call(E, "POST", "/recap/test-send");
+    expect(live.json).toMatchObject({ status: "sent", mode: "live", text: null });
+    expect((await call(E, "GET", "/recap/settings")).json.delivery.lastDelivery).toMatchObject({ status: "sent", provider: "fake" });
   });
 });
 
@@ -253,7 +301,7 @@ describe("pause, unsubscribe, deliveries", () => {
     const mine = await call(A, "GET", "/recap/deliveries");
     expect(mine.status).toBe(200);
     expect(mine.json.length).toBeGreaterThanOrEqual(4); // 2 verification + 3 tests
-    expect(mine.json.every((d: any) => Object.keys(d).sort().join() === "createdAt,forDate,id,kind,status")).toBe(true);
+    expect(mine.json.every((d: any) => Object.keys(d).sort().join() === "createdAt,forDate,id,kind,provider,status")).toBe(true);
     const times = mine.json.map((d: any) => new Date(d.createdAt).getTime());
     expect(times).toEqual([...times].sort((a, b) => b - a));
     expect((await call(A, "GET", "/recap/deliveries?limit=2")).json).toHaveLength(2);

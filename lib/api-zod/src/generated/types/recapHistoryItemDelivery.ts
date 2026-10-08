@@ -7,6 +7,13 @@
  */
 
 export type RecapHistoryItemDelivery = {
-  status: "queued" | "sent" | "delivered" | "undelivered" | "failed";
+  status:
+    | "queued"
+    | "sent"
+    | "delivered"
+    | "undelivered"
+    | "failed"
+    | "previewed";
+  provider: "twilio" | "console" | "fake";
   createdAt: string;
 } | null;

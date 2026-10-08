@@ -40,9 +40,20 @@ export declare const HealthSmsProvider: {
     readonly console: "console";
     readonly fake: "fake";
 };
+/**
+ * live only when Twilio is the provider and every credential is present; console and fake are preview.
+ */
+export type HealthSmsMode = (typeof HealthSmsMode)[keyof typeof HealthSmsMode];
+export declare const HealthSmsMode: {
+    readonly live: "live";
+    readonly preview: "preview";
+};
 export interface HealthSms {
     provider: HealthSmsProvider;
+    /** True only when the provider can really send (console is never configured). */
     configured: boolean;
+    /** live only when Twilio is the provider and every credential is present; console and fake are preview. */
+    mode: HealthSmsMode;
 }
 export interface HealthPlaid {
     /** True when the server has a PLAID_WEBHOOK_URL, so linked banks can
@@ -62,8 +73,34 @@ export interface RecapError {
     error: string;
     code?: string;
 }
+/**
+ * preview = texts are written to the server log and never sent
+ */
+export type RecapDeliveryStateMode = (typeof RecapDeliveryStateMode)[keyof typeof RecapDeliveryStateMode];
+export declare const RecapDeliveryStateMode: {
+    readonly live: "live";
+    readonly preview: "preview";
+};
+export type RecapDeliveryStateLastDelivery = {
+    /** previewed = a console row */
+    status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+    provider: "twilio" | "console" | "fake";
+    at: string;
+} | null;
+export interface RecapDeliveryState {
+    /** preview = texts are written to the server log and never sent */
+    mode: RecapDeliveryStateMode;
+    providerConfigured: boolean;
+    phoneVerified: boolean;
+    /** enabled */
+    scheduled: boolean;
+    sendTimeLocal: string;
+    timezone: string;
+    lastDelivery: RecapDeliveryStateLastDelivery;
+}
 export interface RecapSettings {
     enabled: boolean;
+    delivery: RecapDeliveryState;
     /** HH:MM, 24-hour, in `timezone` */
     sendTimeLocal: string;
     /** IANA zone */
@@ -114,18 +151,30 @@ export interface RecapVerifyStartResult {
 export interface RecapVerifyConfirmInput {
     code: string;
 }
+/**
+ * previewed = no text was sent
+ */
 export type RecapTestSendResultStatus = (typeof RecapTestSendResultStatus)[keyof typeof RecapTestSendResultStatus];
 export declare const RecapTestSendResultStatus: {
-    readonly queued: "queued";
     readonly sent: "sent";
-    readonly delivered: "delivered";
-    readonly undelivered: "undelivered";
-    readonly failed: "failed";
+    readonly previewed: "previewed";
+};
+export type RecapTestSendResultMode = (typeof RecapTestSendResultMode)[keyof typeof RecapTestSendResultMode];
+export declare const RecapTestSendResultMode: {
+    readonly live: "live";
+    readonly preview: "preview";
 };
 export interface RecapTestSendResult {
+    /** previewed = no text was sent */
     status: RecapTestSendResultStatus;
+    mode: RecapTestSendResultMode;
     /** @nullable */
     deliveryId: string | null;
+    /**
+     * The text that would have been sent; present in preview.
+     * @nullable
+     */
+    text?: string | null;
 }
 export interface RecapPauseInput {
     /**
@@ -149,6 +198,13 @@ export declare const RecapDeliveryItemStatus: {
     readonly delivered: "delivered";
     readonly undelivered: "undelivered";
     readonly failed: "failed";
+    readonly previewed: "previewed";
+};
+export type RecapDeliveryItemProvider = (typeof RecapDeliveryItemProvider)[keyof typeof RecapDeliveryItemProvider];
+export declare const RecapDeliveryItemProvider: {
+    readonly twilio: "twilio";
+    readonly console: "console";
+    readonly fake: "fake";
 };
 export interface RecapDeliveryItem {
     id: string;
@@ -156,6 +212,7 @@ export interface RecapDeliveryItem {
     /** @nullable */
     forDate: string | null;
     status: RecapDeliveryItemStatus;
+    provider: RecapDeliveryItemProvider;
     createdAt: string;
 }
 export interface RecapPreviewInput {
@@ -194,9 +251,11 @@ export declare const RecapHistoryItemStatus: {
     readonly sent: "sent";
     readonly failed: "failed";
     readonly skipped: "skipped";
+    readonly previewed: "previewed";
 };
 export type RecapHistoryItemDelivery = {
-    status: "queued" | "sent" | "delivered" | "undelivered" | "failed";
+    status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+    provider: "twilio" | "console" | "fake";
     createdAt: string;
 } | null;
 export interface RecapHistoryItem {

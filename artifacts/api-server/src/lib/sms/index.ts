@@ -23,7 +23,14 @@ export interface SmsConfig {
   provider: SmsProviderName;
   /** True when that provider has everything it needs. Booleans only — never a value. */
   configured: boolean;
+  /**
+   * "live" only when Twilio is the provider AND every credential is present.
+   * console and fake never put a text on a phone, so they are "preview".
+   */
+  mode: SmsMode;
 }
+
+export type SmsMode = "live" | "preview";
 
 function requested(): SmsProviderName {
   const raw = process.env.SMS_PROVIDER?.trim().toLowerCase();
@@ -48,9 +55,13 @@ export function readTwilioConfig(): (TwilioConfig & { webhookBaseUrl: string }) 
 
 export function getSmsConfig(): SmsConfig {
   const provider = requested();
-  if (provider === "twilio") return { provider, configured: readTwilioConfig() !== null };
-  if (provider === "fake") return { provider, configured: process.env.NODE_ENV !== "production" };
-  return { provider, configured: true };
+  if (provider === "twilio") {
+    const ok = readTwilioConfig() !== null;
+    return { provider, configured: ok, mode: ok ? "live" : "preview" };
+  }
+  if (provider === "fake") return { provider, configured: process.env.NODE_ENV !== "production", mode: "preview" };
+  // console is the provider that never sends: it is not "configured", it is a preview.
+  return { provider, configured: false, mode: "preview" };
 }
 
 const warned = new Set<string>();

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { RecapFacts } from "../recap/facts";
+import { pickAction } from "../recap/action";
 import { renderRecapTemplate, FINDING_PHRASES } from "../recap/template";
 import { allowedNumbers, maxTextFor, validateRecapDraft, MAX_MESSAGE_CHARS, MAX_TEXT_CHARS } from "../recap/validate";
 import { findForbidden, isGsmSafe, safeName, toGsm } from "../recap/text";
@@ -40,7 +41,7 @@ function randomFacts(seed: number): RecapFacts {
   const cat = Math.floor(r() * 3) * (r() < 0.3 ? 1 : 0);
   const payday = r() < 0.7;
   const cap = r() < 0.8 ? money(r, 800) : null;
-  return {
+  const core: Omit<RecapFacts, "action"> = {
     forDate: "2026-10-07",
     yesterday: "2026-10-06",
     yesterdayWeekday: "Tue",
@@ -73,7 +74,7 @@ function randomFacts(seed: number): RecapFacts {
     categorizationReviewCount: cat,
     needsLookCount: review + cat,
     nextStep: review + cat > 0 ? "review" : bills.some((b) => b.dueTomorrow) ? "bill_tomorrow" : null,
-    debt: { payoffPct: r() < 0.8 ? Math.floor(r() * 100) : null, confirmedPaymentsYesterday: Math.floor(r() * 3) },
+    debt: { payoffPct: r() < 0.8 ? Math.floor(r() * 100) : null, confirmedPaymentsYesterday: Math.floor(r() * 3), topAprName: r() < 0.6 ? pick(r, ["Visa", "Store Card", "Car Loan"]) : null },
     freshness: {
       stale,
       staleReason: stale ? pick(r, ["old", "refresh_failed", "manual_old"]) : null,
@@ -83,9 +84,10 @@ function randomFacts(seed: number): RecapFacts {
     progress: { lowerThanLastWeek: r() < 0.4, debtPayment: r() < 0.3 },
     findings:
       r() < 0.5
-        ? [{ id: "f1", kind: pick(r, Object.keys(FINDING_PHRASES)), severity: pick(r, ["info", "watch", "high"] as const), summary: "a bill came in at $212, up $34 from usual", surfaced: r() < 0.3 }]
+        ? [{ id: "f1", kind: pick(r, Object.keys(FINDING_PHRASES)), severity: pick(r, ["info", "watch", "high"] as const), summary: "a bill came in at $212, up $34 from usual", surfaced: r() < 0.3, shortBy: r() < 0.5 ? money(r, 900) : null }]
         : [],
   };
+  return { ...core, action: pickAction(core) };
 }
 
 const LINK = recapLink("2026-10-07");
@@ -196,6 +198,7 @@ describe("template branches", () => {
     categorizationReviewCount: 0,
     needsLookCount: 0,
     nextStep: null,
+    action: null,
     findings: [],
     freshness: { stale: false, staleReason: null, asOfBank: "2026-10-06T12:00:00.000Z", daysSinceBank: 1 },
     progress: { lowerThanLastWeek: false, debtPayment: false },
@@ -213,12 +216,12 @@ describe("template branches", () => {
       nextStep: "review",
     };
     expect(renderRecapTemplate(f)).toBe(
-      "Yesterday: $92 spent (Groceries $50, Dining $12). $1,234 free until payday (Fri). On track this week. 1 charge needs a look. Due soon: Electric $90 tomorrow.",
+      "Yesterday: $92 spent (Groceries $50, Dining $12). Room in the plan: $1,234 until Fri. On track this week. 1 charge needs a look. Due soon: Electric $90 tomorrow.",
     );
   });
 
   it("no spending: says nothing was spent only when the bank is fresh", () => {
-    expect(renderRecapTemplate(quiet)).toBe("Yesterday: nothing spent. $1,234 free until payday (Fri). On track this week.");
+    expect(renderRecapTemplate(quiet)).toBe("Yesterday: nothing spent. Room in the plan: $1,234 until Fri. On track this week.");
   });
 
   it("stale: says how old the bank data is and never claims nothing was spent", () => {
@@ -258,7 +261,7 @@ describe("template branches", () => {
       position: { ...quiet.position, horizonKind: "week_end", paydayDate: null, paydayWeekday: null },
       weekToDate: { spent: 0, cap: null, remainingWeek: null, withinPlan: null },
     });
-    expect(t).toBe("Yesterday: nothing spent. $1,234 free through Saturday.");
+    expect(t).toBe("Yesterday: nothing spent. Room in the plan: $1,234 until Saturday.");
   });
 
   it("at most one next step and at most one finding; an already-surfaced or stale-bank finding is not repeated", () => {

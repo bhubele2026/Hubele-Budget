@@ -5,9 +5,13 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { HealthSmsMode } from "./healthSmsMode";
 import type { HealthSmsProvider } from "./healthSmsProvider";
 export interface HealthSms {
     provider: HealthSmsProvider;
+    /** True only when the provider can really send (console is never configured). */
     configured: boolean;
+    /** live only when Twilio is the provider and every credential is present; console and fake are preview. */
+    mode: HealthSmsMode;
 }
 //# sourceMappingURL=healthSms.d.ts.map

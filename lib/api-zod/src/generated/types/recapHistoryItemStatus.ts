@@ -14,4 +14,5 @@ export const RecapHistoryItemStatus = {
   sent: "sent",
   failed: "failed",
   skipped: "skipped",
+  previewed: "previewed",
 } as const;

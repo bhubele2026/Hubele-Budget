@@ -37,7 +37,16 @@ export const HealthCheckResponse = zod.object({
   }),
   sms: zod.object({
     provider: zod.enum(["twilio", "console", "fake"]),
-    configured: zod.boolean(),
+    configured: zod
+      .boolean()
+      .describe(
+        "True only when the provider can really send (console is never configured).",
+      ),
+    mode: zod
+      .enum(["live", "preview"])
+      .describe(
+        "live only when Twilio is the provider and every credential is present; console and fake are preview.",
+      ),
   }),
   plaid: zod.object({
     webhookUrlSet: zod
@@ -118,6 +127,33 @@ on first read). Never carries the full phone number: only its last four digits.
  */
 export const GetRecapSettingsResponse = zod.object({
   enabled: zod.boolean(),
+  delivery: zod.object({
+    mode: zod
+      .enum(["live", "preview"])
+      .describe("preview = texts are written to the server log and never sent"),
+    providerConfigured: zod.boolean(),
+    phoneVerified: zod.boolean(),
+    scheduled: zod.boolean().describe("enabled"),
+    sendTimeLocal: zod.string(),
+    timezone: zod.string(),
+    lastDelivery: zod.union([
+      zod.object({
+        status: zod
+          .enum([
+            "queued",
+            "sent",
+            "delivered",
+            "undelivered",
+            "failed",
+            "previewed",
+          ])
+          .describe("previewed = a console row"),
+        provider: zod.enum(["twilio", "console", "fake"]),
+        at: zod.string(),
+      }),
+      zod.null(),
+    ]),
+  }),
   sendTimeLocal: zod.string().describe("HH:MM, 24-hour, in `timezone`"),
   timezone: zod.string().describe("IANA zone"),
   phoneLast4: zod.string().nullable(),
@@ -146,6 +182,33 @@ export const UpdateRecapSettingsBody = zod.object({
 
 export const UpdateRecapSettingsResponse = zod.object({
   enabled: zod.boolean(),
+  delivery: zod.object({
+    mode: zod
+      .enum(["live", "preview"])
+      .describe("preview = texts are written to the server log and never sent"),
+    providerConfigured: zod.boolean(),
+    phoneVerified: zod.boolean(),
+    scheduled: zod.boolean().describe("enabled"),
+    sendTimeLocal: zod.string(),
+    timezone: zod.string(),
+    lastDelivery: zod.union([
+      zod.object({
+        status: zod
+          .enum([
+            "queued",
+            "sent",
+            "delivered",
+            "undelivered",
+            "failed",
+            "previewed",
+          ])
+          .describe("previewed = a console row"),
+        provider: zod.enum(["twilio", "console", "fake"]),
+        at: zod.string(),
+      }),
+      zod.null(),
+    ]),
+  }),
   sendTimeLocal: zod.string().describe("HH:MM, 24-hour, in `timezone`"),
   timezone: zod.string().describe("IANA zone"),
   phoneLast4: zod.string().nullable(),
@@ -191,6 +254,33 @@ export const ConfirmRecapVerificationBody = zod.object({
 
 export const ConfirmRecapVerificationResponse = zod.object({
   enabled: zod.boolean(),
+  delivery: zod.object({
+    mode: zod
+      .enum(["live", "preview"])
+      .describe("preview = texts are written to the server log and never sent"),
+    providerConfigured: zod.boolean(),
+    phoneVerified: zod.boolean(),
+    scheduled: zod.boolean().describe("enabled"),
+    sendTimeLocal: zod.string(),
+    timezone: zod.string(),
+    lastDelivery: zod.union([
+      zod.object({
+        status: zod
+          .enum([
+            "queued",
+            "sent",
+            "delivered",
+            "undelivered",
+            "failed",
+            "previewed",
+          ])
+          .describe("previewed = a console row"),
+        provider: zod.enum(["twilio", "console", "fake"]),
+        at: zod.string(),
+      }),
+      zod.null(),
+    ]),
+  }),
   sendTimeLocal: zod.string().describe("HH:MM, 24-hour, in `timezone`"),
   timezone: zod.string().describe("IANA zone"),
   phoneLast4: zod.string().nullable(),
@@ -208,8 +298,15 @@ export const ConfirmRecapVerificationResponse = zod.object({
  * @summary (AI-4b) Text the fixed test line to the caller's verified number (3 per day).
  */
 export const SendRecapTestResponse = zod.object({
-  status: zod.enum(["queued", "sent", "delivered", "undelivered", "failed"]),
+  status: zod
+    .enum(["sent", "previewed"])
+    .describe("previewed = no text was sent"),
+  mode: zod.enum(["live", "preview"]),
   deliveryId: zod.string().nullable(),
+  text: zod
+    .string()
+    .nullish()
+    .describe("The text that would have been sent; present in preview."),
 });
 
 /**
@@ -221,6 +318,33 @@ export const PauseRecapBody = zod.object({
 
 export const PauseRecapResponse = zod.object({
   enabled: zod.boolean(),
+  delivery: zod.object({
+    mode: zod
+      .enum(["live", "preview"])
+      .describe("preview = texts are written to the server log and never sent"),
+    providerConfigured: zod.boolean(),
+    phoneVerified: zod.boolean(),
+    scheduled: zod.boolean().describe("enabled"),
+    sendTimeLocal: zod.string(),
+    timezone: zod.string(),
+    lastDelivery: zod.union([
+      zod.object({
+        status: zod
+          .enum([
+            "queued",
+            "sent",
+            "delivered",
+            "undelivered",
+            "failed",
+            "previewed",
+          ])
+          .describe("previewed = a console row"),
+        provider: zod.enum(["twilio", "console", "fake"]),
+        at: zod.string(),
+      }),
+      zod.null(),
+    ]),
+  }),
   sendTimeLocal: zod.string().describe("HH:MM, 24-hour, in `timezone`"),
   timezone: zod.string().describe("IANA zone"),
   phoneLast4: zod.string().nullable(),
@@ -239,6 +363,33 @@ export const PauseRecapResponse = zod.object({
  */
 export const UnsubscribeRecapResponse = zod.object({
   enabled: zod.boolean(),
+  delivery: zod.object({
+    mode: zod
+      .enum(["live", "preview"])
+      .describe("preview = texts are written to the server log and never sent"),
+    providerConfigured: zod.boolean(),
+    phoneVerified: zod.boolean(),
+    scheduled: zod.boolean().describe("enabled"),
+    sendTimeLocal: zod.string(),
+    timezone: zod.string(),
+    lastDelivery: zod.union([
+      zod.object({
+        status: zod
+          .enum([
+            "queued",
+            "sent",
+            "delivered",
+            "undelivered",
+            "failed",
+            "previewed",
+          ])
+          .describe("previewed = a console row"),
+        provider: zod.enum(["twilio", "console", "fake"]),
+        at: zod.string(),
+      }),
+      zod.null(),
+    ]),
+  }),
   sendTimeLocal: zod.string().describe("HH:MM, 24-hour, in `timezone`"),
   timezone: zod.string().describe("IANA zone"),
   phoneLast4: zod.string().nullable(),
@@ -269,7 +420,15 @@ export const ListRecapDeliveriesResponseItem = zod.object({
   id: zod.string(),
   kind: zod.enum(["scheduled", "test", "verification", "alert", "reply"]),
   forDate: zod.string().nullable(),
-  status: zod.enum(["queued", "sent", "delivered", "undelivered", "failed"]),
+  status: zod.enum([
+    "queued",
+    "sent",
+    "delivered",
+    "undelivered",
+    "failed",
+    "previewed",
+  ]),
+  provider: zod.enum(["twilio", "console", "fake"]),
   createdAt: zod.string(),
 });
 export const ListRecapDeliveriesResponse = zod.array(
@@ -330,7 +489,7 @@ export const ListRecapHistoryResponseItem = zod.object({
   forDate: zod.string(),
   text: zod.string(),
   source: zod.enum(["model", "template"]),
-  status: zod.enum(["drafted", "sent", "failed", "skipped"]),
+  status: zod.enum(["drafted", "sent", "failed", "skipped", "previewed"]),
   generatedAt: zod.string(),
   delivery: zod.union([
     zod.object({
@@ -340,7 +499,9 @@ export const ListRecapHistoryResponseItem = zod.object({
         "delivered",
         "undelivered",
         "failed",
+        "previewed",
       ]),
+      provider: zod.enum(["twilio", "console", "fake"]),
       createdAt: zod.string(),
     }),
     zod.null(),
@@ -370,7 +531,7 @@ export const GenerateRecapNowResponse = zod.object({
     forDate: zod.string(),
     text: zod.string(),
     source: zod.enum(["model", "template"]),
-    status: zod.enum(["drafted", "sent", "failed", "skipped"]),
+    status: zod.enum(["drafted", "sent", "failed", "skipped", "previewed"]),
     generatedAt: zod.string(),
     delivery: zod.union([
       zod.object({
@@ -380,7 +541,9 @@ export const GenerateRecapNowResponse = zod.object({
           "delivered",
           "undelivered",
           "failed",
+          "previewed",
         ]),
+        provider: zod.enum(["twilio", "console", "fake"]),
         createdAt: zod.string(),
       }),
       zod.null(),

@@ -15,4 +15,5 @@ export const RecapDeliveryItemStatus = {
   delivered: "delivered",
   undelivered: "undelivered",
   failed: "failed",
+  previewed: "previewed",
 } as const;

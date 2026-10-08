@@ -43,6 +43,11 @@ beforeEach(async () => {
 });
 
 const GOOD = { text: "Yesterday: $92 spent (Groceries $50). Electric $90 tomorrow.", factsUsed: ["spentYesterday", "billsNext3Days"] };
+// The action line is chosen by code and appended when a draft leaves it out.
+const actionOf = (facts: unknown): string => {
+  const a = (facts as { action?: { text: string } | null }).action?.text;
+  return a ? ` ${a}` : "";
+};
 const usageRows = (m: TestMember) => db.select().from(aiUsageTable).where(eq(aiUsageTable.householdId, m.householdId));
 const runRows = (m: TestMember) => db.select().from(agentRunsTable).where(eq(agentRunsTable.householdId, m.householdId));
 
@@ -55,13 +60,14 @@ describe("a stored recap", () => {
     expect(out.recap).toMatchObject({
       source: "model",
       status: "drafted",
-      promptVersion: "recap.v1",
-      text: `${GOOD.text} ${LINK}`,
+      promptVersion: "recap.v2",
       forDate: FOR_DATE,
       userId: A.userId,
       householdId: A.householdId,
     });
     expect(out.recap.facts).toMatchObject({ yesterday: "2026-10-06", spentYesterday: { total: 92.4 } });
+    expect(out.recap.text).toBe(`${GOOD.text}${actionOf(out.recap.facts)} ${LINK}`);
+    expect((out.recap.facts as { action: unknown }).action).not.toBeNull();
 
     const runs = await runRows(A);
     expect(runs).toHaveLength(1);
@@ -70,7 +76,7 @@ describe("a stored recap", () => {
     expect(runs[0]!.summary).toBe("model draft, 1 call");
     const usage = await usageRows(A);
     expect(usage).toHaveLength(1);
-    expect(usage[0]).toMatchObject({ task: "recap", status: "ok", promptVersion: "recap.v1", runId: runs[0]!.id });
+    expect(usage[0]).toMatchObject({ task: "recap", status: "ok", promptVersion: "recap.v2", runId: runs[0]!.id });
   });
 
   it("sends the model the facts as data, with no row ids and no merchant strings", async () => {
@@ -109,7 +115,7 @@ describe("a stored recap", () => {
     const out = await generateRecap(A.householdId, A.userId, FOR_DATE);
     if (out.preview) throw new Error("expected a stored recap");
     expect(out.recap.source).toBe("model");
-    expect(out.recap.text).toBe(`${GOOD.text} ${LINK}`);
+    expect(out.recap.text).toBe(`${GOOD.text}${actionOf(out.recap.facts)} ${LINK}`);
     expect(fakeCalls).toHaveLength(2);
     expect(String(fakeCalls[1]!.messages[0]!.content)).toContain('contains "!"');
   });
@@ -118,7 +124,7 @@ describe("a stored recap", () => {
     queueFakeSteps("recap", { kind: "ok", value: { text: "Yesterday — $92 spent. Groceries ‘$50’.", factsUsed: [] } });
     const out = await generateRecap(A.householdId, A.userId, FOR_DATE);
     if (out.preview) throw new Error("expected a stored recap");
-    expect(out.recap.text).toBe(`Yesterday - $92 spent. Groceries '$50'. ${LINK}`);
+    expect(out.recap.text).toBe(`Yesterday - $92 spent. Groceries '$50'.${actionOf(out.recap.facts)} ${LINK}`);
   });
 
   it("falls back to the template with no model call when AI is off, over budget, or the model refuses", async () => {
@@ -187,19 +193,19 @@ describe("a stored recap", () => {
 });
 
 describe("findings", () => {
-  it("the template mentions at most one unseen finding and marks it surfaced", async () => {
+  it("the template mentions at most one unseen finding, marks it surfaced, and moves on tomorrow", async () => {
     process.env.AI_ENABLED = "false";
     try {
       const [f1, f2] = await db
         .insert(agentFindingsTable)
         .values([
-          { householdId: A.householdId, kind: "shortfall_before_income", dedupeKey: "s:1", severity: "high", confidence: "confirmed", payload: { shortBy: 120 } },
+          { householdId: A.householdId, kind: "duplicate_charge", dedupeKey: "d:1", severity: "high", confidence: "confirmed", payload: { amount: 30 } },
           { householdId: A.householdId, kind: "limit_near", dedupeKey: "l:1", severity: "watch", confidence: "confirmed", payload: { remainingWeek: 20 } },
         ])
         .returning();
       const out = await generateRecap(A.householdId, A.userId, FOR_DATE);
       if (out.preview) throw new Error("expected a stored recap");
-      expect(out.recap.text).toContain("Cash looks tight before payday.");
+      expect(out.recap.text).toContain("Two matching charges landed close together.");
       expect(out.recap.text).not.toContain("weekly limit");
       const [a] = await db.select().from(agentFindingsTable).where(eq(agentFindingsTable.id, f1!.id));
       const [b] = await db.select().from(agentFindingsTable).where(eq(agentFindingsTable.id, f2!.id));
@@ -209,7 +215,20 @@ describe("findings", () => {
       const next = await generateRecap(A.householdId, A.userId, "2026-10-08");
       if (next.preview) throw new Error("expected a stored recap");
       expect(next.recap.text).toContain("The weekly limit is nearly used.");
-      expect(next.recap.text).not.toContain("Cash looks tight");
+      expect(next.recap.text).not.toContain("Two matching charges");
+    } finally {
+      process.env.AI_ENABLED = "true";
+    }
+  });
+
+  it("a shortfall finding becomes the action line (the gap, from the finding) and is not said twice", async () => {
+    process.env.AI_ENABLED = "false";
+    try {
+      await db.insert(agentFindingsTable).values({ householdId: A.householdId, kind: "shortfall_before_income", dedupeKey: "s:1", severity: "high", confidence: "confirmed", payload: { shortBy: 120 } });
+      const out = await generateRecap(A.householdId, A.userId, FOR_DATE);
+      if (out.preview) throw new Error("expected a stored recap");
+      expect(out.recap.text).toContain("Cash may dip $120 under the buffer before payday.");
+      expect(out.recap.text).not.toContain("Cash looks tight");
     } finally {
       process.env.AI_ENABLED = "true";
     }
@@ -221,7 +240,7 @@ describe("preview", () => {
     queueFakeSteps("recap", { kind: "ok", value: GOOD });
     const out = await generateRecap(A.householdId, A.userId, FOR_DATE, { preview: true });
     if (!out.preview) throw new Error("expected a preview");
-    expect(out.model).toEqual({ text: `${GOOD.text} ${LINK}`, source: "model", demo: true });
+    expect(out.model).toEqual({ text: `${GOOD.text}${actionOf(out.facts)} ${LINK}`, source: "model", demo: true });
     expect(out.template.text).toMatch(/^Yesterday: \$92 spent/);
     expect(out.template.text.endsWith(LINK)).toBe(true);
     expect(out.facts.spentYesterday.total).toBe(92.4);
@@ -235,7 +254,7 @@ describe("preview", () => {
   it("with the demo provider the model draft is the labelled fixture", async () => {
     const out = await generateRecap(A.householdId, A.userId, FOR_DATE, { preview: true });
     if (!out.preview) throw new Error("expected a preview");
-    expect(out.model).toEqual({ text: `Demo recap. No model was called. ${LINK}`, source: "model", demo: true });
+    expect(out.model).toEqual({ text: `Demo recap. No model was called.${actionOf(out.facts)} ${LINK}`, source: "model", demo: true });
   });
 
   it("the model draft is null when AI is off; the template is still there", async () => {

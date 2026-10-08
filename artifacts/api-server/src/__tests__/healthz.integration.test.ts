@@ -32,7 +32,7 @@ describe("GET /healthz", () => {
       version: expect.any(String),
       jobs: { mode: "off", started: false, failedLast24h: 0, dlq: 0 },
       ai: { enabled: true, configured: true, provider: "fake" },
-      sms: { provider: "twilio", configured: false },
+      sms: { provider: "twilio", configured: false, mode: "preview" },
       plaid: { webhookUrlSet: false },
     });
     const body = JSON.stringify(json);
@@ -64,7 +64,7 @@ describe("GET /healthz", () => {
     const { json } = await request("GET", "/healthz");
     process.env.SMS_PROVIDER = "twilio";
     process.env.AI_ENABLED = "true";
-    expect(json).toMatchObject({ ai: { enabled: false }, sms: { provider: "console", configured: true } });
+    expect(json).toMatchObject({ ai: { enabled: false }, sms: { provider: "console", configured: false, mode: "preview" } });
   });
 
   it("reports twilio as configured only when sid, token, a sender and the webhook base URL are all set", async () => {
@@ -73,10 +73,10 @@ describe("GET /healthz", () => {
     try {
       // No webhook base URL yet: status callbacks and signature checks would not work.
       const missing = await request("GET", "/healthz");
-      expect((missing.json as { sms: unknown }).sms).toEqual({ provider: "twilio", configured: false });
+      expect((missing.json as { sms: unknown }).sms).toEqual({ provider: "twilio", configured: false, mode: "preview" });
       process.env.SMS_WEBHOOK_BASE_URL = "https://h2.example.test";
       const { json } = await request("GET", "/healthz");
-      expect((json as { sms: unknown }).sms).toEqual({ provider: "twilio", configured: true });
+      expect((json as { sms: unknown }).sms).toEqual({ provider: "twilio", configured: true, mode: "live" });
       expect(JSON.stringify(json)).not.toContain("MG1");
     } finally {
       delete process.env.TWILIO_AUTH_TOKEN;

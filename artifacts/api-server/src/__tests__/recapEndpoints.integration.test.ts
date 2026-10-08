@@ -110,12 +110,18 @@ beforeEach(async () => {
 const GOOD = { text: "Yesterday: $92 spent (Groceries $50). Electric $90 tomorrow.", factsUsed: ["spentYesterday"] };
 const LINK = `https://h2.example.test/?d=${FOR_DATE}`;
 
+// The action line is chosen by code and appended when a draft leaves it out.
+const actionOf = (facts: unknown): string => {
+  const a = (facts as { action?: { text: string } | null }).action?.text;
+  return a ? ` ${a}` : "";
+};
+
 describe("POST /recap/preview", () => {
   it("returns the model draft, the template draft and the facts, and stores nothing", async () => {
     queueFakeSteps("recap", { kind: "ok", value: GOOD });
     const r = await call(asOwner(A), "POST", "/recap/preview", { forDate: FOR_DATE });
     expect(r.status).toBe(200);
-    expect(r.json.model).toEqual({ text: `${GOOD.text} ${LINK}`, source: "model", demo: true });
+    expect(r.json.model).toEqual({ text: `${GOOD.text}${actionOf(r.json.facts)} ${LINK}`, source: "model", demo: true });
     expect(r.json.template.text).toMatch(/^Yesterday: \$92 spent \(Groceries \$50, Unfiled \$30, Dining Out \$12\)\./);
     expect(r.json.template.text.endsWith(LINK)).toBe(true);
     expect(r.json.facts).toMatchObject({ forDate: FOR_DATE, yesterday: "2026-10-06", spentYesterday: { total: 92.4 } });
@@ -129,7 +135,7 @@ describe("POST /recap/preview", () => {
     const r = await call(asOwner(A), "POST", "/recap/preview");
     expect(r.status).toBe(200);
     expect(r.json.facts.forDate).toBe(FOR_DATE);
-    expect(r.json.model).toEqual({ text: `Demo recap. No model was called. ${LINK}`, source: "model", demo: true });
+    expect(r.json.model).toEqual({ text: `Demo recap. No model was called.${actionOf(r.json.facts)} ${LINK}`, source: "model", demo: true });
   });
 
   it("the model draft is null when AI is off", async () => {
@@ -224,12 +230,34 @@ describe("GET /recap/history", () => {
     expect(r.status).toBe(200);
     expect(r.json.map((x: { forDate: string }) => x.forDate)).toEqual([FOR_DATE, "2026-10-06"]);
     expect(Object.keys(r.json[0]).sort()).toEqual(["delivery", "forDate", "generatedAt", "id", "source", "status", "text"]);
-    expect(r.json[0].delivery).toEqual({ status: "delivered", createdAt: expect.any(String) });
+    expect(r.json[0].delivery).toEqual({ status: "delivered", provider: "fake", createdAt: expect.any(String) });
     expect(r.json[1].delivery).toBeNull();
     expect(r.json[0].text.endsWith(LINK)).toBe(true);
     // The facts and the phone number never ride along.
     expect(JSON.stringify(r.json)).not.toMatch(/facts|5555550142|\+1/);
     await db.delete(recapDeliveriesTable).where(eq(recapDeliveriesTable.householdId, A.householdId));
+  });
+
+  it("a console delivery shows as previewed and the recap is never reported as sent", async () => {
+    const day = await call(asOwner(A), "POST", "/recap/generate-now", { forDate: "2026-10-05" });
+    await db.update(recapsTable).set({ status: "sent" }).where(eq(recapsTable.id, day.json.recap.id));
+    await db.insert(recapDeliveriesTable).values({
+      householdId: A.householdId,
+      userId: A.userId,
+      recapId: day.json.recap.id,
+      forDate: "2026-10-05",
+      kind: "scheduled",
+      toE164: "+15555550142",
+      provider: "console",
+      status: "sent",
+      idempotencyKey: `recap:${A.userId}:2026-10-05`,
+    });
+    const r = await call(asOwner(A), "GET", "/recap/history");
+    const row = r.json.find((x: { forDate: string }) => x.forDate === "2026-10-05");
+    expect(row.status).toBe("previewed");
+    expect(row.delivery).toEqual({ status: "previewed", provider: "console", createdAt: expect.any(String) });
+    await db.delete(recapDeliveriesTable).where(eq(recapDeliveriesTable.householdId, A.householdId));
+    await db.delete(recapsTable).where(eq(recapsTable.id, day.json.recap.id));
   });
 
   it("limit is 1 to 30", async () => {
