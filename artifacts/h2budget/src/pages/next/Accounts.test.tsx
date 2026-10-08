@@ -124,6 +124,35 @@ describe("checking variant", () => {
   });
 });
 
+describe("embedded ledgers stick (C0)", () => {
+  /**
+   * An `overflow: hidden` panel is a scroll container, so the ledger's sticky
+   * pane and bulk bar stuck to the panel — which never moves — instead of to
+   * <main>. The Activity panel is sticky-safe (`overflow: clip`, pinned in
+   * index.css.test) and flush, with the padding moved inside so the pane can
+   * bleed back over it.
+   */
+  it.each([["/next/accounts/ext-amex", "amex-ledger"], ["/next/accounts/ext-chk", "chase-ledger"]])(
+    "%s: the Activity panel is sticky-safe and flush, the ledger padded inside it",
+    async (path, ledger) => {
+      seed(); renderAt(path);
+      await waitFor(() => expect(screen.getByTestId(ledger)).toBeTruthy());
+      const panel = screen.getByTestId("account-activity");
+      expect(panel.className).toContain("panel-sticky-safe");
+      expect(panel.className).toContain("panel-flush");
+      // No `overflow-hidden` utility sneaks back in on top of the clip.
+      expect(panel.className).not.toMatch(/\boverflow-(hidden|auto|scroll)\b/);
+      // Nothing between the panel and the ledger is a scroll container either.
+      let el = screen.getByTestId(ledger).parentElement;
+      while (el && el !== panel) {
+        expect(el.className).not.toMatch(/\boverflow-(hidden|auto|scroll)\b/);
+        el = el.parentElement;
+      }
+      expect(screen.getByTestId(ledger).closest(".p-4")).toBeTruthy();
+    },
+  );
+});
+
 describe("blanks never become zero", () => {
   const amexId = identityOf({ id: "r", name: "Platinum", type: "credit", institutionName: "American Express", institutionSlug: "amex" });
   it("shows an em-dash for every figure the API does not carry", () => {

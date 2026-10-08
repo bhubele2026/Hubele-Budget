@@ -315,6 +315,41 @@
      shrank every padding, gap and icon by a fifth — the ported kit's class
      strings are drawn against 0.25rem and read cramped at anything else. */
   --spacing: 0.25rem;
+
+  /* ── THE SHELL SCROLL CONTRACT (C0) ──────────────────────────────────────
+     Inside the signed-in shell `<main>` is the only vertical scroller (see the
+     `html` note in @layer base). Pages read these instead of hard-coding the
+     shell's geometry:
+       --shell-pad-x / --shell-pad-y  the padding the shell puts around every
+                                      page (`.shell-pad`; p-3, md:p-5)
+       --page-sticky-top              the height of the page's own sticky head.
+                                      The page sets it on its wrapper; a second
+                                      sticky row (bulk bar, day header, pinned
+                                      inbox) uses `top: var(--page-sticky-top)`
+                                      to land flush beneath it. 0 without one.
+       --page-head-overshoot          LEGACY, kept so C0 moves no pixel:
+     ⚠️ The Forecast, Chase and Amex sticky heads were written against a
+     p-4 md:p-8 shell (`-mx-4 -mt-4 md:-mx-8 md:-mt-8`) while the shell pads
+     p-3 md:p-5, so each head reaches 4/12 px past the padding (parity review
+     D18). That overshoot is NOT invisible: `sticky` pushes the head back down
+     to the scroller's top, so the content beneath it sits 4/12 px higher than
+     it would without it, and past a 1,600 px column the head is 24 px wider
+     than the content. `.page-sticky-head` = shell pad + overshoot reproduces
+     today's geometry exactly; the restyle that owns those pages sets the
+     overshoot to 0px (and takes the 4/12 px on purpose). */
+  --shell-pad-x: 0.75rem;
+  --shell-pad-y: 0.75rem;
+  --page-head-overshoot: 4px;
+  --page-sticky-top: 0px;
+}
+
+/* Tailwind's `md` (48rem): the shell's md:p-5, and the heads' md:-mx-8/-mt-8. */
+@media (width >= 48rem) {
+  :root {
+    --shell-pad-x: 1.25rem;
+    --shell-pad-y: 1.25rem;
+    --page-head-overshoot: 12px;
+  }
 }
 
 /* ── REDUCED MOTION, PART 1: THE FOUR DIALS ─────────────────────────────────
@@ -354,13 +389,26 @@
   }
 
   /**
-   * ⚠️⚠️ `html` IS THE SOLE VERTICAL SCROLLER, AND THE GUTTER IS ALWAYS RESERVED.
+   * ⚠️⚠️ ONE VERTICAL SCROLLER PER SCREEN, AND ITS GUTTER IS ALWAYS RESERVED.
+   *
+   * Inside the signed-in shell that scroller is `<main>` (`layout.tsx`: the
+   * shell is `h-screen overflow-hidden`, and `<main data-shell-scroller
+   * class="shell-scroller">` scrolls). It is NOT `html`, whatever this note
+   * used to say: `window.scrollY` stays 0 on every app page, so anything that
+   * listens to the window (a window virtualizer, a scroll spy) sees nothing.
+   * Find the scroller with `shellScrollerOf()` (`lib/shellScroll.ts`), and
+   * offset sticky rows with the shell variables on `:root`.
+   *
+   * `html` is the scroller only for screens drawn outside the shell (sign-in,
+   * sign-up), which is what the rule below is for; inside the shell it never
+   * has anything to scroll.
    *
    * A scrollbar that appears and disappears between views moves the layout by
    * ~15px. Anything measuring its own width mid-animation — a chart's
    * responsive container above all — re-measures at the new size, throws away
    * the frame it was drawing and swaps in the final static picture, so the draw
-   * simply never happens. It cost the Financial Dashboard a day to find.
+   * simply never happens. It cost the Financial Dashboard a day to find. Hence
+   * `scrollbar-gutter: stable` on BOTH: here, and on `.shell-scroller`.
    *
    * `body` deliberately gets NO `overflow-x`: `overflow-x: hidden` forces
    * `overflow-y` to compute to `auto`, which would make body a SECOND scroll
@@ -454,6 +502,14 @@
     transition: box-shadow calc(96ms * var(--anim-speed)) var(--ease-move);
   }
   .panel-link:hover { box-shadow: var(--shadow-lift); }
+  /* ⚠️ STICKY-SAFE. `overflow: hidden` makes a box a scroll container even
+     though it never scrolls, so a `position: sticky` row inside it sticks to
+     the panel — which does not move — and never to `<main>`. `clip` clips the
+     same corners but is NOT a scroll container, so a ledger's bulk bar inside
+     sticks to `<main>` as it should. (Must follow `.panel`: same specificity.)
+     `Panel variant="sticky-safe"`. `flush` (no body padding) and `static` (no
+     hover lift) are handled in `Panel` itself. */
+  .panel-sticky-safe { overflow: clip; }
   .panel-accent-checking { border-left: 4px solid var(--color-acct-checking); }
   .panel-accent-amex { border-left: 4px solid var(--color-acct-amex); }
   .panel-accent-card2 { border-left: 4px solid var(--color-acct-card2); }
@@ -577,6 +633,25 @@
 }
 
 @layer utilities {
+  /* ── The shell scroll contract (see the variables on `:root`) ─────────────
+     Utilities, not components, on purpose: a parent's `space-y-*` writes
+     `margin-block-start` on its children from THIS layer, and a component-layer
+     `margin-top` would lose to it outright. */
+  .shell-scroller { scrollbar-gutter: stable; }
+  .shell-pad { padding: var(--shell-pad-y) var(--shell-pad-x); }
+  /* Bleeds a row out to the scroller's edges (through the shell padding) while
+     its contents stay on the page's left edge. */
+  .page-bleed-x {
+    margin-inline: calc(-1 * (var(--shell-pad-x) + var(--page-head-overshoot)));
+    padding-inline: calc(var(--shell-pad-x) + var(--page-head-overshoot));
+  }
+  /* A page's own sticky head: bleeds out and up to the scroller's top edge. */
+  .page-sticky-head {
+    margin-top: calc(-1 * (var(--shell-pad-y) + var(--page-head-overshoot)));
+    margin-inline: calc(-1 * (var(--shell-pad-x) + var(--page-head-overshoot)));
+    padding-inline: calc(var(--shell-pad-x) + var(--page-head-overshoot));
+  }
+
   /* Aligning (tabular) lining figures for financial tables — clean, not
      monospace/"code". Money never reflows as it counts or updates. */
   .fin-num {

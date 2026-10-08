@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { identityOf } from "@/lib/accountIdentity";
-import { AccountChip, PageGrid, Panel, StatBlock, TxnTable, shortDate } from "./index";
+import { AccountChip, ChartPanel, PageGrid, Panel, StatBlock, TablePanel, TxnTable, shortDate } from "./index";
 
 afterEach(cleanup);
 const chase = identityOf({ id: "1", name: "Total Checking", mask: "4821", type: "depository", subtype: "checking", institutionName: "Chase", institutionSlug: "chase" });
@@ -58,5 +58,59 @@ describe("next primitives", () => {
     expect(screen.getByText("No transactions to show.")).toBeTruthy();
     expect(shortDate("2026-01-01")).toBe("Jan 1");
     expect(shortDate("garbage")).toBe("garbage");
+  });
+});
+
+describe("Panel variants (C0)", () => {
+  const body = (section: Element) => section.querySelector(":scope > div")!;
+  it("default: padded body, hover lift, clipped by .panel's overflow: hidden", () => {
+    const { container } = render(<Panel title="Plain">x</Panel>);
+    const p = container.querySelector("section")!;
+    expect(p.className.split(" ")).toEqual(expect.arrayContaining(["panel", "panel-link"]));
+    expect(p.className).not.toContain("panel-sticky-safe");
+    expect(body(p).className).toBe("p-4");
+  });
+  it("flush drops the body padding; static drops the hover lift", () => {
+    const { container } = render(<Panel title="Ledger" variant={["flush", "static"]}>x</Panel>);
+    const p = container.querySelector("section")!;
+    expect(p.className).toContain("panel-flush");
+    expect(p.className).not.toContain("panel-link");
+    expect(body(p).className).toBe("");
+  });
+  it("sticky-safe adds the overflow: clip class (index.css pins the rule)", () => {
+    const { container } = render(<Panel title="Activity" variant="sticky-safe">x</Panel>);
+    const p = container.querySelector("section")!;
+    expect(p.className).toContain("panel-sticky-safe");
+    expect(p.className).toContain("panel-link");
+    expect(body(p).className).toBe("p-4");
+  });
+  it("ChartPanel gives the chart a fixed-height, full-width box", () => {
+    const { container } = render(<ChartPanel title="Balance" height={320}><div data-testid="chart" /></ChartPanel>);
+    const b = screen.getByTestId("chart").parentElement as HTMLElement;
+    expect(b.style.height).toBe("320px");
+    expect(b.className).toContain("w-full");
+    expect(container.querySelector("section")!.className).toContain("panel");
+    // default height
+    cleanup();
+    render(<ChartPanel title="Trend"><div data-testid="chart2" /></ChartPanel>);
+    expect((screen.getByTestId("chart2").parentElement as HTMLElement).style.height).toBe("280px");
+  });
+  it("TablePanel is flush, carries a header row, and scrolls its rows under a max height", () => {
+    const { container } = render(
+      <TablePanel title="Rows" head={<span>Date · Amount</span>} maxHeight={400} variant="sticky-safe">
+        <div data-testid="rows" />
+      </TablePanel>,
+    );
+    const p = container.querySelector("section")!;
+    expect(p.className).toContain("panel-flush");
+    expect(p.className).toContain("panel-sticky-safe");
+    expect(screen.getByTestId("table-panel-head").textContent).toBe("Date · Amount");
+    const rows = screen.getByTestId("table-panel-rows");
+    expect(rows.style.maxHeight).toBe("400px");
+    expect(rows.className).toContain("overflow-y-auto");
+    cleanup();
+    render(<TablePanel title="Rows"><div /></TablePanel>);
+    expect(screen.queryByTestId("table-panel-head")).toBeNull();
+    expect(screen.getByTestId("table-panel-rows").className).toBe("");
   });
 });

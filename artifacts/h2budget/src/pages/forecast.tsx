@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { ForecastNextCtx } from "./next/forecast/types";
 import {
   useDeferredValue,
@@ -2711,14 +2711,16 @@ export default function ForecastPage({
               const sugs = bankSuggestions.get(card.bank.txn.id) ?? [];
               const txnId = card.bank.txn.id;
               const isSelected = selectedBankIds.has(txnId);
+              // `--page-sticky-top` is set on the page wrapper from the
+              // measured head (the shell contract, index.css).
               const stickyStyle = canPinInbox
-                ? { top: pageStickyHeaderHeight }
+                ? { top: "var(--page-sticky-top, 0px)" }
                 : undefined;
               return (
                 <div
                   className={
                     canPinInbox
-                      ? "sticky z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-2 bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur border-b shadow-sm"
+                      ? "page-bleed-x sticky z-20 py-2 bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur border-b shadow-sm"
                       : ""
                   }
                   style={stickyStyle}
@@ -3679,9 +3681,15 @@ export default function ForecastPage({
 
   if (hashRedirectTo && !renderNext) return <Redirect to={hashRedirectTo} replace />;
 
+  // (C0) The measured sticky head, published for the rows that pin under it
+  // (the shell contract's `--page-sticky-top`, index.css).
+  const stickyTopStyle = {
+    ["--page-sticky-top" as string]: `${pageStickyHeaderHeight}px`,
+  } as CSSProperties;
+
   if (renderNext) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6" style={stickyTopStyle}>
         {bannerBlock}
         {renderNext({
           mode,
@@ -3720,9 +3728,9 @@ export default function ForecastPage({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={stickyTopStyle}>
       {bannerBlock}
-      <div ref={pageStickyHeaderRef} className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
+      <div ref={pageStickyHeaderRef} className="page-sticky-head sticky top-0 z-30 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
       {/* ⭐ The title used to be a sentence explaining the page's philosophy
           ("Plan register — you decide every match."). The register below says
           that by existing; the head just names the screen. */}

@@ -5,7 +5,6 @@ import {
   useGetForecastCashSignal, getGetForecastCashSignalQueryKey,
   useListDebts, getListDebtsQueryKey,
   useGetAmexWeeklyPayoff, getGetAmexWeeklyPayoffQueryKey,
-  useGetMoneyPosition, getGetMoneyPositionQueryKey,
   useGetSettings, getGetSettingsQueryKey,
   useGetBudgetMonth, getGetBudgetMonthQueryKey,
   useGetBillsSummary, getGetBillsSummaryQueryKey,
@@ -14,9 +13,14 @@ import {
   useListCategories, getListCategoriesQueryKey,
   useListCategorizationReview, getListCategorizationReviewQueryKey,
   useGetDuplicateTransactionCount, getGetDuplicateTransactionCountQueryKey,
-  previewRecap,
   type ListTransactionsParams,
 } from "@workspace/api-client-react";
+// (C0) Fold-in operations come from the features module, which only lazy
+// pages import — from the main module they would sit in the landing chunk.
+import {
+  useGetMoneyPosition, getGetMoneyPositionQueryKey,
+  previewRecap,
+} from "@workspace/api-client-react/features";
 
 /**
  * Every query the dashboard reads, each with an explicit key and staleTime so

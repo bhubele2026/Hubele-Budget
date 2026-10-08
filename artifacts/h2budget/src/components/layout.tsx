@@ -711,7 +711,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Body: single full-width content column. ─────────────────────── */}
       <div className="flex min-h-0 flex-1">
-        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        {/* ⚠️ THE ONLY VERTICAL SCROLLER inside the shell (index.css, the
+            `html` note). `data-shell-scroller` is how code finds it
+            (`shellScrollerOf`, `lib/shellScroll.ts`); `.shell-scroller`
+            reserves its gutter. */}
+        <main
+          data-shell-scroller=""
+          className="shell-scroller min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+        >
           {/* ⚠️ KEYED ON LOCATION so EVERY client-side navigation re-runs the
               entrance — without the key this animates once on layout mount and
               never again. `.page-in` puts the timing on the kit's dials
@@ -723,7 +730,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               {children}
             </div>
           ) : (
-            <div key={location} className="page-in mx-auto max-w-[1600px] p-3 md:p-5">
+            // `.shell-pad` is p-3 md:p-5, read from --shell-pad-x/-y so the
+            // pages' sticky heads bleed by the same numbers.
+            <div key={location} className="page-in shell-pad mx-auto max-w-[1600px]">
               {children}
             </div>
           )}

@@ -4,6 +4,7 @@ import path from "path";
 const root = path.resolve(__dirname, "..", "..");
 const apiClientReactSrc = path.resolve(root, "lib", "api-client-react", "src");
 const apiClientReactLedgerSrc = path.resolve(apiClientReactSrc, "ledger");
+const apiClientReactFeaturesSrc = path.resolve(apiClientReactSrc, "features");
 const apiZodSrc = path.resolve(root, "lib", "api-zod", "src");
 
 // Our exports make assumptions about the title of the API being "Api" (i.e. generated output is `api.ts`).
@@ -87,6 +88,41 @@ export default defineConfig({
               version: 5,
             },
           },
+        },
+      },
+    },
+  },
+  // (C0) The fold-in operations (parity review F1-F10), tagged `features` in
+  // the spec and exported as `@workspace/api-client-react/features`, for the
+  // same reason as the ledger module above: the main module lives in the entry
+  // chunk, so every hook a lazy page starts using from it grows the landing JS.
+  // Unlike chase-ledger they are NOT excluded from the main module yet — the
+  // frozen h2 app imports them from it until it is deleted at the switch; then
+  // add "features" to the main config's exclude list. The h2budget app imports
+  // them from here only (`featuresImportGraph.test.ts` holds it to that).
+  "api-client-react-features": {
+    input: {
+      target: "./openapi.yaml",
+      override: {
+        transformer: titleTransformer,
+      },
+      filters: { mode: "include", tags: ["features"] },
+    },
+    output: {
+      workspace: apiClientReactFeaturesSrc,
+      target: "generated",
+      client: "react-query",
+      mode: "split",
+      baseUrl: "/api",
+      clean: true,
+      prettier: true,
+      override: {
+        fetch: {
+          includeHttpResponseReturnType: false,
+        },
+        mutator: {
+          path: path.resolve(apiClientReactSrc, "custom-fetch.ts"),
+          name: "customFetch",
         },
       },
     },

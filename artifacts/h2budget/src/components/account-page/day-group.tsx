@@ -73,7 +73,7 @@ export function DayGroup({
           "surface sticky z-10 flex items-center justify-between gap-3 rounded-control px-3 py-2 ring-1 ring-brand-line",
           isToday && accentRing,
         )}
-        style={{ top: "var(--pinned-pane-h, 0px)" }}
+        style={{ top: "var(--page-sticky-top, 0px)" }}
       >
         <div className="flex min-w-0 items-center gap-3">
           <Checkbox

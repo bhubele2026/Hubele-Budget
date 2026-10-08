@@ -32,3 +32,11 @@ export const Tooltip = Nothing;
 export const Legend = Nothing;
 export const LabelList = Nothing;
 export const ReferenceArea = Nothing;
+// (C0) The raw primitives `@/lib/charts` re-exports for reportsShared and the
+// account balance trend.
+export const AreaChart = Nothing;
+export const Area = Nothing;
+export const BarChart = Nothing;
+export const ReferenceLine = Nothing;
+export const ReferenceDot = Nothing;
+export const Label = Nothing;
