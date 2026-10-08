@@ -59,8 +59,11 @@ describe("GET /healthz", () => {
   it("reports twilio as configured only when sid, token, a sender and the webhook base URL are all set", async () => {
     process.env.TWILIO_AUTH_TOKEN = "t";
     process.env.TWILIO_MESSAGING_SERVICE_SID = "MG1";
-    process.env.SMS_WEBHOOK_BASE_URL = "https://h2.example.test";
     try {
+      // No webhook base URL yet: status callbacks and signature checks would not work.
+      const missing = await request("GET", "/healthz");
+      expect((missing.json as { sms: unknown }).sms).toEqual({ provider: "twilio", configured: false });
+      process.env.SMS_WEBHOOK_BASE_URL = "https://h2.example.test";
       const { json } = await request("GET", "/healthz");
       expect((json as { sms: unknown }).sms).toEqual({ provider: "twilio", configured: true });
       expect(JSON.stringify(json)).not.toContain("MG1");
