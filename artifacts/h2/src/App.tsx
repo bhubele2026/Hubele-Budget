@@ -8,7 +8,8 @@ import { createQueryClient, prefetchSpineOnHint } from "@/data/queryClient";
 import { askForSpineAgainIfFailed } from "@/data/spineRecovery";
 import { readAuthHint, writeAuthHint } from "@/lib/authHint";
 import { prefetchTodayOnIdle } from "@/data/todayData";
-import { importDesign, importDesignToday, importPlaidOAuth } from "@/lib/routePrefetch";
+import { useActivityBadge } from "@/data/activityBadge";
+import { importActivity, importDesign, importDesignActivity, importDesignToday, importPlaidOAuth } from "@/lib/routePrefetch";
 import { SkeletonFigure, SkeletonLine } from "@/kit/Skeleton";
 import { BootFrame, Shell } from "@/shell/Shell";
 import { NotFound } from "@/shell/NotFound";
@@ -24,6 +25,10 @@ import Today, { TodaySkeleton } from "@/screens/today/Today";
 
 const DesignPage = lazy(importDesign);
 const DesignTodayPage = lazy(importDesignToday);
+const DesignActivityPage = lazy(importDesignActivity);
+// One chunk for the three Activity views (ledger, review, rules): they share the
+// sheets, the picker and the toasts, and none of it belongs on the open path.
+const ActivityPage = lazy(importActivity);
 const PlaidOAuthPage = lazy(importPlaidOAuth);
 
 const queryClient = createQueryClient();
@@ -69,6 +74,7 @@ function RouteFallback() {
 function ProtectedShell() {
   const [location] = useLocation();
   const { isLoaded, isSignedIn } = useAuth();
+  const activityBadge = useActivityBadge(Boolean(isLoaded && isSignedIn));
 
   // Keep the hint honest: set on a real signed-in answer, cleared on sign-out.
   useEffect(() => {
@@ -95,12 +101,21 @@ function ProtectedShell() {
   if (!isSignedIn) return <Redirect to="/sign-in" />;
 
   return (
-    <Shell>
+    <Shell activityBadge={activityBadge}>
       <PageErrorBoundary resetKey={location}>
         <Suspense fallback={<RouteFallback />}>
           <Switch>
             <Route path="/">
               <Today />
+            </Route>
+            <Route path="/activity">
+              <ActivityPage view="ledger" />
+            </Route>
+            <Route path="/activity/review">
+              <ActivityPage view="review" />
+            </Route>
+            <Route path="/activity/rules">
+              <ActivityPage view="rules" />
             </Route>
             <Route path="/plaid-oauth">
               <PlaidOAuthPage />
@@ -146,6 +161,20 @@ function PublicDesignToday() {
   );
 }
 
+/** Activity on made-up data: public, no network, so the screens can be judged signed out. */
+function PublicDesignActivity() {
+  const [location] = useLocation();
+  return (
+    <Shell>
+      <PageErrorBoundary resetKey={location}>
+        <Suspense fallback={<RouteFallback />}>
+          <DesignActivityPage />
+        </Suspense>
+      </PageErrorBoundary>
+    </Shell>
+  );
+}
+
 /** Drops every cached figure when the signed-in user changes (ported). */
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
@@ -182,6 +211,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/design/today" component={PublicDesignToday} />
+          <Route path="/design/activity/*?" component={PublicDesignActivity} />
           <Route path="/design" component={PublicDesign} />
           <Route component={ProtectedShell} />
         </Switch>

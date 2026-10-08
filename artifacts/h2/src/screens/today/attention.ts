@@ -101,7 +101,7 @@ export function attentionItems(i: {
     out.push({
       kind: "review",
       title: i.reviewCount === 1 ? "1 charge needs a look" : `${i.reviewCount} charges need a look`,
-      action: { label: "Open review", href: "/classic/review" },
+      action: { label: "Open review", href: "/activity/review" },
     });
   }
   if (out.length === 0) out.push({ kind: "nothing", title: "Nothing needs you today" });

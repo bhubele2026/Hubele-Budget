@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   bills: {} as Hook,
   ledger: {} as Hook,
   categories: {} as Hook,
+  trail: {} as Hook,
+  unfiled: {} as Hook,
   prefs: {} as Hook,
   save: vi.fn(),
 }));
@@ -41,11 +43,14 @@ vi.mock("@workspace/api-client-react", () => ({
   getListAllowancePlansQueryKey: () => ["/api/allowance-plans"],
   useListCategories: () => mocks.categories,
   getListCategoriesQueryKey: () => ["/api/budget/categories"],
+  useListAgentActions: () => mocks.trail,
+  getListAgentActionsQueryKey: (p: unknown) => ["/api/agent/actions", p],
   getGetSpineQueryKey: () => ["/api/spine"],
   getGetForecastBankBalanceExplainQueryKey: () => ["/api/forecast/bank-balance/explain"],
 }));
 vi.mock("@workspace/api-client-react/ledger", () => ({
-  useGetTransactionsLedger: () => mocks.ledger,
+  // The unfiled count and the activity rows are two requests; `uncategorized` tells them apart.
+  useGetTransactionsLedger: (p: { uncategorized?: string }) => (p.uncategorized ? mocks.unfiled : mocks.ledger),
   getGetTransactionsLedgerQueryKey: (p: unknown) => ["/api/transactions/ledger", p],
   useGetUiPreferences: () => mocks.prefs,
   getGetUiPreferencesQueryKey: () => ["/api/me/ui-preferences"],
@@ -193,6 +198,8 @@ beforeEach(() => {
   mocks.bills = q(BILLS);
   mocks.ledger = q(LEDGER);
   mocks.categories = q(CATEGORIES);
+  mocks.trail = q({ actions: [] });
+  mocks.unfiled = q({ ...LEDGER, rows: [], matchingCount: 0 });
   // Seen already: the sheet stays out of the way unless a test asks for it.
   mocks.prefs = q({ sidebarCollapsed: true, whatsNewSeen: "h2-1" });
   mocks.save = vi.fn();
@@ -316,11 +323,25 @@ describe("Today — this week", () => {
 
   it("unplanned on top and unfiled charges are said, with a way to file", () => {
     mocks.position = q({ ...POSITION, unplannedWeek: "40.00", needsClassificationWeek: "25.50" });
+    mocks.unfiled = q({ ...LEDGER, rows: [], matchingCount: 3 });
     renderToday();
     expect(screen.getByTestId("week-caption").textContent).toBe("$456 so far · $40 unplanned on top");
     const filing = screen.getByTestId("needs-filing");
-    expect(filing.textContent).toContain("$26 needs filing");
-    expect(within(filing).getByRole("link", { name: "File it" }).getAttribute("href")).toBe("/classic/review");
+    // A COUNT OF CHARGES, never dollars.
+    expect(filing.textContent).toContain("3 charges need filing");
+    expect(filing.textContent).not.toContain("$");
+    expect(within(filing).getByRole("link", { name: "File them" }).getAttribute("href")).toBe("/activity?unfiled=1");
+  });
+
+  it("one unfiled charge reads in the singular; none draws nothing", () => {
+    mocks.position = q({ ...POSITION, needsClassificationWeek: "25.50" });
+    mocks.unfiled = q({ ...LEDGER, rows: [], matchingCount: 1 });
+    renderToday();
+    expect(screen.getByTestId("needs-filing").textContent).toContain("1 charge needs filing");
+    cleanup();
+    mocks.unfiled = q({ ...LEDGER, rows: [], matchingCount: 0 });
+    renderToday();
+    expect(screen.queryByTestId("needs-filing")).toBeNull();
   });
 
   it("explains the limit: owner-set, and the suggestion", () => {
@@ -426,11 +447,11 @@ describe("Today — one thing, in a fixed order", () => {
     expect(screen.getByTestId("action-title").textContent).toBe("Electric $142 is due tomorrow");
   });
 
-  it("charges to review link to the classic review", () => {
+  it("charges to review link to the Activity review queue", () => {
     mocks.spine = readSpine({ data: { ...SPINE, reviewCount: 1 } });
     renderToday();
     expect(screen.getByTestId("action-title").textContent).toBe("1 charge needs a look");
-    expect(screen.getByRole("link", { name: "Open review" }).getAttribute("href")).toBe("/classic/review");
+    expect(screen.getByRole("link", { name: "Open review" }).getAttribute("href")).toBe("/activity/review");
   });
 });
 
@@ -447,13 +468,45 @@ describe("Today — yesterday and today", () => {
     expect(rows[1]!.textContent).toContain("Not filed");
     expect(rows[1]!.textContent).not.toContain("pending");
     expect(figuresIn(rows[2]!)).toEqual([["+$1,200", "1200.00"]]);
-    expect(screen.getByRole("link", { name: /All activity/ }).getAttribute("href")).toBe("/classic/transactions");
+    expect(screen.getByRole("link", { name: /All activity/ }).getAttribute("href")).toBe("/activity");
   });
 
   it("empty: 'No charges yet today.'", () => {
     mocks.ledger = q({ ...LEDGER, rows: [], matchingCount: 0 });
     renderToday();
     expect(screen.getByTestId("section-activity").textContent).toContain("No charges yet today.");
+  });
+});
+
+describe("Today — handled", () => {
+  const action = (id: string, runId: string, type: string, over: Record<string, unknown> = {}) => ({
+    id, runId, type, targetKind: "transaction", targetId: id, outcome: "applied", reversible: true, undoneAt: null,
+    createdAt: "2026-10-07T14:30:00Z", ...over,
+  });
+
+  it("hidden when H2 handled nothing", () => {
+    renderToday();
+    expect(screen.queryByTestId("section-handled")).toBeNull();
+  });
+
+  it("shows the last four lines, grouped by run, linking to Activity", () => {
+    mocks.trail = q({
+      actions: [
+        action("a1", "r1", "set_category"),
+        action("a2", "r1", "set_category"),
+        action("a3", "r1", "set_category"),
+        action("a4", "r2", "remember"),
+        action("a5", "r3", "recap"),
+        action("a6", "r4", "propose"),
+        action("a7", "r5", "wishlist"),
+      ],
+    });
+    renderToday();
+    const rows = within(screen.getByTestId("handled-rows")).getAllByTestId("handled-row");
+    expect(rows).toHaveLength(4);
+    expect(rows[0]!.textContent).toContain("Filed 3 charges");
+    expect(rows[1]!.textContent).toContain("Remembered 1 merchant");
+    expect(within(screen.getByTestId("section-handled")).getByRole("link", { name: /See details/ }).getAttribute("href")).toBe("/activity");
   });
 });
 
