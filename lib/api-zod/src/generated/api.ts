@@ -6373,6 +6373,104 @@ export const GetMoneyPositionResponse = zod
   );
 
 /**
+ * evaluateAfford (avalanche-core) over one read of the household — the same read GET /money/position makes, plus the debt plan's debts and settings and this month's category plans. The purchase is one more outflow on the same curve: the curve is re-walked, the position re-computed (a purchase this week counts against this week's cap) and the debt-free range re-run with that month's extra cut when what is left until payday falls under it. A $0 purchase reproduces the baseline to the cent, and a purchase never shows a higher figure than the baseline. Stateless; nothing is written.
+ * @summary Can we afford this? One purchase against the money position, before and after
+ */
+export const evaluateAffordBodyAmountExclusiveMin = 0;
+export const evaluateAffordBodyAmountMax = 100000;
+
+export const evaluateAffordBodyDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+export const evaluateAffordBodyMemberMax = 200;
+
+export const EvaluateAffordBody = zod.object({
+  amount: zod
+    .number()
+    .gt(evaluateAffordBodyAmountExclusiveMin)
+    .max(evaluateAffordBodyAmountMax)
+    .describe("Dollars."),
+  date: zod
+    .string()
+    .regex(evaluateAffordBodyDateRegExp)
+    .optional()
+    .describe("Today when omitted; a past date is counted today."),
+  categoryId: zod.string().optional(),
+  member: zod
+    .string()
+    .max(evaluateAffordBodyMemberMax)
+    .optional()
+    .describe(
+      "The member making the purchase (the shared weekly cap is used).",
+    ),
+});
+
+export const EvaluateAffordResponse = zod.object({
+  amount: zod.string(),
+  dateISO: zod.string(),
+  baseline: zod.object({
+    safeToSpendNow: zod.string().nullable(),
+    remainingWeek: zod.string().nullable(),
+    availableUntilPayday: zod.string().nullable(),
+    lowest: zod
+      .string()
+      .describe("The curve's lowest end-of-day balance over its window."),
+    lowestDate: zod.string().nullable(),
+    debtFreeEarliest: zod.string().nullable().describe("YYYY-MM."),
+    debtFreeLatest: zod
+      .string()
+      .nullable()
+      .describe("YYYY-MM; null when open-ended."),
+    totalInterestLow: zod.string().nullable(),
+  }),
+  proposed: zod.object({
+    safeToSpendNow: zod.string().nullable(),
+    remainingWeek: zod.string().nullable(),
+    availableUntilPayday: zod.string().nullable(),
+    lowest: zod
+      .string()
+      .describe("The curve's lowest end-of-day balance over its window."),
+    lowestDate: zod.string().nullable(),
+    debtFreeEarliest: zod.string().nullable().describe("YYYY-MM."),
+    debtFreeLatest: zod
+      .string()
+      .nullable()
+      .describe("YYYY-MM; null when open-ended."),
+    totalInterestLow: zod.string().nullable(),
+  }),
+  delta: zod.object({
+    safeToSpendNow: zod.string().nullable(),
+    remainingWeek: zod.string().nullable(),
+    availableUntilPayday: zod.string().nullable(),
+    lowest: zod.string(),
+    lowestDate: zod
+      .string()
+      .nullable()
+      .describe("The proposed lowest day when the purchase moved it."),
+    debtFreeEarliest: zod.number().nullable().describe("Months later."),
+    debtFreeLatest: zod.number().nullable().describe("Months later."),
+    totalInterestLow: zod.string().nullable(),
+  }),
+  category: zod.union([
+    zod.object({
+      categoryId: zod.string(),
+      remainingBefore: zod.string().nullable(),
+      remainingAfter: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+  debt: zod.object({
+    affected: zod.boolean(),
+    cut: zod.string(),
+    cutMonth: zod.string().nullable(),
+    debtFreeMonthShift: zod.number().nullable(),
+    interestDelta: zod.string().nullable(),
+  }),
+  verdict: zod.enum(["fits", "tight", "breaks_buffer", "breaks_zero"]),
+  assumptions: zod.array(zod.string()),
+});
+
+/**
  * @summary The household's allowance plans and the suggested weekly cap with its working
  */
 export const ListAllowancePlansResponse = zod.object({
@@ -7468,6 +7566,24 @@ export const UpdateWishlistItemResponse = zod.object({
   waitingDaysLeft: zod.number().describe("0 once the waiting period is over."),
   decision: zod.enum(["pending", "approved", "declined", "bought"]),
   decidedAt: zod.coerce.date().nullable(),
+});
+
+/**
+ * The nightly wishlist.evaluate job's work for one item: evaluateAfford with the item's amount (and category) today, stored in the item's last_evaluation.
+ * @summary Evaluate one wish-list item now, as if bought today, and store the answer
+ */
+export const EvaluateWishlistItemParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const EvaluateWishlistItemResponse = zod.object({
+  itemId: zod.string(),
+  lastEvaluation: zod.object({
+    evaluatedAt: zod.coerce.date(),
+    verdict: zod.enum(["fits", "tight", "breaks_buffer", "breaks_zero"]),
+    safeToSpendNowAfter: zod.string().nullable(),
+    availableUntilPaydayAfter: zod.string().nullable(),
+  }),
 });
 
 /**

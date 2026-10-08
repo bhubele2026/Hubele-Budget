@@ -11,7 +11,7 @@ import {
   recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
-import { addDaysISO } from "@workspace/avalanche-core";
+import { AffordInputError, addDaysISO } from "@workspace/avalanche-core";
 import type { AgentTool } from "../provider";
 import { untrusted } from "../redact";
 import { buildMoneyPosition } from "../../lib/moneyPosition";
@@ -19,6 +19,7 @@ import { buildSpendingFacts } from "../../lib/spendingFacts";
 import { buildBillsSummary } from "../../lib/billsSummary";
 import { computeCashSignal } from "../../lib/cashSignal";
 import { computeDebtPlan } from "../../lib/debtPlan";
+import { evaluateAffordForHousehold } from "../../lib/afford";
 import { recapFacts } from "../../recap/facts";
 import { householdTodayISO } from "../../lib/householdClock";
 import { logger } from "../../lib/logger";
@@ -329,6 +330,48 @@ export function makeToolDefs(ctx: ToolContext): ToolDef[] {
           planned60d: capRows(plan.planned60d, 10).map((p) => ({ date: p.date, label: untrusted("debt", p.label), amount: p.amount })),
           assumptions: plan.assumptions,
         });
+      },
+    },
+    {
+      // (PR-F1) "Can I spend $300 this weekend?" — answered by `evaluateAfford`.
+      name: "evaluate_scenario",
+      tier: "read",
+      what: "Can we afford this? One purchase, before and after",
+      description:
+        "What one extra purchase would do, computed by code: safe to spend now, this week's limit, available until payday, the lowest balance ahead and the debt-free range, before and after, with a verdict (fits, tight, breaks_buffer, breaks_zero) and the assumptions. extraSpend.amount is dollars; date (YYYY-MM-DD) defaults to today. Call this before answering any question about whether the household can afford or spend something.",
+      inputSchema: z
+        .object({
+          extraSpend: z
+            .object({ amount: z.number().positive().max(100_000), date: isoDate.optional(), categoryId: z.string().optional() })
+            .strict(),
+        })
+        .strict(),
+      run: async (i: { extraSpend: { amount: number; date?: string; categoryId?: string } }) => {
+        const s = i.extraSpend;
+        if (s.date !== undefined && addDaysISO(s.date, 0) !== s.date) return failure("bad_date");
+        if (s.categoryId !== undefined && (!isUuid(s.categoryId) || !(await categoryNames(householdId, [s.categoryId])).has(s.categoryId))) {
+          return notFound();
+        }
+        try {
+          const r = await evaluateAffordForHousehold(householdId, ownerUserId, {
+            amount: s.amount,
+            dateISO: s.date ?? null,
+            categoryId: s.categoryId ?? null,
+          });
+          return toResult({
+            verdict: r.verdict,
+            amount: r.amount,
+            date: r.dateISO,
+            before: r.baseline,
+            after: r.proposed,
+            category: r.category,
+            debt: r.debt,
+            assumptions: r.assumptions,
+          });
+        } catch (err) {
+          if (err instanceof AffordInputError) return failure(err.code);
+          throw err;
+        }
       },
     },
     {

@@ -14117,6 +14117,246 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     degradedReason: "refresh_failed" | "old" | "manual_old" | null;
 }>;
 /**
+ * evaluateAfford (avalanche-core) over one read of the household — the same read GET /money/position makes, plus the debt plan's debts and settings and this month's category plans. The purchase is one more outflow on the same curve: the curve is re-walked, the position re-computed (a purchase this week counts against this week's cap) and the debt-free range re-run with that month's extra cut when what is left until payday falls under it. A $0 purchase reproduces the baseline to the cent, and a purchase never shows a higher figure than the baseline. Stateless; nothing is written.
+ * @summary Can we afford this? One purchase against the money position, before and after
+ */
+export declare const evaluateAffordBodyAmountExclusiveMin = 0;
+export declare const evaluateAffordBodyAmountMax = 100000;
+export declare const evaluateAffordBodyDateRegExp: RegExp;
+export declare const evaluateAffordBodyMemberMax = 200;
+export declare const EvaluateAffordBody: zod.ZodObject<{
+    amount: zod.ZodNumber;
+    date: zod.ZodOptional<zod.ZodString>;
+    categoryId: zod.ZodOptional<zod.ZodString>;
+    member: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    amount: number;
+    date?: string | undefined;
+    categoryId?: string | undefined;
+    member?: string | undefined;
+}, {
+    amount: number;
+    date?: string | undefined;
+    categoryId?: string | undefined;
+    member?: string | undefined;
+}>;
+export declare const EvaluateAffordResponse: zod.ZodObject<{
+    amount: zod.ZodString;
+    dateISO: zod.ZodString;
+    baseline: zod.ZodObject<{
+        safeToSpendNow: zod.ZodNullable<zod.ZodString>;
+        remainingWeek: zod.ZodNullable<zod.ZodString>;
+        availableUntilPayday: zod.ZodNullable<zod.ZodString>;
+        lowest: zod.ZodString;
+        lowestDate: zod.ZodNullable<zod.ZodString>;
+        debtFreeEarliest: zod.ZodNullable<zod.ZodString>;
+        debtFreeLatest: zod.ZodNullable<zod.ZodString>;
+        totalInterestLow: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: string | null;
+        debtFreeLatest: string | null;
+        totalInterestLow: string | null;
+    }, {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: string | null;
+        debtFreeLatest: string | null;
+        totalInterestLow: string | null;
+    }>;
+    proposed: zod.ZodObject<{
+        safeToSpendNow: zod.ZodNullable<zod.ZodString>;
+        remainingWeek: zod.ZodNullable<zod.ZodString>;
+        availableUntilPayday: zod.ZodNullable<zod.ZodString>;
+        lowest: zod.ZodString;
+        lowestDate: zod.ZodNullable<zod.ZodString>;
+        debtFreeEarliest: zod.ZodNullable<zod.ZodString>;
+        debtFreeLatest: zod.ZodNullable<zod.ZodString>;
+        totalInterestLow: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: string | null;
+        debtFreeLatest: string | null;
+        totalInterestLow: string | null;
+    }, {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: string | null;
+        debtFreeLatest: string | null;
+        totalInterestLow: string | null;
+    }>;
+    delta: zod.ZodObject<{
+        safeToSpendNow: zod.ZodNullable<zod.ZodString>;
+        remainingWeek: zod.ZodNullable<zod.ZodString>;
+        availableUntilPayday: zod.ZodNullable<zod.ZodString>;
+        lowest: zod.ZodString;
+        lowestDate: zod.ZodNullable<zod.ZodString>;
+        debtFreeEarliest: zod.ZodNullable<zod.ZodNumber>;
+        debtFreeLatest: zod.ZodNullable<zod.ZodNumber>;
+        totalInterestLow: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: number | null;
+        debtFreeLatest: number | null;
+        totalInterestLow: string | null;
+    }, {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: number | null;
+        debtFreeLatest: number | null;
+        totalInterestLow: string | null;
+    }>;
+    category: zod.ZodUnion<[zod.ZodObject<{
+        categoryId: zod.ZodString;
+        remainingBefore: zod.ZodNullable<zod.ZodString>;
+        remainingAfter: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        categoryId: string;
+        remainingBefore: string | null;
+        remainingAfter: string | null;
+    }, {
+        categoryId: string;
+        remainingBefore: string | null;
+        remainingAfter: string | null;
+    }>, zod.ZodNull]>;
+    debt: zod.ZodObject<{
+        affected: zod.ZodBoolean;
+        cut: zod.ZodString;
+        cutMonth: zod.ZodNullable<zod.ZodString>;
+        debtFreeMonthShift: zod.ZodNullable<zod.ZodNumber>;
+        interestDelta: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        affected: boolean;
+        cut: string;
+        cutMonth: string | null;
+        debtFreeMonthShift: number | null;
+        interestDelta: string | null;
+    }, {
+        affected: boolean;
+        cut: string;
+        cutMonth: string | null;
+        debtFreeMonthShift: number | null;
+        interestDelta: string | null;
+    }>;
+    verdict: zod.ZodEnum<["fits", "tight", "breaks_buffer", "breaks_zero"]>;
+    assumptions: zod.ZodArray<zod.ZodString, "many">;
+}, "strip", zod.ZodTypeAny, {
+    amount: string;
+    category: {
+        categoryId: string;
+        remainingBefore: string | null;
+        remainingAfter: string | null;
+    } | null;
+    debt: {
+        affected: boolean;
+        cut: string;
+        cutMonth: string | null;
+        debtFreeMonthShift: number | null;
+        interestDelta: string | null;
+    };
+    delta: {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: number | null;
+        debtFreeLatest: number | null;
+        totalInterestLow: string | null;
+    };
+    assumptions: string[];
+    dateISO: string;
+    baseline: {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: string | null;
+        debtFreeLatest: string | null;
+        totalInterestLow: string | null;
+    };
+    proposed: {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: string | null;
+        debtFreeLatest: string | null;
+        totalInterestLow: string | null;
+    };
+    verdict: "tight" | "fits" | "breaks_buffer" | "breaks_zero";
+}, {
+    amount: string;
+    category: {
+        categoryId: string;
+        remainingBefore: string | null;
+        remainingAfter: string | null;
+    } | null;
+    debt: {
+        affected: boolean;
+        cut: string;
+        cutMonth: string | null;
+        debtFreeMonthShift: number | null;
+        interestDelta: string | null;
+    };
+    delta: {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: number | null;
+        debtFreeLatest: number | null;
+        totalInterestLow: string | null;
+    };
+    assumptions: string[];
+    dateISO: string;
+    baseline: {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: string | null;
+        debtFreeLatest: string | null;
+        totalInterestLow: string | null;
+    };
+    proposed: {
+        lowestDate: string | null;
+        safeToSpendNow: string | null;
+        remainingWeek: string | null;
+        availableUntilPayday: string | null;
+        lowest: string;
+        debtFreeEarliest: string | null;
+        debtFreeLatest: string | null;
+        totalInterestLow: string | null;
+    };
+    verdict: "tight" | "fits" | "breaks_buffer" | "breaks_zero";
+}>;
+/**
  * @summary The household's allowance plans and the suggested weekly cap with its working
  */
 export declare const ListAllowancePlansResponse: zod.ZodObject<{
@@ -14573,7 +14813,7 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
         runId: string;
         targetKind: string;
         targetId: string | null;
-        outcome: "applied" | "proposed" | "needs_attention";
+        outcome: "proposed" | "applied" | "needs_attention";
         reversible: boolean;
         undoneAt: Date | null;
     }, {
@@ -14583,7 +14823,7 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
         runId: string;
         targetKind: string;
         targetId: string | null;
-        outcome: "applied" | "proposed" | "needs_attention";
+        outcome: "proposed" | "applied" | "needs_attention";
         reversible: boolean;
         undoneAt: Date | null;
     }>, "many">;
@@ -14595,7 +14835,7 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
         runId: string;
         targetKind: string;
         targetId: string | null;
-        outcome: "applied" | "proposed" | "needs_attention";
+        outcome: "proposed" | "applied" | "needs_attention";
         reversible: boolean;
         undoneAt: Date | null;
     }[];
@@ -14607,7 +14847,7 @@ export declare const ListAgentActionsResponse: zod.ZodObject<{
         runId: string;
         targetKind: string;
         targetId: string | null;
-        outcome: "applied" | "proposed" | "needs_attention";
+        outcome: "proposed" | "applied" | "needs_attention";
         reversible: boolean;
         undoneAt: Date | null;
     }[];
@@ -14640,7 +14880,7 @@ export declare const UndoAgentActionResponse: zod.ZodObject<{
     runId: string;
     targetKind: string;
     targetId: string | null;
-    outcome: "applied" | "proposed" | "needs_attention";
+    outcome: "proposed" | "applied" | "needs_attention";
     reversible: boolean;
     undoneAt: Date | null;
 }, {
@@ -14650,7 +14890,7 @@ export declare const UndoAgentActionResponse: zod.ZodObject<{
     runId: string;
     targetKind: string;
     targetId: string | null;
-    outcome: "applied" | "proposed" | "needs_attention";
+    outcome: "proposed" | "applied" | "needs_attention";
     reversible: boolean;
     undoneAt: Date | null;
 }>;
@@ -15755,10 +15995,10 @@ export declare const ListAgentProposalsQueryParams: zod.ZodObject<{
     status: zod.ZodDefault<zod.ZodEnum<["proposed", "approved", "rejected", "applied", "expired", "all"]>>;
     limit: zod.ZodDefault<zod.ZodNumber>;
 }, "strip", zod.ZodTypeAny, {
-    status: "expired" | "all" | "applied" | "proposed" | "approved" | "rejected";
+    status: "expired" | "proposed" | "all" | "applied" | "approved" | "rejected";
     limit: number;
 }, {
-    status?: "expired" | "all" | "applied" | "proposed" | "approved" | "rejected" | undefined;
+    status?: "expired" | "proposed" | "all" | "applied" | "approved" | "rejected" | undefined;
     limit?: number | undefined;
 }>;
 export declare const ListAgentProposalsResponse: zod.ZodObject<{
@@ -15775,7 +16015,7 @@ export declare const ListAgentProposalsResponse: zod.ZodObject<{
         expiresAt: zod.ZodDate;
         createdAt: zod.ZodDate;
     }, "strip", zod.ZodTypeAny, {
-        status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+        status: "expired" | "proposed" | "applied" | "approved" | "rejected";
         id: string;
         expiresAt: Date;
         kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
@@ -15787,7 +16027,7 @@ export declare const ListAgentProposalsResponse: zod.ZodObject<{
         decidedAt: Date | null;
         appliedActionId: string | null;
     }, {
-        status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+        status: "expired" | "proposed" | "applied" | "approved" | "rejected";
         id: string;
         expiresAt: Date;
         kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
@@ -15801,7 +16041,7 @@ export declare const ListAgentProposalsResponse: zod.ZodObject<{
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     proposals: {
-        status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+        status: "expired" | "proposed" | "applied" | "approved" | "rejected";
         id: string;
         expiresAt: Date;
         kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
@@ -15815,7 +16055,7 @@ export declare const ListAgentProposalsResponse: zod.ZodObject<{
     }[];
 }, {
     proposals: {
-        status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+        status: "expired" | "proposed" | "applied" | "approved" | "rejected";
         id: string;
         expiresAt: Date;
         kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
@@ -15851,7 +16091,7 @@ export declare const ApproveAgentProposalResponse: zod.ZodObject<{
     expiresAt: zod.ZodDate;
     createdAt: zod.ZodDate;
 }, "strip", zod.ZodTypeAny, {
-    status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+    status: "expired" | "proposed" | "applied" | "approved" | "rejected";
     id: string;
     expiresAt: Date;
     kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
@@ -15863,7 +16103,7 @@ export declare const ApproveAgentProposalResponse: zod.ZodObject<{
     decidedAt: Date | null;
     appliedActionId: string | null;
 }, {
-    status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+    status: "expired" | "proposed" | "applied" | "approved" | "rejected";
     id: string;
     expiresAt: Date;
     kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
@@ -15898,7 +16138,7 @@ export declare const RejectAgentProposalResponse: zod.ZodObject<{
     expiresAt: zod.ZodDate;
     createdAt: zod.ZodDate;
 }, "strip", zod.ZodTypeAny, {
-    status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+    status: "expired" | "proposed" | "applied" | "approved" | "rejected";
     id: string;
     expiresAt: Date;
     kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
@@ -15910,7 +16150,7 @@ export declare const RejectAgentProposalResponse: zod.ZodObject<{
     decidedAt: Date | null;
     appliedActionId: string | null;
 }, {
-    status: "expired" | "applied" | "proposed" | "approved" | "rejected";
+    status: "expired" | "proposed" | "applied" | "approved" | "rejected";
     id: string;
     expiresAt: Date;
     kind: "budget_line" | "set_category" | "weekly_limit" | "extra_debt_payment" | "bill_amount";
@@ -16219,6 +16459,52 @@ export declare const UpdateWishlistItemResponse: zod.ZodObject<{
     waitingUntil: string;
     waitingDaysLeft: number;
     decision: "pending" | "approved" | "declined" | "bought";
+}>;
+/**
+ * The nightly wishlist.evaluate job's work for one item: evaluateAfford with the item's amount (and category) today, stored in the item's last_evaluation.
+ * @summary Evaluate one wish-list item now, as if bought today, and store the answer
+ */
+export declare const EvaluateWishlistItemParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const EvaluateWishlistItemResponse: zod.ZodObject<{
+    itemId: zod.ZodString;
+    lastEvaluation: zod.ZodObject<{
+        evaluatedAt: zod.ZodDate;
+        verdict: zod.ZodEnum<["fits", "tight", "breaks_buffer", "breaks_zero"]>;
+        safeToSpendNowAfter: zod.ZodNullable<zod.ZodString>;
+        availableUntilPaydayAfter: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        verdict: "tight" | "fits" | "breaks_buffer" | "breaks_zero";
+        evaluatedAt: Date;
+        safeToSpendNowAfter: string | null;
+        availableUntilPaydayAfter: string | null;
+    }, {
+        verdict: "tight" | "fits" | "breaks_buffer" | "breaks_zero";
+        evaluatedAt: Date;
+        safeToSpendNowAfter: string | null;
+        availableUntilPaydayAfter: string | null;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    itemId: string;
+    lastEvaluation: {
+        verdict: "tight" | "fits" | "breaks_buffer" | "breaks_zero";
+        evaluatedAt: Date;
+        safeToSpendNowAfter: string | null;
+        availableUntilPaydayAfter: string | null;
+    };
+}, {
+    itemId: string;
+    lastEvaluation: {
+        verdict: "tight" | "fits" | "breaks_buffer" | "breaks_zero";
+        evaluatedAt: Date;
+        safeToSpendNowAfter: string | null;
+        availableUntilPaydayAfter: string | null;
+    };
 }>;
 /**
  * @summary This month's AI cost, calls, caps and the latest runs
