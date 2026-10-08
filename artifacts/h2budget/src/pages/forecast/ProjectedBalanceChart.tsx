@@ -413,9 +413,8 @@ export function ProjectedBalanceChart({
           {expanded && scale.domain[0] < 0 && (
             <ReferenceLine y={0} stroke={CHART.steel} strokeWidth={1} data-testid="ref-zero" />
           )}
-          {expanded && todayISO ? (
-            <>
-              <Area
+          {expanded && todayISO && (
+            <Area
                 {...ANIM_AREA}
                 isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
                 type="monotone"
@@ -426,7 +425,9 @@ export function ProjectedBalanceChart({
                 name="Actual"
                 connectNulls
               />
-              <Area
+          )}
+          {expanded && todayISO && (
+            <Area
                 {...ANIM_AREA}
                 isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
                 type="monotone"
@@ -438,11 +439,13 @@ export function ProjectedBalanceChart({
                 name="Projected"
                 connectNulls
               />
+          )}
+          {expanded && todayISO && (
               <ReferenceLine x={todayISO} stroke={CHART.mist} strokeWidth={1.25} data-testid="ref-today">
                 <RechartsLabel value="Today" position="insideTopRight" fill={CHART.steel} fontSize={10} />
               </ReferenceLine>
-            </>
-          ) : (
+          )}
+          {!(expanded && todayISO) && (
             <Area
               {...ANIM_AREA}
               isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
