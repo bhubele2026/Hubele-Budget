@@ -1,0 +1,1 @@
+{"version":3,"file":"aiConversationDetail.d.ts","sourceRoot":"","sources":["../../../src/generated/types/aiConversationDetail.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,kBAAkB,CAAC;AACvD,OAAO,KAAK,EAAE,SAAS,EAAE,MAAM,aAAa,CAAC;AAE7C,MAAM,WAAW,oBAAoB;IACnC,YAAY,EAAE,cAAc,CAAC;IAC7B,QAAQ,EAAE,SAAS,EAAE,CAAC;CACvB"}

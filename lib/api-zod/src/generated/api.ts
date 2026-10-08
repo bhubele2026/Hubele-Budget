@@ -6968,3 +6968,459 @@ export const ReplaceTransactionSplitsResponse = zod.object({
 export const DeleteTransactionSplitsParams = zod.object({
   id: zod.coerce.string().uuid(),
 });
+
+/**
+ * @summary The signed-in person's conversations, newest first
+ */
+export const listAiConversationsQueryLimitDefault = 20;
+export const listAiConversationsQueryLimitMax = 20;
+
+export const ListAiConversationsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listAiConversationsQueryLimitMax)
+    .default(listAiConversationsQueryLimitDefault),
+});
+
+export const ListAiConversationsResponse = zod.object({
+  conversations: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      createdAt: zod.coerce.date(),
+      lastMessageAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary One conversation with its messages (the polling fallback after a dropped stream)
+ */
+export const GetAiConversationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetAiConversationResponse = zod.object({
+  conversation: zod.object({
+    id: zod.string(),
+    title: zod.string(),
+    createdAt: zod.coerce.date(),
+    lastMessageAt: zod.coerce.date(),
+  }),
+  messages: zod.array(
+    zod.object({
+      id: zod.string(),
+      role: zod.enum(["user", "assistant", "tool"]),
+      content: zod
+        .record(zod.string(), zod.unknown())
+        .describe(
+          "user \/ assistant: `{ text }` (assistant also `grounded`, `demo`, `tools`); tool: `{ name }` only.",
+        ),
+      runId: zod.string().nullable(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * (AI-2) `text/event-stream`. Each frame is `event: <type>` and `data: <AiChatEvent as JSON>`; a `: ping` comment arrives every 15 seconds. The model reads through tools and may propose changes; it never applies one. After `done` (or a dropped stream) read the stored answer from `GET /ai/conversations/{id}`. Tagged `ai-stream`: generated for the zod package only — the web client reads the stream itself.
+ * @summary Ask a question; the answer streams back as server-sent events
+ */
+export const aiChatBodyTextMax = 2000;
+
+export const aiChatBodyUserAskedToChangeDefault = false;
+
+export const AiChatBody = zod.object({
+  conversationId: zod.string(),
+  text: zod.string().min(1).max(aiChatBodyTextMax),
+  userAskedToChange: zod
+    .boolean()
+    .default(aiChatBodyUserAskedToChangeDefault)
+    .describe(
+      "True only when the person's own action asked Ask to file the charge (a button), never inferred from text.",
+    ),
+});
+
+export const AiChatResponse = zod
+  .object({
+    type: zod.enum(["token", "tool", "done", "error"]),
+    text: zod.string().optional(),
+    name: zod.string().optional(),
+    status: zod.enum(["running", "done", "error"]).optional(),
+    runId: zod.string().optional(),
+    messageId: zod.string().optional(),
+    grounded: zod.boolean().optional(),
+    demo: zod.boolean().optional(),
+    code: zod.string().optional(),
+    message: zod.string().optional(),
+    retryable: zod.boolean().optional(),
+  })
+  .describe(
+    "One server-sent event. `token` carries `text`; `tool` carries `name` and `status`; `done` carries `runId`, `messageId`, the final `text` (it replaces the streamed tokens), `grounded` and `demo`; `error` carries `code`, `message`, `retryable` (and `runId` once a run exists).",
+  );
+
+/**
+ * @summary Changes Ask proposed, newest first (open by default)
+ */
+export const listAgentProposalsQueryStatusDefault = `proposed`;
+export const listAgentProposalsQueryLimitDefault = 20;
+export const listAgentProposalsQueryLimitMax = 50;
+
+export const ListAgentProposalsQueryParams = zod.object({
+  status: zod
+    .enum(["proposed", "approved", "rejected", "applied", "expired", "all"])
+    .default(listAgentProposalsQueryStatusDefault),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listAgentProposalsQueryLimitMax)
+    .default(listAgentProposalsQueryLimitDefault),
+});
+
+export const ListAgentProposalsResponse = zod.object({
+  proposals: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum([
+        "set_category",
+        "weekly_limit",
+        "budget_line",
+        "extra_debt_payment",
+        "bill_amount",
+      ]),
+      status: zod.enum([
+        "proposed",
+        "approved",
+        "rejected",
+        "applied",
+        "expired",
+      ]),
+      payload: zod
+        .record(zod.string(), zod.unknown())
+        .describe(
+          "`target`, `before`, `after`, `label` (figures read by code), plus `txnId` \/ `categoryId` for a category proposal.",
+        ),
+      rationale: zod.string(),
+      runId: zod.string(),
+      decidedBy: zod.string().nullable(),
+      decidedAt: zod.coerce.date().nullable(),
+      appliedActionId: zod.string().nullable(),
+      expiresAt: zod.coerce.date(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Approve a proposal and apply it through the app's own writer
+ */
+export const ApproveAgentProposalParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ApproveAgentProposalResponse = zod.object({
+  id: zod.string(),
+  kind: zod.enum([
+    "set_category",
+    "weekly_limit",
+    "budget_line",
+    "extra_debt_payment",
+    "bill_amount",
+  ]),
+  status: zod.enum(["proposed", "approved", "rejected", "applied", "expired"]),
+  payload: zod
+    .record(zod.string(), zod.unknown())
+    .describe(
+      "`target`, `before`, `after`, `label` (figures read by code), plus `txnId` \/ `categoryId` for a category proposal.",
+    ),
+  rationale: zod.string(),
+  runId: zod.string(),
+  decidedBy: zod.string().nullable(),
+  decidedAt: zod.coerce.date().nullable(),
+  appliedActionId: zod.string().nullable(),
+  expiresAt: zod.coerce.date(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Reject a proposal
+ */
+export const RejectAgentProposalParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const RejectAgentProposalResponse = zod.object({
+  id: zod.string(),
+  kind: zod.enum([
+    "set_category",
+    "weekly_limit",
+    "budget_line",
+    "extra_debt_payment",
+    "bill_amount",
+  ]),
+  status: zod.enum(["proposed", "approved", "rejected", "applied", "expired"]),
+  payload: zod
+    .record(zod.string(), zod.unknown())
+    .describe(
+      "`target`, `before`, `after`, `label` (figures read by code), plus `txnId` \/ `categoryId` for a category proposal.",
+    ),
+  rationale: zod.string(),
+  runId: zod.string(),
+  decidedBy: zod.string().nullable(),
+  decidedAt: zod.coerce.date().nullable(),
+  appliedActionId: zod.string().nullable(),
+  expiresAt: zod.coerce.date(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary What the household (or Ask, visibly) keeps in memory
+ */
+export const ListMemoryResponse = zod.object({
+  memories: zod.array(
+    zod.object({
+      id: zod.string(),
+      scope: zod.enum(["categorization", "spending", "debt", "general"]),
+      key: zod.string(),
+      value: zod
+        .record(zod.string(), zod.unknown())
+        .describe(
+          "`{ text }`; an agent note also carries `kind` (preference | decision).",
+        ),
+      source: zod.enum(["user_stated", "inferred", "agent_proposed"]),
+      createdByKind: zod.enum(["user", "agent"]),
+      memberUserId: zod.string().nullable(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary State a preference or decision (replaces what the key held)
+ */
+export const putMemoryPathKeyMax = 60;
+
+export const PutMemoryParams = zod.object({
+  scope: zod.enum(["categorization", "spending", "debt", "general"]),
+  key: zod.coerce.string().min(1).max(putMemoryPathKeyMax),
+});
+
+export const putMemoryBodyValueMax = 300;
+
+export const putMemoryBodyMineDefault = false;
+
+export const PutMemoryBody = zod.object({
+  value: zod.string().min(1).max(putMemoryBodyValueMax),
+  mine: zod
+    .boolean()
+    .default(putMemoryBodyMineDefault)
+    .describe("Keep it for the signed-in member only."),
+});
+
+export const PutMemoryResponse = zod.object({
+  id: zod.string(),
+  scope: zod.enum(["categorization", "spending", "debt", "general"]),
+  key: zod.string(),
+  value: zod
+    .record(zod.string(), zod.unknown())
+    .describe(
+      "`{ text }`; an agent note also carries `kind` (preference | decision).",
+    ),
+  source: zod.enum(["user_stated", "inferred", "agent_proposed"]),
+  createdByKind: zod.enum(["user", "agent"]),
+  memberUserId: zod.string().nullable(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Forget one memory (it leaves every list and every prompt)
+ */
+export const DeleteMemoryParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
+ * @summary The wish list, with each item's waiting period
+ */
+export const ListWishlistResponse = zod.object({
+  waitDays: zod.number(),
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      amount: zod.number().nullable(),
+      url: zod.string().nullable(),
+      categoryId: zod.string().nullable(),
+      targetDate: zod.string().nullable(),
+      requestedBy: zod.string(),
+      requestedAt: zod.coerce.date(),
+      waitingUntil: zod.string(),
+      waitingDaysLeft: zod
+        .number()
+        .describe("0 once the waiting period is over."),
+      decision: zod.enum(["pending", "approved", "declined", "bought"]),
+      decidedAt: zod.coerce.date().nullable(),
+    }),
+  ),
+});
+
+/**
+ * @summary Add something to the wish list (starts a waiting period)
+ */
+export const createWishlistItemBodyTitleMax = 120;
+
+export const createWishlistItemBodyAmountMin = 0;
+export const createWishlistItemBodyAmountMax = 1000000;
+
+export const createWishlistItemBodyUrlMax = 500;
+
+export const createWishlistItemBodyTargetDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const CreateWishlistItemBody = zod.object({
+  title: zod.string().min(1).max(createWishlistItemBodyTitleMax),
+  amount: zod
+    .number()
+    .min(createWishlistItemBodyAmountMin)
+    .max(createWishlistItemBodyAmountMax)
+    .optional(),
+  url: zod.string().max(createWishlistItemBodyUrlMax).optional(),
+  categoryId: zod.string().optional(),
+  targetDate: zod
+    .string()
+    .regex(createWishlistItemBodyTargetDateRegExp)
+    .optional(),
+});
+
+/**
+ * @summary Edit an item or decide it (a yes waits out the waiting period)
+ */
+export const UpdateWishlistItemParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const updateWishlistItemBodyTitleMax = 120;
+
+export const updateWishlistItemBodyAmountMin = 0;
+export const updateWishlistItemBodyAmountMax = 1000000;
+
+export const updateWishlistItemBodyUrlMax = 500;
+
+export const updateWishlistItemBodyTargetDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const UpdateWishlistItemBody = zod.object({
+  title: zod.string().min(1).max(updateWishlistItemBodyTitleMax).optional(),
+  amount: zod
+    .number()
+    .min(updateWishlistItemBodyAmountMin)
+    .max(updateWishlistItemBodyAmountMax)
+    .nullish(),
+  url: zod.string().max(updateWishlistItemBodyUrlMax).nullish(),
+  targetDate: zod
+    .string()
+    .regex(updateWishlistItemBodyTargetDateRegExp)
+    .nullish(),
+  decision: zod.enum(["pending", "approved", "declined", "bought"]).optional(),
+});
+
+export const UpdateWishlistItemResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  amount: zod.number().nullable(),
+  url: zod.string().nullable(),
+  categoryId: zod.string().nullable(),
+  targetDate: zod.string().nullable(),
+  requestedBy: zod.string(),
+  requestedAt: zod.coerce.date(),
+  waitingUntil: zod.string(),
+  waitingDaysLeft: zod.number().describe("0 once the waiting period is over."),
+  decision: zod.enum(["pending", "approved", "declined", "bought"]),
+  decidedAt: zod.coerce.date().nullable(),
+});
+
+/**
+ * @summary This month's AI cost, calls, caps and the latest runs
+ */
+export const GetAiUsageSummaryResponse = zod.object({
+  month: zod.string().describe("UTC month, YYYY-MM"),
+  monthToDateUsd: zod.number(),
+  calls: zod.number().optional(),
+  failures: zod.number().optional(),
+  blocked: zod.number().optional(),
+  cacheHitRatio: zod.number().nullish(),
+  byTask: zod.array(
+    zod.object({
+      task: zod.string(),
+      costUsd: zod.number(),
+      calls: zod.number(),
+      failures: zod.number(),
+    }),
+  ),
+  budget: zod.object({
+    monthlyCapUsd: zod.number(),
+    hardCapUsd: zod.number(),
+    dailyCaps: zod.record(zod.string(), zod.number()),
+    pausedUntil: zod.coerce.date().nullable(),
+  }),
+  recentRuns: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum([
+        "chat",
+        "categorize",
+        "monitor",
+        "recap",
+        "receipt",
+        "sms_question",
+      ]),
+      trigger: zod.enum(["user", "txn_arrived", "schedule", "sms", "retry"]),
+      status: zod.enum([
+        "running",
+        "succeeded",
+        "failed",
+        "refused",
+        "budget_exceeded",
+      ]),
+      startedAt: zod.coerce.date(),
+      finishedAt: zod.coerce.date().nullable(),
+      summary: zod.string().nullable().describe("Counts and refs only"),
+      inputTokens: zod.number(),
+      outputTokens: zod.number(),
+      costUsd: zod.number().nullable(),
+    }),
+  ),
+});
+
+/**
+ * @summary Owner sets the monthly caps and the pause
+ */
+export const updateAiBudgetBodyMonthlyCapUsdMin = 0;
+export const updateAiBudgetBodyMonthlyCapUsdMax = 1000;
+
+export const updateAiBudgetBodyHardCapUsdMin = 0;
+export const updateAiBudgetBodyHardCapUsdMax = 1000;
+
+export const UpdateAiBudgetBody = zod.object({
+  monthlyCapUsd: zod
+    .number()
+    .min(updateAiBudgetBodyMonthlyCapUsdMin)
+    .max(updateAiBudgetBodyMonthlyCapUsdMax)
+    .optional(),
+  hardCapUsd: zod
+    .number()
+    .min(updateAiBudgetBodyHardCapUsdMin)
+    .max(updateAiBudgetBodyHardCapUsdMax)
+    .optional(),
+  pausedUntil: zod.coerce.date().nullish(),
+});
+
+export const UpdateAiBudgetResponse = zod.object({
+  monthlyCapUsd: zod.number(),
+  hardCapUsd: zod.number(),
+  dailyCaps: zod.record(zod.string(), zod.number()),
+  pausedUntil: zod.coerce.date().nullable(),
+});

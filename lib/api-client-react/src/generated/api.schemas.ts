@@ -5154,6 +5154,335 @@ export interface TransactionSplits {
   splits: TransactionSplit[];
 }
 
+export interface AiConversation {
+  id: string;
+  title: string;
+  createdAt: string;
+  lastMessageAt: string;
+}
+
+export interface AiConversationList {
+  conversations: AiConversation[];
+}
+
+export type AiMessageRole = (typeof AiMessageRole)[keyof typeof AiMessageRole];
+
+export const AiMessageRole = {
+  user: "user",
+  assistant: "assistant",
+  tool: "tool",
+} as const;
+
+/**
+ * user / assistant: `{ text }` (assistant also `grounded`, `demo`, `tools`); tool: `{ name }` only.
+ */
+export type AiMessageContent = { [key: string]: unknown };
+
+export interface AiMessage {
+  id: string;
+  role: AiMessageRole;
+  /** user / assistant: `{ text }` (assistant also `grounded`, `demo`, `tools`); tool: `{ name }` only. */
+  content: AiMessageContent;
+  /** @nullable */
+  runId: string | null;
+  createdAt: string;
+}
+
+export interface AiConversationDetail {
+  conversation: AiConversation;
+  messages: AiMessage[];
+}
+
+export interface AiChatRequest {
+  conversationId: string;
+  /**
+   * @minLength 1
+   * @maxLength 2000
+   */
+  text: string;
+  /** True only when the person's own action asked Ask to file the charge (a button), never inferred from text. */
+  userAskedToChange?: boolean;
+}
+
+export type AiChatEventType =
+  (typeof AiChatEventType)[keyof typeof AiChatEventType];
+
+export const AiChatEventType = {
+  token: "token",
+  tool: "tool",
+  done: "done",
+  error: "error",
+} as const;
+
+export type AiChatEventStatus =
+  (typeof AiChatEventStatus)[keyof typeof AiChatEventStatus];
+
+export const AiChatEventStatus = {
+  running: "running",
+  done: "done",
+  error: "error",
+} as const;
+
+/**
+ * One server-sent event. `token` carries `text`; `tool` carries `name` and `status`; `done` carries `runId`, `messageId`, the final `text` (it replaces the streamed tokens), `grounded` and `demo`; `error` carries `code`, `message`, `retryable` (and `runId` once a run exists).
+ */
+export interface AiChatEvent {
+  type: AiChatEventType;
+  text?: string;
+  name?: string;
+  status?: AiChatEventStatus;
+  runId?: string;
+  messageId?: string;
+  grounded?: boolean;
+  demo?: boolean;
+  code?: string;
+  message?: string;
+  retryable?: boolean;
+}
+
+export type AgentProposalKind =
+  (typeof AgentProposalKind)[keyof typeof AgentProposalKind];
+
+export const AgentProposalKind = {
+  set_category: "set_category",
+  weekly_limit: "weekly_limit",
+  budget_line: "budget_line",
+  extra_debt_payment: "extra_debt_payment",
+  bill_amount: "bill_amount",
+} as const;
+
+export type AgentProposalStatus =
+  (typeof AgentProposalStatus)[keyof typeof AgentProposalStatus];
+
+export const AgentProposalStatus = {
+  proposed: "proposed",
+  approved: "approved",
+  rejected: "rejected",
+  applied: "applied",
+  expired: "expired",
+} as const;
+
+/**
+ * `target`, `before`, `after`, `label` (figures read by code), plus `txnId` / `categoryId` for a category proposal.
+ */
+export type AgentProposalPayload = { [key: string]: unknown };
+
+export interface AgentProposal {
+  id: string;
+  kind: AgentProposalKind;
+  status: AgentProposalStatus;
+  /** `target`, `before`, `after`, `label` (figures read by code), plus `txnId` / `categoryId` for a category proposal. */
+  payload: AgentProposalPayload;
+  rationale: string;
+  runId: string;
+  /** @nullable */
+  decidedBy: string | null;
+  /** @nullable */
+  decidedAt: string | null;
+  /** @nullable */
+  appliedActionId: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface AgentProposalList {
+  proposals: AgentProposal[];
+}
+
+export type MemoryItemScope =
+  (typeof MemoryItemScope)[keyof typeof MemoryItemScope];
+
+export const MemoryItemScope = {
+  categorization: "categorization",
+  spending: "spending",
+  debt: "debt",
+  general: "general",
+} as const;
+
+/**
+ * `{ text }`; an agent note also carries `kind` (preference | decision).
+ */
+export type MemoryItemValue = { [key: string]: unknown };
+
+export type MemoryItemSource =
+  (typeof MemoryItemSource)[keyof typeof MemoryItemSource];
+
+export const MemoryItemSource = {
+  user_stated: "user_stated",
+  inferred: "inferred",
+  agent_proposed: "agent_proposed",
+} as const;
+
+export type MemoryItemCreatedByKind =
+  (typeof MemoryItemCreatedByKind)[keyof typeof MemoryItemCreatedByKind];
+
+export const MemoryItemCreatedByKind = {
+  user: "user",
+  agent: "agent",
+} as const;
+
+export interface MemoryItem {
+  id: string;
+  scope: MemoryItemScope;
+  key: string;
+  /** `{ text }`; an agent note also carries `kind` (preference | decision). */
+  value: MemoryItemValue;
+  source: MemoryItemSource;
+  createdByKind: MemoryItemCreatedByKind;
+  /** @nullable */
+  memberUserId: string | null;
+  updatedAt: string;
+}
+
+export interface MemoryList {
+  memories: MemoryItem[];
+}
+
+export interface PutMemoryBody {
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  value: string;
+  /** Keep it for the signed-in member only. */
+  mine?: boolean;
+}
+
+export type WishlistItemDecision =
+  (typeof WishlistItemDecision)[keyof typeof WishlistItemDecision];
+
+export const WishlistItemDecision = {
+  pending: "pending",
+  approved: "approved",
+  declined: "declined",
+  bought: "bought",
+} as const;
+
+export interface WishlistItem {
+  id: string;
+  title: string;
+  /** @nullable */
+  amount: number | null;
+  /** @nullable */
+  url: string | null;
+  /** @nullable */
+  categoryId: string | null;
+  /** @nullable */
+  targetDate: string | null;
+  requestedBy: string;
+  requestedAt: string;
+  waitingUntil: string;
+  /** 0 once the waiting period is over. */
+  waitingDaysLeft: number;
+  decision: WishlistItemDecision;
+  /** @nullable */
+  decidedAt: string | null;
+}
+
+export interface WishlistList {
+  waitDays: number;
+  items: WishlistItem[];
+}
+
+export interface CreateWishlistItemBody {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  title: string;
+  /**
+   * @minimum 0
+   * @maximum 1000000
+   */
+  amount?: number;
+  /** @maxLength 500 */
+  url?: string;
+  categoryId?: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  targetDate?: string;
+}
+
+export type UpdateWishlistItemBodyDecision =
+  (typeof UpdateWishlistItemBodyDecision)[keyof typeof UpdateWishlistItemBodyDecision];
+
+export const UpdateWishlistItemBodyDecision = {
+  pending: "pending",
+  approved: "approved",
+  declined: "declined",
+  bought: "bought",
+} as const;
+
+export interface UpdateWishlistItemBody {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  title?: string;
+  /**
+   * @minimum 0
+   * @maximum 1000000
+   * @nullable
+   */
+  amount?: number | null;
+  /**
+   * @maxLength 500
+   * @nullable
+   */
+  url?: string | null;
+  /**
+   * @nullable
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  targetDate?: string | null;
+  decision?: UpdateWishlistItemBodyDecision;
+}
+
+export type AiBudgetDailyCaps = { [key: string]: number };
+
+export interface AiBudget {
+  monthlyCapUsd: number;
+  hardCapUsd: number;
+  dailyCaps: AiBudgetDailyCaps;
+  /** @nullable */
+  pausedUntil: string | null;
+}
+
+export interface UpdateAiBudgetBody {
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  monthlyCapUsd?: number;
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  hardCapUsd?: number;
+  /** @nullable */
+  pausedUntil?: string | null;
+}
+
+export type AiUsageSummaryByTaskItem = {
+  task: string;
+  costUsd: number;
+  calls: number;
+  failures: number;
+};
+
+export interface AiUsageSummary {
+  /** UTC month, YYYY-MM */
+  month: string;
+  monthToDateUsd: number;
+  calls?: number;
+  failures?: number;
+  blocked?: number;
+  /** @nullable */
+  cacheHitRatio?: number | null;
+  byTask: AiUsageSummaryByTaskItem[];
+  budget: AiBudget;
+  recentRuns: AgentRun[];
+}
+
 export type ListRecapDeliveriesParams = {
   /**
    * @minimum 1
@@ -5369,3 +5698,32 @@ export type ListCategoryDecisionsParams = {
 export type ApplyLearnedRuleRetroactivelyParams = {
   dryRun?: boolean;
 };
+
+export type ListAiConversationsParams = {
+  /**
+   * @minimum 1
+   * @maximum 20
+   */
+  limit?: number;
+};
+
+export type ListAgentProposalsParams = {
+  status?: ListAgentProposalsStatus;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+};
+
+export type ListAgentProposalsStatus =
+  (typeof ListAgentProposalsStatus)[keyof typeof ListAgentProposalsStatus];
+
+export const ListAgentProposalsStatus = {
+  proposed: "proposed",
+  approved: "approved",
+  rejected: "rejected",
+  applied: "applied",
+  expired: "expired",
+  all: "all",
+} as const;

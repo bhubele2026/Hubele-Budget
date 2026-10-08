@@ -3,6 +3,7 @@ import { logger } from "../../lib/logger";
 import { recapV1 } from "./recap.v1";
 import type { AiTask } from "../config";
 import { categorizeV1 } from "./categorize.v1";
+import { chatV1 } from "./chat.v1";
 
 // (AI-0) Versioned prompts. Each task maps version keys ("v1", "v2", …) to a
 // prompt; the newest runs unless AI_PROMPT_<TASK> names another version (an
@@ -27,6 +28,8 @@ export const PROMPTS: PromptRegistry = {
   categorize: { v1: categorizeV1 },
   // (AI-4a) The morning recap prompt.
   recap: { v1: recapV1 },
+  // (AI-2) The Ask prompt.
+  chat: { v1: chatV1 },
 };
 
 function versionNumber(key: string): number {

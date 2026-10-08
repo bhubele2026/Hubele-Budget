@@ -1,0 +1,1 @@
+{"version":3,"file":"aiUsageSummaryByTaskItem.d.ts","sourceRoot":"","sources":["../../../src/generated/types/aiUsageSummaryByTaskItem.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,MAAM,wBAAwB,GAAG;IACrC,IAAI,EAAE,MAAM,CAAC;IACb,OAAO,EAAE,MAAM,CAAC;IAChB,KAAK,EAAE,MAAM,CAAC;IACd,QAAQ,EAAE,MAAM,CAAC;CAClB,CAAC"}

@@ -23,7 +23,7 @@ export default defineConfig({
       },
       // (PR14 review M4) Operations tagged chase-ledger are generated into
       // their own module (below), so the landing chunk never carries them.
-      filters: { mode: "exclude", tags: ["chase-ledger"] },
+      filters: { mode: "exclude", tags: ["chase-ledger", "ai-stream"] },
     },
     output: {
       workspace: apiClientReactSrc,

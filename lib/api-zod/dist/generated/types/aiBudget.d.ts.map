@@ -1,0 +1,1 @@
+{"version":3,"file":"aiBudget.d.ts","sourceRoot":"","sources":["../../../src/generated/types/aiBudget.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,iBAAiB,EAAE,MAAM,qBAAqB,CAAC;AAE7D,MAAM,WAAW,QAAQ;IACvB,aAAa,EAAE,MAAM,CAAC;IACtB,UAAU,EAAE,MAAM,CAAC;IACnB,SAAS,EAAE,iBAAiB,CAAC;IAC7B,gBAAgB;IAChB,WAAW,EAAE,IAAI,GAAG,IAAI,CAAC;CAC1B"}

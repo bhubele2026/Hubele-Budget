@@ -34,6 +34,14 @@ tags:
   - name: money
     description: (PR-B1) The money position (safe to spend until payday and this week) and the allowance plans behind its weekly cap.
   - name: categorization
+  - name: ai
+    description: (AI-2) Ask — conversations, the chat stream, AI usage and budget.
+  - name: ai-stream
+    description: (AI-2) The chat stream. Generated for the zod package only; the web client reads the event stream itself.
+  - name: memory
+    description: (AI-2) What the household (or Ask, visibly) keeps in memory.
+  - name: wishlist
+    description: (AI-2) The wish list and its waiting period.
 paths:
   /healthz:
     get:
@@ -2879,6 +2887,257 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { description: Not found }
+
+  # ── (AI-2) Ask: conversations, chat (SSE), proposals, memory, wish list, AI usage ──
+  /ai/conversations:
+    post:
+      operationId: createAiConversation
+      tags: [ai]
+      summary: Start a conversation with Ask
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiConversation" }
+    get:
+      operationId: listAiConversations
+      tags: [ai]
+      summary: The signed-in person's conversations, newest first
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 20, default: 20 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiConversationList" }
+
+  /ai/conversations/{id}:
+    get:
+      operationId: getAiConversation
+      tags: [ai]
+      summary: One conversation with its messages (the polling fallback after a dropped stream)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiConversationDetail" }
+        "404": { description: No such conversation for this person }
+
+  /ai/chat:
+    post:
+      operationId: aiChat
+      tags: [ai, ai-stream]
+      summary: Ask a question; the answer streams back as server-sent events
+      description: >-
+        (AI-2) `text/event-stream`. Each frame is `event: <type>` and
+        `data: <AiChatEvent as JSON>`; a `: ping` comment arrives every 15
+        seconds. The model reads through tools and may propose changes; it never
+        applies one. After `done` (or a dropped stream) read the stored answer
+        from `GET /ai/conversations/{id}`. Tagged `ai-stream`: generated for
+        the zod package only — the web client reads the stream itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiChatRequest" }
+      responses:
+        "200":
+          description: The event stream
+          content:
+            text/event-stream:
+              schema: { $ref: "#/components/schemas/AiChatEvent" }
+            # The payload of one frame, so the zod package carries a validator for it.
+            application/json:
+              schema: { $ref: "#/components/schemas/AiChatEvent" }
+        "400": { description: Invalid request }
+        "404": { description: No such conversation for this person }
+        "409": { description: This conversation is already answering }
+        "429": { description: Too many requests (30 a minute per person) }
+
+  /agent/proposals:
+    get:
+      operationId: listAgentProposals
+      tags: [agent]
+      summary: Changes Ask proposed, newest first (open by default)
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [proposed, approved, rejected, applied, expired, all], default: proposed }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentProposalList" }
+
+  /agent/proposals/{id}/approve:
+    post:
+      operationId: approveAgentProposal
+      tags: [agent]
+      summary: Approve a proposal and apply it through the app's own writer
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentProposal" }
+        "403": { description: Only the household owner sets the weekly limit }
+        "404": { description: No such proposal in this household }
+        "409": { description: "Not open (decided or expired), or its target changed" }
+
+  /agent/proposals/{id}/reject:
+    post:
+      operationId: rejectAgentProposal
+      tags: [agent]
+      summary: Reject a proposal
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentProposal" }
+        "404": { description: No such proposal in this household }
+        "409": { description: Not open }
+
+  /memory:
+    get:
+      operationId: listMemory
+      tags: [memory]
+      summary: What the household (or Ask, visibly) keeps in memory
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryList" }
+
+  /memory/{scope}/{key}:
+    put:
+      operationId: putMemory
+      tags: [memory]
+      summary: State a preference or decision (replaces what the key held)
+      parameters:
+        - { in: path, name: scope, required: true, schema: { type: string, enum: [categorization, spending, debt, general] } }
+        - { in: path, name: key, required: true, schema: { type: string, minLength: 1, maxLength: 60 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PutMemoryBody" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryItem" }
+        "400": { description: Invalid key or value }
+        "409": { description: The household's memory is full }
+
+  /memory/{id}:
+    delete:
+      operationId: deleteMemory
+      tags: [memory]
+      summary: Forget one memory (it leaves every list and every prompt)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Forgotten }
+        "404": { description: No such memory in this household }
+
+  /wishlist:
+    get:
+      operationId: listWishlist
+      tags: [wishlist]
+      summary: The wish list, with each item's waiting period
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WishlistList" }
+    post:
+      operationId: createWishlistItem
+      tags: [wishlist]
+      summary: Add something to the wish list (starts a waiting period)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateWishlistItemBody" }
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WishlistItem" }
+        "400": { description: Invalid item }
+
+  /wishlist/{id}:
+    patch:
+      operationId: updateWishlistItem
+      tags: [wishlist]
+      summary: Edit an item or decide it (a yes waits out the waiting period)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateWishlistItemBody" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WishlistItem" }
+        "400": { description: Invalid edit }
+        "404": { description: No such item in this household }
+        "409": { description: Still in the waiting period }
+
+  /ai/usage/summary:
+    get:
+      operationId: getAiUsageSummary
+      tags: [ai]
+      summary: This month's AI cost, calls, caps and the latest runs
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiUsageSummary" }
+
+  /ai/budget:
+    put:
+      operationId: updateAiBudget
+      tags: [ai]
+      summary: Owner sets the monthly caps and the pause
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAiBudgetBody" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiBudget" }
+        "400": { description: Invalid caps }
+        "403": { description: Only the household owner sets the budget }
 
 components:
   schemas:
@@ -7591,3 +7850,240 @@ components:
         splits:
           type: array
           items: { $ref: "#/components/schemas/TransactionSplit" }
+
+    # ── (AI-2) ─────────────────────────────────────────────────────────────
+    AiConversation:
+      type: object
+      additionalProperties: false
+      required: [id, title, createdAt, lastMessageAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastMessageAt: { type: string, format: date-time }
+
+    AiConversationList:
+      type: object
+      additionalProperties: false
+      required: [conversations]
+      properties:
+        conversations:
+          type: array
+          items: { $ref: "#/components/schemas/AiConversation" }
+
+    AiMessage:
+      type: object
+      additionalProperties: false
+      required: [id, role, content, runId, createdAt]
+      properties:
+        id: { type: string }
+        role: { type: string, enum: [user, assistant, tool] }
+        content:
+          type: object
+          additionalProperties: true
+          description: "user / assistant: `{ text }` (assistant also `grounded`, `demo`, `tools`); tool: `{ name }` only."
+        runId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AiConversationDetail:
+      type: object
+      additionalProperties: false
+      required: [conversation, messages]
+      properties:
+        conversation: { $ref: "#/components/schemas/AiConversation" }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/AiMessage" }
+
+    AiChatRequest:
+      type: object
+      additionalProperties: false
+      required: [conversationId, text]
+      properties:
+        conversationId: { type: string }
+        text: { type: string, minLength: 1, maxLength: 2000 }
+        userAskedToChange:
+          type: boolean
+          default: false
+          description: True only when the person's own action asked Ask to file the charge (a button), never inferred from text.
+
+    AiChatEvent:
+      type: object
+      additionalProperties: false
+      description: >-
+        One server-sent event. `token` carries `text`; `tool` carries `name`
+        and `status`; `done` carries `runId`, `messageId`, the final `text`
+        (it replaces the streamed tokens), `grounded` and `demo`; `error`
+        carries `code`, `message`, `retryable` (and `runId` once a run exists).
+      required: [type]
+      properties:
+        type: { type: string, enum: [token, tool, done, error] }
+        text: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [running, done, error] }
+        runId: { type: string }
+        messageId: { type: string }
+        grounded: { type: boolean }
+        demo: { type: boolean }
+        code: { type: string }
+        message: { type: string }
+        retryable: { type: boolean }
+
+    AgentProposal:
+      type: object
+      additionalProperties: false
+      required: [id, kind, status, payload, rationale, runId, decidedBy, decidedAt, appliedActionId, expiresAt, createdAt]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [set_category, weekly_limit, budget_line, extra_debt_payment, bill_amount] }
+        status: { type: string, enum: [proposed, approved, rejected, applied, expired] }
+        payload:
+          type: object
+          additionalProperties: true
+          description: "`target`, `before`, `after`, `label` (figures read by code), plus `txnId` / `categoryId` for a category proposal."
+        rationale: { type: string }
+        runId: { type: string }
+        decidedBy: { type: ["string", "null"] }
+        decidedAt: { type: ["string", "null"], format: date-time }
+        appliedActionId: { type: ["string", "null"] }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    AgentProposalList:
+      type: object
+      additionalProperties: false
+      required: [proposals]
+      properties:
+        proposals:
+          type: array
+          items: { $ref: "#/components/schemas/AgentProposal" }
+
+    MemoryItem:
+      type: object
+      additionalProperties: false
+      required: [id, scope, key, value, source, createdByKind, memberUserId, updatedAt]
+      properties:
+        id: { type: string }
+        scope: { type: string, enum: [categorization, spending, debt, general] }
+        key: { type: string }
+        value:
+          type: object
+          additionalProperties: true
+          description: "`{ text }`; an agent note also carries `kind` (preference | decision)."
+        source: { type: string, enum: [user_stated, inferred, agent_proposed] }
+        createdByKind: { type: string, enum: [user, agent] }
+        memberUserId: { type: ["string", "null"] }
+        updatedAt: { type: string, format: date-time }
+
+    MemoryList:
+      type: object
+      additionalProperties: false
+      required: [memories]
+      properties:
+        memories:
+          type: array
+          items: { $ref: "#/components/schemas/MemoryItem" }
+
+    PutMemoryBody:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: { type: string, minLength: 1, maxLength: 300 }
+        mine: { type: boolean, default: false, description: "Keep it for the signed-in member only." }
+
+    WishlistItem:
+      type: object
+      additionalProperties: false
+      required: [id, title, amount, url, categoryId, targetDate, requestedBy, requestedAt, waitingUntil, waitingDaysLeft, decision, decidedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        amount: { type: ["number", "null"] }
+        url: { type: ["string", "null"] }
+        categoryId: { type: ["string", "null"] }
+        targetDate: { type: ["string", "null"] }
+        requestedBy: { type: string }
+        requestedAt: { type: string, format: date-time }
+        waitingUntil: { type: string }
+        waitingDaysLeft: { type: integer, description: "0 once the waiting period is over." }
+        decision: { type: string, enum: [pending, approved, declined, bought] }
+        decidedAt: { type: ["string", "null"], format: date-time }
+
+    WishlistList:
+      type: object
+      additionalProperties: false
+      required: [items, waitDays]
+      properties:
+        waitDays: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WishlistItem" }
+
+    CreateWishlistItemBody:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        amount: { type: number, minimum: 0, maximum: 1000000 }
+        url: { type: string, maxLength: 500 }
+        categoryId: { type: string }
+        targetDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+
+    UpdateWishlistItemBody:
+      type: object
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        amount: { type: ["number", "null"], minimum: 0, maximum: 1000000 }
+        url: { type: ["string", "null"], maxLength: 500 }
+        targetDate: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        decision: { type: string, enum: [pending, approved, declined, bought] }
+
+    AiBudget:
+      type: object
+      additionalProperties: false
+      required: [monthlyCapUsd, hardCapUsd, dailyCaps, pausedUntil]
+      properties:
+        monthlyCapUsd: { type: number }
+        hardCapUsd: { type: number }
+        dailyCaps:
+          type: object
+          additionalProperties: { type: integer }
+        pausedUntil: { type: ["string", "null"], format: date-time }
+
+    UpdateAiBudgetBody:
+      type: object
+      additionalProperties: false
+      properties:
+        monthlyCapUsd: { type: number, minimum: 0, maximum: 1000 }
+        hardCapUsd: { type: number, minimum: 0, maximum: 1000 }
+        pausedUntil: { type: ["string", "null"], format: date-time }
+
+    AiUsageSummary:
+      type: object
+      additionalProperties: false
+      required: [month, byTask, budget, monthToDateUsd, recentRuns]
+      properties:
+        month: { type: string, description: "UTC month, YYYY-MM" }
+        monthToDateUsd: { type: number }
+        calls: { type: integer }
+        failures: { type: integer }
+        blocked: { type: integer }
+        cacheHitRatio: { type: ["number", "null"] }
+        byTask:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [task, costUsd, calls, failures]
+            properties:
+              task: { type: string }
+              costUsd: { type: number }
+              calls: { type: integer }
+              failures: { type: integer }
+        budget: { $ref: "#/components/schemas/AiBudget" }
+        recentRuns:
+          type: array
+          items: { $ref: "#/components/schemas/AgentRun" }

@@ -4532,6 +4532,291 @@ export interface TransactionSplits {
     invalid: boolean;
     splits: TransactionSplit[];
 }
+export interface AiConversation {
+    id: string;
+    title: string;
+    createdAt: string;
+    lastMessageAt: string;
+}
+export interface AiConversationList {
+    conversations: AiConversation[];
+}
+export type AiMessageRole = (typeof AiMessageRole)[keyof typeof AiMessageRole];
+export declare const AiMessageRole: {
+    readonly user: "user";
+    readonly assistant: "assistant";
+    readonly tool: "tool";
+};
+/**
+ * user / assistant: `{ text }` (assistant also `grounded`, `demo`, `tools`); tool: `{ name }` only.
+ */
+export type AiMessageContent = {
+    [key: string]: unknown;
+};
+export interface AiMessage {
+    id: string;
+    role: AiMessageRole;
+    /** user / assistant: `{ text }` (assistant also `grounded`, `demo`, `tools`); tool: `{ name }` only. */
+    content: AiMessageContent;
+    /** @nullable */
+    runId: string | null;
+    createdAt: string;
+}
+export interface AiConversationDetail {
+    conversation: AiConversation;
+    messages: AiMessage[];
+}
+export interface AiChatRequest {
+    conversationId: string;
+    /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+    text: string;
+    /** True only when the person's own action asked Ask to file the charge (a button), never inferred from text. */
+    userAskedToChange?: boolean;
+}
+export type AiChatEventType = (typeof AiChatEventType)[keyof typeof AiChatEventType];
+export declare const AiChatEventType: {
+    readonly token: "token";
+    readonly tool: "tool";
+    readonly done: "done";
+    readonly error: "error";
+};
+export type AiChatEventStatus = (typeof AiChatEventStatus)[keyof typeof AiChatEventStatus];
+export declare const AiChatEventStatus: {
+    readonly running: "running";
+    readonly done: "done";
+    readonly error: "error";
+};
+/**
+ * One server-sent event. `token` carries `text`; `tool` carries `name` and `status`; `done` carries `runId`, `messageId`, the final `text` (it replaces the streamed tokens), `grounded` and `demo`; `error` carries `code`, `message`, `retryable` (and `runId` once a run exists).
+ */
+export interface AiChatEvent {
+    type: AiChatEventType;
+    text?: string;
+    name?: string;
+    status?: AiChatEventStatus;
+    runId?: string;
+    messageId?: string;
+    grounded?: boolean;
+    demo?: boolean;
+    code?: string;
+    message?: string;
+    retryable?: boolean;
+}
+export type AgentProposalKind = (typeof AgentProposalKind)[keyof typeof AgentProposalKind];
+export declare const AgentProposalKind: {
+    readonly set_category: "set_category";
+    readonly weekly_limit: "weekly_limit";
+    readonly budget_line: "budget_line";
+    readonly extra_debt_payment: "extra_debt_payment";
+    readonly bill_amount: "bill_amount";
+};
+export type AgentProposalStatus = (typeof AgentProposalStatus)[keyof typeof AgentProposalStatus];
+export declare const AgentProposalStatus: {
+    readonly proposed: "proposed";
+    readonly approved: "approved";
+    readonly rejected: "rejected";
+    readonly applied: "applied";
+    readonly expired: "expired";
+};
+/**
+ * `target`, `before`, `after`, `label` (figures read by code), plus `txnId` / `categoryId` for a category proposal.
+ */
+export type AgentProposalPayload = {
+    [key: string]: unknown;
+};
+export interface AgentProposal {
+    id: string;
+    kind: AgentProposalKind;
+    status: AgentProposalStatus;
+    /** `target`, `before`, `after`, `label` (figures read by code), plus `txnId` / `categoryId` for a category proposal. */
+    payload: AgentProposalPayload;
+    rationale: string;
+    runId: string;
+    /** @nullable */
+    decidedBy: string | null;
+    /** @nullable */
+    decidedAt: string | null;
+    /** @nullable */
+    appliedActionId: string | null;
+    expiresAt: string;
+    createdAt: string;
+}
+export interface AgentProposalList {
+    proposals: AgentProposal[];
+}
+export type MemoryItemScope = (typeof MemoryItemScope)[keyof typeof MemoryItemScope];
+export declare const MemoryItemScope: {
+    readonly categorization: "categorization";
+    readonly spending: "spending";
+    readonly debt: "debt";
+    readonly general: "general";
+};
+/**
+ * `{ text }`; an agent note also carries `kind` (preference | decision).
+ */
+export type MemoryItemValue = {
+    [key: string]: unknown;
+};
+export type MemoryItemSource = (typeof MemoryItemSource)[keyof typeof MemoryItemSource];
+export declare const MemoryItemSource: {
+    readonly user_stated: "user_stated";
+    readonly inferred: "inferred";
+    readonly agent_proposed: "agent_proposed";
+};
+export type MemoryItemCreatedByKind = (typeof MemoryItemCreatedByKind)[keyof typeof MemoryItemCreatedByKind];
+export declare const MemoryItemCreatedByKind: {
+    readonly user: "user";
+    readonly agent: "agent";
+};
+export interface MemoryItem {
+    id: string;
+    scope: MemoryItemScope;
+    key: string;
+    /** `{ text }`; an agent note also carries `kind` (preference | decision). */
+    value: MemoryItemValue;
+    source: MemoryItemSource;
+    createdByKind: MemoryItemCreatedByKind;
+    /** @nullable */
+    memberUserId: string | null;
+    updatedAt: string;
+}
+export interface MemoryList {
+    memories: MemoryItem[];
+}
+export interface PutMemoryBody {
+    /**
+     * @minLength 1
+     * @maxLength 300
+     */
+    value: string;
+    /** Keep it for the signed-in member only. */
+    mine?: boolean;
+}
+export type WishlistItemDecision = (typeof WishlistItemDecision)[keyof typeof WishlistItemDecision];
+export declare const WishlistItemDecision: {
+    readonly pending: "pending";
+    readonly approved: "approved";
+    readonly declined: "declined";
+    readonly bought: "bought";
+};
+export interface WishlistItem {
+    id: string;
+    title: string;
+    /** @nullable */
+    amount: number | null;
+    /** @nullable */
+    url: string | null;
+    /** @nullable */
+    categoryId: string | null;
+    /** @nullable */
+    targetDate: string | null;
+    requestedBy: string;
+    requestedAt: string;
+    waitingUntil: string;
+    /** 0 once the waiting period is over. */
+    waitingDaysLeft: number;
+    decision: WishlistItemDecision;
+    /** @nullable */
+    decidedAt: string | null;
+}
+export interface WishlistList {
+    waitDays: number;
+    items: WishlistItem[];
+}
+export interface CreateWishlistItemBody {
+    /**
+     * @minLength 1
+     * @maxLength 120
+     */
+    title: string;
+    /**
+     * @minimum 0
+     * @maximum 1000000
+     */
+    amount?: number;
+    /** @maxLength 500 */
+    url?: string;
+    categoryId?: string;
+    /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+    targetDate?: string;
+}
+export type UpdateWishlistItemBodyDecision = (typeof UpdateWishlistItemBodyDecision)[keyof typeof UpdateWishlistItemBodyDecision];
+export declare const UpdateWishlistItemBodyDecision: {
+    readonly pending: "pending";
+    readonly approved: "approved";
+    readonly declined: "declined";
+    readonly bought: "bought";
+};
+export interface UpdateWishlistItemBody {
+    /**
+     * @minLength 1
+     * @maxLength 120
+     */
+    title?: string;
+    /**
+     * @minimum 0
+     * @maximum 1000000
+     * @nullable
+     */
+    amount?: number | null;
+    /**
+     * @maxLength 500
+     * @nullable
+     */
+    url?: string | null;
+    /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+    targetDate?: string | null;
+    decision?: UpdateWishlistItemBodyDecision;
+}
+export type AiBudgetDailyCaps = {
+    [key: string]: number;
+};
+export interface AiBudget {
+    monthlyCapUsd: number;
+    hardCapUsd: number;
+    dailyCaps: AiBudgetDailyCaps;
+    /** @nullable */
+    pausedUntil: string | null;
+}
+export interface UpdateAiBudgetBody {
+    /**
+     * @minimum 0
+     * @maximum 1000
+     */
+    monthlyCapUsd?: number;
+    /**
+     * @minimum 0
+     * @maximum 1000
+     */
+    hardCapUsd?: number;
+    /** @nullable */
+    pausedUntil?: string | null;
+}
+export type AiUsageSummaryByTaskItem = {
+    task: string;
+    costUsd: number;
+    calls: number;
+    failures: number;
+};
+export interface AiUsageSummary {
+    /** UTC month, YYYY-MM */
+    month: string;
+    monthToDateUsd: number;
+    calls?: number;
+    failures?: number;
+    blocked?: number;
+    /** @nullable */
+    cacheHitRatio?: number | null;
+    byTask: AiUsageSummaryByTaskItem[];
+    budget: AiBudget;
+    recentRuns: AgentRun[];
+}
 export type GetTransactionsLedgerParams = {
     /**
    * `plaid_accounts.id` of the ledger account. Optional; defaults to
