@@ -936,8 +936,13 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
       // "owed" anywhere but inside "allowed" (paceAllowedToday is the cap's pace).
       expect(k, k).not.toMatch(/debt(?!$)|(?<!all)owed|balance/i);
     }
-    // The spine's debt object is still the percentage alone.
-    expect(Object.keys(spine.debt)).toEqual(["payoffPct"]);
+    // The spine's debt object carries the percentage, the next milestone and
+    // the amount paid down this month (PR-D) — never a balance, a limit or an
+    // amount owed.
+    expect(Object.keys(spine.debt).sort()).toEqual(["nextMilestone", "paidDownMtd", "payoffPct"]);
+    for (const key of Object.keys(spine.debt)) {
+      expect(key).not.toMatch(/balance|owed|remaining|limit|credit/i);
+    }
   });
 
   it("is one snapshot: asOf is present and every field is populated together", async () => {
