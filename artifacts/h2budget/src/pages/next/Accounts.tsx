@@ -7,6 +7,7 @@ import {
 import { Page, emptyNote } from "@/ui";
 import { PageGrid, Panel, TxnTable, type TxnRow } from "@/components/next";
 import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
+import { displayAmount } from "@/lib/amountDisplay";
 import { identityOf } from "@/lib/accountIdentity";
 import { householdToday } from "@/lib/householdDay";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
@@ -26,7 +27,7 @@ function daysBack(iso: string, n: number): string {
 
 function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries> }) {
   const today = useMemo(() => householdToday(new Date()), []);
-  const { data: txns, isLoading } = useListTransactions({ from: daysBack(today, 14), to: today, limit: 100 });
+  const { data: txns, isLoading } = useListTransactions({ from: daysBack(today, 30), to: today, limit: 100 });
   const { data: cats } = useListCategories();
   const rows = useMemo<TxnRow[]>(() => {
     const byExt = new Map(entries.map((e) => [e.plaidAccountId, e]));
@@ -38,7 +39,7 @@ function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries
         id: t.id,
         date: t.occurredOn.slice(0, 10),
         description: t.displayName ?? t.description,
-        amount: -parseFloat(t.amount),
+        amount: displayAmount(t.amount, e?.identity ?? manual),
         identity: e?.identity ?? manual,
         pending: t.pending,
         category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
@@ -48,8 +49,8 @@ function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries
   }, [txns, cats, entries]);
   if (isLoading) return <AccountPageSkeleton tiles={2} />;
   return (
-    <Panel title="Recent activity" sub="Last 14 days, every account. Pick an account to review and edit." span={12} data-testid="combined-activity">
-      {rows.length ? <TxnTable rows={rows} /> : <p className={emptyNote}>No activity in the last 14 days.</p>}
+    <Panel title="Recent activity" sub="Last 30 days, every account. Pick an account to review and edit." span={12} data-testid="combined-activity">
+      {rows.length ? <TxnTable rows={rows} /> : <p className={emptyNote}>No activity in the last 30 days.</p>}
     </Panel>
   );
 }
@@ -62,7 +63,8 @@ export default function NextAccountsPage() {
   const { data: payoff } = useGetAmexWeeklyPayoff();
   const { data: forecast } = useGetForecast({ days: 90 });
   const entries = useMemo(() => buildEntries(items), [items]);
-  const selected = entries.find((e) => e.plaidAccountId === selectedId) ?? null;
+  // The id may be the Plaid account_id or the items response's row id.
+  const selected = entries.find((e) => e.plaidAccountId === selectedId || e.rowId === selectedId) ?? null;
 
   const debtFor = (rowId: string) => (debts ?? []).find((d) => d.plaidAccountId === rowId) ?? null;
   const snapshotFor = (rowId: string) =>
