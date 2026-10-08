@@ -6314,7 +6314,9 @@ export const GetMoneyPositionResponse = zod
     cashBuffer: zod.string(),
     reservesHeld: zod
       .string()
-      .describe("Money held back for goals; 0.00 until goals ship"),
+      .describe(
+        "Money the active goals hold back in checking (reserved in checking, not backed by an account)",
+      ),
     availableUntilPayday: zod.string().nullable(),
     weekStart: zod.string(),
     weekEnd: zod.string(),
@@ -7667,4 +7669,250 @@ export const UpdateAiBudgetResponse = zod.object({
   hardCapUsd: zod.number(),
   dailyCaps: zod.record(zod.string(), zod.number()),
   pausedUntil: zod.coerce.date().nullable(),
+});
+
+/**
+ * (PR-C) A goal's current amount is the backing savings account's balance when an account backs it (null until that balance is known), else the amount the household typed. monthsToTargetLow/High are a range at the contribution rate, never a date promise. Archived goals are left out unless include=archived. A buffer goal's target sits beside the cash buffer; it never changes it. Read-only.
+ * @summary The household's goals with progress, the money they hold back in checking, and the cash buffer beside them
+ */
+export const ListGoalsQueryParams = zod.object({
+  include: zod.enum(["archived"]).optional(),
+});
+
+export const ListGoalsResponse = zod.object({
+  goals: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      kind: zod.enum(["savings", "buffer", "sinking", "debt_payoff"]),
+      status: zod.enum(["active", "paused", "reached", "archived"]),
+      targetAmount: zod.string().nullable(),
+      manualCurrentAmount: zod
+        .string()
+        .describe(
+          "The amount the household typed; for a goal reserved in checking",
+        ),
+      plaidAccountId: zod
+        .string()
+        .nullable()
+        .describe("The savings account that backs the goal (never checking)"),
+      monthlyContribution: zod.string(),
+      targetDate: zod.string().nullable(),
+      reservedInChecking: zod.boolean(),
+      priority: zod.number(),
+      currentAmount: zod
+        .string()
+        .nullable()
+        .describe(
+          "The backing account's balance, or the typed amount; null when the account's balance is not known yet",
+        ),
+      currentSource: zod.enum(["manual", "account"]),
+      percent: zod.number().nullable().describe("Whole percent of the target"),
+      remaining: zod.string().nullable(),
+      monthsToTargetLow: zod
+        .number()
+        .nullable()
+        .describe(
+          "At the contribution rate, between low and high months; null when the rate never reaches it",
+        ),
+      monthsToTargetHigh: zod.number().nullable(),
+      requiredMonthly: zod
+        .string()
+        .nullable()
+        .describe(
+          "remaining ÷ months left to the target date, rounded up; the whole remaining once the date has come",
+        ),
+      onTrack: zod
+        .boolean()
+        .nullable()
+        .describe(
+          "false when the required pace is more than 1.2 × the contribution; null when it cannot be judged",
+        ),
+      reserveHeld: zod
+        .string()
+        .describe(
+          "What this goal holds back from available: its typed amount when active, reserved in checking and not backed by an account; else 0.00",
+        ),
+      cashBuffer: zod
+        .string()
+        .nullable()
+        .describe(
+          "For a buffer goal, the forecast's cash buffer shown beside its target (the goal never changes it); null for other kinds",
+        ),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  reservesHeld: zod
+    .string()
+    .describe("Σ reserveHeld: the money position's reservesHeld"),
+  goalsMonthly: zod
+    .string()
+    .describe(
+      "Σ the active goals' monthly contributions: the weekly-limit derivation's goals line",
+    ),
+  cashBuffer: zod.string(),
+});
+
+/**
+ * @summary Add a goal
+ */
+export const createGoalBodyNameMax = 80;
+
+export const createGoalBodyTargetAmountRegExp = new RegExp(
+  "^\\d{1,8}(\\.\\d{1,2})?$",
+);
+export const createGoalBodyManualCurrentAmountRegExp = new RegExp(
+  "^\\d{1,8}(\\.\\d{1,2})?$",
+);
+export const createGoalBodyMonthlyContributionRegExp = new RegExp(
+  "^\\d{1,8}(\\.\\d{1,2})?$",
+);
+export const createGoalBodyTargetDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+export const createGoalBodyPriorityMin = 0;
+export const createGoalBodyPriorityMax = 1000;
+
+export const CreateGoalBody = zod.object({
+  name: zod.string().min(1).max(createGoalBodyNameMax),
+  kind: zod.enum(["savings", "buffer", "sinking", "debt_payoff"]),
+  targetAmount: zod.string().regex(createGoalBodyTargetAmountRegExp).nullish(),
+  manualCurrentAmount: zod
+    .string()
+    .regex(createGoalBodyManualCurrentAmountRegExp)
+    .optional(),
+  plaidAccountId: zod.string().nullish(),
+  monthlyContribution: zod
+    .string()
+    .regex(createGoalBodyMonthlyContributionRegExp)
+    .optional(),
+  targetDate: zod.string().regex(createGoalBodyTargetDateRegExp).nullish(),
+  reservedInChecking: zod.boolean().optional(),
+  priority: zod
+    .number()
+    .min(createGoalBodyPriorityMin)
+    .max(createGoalBodyPriorityMax)
+    .optional(),
+});
+
+/**
+ * @summary Edit a goal
+ */
+export const UpdateGoalParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const updateGoalBodyNameMax = 80;
+
+export const updateGoalBodyTargetAmountRegExp = new RegExp(
+  "^\\d{1,8}(\\.\\d{1,2})?$",
+);
+export const updateGoalBodyManualCurrentAmountRegExp = new RegExp(
+  "^\\d{1,8}(\\.\\d{1,2})?$",
+);
+export const updateGoalBodyMonthlyContributionRegExp = new RegExp(
+  "^\\d{1,8}(\\.\\d{1,2})?$",
+);
+export const updateGoalBodyTargetDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+export const updateGoalBodyPriorityMin = 0;
+export const updateGoalBodyPriorityMax = 1000;
+
+export const UpdateGoalBody = zod.object({
+  name: zod.string().min(1).max(updateGoalBodyNameMax).optional(),
+  kind: zod.enum(["savings", "buffer", "sinking", "debt_payoff"]).optional(),
+  status: zod.enum(["active", "paused", "reached", "archived"]).optional(),
+  targetAmount: zod.string().regex(updateGoalBodyTargetAmountRegExp).nullish(),
+  manualCurrentAmount: zod
+    .string()
+    .regex(updateGoalBodyManualCurrentAmountRegExp)
+    .optional(),
+  plaidAccountId: zod.string().nullish(),
+  monthlyContribution: zod
+    .string()
+    .regex(updateGoalBodyMonthlyContributionRegExp)
+    .optional(),
+  targetDate: zod.string().regex(updateGoalBodyTargetDateRegExp).nullish(),
+  reservedInChecking: zod.boolean().optional(),
+  priority: zod
+    .number()
+    .min(updateGoalBodyPriorityMin)
+    .max(updateGoalBodyPriorityMax)
+    .optional(),
+});
+
+export const UpdateGoalResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  kind: zod.enum(["savings", "buffer", "sinking", "debt_payoff"]),
+  status: zod.enum(["active", "paused", "reached", "archived"]),
+  targetAmount: zod.string().nullable(),
+  manualCurrentAmount: zod
+    .string()
+    .describe(
+      "The amount the household typed; for a goal reserved in checking",
+    ),
+  plaidAccountId: zod
+    .string()
+    .nullable()
+    .describe("The savings account that backs the goal (never checking)"),
+  monthlyContribution: zod.string(),
+  targetDate: zod.string().nullable(),
+  reservedInChecking: zod.boolean(),
+  priority: zod.number(),
+  currentAmount: zod
+    .string()
+    .nullable()
+    .describe(
+      "The backing account's balance, or the typed amount; null when the account's balance is not known yet",
+    ),
+  currentSource: zod.enum(["manual", "account"]),
+  percent: zod.number().nullable().describe("Whole percent of the target"),
+  remaining: zod.string().nullable(),
+  monthsToTargetLow: zod
+    .number()
+    .nullable()
+    .describe(
+      "At the contribution rate, between low and high months; null when the rate never reaches it",
+    ),
+  monthsToTargetHigh: zod.number().nullable(),
+  requiredMonthly: zod
+    .string()
+    .nullable()
+    .describe(
+      "remaining ÷ months left to the target date, rounded up; the whole remaining once the date has come",
+    ),
+  onTrack: zod
+    .boolean()
+    .nullable()
+    .describe(
+      "false when the required pace is more than 1.2 × the contribution; null when it cannot be judged",
+    ),
+  reserveHeld: zod
+    .string()
+    .describe(
+      "What this goal holds back from available: its typed amount when active, reserved in checking and not backed by an account; else 0.00",
+    ),
+  cashBuffer: zod
+    .string()
+    .nullable()
+    .describe(
+      "For a buffer goal, the forecast's cash buffer shown beside its target (the goal never changes it); null for other kinds",
+    ),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Remove a goal (archived, not deleted, when it holds money back in checking)
+ */
+export const DeleteGoalParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const DeleteGoalResponse = zod.object({
+  id: zod.string(),
+  outcome: zod.enum(["deleted", "archived"]),
 });

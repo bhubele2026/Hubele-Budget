@@ -874,7 +874,27 @@ export {
   monthStartOf,
   type DailyMetrics,
   type DailyMetricsInputs,
+  type MetricsGoalRow,
   type MetricsSnapshotRow,
   type MetricsSpendRow,
   type MetricsWithinPlan,
 } from "./metrics";
+
+// (PR-C) Goals and reserves: the reserve the money position holds back, the
+// weekly-limit derivation's goals line, progress and the goal_behind rule.
+export {
+  GOAL_BEHIND_DEN,
+  GOAL_BEHIND_NUM,
+  GOAL_DAYS_PER_YEAR,
+  GOAL_KINDS,
+  GOAL_STATUSES,
+  goalCurrentCents,
+  goalProgress,
+  goalReserveCents,
+  goalsMonthlyCents,
+  reservesHeldCents,
+  type GoalKind,
+  type GoalMathRow,
+  type GoalProgress,
+  type GoalStatus,
+} from "./goals";

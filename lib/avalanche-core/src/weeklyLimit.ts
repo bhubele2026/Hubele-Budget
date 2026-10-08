@@ -12,7 +12,8 @@
 //                        for it, as the forecast does)
 //   debtMinimumsMonthly  Σ active debts' minimum payments
 //   extraMonthly         the Avalanche extra payment
-//   goalsMonthly         money set aside for goals (0 until goals ship)
+//   goalsMonthly         money set aside for goals: Σ monthly contribution of the
+//                        ACTIVE goals (PR-C, `goalsMonthlyCents`)
 //   discretionaryMonthly = takeHome − committed − minimums − extra − goals
 //   suggestedWeekly      = max(0, floor(discretionaryMonthly × 12/52 / 5) × 5)
 //                          — per week, rounded DOWN to whole $5
@@ -68,7 +69,7 @@ export interface WeeklyLimitInputs {
   debts: ReadonlyArray<{ minPayment: number | string; status?: string | null }>;
   /** `avalanche_settings.manual_extra`, per month. */
   avalancheExtra: number | string;
-  /** 0 until goals ship. */
+  /** Σ the active goals' monthly contributions (PR-C, `goalsMonthlyCents`). */
   goalsMonthly: number | string;
 }
 

@@ -20,6 +20,9 @@
 //   the cap        `allowance_plans` through `everydayPlanFromRows`, with the
 //                  week's override from `preferences.weeklyAllowanceOverrides`.
 //   freshness      `computeBankFreshness` — the spine's own bank verdict.
+//   reserves       (PR-C) `reservesHeld` — money the active goals hold back in
+//                  checking (`lib/goals.ts`); a goal backed by a savings
+//                  account never enters it.
 //
 // ⚠️ READ-ONLY. No write, no Plaid call: it sits on the spine's path.
 
@@ -40,6 +43,7 @@ import { computeBankFreshness, type BankFreshness } from "./bankFreshness";
 import { loadMoneyContext, loadMovementRows, type MoneyContextSupersede } from "./moneyContext";
 import { loadAllowancePlans, planRowsOf } from "./allowancePlans";
 import { TRACKING_START } from "./spendingFacts";
+import { reservesHeld as loadReservesHeld } from "./goals";
 
 /** The horizon the spine and the Forecast tile ask for; the position reads the same curve. */
 export const POSITION_HORIZON_DAYS = 90;
@@ -106,7 +110,7 @@ export async function loadPositionInputs(
     opts.cash ?? computeCashSignalDetailed(householdId, ownerUserId, { horizonDays: POSITION_HORIZON_DAYS }),
   );
   const freshnessRead = Promise.resolve(opts.freshness ?? computeBankFreshness(householdId, ownerUserId));
-  const [{ signal, ledger }, freshness, incomeRows, planRows] = await Promise.all([
+  const [{ signal, ledger }, freshness, incomeRows, planRows, reserves] = await Promise.all([
     cashRead,
     freshnessRead,
     db
@@ -120,6 +124,7 @@ export async function loadPositionInputs(
       .from(recurringItemsTable)
       .where(eq(recurringItemsTable.householdId, householdId)),
     loadAllowancePlans(householdId),
+    loadReservesHeld(householdId),
   ]);
 
   // The household week on the ledger's own today, clamped to the tracking
@@ -151,7 +156,7 @@ export async function loadPositionInputs(
       .filter((r) => r.kind === "income")
       .map((r) => ({ id: r.id, amount: r.amount, frequency: r.frequency, active: r.active === "true" })),
     cashBuffer: signal.cashBuffer,
-    reservesHeld: 0,
+    reservesHeld: reserves,
     weekCap,
     weekRows,
     freshness: {

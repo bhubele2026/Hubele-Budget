@@ -13,6 +13,7 @@
 // Money is summed in integer cents so the sums are exact.
 
 import { effectiveDebtBalance } from "./index";
+import { goalProgress, reservesHeldCents, type GoalMathRow } from "./goals";
 
 export const METRICS_VERSION = 1;
 
@@ -34,6 +35,11 @@ export interface MetricsSpendRow {
   spend: number | string;
 }
 
+/** (PR-C) A goal row with its current amount in dollars (the linked account's balance or the typed amount; null = unknown). */
+export interface MetricsGoalRow extends GoalMathRow {
+  current: number | string | null;
+}
+
 export interface DailyMetricsInputs {
   /** The household day the metrics describe, YYYY-MM-DD. */
   asOf: string;
@@ -51,6 +57,8 @@ export interface DailyMetricsInputs {
   freshness: { stale: boolean; staleReason: string | null } | null;
   /** Each Plaid item's last successful sync as a household day (null = never). */
   itemLastSyncedDays: Array<string | null> | null;
+  /** (PR-C) The household's goals as of the run; null (or absent) when the day is not live. */
+  goals?: MetricsGoalRow[] | null;
 }
 
 export interface DailyMetrics {
@@ -76,6 +84,10 @@ export interface DailyMetrics {
     staleReason: string | null;
     accountsSilentDays: number | null;
   };
+  /** (PR-C) Σ money the active goals hold back in checking — the position's `reservesHeld`; null when not live. */
+  goalsReservedTotal: number | null;
+  /** (PR-C) Active goals with a target and a date that are not behind (`goalProgress().behind === false`); null when not live. */
+  goalsOnTrackCount: number | null;
 }
 
 /** The point-in-time fields: what a past-day recompute keeps from the stored row. */
@@ -88,6 +100,8 @@ export const POINT_IN_TIME_FIELDS = [
   "uncategorizedCount",
   "reviewQueueSize",
   "dataCompleteness",
+  "goalsReservedTotal",
+  "goalsOnTrackCount",
 ] as const satisfies ReadonlyArray<keyof DailyMetrics>;
 
 const cents = (v: number | string | null | undefined): number => {
@@ -153,6 +167,14 @@ export function computeDailyMetrics(inputs: DailyMetricsInputs): DailyMetrics {
   }
 
   const capNum = inputs.position?.weekCap == null ? null : Number(inputs.position.weekCap);
+  const goals = inputs.goals ?? null;
+  let onTrack = 0;
+  if (goals) {
+    for (const g of goals) {
+      const current = g.current === null || g.current === "" ? null : cents(g.current);
+      if (goalProgress(g, current, inputs.asOf).behind === false) onTrack += 1;
+    }
+  }
   return {
     totalDebtEffective: total,
     debtPaidDownGenuineMtd: money(paidGenuine),
@@ -171,6 +193,8 @@ export function computeDailyMetrics(inputs: DailyMetricsInputs): DailyMetrics {
       staleReason: inputs.freshness ? inputs.freshness.staleReason : null,
       accountsSilentDays: inputs.itemLastSyncedDays ? accountsSilentDaysOf(inputs.asOf, inputs.itemLastSyncedDays) : null,
     },
+    goalsReservedTotal: goals ? money(reservesHeldCents(goals)) : null,
+    goalsOnTrackCount: goals ? onTrack : null,
   };
 }
 

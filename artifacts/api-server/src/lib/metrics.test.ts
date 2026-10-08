@@ -73,6 +73,8 @@ describe("computeDailyMetrics", () => {
       uncategorizedCount: 4,
       reviewQueueSize: 7,
       dataCompleteness: { stale: true, staleReason: "old", accountsSilentDays: 5 },
+      goalsReservedTotal: null, // (PR-C) no goals input: not live
+      goalsOnTrackCount: null,
     });
   });
 
@@ -120,6 +122,8 @@ describe("computeDailyMetrics", () => {
       uncategorizedCount: null,
       reviewQueueSize: null,
       dataCompleteness: { stale: null, staleReason: null, accountsSilentDays: null },
+      goalsReservedTotal: null,
+      goalsOnTrackCount: null,
     });
   });
 

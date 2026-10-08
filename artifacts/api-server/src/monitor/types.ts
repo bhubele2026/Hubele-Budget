@@ -72,6 +72,21 @@ export interface RecentRow {
   signature: string;
 }
 
+/** (PR-C) A goal as the goal_behind detector reads it: the row's figures and its current amount. */
+export interface GoalFacts {
+  goalId: string;
+  kind: string;
+  status: string;
+  targetAmount: number | string | null;
+  manualCurrentAmount: number | string;
+  plaidAccountId: string | null;
+  monthlyContribution: number | string;
+  targetDate: string | null;
+  reservedInChecking: boolean;
+  /** Dollars: the backing account's balance or the typed amount; null when unknown. */
+  current: number | string | null;
+}
+
 export interface MonitorFacts {
   householdId: string;
   todayISO: string;
@@ -89,6 +104,8 @@ export interface MonitorFacts {
   bills: BillFacts[];
   /** Posted rows of the last 72 h (plus a day of slack), both directions, transfers excluded. */
   recentRows: RecentRow[];
+  /** (PR-C) The household's non-archived goals; absent reads as none. */
+  goals?: GoalFacts[];
 }
 
 export type Detector = (facts: MonitorFacts) => Finding[];

@@ -44,6 +44,8 @@ tags:
     description: (AI-2) What the household (or Ask, visibly) keeps in memory.
   - name: wishlist
     description: (AI-2) The wish list and its waiting period.
+  - name: goals
+    description: (PR-C) Savings, buffer, sinking and debt-payoff goals, and the money a goal holds back in checking.
 paths:
   /healthz:
     get:
@@ -3237,6 +3239,79 @@ paths:
         "400": { description: Invalid caps }
         "403": { description: Only the household owner sets the budget }
 
+  /goals:
+    get:
+      operationId: listGoals
+      tags: [goals]
+      summary: The household's goals with progress, the money they hold back in checking, and the cash buffer beside them
+      description: >-
+        (PR-C) A goal's current amount is the backing savings account's balance when
+        an account backs it (null until that balance is known), else the amount the
+        household typed. monthsToTargetLow/High are a range at the contribution
+        rate, never a date promise. Archived goals are left out unless
+        include=archived. A buffer goal's target sits beside the cash buffer; it
+        never changes it. Read-only.
+      parameters:
+        - in: query
+          name: include
+          schema: { type: string, enum: [archived] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GoalList" }
+    post:
+      operationId: createGoal
+      tags: [goals]
+      summary: Add a goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GoalCreate" }
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Goal" }
+        "400": { description: "Invalid goal, date or backing account" }
+
+  /goals/{id}:
+    patch:
+      operationId: updateGoal
+      tags: [goals]
+      summary: Edit a goal
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GoalUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Goal" }
+        "400": { description: "Invalid edit, date or backing account" }
+        "404": { description: No such goal in this household }
+    delete:
+      operationId: deleteGoal
+      tags: [goals]
+      summary: Remove a goal (archived, not deleted, when it holds money back in checking)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Deleted or archived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GoalDeleteResult" }
+        "404": { description: No such goal in this household }
+
 components:
   schemas:
     HealthStatus:
@@ -4073,7 +4148,7 @@ components:
         lowestUntilPaydayDate: { type: ["string", "null"] }
         committedUntilPayday: { type: string, description: "Sum of the planned outflows landing in the window, payday's own bills included" }
         cashBuffer: { type: string }
-        reservesHeld: { type: string, description: Money held back for goals; 0.00 until goals ship }
+        reservesHeld: { type: string, description: "Money the active goals hold back in checking (reserved in checking, not backed by an account)" }
         availableUntilPayday: { type: ["string", "null"] }
         weekStart: { type: string }
         weekEnd: { type: string }
@@ -8364,3 +8439,82 @@ components:
         recentRuns:
           type: array
           items: { $ref: "#/components/schemas/AgentRun" }
+
+    Goal:
+      type: object
+      additionalProperties: false
+      required: [id, name, kind, status, targetAmount, manualCurrentAmount, plaidAccountId, monthlyContribution, targetDate, reservedInChecking, priority, currentAmount, currentSource, percent, remaining, monthsToTargetLow, monthsToTargetHigh, requiredMonthly, onTrack, reserveHeld, cashBuffer, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [savings, buffer, sinking, debt_payoff] }
+        status: { type: string, enum: [active, paused, reached, archived] }
+        targetAmount: { type: ["string", "null"] }
+        manualCurrentAmount: { type: string, description: The amount the household typed; for a goal reserved in checking, the money held back }
+        plaidAccountId: { type: ["string", "null"], description: The savings account that backs the goal (never checking) }
+        monthlyContribution: { type: string }
+        targetDate: { type: ["string", "null"] }
+        reservedInChecking: { type: boolean }
+        priority: { type: integer }
+        currentAmount: { type: ["string", "null"], description: "The backing account's balance, or the typed amount; null when the account's balance is not known yet" }
+        currentSource: { type: string, enum: [manual, account] }
+        percent: { type: ["integer", "null"], description: Whole percent of the target, rounded down (0-100) }
+        remaining: { type: ["string", "null"] }
+        monthsToTargetLow: { type: ["integer", "null"], description: "At the contribution rate, between low and high months; null when the rate never reaches it" }
+        monthsToTargetHigh: { type: ["integer", "null"] }
+        requiredMonthly: { type: ["string", "null"], description: "remaining ÷ months left to the target date, rounded up; the whole remaining once the date has come" }
+        onTrack: { type: ["boolean", "null"], description: "false when the required pace is more than 1.2 × the contribution; null when it cannot be judged" }
+        reserveHeld: { type: string, description: "What this goal holds back from available: its typed amount when active, reserved in checking and not backed by an account; else 0.00" }
+        cashBuffer: { type: ["string", "null"], description: "For a buffer goal, the forecast's cash buffer shown beside its target (the goal never changes it); null for other kinds" }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    GoalList:
+      type: object
+      additionalProperties: false
+      required: [goals, reservesHeld, goalsMonthly, cashBuffer]
+      properties:
+        goals:
+          type: array
+          items: { $ref: "#/components/schemas/Goal" }
+        reservesHeld: { type: string, description: "Σ reserveHeld: the money position's reservesHeld" }
+        goalsMonthly: { type: string, description: "Σ the active goals' monthly contributions: the weekly-limit derivation's goals line" }
+        cashBuffer: { type: string }
+
+    GoalCreate:
+      type: object
+      additionalProperties: false
+      required: [name, kind]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        kind: { type: string, enum: [savings, buffer, sinking, debt_payoff] }
+        targetAmount: { type: ["string", "null"], pattern: '^\d{1,8}(\.\d{1,2})?$' }
+        manualCurrentAmount: { type: string, pattern: '^\d{1,8}(\.\d{1,2})?$' }
+        plaidAccountId: { type: ["string", "null"] }
+        monthlyContribution: { type: string, pattern: '^\d{1,8}(\.\d{1,2})?$' }
+        targetDate: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        reservedInChecking: { type: boolean }
+        priority: { type: integer, minimum: 0, maximum: 1000 }
+
+    GoalUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        kind: { type: string, enum: [savings, buffer, sinking, debt_payoff] }
+        status: { type: string, enum: [active, paused, reached, archived] }
+        targetAmount: { type: ["string", "null"], pattern: '^\d{1,8}(\.\d{1,2})?$' }
+        manualCurrentAmount: { type: string, pattern: '^\d{1,8}(\.\d{1,2})?$' }
+        plaidAccountId: { type: ["string", "null"] }
+        monthlyContribution: { type: string, pattern: '^\d{1,8}(\.\d{1,2})?$' }
+        targetDate: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        reservedInChecking: { type: boolean }
+        priority: { type: integer, minimum: 0, maximum: 1000 }
+
+    GoalDeleteResult:
+      type: object
+      additionalProperties: false
+      required: [id, outcome]
+      properties:
+        id: { type: string }
+        outcome: { type: string, enum: [deleted, archived] }

@@ -106,7 +106,7 @@ export interface PositionInputs {
   /** The household's income plans: the largest active one sets the payday threshold. */
   incomeItems: readonly PositionIncomeItem[];
   cashBuffer: number | string;
-  /** Money set aside for goals and still in checking. 0 until goals ship. */
+  /** Money set aside for goals and still in checking (PR-C, `reservesHeldCents`). */
   reservesHeld?: number | string;
   /** This week's cap in dollars, or null when the household has set none. */
   weekCap: number | string | null;

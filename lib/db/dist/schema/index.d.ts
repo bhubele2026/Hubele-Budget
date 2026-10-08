@@ -5140,9 +5140,9 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
 }>;
 export declare const insertMappingRuleSchema: import("zod/v4").ZodObject<{
     categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
+    priority: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
     pattern: import("zod/v4").ZodString;
     matchType: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
-    priority: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
 }, {
     out: {};
     in: {};
@@ -5582,4 +5582,5 @@ export * from "./agent";
 export * from "./recap";
 export * from "./debt";
 export * from "./metrics";
+export * from "./goals";
 //# sourceMappingURL=index.d.ts.map

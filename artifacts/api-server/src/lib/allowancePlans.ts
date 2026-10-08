@@ -10,6 +10,7 @@ import {
   recurringItemsTable,
   type AllowancePlan,
 } from "@workspace/db";
+import { goalsMonthly as loadGoalsMonthly } from "./goals";
 import {
   deriveWeeklyLimit,
   type AllowancePlanRow,
@@ -66,13 +67,14 @@ export function planRowsOf(rows: readonly AllowancePlan[]): AllowancePlanRow[] {
 
 /**
  * The suggested weekly cap (`deriveWeeklyLimit`) from the household's own plans:
- * its recurring items, its debts' minimums and the owner's Avalanche extra.
+ * its recurring items, its debts' minimums, the owner's Avalanche extra and
+ * (PR-C) the active goals' monthly contributions.
  */
 export async function suggestWeeklyCap(
   householdId: string,
   ownerUserId: string,
 ): Promise<WeeklyLimitSuggestion> {
-  const [recurring, debts, [ava]] = await Promise.all([
+  const [recurring, debts, [ava], goals] = await Promise.all([
     db
       .select({
         name: recurringItemsTable.name,
@@ -92,12 +94,13 @@ export async function suggestWeeklyCap(
       .select({ manualExtra: avalancheSettingsTable.manualExtra })
       .from(avalancheSettingsTable)
       .where(eq(avalancheSettingsTable.userId, ownerUserId)),
+    loadGoalsMonthly(householdId),
   ]);
   return deriveWeeklyLimit({
     incomeItems: recurring.filter((r) => r.kind === "income"),
     billItems: recurring.filter((r) => r.kind !== "income"),
     debts,
     avalancheExtra: ava?.manualExtra ?? 0,
-    goalsMonthly: 0,
+    goalsMonthly: goals,
   });
 }

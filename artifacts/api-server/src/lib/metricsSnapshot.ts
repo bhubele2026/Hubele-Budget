@@ -31,6 +31,7 @@ import {
   tier2PairedTxnIdsOf,
 } from "./moneyPosition";
 import { TRACKING_START, buildSpendingFacts } from "./spendingFacts";
+import { loadGoalsWithCurrent } from "./goals";
 
 // (PR-E) THE DAILY METRICS LOADER: reads what `computeDailyMetrics` (avalanche-core)
 // sums, and upserts one `household_metrics_daily` row per household per day.
@@ -179,11 +180,12 @@ export async function computeMetricsForDay(
       .where(eq(plaidItemsTable.householdId, householdId)),
     listReviewQueue(householdId, 1),
   ]);
-  const [position, netted, spend, facts] = await Promise.all([
+  const [position, netted, spend, facts, goals] = await Promise.all([
     buildMoneyPosition(householdId, ownerUserId, { cash, freshness }),
     withPendingPayments(householdId, debtRows),
     liveSpend(householdId, ownerUserId, today, tier2PairedTxnIdsOf(cash.ledger)),
     buildSpendingFacts(householdId, monthStartOf(today), today),
+    loadGoalsWithCurrent(householdId, ownerUserId),
   ]);
   return computeDailyMetrics({
     ...base,
@@ -195,6 +197,7 @@ export async function computeMetricsForDay(
     reviewQueueSize: queue.total,
     freshness: { stale: freshness.stale, staleReason: freshness.staleReason },
     itemLastSyncedDays: items.map((i) => (i.lastSyncedAt ? householdDayOf(i.lastSyncedAt) : null)),
+    goals,
   });
 }
 

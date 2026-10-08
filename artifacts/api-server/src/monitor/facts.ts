@@ -13,6 +13,7 @@ import { buildMoneyPosition, POSITION_HORIZON_DAYS } from "../lib/moneyPosition"
 import { buildSpendingFacts, TRACKING_START } from "../lib/spendingFacts";
 import { householdTodayISO } from "../lib/householdClock";
 import { merchantSignature } from "../lib/merchantNameExtract";
+import { loadGoalsWithCurrent } from "../lib/goals";
 import type { BillFacts, BillPayment, CategoryFacts, MonitorFacts, RecentRow } from "./types";
 
 // (AI-3) ONE READ of everything the detectors need, assembled once per run.
@@ -55,7 +56,7 @@ export async function loadMonitorFacts(
   const trailingStartRaw = monthStartBefore(month.start, TRAILING_MONTHS);
   const trailingStart = trailingStartRaw < TRACKING_START ? TRACKING_START : trailingStartRaw;
 
-  const [mtd, trailing, lines, items, resolutions, recent] = await Promise.all([
+  const [mtd, trailing, lines, items, resolutions, recent, goals] = await Promise.all([
     buildSpendingFacts(householdId, month.start, todayISO),
     trailingStart <= prevEnd ? buildSpendingFacts(householdId, trailingStart, prevEnd) : Promise.resolve(null),
     db
@@ -113,6 +114,7 @@ export async function loadMonitorFacts(
       )
       .orderBy(desc(transactionsTable.occurredOn))
       .limit(RECENT_ROW_CAP),
+    loadGoalsWithCurrent(householdId, ownerUserId),
   ]);
 
   // Categories: this month's spend against this month's line.
@@ -197,5 +199,6 @@ export async function loadMonitorFacts(
     categories,
     bills,
     recentRows,
+    goals,
   };
 }

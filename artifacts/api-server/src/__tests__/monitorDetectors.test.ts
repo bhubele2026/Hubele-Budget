@@ -203,7 +203,7 @@ describe("runDetectors", () => {
   it("a calm household has no findings", () => {
     expect(runDetectors(calmFacts())).toEqual([]);
   });
-  it("never emits goal_behind (PR-C)", () => {
+  it("emits no goal_behind when the household has no goals", () => {
     const kinds = runDetectors(
       calmFacts({
         position: calmPosition({ availableUntilPayday: "0.00", lowestUntilPayday: "0.00", remainingWeek: "1.00" }),

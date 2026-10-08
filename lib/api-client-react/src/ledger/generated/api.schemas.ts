@@ -1164,7 +1164,7 @@ export interface MoneyPosition {
   /** Sum of the planned outflows landing in the window, payday's own bills included */
   committedUntilPayday: string;
   cashBuffer: string;
-  /** Money held back for goals; 0.00 until goals ship */
+  /** Money the active goals hold back in checking (reserved in checking, not backed by an account) */
   reservesHeld: string;
   /** @nullable */
   availableUntilPayday: string | null;
@@ -5709,6 +5709,207 @@ export interface AiUsageSummary {
   byTask: AiUsageSummaryByTaskItem[];
   budget: AiBudget;
   recentRuns: AgentRun[];
+}
+
+export type GoalKind = (typeof GoalKind)[keyof typeof GoalKind];
+
+export const GoalKind = {
+  savings: "savings",
+  buffer: "buffer",
+  sinking: "sinking",
+  debt_payoff: "debt_payoff",
+} as const;
+
+export type GoalStatus = (typeof GoalStatus)[keyof typeof GoalStatus];
+
+export const GoalStatus = {
+  active: "active",
+  paused: "paused",
+  reached: "reached",
+  archived: "archived",
+} as const;
+
+export type GoalCurrentSource =
+  (typeof GoalCurrentSource)[keyof typeof GoalCurrentSource];
+
+export const GoalCurrentSource = {
+  manual: "manual",
+  account: "account",
+} as const;
+
+export interface Goal {
+  id: string;
+  name: string;
+  kind: GoalKind;
+  status: GoalStatus;
+  /** @nullable */
+  targetAmount: string | null;
+  /** The amount the household typed; for a goal reserved in checking */
+  manualCurrentAmount: string;
+  /**
+   * The savings account that backs the goal (never checking)
+   * @nullable
+   */
+  plaidAccountId: string | null;
+  monthlyContribution: string;
+  /** @nullable */
+  targetDate: string | null;
+  reservedInChecking: boolean;
+  priority: number;
+  /**
+   * The backing account's balance, or the typed amount; null when the account's balance is not known yet
+   * @nullable
+   */
+  currentAmount: string | null;
+  currentSource: GoalCurrentSource;
+  /**
+   * Whole percent of the target
+   * @nullable
+   */
+  percent: number | null;
+  /** @nullable */
+  remaining: string | null;
+  /**
+   * At the contribution rate, between low and high months; null when the rate never reaches it
+   * @nullable
+   */
+  monthsToTargetLow: number | null;
+  /** @nullable */
+  monthsToTargetHigh: number | null;
+  /**
+   * remaining ÷ months left to the target date, rounded up; the whole remaining once the date has come
+   * @nullable
+   */
+  requiredMonthly: string | null;
+  /**
+   * false when the required pace is more than 1.2 × the contribution; null when it cannot be judged
+   * @nullable
+   */
+  onTrack: boolean | null;
+  /** What this goal holds back from available: its typed amount when active, reserved in checking and not backed by an account; else 0.00 */
+  reserveHeld: string;
+  /**
+   * For a buffer goal, the forecast's cash buffer shown beside its target (the goal never changes it); null for other kinds
+   * @nullable
+   */
+  cashBuffer: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoalList {
+  goals: Goal[];
+  /** Σ reserveHeld: the money position's reservesHeld */
+  reservesHeld: string;
+  /** Σ the active goals' monthly contributions: the weekly-limit derivation's goals line */
+  goalsMonthly: string;
+  cashBuffer: string;
+}
+
+export type GoalCreateKind =
+  (typeof GoalCreateKind)[keyof typeof GoalCreateKind];
+
+export const GoalCreateKind = {
+  savings: "savings",
+  buffer: "buffer",
+  sinking: "sinking",
+  debt_payoff: "debt_payoff",
+} as const;
+
+export interface GoalCreate {
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  name: string;
+  kind: GoalCreateKind;
+  /**
+   * @nullable
+   * @pattern ^\d{1,8}(\.\d{1,2})?$
+   */
+  targetAmount?: string | null;
+  /** @pattern ^\d{1,8}(\.\d{1,2})?$ */
+  manualCurrentAmount?: string;
+  /** @nullable */
+  plaidAccountId?: string | null;
+  /** @pattern ^\d{1,8}(\.\d{1,2})?$ */
+  monthlyContribution?: string;
+  /**
+   * @nullable
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  targetDate?: string | null;
+  reservedInChecking?: boolean;
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  priority?: number;
+}
+
+export type GoalUpdateKind =
+  (typeof GoalUpdateKind)[keyof typeof GoalUpdateKind];
+
+export const GoalUpdateKind = {
+  savings: "savings",
+  buffer: "buffer",
+  sinking: "sinking",
+  debt_payoff: "debt_payoff",
+} as const;
+
+export type GoalUpdateStatus =
+  (typeof GoalUpdateStatus)[keyof typeof GoalUpdateStatus];
+
+export const GoalUpdateStatus = {
+  active: "active",
+  paused: "paused",
+  reached: "reached",
+  archived: "archived",
+} as const;
+
+export interface GoalUpdate {
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  name?: string;
+  kind?: GoalUpdateKind;
+  status?: GoalUpdateStatus;
+  /**
+   * @nullable
+   * @pattern ^\d{1,8}(\.\d{1,2})?$
+   */
+  targetAmount?: string | null;
+  /** @pattern ^\d{1,8}(\.\d{1,2})?$ */
+  manualCurrentAmount?: string;
+  /** @nullable */
+  plaidAccountId?: string | null;
+  /** @pattern ^\d{1,8}(\.\d{1,2})?$ */
+  monthlyContribution?: string;
+  /**
+   * @nullable
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  targetDate?: string | null;
+  reservedInChecking?: boolean;
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  priority?: number;
+}
+
+export type GoalDeleteResultOutcome =
+  (typeof GoalDeleteResultOutcome)[keyof typeof GoalDeleteResultOutcome];
+
+export const GoalDeleteResultOutcome = {
+  deleted: "deleted",
+  archived: "archived",
+} as const;
+
+export interface GoalDeleteResult {
+  id: string;
+  outcome: GoalDeleteResultOutcome;
 }
 
 export type GetTransactionsLedgerParams = {
