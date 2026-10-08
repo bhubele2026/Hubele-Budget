@@ -1,14 +1,121 @@
-import { Page } from "@/ui";
-import { PageGrid, Panel } from "@/components/next";
+import { lazy, Suspense, useMemo } from "react";
+import { useRoute } from "wouter";
+import {
+  useGetAmexWeeklyPayoff, useGetForecast, useListCategories, useListDebts,
+  useListPlaidItems, useListTransactions,
+} from "@workspace/api-client-react";
+import { Page, emptyNote } from "@/ui";
+import { PageGrid, Panel, TxnTable, type TxnRow } from "@/components/next";
+import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
+import { identityOf } from "@/lib/accountIdentity";
+import { householdToday } from "@/lib/householdDay";
+import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
+import { AccountSelector, type BalanceByRow } from "./accounts/AccountSelector";
+import { AccountSummary } from "./accounts/AccountSummary";
+import { buildEntries } from "./accounts/entries";
+
+// Both ledgers are the existing pages, moved in whole (same hooks, bulk bars,
+// dialogs and tests). Lazy, so nothing here joins the landing bundle.
+const AmexLedger = lazy(() => import("@/pages/amex"));
+const ChaseLedger = lazy(() => import("@/pages/transactions"));
+
+function daysBack(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d - n)).toISOString().slice(0, 10);
+}
+
+function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries> }) {
+  const today = useMemo(() => householdToday(new Date()), []);
+  const { data: txns, isLoading } = useListTransactions({ from: daysBack(today, 14), to: today, limit: 100 });
+  const { data: cats } = useListCategories();
+  const rows = useMemo<TxnRow[]>(() => {
+    const byExt = new Map(entries.map((e) => [e.plaidAccountId, e]));
+    const catName = new Map((cats ?? []).map((c) => [c.id, c.name]));
+    const manual = identityOf({ id: "manual", name: "Manual", institutionName: "Manual entry" });
+    return (txns ?? []).map((t) => {
+      const e = t.plaidAccountId ? byExt.get(t.plaidAccountId) : undefined;
+      return {
+        id: t.id,
+        date: t.occurredOn.slice(0, 10),
+        description: t.displayName ?? t.description,
+        amount: -parseFloat(t.amount),
+        identity: e?.identity ?? manual,
+        pending: t.pending,
+        category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
+        href: e ? `/next/accounts/${encodeURIComponent(e.plaidAccountId)}` : undefined,
+      };
+    });
+  }, [txns, cats, entries]);
+  if (isLoading) return <AccountPageSkeleton tiles={2} />;
+  return (
+    <Panel title="Recent activity" sub="Last 14 days, every account. Pick an account to review and edit." span={12} data-testid="combined-activity">
+      {rows.length ? <TxnTable rows={rows} /> : <p className={emptyNote}>No activity in the last 14 days.</p>}
+    </Panel>
+  );
+}
 
 export default function NextAccountsPage() {
+  const [, params] = useRoute("/next/accounts/:plaidAccountId");
+  const selectedId = params?.plaidAccountId ? decodeURIComponent(params.plaidAccountId) : null;
+  const { data: items, isLoading } = useListPlaidItems();
+  const { data: debts } = useListDebts();
+  const { data: payoff } = useGetAmexWeeklyPayoff();
+  const { data: forecast } = useGetForecast({ days: 90 });
+  const entries = useMemo(() => buildEntries(items), [items]);
+  const selected = entries.find((e) => e.plaidAccountId === selectedId) ?? null;
+
+  const debtFor = (rowId: string) => (debts ?? []).find((d) => d.plaidAccountId === rowId) ?? null;
+  const snapshotFor = (rowId: string) =>
+    deriveEffectiveSnapshot({
+      bankSnapshot: forecast?.bankSnapshot ?? null,
+      accountSnapshots: forecast?.accountSnapshots ?? {},
+      selectedAccountInternalId: rowId,
+      plaidCheckingAccounts: forecast?.plaidCheckingAccounts ?? [],
+    });
+  const balances: BalanceByRow = {};
+  for (const e of entries) {
+    balances[e.rowId] = e.identity.isCard ? debtFor(e.rowId)?.balance : e.identity.kind === "checking" ? snapshotFor(e.rowId)?.balance : undefined;
+  }
+
   return (
     <div data-testid="page-next-accounts">
-      <Page title="Accounts" sub="Preview">
+      <Page title={selected ? selected.identity.label : "Accounts"} sub={selected ? undefined : "Every card and bank in one place"}>
         <PageGrid>
-          <Panel title="Preview page" span={12}>
-            <p className="text-body text-neutral-600">Preview page — the accounts build lands here.</p>
-          </Panel>
+          <div className="span-12 min-w-0">
+            {isLoading ? (
+              <AccountPageSkeleton tiles={2} />
+            ) : entries.length ? (
+              <AccountSelector entries={entries} selectedId={selected?.plaidAccountId ?? null} balances={balances} />
+            ) : (
+              <p className={emptyNote}>No linked accounts yet.</p>
+            )}
+            {selectedId && !selected && !isLoading ? (
+              <p role="status" className="mt-2 text-label text-neutral-600">That account is not linked here. Showing all accounts.</p>
+            ) : null}
+          </div>
+          {selected ? (
+            <>
+              <AccountSummary
+                entry={selected}
+                debt={debtFor(selected.rowId)}
+                payoffCard={(payoff?.cards ?? []).find((c) => c.plaidAccountId === selected.plaidAccountId) ?? null}
+                snapshot={selected.identity.isCard ? null : snapshotFor(selected.rowId)}
+              />
+              <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" data-testid="account-activity">
+                <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
+                  {selected.identity.isCard ? (
+                    <AmexLedger embedded accountId={selected.plaidAccountId} />
+                  ) : selected.identity.kind === "checking" ? (
+                    <ChaseLedger embedded accountKey={selected.rowId} />
+                  ) : (
+                    <p className={emptyNote}>This account type has no activity view yet.</p>
+                  )}
+                </Suspense>
+              </Panel>
+            </>
+          ) : (
+            <CombinedActivity entries={entries} />
+          )}
         </PageGrid>
       </Page>
     </div>

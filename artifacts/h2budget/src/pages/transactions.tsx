@@ -183,7 +183,15 @@ function readInitialChaseAccount(): string | null {
   }
 }
 
-export default function TransactionsPage() {
+/**
+ * `embedded` + `accountKey` are used by `/next/accounts/:plaidAccountId`: the
+ * page drops its own title and opens on one linked account (the internal
+ * plaid_accounts id). Without props it behaves exactly as before.
+ */
+export default function TransactionsPage({
+  embedded = false,
+  accountKey,
+}: { embedded?: boolean; accountKey?: string; params?: unknown } = {}) {
   // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
   // charges — banks sync only on the manual Sync button now.
   //
@@ -245,8 +253,11 @@ export default function TransactionsPage() {
   // across reloads via a `?account=` URL param plus a localStorage
   // fallback so deep-links share the same view.
   const [selectedAccountKey, setSelectedAccountKey] = useState<string | null>(
-    () => readInitialChaseAccount(),
+    () => accountKey ?? readInitialChaseAccount(),
   );
+  useEffect(() => {
+    if (embedded && accountKey) setSelectedAccountKey(accountKey);
+  }, [embedded, accountKey]);
   // The effective key falls back to the snapshot's account (or "manual"
   // when there is no snapshot) so a fresh user with no preference still
   // lands on the same account they would have seen before #103.
@@ -2300,9 +2311,24 @@ export default function TransactionsPage() {
       {register.isRefetchError && <div role="alert" className={errorBanner}>Chase refresh failed. Showing the last loaded transactions. <button className={btnLink} onClick={() => void register.refetch()}>Retry transactions</button></div>}
       <div
         ref={paneRef}
-        className="sticky top-0 z-30 -mx-4 -mt-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pt-3 pb-3 md:-mx-8 md:-mt-8 md:px-8 md:pt-4"
+        className={embedded ? "sticky top-0 z-30 space-y-3 border-b border-brand-line bg-platinum-1 pb-3" : "sticky top-0 z-30 -mx-4 -mt-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pt-3 pb-3 md:-mx-8 md:-mt-8 md:px-8 md:pt-4"}
       >
-      <AccountPageHeader
+      {embedded ? (
+        <div className="flex flex-wrap items-start justify-end gap-2">
+          <>
+            <Button onClick={handleOpenNew} variant="outline" size="sm" data-testid="button-add-transaction">
+              <Plus className="w-4 h-4 mr-1.5" /> Add transaction
+            </Button>
+            <SyncButton relevantItemIds={relevantPlaidItemIds} />
+            <PlaidLinkButton
+              label="Connect a bank"
+              onImportReady={() => void invalidateBankLedger(queryClient)}
+              inlineProgress={false}
+            />
+          </>
+        </div>
+      ) : (
+        <AccountPageHeader
         title="Chase"
         icon={<ChaseLogo className="h-7 w-7" />}
         actions={
@@ -2319,6 +2345,7 @@ export default function TransactionsPage() {
           </>
         }
       />
+      )}
 
       <div className="space-y-3">
         {/* Weekly-first range control. Month stepper only when in Month mode. */}
