@@ -946,6 +946,20 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
 
 type PlaidItemRow = typeof plaidItemsTable.$inferSelect;
 
+export function autoUpdatesOf(it: PlaidItemRow): {
+  on: boolean;
+  reason: "ok" | "no_url" | "not_registered" | "error";
+  checkedAt: string | null;
+  error: string | null;
+} {
+  const desired = process.env.PLAID_WEBHOOK_URL?.trim() || null;
+  const checkedAt = it.webhookCheckedAt ? it.webhookCheckedAt.toISOString() : null;
+  if (!desired) return { on: false, reason: "no_url", checkedAt, error: null };
+  if (it.webhookUrl === desired) return { on: true, reason: "ok", checkedAt, error: null };
+  if (it.webhookError) return { on: false, reason: "error", checkedAt, error: it.webhookError };
+  return { on: false, reason: "not_registered", checkedAt, error: null };
+}
+
 function serializePlaidItemDetail(
   it: PlaidItemRow,
   accounts: PlaidAccountRow[],
@@ -1020,6 +1034,9 @@ function serializePlaidItemDetail(
     consentWarningDismissedForCutoff: it.consentWarningDismissedForCutoff
       ? it.consentWarningDismissedForCutoff.toISOString()
       : null,
+    // (V3) Is this bank set to tell H2 when something changes? `on` only when
+    // the address Plaid holds equals the one the server would register now.
+    autoUpdates: autoUpdatesOf(it),
     accounts: accounts.map((a) => ({
       id: a.id,
       accountId: a.accountId,

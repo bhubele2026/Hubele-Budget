@@ -46,6 +46,7 @@ import {
 } from "./plaidSyncAttempts";
 import { PLAID_REAUTH_ERROR_CODES } from "./plaidReauthCodes";
 import { emit } from "../jobs/emit";
+import { ensureItemWebhook } from "./plaidWebhookEnsure";
 import { QUEUES } from "../jobs/queues";
 
 /**
@@ -2078,6 +2079,12 @@ export async function syncPlaidItem(
         stillPreparingSince: null,
       })
       .where(eq(plaidItemsTable.id, itemRowId));
+
+    // (V3) Make sure this bank will tell H2 when something changes. Runs after
+    // the commit and after the `txn.arrived` hand-off above, so it can never
+    // block them; free (`/item/webhook/update`), never throws, and skips when
+    // the address was confirmed in the last 7 days.
+    await ensureItemWebhook(item);
 
     // (#361) Stamp `first_sync_completed_at` on every account belonging
     // to this item that hasn't been stamped yet, so the cutoff gate

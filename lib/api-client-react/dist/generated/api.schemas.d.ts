@@ -44,12 +44,19 @@ export interface HealthSms {
     provider: HealthSmsProvider;
     configured: boolean;
 }
+export interface HealthPlaid {
+    /** True when the server has a PLAID_WEBHOOK_URL, so linked banks can
+  be told where to send updates. The address itself is never shown.
+   */
+    webhookUrlSet: boolean;
+}
 export interface HealthStatus {
     status: string;
     version: string;
     jobs: HealthJobs;
     ai: HealthAi;
     sms: HealthSms;
+    plaid: HealthPlaid;
 }
 export interface RecapError {
     error: string;
@@ -4128,6 +4135,27 @@ export interface PlaidAccount {
     /** @nullable */
     firstSyncCompletedAt?: string | null;
 }
+export type PlaidItemDetailAutoUpdatesReason = (typeof PlaidItemDetailAutoUpdatesReason)[keyof typeof PlaidItemDetailAutoUpdatesReason];
+export declare const PlaidItemDetailAutoUpdatesReason: {
+    readonly ok: "ok";
+    readonly no_url: "no_url";
+    readonly not_registered: "not_registered";
+    readonly error: "error";
+};
+/**
+ * (V3) Whether this bank tells H2 when something changes. `on` only
+when the webhook address Plaid holds equals the server's current
+PLAID_WEBHOOK_URL.
+
+ */
+export type PlaidItemDetailAutoUpdates = {
+    on: boolean;
+    reason: PlaidItemDetailAutoUpdatesReason;
+    /** @nullable */
+    checkedAt: string | null;
+    /** @nullable */
+    error: string | null;
+};
 export interface PlaidItemDetail {
     id: string;
     itemId: string;
@@ -4170,6 +4198,11 @@ export interface PlaidItemDetail {
     lastBankTxOn?: string | null;
     /** @nullable */
     refreshProductDisabledAt?: string | null;
+    /** (V3) Whether this bank tells H2 when something changes. `on` only
+  when the webhook address Plaid holds equals the server's current
+  PLAID_WEBHOOK_URL.
+   */
+    autoUpdates?: PlaidItemDetailAutoUpdates;
     accounts: PlaidAccount[];
 }
 export interface PlaidSyncInput {

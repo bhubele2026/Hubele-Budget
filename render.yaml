@@ -7,7 +7,11 @@
 # Single instance: pg-boss (Postgres-backed) runs every scheduled job in
 # process — categorize, monitor, recap, metrics snapshot, prune — with
 # singleton keys per job, so a second instance would only double the pollers.
-# Banks sync ONLY when the owner clicks Sync (POST /plaid/sync).
+# Banks sync on the owner's Sync click (POST /plaid/sync) AND on Plaid webhooks
+# (POST /plaid/webhook -> the free /transactions/sync; set
+# PLAID_WEBHOOK_URL=https://h2budget.onrender.com/api/plaid/webhook). The
+# billable /transactions/refresh runs only behind the explicit Force confirm
+# (Plaid once billed the household ~$500 for background pulls).
 #
 # Toolchain mirrors CI (.github/workflows/ci.yml): Node 24, pnpm 10.34.3,
 # the .npmrc strict-dep-builds/verify-deps accommodations, --frozen-lockfile.

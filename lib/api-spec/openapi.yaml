@@ -3316,13 +3316,24 @@ components:
   schemas:
     HealthStatus:
       type: object
-      required: [status, version, jobs, ai, sms]
+      required: [status, version, jobs, ai, sms, plaid]
       properties:
         status: { type: string }
         version: { type: string }
         jobs: { $ref: "#/components/schemas/HealthJobs" }
         ai: { $ref: "#/components/schemas/HealthAi" }
         sms: { $ref: "#/components/schemas/HealthSms" }
+        plaid: { $ref: "#/components/schemas/HealthPlaid" }
+
+    HealthPlaid:
+      type: object
+      required: [webhookUrlSet]
+      properties:
+        webhookUrlSet:
+          type: boolean
+          description: |
+            True when the server has a PLAID_WEBHOOK_URL, so linked banks can
+            be told where to send updates. The address itself is never shown.
 
     HealthJobs:
       type: object
@@ -7518,6 +7529,18 @@ components:
         # /transactions/refresh call (self-heal), or by an explicit
         # POST /plaid/items/{id}/clear-refresh-disabled.
         refreshProductDisabledAt: { type: ["string", "null"] }
+        autoUpdates:
+          type: object
+          description: |
+            (V3) Whether this bank tells H2 when something changes. `on` only
+            when the webhook address Plaid holds equals the server's current
+            PLAID_WEBHOOK_URL.
+          required: [on, reason, checkedAt, error]
+          properties:
+            on: { type: boolean }
+            reason: { type: string, enum: [ok, no_url, not_registered, error] }
+            checkedAt: { type: ["string", "null"] }
+            error: { type: ["string", "null"] }
         accounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidAccount" }

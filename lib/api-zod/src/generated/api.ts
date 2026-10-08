@@ -39,6 +39,13 @@ export const HealthCheckResponse = zod.object({
     provider: zod.enum(["twilio", "console", "fake"]),
     configured: zod.boolean(),
   }),
+  plaid: zod.object({
+    webhookUrlSet: zod
+      .boolean()
+      .describe(
+        "True when the server has a PLAID_WEBHOOK_URL, so linked banks can\nbe told where to send updates. The address itself is never shown.\n",
+      ),
+  }),
 });
 
 /**
@@ -5146,6 +5153,17 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
   refreshProductDisabledAt: zod.string().nullish(),
+  autoUpdates: zod
+    .object({
+      on: zod.boolean(),
+      reason: zod.enum(["ok", "no_url", "not_registered", "error"]),
+      checkedAt: zod.string().nullable(),
+      error: zod.string().nullable(),
+    })
+    .optional()
+    .describe(
+      "(V3) Whether this bank tells H2 when something changes. `on` only\nwhen the webhook address Plaid holds equals the server's current\nPLAID_WEBHOOK_URL.\n",
+    ),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -5185,6 +5203,17 @@ export const ListPlaidItemsResponseItem = zod.object({
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
   refreshProductDisabledAt: zod.string().nullish(),
+  autoUpdates: zod
+    .object({
+      on: zod.boolean(),
+      reason: zod.enum(["ok", "no_url", "not_registered", "error"]),
+      checkedAt: zod.string().nullable(),
+      error: zod.string().nullable(),
+    })
+    .optional()
+    .describe(
+      "(V3) Whether this bank tells H2 when something changes. `on` only\nwhen the webhook address Plaid holds equals the server's current\nPLAID_WEBHOOK_URL.\n",
+    ),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -5239,6 +5268,17 @@ export const ClearPlaidItemRefreshDisabledResponse = zod.object({
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
   refreshProductDisabledAt: zod.string().nullish(),
+  autoUpdates: zod
+    .object({
+      on: zod.boolean(),
+      reason: zod.enum(["ok", "no_url", "not_registered", "error"]),
+      checkedAt: zod.string().nullable(),
+      error: zod.string().nullable(),
+    })
+    .optional()
+    .describe(
+      "(V3) Whether this bank tells H2 when something changes. `on` only\nwhen the webhook address Plaid holds equals the server's current\nPLAID_WEBHOOK_URL.\n",
+    ),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -5384,6 +5424,17 @@ export const DismissPlaidExpirationWarningResponse = zod.object({
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
   refreshProductDisabledAt: zod.string().nullish(),
+  autoUpdates: zod
+    .object({
+      on: zod.boolean(),
+      reason: zod.enum(["ok", "no_url", "not_registered", "error"]),
+      checkedAt: zod.string().nullable(),
+      error: zod.string().nullable(),
+    })
+    .optional()
+    .describe(
+      "(V3) Whether this bank tells H2 when something changes. `on` only\nwhen the webhook address Plaid holds equals the server's current\nPLAID_WEBHOOK_URL.\n",
+    ),
   accounts: zod.array(
     zod.object({
       id: zod.string(),

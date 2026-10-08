@@ -54,6 +54,13 @@ export declare const HealthCheckResponse: zod.ZodObject<{
         configured: boolean;
         provider: "fake" | "twilio" | "console";
     }>;
+    plaid: zod.ZodObject<{
+        webhookUrlSet: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        webhookUrlSet: boolean;
+    }, {
+        webhookUrlSet: boolean;
+    }>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
     version: string;
@@ -72,6 +79,9 @@ export declare const HealthCheckResponse: zod.ZodObject<{
         configured: boolean;
         provider: "fake" | "twilio" | "console";
     };
+    plaid: {
+        webhookUrlSet: boolean;
+    };
 }, {
     status: string;
     version: string;
@@ -89,6 +99,9 @@ export declare const HealthCheckResponse: zod.ZodObject<{
     sms: {
         configured: boolean;
         provider: "fake" | "twilio" | "console";
+    };
+    plaid: {
+        webhookUrlSet: boolean;
     };
 }>;
 /**
@@ -10904,6 +10917,22 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     refreshProductDisabledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    autoUpdates: zod.ZodOptional<zod.ZodObject<{
+        on: zod.ZodBoolean;
+        reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
+        checkedAt: zod.ZodNullable<zod.ZodString>;
+        error: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    }, {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    }>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -10965,6 +10994,12 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     errorKind?: string | null | undefined;
     lastBankTxOn?: string | null | undefined;
     refreshProductDisabledAt?: string | null | undefined;
+    autoUpdates?: {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    } | undefined;
 }, {
     id: string;
     itemId: string;
@@ -10995,6 +11030,12 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     errorKind?: string | null | undefined;
     lastBankTxOn?: string | null | undefined;
     refreshProductDisabledAt?: string | null | undefined;
+    autoUpdates?: {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    } | undefined;
 }>;
 export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     id: zod.ZodString;
@@ -11015,6 +11056,22 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     refreshProductDisabledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    autoUpdates: zod.ZodOptional<zod.ZodObject<{
+        on: zod.ZodBoolean;
+        reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
+        checkedAt: zod.ZodNullable<zod.ZodString>;
+        error: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    }, {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    }>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -11076,6 +11133,12 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     errorKind?: string | null | undefined;
     lastBankTxOn?: string | null | undefined;
     refreshProductDisabledAt?: string | null | undefined;
+    autoUpdates?: {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    } | undefined;
 }, {
     id: string;
     itemId: string;
@@ -11106,6 +11169,12 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     errorKind?: string | null | undefined;
     lastBankTxOn?: string | null | undefined;
     refreshProductDisabledAt?: string | null | undefined;
+    autoUpdates?: {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    } | undefined;
 }>;
 export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -11126,6 +11195,22 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     refreshProductDisabledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    autoUpdates: zod.ZodOptional<zod.ZodObject<{
+        on: zod.ZodBoolean;
+        reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
+        checkedAt: zod.ZodNullable<zod.ZodString>;
+        error: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    }, {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    }>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -11187,6 +11272,12 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     errorKind?: string | null | undefined;
     lastBankTxOn?: string | null | undefined;
     refreshProductDisabledAt?: string | null | undefined;
+    autoUpdates?: {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    } | undefined;
 }, {
     id: string;
     itemId: string;
@@ -11217,6 +11308,12 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     errorKind?: string | null | undefined;
     lastBankTxOn?: string | null | undefined;
     refreshProductDisabledAt?: string | null | undefined;
+    autoUpdates?: {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    } | undefined;
 }>, "many">;
 /**
  * @summary (#725) Clear the `refreshProductDisabledAt` short-circuit stamp
@@ -11254,6 +11351,22 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
     errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     refreshProductDisabledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    autoUpdates: zod.ZodOptional<zod.ZodObject<{
+        on: zod.ZodBoolean;
+        reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
+        checkedAt: zod.ZodNullable<zod.ZodString>;
+        error: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    }, {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    }>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -11315,6 +11428,12 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
     errorKind?: string | null | undefined;
     lastBankTxOn?: string | null | undefined;
     refreshProductDisabledAt?: string | null | undefined;
+    autoUpdates?: {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    } | undefined;
 }, {
     id: string;
     itemId: string;
@@ -11345,6 +11464,12 @@ export declare const ClearPlaidItemRefreshDisabledResponse: zod.ZodObject<{
     errorKind?: string | null | undefined;
     lastBankTxOn?: string | null | undefined;
     refreshProductDisabledAt?: string | null | undefined;
+    autoUpdates?: {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    } | undefined;
 }>;
 export declare const DeletePlaidItemParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -11609,6 +11734,22 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
     errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     refreshProductDisabledAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    autoUpdates: zod.ZodOptional<zod.ZodObject<{
+        on: zod.ZodBoolean;
+        reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
+        checkedAt: zod.ZodNullable<zod.ZodString>;
+        error: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    }, {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    }>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -11670,6 +11811,12 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
     errorKind?: string | null | undefined;
     lastBankTxOn?: string | null | undefined;
     refreshProductDisabledAt?: string | null | undefined;
+    autoUpdates?: {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    } | undefined;
 }, {
     id: string;
     itemId: string;
@@ -11700,6 +11847,12 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
     errorKind?: string | null | undefined;
     lastBankTxOn?: string | null | undefined;
     refreshProductDisabledAt?: string | null | undefined;
+    autoUpdates?: {
+        on: boolean;
+        error: string | null;
+        reason: "error" | "ok" | "no_url" | "not_registered";
+        checkedAt: string | null;
+    } | undefined;
 }>;
 export declare const SyncPlaidTransactionsBody: zod.ZodObject<{
     itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -12046,20 +12199,20 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
         error: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         error: string | null;
-        channel: "skipped" | "email" | "log";
         reason: string | null;
+        channel: "skipped" | "email" | "log";
         recipient: string | null;
     }, {
         error: string | null;
-        channel: "skipped" | "email" | "log";
         reason: string | null;
+        channel: "skipped" | "email" | "log";
         recipient: string | null;
     }>, zod.ZodNull]>;
 }, "strip", zod.ZodTypeAny, {
     alert: {
         error: string | null;
-        channel: "skipped" | "email" | "log";
         reason: string | null;
+        channel: "skipped" | "email" | "log";
         recipient: string | null;
     } | null;
     scanned: number;
@@ -12072,8 +12225,8 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
 }, {
     alert: {
         error: string | null;
-        channel: "skipped" | "email" | "log";
         reason: string | null;
+        channel: "skipped" | "email" | "log";
         recipient: string | null;
     } | null;
     scanned: number;

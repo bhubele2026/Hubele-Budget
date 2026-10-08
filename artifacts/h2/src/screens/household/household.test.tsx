@@ -152,6 +152,25 @@ describe("Banks — the list, in words", () => {
     expect(screen.getByText("Plaid is not set up on this server.")).toBeTruthy();
   });
 
+  it("each bank shows its Automatic updates line under the last-synced line; Sync and Force stay", () => {
+    mount(
+      <BanksView
+        data={banks([
+          item("a", "Alpha", { autoUpdates: { on: true, reason: "ok", checkedAt: null, error: null } }),
+          item("b", "Beta", { autoUpdates: { on: false, reason: "not_registered", checkedAt: null, error: null } }),
+        ])}
+        now={NOW}
+      />,
+    );
+    const lines = screen.getAllByTestId("bank-auto-updates").map((n) => n.textContent);
+    expect(lines).toEqual([
+      "Automatic updates: On — the bank tells H2 when something changes.",
+      "Automatic updates: Off — not registered yet; the next sync will register it.",
+    ]);
+    expect(screen.getAllByTestId("bank-synced")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Sync/ }).length).toBeGreaterThan(0);
+  });
+
   it("the classic app is named for what is not ported", () => {
     mount(<BanksView data={banks([OK])} now={NOW} />);
     const link = screen.getByTestId("classic-settings");

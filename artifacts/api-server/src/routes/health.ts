@@ -26,6 +26,7 @@ router.get("/healthz", async (_req, res) => {
     jobs,
     ai: getAiStatus(),
     sms: getSmsConfig(),
+    plaid: { webhookUrlSet: Boolean(process.env.PLAID_WEBHOOK_URL?.trim()) },
   });
   res.json(data);
 });

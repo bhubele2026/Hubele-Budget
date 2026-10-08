@@ -510,6 +510,13 @@ export const plaidItemsTable = pgTable(
       "consent_warning_dismissed_for_cutoff",
       { withTimezone: true },
     ),
+    // (V3) The webhook address Plaid was last told to call for this item
+    // (`/item/webhook/update`, free), when we last checked, and the bank's
+    // refusal if there was one. Banks linked before PLAID_WEBHOOK_URL was set
+    // never notify H2 until this is registered.
+    webhookUrl: text("webhook_url"),
+    webhookCheckedAt: timestamp("webhook_checked_at", { withTimezone: true }),
+    webhookError: text("webhook_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

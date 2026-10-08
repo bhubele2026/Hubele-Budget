@@ -102,6 +102,29 @@ export function lastSyncedWords(item: PlaidItemDetail, now?: Date): string {
   return when ? `Synced ${when}` : "Not synced yet";
 }
 
+/**
+ * The "Automatic updates" line under a bank's last-synced line: does the bank
+ * tell H2 when something changes? Older servers send no field; say nothing then.
+ */
+export function autoUpdatesWords(item: PlaidItemDetail): string | null {
+  const a = item.autoUpdates;
+  if (!a) return null;
+  switch (a.reason) {
+    case "ok":
+      return "Automatic updates: On — the bank tells H2 when something changes.";
+    case "no_url":
+      return "Automatic updates: Off — no webhook address on the server.";
+    case "not_registered":
+      return "Automatic updates: Off — not registered yet; the next sync will register it.";
+    case "error": {
+      const why = bankErrorWords(a.error).replace(/\s+/g, " ").slice(0, 120);
+      return `Automatic updates: Off — the bank refused the address: ${why}`;
+    }
+    default:
+      return null;
+  }
+}
+
 /** "Checking · ending 0100 · checking" */
 export function accountLine(a: PlaidAccount): string {
   const kind = a.subtype ?? a.type ?? null;
