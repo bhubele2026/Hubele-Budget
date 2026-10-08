@@ -36,7 +36,7 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
 });
 
 import { MemoryView, NEVER_STORED } from "./AskMemory";
-import { WishlistView, AFFORD_LINE, parseAmount } from "@/screens/plan/PlanWishlist";
+import { WishlistView, parseAmount } from "@/screens/plan/PlanWishlist";
 import { AiCostView, capOf } from "@/screens/household/AiCost";
 
 const NOW = new Date("2026-10-07T15:00:00Z");
@@ -128,7 +128,7 @@ describe("Wish list", () => {
   });
   const list = (items: WishlistItem[]): Read<WishlistList> => loaded({ items, waitDays: 7 });
 
-  it("title, amount, asked date, 'Wait until', decisions; decided items sit apart without controls; the Afford line", () => {
+  it("title, amount, asked date, 'Wait until', decisions; decided items sit apart without controls; the Afford link", () => {
     mount(
       <WishlistView
         list={list([item("w1", "Standing desk"), item("w2", "Rain jacket", { waitingDaysLeft: 0, decision: "approved", amount: 120 }), item("w3", "Board game", { decision: "bought", amount: 45 })])}
@@ -143,7 +143,7 @@ describe("Wish list", () => {
     const done = within(screen.getByTestId("wish-decided")).getAllByTestId("wish-item");
     expect(done).toHaveLength(1);
     expect(within(done[0]!).queryByTestId("wish-bought")).toBeNull();
-    expect(screen.getByTestId("afford-note").textContent).toBe(AFFORD_LINE);
+    expect(screen.getByTestId("afford-note").textContent).toBe("Can we afford something?");
   });
 
   it("Bought and Dropped send the decision", async () => {

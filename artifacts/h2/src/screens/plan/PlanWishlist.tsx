@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getListWishlistQueryKey, useCreateWishlistItem, useUpdateWishlistItem, type WishlistItem, type WishlistList } from "@workspace/api-client-react";
+import { getListWishlistQueryKey, useCreateWishlistItem, useEvaluateWishlistItem, useUpdateWishlistItem, type WishlistEvaluation, type WishlistItem, type WishlistList } from "@workspace/api-client-react";
 import { OWN_INVALIDATION } from "@/data/mutationInvalidation";
 import { readOf, type Read } from "@/data/todayData";
+import { AffordLauncher } from "@/screens/afford/AffordLauncher";
 import { Button } from "@/kit/Button";
 import { Note } from "@/kit/Note";
 import { Section } from "@/kit/Section";
@@ -11,6 +12,7 @@ import { SkeletonLine } from "@/kit/Skeleton";
 import { StatusWord, type StatusTone } from "@/kit/StatusWord";
 import { shortDate, shortDateOfInstant } from "@/lib/dates";
 import { centsValue, fmtMoney, toAmount } from "@/lib/money";
+import { VERDICT } from "@/screens/afford/verdict";
 import { apiMessage } from "@/screens/household/words";
 import { useWishlist } from "@/screens/ask/askData";
 import { Field, MoneyInput, PlanFrame, inputClass, useToast } from "./parts";
@@ -22,7 +24,8 @@ const DECISION: Record<WishlistItem["decision"], { word: string; tone: StatusTon
   declined: { word: "Dropped", tone: "stale" },
 };
 
-export const AFFORD_LINE = "The Afford check arrives with the scenario package.";
+/** A list row may carry the server's stored check (`lastEvaluation`); a check made here shows at once. */
+type Row = WishlistItem & { lastEvaluation?: WishlistEvaluation | null };
 
 /** Dollars typed by a person: "$1,200.50" → 1200.5; blank is no amount; anything else is null. */
 export function parseAmount(raw: string): number | null | "bad" {
@@ -56,6 +59,9 @@ export function WishlistView({ list }: { list: Read<WishlistList> }) {
   const qc = useQueryClient();
   const create = useCreateWishlistItem({ mutation: { meta: OWN_INVALIDATION } });
   const update = useUpdateWishlistItem({ mutation: { meta: OWN_INVALIDATION } });
+  const evaluate = useEvaluateWishlistItem({ mutation: { meta: OWN_INVALIDATION } });
+  const [checks, setChecks] = useState<Record<string, WishlistEvaluation>>({});
+  const [checking, setChecking] = useState<string | null>(null);
   const { say, node: toast } = useToast();
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
@@ -114,9 +120,23 @@ export function WishlistView({ list }: { list: Read<WishlistList> }) {
     }
   };
 
+  const check = async (item: WishlistItem) => {
+    setChecking(item.id);
+    try {
+      const r = await evaluate.mutateAsync({ id: item.id });
+      setChecks((c) => ({ ...c, [item.id]: r.lastEvaluation }));
+    } catch (e) {
+      say(apiMessage(e, "Couldn't check that. Nothing changed."), "error");
+    } finally {
+      setChecking(null);
+    }
+  };
+
   const row = (i: WishlistItem, live: boolean) => {
     const amt = toAmount(i.amount);
     const d = DECISION[i.decision];
+    const ev = checks[i.id] ?? (i as Row).lastEvaluation ?? null;
+    const evAfter = toAmount(ev?.availableUntilPaydayAfter);
     return (
       <li key={i.id} className="flex flex-col gap-1 border-t border-rule py-3 first:border-t-0" data-testid="wish-item" data-decision={i.decision}>
         <div className="flex items-baseline justify-between gap-4">
@@ -144,8 +164,29 @@ export function WishlistView({ list }: { list: Read<WishlistList> }) {
           )}
           <StatusWord tone={d.tone}>{d.word}</StatusWord>
         </div>
+        {ev && (
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 type-caption text-ink-2" data-testid="wish-eval" data-verdict={ev.verdict}>
+            <StatusWord tone={VERDICT[ev.verdict].tone} data-testid="wish-eval-word">
+              {VERDICT[ev.verdict].word}
+            </StatusWord>
+            <span data-testid="wish-eval-date">evaluated {shortDateOfInstant(ev.evaluatedAt)}</span>
+            {evAfter != null && (
+              <span data-testid="wish-eval-after">
+                free until payday after{" "}
+                <data value={centsValue(evAfter)} className="tnum">
+                  {fmtMoney(evAfter)}
+                </data>
+              </span>
+            )}
+          </p>
+        )}
         {live && (
           <div className="flex gap-3">
+            {i.decision === "pending" && amt != null && (
+              <Button variant="quiet" size="sm" onClick={() => check(i)} disabled={checking === i.id} data-testid="wish-check">
+                Check now
+              </Button>
+            )}
             <Button variant="quiet" size="sm" onClick={() => decide(i, "bought")} disabled={update.isPending} data-testid="wish-bought">
               Bought
             </Button>
@@ -190,9 +231,9 @@ export function WishlistView({ list }: { list: Read<WishlistList> }) {
             <ul data-testid="wish-decided">{decided.map((i) => row(i, false))}</ul>
           </Section>
         )}
-        <p className="type-caption text-ink-3" data-testid="afford-note">
-          {AFFORD_LINE}
-        </p>
+        <div data-testid="afford-note">
+          <AffordLauncher variant="link" />
+        </div>
       </div>
 
       <Sheet open={adding} onOpenChange={setAdding} title="Add to the wish list" description="H2 starts the waiting period when you add it." returnFocusRef={addButton}>

@@ -10,6 +10,7 @@ import { SkeletonFigure, SkeletonLine, SkeletonMeter } from "@/kit/Skeleton";
 import { longDate } from "@/lib/dates";
 import { toAmount } from "@/lib/money";
 import { attentionItems, billsDueSoon, upcomingBills } from "./attention";
+import { AffordLauncher } from "@/screens/afford/AffordLauncher";
 import { Hero } from "./Hero";
 import { OneThing } from "./sections";
 import { WeekSection } from "./WeekSection";
@@ -193,6 +194,8 @@ export function TodayView({
         settings={settings}
         unfiled={unfiled}
       />
+
+      {live && <AffordLauncher variant="quiet" className="-mt-4 mb-8 w-full" />}
 
       <OneThing items={items} loading={s == null && spine.state !== "failed"} />
 
