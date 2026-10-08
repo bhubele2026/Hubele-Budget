@@ -572,15 +572,15 @@ export async function buildSpendingFacts(
  *     no idea of a match);
  *   - (review M1) a reimbursable row never counts, whatever flag or match it
  *     carries: today's rule 7 fires before either is looked at, while
- *     `classifyMovement` lets a match (step 2) or a flag (steps 3-5) outrank
- *     `reimbursable` (step 6).
+ *     `classifyMovement` lets a confirmed match (step 2) outrank `reimbursable`
+ *     (step 3; PR-B2 moved it ahead of the flags).
  * mode "forward" is coverage alone — what switching the figure onto
  * `classifyMovement`, as section A specifies it, would do:
  *   1. a confirmed match (carried to its posted row) stops counting —
  *      decision 12: the bill is already in the plan;
- *   2. a reimbursable row that carries an allowance flag counts under its
- *      flag. The owner's 2026-09-15 rule ("a reimbursable charge shows as its
- *      own row") says it should not; PR8r settles it before switching.
+ *   2. (PR-B2) a reimbursable row that carries an allowance flag no longer
+ *      counts: `reimbursable` outranks the flags (the owner's 2026-09-15 rule,
+ *      "a reimbursable charge shows as its own row").
  *
  * `rows` must already be in EFFECTIVE-FILING form (`effectiveFiling`) with
  * replaced-pending rows left out — the same preparation `buildSpendingFacts`

@@ -823,3 +823,20 @@ export function payoffPct(
   if (sumOrig <= 0) return null;
   return Math.max(0, Math.min(1, (sumOrig - sumBal) / sumOrig)) * 100;
 }
+// (PR-B2, decision 7) The everyday hooks: the funding bills become date hooks,
+// each occurrence replaced by the card payoff it stands for.
+export {
+  hookPeriodOf,
+  namesCardIssuer,
+  nextHookOccurrence,
+  payoffFor,
+  payoffsPaidBy,
+  readEverydayHooks,
+  type DuePayoff,
+  type EverydayHook,
+  type EverydayHooks,
+  type HookCadence,
+  type Payoff,
+  type PayoffInputs,
+  type PayoffPaymentRow,
+} from "./everydayHooks";

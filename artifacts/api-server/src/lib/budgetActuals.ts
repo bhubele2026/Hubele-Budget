@@ -182,9 +182,9 @@ export interface ClassifierBudgetMonthRow
  *
  * mode "forward" is coverage alone (PR8r/PR10): on top of the classes above, a
  * confirmed match buckets NOWHERE — the bill is already counted in the plan
- * (decision 12) — and a reimbursable row buckets under its flag, which the
- * owner's 2026-09-15 rule ("a reimbursable charge shows as its own row") says
- * it should not; PR8r settles that before switching.
+ * (decision 12). (PR-B2) A reimbursable row buckets nowhere in either mode:
+ * `classifyMovement` puts `reimbursable` ahead of the flags (the owner's
+ * 2026-09-15 rule, "a reimbursable charge shows as its own row").
  */
 export function classifierAllowanceRows(
   rows: readonly ClassifierBudgetMonthRow[],

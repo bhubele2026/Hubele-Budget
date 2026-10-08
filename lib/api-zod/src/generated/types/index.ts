@@ -146,6 +146,8 @@ export * from "./cashSignalAccountVia";
 export * from "./cashSignalAssumedPaidPlan";
 export * from "./cashSignalDailyItem";
 export * from "./cashSignalEventsItem";
+export * from "./cashSignalHookAmountIgnoredItem";
+export * from "./cashSignalHookAmountIgnoredItemCadence";
 export * from "./cashSignalListedPlan";
 export * from "./cashSignalMatchesItem";
 export * from "./cashSignalMatchesItemTier";

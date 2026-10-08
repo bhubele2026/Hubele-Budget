@@ -9,6 +9,7 @@ import type { CashSignalAccount } from "./cashSignalAccount";
 import type { CashSignalAssumedPaidPlan } from "./cashSignalAssumedPaidPlan";
 import type { CashSignalDailyItem } from "./cashSignalDailyItem";
 import type { CashSignalEventsItem } from "./cashSignalEventsItem";
+import type { CashSignalHookAmountIgnoredItem } from "./cashSignalHookAmountIgnoredItem";
 import type { CashSignalListedPlan } from "./cashSignalListedPlan";
 import type { CashSignalMatchesItem } from "./cashSignalMatchesItem";
 import type { CashSignalStatus } from "./cashSignalStatus";
@@ -37,6 +38,14 @@ export interface CashSignal {
     acceptedImpact?: string;
     daily?: CashSignalDailyItem[];
     events?: CashSignalEventsItem[];
+    /** (PR-B2, decision 7) The everyday hooks in force: the Weekly / Monthly
+  Spend items whose occurrences the forecast replaces with the card
+  payoff (the period's card charges plus what is left of the
+  allowance while the period is open). `storedAmount` is the item's
+  own amount, which the forecast ignores — banner data for the UI.
+  Present only when the household has a hook.
+   */
+    hookAmountIgnored?: CashSignalHookAmountIgnoredItem[];
     /** (PR6) Unresolved expenses due more than 14 days ago that no bank
   row confidently paid. Not on the curve, and never dropped
   silently. Bounded by the forecast's expansion (the first of last

@@ -3125,8 +3125,8 @@ export type CashSignalEventsItem = {
   the bank). `overdue_remainder_assumed_unpaid` (PR6 review):
   overdue, a bank row paid part of it, and the unpaid
   remainder lands on the next business day.
-  `dragged_past_due`: the pre-PR6 rule, kept for
-  weekly-cadence expenses due before today until PR8.
+  (PR-B2) `dragged_past_due` is retired: weekly-cadence
+  expenses follow the overdue rule like any bill.
   `pre_window_on_first_day`: no snapshot, due before the
   window, placed on its first day.
   `remainder_assumed_unpaid` (decision 13, round 4): due after
@@ -3142,6 +3142,16 @@ export type CashSignalEventsItem = {
     occurrenceKey?: string;
     /** (PR6) The occurrence's own date (before any reschedule), which resolutions are keyed on. */
     occurrenceDate?: string;
+};
+export type CashSignalHookAmountIgnoredItemCadence = (typeof CashSignalHookAmountIgnoredItemCadence)[keyof typeof CashSignalHookAmountIgnoredItemCadence];
+export declare const CashSignalHookAmountIgnoredItemCadence: {
+    readonly weekly: "weekly";
+    readonly monthly: "monthly";
+};
+export type CashSignalHookAmountIgnoredItem = {
+    itemId: string;
+    cadence: CashSignalHookAmountIgnoredItemCadence;
+    storedAmount: string;
 };
 export type CashSignalMatchesItemTier = (typeof CashSignalMatchesItemTier)[keyof typeof CashSignalMatchesItemTier];
 export declare const CashSignalMatchesItemTier: {
@@ -3264,6 +3274,14 @@ export interface CashSignal {
     acceptedImpact?: string;
     daily?: CashSignalDailyItem[];
     events?: CashSignalEventsItem[];
+    /** (PR-B2, decision 7) The everyday hooks in force: the Weekly / Monthly
+  Spend items whose occurrences the forecast replaces with the card
+  payoff (the period's card charges plus what is left of the
+  allowance while the period is open). `storedAmount` is the item's
+  own amount, which the forecast ignores — banner data for the UI.
+  Present only when the household has a hook.
+   */
+    hookAmountIgnored?: CashSignalHookAmountIgnoredItem[];
     /** (PR6) Unresolved expenses due more than 14 days ago that no bank
   row confidently paid. Not on the curve, and never dropped
   silently. Bounded by the forecast's expansion (the first of last
