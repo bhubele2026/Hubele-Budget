@@ -7156,18 +7156,33 @@ export const UndoAgentActionResponse = zod.object({
 /**
  * @summary Owner only. Run the deterministic categorization stages over the
 household's rows dated on/after `since` (default: the last 90 days).
-Idempotent: a second run with nothing changed records nothing.
+(V7) With `scope: all`, over every row from the household's oldest
+(`since` is ignored), in slices of 500 ids, oldest first. Locked rows
+and rows a person filed are never touched. When AI is on, the model
+pass over the rows still undecided plus the open review queue is
+enqueued as background jobs. Idempotent: a second run with nothing
+changed records nothing.
 
  */
 export const RunCategorizationBody = zod.object({
   since: zod.coerce.date().optional(),
+  scope: zod
+    .enum(["all"])
+    .optional()
+    .describe(
+      "(V7) File the whole backlog, from the household's oldest row. `since` is ignored.",
+    ),
 });
 
 export const RunCategorizationResponse = zod.object({
   decided: zod
     .number()
     .describe("Decisions that wrote a category (auto or provisional)."),
-  queued: zod.number().describe("Decisions placed in the review queue."),
+  queued: zod
+    .number()
+    .describe(
+      "(V7) Decisions that need a person: band queue, no category written.",
+    ),
   ambiguous: zod
     .number()
     .describe("Rows no deterministic stage decided at 0.6 or more."),
@@ -7175,7 +7190,25 @@ export const RunCategorizationResponse = zod.object({
     .number()
     .optional()
     .describe(
-      "Rows handed to the model pass (a background job); 0 when AI is off.",
+      "Rows handed to the model pass (background jobs); 0 when AI is off.",
+    ),
+  filed: zod
+    .number()
+    .describe("(V7) Decisions that filed a charge outright (band auto)."),
+  suggested: zod
+    .number()
+    .describe(
+      "(V7) Decisions that filed a charge provisionally (band provisional).",
+    ),
+  unreviewed: zod
+    .number()
+    .describe(
+      "(V7) The household's model suggestions left unchanged 14 days: not verified.",
+    ),
+  remaining: zod
+    .number()
+    .describe(
+      "(V7) Charges still without a category and not locked, after the run.",
     ),
 });
 
@@ -7183,8 +7216,10 @@ export const RunCategorizationResponse = zod.object({
  * @summary (V1) What files the household's charges and how far the model may go:
 the owner's two switches, AI status, the deterministic engine's
 counts, the model's mode and the requirements it still has to meet,
-the last 20 decisions (any source) and the review-queue count. Any
-member. The model's mode is computed by the same function the
+the last 20 decisions (any source) and the review-queue count;
+(V7) the backlog (unfiled charges, the oldest one's date, provisional
+rows) and one row per linked bank (data through, automatic updates).
+Any member. The model's mode is computed by the same function the
 categorize job uses.
 
  */
@@ -7216,12 +7251,22 @@ export const GetCategorizationSettingsResponse = zod.object({
     eligible: zod
       .boolean()
       .describe(
-        "The record has earned automatic filing: at least 30 judged,\n9 in 10 accepted among the last 50; once open it holds while\nthe last 20 stay at 8 in 10, and after a slip reopens at 9 in 10.\n",
+        "The record has earned automatic filing: at least 30 verified,\n9 in 10 accepted among the last 50; once open it holds while\nthe last 20 stay at 8 in 10, and after a slip reopens at 9 in 10.\n",
       ),
     judged: zod
       .number()
       .describe(
-        "Model suggestions accepted or corrected (silently or by a person)",
+        "Model suggestions a person accepted or corrected, lifetime (= verified).",
+      ),
+    verified: zod
+      .number()
+      .describe(
+        "(V7) The same count as judged, under the name the screen uses.",
+      ),
+    unreviewed: zod
+      .number()
+      .describe(
+        "(V7) Model suggestions left unchanged 14 days, not undone. Not verified; counted toward nothing.",
       ),
     requirements: zod.array(
       zod.object({
@@ -7281,9 +7326,13 @@ export const GetCategorizationSettingsResponse = zod.object({
             zod.literal("accepted"),
             zod.literal("corrected"),
             zod.literal("skipped"),
+            zod.literal("unreviewed"),
             zod.literal(null),
           ])
-          .nullable(),
+          .nullable()
+          .describe(
+            "(V7) unreviewed = a model suggestion left unchanged 14 days; not verified.",
+          ),
         resolvedBy: zod
           .union([
             zod.literal("user"),
@@ -7304,6 +7353,42 @@ export const GetCategorizationSettingsResponse = zod.object({
     )
     .max(getCategorizationSettingsResponseRecentMax),
   reviewCount: zod.number(),
+  backlog: zod.object({
+    unfiled: zod
+      .number()
+      .describe("Charges with no category that no person locked."),
+    oldestUnfiledOn: zod.coerce
+      .date()
+      .nullable()
+      .describe("The oldest unfiled charge's date; null when none."),
+    provisional: zod
+      .number()
+      .describe(
+        "Charges still flagged provisional (filed by the engine, not verified).",
+      ),
+  }),
+  banks: zod
+    .array(
+      zod.object({
+        itemId: zod
+          .string()
+          .describe("The same `itemId` GET \/plaid\/items lists."),
+        name: zod.string().nullable(),
+        lastDataOn: zod.coerce
+          .date()
+          .nullable()
+          .describe(
+            "The household's date of the last successful sync; null before the first.",
+          ),
+        autoUpdates: zod.object({
+          on: zod.boolean(),
+          reason: zod.enum(["ok", "no_url", "not_registered", "error"]),
+        }),
+      }),
+    )
+    .describe(
+      "(V7) One row per linked bank, from the rows GET \/plaid\/items lists. No Plaid call.",
+    ),
 });
 
 /**
@@ -7355,12 +7440,22 @@ export const UpdateCategorizationSettingsResponse = zod.object({
     eligible: zod
       .boolean()
       .describe(
-        "The record has earned automatic filing: at least 30 judged,\n9 in 10 accepted among the last 50; once open it holds while\nthe last 20 stay at 8 in 10, and after a slip reopens at 9 in 10.\n",
+        "The record has earned automatic filing: at least 30 verified,\n9 in 10 accepted among the last 50; once open it holds while\nthe last 20 stay at 8 in 10, and after a slip reopens at 9 in 10.\n",
       ),
     judged: zod
       .number()
       .describe(
-        "Model suggestions accepted or corrected (silently or by a person)",
+        "Model suggestions a person accepted or corrected, lifetime (= verified).",
+      ),
+    verified: zod
+      .number()
+      .describe(
+        "(V7) The same count as judged, under the name the screen uses.",
+      ),
+    unreviewed: zod
+      .number()
+      .describe(
+        "(V7) Model suggestions left unchanged 14 days, not undone. Not verified; counted toward nothing.",
       ),
     requirements: zod.array(
       zod.object({
@@ -7420,9 +7515,13 @@ export const UpdateCategorizationSettingsResponse = zod.object({
             zod.literal("accepted"),
             zod.literal("corrected"),
             zod.literal("skipped"),
+            zod.literal("unreviewed"),
             zod.literal(null),
           ])
-          .nullable(),
+          .nullable()
+          .describe(
+            "(V7) unreviewed = a model suggestion left unchanged 14 days; not verified.",
+          ),
         resolvedBy: zod
           .union([
             zod.literal("user"),
@@ -7443,6 +7542,42 @@ export const UpdateCategorizationSettingsResponse = zod.object({
     )
     .max(updateCategorizationSettingsResponseRecentMax),
   reviewCount: zod.number(),
+  backlog: zod.object({
+    unfiled: zod
+      .number()
+      .describe("Charges with no category that no person locked."),
+    oldestUnfiledOn: zod.coerce
+      .date()
+      .nullable()
+      .describe("The oldest unfiled charge's date; null when none."),
+    provisional: zod
+      .number()
+      .describe(
+        "Charges still flagged provisional (filed by the engine, not verified).",
+      ),
+  }),
+  banks: zod
+    .array(
+      zod.object({
+        itemId: zod
+          .string()
+          .describe("The same `itemId` GET \/plaid\/items lists."),
+        name: zod.string().nullable(),
+        lastDataOn: zod.coerce
+          .date()
+          .nullable()
+          .describe(
+            "The household's date of the last successful sync; null before the first.",
+          ),
+        autoUpdates: zod.object({
+          on: zod.boolean(),
+          reason: zod.enum(["ok", "no_url", "not_registered", "error"]),
+        }),
+      }),
+    )
+    .describe(
+      "(V7) One row per linked bank, from the rows GET \/plaid\/items lists. No Plaid call.",
+    ),
 });
 
 /**

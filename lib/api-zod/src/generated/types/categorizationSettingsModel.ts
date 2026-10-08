@@ -15,13 +15,17 @@ suggest = its answers are provisional until a person looks;
 auto = sure answers file on their own.
  */
   mode: CategorizationSettingsModelMode;
-  /** The record has earned automatic filing: at least 30 judged,
+  /** The record has earned automatic filing: at least 30 verified,
 9 in 10 accepted among the last 50; once open it holds while
 the last 20 stay at 8 in 10, and after a slip reopens at 9 in 10.
  */
   eligible: boolean;
-  /** Model suggestions accepted or corrected (silently or by a person) */
+  /** Model suggestions a person accepted or corrected, lifetime (= verified). */
   judged: number;
+  /** (V7) The same count as judged, under the name the screen uses. */
+  verified: number;
+  /** (V7) Model suggestions left unchanged 14 days, not undone. Not verified; counted toward nothing. */
+  unreviewed: number;
   requirements: CategorizationRequirement[];
   accuracy: CategorizationSettingsModelAccuracy;
 };

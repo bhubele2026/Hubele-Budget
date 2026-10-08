@@ -16,6 +16,7 @@ import { householdsTable, transactionsTable } from "./index";
 // lib/db/migrations/0020_categorization_v2.sql — keep the two equal (the
 // schemaMigrations test replays the SQL and compares column for column).
 // (V1) `resolved_via` comes from 0111_category_decisions_resolved_via.sql.
+// (V7) resolution 'unreviewed' comes from 0116_category_decisions_unreviewed.sql.
 
 /**
  * One row per categorization decision: what the engine (or a person) decided
@@ -49,11 +50,18 @@ export const categoryDecisionsTable = pgTable(
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     /** Who resolved it: a user id, or 'system' when a newer engine decision superseded it. */
     resolvedBy: text("resolved_by"),
+    /**
+     * accepted | corrected | skipped (a person answered it) or (V7)
+     * 'unreviewed': a provisional model suggestion left unchanged for
+     * SILENT_ACCEPT_DAYS. Unreviewed is NOT verified: it leaves the queue but
+     * counts toward neither the model's record nor its priors.
+     */
     resolution: text("resolution"),
     /**
      * (V1) How it was settled: 'user' (a person accepted / corrected / skipped
      * it) or 'silent' (a provisional model suggestion that stood unchanged for
-     * SILENT_ACCEPT_DAYS). NULL while open, or when the engine superseded it.
+     * SILENT_ACCEPT_DAYS; resolution 'unreviewed' since V7). NULL while open,
+     * or when the engine superseded it.
      */
     resolvedVia: text("resolved_via"),
     undoneAt: timestamp("undone_at", { withTimezone: true }),
@@ -73,7 +81,7 @@ export const categoryDecisionsTable = pgTable(
     check("category_decisions_band_ck", sql`${t.band} IN ('auto','provisional','queue')`),
     check(
       "category_decisions_resolution_ck",
-      sql`${t.resolution} IS NULL OR ${t.resolution} IN ('accepted','corrected','skipped')`,
+      sql`${t.resolution} IS NULL OR ${t.resolution} IN ('accepted','corrected','skipped','unreviewed')`,
     ),
     check(
       "category_decisions_resolved_via_ck",

@@ -8,9 +8,10 @@ import {
   useUpdateTransaction,
   type Category,
   type CategorizationRecentDecision,
+  type CategorizationRunResult,
   type CategorizationSettings,
 } from "@workspace/api-client-react";
-import { settingsKey, useCategorizationSettings, useSaveCategorizationSettings } from "@/data/automationApi";
+import { settingsKey, useCategorizationSettings, useRunCategorization, useSaveCategorizationSettings } from "@/data/automationApi";
 import { invalidateActivity, useCategoryList } from "@/data/activityData";
 import { readOf } from "@/data/todayData";
 import { Button, buttonClass } from "@/kit/Button";
@@ -25,13 +26,19 @@ import { useToast } from "@/screens/plan/parts";
 import { SwitchRow } from "./parts";
 import {
   AI_STATUS,
+  BACKLOG,
   JUDGED_NOTE,
   MODE_LADDER,
+  UNREVIEWED_HINT,
+  backlogLine,
   bandWord,
+  bankLine,
   engineLine,
   requirementFigure,
   resolutionWord,
+  runResultLine,
   sourceWord,
+  unreviewedLine,
 } from "./automationWords";
 
 /** A refusal in words; the server's `owner_only` code never reaches the screen. */
@@ -67,6 +74,11 @@ function Row({ d, onChange, onUndo, busy }: { d: CategorizationRecentDecision; o
         <span data-testid="decision-category">{d.categoryName ?? "Not filed"}</span> · <span data-testid="decision-source">{sourceWord(d.source)}</span> ·{" "}
         <span data-testid="decision-band">{bandWord(d.band)}</span> · <span data-testid="decision-resolution">{resolutionWord(d)}</span>
       </p>
+      {d.resolution === "unreviewed" && (
+        <p className="type-caption text-ink-3" data-testid="decision-hint">
+          {UNREVIEWED_HINT}
+        </p>
+      )}
       <div className="flex items-center gap-3">
         <Button size="sm" variant="quiet" onClick={onChange} disabled={busy} data-testid="decision-change" aria-label={`Change category for ${d.description}`}>
           Change
@@ -83,8 +95,10 @@ function Row({ d, onChange, onUndo, busy }: { d: CategorizationRecentDecision; o
 
 /**
  * ⭐ AUTOMATION — the one place that says how new charges get filed: the
- * owner's two switches, whether AI is on, what the model may do, the record it
- * has to earn, and the last twenty decisions with Undo and Change. Every word
+ * owner's two switches, (V7) the backlog with "File everything up to today",
+ * each bank's data date, whether AI is on, what the model may do, the record
+ * it has to earn (verified only; left unchanged is counted apart), and the
+ * last twenty decisions with Undo and Change. Every word
  * and number is the server's (`GET /categorization/settings`); the screen only
  * lays them out. Members read it; the switches are the owner's.
  */
@@ -99,12 +113,30 @@ export default function Automation() {
   const save = useSaveCategorizationSettings();
   const undo = useUndoCategoryDecision();
   const update = useUpdateTransaction();
+  const run = useRunCategorization();
   const [changing, setChanging] = useState<CategorizationRecentDecision | null>(null);
+  const [ran, setRan] = useState<CategorizationRunResult | null>(null);
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: settingsKey() });
     invalidateActivity(qc);
   };
+
+  // (V7) The whole backlog. The global write rule refreshes the spine, the
+  // ledger and the reports; this refreshes the view, the review queue and the
+  // transaction lists.
+  const fileAll = () =>
+    run.mutate(
+      { scope: "all" },
+      {
+        onSuccess: (out) => {
+          setRan(out);
+          refresh();
+          void qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/transactions") });
+        },
+        onError: (e) => say(errWords(e, BACKLOG.failed), "error"),
+      },
+    );
 
   const put = (patch: { autoCategorize?: boolean; modelAutoCategorize?: boolean }, ok: string) =>
     save.mutate(
@@ -148,7 +180,7 @@ export default function Automation() {
   };
 
   const s = settings.data;
-  const busy = save.isPending || undo.isPending || update.isPending;
+  const busy = save.isPending || undo.isPending || update.isPending || run.isPending;
   const canSwitch = owner && !!s && !busy;
   const ownerOnly = me.data && !owner ? "Owner only" : null;
 
@@ -181,6 +213,55 @@ export default function Automation() {
           <p className="mt-3 type-caption text-ink-2" data-testid="engine-line">
             {engineLine(s.engine)}
           </p>
+        </Section>
+
+        <Section label={BACKLOG.label} data-testid="section-backlog">
+          <p className="type-body text-ink" data-testid="backlog-line">
+            {backlogLine(s.backlog)}
+          </p>
+          <div className="mt-3 flex flex-col gap-1">
+            <Button
+              size="sm"
+              variant="quiet"
+              className="self-start"
+              onClick={fileAll}
+              disabled={!owner || busy}
+              data-testid="backlog-run"
+            >
+              {run.isPending ? BACKLOG.running : BACKLOG.button}
+            </Button>
+            {ownerOnly && (
+              <span className="type-caption text-ink-3" data-testid="backlog-owner-only">
+                {BACKLOG.ownerOnly}
+              </span>
+            )}
+          </div>
+          {ran && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <p className="type-caption text-ink-2" data-testid="backlog-result">
+                {runResultLine(ran)}
+              </p>
+              <Link href="/activity/review" className={buttonClass({ variant: "link", size: "sm" })} data-testid="backlog-review">
+                Review queue ({s.reviewCount})
+              </Link>
+            </div>
+          )}
+        </Section>
+
+        <Section label="Bank data" data-testid="section-banks">
+          {s.banks.length === 0 ? (
+            <Note kind="empty" data-testid="banks-empty">
+              No bank linked.
+            </Note>
+          ) : (
+            <ul>
+              {s.banks.map((b) => (
+                <li key={b.itemId} className="border-t border-rule py-3 type-body text-ink first:border-t-0" data-testid="bank" data-on={b.autoUpdates.on ? "true" : "false"}>
+                  {bankLine(b)}
+                </li>
+              ))}
+            </ul>
+          )}
         </Section>
 
         <Section label="AI" data-testid="section-ai">
@@ -242,6 +323,9 @@ export default function Automation() {
               </li>
             ))}
           </ul>
+          <p className="border-t border-rule pt-3 type-caption text-ink-2" data-testid="unreviewed-line">
+            {unreviewedLine(s.model.unreviewed)}
+          </p>
         </Section>
 
         <Section

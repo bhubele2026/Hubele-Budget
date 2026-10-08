@@ -15683,38 +15683,60 @@ export declare const UndoAgentActionResponse: zod.ZodObject<{
 /**
  * @summary Owner only. Run the deterministic categorization stages over the
 household's rows dated on/after `since` (default: the last 90 days).
-Idempotent: a second run with nothing changed records nothing.
+(V7) With `scope: all`, over every row from the household's oldest
+(`since` is ignored), in slices of 500 ids, oldest first. Locked rows
+and rows a person filed are never touched. When AI is on, the model
+pass over the rows still undecided plus the open review queue is
+enqueued as background jobs. Idempotent: a second run with nothing
+changed records nothing.
 
  */
 export declare const RunCategorizationBody: zod.ZodObject<{
     since: zod.ZodOptional<zod.ZodDate>;
+    scope: zod.ZodOptional<zod.ZodEnum<["all"]>>;
 }, "strip", zod.ZodTypeAny, {
     since?: Date | undefined;
+    scope?: "all" | undefined;
 }, {
     since?: Date | undefined;
+    scope?: "all" | undefined;
 }>;
 export declare const RunCategorizationResponse: zod.ZodObject<{
     decided: zod.ZodNumber;
     queued: zod.ZodNumber;
     ambiguous: zod.ZodNumber;
     modelQueued: zod.ZodOptional<zod.ZodNumber>;
+    filed: zod.ZodNumber;
+    suggested: zod.ZodNumber;
+    unreviewed: zod.ZodNumber;
+    remaining: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
     queued: number;
+    unreviewed: number;
     ambiguous: number;
+    suggested: number;
     decided: number;
+    filed: number;
+    remaining: number;
     modelQueued?: number | undefined;
 }, {
     queued: number;
+    unreviewed: number;
     ambiguous: number;
+    suggested: number;
     decided: number;
+    filed: number;
+    remaining: number;
     modelQueued?: number | undefined;
 }>;
 /**
  * @summary (V1) What files the household's charges and how far the model may go:
 the owner's two switches, AI status, the deterministic engine's
 counts, the model's mode and the requirements it still has to meet,
-the last 20 decisions (any source) and the review-queue count. Any
-member. The model's mode is computed by the same function the
+the last 20 decisions (any source) and the review-queue count;
+(V7) the backlog (unfiled charges, the oldest one's date, provisional
+rows) and one row per linked bank (data through, automatic updates).
+Any member. The model's mode is computed by the same function the
 categorize job uses.
 
  */
@@ -15752,6 +15774,8 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         mode: zod.ZodEnum<["off", "suggest", "auto"]>;
         eligible: zod.ZodBoolean;
         judged: zod.ZodNumber;
+        verified: zod.ZodNumber;
+        unreviewed: zod.ZodNumber;
         requirements: zod.ZodArray<zod.ZodObject<{
             key: zod.ZodEnum<["ai", "owner_switch", "judged", "accuracy", "holding", "floor"]>;
             label: zod.ZodString;
@@ -15813,6 +15837,8 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         }>;
     }, "strip", zod.ZodTypeAny, {
         mode: "off" | "suggest" | "auto";
+        verified: number;
+        unreviewed: number;
         eligible: boolean;
         judged: number;
         requirements: {
@@ -15834,6 +15860,8 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         };
     }, {
         mode: "off" | "suggest" | "auto";
+        verified: number;
+        unreviewed: number;
         eligible: boolean;
         judged: number;
         requirements: {
@@ -15864,7 +15892,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         band: zod.ZodEnum<["auto", "provisional", "queue"]>;
         categoryId: zod.ZodNullable<zod.ZodString>;
         categoryName: zod.ZodNullable<zod.ZodString>;
-        resolution: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"accepted">, zod.ZodLiteral<"corrected">, zod.ZodLiteral<"skipped">, zod.ZodLiteral<null>]>>;
+        resolution: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"accepted">, zod.ZodLiteral<"corrected">, zod.ZodLiteral<"skipped">, zod.ZodLiteral<"unreviewed">, zod.ZodLiteral<null>]>>;
         resolvedBy: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"user">, zod.ZodLiteral<"silent">, zod.ZodLiteral<null>]>>;
         decidedAt: zod.ZodDate;
         undoable: zod.ZodBoolean;
@@ -15878,7 +15906,7 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         categoryName: string | null;
         transactionId: string;
         band: "queue" | "auto" | "provisional";
-        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
         undoable: boolean;
@@ -15892,12 +15920,56 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         categoryName: string | null;
         transactionId: string;
         band: "queue" | "auto" | "provisional";
-        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
         undoable: boolean;
     }>, "many">;
     reviewCount: zod.ZodNumber;
+    backlog: zod.ZodObject<{
+        unfiled: zod.ZodNumber;
+        oldestUnfiledOn: zod.ZodNullable<zod.ZodDate>;
+        provisional: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        provisional: number;
+        unfiled: number;
+        oldestUnfiledOn: Date | null;
+    }, {
+        provisional: number;
+        unfiled: number;
+        oldestUnfiledOn: Date | null;
+    }>;
+    banks: zod.ZodArray<zod.ZodObject<{
+        itemId: zod.ZodString;
+        name: zod.ZodNullable<zod.ZodString>;
+        lastDataOn: zod.ZodNullable<zod.ZodDate>;
+        autoUpdates: zod.ZodObject<{
+            on: zod.ZodBoolean;
+            reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
+        }, "strip", zod.ZodTypeAny, {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        }, {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        name: string | null;
+        itemId: string;
+        autoUpdates: {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        };
+        lastDataOn: Date | null;
+    }, {
+        name: string | null;
+        itemId: string;
+        autoUpdates: {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        };
+        lastDataOn: Date | null;
+    }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     ai: {
         enabled: boolean;
@@ -15905,6 +15977,8 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
     };
     model: {
         mode: "off" | "suggest" | "auto";
+        verified: number;
+        unreviewed: number;
         eligible: boolean;
         judged: number;
         requirements: {
@@ -15944,10 +16018,24 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         categoryName: string | null;
         transactionId: string;
         band: "queue" | "auto" | "provisional";
-        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
         undoable: boolean;
+    }[];
+    backlog: {
+        provisional: number;
+        unfiled: number;
+        oldestUnfiledOn: Date | null;
+    };
+    banks: {
+        name: string | null;
+        itemId: string;
+        autoUpdates: {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        };
+        lastDataOn: Date | null;
     }[];
 }, {
     ai: {
@@ -15956,6 +16044,8 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
     };
     model: {
         mode: "off" | "suggest" | "auto";
+        verified: number;
+        unreviewed: number;
         eligible: boolean;
         judged: number;
         requirements: {
@@ -15995,10 +16085,24 @@ export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
         categoryName: string | null;
         transactionId: string;
         band: "queue" | "auto" | "provisional";
-        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
         undoable: boolean;
+    }[];
+    backlog: {
+        provisional: number;
+        unfiled: number;
+        oldestUnfiledOn: Date | null;
+    };
+    banks: {
+        name: string | null;
+        itemId: string;
+        autoUpdates: {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        };
+        lastDataOn: Date | null;
     }[];
 }>;
 /**
@@ -16051,6 +16155,8 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         mode: zod.ZodEnum<["off", "suggest", "auto"]>;
         eligible: zod.ZodBoolean;
         judged: zod.ZodNumber;
+        verified: zod.ZodNumber;
+        unreviewed: zod.ZodNumber;
         requirements: zod.ZodArray<zod.ZodObject<{
             key: zod.ZodEnum<["ai", "owner_switch", "judged", "accuracy", "holding", "floor"]>;
             label: zod.ZodString;
@@ -16112,6 +16218,8 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         }>;
     }, "strip", zod.ZodTypeAny, {
         mode: "off" | "suggest" | "auto";
+        verified: number;
+        unreviewed: number;
         eligible: boolean;
         judged: number;
         requirements: {
@@ -16133,6 +16241,8 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         };
     }, {
         mode: "off" | "suggest" | "auto";
+        verified: number;
+        unreviewed: number;
         eligible: boolean;
         judged: number;
         requirements: {
@@ -16163,7 +16273,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         band: zod.ZodEnum<["auto", "provisional", "queue"]>;
         categoryId: zod.ZodNullable<zod.ZodString>;
         categoryName: zod.ZodNullable<zod.ZodString>;
-        resolution: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"accepted">, zod.ZodLiteral<"corrected">, zod.ZodLiteral<"skipped">, zod.ZodLiteral<null>]>>;
+        resolution: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"accepted">, zod.ZodLiteral<"corrected">, zod.ZodLiteral<"skipped">, zod.ZodLiteral<"unreviewed">, zod.ZodLiteral<null>]>>;
         resolvedBy: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"user">, zod.ZodLiteral<"silent">, zod.ZodLiteral<null>]>>;
         decidedAt: zod.ZodDate;
         undoable: zod.ZodBoolean;
@@ -16177,7 +16287,7 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         categoryName: string | null;
         transactionId: string;
         band: "queue" | "auto" | "provisional";
-        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
         undoable: boolean;
@@ -16191,12 +16301,56 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         categoryName: string | null;
         transactionId: string;
         band: "queue" | "auto" | "provisional";
-        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
         undoable: boolean;
     }>, "many">;
     reviewCount: zod.ZodNumber;
+    backlog: zod.ZodObject<{
+        unfiled: zod.ZodNumber;
+        oldestUnfiledOn: zod.ZodNullable<zod.ZodDate>;
+        provisional: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        provisional: number;
+        unfiled: number;
+        oldestUnfiledOn: Date | null;
+    }, {
+        provisional: number;
+        unfiled: number;
+        oldestUnfiledOn: Date | null;
+    }>;
+    banks: zod.ZodArray<zod.ZodObject<{
+        itemId: zod.ZodString;
+        name: zod.ZodNullable<zod.ZodString>;
+        lastDataOn: zod.ZodNullable<zod.ZodDate>;
+        autoUpdates: zod.ZodObject<{
+            on: zod.ZodBoolean;
+            reason: zod.ZodEnum<["ok", "no_url", "not_registered", "error"]>;
+        }, "strip", zod.ZodTypeAny, {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        }, {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        name: string | null;
+        itemId: string;
+        autoUpdates: {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        };
+        lastDataOn: Date | null;
+    }, {
+        name: string | null;
+        itemId: string;
+        autoUpdates: {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        };
+        lastDataOn: Date | null;
+    }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     ai: {
         enabled: boolean;
@@ -16204,6 +16358,8 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
     };
     model: {
         mode: "off" | "suggest" | "auto";
+        verified: number;
+        unreviewed: number;
         eligible: boolean;
         judged: number;
         requirements: {
@@ -16243,10 +16399,24 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         categoryName: string | null;
         transactionId: string;
         band: "queue" | "auto" | "provisional";
-        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
         undoable: boolean;
+    }[];
+    backlog: {
+        provisional: number;
+        unfiled: number;
+        oldestUnfiledOn: Date | null;
+    };
+    banks: {
+        name: string | null;
+        itemId: string;
+        autoUpdates: {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        };
+        lastDataOn: Date | null;
     }[];
 }, {
     ai: {
@@ -16255,6 +16425,8 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
     };
     model: {
         mode: "off" | "suggest" | "auto";
+        verified: number;
+        unreviewed: number;
         eligible: boolean;
         judged: number;
         requirements: {
@@ -16294,10 +16466,24 @@ export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
         categoryName: string | null;
         transactionId: string;
         band: "queue" | "auto" | "provisional";
-        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolution: "skipped" | "unreviewed" | "accepted" | "corrected" | null;
         resolvedBy: "user" | "silent" | null;
         decidedAt: Date;
         undoable: boolean;
+    }[];
+    backlog: {
+        provisional: number;
+        unfiled: number;
+        oldestUnfiledOn: Date | null;
+    };
+    banks: {
+        name: string | null;
+        itemId: string;
+        autoUpdates: {
+            on: boolean;
+            reason: "error" | "ok" | "no_url" | "not_registered";
+        };
+        lastDataOn: Date | null;
     }[];
 }>;
 /**
@@ -18104,6 +18290,7 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         priority: number;
         cashBuffer: string | null;
         updatedAt: string;
+        remaining: string | null;
         targetDate: string | null;
         targetAmount: string | null;
         manualCurrentAmount: string;
@@ -18112,7 +18299,6 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         currentAmount: string | null;
         currentSource: "account" | "manual";
         percent: number | null;
-        remaining: string | null;
         monthsToTargetLow: number | null;
         monthsToTargetHigh: number | null;
         requiredMonthly: string | null;
@@ -18128,6 +18314,7 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         priority: number;
         cashBuffer: string | null;
         updatedAt: string;
+        remaining: string | null;
         targetDate: string | null;
         targetAmount: string | null;
         manualCurrentAmount: string;
@@ -18136,7 +18323,6 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         currentAmount: string | null;
         currentSource: "account" | "manual";
         percent: number | null;
-        remaining: string | null;
         monthsToTargetLow: number | null;
         monthsToTargetHigh: number | null;
         requiredMonthly: string | null;
@@ -18160,6 +18346,7 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         priority: number;
         cashBuffer: string | null;
         updatedAt: string;
+        remaining: string | null;
         targetDate: string | null;
         targetAmount: string | null;
         manualCurrentAmount: string;
@@ -18168,7 +18355,6 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         currentAmount: string | null;
         currentSource: "account" | "manual";
         percent: number | null;
-        remaining: string | null;
         monthsToTargetLow: number | null;
         monthsToTargetHigh: number | null;
         requiredMonthly: string | null;
@@ -18189,6 +18375,7 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         priority: number;
         cashBuffer: string | null;
         updatedAt: string;
+        remaining: string | null;
         targetDate: string | null;
         targetAmount: string | null;
         manualCurrentAmount: string;
@@ -18197,7 +18384,6 @@ export declare const ListGoalsResponse: zod.ZodObject<{
         currentAmount: string | null;
         currentSource: "account" | "manual";
         percent: number | null;
-        remaining: string | null;
         monthsToTargetLow: number | null;
         monthsToTargetHigh: number | null;
         requiredMonthly: string | null;
@@ -18331,6 +18517,7 @@ export declare const UpdateGoalResponse: zod.ZodObject<{
     priority: number;
     cashBuffer: string | null;
     updatedAt: string;
+    remaining: string | null;
     targetDate: string | null;
     targetAmount: string | null;
     manualCurrentAmount: string;
@@ -18339,7 +18526,6 @@ export declare const UpdateGoalResponse: zod.ZodObject<{
     currentAmount: string | null;
     currentSource: "account" | "manual";
     percent: number | null;
-    remaining: string | null;
     monthsToTargetLow: number | null;
     monthsToTargetHigh: number | null;
     requiredMonthly: string | null;
@@ -18355,6 +18541,7 @@ export declare const UpdateGoalResponse: zod.ZodObject<{
     priority: number;
     cashBuffer: string | null;
     updatedAt: string;
+    remaining: string | null;
     targetDate: string | null;
     targetAmount: string | null;
     manualCurrentAmount: string;
@@ -18363,7 +18550,6 @@ export declare const UpdateGoalResponse: zod.ZodObject<{
     currentAmount: string | null;
     currentSource: "account" | "manual";
     percent: number | null;
-    remaining: string | null;
     monthsToTargetLow: number | null;
     monthsToTargetHigh: number | null;
     requiredMonthly: string | null;

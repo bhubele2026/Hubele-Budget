@@ -20,7 +20,7 @@
 //
 // Idempotent: unique (transaction_id, input_hash) + ON CONFLICT DO NOTHING,
 // and a decision identical to the row's latest live one is not re-recorded.
-import { and, eq, inArray, isNull, ne, gte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, gte, sql } from "drizzle-orm";
 import {
   db,
   categoryDecisionsTable,
@@ -351,6 +351,49 @@ export async function runCategorizationBatch(
     stillAmbiguous = ambiguous.filter((r) => !decided.has(r.id));
   }
   return { decisions, ambiguous: stillAmbiguous.map((r) => r.id) };
+}
+
+/** (V7) How many transaction ids one backlog slice runs over. */
+export const BACKLOG_SLICE = 500;
+
+/**
+ * ⭐ (V7) "File everything up to today": the deterministic stages over EVERY
+ * row of the household — `since` is the household's oldest `occurred_on` —
+ * in slices of BACKLOG_SLICE ids, oldest first, so no one engine pass holds
+ * more than a slice. Each slice is an ordinary `runCategorizationBatch`, so
+ * `engineMayWrite` decides exactly as it does for the 90-day run: a locked row
+ * or a row a person filed is never touched, and a second run records nothing.
+ * No model here: the caller enqueues the model pass.
+ */
+export async function runCategorizationBacklog(
+  householdId: string,
+  opts: { now?: Date } = {},
+): Promise<BatchResult & { since: string | null }> {
+  const [o] = await db
+    .select({ since: sql<string | null>`min(${transactionsTable.occurredOn})::text` })
+    .from(transactionsTable)
+    .where(eq(transactionsTable.householdId, householdId));
+  const since = o?.since ?? null;
+  if (!since) return { decisions: [], ambiguous: [], since: null };
+  const ids = (
+    await db
+      .select({ id: transactionsTable.id })
+      .from(transactionsTable)
+      .where(and(eq(transactionsTable.householdId, householdId), gte(transactionsTable.occurredOn, since)))
+      .orderBy(asc(transactionsTable.occurredOn), asc(transactionsTable.createdAt), asc(transactionsTable.id))
+  ).map((r) => r.id);
+  const decisions: Decision[] = [];
+  const ambiguous: string[] = [];
+  for (let i = 0; i < ids.length; i += BACKLOG_SLICE) {
+    const out = await runCategorizationBatch(householdId, {
+      txnIds: ids.slice(i, i + BACKLOG_SLICE),
+      trigger: "manual",
+      ...(opts.now ? { now: opts.now } : {}),
+    });
+    decisions.push(...out.decisions);
+    ambiguous.push(...out.ambiguous);
+  }
+  return { decisions, ambiguous, since };
 }
 
 // ── Notices: queue items that are not a category opinion ────────────────────

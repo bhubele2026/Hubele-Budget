@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 /**
+ * (V7) unreviewed = a model suggestion left unchanged 14 days; not verified.
  * @nullable
  */
 export type CategorizationRecentDecisionResolution = (typeof CategorizationRecentDecisionResolution)[keyof typeof CategorizationRecentDecisionResolution] | null;
@@ -13,5 +14,6 @@ export declare const CategorizationRecentDecisionResolution: {
     readonly accepted: "accepted";
     readonly corrected: "corrected";
     readonly skipped: "skipped";
+    readonly unreviewed: "unreviewed";
 };
 //# sourceMappingURL=categorizationRecentDecisionResolution.d.ts.map

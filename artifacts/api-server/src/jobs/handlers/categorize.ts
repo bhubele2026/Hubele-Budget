@@ -35,9 +35,9 @@ import { QUEUES } from "../queues";
 // household per minute), so the job also sweeps the last CATCH_UP_DAYS days of
 // rows that still have no category.
 //
-// (V1) First, provisional model suggestions left standing for 14 days are
-// settled as silently accepted (review.ts settleSilentAcceptances), so the gate
-// reads an up-to-date record. The gate is `evaluateModelGate` — the same
+// (V1, V7) First, provisional model suggestions left standing for 14 days are
+// settled as 'unreviewed' (review.ts settleSilentAcceptances): out of the
+// queue, still provisional, and NOT part of the gate's record. The gate is `evaluateModelGate` — the same
 // function GET /categorization/settings shows the household.
 //
 // Failures: budget_exceeded ends the run `budget_exceeded` and does NOT retry
@@ -76,6 +76,32 @@ export async function enqueueCategorize(
     { householdId, ownerUserId, txnIds: txnIds.slice(0, MAX_JOB_IDS), trigger },
     categorizeSendOptions(householdId),
   );
+}
+
+/**
+ * (V7) The backlog run's model pass: every id, in jobs of at most MAX_JOB_IDS.
+ * Each chunk has its own singleton key (`cat:<household>:all:<n>`), so the
+ * per-household one-a-minute throttle on `cat:<household>` neither drops a
+ * chunk nor is bypassed by everyday syncs; a second click inside the minute
+ * is still deduped chunk for chunk. Returns how many ids were handed over.
+ */
+export async function enqueueCategorizeChunks(
+  householdId: string,
+  ownerUserId: string,
+  txnIds: readonly string[],
+  trigger: "txn_arrived" | "user" = "user",
+): Promise<number> {
+  let n = 0;
+  for (let i = 0; i < txnIds.length; i += MAX_JOB_IDS) {
+    const part = txnIds.slice(i, i + MAX_JOB_IDS);
+    await emit(
+      QUEUES.categorizeBatch,
+      { householdId, ownerUserId, txnIds: part, trigger },
+      { ...categorizeSendOptions(householdId), singletonKey: `cat:${householdId}:all:${i / MAX_JOB_IDS}` },
+    );
+    n += part.length;
+  }
+  return n;
 }
 
 export interface CategorizeJobResult {
@@ -288,9 +314,12 @@ export async function handleCategorizeJobs(jobs: Job<CategorizeJobData>[]): Prom
   return results;
 }
 
-/** Unresolved review-queue rows (open queue-band decisions), for a manual "run it now". */
-export async function openQueueTxnIds(householdId: string, limit = MAX_JOB_IDS): Promise<string[]> {
-  const rows = await db
+/**
+ * Unresolved review-queue rows (open queue-band decisions), for a manual "run
+ * it now". (V7) `limit: null` reads them all (the backlog run chunks them).
+ */
+export async function openQueueTxnIds(householdId: string, limit: number | null = MAX_JOB_IDS): Promise<string[]> {
+  const q = db
     .selectDistinct({ id: categoryDecisionsTable.transactionId })
     .from(categoryDecisionsTable)
     .where(
@@ -300,7 +329,7 @@ export async function openQueueTxnIds(householdId: string, limit = MAX_JOB_IDS):
         isNull(categoryDecisionsTable.resolvedAt),
         isNull(categoryDecisionsTable.undoneAt),
       ),
-    )
-    .limit(limit);
+    );
+  const rows = limit == null ? await q : await q.limit(limit);
   return rows.map((r) => r.id);
 }

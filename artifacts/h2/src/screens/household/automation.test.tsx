@@ -7,15 +7,18 @@ import { createQueryClient } from "@/data/queryClient";
 import {
   getGetCategorizationSettingsQueryKey,
   getGetCategorizationSettingsUrl,
+  getGetSpineQueryKey,
+  getListCategorizationReviewQueryKey,
   getListMappingRulesQueryKey,
   getListMappingRulesUrl,
+  getRunCategorizationUrl,
   getUpdateCategorizationSettingsUrl,
 } from "@workspace/api-client-react";
-import { mappingRulesKey, settingsKey } from "@/data/automationApi";
+import { RUN_URL, mappingRulesKey, settingsKey } from "@/data/automationApi";
 import { installApi, on, CATEGORIES } from "@/screens/activity/testApi";
 import Automation from "./Automation";
 import DesignAutomation, { SAMPLE_SETTINGS } from "@/screens/design/DesignAutomation";
-import { bandWord, engineLine, requirementFigure, resolutionWord, sourceWord } from "./automationWords";
+import { backlogLine, bandWord, bankLine, engineLine, fullDate, requirementFigure, resolutionWord, runResultLine, sourceWord } from "./automationWords";
 
 const view = (over: Record<string, unknown> = {}) =>
   ({ ...(SAMPLE_SETTINGS as unknown as Record<string, unknown>), ...over }) as unknown as CategorizationSettings;
@@ -40,7 +43,7 @@ function mount(settings: CategorizationSettings, owner = true, extra: ReturnType
       <Automation />
     </QueryClientProvider>,
   );
-  return api;
+  return Object.assign(api, { client });
 }
 
 beforeEach(() => vi.unstubAllGlobals());
@@ -59,13 +62,16 @@ describe("Automation — every section from a fixture", () => {
     expect(screen.getByTestId("mode-suggest").getAttribute("data-current")).toBe("true");
     expect(screen.getByTestId("mode-off").getAttribute("data-current")).toBeNull();
     expect(screen.getByTestId("mode-suggest").textContent).toContain("Now");
-    expect(within(screen.getByTestId("req-judged")).getByTestId("req-figure").textContent).toBe("18 of 30 judged");
+    expect(within(screen.getByTestId("req-judged")).getByTestId("req-figure").textContent).toBe("18 of 30 verified");
+    expect(screen.getByTestId("req-judged").textContent).toContain("At least 30 suggestions you verified in Review.");
+    expect(screen.getByTestId("unreviewed-line").textContent).toBe("Left unchanged, not verified: 4");
     expect(within(screen.getByTestId("req-accuracy")).getByTestId("req-figure").textContent).toBe("16 of 18 right");
     expect(screen.getByTestId("req-ai").textContent).toContain("Met");
     expect(screen.getByTestId("req-judged").textContent).toContain("Not met");
     expect(screen.getByTestId("section-requirements").textContent).toContain(
-      "Judged = accepted or corrected in Review, or a provisional filing you left unchanged for 14 days.",
+      "Verified = a suggestion you accepted or corrected in Review. One left unchanged for 14 days is not verified.",
     );
+    expect(screen.getByTestId("section-requirements").textContent).not.toContain("Judged");
     expect(screen.getAllByTestId("decision")).toHaveLength(8);
     expect(screen.getByTestId("link-review").textContent).toBe("Review queue (3)");
     expect(screen.getByTestId("link-review").getAttribute("href")).toBe("/activity/review");
@@ -150,7 +156,9 @@ describe("Automation — recent decisions", () => {
     expect(within(first).getByTestId("decision-source").textContent).toBe("Rule");
     expect(within(first).getByTestId("decision-band").textContent).toBe("Filed");
     expect(within(first).getByTestId("decision-resolution").textContent).toBe("Waiting");
-    expect(within(rows[5]!).getByTestId("decision-resolution").textContent).toBe("Accepted after 14 days");
+    expect(within(rows[5]!).getByTestId("decision-resolution").textContent).toBe("Unreviewed");
+    expect(within(rows[5]!).getByTestId("decision-hint").textContent).toBe("Left unchanged 14 days. Not verified.");
+    expect(within(rows[4]!).queryByTestId("decision-hint")).toBeNull();
     expect(within(rows[3]!).queryByTestId("decision-undo")).toBeNull();
     expect(within(rows[7]!).getByTestId("decision-source").textContent).toBe("Carried over");
   });
@@ -194,8 +202,70 @@ describe("Automation — recent decisions", () => {
   });
 });
 
+describe("Automation — backlog and bank data (V7)", () => {
+  it("reads the unfiled count with the oldest date, and one line per bank", async () => {
+    mount(view());
+    expect((await screen.findByTestId("backlog-line")).textContent).toBe("Unfiled charges: 23 · oldest Mar 14, 2026");
+    expect(screen.getAllByTestId("bank").map((b) => b.textContent)).toEqual([
+      "Sample Bank · data through Oct 7, 2026 · Automatic updates On",
+      "Sample Card · data through Oct 5, 2026 · Automatic updates Off",
+    ]);
+    expect(screen.queryByTestId("backlog-result")).toBeNull();
+    expect(screen.getByTestId("backlog-run").textContent).toBe("File everything up to today");
+  });
+
+  it("nothing unfiled hides the date; no bank says so", async () => {
+    mount(view({ backlog: { unfiled: 0, oldestUnfiledOn: null, provisional: 0 }, banks: [] }));
+    expect((await screen.findByTestId("backlog-line")).textContent).toBe("Unfiled charges: 0");
+    expect(screen.getByTestId("banks-empty").textContent).toBe("No bank linked.");
+  });
+
+  it("the owner files everything: POST { scope: all }, the result line, the Review link, and the view, review queue, spine and ledger refreshed", async () => {
+    const user = userEvent.setup();
+    const result = { decided: 15, queued: 2, ambiguous: 5, modelQueued: 5, filed: 12, suggested: 3, unreviewed: 4, remaining: 5 };
+    const api = mount(view(), true, [on("POST", "/api/categorization/run", result)]);
+    const ledgerKey = ["infinite", "/api/transactions/ledger", { limit: 50 }];
+    api.client.setQueryData(getGetSpineQueryKey(), { ok: true });
+    api.client.setQueryData(getListCategorizationReviewQueryKey({ limit: 20 }), { items: [], total: 0 });
+    api.client.setQueryData(ledgerKey, { pages: [] });
+    const btn = await screen.findByTestId("backlog-run");
+    await waitFor(() => expect((btn as HTMLButtonElement).disabled).toBe(false));
+    const gets = api.find("GET", /categorization\/settings/).length;
+    await user.click(btn);
+    await waitFor(() => expect(api.find("POST", /categorization\/run/)).toHaveLength(1));
+    expect(api.find("POST", /categorization\/run/)[0]!.body).toEqual({ scope: "all" });
+    expect((await screen.findByTestId("backlog-result")).textContent).toBe("Filed 12 · Suggested 3 (provisional) · 2 need a look · 4 left unchanged");
+    expect(screen.getByTestId("backlog-review").getAttribute("href")).toBe("/activity/review");
+    await waitFor(() => expect(api.find("GET", /categorization\/settings/).length).toBeGreaterThan(gets));
+    expect(api.client.getQueryState(getGetSpineQueryKey())?.isInvalidated).toBe(true);
+    expect(api.client.getQueryState(getListCategorizationReviewQueryKey({ limit: 20 }))?.isInvalidated).toBe(true);
+    expect(api.client.getQueryState(ledgerKey)?.isInvalidated).toBe(true);
+  });
+
+  it("a member sees the button disabled with Owner only, and never posts", async () => {
+    const user = userEvent.setup();
+    const api = mount(view(), false);
+    await waitFor(() => expect(screen.getByTestId("backlog-owner-only").textContent).toBe("Owner only"));
+    const btn = screen.getByTestId("backlog-run") as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    await user.click(btn);
+    expect(api.find("POST", /categorization\/run/)).toHaveLength(0);
+  });
+
+  it("a refused run says so in words", async () => {
+    const user = userEvent.setup();
+    mount(view(), true, [on("POST", "/api/categorization/run", { error: "Forbidden: owner only" }, 403)]);
+    const btn = await screen.findByTestId("backlog-run");
+    await waitFor(() => expect((btn as HTMLButtonElement).disabled).toBe(false));
+    await user.click(btn);
+    expect((await screen.findByTestId("toast")).textContent).toBe("Only the household owner can do this.");
+    expect(screen.queryByTestId("backlog-result")).toBeNull();
+  });
+});
+
 describe("the hand-written client matches the generated one", () => {
   it("same query keys and URLs, so every other screen's invalidation still reaches it", () => {
+    expect(RUN_URL).toBe(getRunCategorizationUrl());
     expect(settingsKey()).toEqual(getGetCategorizationSettingsQueryKey());
     expect(mappingRulesKey()).toEqual(getListMappingRulesQueryKey());
     expect(getGetCategorizationSettingsUrl()).toBe("/api/categorization/settings");
@@ -211,6 +281,15 @@ describe("Automation words", () => {
     expect(resolutionWord({ resolution: "accepted", resolvedBy: "user" })).toBe("Accepted");
     expect(resolutionWord({ resolution: "corrected", resolvedBy: "user" })).toBe("Corrected");
     expect(resolutionWord({ resolution: "skipped", resolvedBy: "user" })).toBe("Skipped");
+    expect(resolutionWord({ resolution: "unreviewed", resolvedBy: "silent" })).toBe("Unreviewed");
+    // An old accepted + silent row (before 0116) never reads as anything but Accepted.
+    expect(resolutionWord({ resolution: "accepted", resolvedBy: "silent" })).toBe("Accepted");
+    expect(requirementFigure({ key: "judged", current: 18, target: 30 })).toBe("18 of 30 verified");
+    expect(fullDate("2026-03-04")).toBe("Mar 4, 2026");
+    expect(backlogLine({ unfiled: 1, oldestUnfiledOn: "2025-12-31" })).toBe("Unfiled charges: 1 · oldest Dec 31, 2025");
+    expect(backlogLine({ unfiled: 0, oldestUnfiledOn: "2025-12-31" })).toBe("Unfiled charges: 0");
+    expect(runResultLine({ filed: 0, suggested: 1, queued: 2, unreviewed: 3 })).toBe("Filed 0 · Suggested 1 (provisional) · 2 need a look · 3 left unchanged");
+    expect(bankLine({ name: null, lastDataOn: null, autoUpdates: { on: false, reason: "no_url" } })).toBe("Bank · data through not yet · Automatic updates Off");
     expect(requirementFigure({ key: "ai", current: 1, target: 1 })).toBeNull();
     expect(engineLine({ rules: 0, learned: 1, recurring: 2 })).toBe("Rules you wrote: 0 · Learned from your corrections: 1 · Recurring bills: 2");
   });
@@ -230,13 +309,16 @@ describe("/design/automation", () => {
     window.history.replaceState(null, "", "/");
   });
 
-  it("renders the screen on made-up data in suggest mode, 18 of 30, with the sample line first", () => {
+  it("renders the screen on made-up data in suggest mode, 18 of 30, the backlog, banks and left-unchanged line, with the sample line first", () => {
     render(<DesignAutomation />);
     const page = screen.getByTestId("page-design-automation");
     expect(page.firstElementChild!.textContent).toContain("Sample — every figure on this page is made up.");
     expect(screen.getByTestId("mode-suggest").getAttribute("data-current")).toBe("true");
-    expect(screen.getByTestId("req-judged").textContent).toContain("18 of 30 judged");
+    expect(screen.getByTestId("req-judged").textContent).toContain("18 of 30 verified");
     expect(screen.getAllByTestId("decision").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("backlog-line").textContent).toBe("Unfiled charges: 23 · oldest Mar 14, 2026");
+    expect(screen.getAllByTestId("bank")).toHaveLength(2);
+    expect(screen.getByTestId("unreviewed-line").textContent).toBe("Left unchanged, not verified: 4");
   });
 });
 

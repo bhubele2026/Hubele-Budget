@@ -16,9 +16,16 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { isAiEnabled } from "../ai/client";
-import { enqueueCategorize, openQueueTxnIds } from "../jobs/handlers/categorize";
-import { runCategorizationBatch } from "../lib/categorizer";
-import { listReviewQueue, resolveDecision, undoDecision } from "../lib/categorizer/review";
+import { enqueueCategorize, enqueueCategorizeChunks, openQueueTxnIds } from "../jobs/handlers/categorize";
+import { runCategorizationBacklog, runCategorizationBatch } from "../lib/categorizer";
+import {
+  backlogOf,
+  listReviewQueue,
+  resolveDecision,
+  settleSilentAcceptances,
+  undoDecision,
+  unreviewedCount,
+} from "../lib/categorizer/review";
 import { listDecisionHistory } from "../lib/categorizer/userDecisions";
 import { deleteSplits, getSplits, replaceSplits } from "../lib/categorizer/splits";
 
@@ -35,27 +42,46 @@ router.post("/categorization/run", requireAuth, async (req, res): Promise<void> 
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const householdId = req.householdId!;
+  // (V7) `scope: "all"` files the whole backlog: every row from the household's
+  // oldest, in bounded slices (runCategorizationBacklog). `since` is ignored then.
+  const all = parsed.data.scope === "all";
   const since = parsed.data.since
     ? typeof parsed.data.since === "string"
       ? parsed.data.since
       : (parsed.data.since as Date).toISOString().slice(0, 10)
     : undefined;
-  const out = await runCategorizationBatch(req.householdId!, { since, trigger: "manual" });
+  // Settle first (as the job does), so `unreviewed` below is current.
+  await settleSilentAcceptances(householdId);
+  const out = all
+    ? await runCategorizationBacklog(householdId)
+    : await runCategorizationBatch(householdId, { since, trigger: "manual" });
   // (AI-1) The model pass runs as a job over everything unresolved: the rows
   // no deterministic stage could decide, plus the open review-queue rows.
+  // (V7) The backlog run hands over every such id, in jobs of MAX_JOB_IDS.
   let modelQueued = 0;
   if (isAiEnabled()) {
-    const ids = [...new Set([...out.ambiguous, ...(await openQueueTxnIds(req.householdId!))])];
+    const ids = [...new Set([...out.ambiguous, ...(await openQueueTxnIds(householdId, all ? null : undefined))])];
     if (ids.length > 0) {
-      await enqueueCategorize(req.householdId!, req.householdOwnerId!, ids, "user");
-      modelQueued = ids.length;
+      if (all) {
+        modelQueued = await enqueueCategorizeChunks(householdId, req.householdOwnerId!, ids, "user");
+      } else {
+        await enqueueCategorize(householdId, req.householdOwnerId!, ids, "user");
+        modelQueued = ids.length;
+      }
     }
   }
+  const live = out.decisions.filter((d) => d.source !== "locked");
   res.json({
-    decided: out.decisions.filter((d) => d.source !== "locked" && d.band !== "queue" && d.categoryId).length,
-    queued: out.decisions.filter((d) => d.band !== "auto").length,
+    decided: live.filter((d) => d.band !== "queue" && d.categoryId).length,
+    // (V7) Only the decisions that need a person (band queue, no category written).
+    queued: live.filter((d) => d.band === "queue").length,
     ambiguous: out.ambiguous.length,
     modelQueued,
+    filed: live.filter((d) => d.band === "auto" && d.categoryId).length,
+    suggested: live.filter((d) => d.band === "provisional" && d.categoryId).length,
+    unreviewed: await unreviewedCount(householdId),
+    remaining: (await backlogOf(householdId)).unfiled,
   });
 });
 

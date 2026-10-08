@@ -4735,18 +4735,35 @@ export interface AgentMonitorRunResult {
     autoResolved: number;
     summary: string;
 }
+/**
+ * (V7) File the whole backlog, from the household's oldest row. `since` is ignored.
+ */
+export type RunCategorizationInputScope = (typeof RunCategorizationInputScope)[keyof typeof RunCategorizationInputScope];
+export declare const RunCategorizationInputScope: {
+    readonly all: "all";
+};
 export interface RunCategorizationInput {
     since?: string;
+    /** (V7) File the whole backlog, from the household's oldest row. `since` is ignored. */
+    scope?: RunCategorizationInputScope;
 }
 export interface CategorizationRunResult {
     /** Decisions that wrote a category (auto or provisional). */
     decided: number;
-    /** Decisions placed in the review queue. */
+    /** (V7) Decisions that need a person: band queue, no category written. */
     queued: number;
     /** Rows no deterministic stage decided at 0.6 or more. */
     ambiguous: number;
-    /** Rows handed to the model pass (a background job); 0 when AI is off. */
+    /** Rows handed to the model pass (background jobs); 0 when AI is off. */
     modelQueued?: number;
+    /** (V7) Decisions that filed a charge outright (band auto). */
+    filed: number;
+    /** (V7) Decisions that filed a charge provisionally (band provisional). */
+    suggested: number;
+    /** (V7) The household's model suggestions left unchanged 14 days: not verified. */
+    unreviewed: number;
+    /** (V7) Charges still without a category and not locked, after the run. */
+    remaining: number;
 }
 export interface ReviewFlags {
     novelMerchant: boolean;
@@ -4865,6 +4882,7 @@ export declare const CategorizationRecentDecisionBand: {
     readonly queue: "queue";
 };
 /**
+ * (V7) unreviewed = a model suggestion left unchanged 14 days; not verified.
  * @nullable
  */
 export type CategorizationRecentDecisionResolution = (typeof CategorizationRecentDecisionResolution)[keyof typeof CategorizationRecentDecisionResolution] | null;
@@ -4872,6 +4890,7 @@ export declare const CategorizationRecentDecisionResolution: {
     readonly accepted: "accepted";
     readonly corrected: "corrected";
     readonly skipped: "skipped";
+    readonly unreviewed: "unreviewed";
 };
 /**
  * How it was settled. null while open, or when a newer engine decision superseded it.
@@ -4894,7 +4913,10 @@ export interface CategorizationRecentDecision {
     categoryId: string | null;
     /** @nullable */
     categoryName: string | null;
-    /** @nullable */
+    /**
+     * (V7) unreviewed = a model suggestion left unchanged 14 days; not verified.
+     * @nullable
+     */
     resolution: CategorizationRecentDecisionResolution;
     /**
      * How it was settled. null while open, or when a newer engine decision superseded it.
@@ -4904,6 +4926,40 @@ export interface CategorizationRecentDecision {
     decidedAt: string;
     /** POST /category-decisions/{id}/undo would succeed now (same preconditions). */
     undoable: boolean;
+}
+export interface CategorizationBacklog {
+    /** Charges with no category that no person locked. */
+    unfiled: number;
+    /**
+     * The oldest unfiled charge's date; null when none.
+     * @nullable
+     */
+    oldestUnfiledOn: string | null;
+    /** Charges still flagged provisional (filed by the engine, not verified). */
+    provisional: number;
+}
+export type CategorizationBankAutoUpdatesReason = (typeof CategorizationBankAutoUpdatesReason)[keyof typeof CategorizationBankAutoUpdatesReason];
+export declare const CategorizationBankAutoUpdatesReason: {
+    readonly ok: "ok";
+    readonly no_url: "no_url";
+    readonly not_registered: "not_registered";
+    readonly error: "error";
+};
+export type CategorizationBankAutoUpdates = {
+    on: boolean;
+    reason: CategorizationBankAutoUpdatesReason;
+};
+export interface CategorizationBank {
+    /** The same `itemId` GET /plaid/items lists. */
+    itemId: string;
+    /** @nullable */
+    name: string | null;
+    /**
+     * The household's date of the last successful sync; null before the first.
+     * @nullable
+     */
+    lastDataOn: string | null;
+    autoUpdates: CategorizationBankAutoUpdates;
 }
 export type CategorizationSettingsAi = {
     configured: boolean;
@@ -4941,13 +4997,17 @@ export type CategorizationSettingsModel = {
   auto = sure answers file on their own.
    */
     mode: CategorizationSettingsModelMode;
-    /** The record has earned automatic filing: at least 30 judged,
+    /** The record has earned automatic filing: at least 30 verified,
   9 in 10 accepted among the last 50; once open it holds while
   the last 20 stay at 8 in 10, and after a slip reopens at 9 in 10.
    */
     eligible: boolean;
-    /** Model suggestions accepted or corrected (silently or by a person) */
+    /** Model suggestions a person accepted or corrected, lifetime (= verified). */
     judged: number;
+    /** (V7) The same count as judged, under the name the screen uses. */
+    verified: number;
+    /** (V7) Model suggestions left unchanged 14 days, not undone. Not verified; counted toward nothing. */
+    unreviewed: number;
     requirements: CategorizationRequirement[];
     accuracy: CategorizationSettingsModelAccuracy;
 };
@@ -4960,6 +5020,9 @@ export interface CategorizationSettings {
     /** @maxItems 20 */
     recent: CategorizationRecentDecision[];
     reviewCount: number;
+    backlog: CategorizationBacklog;
+    /** (V7) One row per linked bank, from the rows GET /plaid/items lists. No Plaid call. */
+    banks: CategorizationBank[];
 }
 export type LearnedRuleScope = (typeof LearnedRuleScope)[keyof typeof LearnedRuleScope];
 export declare const LearnedRuleScope: {

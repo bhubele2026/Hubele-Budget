@@ -14,7 +14,7 @@ import Automation from "@/screens/household/Automation";
  * ⭐ /design/automation — AUTOMATION ON MADE-UP DATA, for judging the screen
  * without signing in. Public, lazy, no network: the query cache holds invented
  * answers under the real keys and every query is switched off. The model is in
- * "suggest" mode with 18 of 30 judged. Pressing a switch or Undo fails (there is
+ * "suggest" mode with 18 of 30 verified and 4 left unchanged; 23 charges unfiled. Pressing a switch or Undo fails (there is
  * no server), which is fine for a sample.
  */
 const CATEGORIES = [
@@ -47,11 +47,13 @@ export const SAMPLE_SETTINGS = {
     mode: "suggest",
     eligible: false,
     judged: 18,
+    verified: 18,
+    unreviewed: 4,
     requirements: [
       { key: "ai", label: "AI is turned on for this app.", met: true, current: 1, target: 1 },
       { key: "owner_switch", label: "The owner lets sure answers file on their own.", met: false, current: 0, target: 1 },
-      { key: "judged", label: "At least 30 suggestions judged.", met: false, current: 18, target: 30 },
-      { key: "accuracy", label: "9 in 10 right among the last 50 judged.", met: false, current: 16, target: 18 },
+      { key: "judged", label: "At least 30 suggestions you verified in Review.", met: false, current: 18, target: 30 },
+      { key: "accuracy", label: "9 in 10 right among the last 50 you verified.", met: false, current: 16, target: 18 },
     ],
     accuracy: { last50: { right: 16, judged: 18 }, last20: { right: 16, judged: 18 } },
   },
@@ -61,11 +63,16 @@ export const SAMPLE_SETTINGS = {
     d("a3", "2026-10-06", "Gas Station", "-41.10", "c3", "Fuel", "memory", "auto", null, null, true),
     d("a4", "2026-10-06", "Streaming Service", "-15.99", null, null, "recurring", "queue", null, null, false),
     d("a5", "2026-10-05", "Pharmacy", "-12.99", "c4", "Pharmacy", "model", "provisional", "accepted", "user", false),
-    d("a6", "2026-10-04", "Pizza Place", "-27.80", "c2", "Dining out", "model", "provisional", "accepted", "silent", false),
+    d("a6", "2026-10-04", "Pizza Place", "-27.80", "c2", "Dining out", "model", "provisional", "unreviewed", "silent", true),
     d("a7", "2026-10-03", "Hardware Depot", "-64.20", "c1", "Groceries", "model", "queue", "corrected", "user", false),
     d("a8", "2026-10-02", "Gas Station", "-38.00", "c3", "Fuel", "inherited", "auto", null, null, true),
   ],
   reviewCount: 3,
+  backlog: { unfiled: 23, oldestUnfiledOn: "2026-03-14", provisional: 6 },
+  banks: [
+    { itemId: "sample-item-1", name: "Sample Bank", lastDataOn: "2026-10-07", autoUpdates: { on: true, reason: "ok" } },
+    { itemId: "sample-item-2", name: "Sample Card", lastDataOn: "2026-10-05", autoUpdates: { on: false, reason: "not_registered" } },
+  ],
 } as unknown as CategorizationSettings;
 
 function sampleClient(): QueryClient {

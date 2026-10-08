@@ -9,10 +9,12 @@
 //                         write a category outright (band auto) — once the
 //                         household's record has earned it (`eligible`).
 //
-// ⭐ Eligibility v2 (V1) is a cumulative, explainable record of JUDGED model
-// suggestions: a model decision (source 'model', not undone) that was accepted
-// or corrected — through the review queue, by a hand filing, or silently (a
-// provisional suggestion left standing for SILENT_ACCEPT_DAYS; review.ts).
+// ⭐ Eligibility v2 (V1) is a cumulative, explainable record of VERIFIED model
+// suggestions ("judged" in the code): a model decision (source 'model', not
+// undone) that a person accepted or corrected — through the review queue or
+// by a hand filing. (V7) A provisional suggestion left unchanged for
+// SILENT_ACCEPT_DAYS is resolution 'unreviewed' (review.ts) and is NOT in the
+// record: not reviewing a charge does not show its category is right.
 //
 //   1. Warm-up: at least MODEL_AUTO_MIN_JUDGED judged, lifetime (never expires).
 //   2. Accuracy: among the last 50 judged (by resolved_at), accepted ÷ judged ≥
@@ -149,14 +151,14 @@ export function requirementsFor(
     },
     {
       key: "judged",
-      label: `At least ${MODEL_AUTO_MIN_JUDGED} suggestions judged.`,
+      label: `At least ${MODEL_AUTO_MIN_JUDGED} suggestions you verified in Review.`,
       met: rec.judged >= MODEL_AUTO_MIN_JUDGED,
       current: rec.judged,
       target: MODEL_AUTO_MIN_JUDGED,
     },
     {
       key: "accuracy",
-      label: `9 in 10 right among the last ${MODEL_AUTO_ACCURACY_WINDOW} judged.`,
+      label: `9 in 10 right among the last ${MODEL_AUTO_ACCURACY_WINDOW} you verified.`,
       met: meets(rec.accurateOfLast50, rec.last50, MODEL_AUTO_MIN_ACCEPT_RATE),
       current: rec.accurateOfLast50,
       target: neededRight(rec.last50 || MODEL_AUTO_ACCURACY_WINDOW, MODEL_AUTO_MIN_ACCEPT_RATE),
@@ -202,7 +204,11 @@ export async function loadCategorizationSwitches(
   };
 }
 
-/** The judged record, oldest first (true = accepted), resolved on or before `now`. */
+/**
+ * The verified record, oldest first (true = accepted), resolved on or before
+ * `now`. Accepted or corrected only: (V7) an 'unreviewed' suggestion (left
+ * unchanged) and a skipped one are not in it.
+ */
 export async function loadJudgedRecord(householdId: string, now: Date): Promise<boolean[]> {
   const rows = await db
     .select({ resolution: categoryDecisionsTable.resolution })

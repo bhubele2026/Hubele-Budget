@@ -9,10 +9,18 @@
 export interface CategorizationRunResult {
   /** Decisions that wrote a category (auto or provisional). */
   decided: number;
-  /** Decisions placed in the review queue. */
+  /** (V7) Decisions that need a person: band queue, no category written. */
   queued: number;
   /** Rows no deterministic stage decided at 0.6 or more. */
   ambiguous: number;
-  /** Rows handed to the model pass (a background job); 0 when AI is off. */
+  /** Rows handed to the model pass (background jobs); 0 when AI is off. */
   modelQueued?: number;
+  /** (V7) Decisions that filed a charge outright (band auto). */
+  filed: number;
+  /** (V7) Decisions that filed a charge provisionally (band provisional). */
+  suggested: number;
+  /** (V7) The household's model suggestions left unchanged 14 days: not verified. */
+  unreviewed: number;
+  /** (V7) Charges still without a category and not locked, after the run. */
+  remaining: number;
 }

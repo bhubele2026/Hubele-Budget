@@ -3,9 +3,10 @@
 // A prior is a charge a PERSON stood behind: their own filing (source `user`) or
 // a suggestion they accepted, whose category the row still holds and that was
 // never undone. Raw bank text never leaves this file — only the category name.
-// (V1) A SILENT acceptance (resolved_via 'silent': nobody touched it for 14
-// days) counts toward the gate record but is never a prior — the model is never
-// fed back its own unverified guess.
+// (V1, V7) A suggestion nobody touched for 14 days is resolution 'unreviewed'
+// (review.ts) and is never a prior: only 'accepted' qualifies, and the
+// resolved_via guard keeps out any 'accepted' + 'silent' row written before
+// 0116 — the model is never fed back its own unverified guess.
 //
 //   4 by exact merchant signature, newest first
 //   3 by shared tokens (to_tsvector('simple', description) @@ plainto_tsquery),

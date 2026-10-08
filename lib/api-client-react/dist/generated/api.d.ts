@@ -3428,7 +3428,12 @@ export declare const useUndoAgentAction: <TError = ErrorType<void>, TContext = u
 /**
  * @summary Owner only. Run the deterministic categorization stages over the
 household's rows dated on/after `since` (default: the last 90 days).
-Idempotent: a second run with nothing changed records nothing.
+(V7) With `scope: all`, over every row from the household's oldest
+(`since` is ignored), in slices of 500 ids, oldest first. Locked rows
+and rows a person filed are never touched. When AI is on, the model
+pass over the rows still undecided plus the open review queue is
+enqueued as background jobs. Idempotent: a second run with nothing
+changed records nothing.
 
  */
 export declare const getRunCategorizationUrl: () => string;
@@ -3447,7 +3452,12 @@ export type RunCategorizationMutationError = ErrorType<void>;
 /**
  * @summary Owner only. Run the deterministic categorization stages over the
 household's rows dated on/after `since` (default: the last 90 days).
-Idempotent: a second run with nothing changed records nothing.
+(V7) With `scope: all`, over every row from the household's oldest
+(`since` is ignored), in slices of 500 ids, oldest first. Locked rows
+and rows a person filed are never touched. When AI is on, the model
+pass over the rows still undecided plus the open review queue is
+enqueued as background jobs. Idempotent: a second run with nothing
+changed records nothing.
 
  */
 export declare const useRunCategorization: <TError = ErrorType<void>, TContext = unknown>(options?: {
@@ -3462,8 +3472,10 @@ export declare const useRunCategorization: <TError = ErrorType<void>, TContext =
  * @summary (V1) What files the household's charges and how far the model may go:
 the owner's two switches, AI status, the deterministic engine's
 counts, the model's mode and the requirements it still has to meet,
-the last 20 decisions (any source) and the review-queue count. Any
-member. The model's mode is computed by the same function the
+the last 20 decisions (any source) and the review-queue count;
+(V7) the backlog (unfiled charges, the oldest one's date, provisional
+rows) and one row per linked bank (data through, automatic updates).
+Any member. The model's mode is computed by the same function the
 categorize job uses.
 
  */
@@ -3482,8 +3494,10 @@ export type GetCategorizationSettingsQueryError = ErrorType<unknown>;
  * @summary (V1) What files the household's charges and how far the model may go:
 the owner's two switches, AI status, the deterministic engine's
 counts, the model's mode and the requirements it still has to meet,
-the last 20 decisions (any source) and the review-queue count. Any
-member. The model's mode is computed by the same function the
+the last 20 decisions (any source) and the review-queue count;
+(V7) the backlog (unfiled charges, the oldest one's date, provisional
+rows) and one row per linked bank (data through, automatic updates).
+Any member. The model's mode is computed by the same function the
 categorize job uses.
 
  */

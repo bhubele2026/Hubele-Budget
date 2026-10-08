@@ -18,13 +18,17 @@ import {
   categoryDecisionsTable,
   mappingRulesTable,
   merchantMemoryTable,
+  plaidItemsTable,
   recurringItemsTable,
   settingsTable,
   transactionsTable,
 } from "@workspace/db";
+import { householdDateOf } from "@workspace/avalanche-core";
 import { requireAuth } from "../middlewares/requireAuth";
+import { isSyntheticPlaidItem } from "../lib/plaid";
 import { evaluateModelGate } from "../lib/categorizer/modelGate";
-import { openReviewCount, undoRefusal } from "../lib/categorizer/review";
+import { backlogOf, openReviewCount, undoRefusal, unreviewedCount } from "../lib/categorizer/review";
+import { autoUpdatesOf } from "./plaid";
 
 const router: IRouter = Router();
 
@@ -83,17 +87,40 @@ async function recentDecisions(householdId: string) {
     band: r.band,
     categoryId: r.categoryId,
     categoryName: r.categoryName ?? null,
-    resolution: r.resolution,
+    resolution: r.resolution as "accepted" | "corrected" | "skipped" | "unreviewed" | null,
     resolvedBy: (r.resolvedVia ?? null) as "user" | "silent" | null,
     decidedAt: r.createdAt.toISOString(),
     undoable: undoRefusal(r, { categoryId: r.txnCategoryId, locked: r.locked }) === null,
   }));
 }
 
+/**
+ * (V7) One row per linked bank: the same rows GET /plaid/items lists (this
+ * household's items, synthetic seed rows hidden) and the same `autoUpdatesOf`.
+ * Read from the table only; no Plaid call. `lastDataOn` is the household's
+ * calendar date of the last successful sync.
+ */
+async function banksOf(householdId: string) {
+  const items = (await db.select().from(plaidItemsTable).where(eq(plaidItemsTable.householdId, householdId))).filter(
+    (it) => !isSyntheticPlaidItem(it),
+  );
+  return items
+    .map((it) => {
+      const auto = autoUpdatesOf(it);
+      return {
+        itemId: it.itemId,
+        name: it.institutionName ?? null,
+        lastDataOn: it.lastSyncedAt ? householdDateOf(it.lastSyncedAt) : null,
+        autoUpdates: { on: auto.on, reason: auto.reason },
+      };
+    })
+    .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "") || a.itemId.localeCompare(b.itemId));
+}
+
 /** ⭐ The whole view. Reads only; scoped to the household on every query. */
 export async function categorizationSettingsView(householdId: string, ownerUserId: string, now: Date = new Date()) {
   const gate = await evaluateModelGate(householdId, ownerUserId, now);
-  const [rules, learned, memories, recurring, recent, reviewCount] = await Promise.all([
+  const [rules, learned, memories, recurring, recent, reviewCount, unreviewed, backlog, banks] = await Promise.all([
     // The rules the household wrote.
     total(db.select({ n: count() }).from(mappingRulesTable).where(eq(mappingRulesTable.householdId, householdId))),
     // Learned rules: every merchant_memory row GET /learned-rules lists (disabled ones too).
@@ -113,6 +140,9 @@ export async function categorizationSettingsView(householdId: string, ownerUserI
     ),
     recentDecisions(householdId),
     openReviewCount(householdId),
+    unreviewedCount(householdId),
+    backlogOf(householdId),
+    banksOf(householdId),
   ]);
   return {
     autoCategorize: gate.autoCategorize,
@@ -123,6 +153,10 @@ export async function categorizationSettingsView(householdId: string, ownerUserI
       mode: gate.mode,
       eligible: gate.eligible,
       judged: gate.judged,
+      // (V7) Verified = judged: accepted or corrected by a person.
+      verified: gate.judged,
+      // (V7) Left unchanged 14 days: out of the queue, not verified, counted nowhere.
+      unreviewed,
       requirements: gate.requirements,
       accuracy: {
         last50: { right: gate.accurateOfLast50, judged: gate.last50 },
@@ -131,6 +165,8 @@ export async function categorizationSettingsView(householdId: string, ownerUserI
     },
     recent,
     reviewCount,
+    backlog,
+    banks,
   };
 }
 
