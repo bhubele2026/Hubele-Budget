@@ -56,7 +56,7 @@ to get the household out of debt; correctness and trust beat everything.
 - **Prefetch** a route's primary queries on nav-link **hover/focus** or on idle.
 - **The open path is budgeted per app, and CI enforces it.**
   `node scripts/check-entry-graph.mjs` runs against each web app's build:
-  **classic caps landing JS at 580 KB, h2 at 400 KB.** It fails the build if
+  **h2budget caps landing JS at 580 KB (the frozen `artifacts/h2` at 400 KB until it is deleted).** It fails the build if
   landing JS exceeds its cap, if react-dom lands outside `vendor-react`, or if
   a chart library reaches a preloaded chunk. **Never add a chart to the open
   path.** Charts are lazy and never imported by anything the landing route
@@ -64,47 +64,60 @@ to get the household out of debt; correctness and trust beat everything.
 - **`routePrefetch.ts` and `App.tsx` move in lockstep on any route change —
   in each app.**
 
-## 3. UI — two apps during the transition
+## 3. UI — one app, modernized (direction set by the owner on 2026-10-08)
 
-### The two-app rule
+### Which app
 
-- **`artifacts/h2` is the new app, served at `/`.** All new UI work lands
-  here, on the **"Paper & rule"** design system below.
-- **`artifacts/h2budget` is CLASSIC: frozen.** Hotfixes only (a wrong figure,
-  a broken flow) — no features, no redesign, no new dependencies. It is served
-  at **`/classic`** and is **deleted at the end of the reinvention program**.
-  Its old design laws (see "Classic, inside it only" below) apply **only inside
-  `artifacts/h2budget`**. Never import across the two apps; shared logic moves
-  to `lib/` or is ported.
+- **`artifacts/h2budget` IS the app.** It holds the mature product (forecast,
+  review and reconciliation, Chase and Amex views, reports, budget, allowances,
+  bills, debts, mapping rules, settings) and is being **modernized in place**:
+  new design system, real dashboard, expanded forecast, account identity, and
+  the automation screens folded in. It is served at `/classic` until the owner
+  approves the preview under `/classic/next/*`; then it serves `/`.
+- **`artifacts/h2` is frozen** (the stripped-down replacement the owner
+  rejected): no features, no redesign; it keeps serving `/` only until the
+  switch, then it is deleted. Its pure logic (`attention.ts`, `splitMath.ts`,
+  `format.ts`, money/date helpers, the data layer) moves to `lib/` or into
+  `h2budget`; its kit is not imported — components are rebuilt on h2budget's
+  primitives. Never import across the two apps.
+- **A fresh appearance never reduces functionality or financial visibility.**
+  Every capability in `docs/reviews/2026-10-08-parity-inventory.md` must stay
+  accessible in the modernized app; a link to the old page is a temporary
+  fallback, not parity. Do not rewrite mature functionality to fit a layout;
+  restyle it.
 
-### Paper & rule — the design system for `artifacts/h2`
+### "H2 evolved" — the design system (`src/index.css`, `src/ui.tsx`, `src/lib/chartTokens.ts`)
 
-There is one kit, `artifacts/h2/src/kit/`, and it is small. Reuse it; do not
-invent a second one.
+- **Identity:** navy `#19315b` / `#22406e` is the primary; orange `#f68d2e` is
+  the call to action and attention accent; `#e16d3e` means something is wrong.
+  **Account accents** identify money: checking/Chase in navy, the Amex card in
+  the teal-green token, other cards in the third token — on chips, panel edges,
+  chart series and the forecast legend. Colour reinforces identity; a label
+  always says it too. **Never brown.** No Tailwind palette utilities
+  (`red-*`, `green-*`, …), no arbitrary colour literals: add a token.
+- **Layout:** a 12-column responsive grid — desktop two or three columns of
+  panels, tablet two, phone one. Panels and cards are allowed and expected;
+  so are multiple figures per screen. Useful detail beats whitespace: compact
+  transaction tables (36–40 px rows), account chips with masked digits on every
+  row, balances shown on account panels and the dashboard. The 720 px reading
+  column and "one figure per screen" are gone.
+- **Charts:** large and readable — recharts in `vendor-charts`, lazy, never on
+  the landing path; readable axes and a legend; actual values visibly distinct
+  from projections; hover on desktop, tap/scrub on phone; a selected day stays
+  selected across refetches (key by date, never by index). `CssBars` for small
+  inline bars. The chart animation must not restart on unrelated renders
+  (`lib/chartAnim.ts` + the fingerprint memo in `ProjectedBalanceChart.tsx`).
+- **Type:** Inter Variable, the 6-step scale, a larger numeric step for hero
+  figures; mono tabular numerals for money and counts.
+- **Motion:** purposeful and fast — horizon crossfades, stable chart updates,
+  tooltip and selection markers, expand/collapse, hover/focus/press feedback,
+  progress meters that count up only after data settles. Dials live in
+  `index.css :root`; keep `--anim-speed` equal to `SPEED` in `chartTokens.ts`;
+  `--ease-enter` for arriving, `--ease-move` for travelling. Never animate a
+  payment or an improvement that did not happen. Respect reduced motion.
+- **Voice:** calm, supportive, plain; the app is "H2", never "I"; no sass.
 
-- **Semantic colour tokens only:** `paper` (the ground), `ink` (text), `moss`
-  (the accent), `clay` (needs attention), `ochre` (caution), `slate`
-  (secondary text and rules). Components use the token utilities — **no raw
-  hex, no arbitrary colour literals, no Tailwind palette colours** (`red-*`,
-  `green-*`, `blue-*`, …). If you need a colour, add a token.
-- **Three faces, each with one job:** **Public Sans** for UI text; **Source
-  Serif 4** for headlines and section labels; **IBM Plex Mono with tabular
-  numerals** for money and counts. Digits that don't line up are the loudest
-  "nobody designed this" signal on a financial screen.
-- **Hairline rules, not cards.** Sections are separated by a rule and a label,
-  not boxes, shadows or stat-card grids.
-- **Light only.** No `dark:` variants and no theme toggle. The tokens are
-  semantic so a dark theme can be added later without touching components.
-- **Status is never colour alone.** A word says the state; colour only
-  reinforces it.
-- **One hero figure per screen** — the one number the screen exists to answer.
-  A screen gets one or none.
-- **Word diet.** No sentence where a label works; explanations go behind a
-  disclosure. Zero exclamation marks, zero cute copy.
-- **Voice:** calm, supportive, plain. The app calls itself **"H2"**, never
-  "I".
-
-### Motion — reduced motion (both apps)
+### Motion — reduced motion
 
 - ⚠️ **The reduced-motion switch has two halves and both are load-bearing.**
   The `prefers-reduced-motion: reduce` override of the motion dials MUST stay
@@ -112,7 +125,7 @@ invent a second one.
   outright, so a `:root` override inside `@layer` is silently dead. And any
   animation written with a literal duration (per-child stagger delays, a
   skeleton sweep) needs its own `!important` kill, because no dial reaches it.
-  Each app pins both halves in a CSS test.
+  `index.css.test.ts` pins both halves.
 - Animation driven from JS (charts, scripted transitions) cannot see CSS media
   queries; gate it on `matchMedia("(prefers-reduced-motion: reduce)")` in code.
 
@@ -120,53 +133,38 @@ invent a second one.
 
 `GET /api/spine` computes the shared household snapshot server-side in one pass
 (bank roll-forward, spend windows, next bill, forecast low point/runway/cash
-buffer/verdict, debt payoff %, review count). Every field is produced by **the
-same function the owning page's endpoint calls** — never reimplemented.
+buffer/verdict, debt payoff %, position, review count). Every field is produced
+by **the same function the owning page's endpoint calls** — never reimplemented.
 
 - **Any number the spine carries is read from `useSpine()`, never recomputed
-  locally** — in either app. A page that re-derives its own copy is how two
-  tiles come to disagree, which is exactly what this endpoint exists to make
-  impossible.
+  locally.** A page that re-derives its own copy is how two tiles come to
+  disagree.
 - **The parity contract is tested, not hoped for.**
   `api-server/src/__tests__/spineParity.integration.test.ts` asserts each spine
   field equals its owning endpoint **to the cent**, and asserts the spine never
-  carries a debt balance or amount owed. If you add a spine field, add its
-  parity assertion in the same PR.
-- Mutations invalidate the spine centrally through the `mutationCache` in each
-  app's `App.tsx` — not with thirty hand-written invalidations.
+  carries a debt balance or amount owed (the landing shows % paid; account
+  panels show balances from the account endpoints). If you add a spine field,
+  add its parity assertion in the same PR.
+- Mutations invalidate the spine centrally through the `mutationCache` in
+  `App.tsx` (`lib/mutationInvalidation.ts`) — not with hand-written
+  invalidations.
 
-### Other UI rules (both apps)
+### Other UI rules
 
 - **User identity/name comes from a single source of truth** (Clerk
-  `user.firstName`). No "Brad" vs "Hannah" drift; user-facing copy stays
-  name-neutral or uses that one source.
+  `user.firstName`). Copy stays name-neutral or uses that one source.
 - **No route may render a blank screen.** Unfinished/loading routes show a
   placeholder or skeleton **inside the shared layout**, never a white page.
-- **Voice (UI microcopy):** serious, supportive, professional — calm, clear,
-  genuinely helpful. **No sass, no profanity, no roasting** (the owner
-  explicitly reversed the earlier savage voice in 2026-07). Tie copy to real
-  numbers and next actions; frame partial periods as "so far".
+- **Account identity is unmissable:** every transaction row shows institution,
+  account or card name, masked digits where useful, pending/posted, and the
+  category separately. Missing balance fields (statement balance, minimum, due
+  date) stay blank — never zero, never an estimate.
 - **Send-to-Forecast is a single flow.** Sent = in review = on the curve. Never
   re-add a separate review gate.
-
-### Classic, inside it only (`artifacts/h2budget`, frozen)
-
-These laws bind a classic hotfix and nothing else:
-
-- The kit: `src/ui.tsx` (page furniture), `src/lib/chartTokens.ts` (palette and
-  chart maths), `src/lib/charts.tsx` (recharts, lazy only), `src/lib/cssBars.tsx`
-  (hover-scrubbed lists are CSS bars, never recharts), `src/index.css` (every
-  token), `src/components/viz/*`.
-- Navy + orange only (`#19315b` / `#22406e`, `#f68d2e` accent, `#e16d3e` means
-  something is wrong), the platinum ramp, `NAVY_RAMP` by rank, `CAT8` capped at
-  8. No banned Tailwind colour utilities, no arbitrary colour literals, no
-  colour aliases (`chartTokens.test.ts` asserts this).
-- Inter Variable and the 6-step type scale only; mono tabular numerals for money
-  and counts; no dark mode.
-- Motion dials in `index.css :root`; keep `--anim-speed` equal to `SPEED` in
-  `chartTokens.ts`; `--ease-enter` for arriving, `--ease-move` for travelling;
-  recharts gated by `PREFERS_REDUCED_MOTION`; `index.css.test.ts` pins the
-  reduced-motion halves.
+- **Bundle:** the landing path is budgeted (`scripts/check-entry-graph.mjs`,
+  h2budget 580 KB). Investigate chunking (route-level chunks, lazy panels,
+  `vendor-charts`) before removing a capability; a cap may rise only with a
+  written justification in the PR.
 
 ## 4. Workflow
 
@@ -200,9 +198,9 @@ These laws bind a classic hotfix and nothing else:
 
 - **Stack:** pnpm workspaces, Node 24, TS 5.9. API = Express 5 + Drizzle +
   PostgreSQL + Zod + Orval. Web = React + Vite + TanStack Query + wouter + Clerk.
-- **Packages:** `artifacts/api-server` (Express `/api/*`), **two web apps
-  during the transition** — `artifacts/h2` (the new app, `/`) and
-  `artifacts/h2budget` (classic, frozen, `/classic`) — `lib/api-spec`
+- **Packages:** `artifacts/api-server` (Express `/api/*`), `artifacts/h2budget`
+  (THE web app, being modernized; `/classic` until the switch, then `/`),
+  `artifacts/h2` (frozen, deleted at the switch), `lib/api-spec`
   (OpenAPI), `lib/api-zod` + `lib/api-client-react` (generated), `lib/db`
   (Drizzle schema + `migrate.ts` runner, exported as `@workspace/db/migrate`),
   `lib/db/migrations` (the SQL that production runs), `lib/avalanche-core`
@@ -218,8 +216,8 @@ These laws bind a classic hotfix and nothing else:
     @workspace/api-server run migrate`) — apply pending `lib/db/migrations`
     files to `DATABASE_URL`; idempotent (after a build). The server does the
     same at boot unless `MIGRATE_ON_BOOT=false`.
-- **Tests:** `pnpm --filter ./artifacts/h2 exec vitest run` (new web) and
-  `pnpm --filter h2budget exec vitest run` (classic web), both jsdom, and
+- **Tests:** `pnpm --filter h2budget exec vitest run` (the web app) and
+  `pnpm --filter ./artifacts/h2 exec vitest run` (frozen h2), both jsdom, and
   `pnpm --filter api-server exec vitest run` (API
   integration — needs a real Postgres and `DATABASE_URL` + `ALLOW_TEST_DB=1`).
   Parallel agents must use **separate test databases**. The API suite runs
