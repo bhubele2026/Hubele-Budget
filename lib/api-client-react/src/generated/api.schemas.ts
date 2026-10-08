@@ -182,6 +182,80 @@ export interface RecapDeliveryItem {
   createdAt: string;
 }
 
+export interface RecapPreviewInput {
+  /** YYYY-MM-DD; defaults to today in the member's time zone */
+  forDate?: string;
+}
+
+export type RecapPreviewModel = {
+  text: string;
+  source: "model";
+  /** True when the demo provider wrote it (no model ran) */
+  demo: boolean;
+} | null;
+
+export type RecapPreviewTemplate = {
+  text: string;
+};
+
+/**
+ * The deterministic facts both drafts were written from (money in dollars)
+ */
+export type RecapPreviewFacts = { [key: string]: unknown };
+
+export interface RecapPreview {
+  model: RecapPreviewModel;
+  template: RecapPreviewTemplate;
+  /** The deterministic facts both drafts were written from (money in dollars) */
+  facts: RecapPreviewFacts;
+}
+
+export type RecapHistoryItemSource =
+  (typeof RecapHistoryItemSource)[keyof typeof RecapHistoryItemSource];
+
+export const RecapHistoryItemSource = {
+  model: "model",
+  template: "template",
+} as const;
+
+export type RecapHistoryItemStatus =
+  (typeof RecapHistoryItemStatus)[keyof typeof RecapHistoryItemStatus];
+
+export const RecapHistoryItemStatus = {
+  drafted: "drafted",
+  sent: "sent",
+  failed: "failed",
+  skipped: "skipped",
+} as const;
+
+export type RecapHistoryItemDelivery = {
+  status: "queued" | "sent" | "delivered" | "undelivered" | "failed";
+  createdAt: string;
+} | null;
+
+export interface RecapHistoryItem {
+  id: string;
+  forDate: string;
+  text: string;
+  source: RecapHistoryItemSource;
+  status: RecapHistoryItemStatus;
+  generatedAt: string;
+  delivery: RecapHistoryItemDelivery;
+}
+
+export interface RecapGenerateNowInput {
+  forDate?: string;
+  /** A member of the owner's household; defaults to the caller */
+  userId?: string;
+  /** Replace a recap that has not been sent */
+  replace?: boolean;
+}
+
+export interface RecapGenerateNowResult {
+  created: boolean;
+  recap: RecapHistoryItem;
+}
+
 export interface OpsJobQueueCount {
   queue: string;
   state: string;
@@ -4576,6 +4650,14 @@ export interface AgentMonitorRunResult {
 }
 
 export type ListRecapDeliveriesParams = {
+  /**
+   * @minimum 1
+   * @maximum 30
+   */
+  limit?: number;
+};
+
+export type ListRecapHistoryParams = {
   /**
    * @minimum 1
    * @maximum 30

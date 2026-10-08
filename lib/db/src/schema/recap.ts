@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   index,
   check,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { householdsTable } from "./index";
@@ -133,5 +134,35 @@ export const smsInboundTable = pgTable("sms_inbound", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// (AI-4a) One drafted morning recap per member per day. `facts` is the exact
+// deterministic object the text was written from (money in dollars; category
+// names only, no merchant strings); `text` is the full message including the
+// link, i.e. what is sent. The SQL twin is lib/db/migrations/0090_recaps.sql.
+export const recapsTable = pgTable(
+  "recaps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    forDate: date("for_date").notNull(),
+    facts: jsonb("facts").notNull(),
+    text: text("text").notNull(),
+    source: text("source").notNull(),
+    promptVersion: text("prompt_version"),
+    model: text("model"),
+    status: text("status").notNull().default("drafted"),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userDateUq: uniqueIndex("recaps_user_date_uq").on(t.userId, t.forDate),
+    householdGeneratedIdx: index("recaps_household_generated_idx").on(t.householdId, t.generatedAt),
+    sourceCheck: check("recaps_source_check", sql`source in ('model', 'template')`),
+    statusCheck: check("recaps_status_check", sql`status in ('drafted', 'sent', 'failed', 'skipped')`),
+  }),
+);
+
 export type RecapSettings = typeof recapSettingsTable.$inferSelect;
 export type RecapDelivery = typeof recapDeliveriesTable.$inferSelect;
+export type Recap = typeof recapsTable.$inferSelect;

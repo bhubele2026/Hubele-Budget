@@ -5,6 +5,8 @@ import {
   handlePruneSyncAttempts,
 } from "./handlers/maintenance";
 import { MONITOR_CRON, MONITOR_TZ, handleMonitorJobs } from "./handlers/monitor";
+import { handleRecapGenerate, handleRecapSend } from "./handlers/recapJobs";
+import { RECAP_TICK_CRON, RECAP_TICK_KEY, RECAP_TICK_TZ, handleRecapTick } from "./handlers/recapTick";
 import { handleSmsInbound } from "./handlers/smsInbound";
 import { ALL_QUEUES, QUEUES, dlqName, queueOptions } from "./queues";
 
@@ -33,4 +35,9 @@ export async function registerJobs(boss: PgBoss): Promise<void> {
   await boss.schedule(QUEUES.monitorHousehold, MONITOR_CRON, { fanout: true }, { tz: MONITOR_TZ });
   // (AI-4b) Inbound texts that are not STOP / START / HELP.
   await boss.work(QUEUES.smsInbound, handleSmsInbound);
+  // (AI-4a) The morning recap: a 5-minute tick decides, two workers act.
+  await boss.work(QUEUES.recapTick, handleRecapTick);
+  await boss.schedule(QUEUES.recapTick, RECAP_TICK_CRON, null, { tz: RECAP_TICK_TZ, singletonKey: RECAP_TICK_KEY });
+  await boss.work(QUEUES.recapGenerate, handleRecapGenerate);
+  await boss.work(QUEUES.recapSend, handleRecapSend);
 }

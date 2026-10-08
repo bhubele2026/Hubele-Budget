@@ -4994,6 +4994,7 @@ export declare const insertRecurringSchema: import("zod/v4").ZodObject<{
     in: {};
 }>;
 export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
+    source: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     member: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     notes: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     plaidAccountId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
@@ -5018,7 +5019,6 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     categoryLockedByUser: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     isExternalCardPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     importBatchId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
-    source: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     owedBy: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     plaidTransactionId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pfcPrimary: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;

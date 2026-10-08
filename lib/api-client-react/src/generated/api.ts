@@ -99,6 +99,7 @@ import type {
   ListDashboardBudgetsParams,
   ListPlaidLiabilityAccountsParams,
   ListRecapDeliveriesParams,
+  ListRecapHistoryParams,
   ListTransactionsParams,
   ListWeeklySettlementsParams,
   MappingRule,
@@ -130,7 +131,12 @@ import type {
   PutMerchantAliasResult,
   RecapDeliveryItem,
   RecapError,
+  RecapGenerateNowInput,
+  RecapGenerateNowResult,
+  RecapHistoryItem,
   RecapPauseInput,
+  RecapPreview,
+  RecapPreviewInput,
   RecapSettings,
   RecapSettingsInput,
   RecapTestSendResult,
@@ -1200,6 +1206,280 @@ export function useListRecapDeliveries<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Builds the facts for the caller and returns both drafts. The model draft counts against the
+household's daily `recap` call cap; it is null when AI is off, over budget, refused, or when
+its text failed validation twice. With the demo provider the model text is a labelled fixture.
+Nothing is stored and nothing is sent.
+
+ * @summary (AI-4a) Draft the morning recap for a day without storing or sending it (model draft and template).
+ */
+export const getPreviewRecapUrl = () => {
+  return `/api/recap/preview`;
+};
+
+export const previewRecap = async (
+  recapPreviewInput?: RecapPreviewInput,
+  options?: RequestInit,
+): Promise<RecapPreview> => {
+  return customFetch<RecapPreview>(getPreviewRecapUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(recapPreviewInput),
+  });
+};
+
+export const getPreviewRecapMutationOptions = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewRecap>>,
+    TError,
+    { data: BodyType<RecapPreviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof previewRecap>>,
+  TError,
+  { data: BodyType<RecapPreviewInput> },
+  TContext
+> => {
+  const mutationKey = ["previewRecap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof previewRecap>>,
+    { data: BodyType<RecapPreviewInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return previewRecap(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PreviewRecapMutationResult = NonNullable<
+  Awaited<ReturnType<typeof previewRecap>>
+>;
+export type PreviewRecapMutationBody = BodyType<RecapPreviewInput>;
+export type PreviewRecapMutationError = ErrorType<RecapError>;
+
+/**
+ * @summary (AI-4a) Draft the morning recap for a day without storing or sending it (model draft and template).
+ */
+export const usePreviewRecap = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewRecap>>,
+    TError,
+    { data: BodyType<RecapPreviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof previewRecap>>,
+  TError,
+  { data: BodyType<RecapPreviewInput> },
+  TContext
+> => {
+  return useMutation(getPreviewRecapMutationOptions(options));
+};
+
+/**
+ * @summary (AI-4a) The caller's most recent recaps, newest first (at most 30), with their delivery status.
+ */
+export const getListRecapHistoryUrl = (params?: ListRecapHistoryParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/recap/history?${stringifiedParams}`
+    : `/api/recap/history`;
+};
+
+export const listRecapHistory = async (
+  params?: ListRecapHistoryParams,
+  options?: RequestInit,
+): Promise<RecapHistoryItem[]> => {
+  return customFetch<RecapHistoryItem[]>(getListRecapHistoryUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRecapHistoryQueryKey = (
+  params?: ListRecapHistoryParams,
+) => {
+  return [`/api/recap/history`, ...(params ? [params] : [])] as const;
+};
+
+export const getListRecapHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRecapHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListRecapHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRecapHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListRecapHistoryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listRecapHistory>>
+  > = ({ signal }) => listRecapHistory(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRecapHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRecapHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRecapHistory>>
+>;
+export type ListRecapHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary (AI-4a) The caller's most recent recaps, newest first (at most 30), with their delivery status.
+ */
+
+export function useListRecapHistory<
+  TData = Awaited<ReturnType<typeof listRecapHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListRecapHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRecapHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRecapHistoryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary (AI-4a) Owner only. Generate and store a member's recap for a day now (ops); does not send it.
+ */
+export const getGenerateRecapNowUrl = () => {
+  return `/api/recap/generate-now`;
+};
+
+export const generateRecapNow = async (
+  recapGenerateNowInput?: RecapGenerateNowInput,
+  options?: RequestInit,
+): Promise<RecapGenerateNowResult> => {
+  return customFetch<RecapGenerateNowResult>(getGenerateRecapNowUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(recapGenerateNowInput),
+  });
+};
+
+export const getGenerateRecapNowMutationOptions = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateRecapNow>>,
+    TError,
+    { data: BodyType<RecapGenerateNowInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateRecapNow>>,
+  TError,
+  { data: BodyType<RecapGenerateNowInput> },
+  TContext
+> => {
+  const mutationKey = ["generateRecapNow"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateRecapNow>>,
+    { data: BodyType<RecapGenerateNowInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateRecapNow(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateRecapNowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateRecapNow>>
+>;
+export type GenerateRecapNowMutationBody = BodyType<RecapGenerateNowInput>;
+export type GenerateRecapNowMutationError = ErrorType<RecapError>;
+
+/**
+ * @summary (AI-4a) Owner only. Generate and store a member's recap for a day now (ops); does not send it.
+ */
+export const useGenerateRecapNow = <
+  TError = ErrorType<RecapError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateRecapNow>>,
+    TError,
+    { data: BodyType<RecapGenerateNowInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateRecapNow>>,
+  TError,
+  { data: BodyType<RecapGenerateNowInput> },
+  TContext
+> => {
+  return useMutation(getGenerateRecapNowMutationOptions(options));
+};
 
 /**
  * @summary Dashboard summary

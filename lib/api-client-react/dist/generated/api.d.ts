@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentRunList, AllowancePlan, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListAgentActionsParams, ListAgentFindingsParams, ListAgentRunsParams, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapPauseInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentRunList, AllowancePlan, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListAgentActionsParams, ListAgentFindingsParams, ListAgentRunsParams, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -322,6 +322,88 @@ export declare function useListRecapDeliveries<TData = Awaited<ReturnType<typeof
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * Builds the facts for the caller and returns both drafts. The model draft counts against the
+household's daily `recap` call cap; it is null when AI is off, over budget, refused, or when
+its text failed validation twice. With the demo provider the model text is a labelled fixture.
+Nothing is stored and nothing is sent.
+
+ * @summary (AI-4a) Draft the morning recap for a day without storing or sending it (model draft and template).
+ */
+export declare const getPreviewRecapUrl: () => string;
+export declare const previewRecap: (recapPreviewInput?: RecapPreviewInput, options?: RequestInit) => Promise<RecapPreview>;
+export declare const getPreviewRecapMutationOptions: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof previewRecap>>, TError, {
+        data: BodyType<RecapPreviewInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof previewRecap>>, TError, {
+    data: BodyType<RecapPreviewInput>;
+}, TContext>;
+export type PreviewRecapMutationResult = NonNullable<Awaited<ReturnType<typeof previewRecap>>>;
+export type PreviewRecapMutationBody = BodyType<RecapPreviewInput>;
+export type PreviewRecapMutationError = ErrorType<RecapError>;
+/**
+ * @summary (AI-4a) Draft the morning recap for a day without storing or sending it (model draft and template).
+ */
+export declare const usePreviewRecap: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof previewRecap>>, TError, {
+        data: BodyType<RecapPreviewInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof previewRecap>>, TError, {
+    data: BodyType<RecapPreviewInput>;
+}, TContext>;
+/**
+ * @summary (AI-4a) The caller's most recent recaps, newest first (at most 30), with their delivery status.
+ */
+export declare const getListRecapHistoryUrl: (params?: ListRecapHistoryParams) => string;
+export declare const listRecapHistory: (params?: ListRecapHistoryParams, options?: RequestInit) => Promise<RecapHistoryItem[]>;
+export declare const getListRecapHistoryQueryKey: (params?: ListRecapHistoryParams) => readonly ["/api/recap/history", ...ListRecapHistoryParams[]];
+export declare const getListRecapHistoryQueryOptions: <TData = Awaited<ReturnType<typeof listRecapHistory>>, TError = ErrorType<unknown>>(params?: ListRecapHistoryParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listRecapHistory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listRecapHistory>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListRecapHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listRecapHistory>>>;
+export type ListRecapHistoryQueryError = ErrorType<unknown>;
+/**
+ * @summary (AI-4a) The caller's most recent recaps, newest first (at most 30), with their delivery status.
+ */
+export declare function useListRecapHistory<TData = Awaited<ReturnType<typeof listRecapHistory>>, TError = ErrorType<unknown>>(params?: ListRecapHistoryParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listRecapHistory>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary (AI-4a) Owner only. Generate and store a member's recap for a day now (ops); does not send it.
+ */
+export declare const getGenerateRecapNowUrl: () => string;
+export declare const generateRecapNow: (recapGenerateNowInput?: RecapGenerateNowInput, options?: RequestInit) => Promise<RecapGenerateNowResult>;
+export declare const getGenerateRecapNowMutationOptions: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof generateRecapNow>>, TError, {
+        data: BodyType<RecapGenerateNowInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof generateRecapNow>>, TError, {
+    data: BodyType<RecapGenerateNowInput>;
+}, TContext>;
+export type GenerateRecapNowMutationResult = NonNullable<Awaited<ReturnType<typeof generateRecapNow>>>;
+export type GenerateRecapNowMutationBody = BodyType<RecapGenerateNowInput>;
+export type GenerateRecapNowMutationError = ErrorType<RecapError>;
+/**
+ * @summary (AI-4a) Owner only. Generate and store a member's recap for a day now (ops); does not send it.
+ */
+export declare const useGenerateRecapNow: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof generateRecapNow>>, TError, {
+        data: BodyType<RecapGenerateNowInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof generateRecapNow>>, TError, {
+    data: BodyType<RecapGenerateNowInput>;
+}, TContext>;
 /**
  * @summary Dashboard summary
  */
