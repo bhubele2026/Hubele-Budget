@@ -840,3 +840,19 @@ export {
   type PayoffInputs,
   type PayoffPaymentRow,
 } from "./everydayHooks";
+
+// (PR-E) The daily progress metrics: pure sums over assembled inputs.
+export {
+  METRICS_VERSION,
+  POINT_IN_TIME_FIELDS,
+  accountsSilentDaysOf,
+  computeDailyMetrics,
+  discretionaryCents,
+  keepPointInTime,
+  monthStartOf,
+  type DailyMetrics,
+  type DailyMetricsInputs,
+  type MetricsSnapshotRow,
+  type MetricsSpendRow,
+  type MetricsWithinPlan,
+} from "./metrics";

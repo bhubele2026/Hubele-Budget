@@ -20,8 +20,10 @@ let CURRENT_USER = "";
 let CURRENT_HOUSEHOLD = "";
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (
+  requireAuth: async (
     req: {
+      method?: string;
+      originalUrl?: string;
       userId?: string;
       actualUserId?: string;
       householdId?: string;
@@ -34,6 +36,8 @@ vi.mock("../middlewares/requireAuth", () => ({
     req.actualUserId = CURRENT_USER;
     req.householdId = CURRENT_HOUSEHOLD;
     req.householdOwnerId = CURRENT_USER;
+    // (PR-E) a read no longer runs the budget passes; run them as the read used to.
+    await (await import("./_helpers/budgetPassesOnRead")).runBudgetPassesOnRead(req);
     next();
   },
 }));

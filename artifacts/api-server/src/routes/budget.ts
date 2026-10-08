@@ -53,10 +53,10 @@ import { logger } from "../lib/logger";
 import { planSourceOf, rollUpPlanBySource } from "../lib/budgetPlanSource";
 import { buildAllowanceRollup } from "../lib/budgetAllowance";
 import { monthEndExclusive, daysInMonth } from "../lib/monthBounds";
+import { syncAutoDebtCategories } from "../lib/budgetDebtSync";
 
 const router: IRouter = Router();
 
-const DEBT_GROUP = "Debt — Minimum Payments";
 // Task #690 — dedicated manual bucket on the Budget page for personal
 // one-off envelopes that aren't backed by a bill (e.g. "Birthday gifts",
 // "Kid's soccer"). Categories with `sourceKind='manual'` and
@@ -64,176 +64,6 @@ const DEBT_GROUP = "Debt — Minimum Payments";
 // canonical bill-backed groups. Exported so the same string is reused
 // on both the API response and the frontend.
 export const MY_BUDGET_GROUP = "My budget";
-const DEBT_GROUP_BASE_SORT =
-  (SEED_GROUP_ORDER.indexOf(DEBT_GROUP) >= 0
-    ? SEED_GROUP_ORDER.indexOf(DEBT_GROUP)
-    : 99) * 100;
-
-// Keep budget_categories with sourceKind='auto_debts' in sync with the user's
-// active rows in the Debts tracker, and keep the budget line for each one
-// updated to the debt's current minimum payment for the requested month.
-// Also backfills `category_id` on existing "Payment — <debt name>" transactions
-// so the budget's Actual column reflects payments made to each debt.
-async function syncAutoDebtCategories(
-  householdId: string,
-  userId: string,
-  monthStart: string,
-): Promise<void> {
-  const debts = await db
-    .select()
-    .from(debtsTable)
-    .where(
-      and(eq(debtsTable.householdId, householdId), eq(debtsTable.status, "active")),
-    )
-    .orderBy(desc(debtsTable.apr), asc(debtsTable.name));
-
-  const activeIds = debts.map((d) => d.id);
-
-  // 1. Drop stale auto_debts categories: legacy placeholder/seed rows with no
-  //    debt link, plus any whose linked debt is no longer active/exists.
-  await db
-    .delete(budgetCategoriesTable)
-    .where(
-      and(
-        eq(budgetCategoriesTable.householdId, householdId),
-        eq(budgetCategoriesTable.sourceKind, "auto_debts"),
-        isNull(budgetCategoriesTable.debtId),
-      ),
-    );
-  if (activeIds.length > 0) {
-    await db
-      .delete(budgetCategoriesTable)
-      .where(
-        and(
-          eq(budgetCategoriesTable.householdId, householdId),
-          eq(budgetCategoriesTable.sourceKind, "auto_debts"),
-          notInArray(budgetCategoriesTable.debtId, activeIds),
-        ),
-      );
-  } else {
-    await db
-      .delete(budgetCategoriesTable)
-      .where(
-        and(
-          eq(budgetCategoriesTable.householdId, householdId),
-          eq(budgetCategoriesTable.sourceKind, "auto_debts"),
-        ),
-      );
-  }
-
-  if (debts.length === 0) return;
-
-  // 2. Ensure the budget month row exists so we can attach lines to it.
-  await db
-    .insert(budgetMonthsTable)
-    .values({ userId, householdId, monthStart })
-    .onConflictDoNothing();
-
-  // 3. Upsert one auto_debts category per active debt and the matching line
-  //    for the requested month with planned = debt.minPayment.
-  const existingCats = await db
-    .select()
-    .from(budgetCategoriesTable)
-    .where(
-      and(
-        eq(budgetCategoriesTable.householdId, householdId),
-        eq(budgetCategoriesTable.sourceKind, "auto_debts"),
-      ),
-    );
-  const catByDebtId = new Map(existingCats.map((c) => [c.debtId!, c]));
-
-  for (let i = 0; i < debts.length; i++) {
-    const d = debts[i]!;
-    const sortOrder = DEBT_GROUP_BASE_SORT + i;
-    let catId: string;
-    const cur = catByDebtId.get(d.id);
-    if (!cur) {
-      const [row] = await db
-        .insert(budgetCategoriesTable)
-        .values({
-          userId,
-          householdId,
-          name: d.name,
-          kind: "expense",
-          groupName: DEBT_GROUP,
-          sourceKind: "auto_debts",
-          sortOrder,
-          debtId: d.id,
-        })
-        .onConflictDoNothing({
-          target: [budgetCategoriesTable.householdId, budgetCategoriesTable.debtId],
-        })
-        .returning();
-      if (!row) {
-        // Re-read in case of a concurrent insert.
-        const [existing] = await db
-          .select()
-          .from(budgetCategoriesTable)
-          .where(
-            and(
-              eq(budgetCategoriesTable.householdId, householdId),
-              eq(budgetCategoriesTable.debtId, d.id),
-            ),
-          );
-        if (!existing) continue;
-        catId = existing.id;
-      } else {
-        catId = row.id;
-      }
-    } else {
-      catId = cur.id;
-      if (
-        cur.name !== d.name ||
-        cur.sortOrder !== sortOrder ||
-        cur.groupName !== DEBT_GROUP ||
-        cur.kind !== "expense"
-      ) {
-        await db
-          .update(budgetCategoriesTable)
-          .set({
-            name: d.name,
-            sortOrder,
-            groupName: DEBT_GROUP,
-            kind: "expense",
-          })
-          .where(eq(budgetCategoriesTable.id, cur.id));
-      }
-    }
-
-    await db
-      .insert(budgetLinesTable)
-      .values({
-        userId,
-        householdId,
-        monthStart,
-        categoryId: catId,
-        plannedAmount: d.minPayment,
-        note: "Auto-pulled from Debt Tracker",
-      })
-      .onConflictDoUpdate({
-        target: [
-          budgetLinesTable.householdId,
-          budgetLinesTable.monthStart,
-          budgetLinesTable.categoryId,
-        ],
-        set: { plannedAmount: d.minPayment },
-      });
-
-    // Backfill categoryId on payment transactions created by /debts/:id/payments
-    // so the budget's Actual column shows what's been paid this month.
-    await db
-      .update(transactionsTable)
-      .set({ categoryId: catId })
-      .where(
-        and(
-          eq(transactionsTable.householdId, householdId),
-          isNull(transactionsTable.categoryId),
-          sql`${transactionsTable.description} LIKE ${`Payment — ${d.name}%`}`,
-        ),
-      );
-  }
-}
-
 // Group name used for auto-pulled budget lines that are created on the fly
 // from recurring bills/income that the user added (e.g. via Forecast Review's
 // "Add as bill" flow) without picking an existing budget category. These
@@ -1030,10 +860,8 @@ async function ensureIgnoreCategory(
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;
   const userId = req.userId!;
-  await ensureSeededDefaults(householdId, req.householdOwnerId!, userId);
-  await ensureUncategorizedCategory(householdId, userId);
-  await ensureTransferCategory(householdId, userId);
-  await ensureIgnoreCategory(householdId, userId);
+  // (PR-E) Read-only: no seed, no system-category ensure (see prepareBudgetCategories).
+  void userId;
   const rows = await db
     .select()
     .from(budgetCategoriesTable)
@@ -1046,6 +874,7 @@ router.post(
   "/budget/categories",
   requireAuth,
   async (req, res): Promise<void> => {
+    await prepareBudgetCategories(req.householdId!, req.householdOwnerId!, req.userId!);
     const parsed = CreateCategoryBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
@@ -1089,6 +918,7 @@ router.patch(
   "/budget/categories/:id",
   requireAuth,
   async (req, res): Promise<void> => {
+    await prepareBudgetCategories(req.householdId!, req.householdOwnerId!, req.userId!);
     const params = UpdateCategoryParams.safeParse(req.params);
     if (!params.success) {
       res.status(400).json({ error: params.error.message });
@@ -1206,6 +1036,7 @@ router.delete(
   "/budget/categories/:id",
   requireAuth,
   async (req, res): Promise<void> => {
+    await prepareBudgetCategories(req.householdId!, req.householdOwnerId!, req.userId!);
     const params = DeleteCategoryParams.safeParse(req.params);
     if (!params.success) {
       res.status(400).json({ error: params.error.message });
@@ -1623,6 +1454,184 @@ async function ensureSeededDefaults(
   }
 }
 
+type BudgetLineRow = typeof budgetLinesTable.$inferSelect;
+type BudgetCategoryRow = typeof budgetCategoriesTable.$inferSelect;
+
+/**
+ * (PR-E) For every MANUAL category that doesn't yet have a line for `monthStart`,
+ * clone its most recent prior month's planned amount + note. Auto-pulled
+ * categories (auto_bills / auto_debts) are skipped: their amounts derive from
+ * Bills / Debts on each request.
+ *
+ * `persist: false` (the GET) returns the lines with the carried ones added in
+ * memory (`id` null, as the response already allows) and writes nothing.
+ * `persist: true` (prepareBudgetMonth) inserts them and re-reads.
+ */
+async function carryForwardLines(opts: {
+  householdId: string;
+  userId: string;
+  monthStart: string;
+  cats: BudgetCategoryRow[];
+  lines: BudgetLineRow[];
+  persist: boolean;
+}): Promise<BudgetLineRow[]> {
+  const { householdId, userId, monthStart, cats, lines, persist } = opts;
+  const manualCategoryIds = cats.filter((c) => c.sourceKind === "manual").map((c) => c.id);
+  if (manualCategoryIds.length === 0) return lines;
+  const haveLineForCat = new Set(
+    lines.filter((l) => manualCategoryIds.includes(l.categoryId)).map((l) => l.categoryId),
+  );
+  const missingManualIds = manualCategoryIds.filter((id) => !haveLineForCat.has(id));
+  if (missingManualIds.length === 0) return lines;
+
+  // One query, one row per category (window function).
+  const priorLines = await db.execute<{
+    category_id: string;
+    planned_amount: string;
+    note: string | null;
+  }>(sql`
+    SELECT category_id, planned_amount, note
+    FROM (
+      SELECT
+        category_id,
+        planned_amount,
+        note,
+        ROW_NUMBER() OVER (
+          PARTITION BY category_id
+          ORDER BY month_start DESC
+        ) AS rn
+      FROM budget_lines
+      WHERE household_id = ${householdId}
+        AND month_start < ${monthStart}
+        AND category_id IN (${sql.join(
+          missingManualIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})
+    ) t
+    WHERE rn = 1
+  `);
+  // node-postgres returns a QueryResult with `.rows`; older drizzle typings
+  // sometimes hint an array directly. Handle both shapes.
+  const carry = (
+    Array.isArray(priorLines)
+      ? priorLines
+      : ((priorLines as unknown as { rows?: unknown[] }).rows ?? [])
+  ) as Array<{ category_id: string; planned_amount: string; note: string | null }>;
+  if (carry.length === 0) return lines;
+
+  if (!persist) {
+    const epoch = new Date(0);
+    const synthetic = carry.map(
+      (l) =>
+        ({
+          id: null,
+          userId,
+          householdId,
+          monthStart,
+          categoryId: l.category_id,
+          plannedAmount: l.planned_amount,
+          note: l.note,
+          pinned: false,
+          createdAt: epoch,
+        }) as unknown as BudgetLineRow,
+    );
+    return [...lines, ...synthetic];
+  }
+
+  await db
+    .insert(budgetMonthsTable)
+    .values({ userId, householdId, monthStart })
+    .onConflictDoNothing();
+  await db
+    .insert(budgetLinesTable)
+    .values(
+      carry.map((l) => ({
+        userId,
+        householdId,
+        monthStart,
+        categoryId: l.category_id,
+        plannedAmount: l.planned_amount,
+        note: l.note,
+      })),
+    )
+    .onConflictDoNothing({
+      target: [budgetLinesTable.householdId, budgetLinesTable.monthStart, budgetLinesTable.categoryId],
+    });
+  return db
+    .select()
+    .from(budgetLinesTable)
+    .where(and(eq(budgetLinesTable.householdId, householdId), eq(budgetLinesTable.monthStart, monthStart)));
+}
+
+/**
+ * (PR-E) What `GET /budget/categories` used to do on the way to answering, for
+ * the callers that may write: the default seed (a never-seeded household only,
+ * once) and the system categories (Uncategorized, Transfer, Ignore). The budget
+ * category WRITE routes run it first, so the first write to a never-seeded
+ * household is what seeds it; a read no longer does.
+ */
+export async function prepareBudgetCategories(
+  householdId: string,
+  householdOwnerId: string,
+  userId: string,
+  opts: { seed?: boolean } = {},
+): Promise<void> {
+  if (opts.seed !== false) await ensureSeededDefaults(householdId, householdOwnerId, userId);
+  await ensureUncategorizedCategory(householdId, userId);
+  await ensureTransferCategory(householdId, userId);
+  await ensureIgnoreCategory(householdId, userId);
+}
+
+/**
+ * (PR-E) EVERYTHING `GET /budget/months/:monthStart` USED TO WRITE, in the
+ * order it wrote it, for the callers that may write: `POST /budget/lines`, the
+ * pin routes (via `snapshotAutoLinesForMonth`) and the nightly
+ * `metrics.snapshot` job. Idempotent; the once-per-process gates are the ones
+ * the GET used.
+ *
+ *   v2 category migration + system categories (once per process) → May-2026
+ *   gate → auto_debts → bill links → auto_bills → Avalanche payment line →
+ *   carry-forward lines for `monthStart`.
+ *
+ * It does not seed (see `prepareBudgetCategories`).
+ */
+export async function prepareBudgetMonth(
+  householdId: string,
+  householdOwnerId: string,
+  userId: string,
+  monthStart: string,
+): Promise<void> {
+  // Below the data floor there is nothing to prepare (the GET answers empty).
+  if (monthStart < "2026-04-01") return;
+  if (!oneTimeEnsuresDone.has(householdId)) {
+    await migrateBudgetCategoriesV2(householdId, householdOwnerId, userId);
+    await ensureUncategorizedCategory(householdId, userId);
+    await ensureTransferCategory(householdId, userId);
+    await ensureIgnoreCategory(householdId, userId);
+    oneTimeEnsuresDone.add(householdId);
+  }
+  if (monthStart === MAY_2026_MONTH) await reconcileMay2026Amounts(householdId, householdOwnerId);
+  await syncAutoDebtCategories(householdId, userId, monthStart);
+  await healLegacyRecurringBillLinks(householdId);
+  await syncAutoBillsFromRecurring(householdId, userId);
+  await syncAvalanchePaymentCategory(householdId, householdOwnerId, monthStart);
+  const [allCats, lines] = await Promise.all([
+    db.select().from(budgetCategoriesTable).where(eq(budgetCategoriesTable.householdId, householdId)),
+    db
+      .select()
+      .from(budgetLinesTable)
+      .where(and(eq(budgetLinesTable.householdId, householdId), eq(budgetLinesTable.monthStart, monthStart))),
+  ]);
+  await carryForwardLines({
+    householdId,
+    userId,
+    monthStart,
+    cats: allCats.filter((c) => !c.excludeFromBudget),
+    lines,
+    persist: true,
+  });
+}
+
 router.post(
   "/budget/seed-defaults",
   requireAuth,
@@ -1683,50 +1692,14 @@ router.get(
     const householdOwnerId = req.householdOwnerId!;
     const userId = req.userId!;
 
-    // One-time migration/ensure passes (~15 queries) used to run on EVERY
-    // month read. They only matter once per household, so run them once per
-    // process — a restart re-runs them once, which is what "idempotent"
-    // buys us. The live-state syncs below (debts/bills/avalanche) still run
-    // per-request because they mirror current data into the budget.
-    if (!oneTimeEnsuresDone.has(householdId)) {
-      // One-time consolidation of the legacy budget category list (task #65).
-      // Also gated by a per-household DB flag.
-      await migrateBudgetCategoriesV2(householdId, householdOwnerId, userId);
-
-      // (#474) Ensure the system-managed Uncategorized category exists and
-      // carries `exclude_from_budget=true`. Idempotent.
-      await ensureUncategorizedCategory(householdId, userId);
-      // (#607) Same treatment for the system-managed Transfer category.
-      await ensureTransferCategory(householdId, userId);
-      // (#624) And the system-managed Ignore category — picked to drop
-      // a row from Budget/Reports roll-ups while still affecting balances.
-      await ensureIgnoreCategory(householdId, userId);
-      oneTimeEnsuresDone.add(householdId);
-    }
-
-    // One-time reconciliation of May 2026 planned amounts to the household's
-    // canonical source-of-truth values (task #106), now retired: with its gate
-    // missing it only writes the gate and changes no budget data.
-    if (monthStart === MAY_2026_MONTH) {
-      await reconcileMay2026Amounts(householdId, householdOwnerId);
-    }
-
-    // Pull the live Debts tracker into auto_debts categories/lines for this
-    // month before reading anything back. Each call ensures the budget rows
-    // match the current Debts state (adds, removes, renames, min changes).
-    await syncAutoDebtCategories(householdId, userId, monthStart);
-
-    // Ensure every active recurring bill/income (including ones added on the
-    // fly via Forecast Review's "Add as bill" flow) has an `auto_bills`
-    // budget category linked to it, so the bill appears as a budget line
-    // for monthly budgeting. No-op for items already linked to a curated
-    // category (e.g. "Utilities" rolling up several bills).
-    await healLegacyRecurringBillLinks(householdId);
-    await syncAutoBillsFromRecurring(householdId, userId);
-
-    // Ensure the system-managed "Avalanche payment" line is present and
-    // mirrors avalancheSettings.manualExtra for this month.
-    await syncAvalanchePaymentCategory(householdId, householdOwnerId, monthStart);
+    // (PR-E) A GET WRITES NOTHING. The ensure / migrate / sync passes that used
+    // to run here (system categories, the v2 category migration, the auto_debts
+    // sync, the auto_bills sync, the Avalanche payment line, the carry-forward
+    // lines) now run in `prepareBudgetMonth`: from the budget and debt WRITE
+    // routes and from the nightly `metrics.snapshot` job. This read derives
+    // every figure from what is stored (planned amounts for auto categories are
+    // computed below from Bills and Debts; a carried-forward line is computed in
+    // memory) so the response for an already-synced household is unchanged.
 
     const [month] = await db
       .select()
@@ -1761,112 +1734,10 @@ router.get(
         ),
       );
 
-    // Carry-forward: for every MANUAL category that doesn't yet have a line
-    // this month, copy the most recent prior month's planned amount + note
-    // from that same category. Auto-pulled categories (auto_bills/auto_debts)
-    // are skipped — their amounts derive from Bills/Debts on each request.
-    //
-    // We can't just gate on `lines.length === 0` here because
-    // syncAutoDebtCategories above may have already inserted auto_debts lines
-    // for this month, which would make every future-month carry-forward a
-    // no-op (the bug that left June+ showing $0 across the manual rows).
-    {
-      const manualCategoryIds = cats
-        .filter((c) => c.sourceKind === "manual")
-        .map((c) => c.id);
-
-      if (manualCategoryIds.length > 0) {
-        const haveLineForCat = new Set(
-          lines
-            .filter((l) => manualCategoryIds.includes(l.categoryId))
-            .map((l) => l.categoryId),
-        );
-        const missingManualIds = manualCategoryIds.filter(
-          (id) => !haveLineForCat.has(id),
-        );
-
-        if (missingManualIds.length > 0) {
-          // For each missing manual category, find its most recent prior
-          // line (across all prior months) and clone its planned amount +
-          // note into this month. Done with a single SQL query using a
-          // window function so we get one row per category.
-          const priorLines = await db.execute<{
-            category_id: string;
-            planned_amount: string;
-            note: string | null;
-          }>(sql`
-            SELECT category_id, planned_amount, note
-            FROM (
-              SELECT
-                category_id,
-                planned_amount,
-                note,
-                ROW_NUMBER() OVER (
-                  PARTITION BY category_id
-                  ORDER BY month_start DESC
-                ) AS rn
-              FROM budget_lines
-              WHERE household_id = ${householdId}
-                AND month_start < ${monthStart}
-                AND category_id IN (${sql.join(
-                  missingManualIds.map((id) => sql`${id}`),
-                  sql`, `,
-                )})
-            ) t
-            WHERE rn = 1
-          `);
-
-          // node-postgres returns a QueryResult with `.rows`; older drizzle
-          // typings sometimes hint an array directly. Handle both shapes.
-          const carry = (
-            Array.isArray(priorLines)
-              ? priorLines
-              : ((priorLines as unknown as { rows?: unknown[] }).rows ?? [])
-          ) as Array<{
-            category_id: string;
-            planned_amount: string;
-            note: string | null;
-          }>;
-
-          if (carry.length > 0) {
-            await db
-              .insert(budgetMonthsTable)
-              .values({ userId, householdId, monthStart })
-              .onConflictDoNothing();
-
-            await db
-              .insert(budgetLinesTable)
-              .values(
-                carry.map((l) => ({
-                  userId,
-                  householdId,
-                  monthStart,
-                  categoryId: l.category_id,
-                  plannedAmount: l.planned_amount,
-                  note: l.note,
-                })),
-              )
-              .onConflictDoNothing({
-                target: [
-                  budgetLinesTable.householdId,
-                  budgetLinesTable.monthStart,
-                  budgetLinesTable.categoryId,
-                ],
-              });
-
-            lines = await db
-              .select()
-              .from(budgetLinesTable)
-              .where(
-                and(
-                  eq(budgetLinesTable.householdId, householdId),
-                  eq(budgetLinesTable.monthStart, monthStart),
-                ),
-              );
-          }
-        }
-      }
-    }
+    // Carry-forward: a MANUAL category with no line this month shows the most
+    // recent prior month's planned amount + note. Computed in memory here
+    // (`persist: false`); `prepareBudgetMonth` is what stores it.
+    lines = await carryForwardLines({ householdId, userId, monthStart, cats, lines, persist: false });
 
     // Source-derived planned amounts for auto categories. We compute these
     // on the fly from Bills (recurring_items) and Debts so they always reflect
@@ -2314,6 +2185,8 @@ router.post("/budget/lines", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;
   const householdOwnerId = req.householdOwnerId!;
   const userId = req.userId!;
+  await prepareBudgetCategories(householdId, householdOwnerId, userId);
+  await prepareBudgetMonth(householdId, householdOwnerId, userId, parsed.data.monthStart);
   await db
     .insert(budgetMonthsTable)
     .values({ userId, householdId, monthStart: parsed.data.monthStart })

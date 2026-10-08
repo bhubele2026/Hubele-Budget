@@ -25,6 +25,7 @@ import {
 } from "./plaidSync";
 import { recordPlaidSyncAttempt } from "./plaidSyncAttempts";
 import { recordDebtStatements, type StatementFact } from "./debtLedger";
+import { syncDebtBudgetAfterWrite } from "./budgetDebtSync";
 
 export type LiabilityRow = {
   accountId: string;
@@ -445,6 +446,9 @@ export async function fetchLiabilitiesForItem(
   // (PR-D) One upsert into debt_statements, after the link sweep so a card it
   // just linked has its statement recorded too. Swallows its own errors.
   await recordDebtStatements(householdId, statements);
+  // (PR-E) The auto_debts budget categories follow the debts; this used to happen
+  // on the next GET /budget/months. Best-effort.
+  await syncDebtBudgetAfterWrite(householdId, userId);
   return out;
 }
 
