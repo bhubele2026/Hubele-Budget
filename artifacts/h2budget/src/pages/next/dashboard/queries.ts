@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { OWN_INVALIDATION } from "@/lib/mutationInvalidation";
 import {
   useListPlaidItems, getListPlaidItemsQueryKey,
   useGetForecastCashSignal, getGetForecastCashSignalQueryKey,
@@ -13,7 +14,7 @@ import {
   useListCategories, getListCategoriesQueryKey,
   useListCategorizationReview, getListCategorizationReviewQueryKey,
   useGetDuplicateTransactionCount, getGetDuplicateTransactionCountQueryKey,
-  usePreviewRecap,
+  previewRecap,
   type ListTransactionsParams,
 } from "@workspace/api-client-react";
 
@@ -80,20 +81,29 @@ export const useDuplicateCountQ = () =>
     query: { queryKey: getGetDuplicateTransactionCountQueryKey(), staleTime: 5 * MIN, gcTime: GC },
   });
 
-/** The recap preview is a POST; ask once on mount and keep the answer. */
+/**
+ * (D14) The recap preview is a POST that reads the household and may spend one
+ * of the six daily model calls, so it is a query, not a mutation: one request
+ * per open at most, none while the answer is under ten minutes old, no retry
+ * (a retry is a second model call), and `meta: OWN_INVALIDATION` so it can never
+ * be mistaken for a write that marks the spine, reports and ledger stale. A
+ * mutation here ran the after-write rule on every open.
+ */
+export const RECAP_PREVIEW_KEY = ["/api/recap/preview"] as const;
 export function useRecapPreviewQ() {
-  const m = usePreviewRecap();
-  const asked = useRef(false);
-  const { mutate } = m;
-  useEffect(() => {
-    if (asked.current) return;
-    asked.current = true;
-    mutate({ data: {} });
-  }, [mutate]);
+  const q = useQuery({
+    queryKey: RECAP_PREVIEW_KEY,
+    queryFn: ({ signal }) => previewRecap({}, { signal }),
+    staleTime: 10 * MIN,
+    gcTime: GC,
+    retry: false,
+    refetchOnWindowFocus: false,
+    meta: OWN_INVALIDATION,
+  });
   return {
-    data: m.data,
-    isLoading: m.isPending || (!m.data && !m.isError),
-    isError: m.isError,
-    retry: () => mutate({ data: {} }),
+    data: q.data,
+    isLoading: q.isPending,
+    isError: q.isError,
+    retry: () => void q.refetch(),
   };
 }

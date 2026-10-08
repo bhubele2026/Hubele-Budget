@@ -1877,6 +1877,26 @@ export default function AmexPage({
 
       <SectionHeader eyebrow="Ledger" title="Activity" />
 
+      {/* (D2) Visible control for the persisted hide-reviewed filter. Rows are
+          never hidden from a stored value without this on screen. */}
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant={hideReviewed ? "default" : "outline"}
+          className="h-7 text-xs"
+          aria-pressed={hideReviewed}
+          data-testid="button-hide-reviewed"
+          onClick={() => setHideReviewed((v) => !v)}
+        >
+          {hideReviewed ? "Showing pending only" : "Hide reviewed"}
+        </Button>
+        {hideReviewed && (
+          <span className="text-micro text-neutral-500" data-testid="text-hide-reviewed-note">
+            Reviewed rows are hidden.
+          </span>
+        )}
+      </div>
+
       {/* Bulk action bar */}
       {selected.size > 0 && (
         <div

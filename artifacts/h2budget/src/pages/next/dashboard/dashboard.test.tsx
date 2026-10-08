@@ -322,6 +322,25 @@ describe("needs review", () => {
     expect(screen.getByTestId("dash-review-cats").textContent).toContain("7");
     expect(screen.queryByTestId("dash-review-dups")).toBeNull();
   });
+  it("(D20) Categories to confirm opens the categorization queue, not the forecast inbox", () => {
+    h.Q.queue = ok({ total: 7 });
+    h.Q.dups = ok({ duplicateCount: 0 });
+    wrap(<ReviewPanel />);
+    expect(screen.getByTestId("dash-review-cats").getAttribute("href")).toBe("/activity/review");
+  });
+  it("(D20) a queue that is loading or failed is never 'Nothing is waiting'", () => {
+    h.spine.data = spine({ reviewCount: 0 });
+    h.Q.dups = ok({ duplicateCount: 0 });
+    h.Q.queue = loading;
+    const { unmount } = wrap(<ReviewPanel />);
+    expect(screen.queryByText("Nothing is waiting on a decision.")).toBeNull();
+    expect(screen.getByTestId("dash-review-cats-pending").textContent).toContain("loading");
+    unmount();
+    h.Q.queue = failed;
+    wrap(<ReviewPanel />);
+    expect(screen.queryByText("Nothing is waiting on a decision.")).toBeNull();
+    expect(screen.getByTestId("dash-review-cats-pending").textContent).toContain("did not load");
+  });
   it("shows duplicates when present and an all-clear when nothing waits", () => {
     h.Q.queue = ok({ total: 0 });
     h.Q.dups = ok({ duplicateCount: 2 });
