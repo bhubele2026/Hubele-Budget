@@ -368,6 +368,24 @@ describe("the debt rule", () => {
     expect(r.debt.cut).toBe("50.00");
   });
 
+  it("a cut never shows a gain: where snowball's re-ordering would pay LESS interest, the baseline stands", () => {
+    // Found by search: under snowball, $131 less in October re-orders the targets and
+    // the engine pays $803.88 of interest instead of $846.12. A purchase cannot help
+    // pay debt, so H2 keeps the plan's own figure and says so.
+    const debts: PlanDebt[] = [
+      { id: "d0", name: "D0", apr: 0.27, balance: 2535, minPayment: 108 },
+      { id: "d1", name: "D1", apr: 0.07, balance: 910, minPayment: 92 },
+      { id: "d2", name: "D2", apr: 0.2, balance: 2313, minPayment: 19 },
+    ];
+    const raw = composeCutRun({ debts, extraPerMonth: 278, strategy: "snowball", startDate: new Date(2026, 9, 1), cutMonthIndex: 1, cut: 131 });
+    expect(raw).toEqual({ debtFreeMonth: "2027-11", totalInterest: 803.88 });
+    // Buffer 2,400 leaves 224.50 until payday, under the $278 extra: October's extra is cut by $131.
+    const r = evaluateAfford(household({ ...NO_CAP, debts, extra: 278, strategy: "snowball", cashBuffer: 2400 }), { amount: 131, dateISO: "2026-10-08" });
+    expect(r.debt).toEqual({ affected: true, cut: "131.00", cutMonth: "2026-10", debtFreeMonthShift: 0, interestDelta: "0.00" });
+    expect(Number(r.proposed.totalInterestLow)).toBeGreaterThanOrEqual(Number(r.baseline.totalInterestLow));
+    expect(r.assumptions).toContain(AFFORD_ASSUMPTIONS.noDebtGain);
+  });
+
   it("no planned extra, or a $0 purchase: nothing to cut", () => {
     expect(evaluateAfford(household({ ...debt, extra: 0, cashBuffer: 2600 }), { amount: 50 }).debt.affected).toBe(false);
     expect(evaluateAfford(household({ ...debt, cashBuffer: 2600 }), { amount: 0 }).debt.affected).toBe(false);
