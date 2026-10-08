@@ -2,6 +2,7 @@ import type { Job } from "pg-boss";
 import { eq } from "drizzle-orm";
 import { db, householdsTable, plaidItemsTable } from "@workspace/db";
 import { logger } from "../../lib/logger";
+import { settleSilentAcceptances } from "../../lib/categorizer/review";
 import { runMonitor } from "../../monitor/run";
 import { emit } from "../emit";
 import { QUEUES } from "../queues";
@@ -18,6 +19,10 @@ import { QUEUES } from "../queues";
 // the job, so pg-boss retries it (retryLimit 2) and then parks it in the DLQ.
 // Chaining from `txn.arrived` is one `enqueueMonitor(...)` call from that
 // handler once PR-A lands — see docs/reviews/2026-10-07-ai3-monitoring.md.
+//
+// (V1) Each household's pass first settles provisional model suggestions left
+// standing for 14 days (review.ts settleSilentAcceptances; idempotent), so the
+// model's record moves nightly even on a day no charge arrives.
 
 export const MONITOR_CRON = "15 2 * * *";
 export const MONITOR_TZ = "America/Chicago";
@@ -72,6 +77,7 @@ export async function handleMonitorJobs(jobs: Job<MonitorJobData>[]): Promise<{ 
       logger.warn({ jobId: job.id }, "monitor job without a household; dropped");
       continue;
     }
+    await settleSilentAcceptances(data.householdId);
     await runMonitor(data.householdId, {
       ownerUserId: data.ownerUserId,
       trigger: data.trigger ?? "schedule",

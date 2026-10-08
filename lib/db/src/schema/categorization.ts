@@ -15,6 +15,7 @@ import { householdsTable, transactionsTable } from "./index";
 // (PR-A) Categorization engine v2. Created by
 // lib/db/migrations/0020_categorization_v2.sql — keep the two equal (the
 // schemaMigrations test replays the SQL and compares column for column).
+// (V1) `resolved_via` comes from 0111_category_decisions_resolved_via.sql.
 
 /**
  * One row per categorization decision: what the engine (or a person) decided
@@ -46,8 +47,15 @@ export const categoryDecisionsTable = pgTable(
     promptVersion: text("prompt_version"),
     inputHash: text("input_hash").notNull(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    /** Who resolved it: a user id, or 'system' when a newer engine decision superseded it. */
     resolvedBy: text("resolved_by"),
     resolution: text("resolution"),
+    /**
+     * (V1) How it was settled: 'user' (a person accepted / corrected / skipped
+     * it) or 'silent' (a provisional model suggestion that stood unchanged for
+     * SILENT_ACCEPT_DAYS). NULL while open, or when the engine superseded it.
+     */
+    resolvedVia: text("resolved_via"),
     undoneAt: timestamp("undone_at", { withTimezone: true }),
     createdMemoryId: uuid("created_memory_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -66,6 +74,10 @@ export const categoryDecisionsTable = pgTable(
     check(
       "category_decisions_resolution_ck",
       sql`${t.resolution} IS NULL OR ${t.resolution} IN ('accepted','corrected','skipped')`,
+    ),
+    check(
+      "category_decisions_resolved_via_ck",
+      sql`${t.resolvedVia} IS NULL OR ${t.resolvedVia} IN ('user','silent')`,
     ),
   ],
 );

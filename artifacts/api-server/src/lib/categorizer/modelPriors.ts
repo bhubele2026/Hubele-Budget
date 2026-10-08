@@ -3,6 +3,9 @@
 // A prior is a charge a PERSON stood behind: their own filing (source `user`) or
 // a suggestion they accepted, whose category the row still holds and that was
 // never undone. Raw bank text never leaves this file — only the category name.
+// (V1) A SILENT acceptance (resolved_via 'silent': nobody touched it for 14
+// days) counts toward the gate record but is never a prior — the model is never
+// fed back its own unverified guess.
 //
 //   4 by exact merchant signature, newest first
 //   3 by shared tokens (to_tsvector('simple', description) @@ plainto_tsquery),
@@ -61,7 +64,7 @@ function backedByPerson() {
     isNull(categoryDecisionsTable.undoneAt),
     sql`${categoryDecisionsTable.categoryId} IS NOT NULL`,
     sql`${transactionsTable.categoryId} = ${categoryDecisionsTable.categoryId}`,
-    or(eq(categoryDecisionsTable.source, "user"), eq(categoryDecisionsTable.resolution, "accepted")),
+    or(eq(categoryDecisionsTable.source, "user"), and(eq(categoryDecisionsTable.resolution, "accepted"), sql`${categoryDecisionsTable.resolvedVia} IS DISTINCT FROM 'silent'`)),
   );
 }
 

@@ -1,6 +1,6 @@
 // (PR-A) The review queue: open decisions (provisional | queue, unresolved,
 // not undone), oldest first, and what a person can do with one.
-import { and, asc, count, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { db, categoryDecisionsTable, merchantMemoryTable, transactionsTable } from "@workspace/db";
 import { merchantSignature } from "../merchantNameExtract";
 import { rowsWithSignature, type RetroactiveCandidates } from "./memory";
@@ -11,6 +11,74 @@ const OPEN = and(
   isNull(categoryDecisionsTable.resolvedAt),
   isNull(categoryDecisionsTable.undoneAt),
 );
+
+/** (V1) How many decisions wait in the household's review queue. */
+export async function openReviewCount(householdId: string): Promise<number> {
+  const [{ total }] = (await db
+    .select({ total: count() })
+    .from(categoryDecisionsTable)
+    .where(and(eq(categoryDecisionsTable.householdId, householdId), OPEN))) as [{ total: number }];
+  return Number(total);
+}
+
+/**
+ * (V1) A provisional model suggestion nobody answered for this many days, whose
+ * charge still carries it and is not locked, counts as accepted — silently.
+ */
+export const SILENT_ACCEPT_DAYS = 14;
+
+/**
+ * ⭐ (V1) Silent acceptance. A model decision that is provisional (written and
+ * flagged), unresolved and not undone, decided at least SILENT_ACCEPT_DAYS ago,
+ * whose transaction STILL carries that category and is NOT locked by a person,
+ * becomes resolution 'accepted', resolved_via 'silent', and its row stops being
+ * provisional (it is accepted now; the screen must not say "Provisional"
+ * forever). Nothing else moves: the category stays, the lock stays off, no
+ * memory is learned (memory is a person's act), and modelPriors.ts never uses
+ * it as a prior. A changed category or a locked row is never settled.
+ * Idempotent: a settled decision is no longer open. Returns how many settled.
+ */
+export async function settleSilentAcceptances(householdId: string, now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - SILENT_ACCEPT_DAYS * 86_400_000);
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(categoryDecisionsTable)
+      .set({ resolution: "accepted", resolvedAt: now, resolvedVia: "silent" })
+      .where(
+        and(
+          eq(categoryDecisionsTable.householdId, householdId),
+          eq(categoryDecisionsTable.source, "model"),
+          eq(categoryDecisionsTable.band, "provisional"),
+          isNull(categoryDecisionsTable.resolution),
+          isNull(categoryDecisionsTable.resolvedAt),
+          isNull(categoryDecisionsTable.undoneAt),
+          lte(categoryDecisionsTable.createdAt, cutoff),
+          sql`${categoryDecisionsTable.categoryId} IS NOT NULL`,
+          sql`EXISTS (
+            SELECT 1 FROM ${transactionsTable}
+             WHERE ${transactionsTable.id} = ${categoryDecisionsTable.transactionId}
+               AND ${transactionsTable.householdId} = ${householdId}
+               AND ${transactionsTable.categoryId} = ${categoryDecisionsTable.categoryId}
+               AND ${transactionsTable.categoryLockedByUser} = false
+          )`,
+        ),
+      )
+      .returning({ id: categoryDecisionsTable.id, transactionId: categoryDecisionsTable.transactionId });
+    if (rows.length > 0) {
+      await tx
+        .update(transactionsTable)
+        .set({ categoryProvisional: false })
+        .where(
+          and(
+            eq(transactionsTable.householdId, householdId),
+            eq(transactionsTable.categoryLockedByUser, false),
+            inArray(transactionsTable.id, rows.map((r) => r.transactionId)),
+          ),
+        );
+    }
+    return rows.length;
+  });
+}
 
 export interface ReviewItem {
   decisionId: string;
@@ -70,10 +138,7 @@ export async function listReviewQueue(
     .where(and(eq(categoryDecisionsTable.householdId, householdId), OPEN))
     .orderBy(asc(categoryDecisionsTable.createdAt), asc(categoryDecisionsTable.id))
     .limit(limit);
-  const [{ total }] = (await db
-    .select({ total: count() })
-    .from(categoryDecisionsTable)
-    .where(and(eq(categoryDecisionsTable.householdId, householdId), OPEN))) as [{ total: number }];
+  const total = await openReviewCount(householdId);
   const items: ReviewItem[] = [];
   for (const r of rows) {
     const sig = merchantSignature(r.description);
@@ -106,7 +171,7 @@ export async function listReviewQueue(
       },
     });
   }
-  return { items, total: Number(total) };
+  return { items, total };
 }
 
 export type ReviewOutcome =
@@ -163,7 +228,7 @@ export async function resolveDecision(
     const resolution = action === "skip" ? "skipped" : "accepted";
     await db
       .update(categoryDecisionsTable)
-      .set({ resolvedAt: new Date(), resolvedBy: actor, resolution })
+      .set({ resolvedAt: new Date(), resolvedBy: actor, resolution, resolvedVia: "user" })
       .where(eq(categoryDecisionsTable.id, d.id));
     return done(resolution, d.categoryId, null, null);
   }
@@ -176,6 +241,24 @@ export async function resolveDecision(
     answering: { decisionId: d.id, resolution },
   });
   return done(resolution, target, filed?.decisionId ?? null, filed?.retroactiveCandidates ?? null);
+}
+
+/**
+ * (V1) Why a decision cannot be undone right now, or null when it can. The one
+ * rule both `undoDecision` and the settings view's `undoable` use: not already
+ * undone, not the `locked` marker, an automatic decision never moves a locked
+ * row, and a decision that wrote a category only while the row still holds it.
+ */
+export function undoRefusal(
+  d: { source: string; band: string; categoryId: string | null; undoneAt: Date | null },
+  t: { categoryId: string | null; locked: boolean },
+): { status: 400 | 409; error: string } | null {
+  if (d.undoneAt) return { status: 409, error: "Already undone." };
+  if (d.source === "locked") return { status: 400, error: "Nothing to undo." };
+  if (d.source !== "user" && t.locked) return { status: 409, error: "You filed this one yourself; it does not move." };
+  const wrote = d.source === "user" || (d.band !== "queue" && d.categoryId != null);
+  if (wrote && t.categoryId !== d.categoryId) return { status: 409, error: "This charge changed since; nothing was undone." };
+  return null;
 }
 
 /**
@@ -204,13 +287,9 @@ export async function undoDecision(
       .where(and(eq(transactionsTable.id, d.transactionId), eq(transactionsTable.householdId, householdId)))
       .for("update");
     if (!t) return { status: 404 as const, body: { error: "Not found" } };
+    const refused = undoRefusal(d, t);
+    if (refused) return { status: refused.status, body: { error: refused.error } };
     const wrote = d.source === "user" || (d.band !== "queue" && d.categoryId != null);
-    if (d.source !== "user" && t.locked) {
-      return { status: 409 as const, body: { error: "You filed this one yourself; it does not move." } };
-    }
-    if (wrote && t.categoryId !== d.categoryId) {
-      return { status: 409 as const, body: { error: "This charge changed since; nothing was undone." } };
-    }
     const set: Record<string, unknown> = { categoryProvisional: false };
     if (wrote) set.categoryId = d.previousCategoryId;
     if (d.source === "user") {

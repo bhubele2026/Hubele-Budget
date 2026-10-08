@@ -15710,6 +15710,597 @@ export declare const RunCategorizationResponse: zod.ZodObject<{
     modelQueued?: number | undefined;
 }>;
 /**
+ * @summary (V1) What files the household's charges and how far the model may go:
+the owner's two switches, AI status, the deterministic engine's
+counts, the model's mode and the requirements it still has to meet,
+the last 20 decisions (any source) and the review-queue count. Any
+member. The model's mode is computed by the same function the
+categorize job uses.
+
+ */
+export declare const getCategorizationSettingsResponseRecentMax = 20;
+export declare const GetCategorizationSettingsResponse: zod.ZodObject<{
+    autoCategorize: zod.ZodBoolean;
+    modelAutoCategorize: zod.ZodBoolean;
+    ai: zod.ZodObject<{
+        configured: zod.ZodBoolean;
+        enabled: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        enabled: boolean;
+        configured: boolean;
+    }, {
+        enabled: boolean;
+        configured: boolean;
+    }>;
+    engine: zod.ZodObject<{
+        rules: zod.ZodNumber;
+        learned: zod.ZodNumber;
+        memories: zod.ZodNumber;
+        recurring: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        rules: number;
+        learned: number;
+        memories: number;
+        recurring: number;
+    }, {
+        rules: number;
+        learned: number;
+        memories: number;
+        recurring: number;
+    }>;
+    model: zod.ZodObject<{
+        mode: zod.ZodEnum<["off", "suggest", "auto"]>;
+        eligible: zod.ZodBoolean;
+        judged: zod.ZodNumber;
+        requirements: zod.ZodArray<zod.ZodObject<{
+            key: zod.ZodEnum<["ai", "owner_switch", "judged", "accuracy", "holding", "floor"]>;
+            label: zod.ZodString;
+            met: zod.ZodBoolean;
+            current: zod.ZodNumber;
+            target: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }, {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }>, "many">;
+        accuracy: zod.ZodObject<{
+            last50: zod.ZodObject<{
+                right: zod.ZodNumber;
+                judged: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                judged: number;
+                right: number;
+            }, {
+                judged: number;
+                right: number;
+            }>;
+            last20: zod.ZodObject<{
+                right: zod.ZodNumber;
+                judged: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                judged: number;
+                right: number;
+            }, {
+                judged: number;
+                right: number;
+            }>;
+        }, "strip", zod.ZodTypeAny, {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        }, {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        mode: "off" | "suggest" | "auto";
+        eligible: boolean;
+        judged: number;
+        requirements: {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }[];
+        accuracy: {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        };
+    }, {
+        mode: "off" | "suggest" | "auto";
+        eligible: boolean;
+        judged: number;
+        requirements: {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }[];
+        accuracy: {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        };
+    }>;
+    recent: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        transactionId: zod.ZodString;
+        description: zod.ZodString;
+        amount: zod.ZodString;
+        occurredOn: zod.ZodDate;
+        source: zod.ZodEnum<["locked", "rule", "memory", "recurring", "inherited", "heuristic", "model", "user", "refund"]>;
+        band: zod.ZodEnum<["auto", "provisional", "queue"]>;
+        categoryId: zod.ZodNullable<zod.ZodString>;
+        categoryName: zod.ZodNullable<zod.ZodString>;
+        resolution: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"accepted">, zod.ZodLiteral<"corrected">, zod.ZodLiteral<"skipped">, zod.ZodLiteral<null>]>>;
+        resolvedBy: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"user">, zod.ZodLiteral<"silent">, zod.ZodLiteral<null>]>>;
+        decidedAt: zod.ZodDate;
+        undoable: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        source: "model" | "rule" | "locked" | "user" | "recurring" | "memory" | "inherited" | "heuristic" | "refund";
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        categoryId: string | null;
+        categoryName: string | null;
+        transactionId: string;
+        band: "queue" | "auto" | "provisional";
+        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolvedBy: "user" | "silent" | null;
+        decidedAt: Date;
+        undoable: boolean;
+    }, {
+        id: string;
+        source: "model" | "rule" | "locked" | "user" | "recurring" | "memory" | "inherited" | "heuristic" | "refund";
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        categoryId: string | null;
+        categoryName: string | null;
+        transactionId: string;
+        band: "queue" | "auto" | "provisional";
+        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolvedBy: "user" | "silent" | null;
+        decidedAt: Date;
+        undoable: boolean;
+    }>, "many">;
+    reviewCount: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    ai: {
+        enabled: boolean;
+        configured: boolean;
+    };
+    model: {
+        mode: "off" | "suggest" | "auto";
+        eligible: boolean;
+        judged: number;
+        requirements: {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }[];
+        accuracy: {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        };
+    };
+    autoCategorize: boolean;
+    modelAutoCategorize: boolean;
+    reviewCount: number;
+    engine: {
+        rules: number;
+        learned: number;
+        memories: number;
+        recurring: number;
+    };
+    recent: {
+        id: string;
+        source: "model" | "rule" | "locked" | "user" | "recurring" | "memory" | "inherited" | "heuristic" | "refund";
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        categoryId: string | null;
+        categoryName: string | null;
+        transactionId: string;
+        band: "queue" | "auto" | "provisional";
+        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolvedBy: "user" | "silent" | null;
+        decidedAt: Date;
+        undoable: boolean;
+    }[];
+}, {
+    ai: {
+        enabled: boolean;
+        configured: boolean;
+    };
+    model: {
+        mode: "off" | "suggest" | "auto";
+        eligible: boolean;
+        judged: number;
+        requirements: {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }[];
+        accuracy: {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        };
+    };
+    autoCategorize: boolean;
+    modelAutoCategorize: boolean;
+    reviewCount: number;
+    engine: {
+        rules: number;
+        learned: number;
+        memories: number;
+        recurring: number;
+    };
+    recent: {
+        id: string;
+        source: "model" | "rule" | "locked" | "user" | "recurring" | "memory" | "inherited" | "heuristic" | "refund";
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        categoryId: string | null;
+        categoryName: string | null;
+        transactionId: string;
+        band: "queue" | "auto" | "provisional";
+        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolvedBy: "user" | "silent" | null;
+        decidedAt: Date;
+        undoable: boolean;
+    }[];
+}>;
+/**
+ * @summary (V1) Owner only. Set `autoCategorize` and/or `modelAutoCategorize` in
+the owner's settings preferences (created when missing; every other
+preference key kept). Returns the same view as GET.
+
+ */
+export declare const UpdateCategorizationSettingsBody: zod.ZodObject<{
+    autoCategorize: zod.ZodOptional<zod.ZodBoolean>;
+    modelAutoCategorize: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    autoCategorize?: boolean | undefined;
+    modelAutoCategorize?: boolean | undefined;
+}, {
+    autoCategorize?: boolean | undefined;
+    modelAutoCategorize?: boolean | undefined;
+}>;
+export declare const updateCategorizationSettingsResponseRecentMax = 20;
+export declare const UpdateCategorizationSettingsResponse: zod.ZodObject<{
+    autoCategorize: zod.ZodBoolean;
+    modelAutoCategorize: zod.ZodBoolean;
+    ai: zod.ZodObject<{
+        configured: zod.ZodBoolean;
+        enabled: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        enabled: boolean;
+        configured: boolean;
+    }, {
+        enabled: boolean;
+        configured: boolean;
+    }>;
+    engine: zod.ZodObject<{
+        rules: zod.ZodNumber;
+        learned: zod.ZodNumber;
+        memories: zod.ZodNumber;
+        recurring: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        rules: number;
+        learned: number;
+        memories: number;
+        recurring: number;
+    }, {
+        rules: number;
+        learned: number;
+        memories: number;
+        recurring: number;
+    }>;
+    model: zod.ZodObject<{
+        mode: zod.ZodEnum<["off", "suggest", "auto"]>;
+        eligible: zod.ZodBoolean;
+        judged: zod.ZodNumber;
+        requirements: zod.ZodArray<zod.ZodObject<{
+            key: zod.ZodEnum<["ai", "owner_switch", "judged", "accuracy", "holding", "floor"]>;
+            label: zod.ZodString;
+            met: zod.ZodBoolean;
+            current: zod.ZodNumber;
+            target: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }, {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }>, "many">;
+        accuracy: zod.ZodObject<{
+            last50: zod.ZodObject<{
+                right: zod.ZodNumber;
+                judged: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                judged: number;
+                right: number;
+            }, {
+                judged: number;
+                right: number;
+            }>;
+            last20: zod.ZodObject<{
+                right: zod.ZodNumber;
+                judged: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                judged: number;
+                right: number;
+            }, {
+                judged: number;
+                right: number;
+            }>;
+        }, "strip", zod.ZodTypeAny, {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        }, {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        mode: "off" | "suggest" | "auto";
+        eligible: boolean;
+        judged: number;
+        requirements: {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }[];
+        accuracy: {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        };
+    }, {
+        mode: "off" | "suggest" | "auto";
+        eligible: boolean;
+        judged: number;
+        requirements: {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }[];
+        accuracy: {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        };
+    }>;
+    recent: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        transactionId: zod.ZodString;
+        description: zod.ZodString;
+        amount: zod.ZodString;
+        occurredOn: zod.ZodDate;
+        source: zod.ZodEnum<["locked", "rule", "memory", "recurring", "inherited", "heuristic", "model", "user", "refund"]>;
+        band: zod.ZodEnum<["auto", "provisional", "queue"]>;
+        categoryId: zod.ZodNullable<zod.ZodString>;
+        categoryName: zod.ZodNullable<zod.ZodString>;
+        resolution: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"accepted">, zod.ZodLiteral<"corrected">, zod.ZodLiteral<"skipped">, zod.ZodLiteral<null>]>>;
+        resolvedBy: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"user">, zod.ZodLiteral<"silent">, zod.ZodLiteral<null>]>>;
+        decidedAt: zod.ZodDate;
+        undoable: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        source: "model" | "rule" | "locked" | "user" | "recurring" | "memory" | "inherited" | "heuristic" | "refund";
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        categoryId: string | null;
+        categoryName: string | null;
+        transactionId: string;
+        band: "queue" | "auto" | "provisional";
+        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolvedBy: "user" | "silent" | null;
+        decidedAt: Date;
+        undoable: boolean;
+    }, {
+        id: string;
+        source: "model" | "rule" | "locked" | "user" | "recurring" | "memory" | "inherited" | "heuristic" | "refund";
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        categoryId: string | null;
+        categoryName: string | null;
+        transactionId: string;
+        band: "queue" | "auto" | "provisional";
+        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolvedBy: "user" | "silent" | null;
+        decidedAt: Date;
+        undoable: boolean;
+    }>, "many">;
+    reviewCount: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    ai: {
+        enabled: boolean;
+        configured: boolean;
+    };
+    model: {
+        mode: "off" | "suggest" | "auto";
+        eligible: boolean;
+        judged: number;
+        requirements: {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }[];
+        accuracy: {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        };
+    };
+    autoCategorize: boolean;
+    modelAutoCategorize: boolean;
+    reviewCount: number;
+    engine: {
+        rules: number;
+        learned: number;
+        memories: number;
+        recurring: number;
+    };
+    recent: {
+        id: string;
+        source: "model" | "rule" | "locked" | "user" | "recurring" | "memory" | "inherited" | "heuristic" | "refund";
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        categoryId: string | null;
+        categoryName: string | null;
+        transactionId: string;
+        band: "queue" | "auto" | "provisional";
+        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolvedBy: "user" | "silent" | null;
+        decidedAt: Date;
+        undoable: boolean;
+    }[];
+}, {
+    ai: {
+        enabled: boolean;
+        configured: boolean;
+    };
+    model: {
+        mode: "off" | "suggest" | "auto";
+        eligible: boolean;
+        judged: number;
+        requirements: {
+            label: string;
+            key: "ai" | "judged" | "owner_switch" | "accuracy" | "holding" | "floor";
+            met: boolean;
+            current: number;
+            target: number;
+        }[];
+        accuracy: {
+            last50: {
+                judged: number;
+                right: number;
+            };
+            last20: {
+                judged: number;
+                right: number;
+            };
+        };
+    };
+    autoCategorize: boolean;
+    modelAutoCategorize: boolean;
+    reviewCount: number;
+    engine: {
+        rules: number;
+        learned: number;
+        memories: number;
+        recurring: number;
+    };
+    recent: {
+        id: string;
+        source: "model" | "rule" | "locked" | "user" | "recurring" | "memory" | "inherited" | "heuristic" | "refund";
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        categoryId: string | null;
+        categoryName: string | null;
+        transactionId: string;
+        band: "queue" | "auto" | "provisional";
+        resolution: "skipped" | "accepted" | "corrected" | null;
+        resolvedBy: "user" | "silent" | null;
+        decidedAt: Date;
+        undoable: boolean;
+    }[];
+}>;
+/**
  * @summary Open decisions (provisional or queued), oldest first.
  */
 export declare const listCategorizationReviewQueryLimitDefault = 20;
@@ -15759,9 +16350,9 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         decisionId: string;
         transactionId: string;
         confidence: number;
+        band: "queue" | "provisional";
         currentCategoryId: string | null;
         suggestedCategoryId: string | null;
-        band: "queue" | "provisional";
         explanation: string;
         flags: {
             novelMerchant: boolean;
@@ -15778,9 +16369,9 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         decisionId: string;
         transactionId: string;
         confidence: number;
+        band: "queue" | "provisional";
         currentCategoryId: string | null;
         suggestedCategoryId: string | null;
-        band: "queue" | "provisional";
         explanation: string;
         flags: {
             novelMerchant: boolean;
@@ -15801,9 +16392,9 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         decisionId: string;
         transactionId: string;
         confidence: number;
+        band: "queue" | "provisional";
         currentCategoryId: string | null;
         suggestedCategoryId: string | null;
-        band: "queue" | "provisional";
         explanation: string;
         flags: {
             novelMerchant: boolean;
@@ -15823,9 +16414,9 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         decisionId: string;
         transactionId: string;
         confidence: number;
+        band: "queue" | "provisional";
         currentCategoryId: string | null;
         suggestedCategoryId: string | null;
-        band: "queue" | "provisional";
         explanation: string;
         flags: {
             novelMerchant: boolean;
@@ -16140,9 +16731,9 @@ export declare const ListCategoryDecisionsResponseItem: zod.ZodObject<{
     transactionId: string;
     confidence: number;
     undoneAt: Date | null;
-    band: "queue" | "provisional" | "auto";
-    explanation: string;
+    band: "queue" | "auto" | "provisional";
     resolution: string | null;
+    explanation: string;
 }, {
     id: string;
     createdAt: Date;
@@ -16152,9 +16743,9 @@ export declare const ListCategoryDecisionsResponseItem: zod.ZodObject<{
     transactionId: string;
     confidence: number;
     undoneAt: Date | null;
-    band: "queue" | "provisional" | "auto";
-    explanation: string;
+    band: "queue" | "auto" | "provisional";
     resolution: string | null;
+    explanation: string;
 }>;
 export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -16177,9 +16768,9 @@ export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
     transactionId: string;
     confidence: number;
     undoneAt: Date | null;
-    band: "queue" | "provisional" | "auto";
-    explanation: string;
+    band: "queue" | "auto" | "provisional";
     resolution: string | null;
+    explanation: string;
 }, {
     id: string;
     createdAt: Date;
@@ -16189,9 +16780,9 @@ export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
     transactionId: string;
     confidence: number;
     undoneAt: Date | null;
-    band: "queue" | "provisional" | "auto";
-    explanation: string;
+    band: "queue" | "auto" | "provisional";
     resolution: string | null;
+    explanation: string;
 }>, "many">;
 /**
  * @summary Restore the decision's previous category, clear provisional, stamp
@@ -16809,8 +17400,8 @@ export declare const ListAgentProposalsResponse: zod.ZodObject<{
         rationale: string;
         payload: Record<string, unknown>;
         runId: string;
-        decidedBy: string | null;
         decidedAt: Date | null;
+        decidedBy: string | null;
         appliedActionId: string | null;
     }, {
         status: "expired" | "proposed" | "applied" | "approved" | "rejected";
@@ -16821,8 +17412,8 @@ export declare const ListAgentProposalsResponse: zod.ZodObject<{
         rationale: string;
         payload: Record<string, unknown>;
         runId: string;
-        decidedBy: string | null;
         decidedAt: Date | null;
+        decidedBy: string | null;
         appliedActionId: string | null;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
@@ -16835,8 +17426,8 @@ export declare const ListAgentProposalsResponse: zod.ZodObject<{
         rationale: string;
         payload: Record<string, unknown>;
         runId: string;
-        decidedBy: string | null;
         decidedAt: Date | null;
+        decidedBy: string | null;
         appliedActionId: string | null;
     }[];
 }, {
@@ -16849,8 +17440,8 @@ export declare const ListAgentProposalsResponse: zod.ZodObject<{
         rationale: string;
         payload: Record<string, unknown>;
         runId: string;
-        decidedBy: string | null;
         decidedAt: Date | null;
+        decidedBy: string | null;
         appliedActionId: string | null;
     }[];
 }>;
@@ -16885,8 +17476,8 @@ export declare const ApproveAgentProposalResponse: zod.ZodObject<{
     rationale: string;
     payload: Record<string, unknown>;
     runId: string;
-    decidedBy: string | null;
     decidedAt: Date | null;
+    decidedBy: string | null;
     appliedActionId: string | null;
 }, {
     status: "expired" | "proposed" | "applied" | "approved" | "rejected";
@@ -16897,8 +17488,8 @@ export declare const ApproveAgentProposalResponse: zod.ZodObject<{
     rationale: string;
     payload: Record<string, unknown>;
     runId: string;
-    decidedBy: string | null;
     decidedAt: Date | null;
+    decidedBy: string | null;
     appliedActionId: string | null;
 }>;
 /**
@@ -16932,8 +17523,8 @@ export declare const RejectAgentProposalResponse: zod.ZodObject<{
     rationale: string;
     payload: Record<string, unknown>;
     runId: string;
-    decidedBy: string | null;
     decidedAt: Date | null;
+    decidedBy: string | null;
     appliedActionId: string | null;
 }, {
     status: "expired" | "proposed" | "applied" | "approved" | "rejected";
@@ -16944,8 +17535,8 @@ export declare const RejectAgentProposalResponse: zod.ZodObject<{
     rationale: string;
     payload: Record<string, unknown>;
     runId: string;
-    decidedBy: string | null;
     decidedAt: Date | null;
+    decidedBy: string | null;
     appliedActionId: string | null;
 }>;
 /**
@@ -17090,8 +17681,8 @@ export declare const ListWishlistResponse: zod.ZodObject<{
         amount: number | null;
         categoryId: string | null;
         url: string | null;
-        title: string;
         decidedAt: Date | null;
+        title: string;
         targetDate: string | null;
         requestedBy: string;
         requestedAt: Date;
@@ -17103,8 +17694,8 @@ export declare const ListWishlistResponse: zod.ZodObject<{
         amount: number | null;
         categoryId: string | null;
         url: string | null;
-        title: string;
         decidedAt: Date | null;
+        title: string;
         targetDate: string | null;
         requestedBy: string;
         requestedAt: Date;
@@ -17118,8 +17709,8 @@ export declare const ListWishlistResponse: zod.ZodObject<{
         amount: number | null;
         categoryId: string | null;
         url: string | null;
-        title: string;
         decidedAt: Date | null;
+        title: string;
         targetDate: string | null;
         requestedBy: string;
         requestedAt: Date;
@@ -17134,8 +17725,8 @@ export declare const ListWishlistResponse: zod.ZodObject<{
         amount: number | null;
         categoryId: string | null;
         url: string | null;
-        title: string;
         decidedAt: Date | null;
+        title: string;
         targetDate: string | null;
         requestedBy: string;
         requestedAt: Date;
@@ -17224,8 +17815,8 @@ export declare const UpdateWishlistItemResponse: zod.ZodObject<{
     amount: number | null;
     categoryId: string | null;
     url: string | null;
-    title: string;
     decidedAt: Date | null;
+    title: string;
     targetDate: string | null;
     requestedBy: string;
     requestedAt: Date;
@@ -17237,8 +17828,8 @@ export declare const UpdateWishlistItemResponse: zod.ZodObject<{
     amount: number | null;
     categoryId: string | null;
     url: string | null;
-    title: string;
     decidedAt: Date | null;
+    title: string;
     targetDate: string | null;
     requestedBy: string;
     requestedAt: Date;

@@ -44,6 +44,7 @@ export async function recordUserDecisions(
           resolvedAt: now,
           resolvedBy: actor,
           resolution: "corrected",
+          resolvedVia: "user",
           createdMemoryId: opts.createdMemoryId ?? null,
           createdAt: now,
         })),
@@ -52,7 +53,7 @@ export async function recordUserDecisions(
     ids.push(...rows.map((r) => r.id));
     await exec
       .update(categoryDecisionsTable)
-      .set({ resolvedAt: now, resolvedBy: actor, resolution: "corrected" })
+      .set({ resolvedAt: now, resolvedBy: actor, resolution: "corrected", resolvedVia: "user" })
       .where(
         and(
           inArray(categoryDecisionsTable.transactionId, chunk.map((c) => c.transactionId)),
@@ -152,6 +153,7 @@ export async function recordHandFiling(
           resolvedAt: new Date(),
           resolvedBy: actor,
           resolution: opts.answering.resolution,
+          resolvedVia: "user",
           createdMemoryId,
         })
         .where(

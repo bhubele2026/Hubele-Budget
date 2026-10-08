@@ -2808,6 +2808,44 @@ paths:
               schema: { $ref: "#/components/schemas/CategorizationRunResult" }
         "403": { description: Owner only }
 
+  /categorization/settings:
+    get:
+      operationId: getCategorizationSettings
+      tags: [categorization]
+      summary: |
+        (V1) What files the household's charges and how far the model may go:
+        the owner's two switches, AI status, the deterministic engine's
+        counts, the model's mode and the requirements it still has to meet,
+        the last 20 decisions (any source) and the review-queue count. Any
+        member. The model's mode is computed by the same function the
+        categorize job uses.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategorizationSettings" }
+    put:
+      operationId: updateCategorizationSettings
+      tags: [categorization]
+      summary: |
+        (V1) Owner only. Set `autoCategorize` and/or `modelAutoCategorize` in
+        the owner's settings preferences (created when missing; every other
+        preference key kept). Returns the same view as GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategorizationSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategorizationSettings" }
+        "400": { description: "Neither key sent, an unknown key, or a value that is not true/false" }
+        "403": { description: "Owner only; the body is { error: owner_only }" }
+
   /categorization/review:
     get:
       operationId: listCategorizationReview
@@ -6408,17 +6446,12 @@ components:
             ("h2-1"). A view setting only.
         autoCategorize:
           type: boolean
-          description: |
-            (S1) The user's choice that H2 files new charges on its own.
-            (AI-1) The categorizer's model pass reads it: false skips the model
-            entirely (the deterministic stages still run). Absent means true.
+          deprecated: true
+          description: Not read by the server; use /categorization/settings
         modelAutoCategorize:
           type: boolean
-          description: |
-            (AI-1) The owner lets the model's high-confidence answers write a
-            category outright. Only counts once the household has at least 50
-            model filings accepted in the last 30 days (and 9 in 10 of the ones
-            judged); until then the model stays provisional. Absent means false.
+          deprecated: true
+          description: Not read by the server; use /categorization/settings
     Settings:
       type: object
       required: [weeklyAllowanceAmount, monthlyAllowanceAmount, unplannedAllowanceAmount]
@@ -8330,6 +8363,117 @@ components:
         decisionId: { type: string }
         transactionId: { type: string }
         categoryId: { type: ["string", "null"] }
+
+    CategorizationSettingsInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        autoCategorize:
+          type: boolean
+          description: false turns the model off entirely; the deterministic stages still run.
+        modelAutoCategorize:
+          type: boolean
+          description: The owner lets the model's sure answers file on their own, once the record is eligible.
+
+    CategorizationRequirement:
+      type: object
+      required: [key, label, met, current, target]
+      properties:
+        key:
+          type: string
+          enum: [ai, owner_switch, judged, accuracy, holding, floor]
+          description: |
+            The first four always, in order. `holding` (met) while the gate is
+            open only because the last 20 hold 8 in 10; `floor` (not met) while
+            a slip below 8 in 10 holds it closed.
+        label: { type: string, description: A plain sentence for the screen. }
+        met: { type: boolean }
+        current: { type: integer }
+        target: { type: integer }
+
+    CategorizationAccuracyWindow:
+      type: object
+      required: [right, judged]
+      properties:
+        right: { type: integer }
+        judged: { type: integer }
+
+    CategorizationRecentDecision:
+      type: object
+      required: [id, transactionId, description, amount, occurredOn, source, band, categoryId, categoryName, resolution, resolvedBy, decidedAt, undoable]
+      properties:
+        id: { type: string }
+        transactionId: { type: string }
+        description: { type: string }
+        amount: { type: string }
+        occurredOn: { type: string, format: date }
+        source: { type: string, enum: [locked, rule, memory, recurring, inherited, heuristic, model, user, refund] }
+        band: { type: string, enum: [auto, provisional, queue] }
+        categoryId: { type: ["string", "null"] }
+        categoryName: { type: ["string", "null"] }
+        resolution: { type: ["string", "null"], enum: [accepted, corrected, skipped, null] }
+        resolvedBy:
+          type: ["string", "null"]
+          enum: [user, silent, null]
+          description: How it was settled. null while open, or when a newer engine decision superseded it.
+        decidedAt: { type: string, format: date-time }
+        undoable:
+          type: boolean
+          description: POST /category-decisions/{id}/undo would succeed now (same preconditions).
+
+    CategorizationSettings:
+      type: object
+      required: [autoCategorize, modelAutoCategorize, ai, engine, model, recent, reviewCount]
+      properties:
+        autoCategorize: { type: boolean }
+        modelAutoCategorize: { type: boolean }
+        ai:
+          type: object
+          required: [configured, enabled]
+          properties:
+            configured: { type: boolean }
+            enabled: { type: boolean }
+        engine:
+          type: object
+          required: [rules, learned, memories, recurring]
+          properties:
+            rules: { type: integer, description: Mapping rules the household wrote. }
+            learned: { type: integer, description: Learned rules (what GET /learned-rules lists). }
+            memories: { type: integer, description: Learned rules the engine acts on now (not disabled). }
+            recurring: { type: integer, description: Active recurring items. }
+        model:
+          type: object
+          required: [mode, eligible, judged, requirements, accuracy]
+          properties:
+            mode:
+              type: string
+              enum: ["off", suggest, auto]
+              description: |
+                off = the model does not run (AI off, or autoCategorize false);
+                suggest = its answers are provisional until a person looks;
+                auto = sure answers file on their own.
+            eligible:
+              type: boolean
+              description: |
+                The record has earned automatic filing: at least 30 judged,
+                9 in 10 accepted among the last 50; once open it holds while
+                the last 20 stay at 8 in 10, and after a slip reopens at 9 in 10.
+            judged: { type: integer, description: Model suggestions accepted or corrected (silently or by a person), lifetime. }
+            requirements:
+              type: array
+              items: { $ref: "#/components/schemas/CategorizationRequirement" }
+            accuracy:
+              type: object
+              required: [last50, last20]
+              properties:
+                last50: { $ref: "#/components/schemas/CategorizationAccuracyWindow" }
+                last20: { $ref: "#/components/schemas/CategorizationAccuracyWindow" }
+        recent:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/CategorizationRecentDecision" }
+        reviewCount: { type: integer }
 
     LearnedRule:
       type: object

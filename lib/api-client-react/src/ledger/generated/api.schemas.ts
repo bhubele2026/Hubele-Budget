@@ -3724,16 +3724,15 @@ depends on it.
    * @maxLength 32
    */
   whatsNewSeen?: string;
-  /** (S1) The user's choice that H2 files new charges on its own.
-(AI-1) The categorizer's model pass reads it: false skips the model
-entirely (the deterministic stages still run). Absent means true.
- */
+  /**
+   * Not read by the server; use /categorization/settings
+   * @deprecated
+   */
   autoCategorize?: boolean;
-  /** (AI-1) The owner lets the model's high-confidence answers write a
-category outright. Only counts once the household has at least 50
-model filings accepted in the last 30 days (and 9 in 10 of the ones
-judged); until then the model stays provisional. Absent means false.
- */
+  /**
+   * Not read by the server; use /categorization/settings
+   * @deprecated
+   */
   modelAutoCategorize?: boolean;
 }
 
@@ -5480,6 +5479,187 @@ export interface UndoDecisionResult {
   transactionId: string;
   /** @nullable */
   categoryId: string | null;
+}
+
+export interface CategorizationSettingsInput {
+  /** false turns the model off entirely; the deterministic stages still run. */
+  autoCategorize?: boolean;
+  /** The owner lets the model's sure answers file on their own, once the record is eligible. */
+  modelAutoCategorize?: boolean;
+}
+
+/**
+ * The first four always, in order. `holding` (met) while the gate is
+open only because the last 20 hold 8 in 10; `floor` (not met) while
+a slip below 8 in 10 holds it closed.
+
+ */
+export type CategorizationRequirementKey =
+  (typeof CategorizationRequirementKey)[keyof typeof CategorizationRequirementKey];
+
+export const CategorizationRequirementKey = {
+  ai: "ai",
+  owner_switch: "owner_switch",
+  judged: "judged",
+  accuracy: "accuracy",
+  holding: "holding",
+  floor: "floor",
+} as const;
+
+export interface CategorizationRequirement {
+  /** The first four always, in order. `holding` (met) while the gate is
+open only because the last 20 hold 8 in 10; `floor` (not met) while
+a slip below 8 in 10 holds it closed.
+ */
+  key: CategorizationRequirementKey;
+  /** A plain sentence for the screen. */
+  label: string;
+  met: boolean;
+  current: number;
+  target: number;
+}
+
+export interface CategorizationAccuracyWindow {
+  right: number;
+  judged: number;
+}
+
+export type CategorizationRecentDecisionSource =
+  (typeof CategorizationRecentDecisionSource)[keyof typeof CategorizationRecentDecisionSource];
+
+export const CategorizationRecentDecisionSource = {
+  locked: "locked",
+  rule: "rule",
+  memory: "memory",
+  recurring: "recurring",
+  inherited: "inherited",
+  heuristic: "heuristic",
+  model: "model",
+  user: "user",
+  refund: "refund",
+} as const;
+
+export type CategorizationRecentDecisionBand =
+  (typeof CategorizationRecentDecisionBand)[keyof typeof CategorizationRecentDecisionBand];
+
+export const CategorizationRecentDecisionBand = {
+  auto: "auto",
+  provisional: "provisional",
+  queue: "queue",
+} as const;
+
+/**
+ * @nullable
+ */
+export type CategorizationRecentDecisionResolution =
+  | (typeof CategorizationRecentDecisionResolution)[keyof typeof CategorizationRecentDecisionResolution]
+  | null;
+
+export const CategorizationRecentDecisionResolution = {
+  accepted: "accepted",
+  corrected: "corrected",
+  skipped: "skipped",
+} as const;
+
+/**
+ * How it was settled. null while open, or when a newer engine decision superseded it.
+ * @nullable
+ */
+export type CategorizationRecentDecisionResolvedBy =
+  | (typeof CategorizationRecentDecisionResolvedBy)[keyof typeof CategorizationRecentDecisionResolvedBy]
+  | null;
+
+export const CategorizationRecentDecisionResolvedBy = {
+  user: "user",
+  silent: "silent",
+} as const;
+
+export interface CategorizationRecentDecision {
+  id: string;
+  transactionId: string;
+  description: string;
+  amount: string;
+  occurredOn: string;
+  source: CategorizationRecentDecisionSource;
+  band: CategorizationRecentDecisionBand;
+  /** @nullable */
+  categoryId: string | null;
+  /** @nullable */
+  categoryName: string | null;
+  /** @nullable */
+  resolution: CategorizationRecentDecisionResolution;
+  /**
+   * How it was settled. null while open, or when a newer engine decision superseded it.
+   * @nullable
+   */
+  resolvedBy: CategorizationRecentDecisionResolvedBy;
+  decidedAt: string;
+  /** POST /category-decisions/{id}/undo would succeed now (same preconditions). */
+  undoable: boolean;
+}
+
+export type CategorizationSettingsAi = {
+  configured: boolean;
+  enabled: boolean;
+};
+
+export type CategorizationSettingsEngine = {
+  /** Mapping rules the household wrote. */
+  rules: number;
+  /** Learned rules (what GET /learned-rules lists). */
+  learned: number;
+  /** Learned rules the engine acts on now (not disabled). */
+  memories: number;
+  /** Active recurring items. */
+  recurring: number;
+};
+
+/**
+ * off = the model does not run (AI off, or autoCategorize false);
+suggest = its answers are provisional until a person looks;
+auto = sure answers file on their own.
+
+ */
+export type CategorizationSettingsModelMode =
+  (typeof CategorizationSettingsModelMode)[keyof typeof CategorizationSettingsModelMode];
+
+export const CategorizationSettingsModelMode = {
+  off: "off",
+  suggest: "suggest",
+  auto: "auto",
+} as const;
+
+export type CategorizationSettingsModelAccuracy = {
+  last50: CategorizationAccuracyWindow;
+  last20: CategorizationAccuracyWindow;
+};
+
+export type CategorizationSettingsModel = {
+  /** off = the model does not run (AI off, or autoCategorize false);
+suggest = its answers are provisional until a person looks;
+auto = sure answers file on their own.
+ */
+  mode: CategorizationSettingsModelMode;
+  /** The record has earned automatic filing: at least 30 judged,
+9 in 10 accepted among the last 50; once open it holds while
+the last 20 stay at 8 in 10, and after a slip reopens at 9 in 10.
+ */
+  eligible: boolean;
+  /** Model suggestions accepted or corrected (silently or by a person) */
+  judged: number;
+  requirements: CategorizationRequirement[];
+  accuracy: CategorizationSettingsModelAccuracy;
+};
+
+export interface CategorizationSettings {
+  autoCategorize: boolean;
+  modelAutoCategorize: boolean;
+  ai: CategorizationSettingsAi;
+  engine: CategorizationSettingsEngine;
+  model: CategorizationSettingsModel;
+  /** @maxItems 20 */
+  recent: CategorizationRecentDecision[];
+  reviewCount: number;
 }
 
 export type LearnedRuleScope =

@@ -104,6 +104,12 @@ export const SERVER_OWNED_PREFERENCE_KEYS = [
   // (PR-B2, decision 7) Which recurring items are the everyday hooks. Set once
   // per household by 0042_everyday_hooks.sql; a settings PUT never moves it.
   "everydayHooks",
+  // (V1) The categorizer's two switches. Written only by PUT
+  // /categorization/settings (owner); `SettingsPreferences` does not list them,
+  // so a PUT /settings body would otherwise drop them and silently turn the
+  // model back to its defaults.
+  "autoCategorize",
+  "modelAutoCategorize",
 ] as const;
 
 /**
