@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { TransactionPaymentState } from "./transactionPaymentState";
 import type { TransactionWeeklyBucket } from "./transactionWeeklyBucket";
 export interface Transaction {
     id: string;
@@ -132,5 +133,18 @@ export interface Transaction {
   response — never persisted.
    */
     merchantSignature?: string;
+    /**
+     * (PR-D) A payment logged in the app (POST /debts/{id}/payments) is
+  a claim: "claimed" when written, "confirmed" once a bank row pairs
+  with it. Null on every other row.
+  
+     * @nullable
+     */
+    paymentState?: TransactionPaymentState;
+    /**
+     * (PR-D) The bank row that confirmed this claim.
+     * @nullable
+     */
+    confirmedByTxnId?: string | null;
 }
 //# sourceMappingURL=transaction.d.ts.map

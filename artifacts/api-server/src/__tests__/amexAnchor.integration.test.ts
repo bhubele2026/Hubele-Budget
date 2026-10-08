@@ -132,7 +132,13 @@ describe("refreshAmexAnchor", () => {
     expect(r.updatedDebt).toBe(false);
   });
 
-  it("aggregates both 'amex' and 'plaid:amex' transactions", async () => {
+  it("aggregates both 'amex' and 'plaid:amex' transactions — on ONE sign (PR-D)", async () => {
+    // Workbook `amex`: a charge is POSITIVE. Plaid: a charge is NEGATIVE, a
+    // payment or credit positive. So: a 100.00 workbook charge, a 25.00 Plaid
+    // credit and a 10.00 Plaid charge owe 100 − 25 + 10 = 85.00.
+    // ⚠️ FIGURE THAT MOVES: before PR-D the raw column was summed across both
+    // conventions — 100 + 25 − 10 = 115.00, counting the credit as a charge and
+    // the charge as a credit.
     await insertAmexTxn("2026-04-01", "100.00", "amex");
     await insertAmexTxn("2026-04-02", "25.00", "plaid:amex");
     await insertAmexTxn("2026-04-03", "-10.00", "plaid:amex");
@@ -140,7 +146,28 @@ describe("refreshAmexAnchor", () => {
 
     const r = await refreshAmexAnchor(USER);
     expect(r.txnCount).toBe(3);
-    expect(r.balance).toBeCloseTo(115, 2);
+    expect(r.balance).toBeCloseTo(85, 2);
+  });
+
+  it("(PR-D) a workbook-only household does not move", async () => {
+    await insertAmexTxn("2026-04-01", "100.00", "amex");
+    await insertAmexTxn("2026-04-02", "-40.00", "amex");
+    await insertAmexDebt("0");
+    expect((await refreshAmexAnchor(USER)).balance).toBeCloseTo(60, 2);
+  });
+
+  it("(PR-D) a Plaid-only household: same magnitude, sign corrected (it read NEGATIVE before)", async () => {
+    // Charges 50.00 and 30.00, a 20.00 payment: 60.00 owed. Before PR-D the
+    // raw sum was −60.00 — and a matching auto-anchored debt row would have
+    // been written NEGATIVE.
+    await insertAmexTxn("2026-04-01", "-50.00", "plaid:amex");
+    await insertAmexTxn("2026-04-02", "-30.00", "plaid:amex");
+    await insertAmexTxn("2026-04-03", "20.00", "plaid:amex");
+    const debtId = await insertAmexDebt("0");
+    const r = await refreshAmexAnchor(USER);
+    expect(r.balance).toBeCloseTo(60, 2);
+    const [d] = await db.select().from(debtsTable).where(eq(debtsTable.id, debtId));
+    expect(Number(d!.balance)).toBeCloseTo(60, 2);
   });
 
   it("adopt=true overwrites the debt even when it disagrees with the prior auto value", async () => {

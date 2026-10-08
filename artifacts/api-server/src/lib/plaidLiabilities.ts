@@ -24,6 +24,7 @@ import {
   plaidLogContext,
 } from "./plaidSync";
 import { recordPlaidSyncAttempt } from "./plaidSyncAttempts";
+import { recordDebtStatements, type StatementFact } from "./debtLedger";
 
 export type LiabilityRow = {
   accountId: string;
@@ -347,10 +348,19 @@ export async function fetchLiabilitiesForItem(
   // Step 2: enrich with APR + min payment from /liabilities/get when present.
   const out: LiabilityRow[] = [];
   if (!liab) return out;
+  // (PR-D) Statement facts for `debt_statements`, gathered in the same pass.
+  const statements: StatementFact[] = [];
 
   for (const c of liab.credit ?? []) {
     if (!c.account_id) continue;
     const acc = accountsById.get(c.account_id);
+    statements.push({
+      accountId: c.account_id,
+      statementDate: c.last_statement_issue_date,
+      statementBalance: c.last_statement_balance,
+      minPayment: c.minimum_payment_amount,
+      dueDate: c.next_payment_due_date,
+    });
     out.push({
       accountId: c.account_id,
       kind: "credit",
@@ -364,6 +374,13 @@ export async function fetchLiabilitiesForItem(
   for (const s of liab.student ?? []) {
     if (!s.account_id) continue;
     const acc = accountsById.get(s.account_id);
+    statements.push({
+      accountId: s.account_id,
+      statementDate: (s as { last_statement_issue_date?: string | null }).last_statement_issue_date,
+      statementBalance: (s as { last_statement_balance?: number | null }).last_statement_balance,
+      minPayment: s.minimum_payment_amount,
+      dueDate: (s as { next_payment_due_date?: string | null }).next_payment_due_date,
+    });
     const aprPct = (s as { interest_rate_percentage?: number }).interest_rate_percentage;
     out.push({
       accountId: s.account_id,
@@ -425,6 +442,9 @@ export async function fetchLiabilitiesForItem(
   // the Amex band on link + Sync — not just at server boot. Best-effort
   // (swallows its own errors); scoped to this household.
   await linkRevolvingAmexDebts({ householdId });
+  // (PR-D) One upsert into debt_statements, after the link sweep so a card it
+  // just linked has its statement recorded too. Swallows its own errors.
+  await recordDebtStatements(householdId, statements);
   return out;
 }
 

@@ -23,6 +23,7 @@ import {
   loadPendingPayments,
   type PendingEntry,
 } from "../lib/debtPending";
+import { confirmDebtPaymentClaims } from "../lib/debtPaymentConfirm";
 
 const router: IRouter = Router();
 
@@ -871,6 +872,10 @@ router.post(
           source: "manual",
           member: null,
           debtId,
+          // (PR-D) A payment logged here is a CLAIM until a bank row confirms
+          // it (`lib/debtPaymentConfirm.ts`). The balance still drops now, as
+          // it always has.
+          paymentState: "claimed",
         })
         .returning();
       const [updated] = await tx
@@ -890,12 +895,27 @@ router.post(
       return;
     }
     await recordBalanceSnapshot(req.userId!, householdId, result.debt.id, result.debt.balance);
+    // (PR-D) The bank row may already be in: pair it now, so cash stops
+    // counting the payment twice the moment it is logged. Best-effort.
+    let transaction = result.transaction;
+    try {
+      const { confirmed } = await confirmDebtPaymentClaims(householdId);
+      if (confirmed.some((c) => c.claimId === transaction.id)) {
+        const [fresh] = await db
+          .select()
+          .from(transactionsTable)
+          .where(and(eq(transactionsTable.id, transaction.id), eq(transactionsTable.householdId, householdId)));
+        if (fresh) transaction = fresh;
+      }
+    } catch (err) {
+      req.log?.warn?.({ err }, "[debt-plan] claim confirmation after payment failed");
+    }
     const accountIds = result.debt.plaidAccountId ? [result.debt.plaidAccountId] : [];
     const { accountById, itemById } = await loadAccountContext(householdId, accountIds);
     const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
     res.status(201).json({
       debt: shapeDebt(result.debt, accountById, itemById, pendingByDebt),
-      transaction: result.transaction,
+      transaction,
       killed: result.killed,
     });
   },

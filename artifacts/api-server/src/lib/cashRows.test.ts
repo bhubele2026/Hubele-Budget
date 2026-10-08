@@ -207,3 +207,39 @@ describe("classifyCashRows", () => {
     expect(r.throughToday).toEqual({ rowCount: 2, net: -65 });
   });
 });
+
+describe("classifyCashRows — a confirmed payment claim (PR-D)", () => {
+  // The user logs "Payment — Visa" in the app (a manual checking row), then the
+  // bank's own debit for that payment arrives. One payment, two rows.
+  const claim = (extra: Partial<CashRow> = {}) =>
+    row("claim", "2026-05-10", -250, {
+      source: "manual",
+      plaidAccountId: null,
+      description: "Payment — Visa",
+      ...extra,
+    });
+  const bank = row("bank", "2026-05-11", -250, { description: "VISA ONLINE PAYMENT" });
+
+  it("before PR-D both left cash: the same 250.00 counted twice", () => {
+    const r = classify([claim(), bank]);
+    expect(byId(r).claim).toMatchObject({ reason: "counted", contribution: -250 });
+    expect(r.throughToday).toEqual({ rowCount: 2, net: -500 });
+  });
+
+  it("confirmed, the claim adds 0 and the bank row is the payment: 250.00 once", () => {
+    const r = classify([claim({ claimConfirmed: true }), bank]);
+    expect(byId(r).claim).toMatchObject({ reason: "claim_confirmed", counts: false, contribution: 0 });
+    expect(byId(r).bank).toMatchObject({ reason: "counted", contribution: -250 });
+    expect(r.throughToday).toEqual({ rowCount: 1, net: -250 });
+  });
+
+  it("an UNconfirmed claim still counts: until a bank row says so, the payment is the claim", () => {
+    const r = classify([claim({ claimConfirmed: false })]);
+    expect(r.throughToday).toEqual({ rowCount: 1, net: -250 });
+  });
+
+  it("a confirmed claim the snapshot already holds stays held (adds 0 either way)", () => {
+    const r = classify([claim({ claimConfirmed: true, occurredOn: "2026-04-28" })]);
+    expect(byId(r).claim!.reason).toBe("held");
+  });
+});

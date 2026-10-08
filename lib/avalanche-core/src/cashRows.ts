@@ -16,6 +16,13 @@ export type CashRow = {
   source: string | null;
   plaidAccountId: string | null;
   plaidTransactionId: string | null;
+  /**
+   * (PR-D) A payment the user logged in the app (`POST /debts/:id/payments`, a
+   * claim) that a bank row has since confirmed (`transactions.payment_state =
+   * 'confirmed'` with `confirmed_by_txn_id`). The bank row is the payment; the
+   * claim beside it adds 0. Absent (every row before PR-D) means false.
+   */
+  claimConfirmed?: boolean;
 };
 
 /** The bank balance the rows roll forward from: the instant it was read and its household day. */
@@ -28,11 +35,21 @@ export type CashAnchor = { at: Date; day: string };
  * - `not_bank`: not on the snapshot's account — adds 0;
  * - `superseded`: a pending row its posted row replaced (`pairPendingWithPosted`) — adds 0;
  * - `duplicate`: a second row with the same Plaid transaction id — adds 0 (defensive: the id is unique);
+ * - `claim_confirmed` (PR-D): a payment logged in the app that a bank row has
+ *   confirmed (`claimConfirmed`) — adds 0, because the bank row it paired with
+ *   counts. Before PR-D both counted: the same payment left cash twice;
  * - `adjusted`: a posted row whose pending half was a charge already in the
  *   balance (`pendingChargeWasInBalance`) — adds posted − pending;
  * - `counted`: adds its amount.
  */
-export type CashRowReason = "held" | "not_bank" | "superseded" | "duplicate" | "adjusted" | "counted";
+export type CashRowReason =
+  | "held"
+  | "not_bank"
+  | "claim_confirmed"
+  | "superseded"
+  | "duplicate"
+  | "adjusted"
+  | "counted";
 
 export type CashRowOutcome = {
   id: string;
@@ -92,6 +109,8 @@ export function isBankRow(
  *      ledger after that pending half and is dated on or after it, so it cannot
  *      be inside a balance the pending half was not (PR4c review);
  *   2. adds 0 when it is not on the snapshot's account (`isBankRow`);
+ *   2b. (PR-D) adds 0 when it is a confirmed claim (`claimConfirmed`): the bank
+ *      row that confirmed it is the same payment, and that row counts;
  *   3. adds 0 when it is the pending half of a pair (`pairPendingWithPosted`,
  *      run over the bank rows only, held ones included);
  *   4. adds 0 when an earlier row carried the same Plaid transaction id;
@@ -159,6 +178,8 @@ export function classifyCashRows(
       reason = "held";
     } else if (!isBankRow(r.source, r.plaidAccountId, accountExternalId)) {
       reason = "not_bank";
+    } else if (r.claimConfirmed === true) {
+      reason = "claim_confirmed";
     } else if (supersededIds.has(r.id)) {
       reason = "superseded";
     } else if (r.plaidTransactionId && seenPlaidIds.has(r.plaidTransactionId)) {

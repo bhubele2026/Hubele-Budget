@@ -92,8 +92,12 @@ describe("startServer with the real runner", () => {
   it("a real failing migration file keeps the server from listening", async () => {
     const schema = `pr0_boot_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
     await pool.query(`CREATE SCHEMA ${schema}`);
-    await pool.query(`CREATE TABLE ${schema}.transactions (LIKE public.transactions INCLUDING DEFAULTS)`);
-    await pool.query(`ALTER TABLE ${schema}.transactions DROP COLUMN category_locked_by_user`);
+    // (PR-D) INCLUDING INDEXES copies the primary key: 0060 adds foreign keys
+    // that point at transactions(id), which need one.
+    await pool.query(`CREATE TABLE ${schema}.transactions (LIKE public.transactions INCLUDING DEFAULTS INCLUDING INDEXES)`);
+    for (const col of ["category_locked_by_user", "payment_state", "confirmed_by_txn_id"]) {
+      await pool.query(`ALTER TABLE ${schema}.transactions DROP COLUMN ${col}`);
+    }
     const dir = await mkdtemp(path.join(os.tmpdir(), "pr0-boot-"));
     cleanup.push(async () => {
       await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);

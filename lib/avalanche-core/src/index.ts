@@ -100,6 +100,34 @@ export {
   monthBounds,
 } from "./householdTime";
 export {
+  compareStrategies,
+  debtFreeRange,
+  isCardDebt,
+  milestonesFor,
+  PERCENT_MILESTONES,
+  monthKeyOf,
+  planAssumptions,
+  type Milestone,
+  type MilestoneKind,
+  type PlanAssumption,
+  type PlanDebt,
+  type StrategyComparison,
+  type StrategySummary,
+  type DebtFreeRange,
+} from "./debtPlan";
+export {
+  classifyLiabilityRow,
+  decomposeDelta,
+  isTransferPair,
+  normalizeCardAmount,
+  pairTransfers,
+  type DebtDeltaDecomposition,
+  type DebtEvent,
+  type DebtEventKind,
+  type LiabilityRowInput,
+  type TransferCandidate,
+} from "./debtProgress";
+export {
   CARD_LEDGER_SOURCES,
   MOVEMENT_COVERAGES,
   classifyMovement,
@@ -249,10 +277,19 @@ export function simulate(opts: {
   extraPerMonth: number;
   strategy: Strategy;
   startDate?: Date;
+  /**
+   * (PR-D) New card charges added each month, after interest and before any
+   * payment, to the debt the plan is paying extra to (`targetIndex`). Only
+   * `debtFreeRange`'s third run passes it. Absent or 0 — every other caller —
+   * the block that reads it never runs and the schedule is the one this
+   * function has always produced (pinned in `debtPlan.test.ts`).
+   */
+  newChargesPerMonth?: number;
 }): SimResult {
   const startDate =
     opts.startDate ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const extra = Math.max(0, opts.extraPerMonth || 0);
+  const newCharges = Math.max(0, opts.newChargesPerMonth || 0);
 
   const work = opts.debts
     .filter((d) => (d.status ?? "active") === "active" && d.balance > CENTS)
@@ -297,6 +334,14 @@ export function simulate(opts: {
         startBalance: startBal, endBalance: d.balance, interest,
         minPaid: 0, extraPaid: 0, paidOffThisMonth: false,
       });
+    }
+
+    if (newCharges > CENTS) {
+      const ci = targetIndex(work, opts.strategy);
+      if (ci !== -1) {
+        work[ci].balance = round2(work[ci].balance + newCharges);
+        perDebt[ci].endBalance = work[ci].balance;
+      }
     }
 
     let monthMins = 0;

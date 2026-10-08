@@ -15,6 +15,7 @@ import { loadSupersededPendingIds } from "./supersededPending";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
+import { normalizeCardAmount } from "@workspace/avalanche-core";
 import {
   classifyAmexBrand,
   discoverAmexCards,
@@ -74,8 +75,13 @@ export async function refreshAmexAnchor(
   const adopt = opts.adopt === true;
   const asOf = new Date().toISOString();
 
-  const [agg] = await exec
+  // (PR-D) Summed PER SOURCE, then put on one sign (`normalizeCardAmount`):
+  // the workbook stores a charge positive, Plaid negative. Summing the raw
+  // column across both netted a charge in one against a charge in the other,
+  // and gave a Plaid-only household a negative "balance".
+  const bySource = await exec
     .select({
+      source: transactionsTable.source,
       net: sql<string>`coalesce(sum(${transactionsTable.amount})::text, '0')`,
       cnt: sql<number>`count(*)::int`,
     })
@@ -85,12 +91,17 @@ export async function refreshAmexAnchor(
         eq(transactionsTable.userId, userId),
         inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
       ),
-    );
-  const txnCount = Number(agg?.cnt ?? 0);
+    )
+    .groupBy(transactionsTable.source);
+  const txnCount = bySource.reduce((n, r) => n + Number(r.cnt ?? 0), 0);
   if (txnCount === 0) {
     return { changed: false, updatedDebt: false, balance: null, asOf, txnCount: 0 };
   }
-  const balance = Number(agg!.net);
+  const balanceCents = bySource.reduce(
+    (c, r) => c + Math.round(normalizeCardAmount(r.source, r.net) * 100),
+    0,
+  );
+  const balance = balanceCents / 100;
   const balanceStr = balance.toFixed(2);
 
   // Find the Amex debt — prefer one linked to a Plaid account that has

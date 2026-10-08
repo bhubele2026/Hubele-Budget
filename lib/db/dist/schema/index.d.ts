@@ -2215,6 +2215,40 @@ export declare const transactionsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        paymentState: import("drizzle-orm/pg-core").PgColumn<{
+            name: "payment_state";
+            tableName: "transactions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        confirmedByTxnId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "confirmed_by_txn_id";
+            tableName: "transactions";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "transactions";
@@ -4733,10 +4767,10 @@ export declare const dashboardBudgetsTable: import("drizzle-orm/pg-core").PgTabl
 export declare const insertDebtSchema: import("zod/v4").ZodObject<{
     name: import("zod/v4").ZodString;
     status: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    minPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     balance: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     originalBalance: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     apr: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
-    minPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     payment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     type: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     sortOrder: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
@@ -4755,9 +4789,9 @@ export declare const insertDebtSchema: import("zod/v4").ZodObject<{
 }>;
 export declare const insertCategorySchema: import("zod/v4").ZodObject<{
     name: import("zod/v4").ZodString;
-    sortOrder: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
     debtId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     kind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    sortOrder: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
     groupName: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     sourceKind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     excludeFromBudget: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
@@ -4774,10 +4808,10 @@ export declare const insertBudgetMonthSchema: import("zod/v4").ZodObject<{
     in: {};
 }>;
 export declare const insertBudgetLineSchema: import("zod/v4").ZodObject<{
+    categoryId: import("zod/v4").ZodUUID;
     monthStart: import("zod/v4").ZodString;
     note: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pinned: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
-    categoryId: import("zod/v4").ZodUUID;
     plannedAmount: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
 }, {
     out: {};
@@ -4785,11 +4819,11 @@ export declare const insertBudgetLineSchema: import("zod/v4").ZodObject<{
 }>;
 export declare const insertRecurringSchema: import("zod/v4").ZodObject<{
     name: import("zod/v4").ZodString;
-    active: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     debtId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     kind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
-    categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     amount: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    active: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     frequency: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     dayOfMonth: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodInt>>;
     anchorDate: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
@@ -4798,16 +4832,16 @@ export declare const insertRecurringSchema: import("zod/v4").ZodObject<{
     in: {};
 }>;
 export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
-    member: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
-    notes: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
-    plaidAccountId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     debtId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
-    categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
+    source: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     amount: import("zod/v4").ZodString;
     occurredOn: import("zod/v4").ZodString;
+    notes: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    plaidAccountId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     occurredAt: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     description: import("zod/v4").ZodString;
     account: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     forecastFlag: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     weeklyAllowance: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     weeklyBucket: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
@@ -4822,13 +4856,15 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     categoryLockedByUser: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     isExternalCardPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     importBatchId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
-    source: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    member: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     owedBy: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     plaidTransactionId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pfcPrimary: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pfcDetailed: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pending: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     sentToReviewAt: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    paymentState: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    confirmedByTxnId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
 }, {
     out: {};
     in: {};
@@ -5273,4 +5309,5 @@ export declare const importSnapshotsTable: import("drizzle-orm/pg-core").PgTable
 }>;
 export type ImportSnapshot = typeof importSnapshotsTable.$inferSelect;
 export * from "./ai";
+export * from "./debt";
 //# sourceMappingURL=index.d.ts.map

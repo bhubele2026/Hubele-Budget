@@ -62,6 +62,9 @@ import type {
   DebtLinkInput,
   DebtPaymentInput,
   DebtPaymentResult,
+  DebtPlan,
+  DebtPlanReconcileResult,
+  DebtPlanSnapshotResult,
   DedupeTransactionsReport,
   DeleteAmexAnchor200,
   DeleteDashboardBudgetParams,
@@ -128,6 +131,7 @@ import type {
   SetBankSnapshotInput,
   Settings,
   SettingsInput,
+  SnapshotDebtPlanParams,
   SpendingFacts,
   Spine,
   SyncMinimumsResult,
@@ -9333,6 +9337,256 @@ export const useRemoveMember = <
   TContext
 > => {
   return useMutation(getRemoveMemberMutationOptions(options));
+};
+
+/**
+ * @summary The debt plan — strategies, debt-free range, milestones, planned vs confirmed
+ */
+export const getGetDebtPlanUrl = () => {
+  return `/api/debt-plan`;
+};
+
+export const getDebtPlan = async (options?: RequestInit): Promise<DebtPlan> => {
+  return customFetch<DebtPlan>(getGetDebtPlanUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDebtPlanQueryKey = () => {
+  return [`/api/debt-plan`] as const;
+};
+
+export const getGetDebtPlanQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDebtPlan>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDebtPlan>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDebtPlanQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDebtPlan>>> = ({
+    signal,
+  }) => getDebtPlan({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDebtPlan>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDebtPlanQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDebtPlan>>
+>;
+export type GetDebtPlanQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The debt plan — strategies, debt-free range, milestones, planned vs confirmed
+ */
+
+export function useGetDebtPlan<
+  TData = Awaited<ReturnType<typeof getDebtPlan>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDebtPlan>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDebtPlanQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary (Owner) Re-run the liability ledger and claim confirmation passes
+ */
+export const getReconcileDebtPlanUrl = () => {
+  return `/api/debt-plan/reconcile`;
+};
+
+export const reconcileDebtPlan = async (
+  options?: RequestInit,
+): Promise<DebtPlanReconcileResult> => {
+  return customFetch<DebtPlanReconcileResult>(getReconcileDebtPlanUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getReconcileDebtPlanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reconcileDebtPlan>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reconcileDebtPlan>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["reconcileDebtPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reconcileDebtPlan>>,
+    void
+  > = () => {
+    return reconcileDebtPlan(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReconcileDebtPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reconcileDebtPlan>>
+>;
+
+export type ReconcileDebtPlanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (Owner) Re-run the liability ledger and claim confirmation passes
+ */
+export const useReconcileDebtPlan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reconcileDebtPlan>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reconcileDebtPlan>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getReconcileDebtPlanMutationOptions(options));
+};
+
+/**
+ * @summary (Owner) Write the day's debt progress snapshot and reached milestones
+ */
+export const getSnapshotDebtPlanUrl = (params?: SnapshotDebtPlanParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/debt-plan/snapshot?${stringifiedParams}`
+    : `/api/debt-plan/snapshot`;
+};
+
+export const snapshotDebtPlan = async (
+  params?: SnapshotDebtPlanParams,
+  options?: RequestInit,
+): Promise<DebtPlanSnapshotResult> => {
+  return customFetch<DebtPlanSnapshotResult>(getSnapshotDebtPlanUrl(params), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSnapshotDebtPlanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof snapshotDebtPlan>>,
+    TError,
+    { params?: SnapshotDebtPlanParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof snapshotDebtPlan>>,
+  TError,
+  { params?: SnapshotDebtPlanParams },
+  TContext
+> => {
+  const mutationKey = ["snapshotDebtPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof snapshotDebtPlan>>,
+    { params?: SnapshotDebtPlanParams }
+  > = (props) => {
+    const { params } = props ?? {};
+
+    return snapshotDebtPlan(params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SnapshotDebtPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof snapshotDebtPlan>>
+>;
+
+export type SnapshotDebtPlanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (Owner) Write the day's debt progress snapshot and reached milestones
+ */
+export const useSnapshotDebtPlan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof snapshotDebtPlan>>,
+    TError,
+    { params?: SnapshotDebtPlanParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof snapshotDebtPlan>>,
+  TError,
+  { params?: SnapshotDebtPlanParams },
+  TContext
+> => {
+  return useMutation(getSnapshotDebtPlanMutationOptions(options));
 };
 
 /**

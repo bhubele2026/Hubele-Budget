@@ -27,6 +27,7 @@ import {
   dedupeTransactionsAcrossAccountsForUser,
 } from "./dedupeTransactions";
 import { refreshAmexAnchor } from "./amexAnchor";
+import { afterPlaidSyncDebtPass } from "./debtPaymentConfirm";
 import { logger } from "./logger";
 import { resolveSnapshotAccount } from "./resolveSnapshotAccount";
 import { householdDayOf, householdTodayISO } from "./householdClock";
@@ -2579,6 +2580,7 @@ export async function syncPlaidItem(
       },
       "[plaid-sync] delivery metrics",
     );
+    await afterPlaidSyncDebtPass(householdId, [...added, ...modified].map((t) => t.transaction_id));
     return {
       itemId: item.itemId,
       plaidItemRowId: itemRowId,

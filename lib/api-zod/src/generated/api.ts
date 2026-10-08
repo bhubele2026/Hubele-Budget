@@ -206,6 +206,20 @@ export const GetDashboardResponse = zod.object({
         .describe(
           "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
         ),
+      paymentState: zod
+        .union([
+          zod.literal("claimed"),
+          zod.literal("confirmed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          '(PR-D) A payment logged in the app (POST \/debts\/{id}\/payments) is\na claim: \"claimed\" when written, \"confirmed\" once a bank row pairs\nwith it. Null on every other row.\n',
+        ),
+      confirmedByTxnId: zod
+        .string()
+        .nullish()
+        .describe("(PR-D) The bank row that confirmed this claim."),
     }),
   ),
   topCategories: zod.array(
@@ -332,6 +346,20 @@ export const ListTransactionsResponseItem = zod.object({
     .describe(
       "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
     ),
+  paymentState: zod
+    .union([
+      zod.literal("claimed"),
+      zod.literal("confirmed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe(
+      '(PR-D) A payment logged in the app (POST \/debts\/{id}\/payments) is\na claim: \"claimed\" when written, \"confirmed\" once a bank row pairs\nwith it. Null on every other row.\n',
+    ),
+  confirmedByTxnId: zod
+    .string()
+    .nullish()
+    .describe("(PR-D) The bank row that confirmed this claim."),
 });
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
 
@@ -500,6 +528,20 @@ export const UpdateTransactionResponse = zod
       .describe(
         "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
       ),
+    paymentState: zod
+      .union([
+        zod.literal("claimed"),
+        zod.literal("confirmed"),
+        zod.literal(null),
+      ])
+      .nullish()
+      .describe(
+        '(PR-D) A payment logged in the app (POST \/debts\/{id}\/payments) is\na claim: \"claimed\" when written, \"confirmed\" once a bank row pairs\nwith it. Null on every other row.\n',
+      ),
+    confirmedByTxnId: zod
+      .string()
+      .nullish()
+      .describe("(PR-D) The bank row that confirmed this claim."),
   })
   .and(
     zod.object({
@@ -710,6 +752,20 @@ export const ClearTransferOverrideResponse = zod.object({
     .describe(
       "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
     ),
+  paymentState: zod
+    .union([
+      zod.literal("claimed"),
+      zod.literal("confirmed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe(
+      '(PR-D) A payment logged in the app (POST \/debts\/{id}\/payments) is\na claim: \"claimed\" when written, \"confirmed\" once a bank row pairs\nwith it. Null on every other row.\n',
+    ),
+  confirmedByTxnId: zod
+    .string()
+    .nullish()
+    .describe("(PR-D) The bank row that confirmed this claim."),
 });
 
 /**
@@ -1253,6 +1309,20 @@ export const GetTransactionsLedgerResponse = zod.object({
           .describe(
             "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
           ),
+        paymentState: zod
+          .union([
+            zod.literal("claimed"),
+            zod.literal("confirmed"),
+            zod.literal(null),
+          ])
+          .nullish()
+          .describe(
+            '(PR-D) A payment logged in the app (POST \/debts\/{id}\/payments) is\na claim: \"claimed\" when written, \"confirmed\" once a bank row pairs\nwith it. Null on every other row.\n',
+          ),
+        confirmedByTxnId: zod
+          .string()
+          .nullish()
+          .describe("(PR-D) The bank row that confirmed this claim."),
       })
       .and(
         zod.object({
@@ -1274,7 +1344,7 @@ export const GetTransactionsLedgerResponse = zod.object({
           balanceReason: zod
             .string()
             .describe(
-              "counted (moves the balance by its amount); superseded (a pending\nrow its posted row replaced); duplicate (a second row with the\nsame Plaid transaction id); not_bank (a mask-twin row, which the\nbank balance does not read).\n",
+              "counted (moves the balance by its amount); superseded (a pending\nrow its posted row replaced); duplicate (a second row with the\nsame Plaid transaction id); not_bank (a mask-twin row, which the\nbank balance does not read); claim_confirmed (PR-D: a payment\nlogged in the app that a bank row confirmed — the bank row is\nthe payment).\n",
             ),
           replacedPendingId: zod
             .string()
@@ -3214,6 +3284,20 @@ export const GetForecastResponse = zod.object({
         .describe(
           "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
         ),
+      paymentState: zod
+        .union([
+          zod.literal("claimed"),
+          zod.literal("confirmed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          '(PR-D) A payment logged in the app (POST \/debts\/{id}\/payments) is\na claim: \"claimed\" when written, \"confirmed\" once a bank row pairs\nwith it. Null on every other row.\n',
+        ),
+      confirmedByTxnId: zod
+        .string()
+        .nullish()
+        .describe("(PR-D) The bank row that confirmed this claim."),
     }),
   ),
   resolutions: zod.array(
@@ -5319,6 +5403,173 @@ export const RemoveMemberParams = zod.object({
 });
 
 /**
+ * @summary The debt plan — strategies, debt-free range, milestones, planned vs confirmed
+ */
+export const GetDebtPlanResponse = zod
+  .object({
+    asOf: zod.string(),
+    strategy: zod.enum(["avalanche", "snowball"]),
+    extraMonthly: zod
+      .number()
+      .describe(
+        "avalanche_settings.manual_extra — the extra the forecast plans",
+      ),
+    comparison: zod.object({
+      avalanche: zod.object({
+        monthsToFreedom: zod.number().nullable(),
+        debtFreeMonth: zod.string().nullable().describe("YYYY-MM"),
+        totalInterest: zod.number().nullable(),
+        firstKill: zod.union([
+          zod.object({
+            debtId: zod.string(),
+            month: zod.string(),
+          }),
+          zod.null(),
+        ]),
+      }),
+      snowball: zod.object({
+        monthsToFreedom: zod.number().nullable(),
+        debtFreeMonth: zod.string().nullable().describe("YYYY-MM"),
+        totalInterest: zod.number().nullable(),
+        firstKill: zod.union([
+          zod.object({
+            debtId: zod.string(),
+            month: zod.string(),
+          }),
+          zod.null(),
+        ]),
+      }),
+      delta: zod.object({
+        months: zod.number().nullable().describe("Snowball minus avalanche"),
+        interest: zod.number().nullable().describe("Snowball minus avalanche"),
+      }),
+      killMonths: zod.array(
+        zod.object({
+          debtId: zod.string(),
+          avalanche: zod.string().nullable(),
+          snowball: zod.string().nullable(),
+        }),
+      ),
+      detail: zod.object({
+        debts: zod.array(
+          zod.object({
+            debtId: zod.string(),
+            name: zod.string(),
+            apr: zod.number(),
+            balance: zod.number(),
+            minPayment: zod.number(),
+            minPaymentSource: zod.string().nullable(),
+          }),
+        ),
+      }),
+    }),
+    range: zod.object({
+      earliestMonth: zod.string().nullable(),
+      latestMonth: zod
+        .string()
+        .nullable()
+        .describe("null = open-ended (a run never finishes)"),
+      interestLow: zod.number().nullable(),
+      interestHigh: zod.number().nullable(),
+      newChargesPerMonth: zod
+        .number()
+        .describe(
+          "Measured — charges on the plan's debts over the last 90 days ÷ 3",
+        ),
+      runs: zod.array(
+        zod.object({
+          key: zod.enum(["base", "half_extra", "new_charges"]),
+          debtFreeMonth: zod.string().nullable(),
+          totalInterest: zod.number().nullable(),
+        }),
+      ),
+      assumptions: zod.array(
+        zod.object({
+          key: zod.string(),
+          text: zod.string(),
+        }),
+      ),
+    }),
+    milestones: zod.object({
+      achieved: zod.array(
+        zod.object({
+          key: zod.string(),
+          label: zod.string(),
+          debtId: zod.string().nullable(),
+          achievedOn: zod.string(),
+        }),
+      ),
+      next: zod.union([
+        zod.object({
+          key: zod.string(),
+          label: zod.string(),
+          estimatedMonth: zod.string(),
+        }),
+        zod.null(),
+      ]),
+      upcoming: zod.array(
+        zod.object({
+          key: zod.string(),
+          kind: zod.enum(["debt_paid_off", "first_card_zero", "percent_paid"]),
+          label: zod.string(),
+          debtId: zod.string().nullable(),
+          monthIndex: zod.number(),
+          estimatedMonth: zod.string(),
+        }),
+      ),
+    }),
+    planned60d: zod
+      .array(
+        zod.object({
+          date: zod.string(),
+          itemId: zod.string(),
+          debtId: zod.string().nullable(),
+          label: zod.string(),
+          amount: zod.number(),
+        }),
+      )
+      .describe(
+        "Debt minimums and the Avalanche extra still on the cash curve in the next 60 days",
+      ),
+    confirmedMtd: zod.number().describe("Debt payments a bank row confirms"),
+    paidDownGenuineMtd: zod
+      .number()
+      .describe("confirmedMtd less transfer pairs"),
+    assumptions: zod.array(
+      zod.object({
+        key: zod.string(),
+        text: zod.string(),
+      }),
+    ),
+  })
+  .describe(
+    "(PR-D) The debt plan. Months and ranges only — never one exact payoff date. ⚠️ `comparison.detail` is the only part that carries a balance (per debt, for the Plan › Debt page); every other key is held to the no-balance law by spineParity.integration.test.ts.",
+  );
+
+/**
+ * @summary (Owner) Re-run the liability ledger and claim confirmation passes
+ */
+export const ReconcileDebtPlanResponse = zod.object({
+  ledgerEventsWritten: zod.number(),
+  ledgerEventsCleared: zod.number(),
+  claimsConfirmed: zod.number(),
+  claimsReverted: zod.number(),
+});
+
+/**
+ * @summary (Owner) Write the day's debt progress snapshot and reached milestones
+ */
+export const SnapshotDebtPlanQueryParams = zod.object({
+  date: zod.coerce.string().optional(),
+});
+
+export const SnapshotDebtPlanResponse = zod.object({
+  asOf: zod.string(),
+  snapshotsWritten: zod.number(),
+  milestonesInserted: zod.array(zod.string()),
+});
+
+/**
  * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
@@ -5410,6 +5661,22 @@ export const GetSpineResponse = zod.object({
       .nullable()
       .describe(
         "Percent of anchored debt paid off, 0–100. ⚠️ PERCENT ONLY — no balance or amount owed may ever be added to this object; the landing page renders it and the standing rule is that the front door never shows what is owed. null = no debt carries an anchor.",
+      ),
+    nextMilestone: zod
+      .union([
+        zod.object({
+          label: zod.string(),
+          estimatedMonth: zod.string().describe("YYYY-MM — a month"),
+        }),
+        zod.null(),
+      ])
+      .describe(
+        "(PR-D) computeDebtHeadline() — the next milestone the plan passes; equals GET \/debt-plan .milestones.next. null when none.",
+      ),
+    paidDownMtd: zod
+      .number()
+      .describe(
+        "(PR-D) computeDebtHeadline() — genuine confirmed debt payments this household month (transfer pairs excluded). An amount PAID, never a balance; equals GET \/debt-plan .paidDownGenuineMtd.",
       ),
   }),
   reviewCount: zod

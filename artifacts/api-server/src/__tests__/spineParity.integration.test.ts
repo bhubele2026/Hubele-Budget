@@ -68,6 +68,8 @@ import debtsRouter from "../routes/debts";
 import dashboardRouter from "../routes/dashboard";
 // `/forecast/bank-balance-explain` owns the bank freshness fields the spine carries.
 import bankBalanceExplainRouter from "../routes/bankBalanceExplain";
+// (PR-D) `/debt-plan` owns `debt.nextMilestone` and `debt.paidDownMtd`.
+import debtPlanRouter from "../routes/debtPlan";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import { createdAtStartOfHouseholdDay } from "./_helpers/ledgerCreatedAt";
 import { householdTodayDate } from "../lib/householdClock";
@@ -90,6 +92,7 @@ app.use(reportsRouter);
 app.use(debtsRouter);
 app.use(dashboardRouter);
 app.use(bankBalanceExplainRouter);
+app.use(debtPlanRouter);
 
 let server: Server;
 let baseUrl: string;
@@ -166,6 +169,9 @@ beforeAll(async () => {
       itemId: item!.id,
       accountId: externalId,
       name: "Chase Checking",
+      // (PR-D) A checking account is a depository account: the debt plan's
+      // "confirmed" reads bank rows from these only.
+      type: "depository",
     })
     .returning();
   await db.insert(forecastSettingsTable).values({
@@ -380,6 +386,24 @@ beforeAll(async () => {
     source: "manual",
   });
 
+  // ── (PR-D) A bank payment to the Visa this month: a Plaid checking row the
+  // user tagged to the debt. The debt plan's "confirmed" counts it, so the
+  // spine's `debt.paidDownMtd` parity row is not 0 === 0. Dated the 1st (the
+  // snapshot day, so the snapshot holds it and the bank roll-forward is
+  // untouched) — always inside the current month.
+  await db.insert(transactionsTable).values({
+    userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
+    occurredOn: dayThisMonth(1),
+    createdAt: createdAtStartOfHouseholdDay(dayThisMonth(1)),
+    description: "VISA ONLINE PAYMENT",
+    amount: "-150.00",
+    debtId: VISA_DEBT_ID,
+    plaidAccountId: externalId,
+    plaidTransactionId: `pt-visa-${randomUUID()}`,
+    source: "plaid",
+  });
+
   // ── (PR7 M1) An uncategorized purchase today, inside the spine's week AND
   // month windows. Household spending counts it and realSpend does not, so the
   // spend parity test can tell which one the spine reads. A card charge on an
@@ -431,7 +455,11 @@ type Spine = {
     cashBuffer: string;
     status: string;
   };
-  debt: { payoffPct: number | null };
+  debt: {
+    payoffPct: number | null;
+    nextMilestone: { label: string; estimatedMonth: string } | null;
+    paidDownMtd: number;
+  };
   reviewCount: number;
 };
 
@@ -718,6 +746,24 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(dashboard.activeDebtCount).toBe(2);
   });
 
+  it("(PR-D) debt.nextMilestone + debt.paidDownMtd match GET /debt-plan (computeDebtHeadline)", async () => {
+    const [spine, plan] = await Promise.all([
+      get<Spine>("/spine"),
+      get<{
+        milestones: { next: { label: string; estimatedMonth: string } | null };
+        paidDownGenuineMtd: number;
+      }>("/debt-plan"),
+    ]);
+    const next = plan.milestones.next;
+    expect(spine.debt.nextMilestone).toEqual(next ? { label: next.label, estimatedMonth: next.estimatedMonth } : null);
+    expect(spine.debt.paidDownMtd).toBe(plan.paidDownGenuineMtd);
+    // Not vacuous: the seed's tagged checking payment to the Visa (150.00) is
+    // confirmed, and the plan has a milestone ahead.
+    expect(spine.debt.paidDownMtd).toBe(150);
+    expect(spine.debt.nextMilestone).not.toBeNull();
+    expect(spine.debt.nextMilestone!.estimatedMonth).toMatch(/^\d{4}-\d{2}$/);
+  });
+
   it("reviewCount matches /forecast/review-count", async () => {
     const spine = await get<Spine>("/spine");
     const badge = await get<{ count: number }>("/forecast/review-count");
@@ -732,7 +778,8 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     const alreadyHappened = [2, 3, 6].filter(
       (d) => dayThisMonth(d) <= TODAY_ISO,
     ).length;
-    expect(spine.reviewCount).toBe(2 + 1 + alreadyHappened);
+    // (PR-D) + the tagged Visa bank payment seeded on the 1st (always arrived).
+    expect(spine.reviewCount).toBe(2 + 1 + 1 + alreadyHappened);
   });
 
   it("⚠️ never carries a debt balance or amount owed — landing law", async () => {
@@ -741,7 +788,22 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     // survives someone helpfully adding "totalDebt" to the debt object later.
     const spine = await get<Spine>("/spine");
 
-    expect(Object.keys(spine.debt)).toEqual(["payoffPct"]);
+    expect(Object.keys(spine.debt)).toEqual(["payoffPct", "nextMilestone", "paidDownMtd"]);
+    // (PR-D) No key under `debt`, at any depth, may name a balance, an amount
+    // owed or what remains. `paidDownMtd` is an amount PAID; `nextMilestone` a
+    // label and a month.
+    const debtKeys: string[] = [];
+    const walk = (v: unknown) => {
+      if (v && typeof v === "object") {
+        for (const [k, x] of Object.entries(v)) {
+          debtKeys.push(k);
+          walk(x);
+        }
+      }
+    };
+    walk(spine.debt);
+    expect(debtKeys.length).toBeGreaterThanOrEqual(5);
+    expect(debtKeys.filter((k) => /balance|owed|remaining/i.test(k))).toEqual([]);
 
     // `bank.balance` is the household's own cash and is allowed; nothing else
     // in the payload may look like a debt figure.

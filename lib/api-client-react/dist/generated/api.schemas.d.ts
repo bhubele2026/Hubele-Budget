@@ -91,6 +91,174 @@ export interface OpsJobRetryResult {
 export interface BadgeCount {
     count: number;
 }
+export interface SpineNextMilestone {
+    label: string;
+    /** YYYY-MM — a month */
+    estimatedMonth: string;
+}
+export type DebtPlanStrategySummaryFirstKill = {
+    debtId: string;
+    month: string;
+} | null;
+export interface DebtPlanStrategySummary {
+    /** @nullable */
+    monthsToFreedom: number | null;
+    /**
+     * YYYY-MM
+     * @nullable
+     */
+    debtFreeMonth: string | null;
+    /** @nullable */
+    totalInterest: number | null;
+    firstKill: DebtPlanStrategySummaryFirstKill;
+}
+export interface DebtPlanAssumption {
+    key: string;
+    text: string;
+}
+export type DebtPlanMilestoneKind = (typeof DebtPlanMilestoneKind)[keyof typeof DebtPlanMilestoneKind];
+export declare const DebtPlanMilestoneKind: {
+    readonly debt_paid_off: "debt_paid_off";
+    readonly first_card_zero: "first_card_zero";
+    readonly percent_paid: "percent_paid";
+};
+export interface DebtPlanMilestone {
+    key: string;
+    kind: DebtPlanMilestoneKind;
+    label: string;
+    /** @nullable */
+    debtId: string | null;
+    monthIndex: number;
+    estimatedMonth: string;
+}
+export type DebtPlanStrategy = (typeof DebtPlanStrategy)[keyof typeof DebtPlanStrategy];
+export declare const DebtPlanStrategy: {
+    readonly avalanche: "avalanche";
+    readonly snowball: "snowball";
+};
+export type DebtPlanComparisonDelta = {
+    /**
+     * Snowball minus avalanche
+     * @nullable
+     */
+    months: number | null;
+    /**
+     * Snowball minus avalanche
+     * @nullable
+     */
+    interest: number | null;
+};
+export type DebtPlanComparisonKillMonthsItem = {
+    debtId: string;
+    /** @nullable */
+    avalanche: string | null;
+    /** @nullable */
+    snowball: string | null;
+};
+export type DebtPlanComparisonDetailDebtsItem = {
+    debtId: string;
+    name: string;
+    apr: number;
+    balance: number;
+    minPayment: number;
+    /** @nullable */
+    minPaymentSource: string | null;
+};
+export type DebtPlanComparisonDetail = {
+    debts: DebtPlanComparisonDetailDebtsItem[];
+};
+export type DebtPlanComparison = {
+    avalanche: DebtPlanStrategySummary;
+    snowball: DebtPlanStrategySummary;
+    delta: DebtPlanComparisonDelta;
+    killMonths: DebtPlanComparisonKillMonthsItem[];
+    detail: DebtPlanComparisonDetail;
+};
+export type DebtPlanRangeRunsItemKey = (typeof DebtPlanRangeRunsItemKey)[keyof typeof DebtPlanRangeRunsItemKey];
+export declare const DebtPlanRangeRunsItemKey: {
+    readonly base: "base";
+    readonly half_extra: "half_extra";
+    readonly new_charges: "new_charges";
+};
+export type DebtPlanRangeRunsItem = {
+    key: DebtPlanRangeRunsItemKey;
+    /** @nullable */
+    debtFreeMonth: string | null;
+    /** @nullable */
+    totalInterest: number | null;
+};
+export type DebtPlanRange = {
+    /** @nullable */
+    earliestMonth: string | null;
+    /**
+     * null = open-ended (a run never finishes)
+     * @nullable
+     */
+    latestMonth: string | null;
+    /** @nullable */
+    interestLow: number | null;
+    /** @nullable */
+    interestHigh: number | null;
+    /** Measured — charges on the plan's debts over the last 90 days ÷ 3 */
+    newChargesPerMonth: number;
+    runs: DebtPlanRangeRunsItem[];
+    assumptions: DebtPlanAssumption[];
+};
+export type DebtPlanMilestonesAchievedItem = {
+    key: string;
+    label: string;
+    /** @nullable */
+    debtId: string | null;
+    achievedOn: string;
+};
+export type DebtPlanMilestonesNext = {
+    key: string;
+    label: string;
+    estimatedMonth: string;
+} | null;
+export type DebtPlanMilestones = {
+    achieved: DebtPlanMilestonesAchievedItem[];
+    next: DebtPlanMilestonesNext;
+    upcoming: DebtPlanMilestone[];
+};
+export type DebtPlanPlanned60dItem = {
+    date: string;
+    itemId: string;
+    /** @nullable */
+    debtId: string | null;
+    label: string;
+    amount: number;
+};
+/**
+ * (PR-D) The debt plan. Months and ranges only — never one exact payoff date. ⚠️ `comparison.detail` is the only part that carries a balance (per debt, for the Plan › Debt page); every other key is held to the no-balance law by spineParity.integration.test.ts.
+ */
+export interface DebtPlan {
+    asOf: string;
+    strategy: DebtPlanStrategy;
+    /** avalanche_settings.manual_extra — the extra the forecast plans */
+    extraMonthly: number;
+    comparison: DebtPlanComparison;
+    range: DebtPlanRange;
+    milestones: DebtPlanMilestones;
+    /** Debt minimums and the Avalanche extra still on the cash curve in the next 60 days */
+    planned60d: DebtPlanPlanned60dItem[];
+    /** Debt payments a bank row confirms */
+    confirmedMtd: number;
+    /** confirmedMtd less transfer pairs */
+    paidDownGenuineMtd: number;
+    assumptions: DebtPlanAssumption[];
+}
+export interface DebtPlanReconcileResult {
+    ledgerEventsWritten: number;
+    ledgerEventsCleared: number;
+    claimsConfirmed: number;
+    claimsReverted: number;
+}
+export interface DebtPlanSnapshotResult {
+    asOf: string;
+    snapshotsWritten: number;
+    milestonesInserted: string[];
+}
 export interface SpineNextBill {
     name: string;
     amount: string;
@@ -324,6 +492,10 @@ export type SpineDebt = {
      * @nullable
      */
     payoffPct: number | null;
+    /** (PR-D) computeDebtHeadline() — the next milestone the plan passes; equals GET /debt-plan .milestones.next. null when none. */
+    nextMilestone: SpineNextMilestone | null;
+    /** (PR-D) computeDebtHeadline() — genuine confirmed debt payments this household month (transfer pairs excluded). An amount PAID, never a balance; equals GET /debt-plan .paidDownGenuineMtd. */
+    paidDownMtd: number;
 };
 export interface Spine {
     /** ISO timestamp the snapshot was read */
@@ -360,6 +532,18 @@ export declare const TransactionWeeklyBucket: {
     readonly alcohol: "alcohol";
     readonly entertainment: "entertainment";
     readonly misc: "misc";
+};
+/**
+ * (PR-D) A payment logged in the app (POST /debts/{id}/payments) is
+a claim: "claimed" when written, "confirmed" once a bank row pairs
+with it. Null on every other row.
+
+ * @nullable
+ */
+export type TransactionPaymentState = (typeof TransactionPaymentState)[keyof typeof TransactionPaymentState] | null;
+export declare const TransactionPaymentState: {
+    readonly claimed: "claimed";
+    readonly confirmed: "confirmed";
 };
 export interface Transaction {
     id: string;
@@ -487,6 +671,19 @@ export interface Transaction {
   response — never persisted.
    */
     merchantSignature?: string;
+    /**
+     * (PR-D) A payment logged in the app (POST /debts/{id}/payments) is
+  a claim: "claimed" when written, "confirmed" once a bank row pairs
+  with it. Null on every other row.
+  
+     * @nullable
+     */
+    paymentState?: TransactionPaymentState;
+    /**
+     * (PR-D) The bank row that confirmed this claim.
+     * @nullable
+     */
+    confirmedByTxnId?: string | null;
 }
 export type LedgerRow = Transaction & {
     /**
@@ -511,7 +708,9 @@ export type LedgerRow = Transaction & {
     /** counted (moves the balance by its amount); superseded (a pending
   row its posted row replaced); duplicate (a second row with the
   same Plaid transaction id); not_bank (a mask-twin row, which the
-  bank balance does not read).
+  bank balance does not read); claim_confirmed (PR-D: a payment
+  logged in the app that a bank row confirmed — the bank row is
+  the payment).
    */
     balanceReason: string;
     /**
@@ -3669,5 +3868,8 @@ export type GetBillsSummaryParams = {
 };
 export type ImportWorkbookBody = {
     file: Blob;
+};
+export type SnapshotDebtPlanParams = {
+    date?: string;
 };
 //# sourceMappingURL=api.schemas.d.ts.map
