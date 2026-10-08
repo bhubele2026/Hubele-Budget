@@ -2732,6 +2732,27 @@ paths:
         "404": { description: Not found }
         "409": { description: Already resolved }
 
+  /category-decisions:
+    get:
+      operationId: listCategoryDecisions
+      tags: [categorization]
+      summary: |
+        (PR-A2) How one charge was filed: its decisions, newest first, at most
+        20. A charge outside the household answers 404.
+      parameters:
+        - { in: query, name: transactionId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 20
+                items: { $ref: "#/components/schemas/CategoryDecision" }
+        "400": { description: Invalid query }
+        "404": { description: Not found }
+
   /category-decisions/{id}/undo:
     post:
       operationId: undoCategoryDecision
@@ -2801,8 +2822,13 @@ paths:
       summary: |
         Explicit request: file every unlocked row of this merchant (within the
         rule's scope) into its category. Each write is a `user` decision.
+        (PR-A2) With `dryRun=true` nothing is written: the answer is how many
+        rows would move and up to five of them. The server also reads
+        `{ "dryRun": true }` in the JSON body; the typed client sends the query
+        parameter, which keeps existing callers of the mutation unchanged.
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: dryRun, required: false, schema: { type: boolean } }
       responses:
         "200":
           description: OK
@@ -3747,8 +3773,16 @@ components:
       allOf:
         - $ref: "#/components/schemas/Transaction"
         - type: object
-          required: [runningBalance, balanceAmount, countsInBalance, balanceReason, replacedPendingId, heldAhead, afterToday, stalePending]
+          required: [runningBalance, balanceAmount, countsInBalance, balanceReason, replacedPendingId, heldAhead, afterToday, stalePending, splitCount, categoryProvisional]
           properties:
+            splitCount:
+              type: integer
+              description: (PR-A2) How many parts the charge is split into; 0 when it is not split.
+            categoryProvisional:
+              type: boolean
+              description: |
+                (PR-A2) The category was set by the automatic categorizer with
+                middling confidence and awaits a person's yes. A hand pick clears it.
             runningBalance:
               type: ["string", "null"]
               description: |
@@ -4160,6 +4194,19 @@ components:
               oneOf:
                 - { $ref: "#/components/schemas/RetroactiveCandidates" }
                 - { type: "null" }
+            decisionId:
+              type: string
+              description: |
+                (PR-A2) The `user` decision written for this hand filing, for
+                POST /category-decisions/{id}/undo. Absent when the body named
+                no `categoryId`.
+            learnedRuleId:
+              type: string
+              description: |
+                (PR-A2) The learned rule (merchant memory) this choice created,
+                re-pointed or confirmed, for POST /learned-rules/{id}/apply-retroactively.
+                Absent when no category was set, or the category teaches nothing
+                (Uncategorized, Transfer, Ignore, or a clear).
 
     CreateTransactionResponse:
       allOf:
@@ -4363,6 +4410,12 @@ components:
             Distinct YYYY-MM-01 month-start strings spanning the
             updated rows. Clients invalidate the corresponding budget
             month queries so per-line actuals refresh.
+          items: { type: string }
+        decisionIds:
+          type: array
+          description: |
+            (PR-A2) The `user` decisions written when the patch set or cleared
+            categories, one per updated row. Empty otherwise.
           items: { type: string }
 
     BulkUpdateTransactionResult:
@@ -7461,7 +7514,37 @@ components:
       type: object
       required: [updated]
       properties:
-        updated: { type: integer }
+        updated: { type: integer, description: Rows written. Always 0 on a dry run. }
+        dryRun: { type: boolean, description: Present and true on a dry run. }
+        count: { type: integer, description: Dry run only. Rows the real run would move. }
+        sample:
+          type: array
+          maxItems: 5
+          description: Dry run only. Up to five of those rows, newest first.
+          items: { $ref: "#/components/schemas/RetroactiveSampleRow" }
+    RetroactiveSampleRow:
+      type: object
+      required: [transactionId, description, occurredOn, amount]
+      properties:
+        transactionId: { type: string }
+        description: { type: string }
+        occurredOn: { type: string, format: date }
+        amount: { type: string }
+    CategoryDecision:
+      type: object
+      required: [id, transactionId, source, categoryId, previousCategoryId, confidence, band, explanation, resolution, undoneAt, createdAt]
+      properties:
+        id: { type: string }
+        transactionId: { type: string }
+        source: { type: string, description: "locked, rule, memory, recurring, inherited, heuristic, model, user or refund." }
+        categoryId: { type: ["string", "null"] }
+        previousCategoryId: { type: ["string", "null"] }
+        confidence: { type: number }
+        band: { type: string, enum: [auto, provisional, queue] }
+        explanation: { type: string }
+        resolution: { type: ["string", "null"], description: "accepted, corrected, skipped or null while open." }
+        undoneAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
 
     TransactionSplitInput:
       type: object

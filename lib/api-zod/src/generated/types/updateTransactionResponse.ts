@@ -22,4 +22,15 @@ transactions too" prompt.
 merchant it would also fit. Reported, never applied.
  */
   retroactiveCandidates?: RetroactiveCandidates | null;
+  /** (PR-A2) The `user` decision written for this hand filing, for
+POST /category-decisions/{id}/undo. Absent when the body named
+no `categoryId`.
+ */
+  decisionId?: string;
+  /** (PR-A2) The learned rule (merchant memory) this choice created,
+re-pointed or confirmed, for POST /learned-rules/{id}/apply-retroactively.
+Absent when no category was set, or the category teaches nothing
+(Uncategorized, Transfer, Ignore, or a clear).
+ */
+  learnedRuleId?: string;
 };

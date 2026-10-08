@@ -2,7 +2,7 @@
 // choice (PATCH, correct, accept) also teaches merchant memory and returns the
 // retroactive candidates — it never applies them.
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db, budgetCategoriesTable, categoryDecisionsTable, transactionsTable } from "@workspace/db";
 import { isTransferCategory } from "../excludedCategory";
 import type { Exec } from "./db";
@@ -111,6 +111,8 @@ export async function setCategoryByHand(
 
 export interface HandFilingResult {
   decisionId: string;
+  /** The merchant_memory row this choice created, re-pointed or confirmed; null when it taught nothing. */
+  learnedRuleId: string | null;
   retroactiveCandidates: RetroactiveCandidates | null;
 }
 
@@ -168,9 +170,60 @@ export async function recordHandFiling(
     );
     return {
       decisionId: decisionId!,
+      learnedRuleId: learned?.memoryId ?? null,
       retroactiveCandidates: opts.categoryId
         ? await retroactiveCandidates(householdId, txn, opts.categoryId)
         : null,
     };
   });
+}
+
+export interface DecisionHistoryRow {
+  id: string;
+  transactionId: string;
+  source: string;
+  categoryId: string | null;
+  previousCategoryId: string | null;
+  confidence: number;
+  band: string;
+  explanation: string;
+  resolution: string | null;
+  undoneAt: string | null;
+  createdAt: string;
+}
+
+export const DECISION_HISTORY_MAX = 20;
+
+/**
+ * (PR-A2) How one charge was filed: its decisions, newest first, at most
+ * DECISION_HISTORY_MAX. Null when the charge is not in the household.
+ */
+export async function listDecisionHistory(
+  householdId: string,
+  txnId: string,
+): Promise<DecisionHistoryRow[] | null> {
+  const [txn] = await db
+    .select({ id: transactionsTable.id })
+    .from(transactionsTable)
+    .where(and(eq(transactionsTable.id, txnId), eq(transactionsTable.householdId, householdId)));
+  if (!txn) return null;
+  const rows = await db
+    .select()
+    .from(categoryDecisionsTable)
+    .where(and(eq(categoryDecisionsTable.transactionId, txnId), eq(categoryDecisionsTable.householdId, householdId)))
+    .orderBy(desc(categoryDecisionsTable.createdAt), desc(categoryDecisionsTable.id))
+    .limit(DECISION_HISTORY_MAX);
+  return rows.map((d) => ({
+    id: d.id,
+    transactionId: d.transactionId,
+    source: d.source,
+    categoryId: d.categoryId,
+    previousCategoryId: d.previousCategoryId,
+    confidence: Number(d.confidence),
+    band: d.band,
+    explanation: d.explanation,
+    resolution: d.resolution,
+    undoneAt: d.undoneAt ? d.undoneAt.toISOString() : null,
+    createdAt: d.createdAt.toISOString(),
+  }));
 }

@@ -29,6 +29,7 @@ import type {
   AmexAnchor,
   AmexAnchorInput,
   AmexWeeklyPayoff,
+  ApplyLearnedRuleRetroactivelyParams,
   ApplyRetroactivelyResult,
   AvalancheExtra,
   AvalancheSchedule,
@@ -52,6 +53,7 @@ import type {
   CashSignal,
   CategorizationRunResult,
   Category,
+  CategoryDecision,
   CategoryInput,
   CategoryPatchInput,
   CheckInvitationInput,
@@ -105,6 +107,7 @@ import type {
   ListAgentFindingsParams,
   ListAgentRunsParams,
   ListCategorizationReviewParams,
+  ListCategoryDecisionsParams,
   ListDashboardBudgetsParams,
   ListPlaidLiabilityAccountsParams,
   ListRecapDeliveriesParams,
@@ -11976,6 +11979,110 @@ export const useCorrectCategorizationDecision = <
 };
 
 /**
+ * @summary (PR-A2) How one charge was filed: its decisions, newest first, at most
+20. A charge outside the household answers 404.
+
+ */
+export const getListCategoryDecisionsUrl = (
+  params: ListCategoryDecisionsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/category-decisions?${stringifiedParams}`
+    : `/api/category-decisions`;
+};
+
+export const listCategoryDecisions = async (
+  params: ListCategoryDecisionsParams,
+  options?: RequestInit,
+): Promise<CategoryDecision[]> => {
+  return customFetch<CategoryDecision[]>(getListCategoryDecisionsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCategoryDecisionsQueryKey = (
+  params?: ListCategoryDecisionsParams,
+) => {
+  return [`/api/category-decisions`, ...(params ? [params] : [])] as const;
+};
+
+export const getListCategoryDecisionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCategoryDecisions>>,
+  TError = ErrorType<void>,
+>(
+  params: ListCategoryDecisionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCategoryDecisions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListCategoryDecisionsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listCategoryDecisions>>
+  > = ({ signal }) =>
+    listCategoryDecisions(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCategoryDecisions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCategoryDecisionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listCategoryDecisions>>
+>;
+export type ListCategoryDecisionsQueryError = ErrorType<void>;
+
+/**
+ * @summary (PR-A2) How one charge was filed: its decisions, newest first, at most
+20. A charge outside the household answers 404.
+
+ */
+
+export function useListCategoryDecisions<
+  TData = Awaited<ReturnType<typeof listCategoryDecisions>>,
+  TError = ErrorType<void>,
+>(
+  params: ListCategoryDecisionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCategoryDecisions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCategoryDecisionsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Restore the decision's previous category, clear provisional, stamp
 undone_at and disable the memory it created.
 
@@ -12300,18 +12407,38 @@ export const useDeleteLearnedRule = <
 /**
  * @summary Explicit request: file every unlocked row of this merchant (within the
 rule's scope) into its category. Each write is a `user` decision.
+(PR-A2) With `dryRun=true` nothing is written: the answer is how many
+rows would move and up to five of them. The server also reads
+`{ "dryRun": true }` in the JSON body; the typed client sends the query
+parameter, which keeps existing callers of the mutation unchanged.
 
  */
-export const getApplyLearnedRuleRetroactivelyUrl = (id: string) => {
-  return `/api/learned-rules/${id}/apply-retroactively`;
+export const getApplyLearnedRuleRetroactivelyUrl = (
+  id: string,
+  params?: ApplyLearnedRuleRetroactivelyParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/learned-rules/${id}/apply-retroactively?${stringifiedParams}`
+    : `/api/learned-rules/${id}/apply-retroactively`;
 };
 
 export const applyLearnedRuleRetroactively = async (
   id: string,
+  params?: ApplyLearnedRuleRetroactivelyParams,
   options?: RequestInit,
 ): Promise<ApplyRetroactivelyResult> => {
   return customFetch<ApplyRetroactivelyResult>(
-    getApplyLearnedRuleRetroactivelyUrl(id),
+    getApplyLearnedRuleRetroactivelyUrl(id, params),
     {
       ...options,
       method: "POST",
@@ -12326,14 +12453,14 @@ export const getApplyLearnedRuleRetroactivelyMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>,
     TError,
-    { id: string },
+    { id: string; params?: ApplyLearnedRuleRetroactivelyParams },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>,
   TError,
-  { id: string },
+  { id: string; params?: ApplyLearnedRuleRetroactivelyParams },
   TContext
 > => {
   const mutationKey = ["applyLearnedRuleRetroactively"];
@@ -12347,11 +12474,11 @@ export const getApplyLearnedRuleRetroactivelyMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>,
-    { id: string }
+    { id: string; params?: ApplyLearnedRuleRetroactivelyParams }
   > = (props) => {
-    const { id } = props ?? {};
+    const { id, params } = props ?? {};
 
-    return applyLearnedRuleRetroactively(id, requestOptions);
+    return applyLearnedRuleRetroactively(id, params, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -12366,6 +12493,10 @@ export type ApplyLearnedRuleRetroactivelyMutationError = ErrorType<void>;
 /**
  * @summary Explicit request: file every unlocked row of this merchant (within the
 rule's scope) into its category. Each write is a `user` decision.
+(PR-A2) With `dryRun=true` nothing is written: the answer is how many
+rows would move and up to five of them. The server also reads
+`{ "dryRun": true }` in the JSON body; the typed client sends the query
+parameter, which keeps existing callers of the mutation unchanged.
 
  */
 export const useApplyLearnedRuleRetroactively = <
@@ -12375,14 +12506,14 @@ export const useApplyLearnedRuleRetroactively = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>,
     TError,
-    { id: string },
+    { id: string; params?: ApplyLearnedRuleRetroactivelyParams },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>,
   TError,
-  { id: string },
+  { id: string; params?: ApplyLearnedRuleRetroactivelyParams },
   TContext
 > => {
   return useMutation(getApplyLearnedRuleRetroactivelyMutationOptions(options));

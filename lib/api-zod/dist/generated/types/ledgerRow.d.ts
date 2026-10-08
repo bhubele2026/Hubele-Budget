@@ -7,6 +7,12 @@
  */
 import type { Transaction } from "./transaction";
 export type LedgerRow = Transaction & {
+    /** (PR-A2) How many parts the charge is split into; 0 when it is not split. */
+    splitCount: number;
+    /** (PR-A2) The category was set by the automatic categorizer with
+  middling confidence and awaits a person's yes. A hand pick clears it.
+   */
+    categoryProvisional: boolean;
     /**
      * (PR13) The account balance straight after this row, on the
   register of all the account's rows. Null without a bank

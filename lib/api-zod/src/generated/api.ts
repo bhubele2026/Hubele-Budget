@@ -957,6 +957,18 @@ export const UpdateTransactionResponse = zod
         .describe(
           "(PR-A) When this PATCH set a category: unlocked rows of the same\nmerchant it would also fit. Reported, never applied.\n",
         ),
+      decisionId: zod
+        .string()
+        .optional()
+        .describe(
+          "(PR-A2) The `user` decision written for this hand filing, for\nPOST \/category-decisions\/{id}\/undo. Absent when the body named\nno `categoryId`.\n",
+        ),
+      learnedRuleId: zod
+        .string()
+        .optional()
+        .describe(
+          "(PR-A2) The learned rule (merchant memory) this choice created,\nre-pointed or confirmed, for POST \/learned-rules\/{id}\/apply-retroactively.\nAbsent when no category was set, or the category teaches nothing\n(Uncategorized, Transfer, Ignore, or a clear).\n",
+        ),
     }),
   );
 
@@ -1331,6 +1343,12 @@ export const BulkUpdateTransactionsResponse = zod.object({
     .describe(
       "Distinct YYYY-MM-01 month-start strings spanning the\nupdated rows. Clients invalidate the corresponding budget\nmonth queries so per-line actuals refresh.\n",
     ),
+  decisionIds: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "(PR-A2) The `user` decisions written when the patch set or cleared\ncategories, one per updated row. Empty otherwise.\n",
+    ),
 });
 
 /**
@@ -1638,6 +1656,16 @@ export const GetTransactionsLedgerResponse = zod.object({
       })
       .and(
         zod.object({
+          splitCount: zod
+            .number()
+            .describe(
+              "(PR-A2) How many parts the charge is split into; 0 when it is not split.",
+            ),
+          categoryProvisional: zod
+            .boolean()
+            .describe(
+              "(PR-A2) The category was set by the automatic categorizer with\nmiddling confidence and awaits a person's yes. A hand pick clears it.\n",
+            ),
           runningBalance: zod
             .string()
             .nullable()
@@ -6724,6 +6752,39 @@ export const CorrectCategorizationDecisionResponse = zod.object({
 });
 
 /**
+ * @summary (PR-A2) How one charge was filed: its decisions, newest first, at most
+20. A charge outside the household answers 404.
+
+ */
+export const ListCategoryDecisionsQueryParams = zod.object({
+  transactionId: zod.coerce.string().uuid(),
+});
+
+export const ListCategoryDecisionsResponseItem = zod.object({
+  id: zod.string(),
+  transactionId: zod.string(),
+  source: zod
+    .string()
+    .describe(
+      "locked, rule, memory, recurring, inherited, heuristic, model, user or refund.",
+    ),
+  categoryId: zod.string().nullable(),
+  previousCategoryId: zod.string().nullable(),
+  confidence: zod.number(),
+  band: zod.enum(["auto", "provisional", "queue"]),
+  explanation: zod.string(),
+  resolution: zod
+    .string()
+    .nullable()
+    .describe("accepted, corrected, skipped or null while open."),
+  undoneAt: zod.coerce.date().nullable(),
+  createdAt: zod.coerce.date(),
+});
+export const ListCategoryDecisionsResponse = zod
+  .array(ListCategoryDecisionsResponseItem)
+  .max(20);
+
+/**
  * @summary Restore the decision's previous category, clear provisional, stamp
 undone_at and disable the memory it created.
 
@@ -6791,14 +6852,41 @@ export const DeleteLearnedRuleParams = zod.object({
 /**
  * @summary Explicit request: file every unlocked row of this merchant (within the
 rule's scope) into its category. Each write is a `user` decision.
+(PR-A2) With `dryRun=true` nothing is written: the answer is how many
+rows would move and up to five of them. The server also reads
+`{ "dryRun": true }` in the JSON body; the typed client sends the query
+parameter, which keeps existing callers of the mutation unchanged.
 
  */
 export const ApplyLearnedRuleRetroactivelyParams = zod.object({
   id: zod.coerce.string().uuid(),
 });
 
+export const ApplyLearnedRuleRetroactivelyQueryParams = zod.object({
+  dryRun: zod.coerce.boolean().optional(),
+});
+
+export const applyLearnedRuleRetroactivelyResponseSampleMax = 5;
+
 export const ApplyLearnedRuleRetroactivelyResponse = zod.object({
-  updated: zod.number(),
+  updated: zod.number().describe("Rows written. Always 0 on a dry run."),
+  dryRun: zod.boolean().optional().describe("Present and true on a dry run."),
+  count: zod
+    .number()
+    .optional()
+    .describe("Dry run only. Rows the real run would move."),
+  sample: zod
+    .array(
+      zod.object({
+        transactionId: zod.string(),
+        description: zod.string(),
+        occurredOn: zod.coerce.date(),
+        amount: zod.string(),
+      }),
+    )
+    .max(applyLearnedRuleRetroactivelyResponseSampleMax)
+    .optional()
+    .describe("Dry run only. Up to five of those rows, newest first."),
 });
 
 export const GetTransactionSplitsParams = zod.object({

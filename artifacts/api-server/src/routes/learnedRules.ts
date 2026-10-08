@@ -118,7 +118,33 @@ router.post("/learned-rules/:id/apply-retroactively", requireAuth, async (req, r
     res.status(404).json({ error: "Not found" });
     return;
   }
+  // `dryRun` rides the query (the typed client) or the JSON body (raw callers).
+  const rawQuery = (req.query as { dryRun?: unknown }).dryRun;
+  const bodyDry = (req.body as { dryRun?: unknown } | undefined)?.dryRun;
+  if (
+    (rawQuery !== undefined && rawQuery !== "true" && rawQuery !== "false") ||
+    (bodyDry !== undefined && typeof bodyDry !== "boolean")
+  ) {
+    res.status(400).json({ error: "dryRun must be true or false" });
+    return;
+  }
+  const dryRun = rawQuery === "true" || bodyDry === true;
   const rows = await memoryRetroactiveIds(req.householdId!, m);
+  // (PR-A2) dryRun: say what would move, write nothing.
+  if (dryRun) {
+    res.json({
+      updated: 0,
+      dryRun: true,
+      count: rows.length,
+      sample: rows.slice(0, 5).map((r) => ({
+        transactionId: r.id,
+        description: r.description,
+        occurredOn: r.occurredOn,
+        amount: r.amount,
+      })),
+    });
+    return;
+  }
   if (rows.length === 0) {
     res.json({ updated: 0 });
     return;

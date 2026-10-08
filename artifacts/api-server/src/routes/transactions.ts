@@ -447,12 +447,18 @@ router.patch(
     // `repointedRules` / `ruleAction` stay in the response, always empty, so
     // the classic app's toasts simply do not fire.
     let retroactiveCandidates: RetroactiveCandidates | null = null;
+    // (PR-A2) The decision this hand filing wrote and the learned rule it
+    // taught or confirmed, so the client can undo / apply by id.
+    let decisionId: string | null = null;
+    let learnedRuleId: string | null = null;
     if (bodyHasCategoryId) {
       const filed = await recordHandFiling(req.householdId!, req.userId!, row.id, {
         previousCategoryId: before?.categoryId ?? null,
         categoryId: row.categoryId,
       });
       retroactiveCandidates = filed?.retroactiveCandidates ?? null;
+      decisionId = filed?.decisionId ?? null;
+      learnedRuleId = filed?.learnedRuleId ?? null;
     }
     // If forecast_flag was turned off on a FUTURE row, drop any forecast
     // resolution that points to it so the Forecast inbox/bucket stays
@@ -486,6 +492,9 @@ router.patch(
         candidateCount: null,
       },
       retroactiveCandidates,
+      // Absent (not null) when no category was set; see the spec.
+      ...(decisionId ? { decisionId } : {}),
+      ...(learnedRuleId ? { learnedRuleId } : {}),
     });
   },
 );
@@ -890,8 +899,9 @@ router.post(
               id: transactionsTable.id,
               occurredOn: transactionsTable.occurredOn,
             });
+    let bulkDecisionIds: string[] = [];
     if (bulkBefore) {
-      await recordUserDecisions(
+      bulkDecisionIds = await recordUserDecisions(
         db,
         req.householdId!,
         req.userId!,
@@ -943,6 +953,7 @@ router.post(
         };
       }),
       affectedMonths: Array.from(monthSet).sort(),
+      decisionIds: bulkDecisionIds,
     });
   },
 );
