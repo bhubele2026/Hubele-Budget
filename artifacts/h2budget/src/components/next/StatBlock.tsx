@@ -1,0 +1,39 @@
+import type { ReactNode } from "react";
+import { formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+
+/** A label over a mono figure. A number `value` is formatted as money; pass a
+ *  string/node for counts or anything pre-formatted. `delta` is a signed
+ *  change in money, printed with its sign ("+$120" / "-$45"); the tone only
+ *  colours the figure, the words in `hint` say what it means. */
+export function StatBlock(props: {
+  label: string;
+  value: number | string | ReactNode;
+  delta?: number | null;
+  hint?: ReactNode;
+  tone?: "neutral" | "ok" | "bad";
+  "data-testid"?: string;
+}) {
+  const shown = typeof props.value === "number" ? formatCurrency(props.value) : props.value;
+  const d = props.delta;
+  return (
+    <div data-testid={props["data-testid"]} className="min-w-0">
+      <div className="text-micro font-semibold uppercase tracking-wide text-neutral-500">{props.label}</div>
+      <div
+        className={cn(
+          "mt-0.5 font-mono text-title font-semibold tabular-nums",
+          props.tone === "bad" ? "text-bad" : "text-brand-navy",
+        )}
+      >
+        {shown}
+      </div>
+      {d != null && Number.isFinite(d) && d !== 0 ? (
+        <div className="font-mono text-micro tabular-nums text-neutral-600" data-testid="stat-delta">
+          {d > 0 ? "+" : "-"}
+          {formatCurrency(Math.abs(d))}
+        </div>
+      ) : null}
+      {props.hint ? <div className="mt-0.5 text-micro text-neutral-500">{props.hint}</div> : null}
+    </div>
+  );
+}

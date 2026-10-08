@@ -61,6 +61,9 @@ import {
   importAllowances,
   importMappingRules,
   importSettings,
+  importNextDashboard,
+  importNextForecast,
+  importNextAccounts,
 } from "./lib/routePrefetch";
 
 // (#819) Route-level code splitting. Each page is loaded on demand so the
@@ -87,6 +90,9 @@ const BudgetPage = lazy(importBudget);
 const AllowancesPage = lazy(importAllowances);
 const MappingRulesPage = lazy(importMappingRules);
 const SettingsPage = lazy(importSettings);
+const NextDashboardPage = lazy(importNextDashboard);
+const NextForecastPage = lazy(importNextForecast);
+const NextAccountsPage = lazy(importNextAccounts);
 const PlaidOAuthPage = lazy(() => import("./pages/plaid-oauth"));
 const NotFound = lazy(() => import("./pages/not-found"));
 
@@ -481,6 +487,10 @@ function ProtectedShell() {
             <Route path="/allowances" component={AllowancesPage} />
             <Route path="/mapping-rules" component={MappingRulesPage} />
             <Route path="/settings" component={SettingsPage} />
+            <Route path="/next/dashboard" component={NextDashboardPage} />
+            <Route path="/next/forecast" component={NextForecastPage} />
+            <Route path="/next/accounts" component={NextAccountsPage} />
+            <Route path="/next/accounts/:plaidAccountId" component={NextAccountsPage} />
             <Route path="/plaid-oauth" component={PlaidOAuthPage} />
             <Route component={NotFound} />
           </Switch>

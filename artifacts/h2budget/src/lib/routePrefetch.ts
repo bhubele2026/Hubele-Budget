@@ -37,6 +37,10 @@ export const importBudget = () => import("../pages/budget");
 export const importAllowances = () => import("../pages/allowances");
 export const importMappingRules = () => import("../pages/mapping-rules");
 export const importSettings = () => import("../pages/settings");
+// The /next preview pages (lazy; outside the ribbon until the owner approves).
+export const importNextDashboard = () => import("../pages/next/Dashboard");
+export const importNextForecast = () => import("../pages/next/Forecast");
+export const importNextAccounts = () => import("../pages/next/Accounts");
 
 // ── href → importer map (keyed exactly as the nav links / routes) ────────────
 // A route may map to a shared page component (e.g. /forecast + /review both
@@ -63,6 +67,9 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/reports/behavior": importReportsBehavior,
   "/settings": importSettings,
   "/mapping-rules": importMappingRules,
+  "/next/dashboard": importNextDashboard,
+  "/next/forecast": importNextForecast,
+  "/next/accounts": importNextAccounts,
 };
 
 // Chunks we've already kicked off — prefetch is a no-op after the first call
