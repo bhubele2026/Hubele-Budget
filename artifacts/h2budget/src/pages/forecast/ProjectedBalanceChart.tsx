@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -9,6 +9,7 @@ import {
   Tooltip as RechartsTooltip,
   ReferenceLine,
   ReferenceDot,
+  ReferenceArea,
   Label as RechartsLabel,
 } from "recharts";
 import {
@@ -16,12 +17,14 @@ import {
   AXIS_TICK,
   CHART,
   compactUSD,
+  MARKER,
   niceAxis,
   useXTicks,
 } from "@/lib/charts";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { PlanLine } from "@/lib/forecastMatch";
 import { tooltipPlanLine } from "@/lib/forecastPastDue";
+import { runsBelow, type MarkerGroup } from "@/lib/forecastEventKinds";
 
 /**
  * ⭐ THE CASH CURVE — the one chart on the most-used screen in the app.
@@ -96,6 +99,15 @@ export function ProjectedBalanceChart({
   onJumpToPlan,
   onMarkMissed,
   lockedPlanKeys,
+  variant = "classic",
+  todayISO,
+  markers,
+  riskShading = false,
+  selectedDate,
+  onSelectDate,
+  hoverSelects = false,
+  horizonKey,
+  incomeByDate,
 }: {
   data: DailyPoint[];
   cashBuffer: number;
@@ -107,13 +119,75 @@ export function ProjectedBalanceChart({
   /** (PR5b) `<itemId>|<date>` of partly-paid plans: no Mark missed for them —
    *  the write would replace the partial and un-pay its row. */
   lockedPlanKeys?: ReadonlySet<string>;
+  /**
+   * "classic" (default) is the old page's chart, untouched. "expanded" is the
+   * `/next/forecast` chart: solid-to-today then dashed, grouped event markers,
+   * risk shading, a selectable day, and an animation that only plays when the
+   * data actually changed. Every prop below is ignored in "classic".
+   */
+  variant?: "classic" | "expanded";
+  /** ISO day the solid line ends on and the "Today" rule stands on. */
+  todayISO?: string;
+  markers?: MarkerGroup[];
+  /** Tint the days under the cash buffer, and more strongly the days under zero. */
+  riskShading?: boolean;
+  /** Keyed by DATE, never by index, so it survives refetches and horizon changes. */
+  selectedDate?: string | null;
+  onSelectDate?: (iso: string | null) => void;
+  /** Desktop: resting the pointer on a day selects it (debounced). */
+  hoverSelects?: boolean;
+  /** Changing this crossfades the chart in (one key per horizon). */
+  horizonKey?: string | number;
+  /** Money-in rows per day, listed in the tooltip. */
+  incomeByDate?: Map<string, Array<{ label: string; amount: number }>>;
 }) {
+  const expanded = variant === "expanded";
   // Content fingerprint — see the draw-restart note above.
   const fp = data.map((d) => `${d.rawDate}:${d.balance}`).join("|");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const series = useMemo(() => data, [fp]);
   const xtk = useXTicks(series as unknown as Array<Record<string, unknown>>, "rawDate");
   const scale = useScale(series, cashBuffer);
+
+  // Expanded only. `chartData` is `series` itself unless a "today" split is asked
+  // for, so the classic chart keeps the very same array reference.
+  const chartData = useMemo(
+    () =>
+      expanded && todayISO
+        ? series.map((d) => ({
+            ...d,
+            past: d.rawDate <= todayISO ? d.balance : null,
+            future: d.rawDate >= todayISO ? d.balance : null,
+          }))
+        : series,
+    [series, expanded, todayISO],
+  );
+  const risk = useMemo(
+    () =>
+      expanded && riskShading
+        ? { below: runsBelow(series, cashBuffer), negative: runsBelow(series, 0) }
+        : null,
+    [series, expanded, riskShading, cashBuffer],
+  );
+  // The draw plays once per content fingerprint: it keeps running through
+  // unrelated re-renders (selection, hover) until it has had its time, then
+  // stays off until the data changes again.
+  const [settledFp, setSettledFp] = useState<string | null>(null);
+  useEffect(() => {
+    if (!expanded) return;
+    const t = setTimeout(() => setSettledFp(fp), ANIM_AREA.animationDuration + 150);
+    return () => clearTimeout(t);
+  }, [expanded, fp]);
+  const animateNow = !expanded || settledFp !== fp;
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+  }, []);
+  const canHover =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const selectedInWindow = !!selectedDate && series.some((d) => d.rawDate === selectedDate);
 
   /**
    * ⚠️ ANCHOR THE LOW-POINT LABEL AWAY FROM THE EDGE IT SITS ON.
@@ -137,20 +211,43 @@ export function ProjectedBalanceChart({
   return (
     // `.chart-in` fades the wrapper up; `.area-draw` sweeps a feathered mask
     // left→right so the curve reads as being plotted across the horizon.
-    <div className="chart-in area-draw h-full w-full">
+    <div key={expanded ? horizonKey : undefined} className="chart-in area-draw h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={series} margin={{ top: 14, right: 16, bottom: 16, left: 0 }}>
+        <AreaChart
+          data={chartData}
+          margin={{ top: 14, right: 16, bottom: 16, left: 0 }}
+          {...(expanded && onSelectDate
+            ? {
+                // Tap / click selects. Desktop hover selects once the pointer rests.
+                onClick: (st: { activeLabel?: string | number } | undefined) => {
+                  if (st?.activeLabel != null) onSelectDate(String(st.activeLabel));
+                },
+                onMouseMove: hoverSelects && canHover
+                  ? (st: { activeLabel?: string | number } | undefined) => {
+                      const d = st?.activeLabel;
+                      if (d == null) return;
+                      if (hoverTimer.current) clearTimeout(hoverTimer.current);
+                      hoverTimer.current = setTimeout(() => onSelectDate(String(d)), 140);
+                    }
+                  : undefined,
+              }
+            : {})}
+        >
           <defs>
             <linearGradient id="projectedBalanceGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={CHART.navy} stopOpacity={0.28} />
               <stop offset="100%" stopColor={CHART.navy} stopOpacity={0.02} />
+            </linearGradient>
+            <linearGradient id="projectedBalanceGradFuture" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={CHART.mid} stopOpacity={0.14} />
+              <stop offset="100%" stopColor={CHART.mid} stopOpacity={0.01} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
           <XAxis
             dataKey="rawDate"
             tick={AXIS_TICK}
-            tickFormatter={(v: string) => shortDate(v)}
+            tickFormatter={(v: string) => (expanded ? longTick(v) : shortDate(v))}
             ticks={xtk}
             interval="preserveStartEnd"
             minTickGap={28}
@@ -185,6 +282,21 @@ export function ProjectedBalanceChart({
                       {Number.isFinite(balance) ? formatCurrency(balance) : "—"}
                     </span>
                   </div>
+                  {expanded &&
+                    rawDate &&
+                    (incomeByDate?.get(rawDate)?.length ?? 0) > 0 && (
+                      <div className="mt-2 border-t border-brand-line pt-2">
+                        <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">
+                          Money in
+                        </div>
+                        {incomeByDate!.get(rawDate)!.map((inc, i) => (
+                          <div key={`${inc.label}-${i}`} className="flex items-center justify-between gap-3">
+                            <span className="min-w-0 truncate text-neutral-600">{inc.label}</span>
+                            <span className="font-mono tabular-nums text-ok">{formatCurrency(inc.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   {dayEvents &&
                     dayEvents.length > 0 &&
                     rawDate &&
@@ -274,15 +386,74 @@ export function ProjectedBalanceChart({
               );
             }}
           />
-          <Area
-            {...ANIM_AREA}
-            type="monotone"
-            dataKey="balance"
-            stroke={CHART.navy}
-            strokeWidth={2}
-            fill="url(#projectedBalanceGrad)"
-            name="Forecast"
-          />
+          {risk?.below.map((r, i) => (
+            <ReferenceArea
+              key={`risk-b-${i}-${r.x1}`}
+              x1={r.x1}
+              x2={r.x2}
+              fill={CHART.orangeDeep}
+              fillOpacity={0.1}
+              stroke="none"
+              ifOverflow="hidden"
+              data-testid="risk-below-buffer"
+            />
+          ))}
+          {risk?.negative.map((r, i) => (
+            <ReferenceArea
+              key={`risk-n-${i}-${r.x1}`}
+              x1={r.x1}
+              x2={r.x2}
+              fill={CHART.orangeDeep}
+              fillOpacity={0.24}
+              stroke="none"
+              ifOverflow="hidden"
+              data-testid="risk-below-zero"
+            />
+          ))}
+          {expanded && scale.domain[0] < 0 && (
+            <ReferenceLine y={0} stroke={CHART.steel} strokeWidth={1} data-testid="ref-zero" />
+          )}
+          {expanded && todayISO ? (
+            <>
+              <Area
+                {...ANIM_AREA}
+                isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
+                type="monotone"
+                dataKey="past"
+                stroke={CHART.navy}
+                strokeWidth={2.25}
+                fill="url(#projectedBalanceGrad)"
+                name="Actual"
+                connectNulls
+              />
+              <Area
+                {...ANIM_AREA}
+                isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
+                type="monotone"
+                dataKey="future"
+                stroke={CHART.mid}
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                fill="url(#projectedBalanceGradFuture)"
+                name="Projected"
+                connectNulls
+              />
+              <ReferenceLine x={todayISO} stroke={CHART.mist} strokeWidth={1.25} data-testid="ref-today">
+                <RechartsLabel value="Today" position="insideTopRight" fill={CHART.steel} fontSize={10} />
+              </ReferenceLine>
+            </>
+          ) : (
+            <Area
+              {...ANIM_AREA}
+              isAnimationActive={ANIM_AREA.isAnimationActive && animateNow}
+              type="monotone"
+              dataKey="balance"
+              stroke={CHART.navy}
+              strokeWidth={2}
+              fill="url(#projectedBalanceGrad)"
+              name={expanded ? "Projected" : "Forecast"}
+            />
+          )}
           {Number.isFinite(cashBuffer) && (
             <ReferenceLine
               y={cashBuffer}
@@ -303,7 +474,7 @@ export function ProjectedBalanceChart({
               />
             </ReferenceLine>
           )}
-          {bigBillMarkers.map((m) => {
+          {(expanded ? [] : bigBillMarkers).map((m) => {
             const top = m.bills.find((b) => !!b.itemId) ?? m.bills[0];
             return (
               <ReferenceDot
@@ -324,6 +495,35 @@ export function ProjectedBalanceChart({
               />
             );
           })}
+          {expanded && selectedInWindow && (
+            <ReferenceLine
+              x={selectedDate!}
+              stroke={CHART.navy}
+              strokeWidth={1.5}
+              ifOverflow="extendDomain"
+              data-testid="ref-selected-day"
+            />
+          )}
+          {expanded &&
+            (markers ?? []).map((m) => (
+              <ReferenceDot
+                key={`mk-${m.date}`}
+                x={m.date}
+                y={m.balance}
+                r={6}
+                ifOverflow="extendDomain"
+                isFront
+                shape={(p: { cx?: number; cy?: number }) => (
+                  <MarkerShape
+                    cx={p.cx ?? 0}
+                    cy={p.cy ?? 0}
+                    group={m}
+                    selected={m.date === selectedDate}
+                    onSelect={onSelectDate}
+                  />
+                )}
+              />
+            ))}
           {lowestPoint && (
             <ReferenceDot
               x={lowestPoint.x}
@@ -374,4 +574,59 @@ function shortDate(iso: string): string {
   if (!iso) return "";
   const [, m, d] = iso.split("-");
   return `${m}-${d}`;
+}
+
+
+/** "2026-05-14" → "May 14": the expanded axis has room for the month word. */
+function longTick(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** One marker per day. Shape tells the kind apart as well as colour: payday an
+ *  up-tick, bill a dot, card payment a square, debt payment a diamond. A day
+ *  with several events is ONE marker carrying the count. */
+function MarkerShape({
+  cx,
+  cy,
+  group,
+  selected,
+  onSelect,
+}: {
+  cx: number;
+  cy: number;
+  group: MarkerGroup;
+  selected: boolean;
+  onSelect?: (iso: string | null) => void;
+}) {
+  const fill = MARKER[group.kind];
+  const common = { fill, stroke: "#ffffff", strokeWidth: 1.5 } as const;
+  return (
+    <g
+      data-testid={`marker-${group.date}`}
+      data-kind={group.kind}
+      data-count={group.count}
+      style={{ cursor: onSelect ? "pointer" : undefined }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect?.(group.date);
+      }}
+    >
+      {selected && <circle cx={cx} cy={cy} r={11} fill="none" stroke={CHART.navy} strokeWidth={1.5} />}
+      {group.kind === "payday" && (
+        <path d={`M${cx} ${cy - 7} L${cx - 6} ${cy + 4} L${cx + 6} ${cy + 4} Z`} {...common} />
+      )}
+      {group.kind === "bill" && <circle cx={cx} cy={cy} r={5} {...common} />}
+      {group.kind === "card" && <rect x={cx - 5} y={cy - 5} width={10} height={10} {...common} />}
+      {group.kind === "debt" && (
+        <path d={`M${cx} ${cy - 7} L${cx + 7} ${cy} L${cx} ${cy + 7} L${cx - 7} ${cy} Z`} {...common} />
+      )}
+      {group.count > 1 && (
+        <text x={cx + 8} y={cy - 7} fontSize={10} fontWeight={700} fill={CHART.navy}>
+          {group.count}
+        </text>
+      )}
+    </g>
+  );
 }

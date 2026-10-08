@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import type { ForecastNextCtx } from "./next/forecast/types";
 import {
   useDeferredValue,
   useEffect,
@@ -241,7 +243,14 @@ function pairedAccountLabel(
 
 export default function ForecastPage({
   mode = "overall",
-}: { mode?: "review" | "overall" } = {}) {
+  renderNext,
+}: {
+  mode?: "review" | "overall";
+  /** The `/next/forecast` layout. When given, the page keeps every hook and
+   *  handler but hands the SAME sections (as ready-made JSX) and the SAME
+   *  derived figures to this renderer instead of laying them out itself. */
+  renderNext?: (ctx: ForecastNextCtx) => ReactNode;
+} = {}) {
   // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
   // charges — banks sync only on the manual Sync button now.
   const [horizonDays, setHorizonDays] = useState<number>(() => {
@@ -2037,8 +2046,8 @@ export default function ForecastPage({
   const draggingTotal = draggingPlans.reduce((s, r) => s + r.amount, 0);
   const draggingTargetDate = draggingPlans[0]?.effectiveDate ?? null;
 
-  return (
-    <div className="space-y-6">
+  const bannerBlock = (
+<>
       <PlaidReauthBanner />
       {(forecastError || projectionError) && (
         <div role="alert" className={errorBanner}>
@@ -2048,28 +2057,10 @@ export default function ForecastPage({
           <button type="button" className={btnLink} onClick={() => { void refetchForecast(); void refetchProjection(); }}>Retry forecast</button>
         </div>
       )}
-      <div ref={pageStickyHeaderRef} className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
-      {/* ⭐ The title used to be a sentence explaining the page's philosophy
-          ("Plan register — you decide every match."). The register below says
-          that by existing; the head just names the screen. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-title font-semibold text-brand-navy">
-          {mode === "review" ? "Review" : "Forecast"}
-        </h1>
-        <Help>
-          Plans are matched to bank activity by you — nothing is auto-accepted.
-          A matched plan leaves the register and lands in the month's bucket.
-        </Help>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Link href="/bills" data-testid="link-manage-bills" className={btnLink}>
-            Bills
-          </Link>
-          <button type="button" onClick={() => openSettings()} className={btnLink}>
-            <SettingsIcon className="h-3 w-3" aria-hidden="true" /> Settings
-          </button>
-        </div>
-      </div>
+</>
+  );
 
+  const horizonControls = (
       <div className="flex items-center gap-2 flex-wrap" data-testid="horizon-tabs">
         {/* ⭐ The horizon segmented control. One hairline track, the active
             segment navy-filled — the same shape the tab ribbon uses, so the
@@ -2177,127 +2168,10 @@ export default function ForecastPage({
           </div>
         )}
       </div>
+  );
 
-      {mode === "overall" && (
-      /* ⭐ The headline. One big number, and the three figures it is built
-         from demoted to a footnote — they used to be three sentences. */
-      <section className={kitCard} data-testid="card-forecast-hero">
-        <div className={cardHead}>
-          <h2 className="text-title font-semibold text-brand-navy">
-            Forecast balance
-          </h2>
-          <Help>
-            Where checking lands at the end of the horizon: the bank balance
-            before the start date, plus every matched and still-planned item
-            between then and the end date.
-          </Help>
-          {inboxCount === 0 && reconciledNow && (
-            <span className="chip ok ml-auto" data-testid="badge-inbox-cleared">
-              Inbox cleared
-            </span>
-          )}
-        </div>
-        <div
-          className={`px-4 py-3 font-mono text-display font-semibold tabular-nums ${
-            projReady && Number.isFinite(endingNum) && endingNum < 0
-              ? "text-bad"
-              : "text-brand-navy"
-          }`}
-          data-testid="hero-forecast-balance"
-        >
-          {/* No projection yet, or no bank balance to project from: a dash, never
-              $0.00 dressed as a real ending balance. */}
-          {moneyFace(projReady ? proj?.endingBalance : null)}
-        </div>
-        <Foot>
-          <span className="flex flex-wrap items-center gap-x-5 gap-y-1">
-            <span>
-              {/* The date the figure beside it was computed for. With look-back
-                  closed the request carries no date (the server's household
-                  day), so the browser's own calendar day could name the wrong
-                  day here. */}
-              Bank before {formatDate(proj?.fromDate ?? forecastFromDate)}{" "}
-              <span className="font-mono tabular-nums text-neutral-600">
-                {moneyFace(projReady ? proj?.startingBalance : null)}
-              </span>
-            </span>
-            <span>
-              Matched impact{" "}
-              <span className="font-mono tabular-nums text-neutral-600">
-                {moneyFace(projReady ? proj?.acceptedImpact : null)}
-              </span>
-            </span>
-            <span>
-              Through{" "}
-              {formatDate(proj?.endingDate ?? proj?.toDate ?? forecastFromDate)}{" "}
-              <span className="font-mono tabular-nums text-neutral-600">
-                {moneyFace(projReady ? proj?.endingBalance : null)}
-              </span>
-            </span>
-          </span>
-        </Foot>
-      </section>
-      )}
-      </div>
-
-      {mode === "overall" && (<>
-      {/* ⭐ Four figures, mono, on one baseline. Each tile used to carry its
-          own little graphic — a sparkline of the curve drawn full-size
-          directly below it, a ring restating a ratio the two neighbouring
-          numbers already give, a stripe repeating in-vs-out. The numbers are
-          the content; the chart below is the picture. */}
-      {(() => {
-        const inc = Number(proj?.projectedIncome) || 0;
-        const exp = Number(proj?.projectedExpenses) || 0;
-        const dipsBelowBuffer =
-          Number.isFinite(lowestNum) && lowestNum < Number(proj?.cashBuffer ?? 0);
-        return (
-          <div
-            className="grid grid-cols-2 gap-3 lg:grid-cols-4"
-            data-testid="forecast-kpis"
-          >
-            <Stat
-              index={0}
-              data-testid="kpi-lowest-point"
-              label="Lowest point"
-              value={proj && proj.status !== "no_data" && Number.isFinite(lowestNum) ? formatCurrency(lowestNum) : "—"}
-              tone={dipsBelowBuffer ? "bad" : "navy"}
-              hint={`${!proj || proj.status === "no_data" ? "Set a bank balance to project" : dipsBelowBuffer ? "under buffer" : "above buffer"}${
-                proj?.lowestDate ? ` · ${formatDate(proj.lowestDate)}` : ""
-              }`}
-            />
-            <Stat
-              index={1}
-              data-testid="kpi-ending-balance"
-              label="Ending balance"
-              value={proj && proj.status !== "no_data" ? formatCurrency(proj.endingBalance ?? 0) : "—"}
-              hint={
-                proj?.endingDate
-                  ? formatDate(proj.endingDate)
-                  : `${horizonDays}-day horizon`
-              }
-            />
-            <Stat
-              index={2}
-              data-testid="kpi-projected-income"
-              label="Money in"
-              value={proj ? formatCurrency(inc) : "—"}
-              hint={`over ${horizonDays}d`}
-            />
-            <Stat
-              index={3}
-              data-testid="kpi-projected-expenses"
-              label="Money out"
-              value={proj ? formatCurrency(exp) : "—"}
-              hint={`over ${horizonDays}d`}
-            />
-          </div>
-        );
-      })()}
-
-      <ForecastDateBalance signal={cashProjection} state={dataState(cashProjectionQuery)} />
-
-      {/* (#683) Past-due plans dragging tomorrow — discoverable summary */}
+  const draggingCard = (
+<>
       {draggingPlans.length > 0 && draggingTargetDate && (
         <section className={kitCard} data-testid="card-dragging-plans-summary">
           <div className={cardHead}>
@@ -2445,60 +2319,10 @@ export default function ForecastPage({
           </Foot>
         </section>
       )}
+</>
+  );
 
-      {/* ── The cash curve ─────────────────────────────────────────────────
-             The one chart on this page. Drawing, annotation and tooltip live
-             in ./forecast/ProjectedBalanceChart so `useXTicks` can be called
-             above the page's loading early-return. ─────────────────────── */}
-      <section className={kitCard} data-testid="card-projected-balance-chart">
-        <div className={cardHead}>
-          <h2 className="text-title font-semibold text-brand-navy">
-            Projected balance
-          </h2>
-          <Help>
-            Bank balance rolled forward through every planned bill and income
-            event over the selected horizon. The dashed line is your cash
-            buffer; the orange dot is the projected low point.
-          </Help>
-          <span className="ml-auto text-micro uppercase tracking-wider text-neutral-400">
-            {horizonDays} days
-          </span>
-        </div>
-        <div className="h-[280px] w-full px-1 pb-1 pt-3">
-          {cashProjectionLoading && dailySeries.length === 0 ? (
-            <Skeleton className="h-full w-full" />
-          ) : dailySeries.length === 0 || proj?.status === "no_data" ? (
-            <div
-              className="flex h-full w-full flex-col items-center justify-center gap-3 px-4 text-center"
-              data-testid="empty-projected-balance"
-            >
-              <p className="text-body text-neutral-500">
-                Set a bank snapshot or add planned items to draw the curve.
-              </p>
-              <Button
-                size="sm"
-                onClick={openSnapshot}
-                data-testid="button-empty-set-bank-snapshot"
-              >
-                Set bank snapshot
-              </Button>
-            </div>
-          ) : (
-            <ProjectedBalanceChart
-              data={dailySeries}
-              cashBuffer={cashBufferNum}
-              lowestPoint={lowestPoint}
-              bigBillMarkers={bigBillMarkers}
-              eventsByDate={eventsByDate}
-              onJumpToPlan={jumpToPlan}
-              onMarkMissed={onMarkMissed}
-              lockedPlanKeys={partialPlanKeys}
-            />
-          )}
-        </div>
-      </section>
-
-      {/* Bank snapshot + Avalanche cards (kept below the new summary) */}
+  const bankGrid = (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <section className={kitCard} data-testid="card-bank-snapshot">
           <div className={cardHead}>
@@ -2594,8 +2418,10 @@ export default function ForecastPage({
         </section>
         <AvalancheScheduleCard />
       </div>
-      </>)}
+  );
 
+  const registerBlock = (
+<>
       {mode === "review" && bankInbox.length === 0 && (
         // Single-flow restore: a forecast-flagged checking txn IS in
         // Review, so an empty Review just means nothing's flagged /
@@ -3347,7 +3173,11 @@ export default function ForecastPage({
               )}
             </DragOverlay>
       </DndContext>
+</>
+  );
 
+  const monthBlock = (
+<>
       {mode === "overall" && (
         <div className="space-y-4 mt-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -3523,7 +3353,11 @@ export default function ForecastPage({
           </section>
         </div>
       )}
+</>
+  );
 
+  const dialogsBlock = (
+<>
       {/* Settings dialog */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent>
@@ -3846,6 +3680,259 @@ export default function ForecastPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+</>
+  );
+
+  if (renderNext) {
+    return (
+      <div className="space-y-6">
+        {bannerBlock}
+        {renderNext({
+          mode,
+          horizonDays,
+          horizonControls,
+          draggingCard,
+          bankGrid,
+          registerBlock,
+          monthBlock,
+          proj,
+          projReady,
+          dailySeries,
+          cashBufferNum,
+          lowestPoint,
+          bigBillMarkers,
+          eventsByDate,
+          partialPlanKeys,
+          jumpToPlan,
+          onMarkMissed,
+          onSkipDraggingPlan,
+          openSnapshot,
+          openSettings: () => openSettings(),
+          cashProjectionLoading,
+          bankBalance: data.bankSnapshot ? data.bankSnapshot.balance : data.settings.startingBalance,
+          bankAccountName,
+          bankAccountMask,
+          debtLinks,
+          inboxCount,
+          fromDate: proj?.fromDate ?? forecastFromDate,
+          lookbackOpen,
+          highlightedPlanKey,
+        })}
+        {dialogsBlock}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {bannerBlock}
+      <div ref={pageStickyHeaderRef} className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
+      {/* ⭐ The title used to be a sentence explaining the page's philosophy
+          ("Plan register — you decide every match."). The register below says
+          that by existing; the head just names the screen. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-title font-semibold text-brand-navy">
+          {mode === "review" ? "Review" : "Forecast"}
+        </h1>
+        <Help>
+          Plans are matched to bank activity by you — nothing is auto-accepted.
+          A matched plan leaves the register and lands in the month's bucket.
+        </Help>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Link href="/bills" data-testid="link-manage-bills" className={btnLink}>
+            Bills
+          </Link>
+          <button type="button" onClick={() => openSettings()} className={btnLink}>
+            <SettingsIcon className="h-3 w-3" aria-hidden="true" /> Settings
+          </button>
+        </div>
+      </div>
+
+      {horizonControls}
+
+      {mode === "overall" && (
+      /* ⭐ The headline. One big number, and the three figures it is built
+         from demoted to a footnote — they used to be three sentences. */
+      <section className={kitCard} data-testid="card-forecast-hero">
+        <div className={cardHead}>
+          <h2 className="text-title font-semibold text-brand-navy">
+            Forecast balance
+          </h2>
+          <Help>
+            Where checking lands at the end of the horizon: the bank balance
+            before the start date, plus every matched and still-planned item
+            between then and the end date.
+          </Help>
+          {inboxCount === 0 && reconciledNow && (
+            <span className="chip ok ml-auto" data-testid="badge-inbox-cleared">
+              Inbox cleared
+            </span>
+          )}
+        </div>
+        <div
+          className={`px-4 py-3 font-mono text-display font-semibold tabular-nums ${
+            projReady && Number.isFinite(endingNum) && endingNum < 0
+              ? "text-bad"
+              : "text-brand-navy"
+          }`}
+          data-testid="hero-forecast-balance"
+        >
+          {/* No projection yet, or no bank balance to project from: a dash, never
+              $0.00 dressed as a real ending balance. */}
+          {moneyFace(projReady ? proj?.endingBalance : null)}
+        </div>
+        <Foot>
+          <span className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <span>
+              {/* The date the figure beside it was computed for. With look-back
+                  closed the request carries no date (the server's household
+                  day), so the browser's own calendar day could name the wrong
+                  day here. */}
+              Bank before {formatDate(proj?.fromDate ?? forecastFromDate)}{" "}
+              <span className="font-mono tabular-nums text-neutral-600">
+                {moneyFace(projReady ? proj?.startingBalance : null)}
+              </span>
+            </span>
+            <span>
+              Matched impact{" "}
+              <span className="font-mono tabular-nums text-neutral-600">
+                {moneyFace(projReady ? proj?.acceptedImpact : null)}
+              </span>
+            </span>
+            <span>
+              Through{" "}
+              {formatDate(proj?.endingDate ?? proj?.toDate ?? forecastFromDate)}{" "}
+              <span className="font-mono tabular-nums text-neutral-600">
+                {moneyFace(projReady ? proj?.endingBalance : null)}
+              </span>
+            </span>
+          </span>
+        </Foot>
+      </section>
+      )}
+      </div>
+
+      {mode === "overall" && (<>
+      {/* ⭐ Four figures, mono, on one baseline. Each tile used to carry its
+          own little graphic — a sparkline of the curve drawn full-size
+          directly below it, a ring restating a ratio the two neighbouring
+          numbers already give, a stripe repeating in-vs-out. The numbers are
+          the content; the chart below is the picture. */}
+      {(() => {
+        const inc = Number(proj?.projectedIncome) || 0;
+        const exp = Number(proj?.projectedExpenses) || 0;
+        const dipsBelowBuffer =
+          Number.isFinite(lowestNum) && lowestNum < Number(proj?.cashBuffer ?? 0);
+        return (
+          <div
+            className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+            data-testid="forecast-kpis"
+          >
+            <Stat
+              index={0}
+              data-testid="kpi-lowest-point"
+              label="Lowest point"
+              value={proj && proj.status !== "no_data" && Number.isFinite(lowestNum) ? formatCurrency(lowestNum) : "—"}
+              tone={dipsBelowBuffer ? "bad" : "navy"}
+              hint={`${!proj || proj.status === "no_data" ? "Set a bank balance to project" : dipsBelowBuffer ? "under buffer" : "above buffer"}${
+                proj?.lowestDate ? ` · ${formatDate(proj.lowestDate)}` : ""
+              }`}
+            />
+            <Stat
+              index={1}
+              data-testid="kpi-ending-balance"
+              label="Ending balance"
+              value={proj && proj.status !== "no_data" ? formatCurrency(proj.endingBalance ?? 0) : "—"}
+              hint={
+                proj?.endingDate
+                  ? formatDate(proj.endingDate)
+                  : `${horizonDays}-day horizon`
+              }
+            />
+            <Stat
+              index={2}
+              data-testid="kpi-projected-income"
+              label="Money in"
+              value={proj ? formatCurrency(inc) : "—"}
+              hint={`over ${horizonDays}d`}
+            />
+            <Stat
+              index={3}
+              data-testid="kpi-projected-expenses"
+              label="Money out"
+              value={proj ? formatCurrency(exp) : "—"}
+              hint={`over ${horizonDays}d`}
+            />
+          </div>
+        );
+      })()}
+
+      <ForecastDateBalance signal={cashProjection} state={dataState(cashProjectionQuery)} />
+
+      {/* (#683) Past-due plans dragging tomorrow — discoverable summary */}
+      {draggingCard}
+
+      {/* ── The cash curve ─────────────────────────────────────────────────
+             The one chart on this page. Drawing, annotation and tooltip live
+             in ./forecast/ProjectedBalanceChart so `useXTicks` can be called
+             above the page's loading early-return. ─────────────────────── */}
+      <section className={kitCard} data-testid="card-projected-balance-chart">
+        <div className={cardHead}>
+          <h2 className="text-title font-semibold text-brand-navy">
+            Projected balance
+          </h2>
+          <Help>
+            Bank balance rolled forward through every planned bill and income
+            event over the selected horizon. The dashed line is your cash
+            buffer; the orange dot is the projected low point.
+          </Help>
+          <span className="ml-auto text-micro uppercase tracking-wider text-neutral-400">
+            {horizonDays} days
+          </span>
+        </div>
+        <div className="h-[280px] w-full px-1 pb-1 pt-3">
+          {cashProjectionLoading && dailySeries.length === 0 ? (
+            <Skeleton className="h-full w-full" />
+          ) : dailySeries.length === 0 || proj?.status === "no_data" ? (
+            <div
+              className="flex h-full w-full flex-col items-center justify-center gap-3 px-4 text-center"
+              data-testid="empty-projected-balance"
+            >
+              <p className="text-body text-neutral-500">
+                Set a bank snapshot or add planned items to draw the curve.
+              </p>
+              <Button
+                size="sm"
+                onClick={openSnapshot}
+                data-testid="button-empty-set-bank-snapshot"
+              >
+                Set bank snapshot
+              </Button>
+            </div>
+          ) : (
+            <ProjectedBalanceChart
+              data={dailySeries}
+              cashBuffer={cashBufferNum}
+              lowestPoint={lowestPoint}
+              bigBillMarkers={bigBillMarkers}
+              eventsByDate={eventsByDate}
+              onJumpToPlan={jumpToPlan}
+              onMarkMissed={onMarkMissed}
+              lockedPlanKeys={partialPlanKeys}
+            />
+          )}
+        </div>
+      </section>
+
+      {/* Bank snapshot + Avalanche cards (kept below the new summary) */}
+      {bankGrid}
+      </>)}
+
+      {registerBlock}
+
+      {monthBlock}
+
+      {dialogsBlock}
     </div>
   );
 }

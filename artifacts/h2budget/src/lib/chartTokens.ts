@@ -84,6 +84,20 @@ export const ACCOUNT_ACCENT = {
 export type AccountAccent = keyof typeof ACCOUNT_ACCENT;
 
 /**
+ * Forecast event markers (the expanded chart). One colour per kind, each also
+ * told apart by SHAPE and by the legend label, so colour is never alone:
+ * payday = navy up-tick, bill = steel dot, card payment = the Amex accent
+ * square, debt payment = orange diamond.
+ */
+export const MARKER = {
+  payday: "#19315b",
+  bill: "#4d5d73",
+  card: "#0f766e",
+  debt: "#f68d2e",
+} as const;
+export type MarkerKind = keyof typeof MARKER;
+
+/**
  * Desaturated neutral grey for the "All others" rollup band.
  *
  * ⚠️ THIS VALUE IS LOAD-BEARING AND IS PINNED BY A TEST. It used to be
