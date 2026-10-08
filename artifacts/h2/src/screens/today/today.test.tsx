@@ -45,6 +45,16 @@ const SPINE: Spine = {
   forecast: { lowPoint: "800.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "ready" },
   debt: { payoffPct: 41.3 },
   reviewCount: 2,
+  position: {
+    safeToSpendNow: "144.50",
+    remainingWeek: "144.50",
+    availableUntilPayday: "2124.50",
+    paydayDate: "2026-10-09",
+    horizonKind: "payday",
+    withinPlan: "yes",
+    confidence: "firm",
+    degraded: false,
+  },
 };
 
 function read(over: Partial<SpineRead> = {}): SpineRead {
