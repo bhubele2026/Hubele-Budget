@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import {
   useApplyLearnedRuleRetroactively,
   useDeleteLearnedRule,
+  type MappingRule,
   useUpdateLearnedRule,
   type LearnedRule,
   type UpdateLearnedRuleInput,
 } from "@workspace/api-client-react";
+import { mappingRulesKey, useChangeMappingRule, useMappingRules, useRemoveMappingRule } from "@/data/automationApi";
 import { useCategoryList, useInvalidateActivity, useLearnedRules } from "@/data/activityData";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, buttonClass } from "@/kit/Button";
 import { Note } from "@/kit/Note";
 import { SkeletonLine } from "@/kit/Skeleton";
@@ -162,16 +166,89 @@ function Rule({ rule, categories }: { rule: LearnedRule; categories: { id: strin
   );
 }
 
+/** A rule the household wrote: pattern → category. Change the category or delete it. */
+function HandRule({ rule, categories }: { rule: MappingRule; categories: { id: string; name: string }[] }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const update = useChangeMappingRule();
+  const remove = useRemoveMappingRule();
+  const [confirming, setConfirming] = useState(false);
+  const busy = update.isPending || remove.isPending;
+  const reload = () => void qc.invalidateQueries({ queryKey: mappingRulesKey() });
+  const catName = categories.find((c) => c.id === rule.categoryId)?.name;
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-rule py-3 first:border-t-0" data-testid="hand-rule">
+      <p className="type-body text-ink" data-testid="hand-rule-pattern">
+        {rule.pattern} <span className="text-ink-3">→</span> <span data-testid="hand-rule-category">{catName ?? "Not filed"}</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <select
+          aria-label={`Category for ${rule.pattern}`}
+          value={rule.categoryId ?? ""}
+          disabled={busy}
+          onChange={async (e) => {
+            try {
+              await update.mutateAsync({ id: rule.id, data: { pattern: rule.pattern, matchType: rule.matchType, priority: rule.priority, categoryId: e.target.value } });
+              reload();
+            } catch {
+              toast.show({ message: "Couldn't change that rule. It's as it was.", tone: "error" });
+            }
+          }}
+          className={selectCls}
+          data-testid="hand-rule-select"
+        >
+          {!rule.categoryId && <option value="">Not filed</option>}
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        {confirming ? (
+          <span className="flex items-center gap-2">
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={busy}
+              onClick={async () => {
+                try {
+                  await remove.mutateAsync({ id: rule.id });
+                  reload();
+                } catch {
+                  setConfirming(false);
+                  toast.show({ message: "Couldn't delete that rule. It's still here.", tone: "error" });
+                }
+              }}
+              data-testid="hand-rule-delete-confirm"
+            >
+              Delete
+            </Button>
+            <Button variant="quiet" size="sm" onClick={() => setConfirming(false)}>
+              Keep
+            </Button>
+          </span>
+        ) : (
+          <Button variant="quiet" size="sm" disabled={busy} onClick={() => setConfirming(true)} data-testid="hand-rule-delete">
+            Delete
+          </Button>
+        )}
+      </div>
+    </li>
+  );
+}
+
 /**
  * ⭐ RULES H2 LEARNED — a merchant, the category you chose for it, how far it
  * applies and how often you confirmed it. Change either, turn a rule off,
  * delete it, or press Apply to past charges to file the merchant's older
- * charges (never done by itself). Hand-written rules stay in the classic app
- * until Plan arrives.
+ * charges (never done by itself). Rules you wrote sit below, with the
+ * category and delete the API allows (PATCH and DELETE /mapping-rules/:id), so
+ * nothing here sends you to the classic app.
  */
 export function RulesView() {
   const rules = useLearnedRules();
   const categories = useCategoryList();
+  const hand = useMappingRules();
   const cats = useMemo(() => (categories.data ?? []).map((c) => ({ id: c.id, name: c.name })), [categories.data]);
   const sorted = useMemo(
     () =>
@@ -216,12 +293,33 @@ export function RulesView() {
 
   return (
     <div className="flex flex-col gap-4" data-testid="rules-view">
+      <p className="type-caption text-ink-3" data-testid="automation-link">
+        <Link href="/household/automation" className={buttonClass({ variant: "link", size: "sm" })}>
+          How filing works and what the model may do → Automation
+        </Link>
+      </p>
       {body}
-      <div className="border-t border-rule pt-4">
-        <a href="/classic/mapping-rules" className={buttonClass({ variant: "link", size: "sm" })} data-testid="classic-rules-link">
-          Hand-written rules
-        </a>
-        <p className="mt-1 type-caption text-ink-3">These stay in the classic app for now.</p>
+      <div className="border-t border-rule pt-4" data-testid="hand-rules">
+        <h2 className="mb-2 type-section text-ink-2">Rules you wrote</h2>
+        {hand.isError && !hand.data ? (
+          <Note kind="error" onRetry={() => void hand.refetch()} retrying={hand.isFetching}>
+            Couldn't load your rules.
+          </Note>
+        ) : !hand.data ? (
+          <SkeletonLine className="w-64" />
+        ) : hand.data.length === 0 ? (
+          <Note kind="empty" data-testid="hand-rules-empty">
+            You haven't written a rule.
+          </Note>
+        ) : (
+          <ul>
+            {[...hand.data]
+              .sort((a, b) => a.priority - b.priority || a.pattern.localeCompare(b.pattern))
+              .map((r) => (
+                <HandRule key={r.id} rule={r} categories={cats} />
+              ))}
+          </ul>
+        )}
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -174,8 +175,18 @@ function sampleClient(): QueryClient {
 
 const client = sampleClient();
 
+// The Automation sample shares this chunk's route (see routePrefetch.ts): loaded on demand.
+const AutomationSample = lazy(() => import("./DesignAutomation"));
+
 export default function DesignActivity() {
   const [location] = useLocation();
+  if (location.startsWith("/design/automation")) {
+    return (
+      <Suspense fallback={null}>
+        <AutomationSample />
+      </Suspense>
+    );
+  }
   const rest = location.slice(BASE.length);
   const view: ActivityViewKey = rest.startsWith("/review") ? "review" : rest.startsWith("/rules") ? "rules" : "ledger";
   return (

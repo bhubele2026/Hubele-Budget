@@ -181,9 +181,8 @@ function ProtectedShell() {
             <Route path="/ask/memory">
               <AskMemoryPage />
             </Route>
-            <Route path="/household/ai">
-              <HouseholdAiPage />
-            </Route>
+            <Route path="/household/ai" component={HouseholdAiPage} />
+            <Route path="/household/automation" component={HouseholdAiPage} />
             <Route path="/household">
               <HouseholdPage />
             </Route>
@@ -233,11 +232,12 @@ function PublicDesignPage({ page: Page }: { page: ComponentType }) {
     </Shell>
   );
 }
-const PublicDesignToday = () => <PublicDesignPage page={DesignTodayPage} />;
-const PublicDesignPlan = () => <PublicDesignPage page={DesignPlanPage} />;
-const PublicDesignActivity = () => <PublicDesignPage page={DesignActivityPage} />;
-const PublicDesignRecap = () => <PublicDesignPage page={DesignRecapPage} />;
-const PublicDesignAsk = () => <PublicDesignPage page={DesignAskPage} />;
+const publicSample = (page: ComponentType) => () => <PublicDesignPage page={page} />;
+const PublicDesignToday = publicSample(DesignTodayPage);
+const PublicDesignPlan = publicSample(DesignPlanPage);
+const PublicDesignActivity = publicSample(DesignActivityPage);
+const PublicDesignRecap = publicSample(DesignRecapPage);
+const PublicDesignAsk = publicSample(DesignAskPage);
 
 
 
@@ -282,6 +282,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/design/activity/*?" component={PublicDesignActivity} />
           <Route path="/design/recap" component={PublicDesignRecap} />
           <Route path="/design/ask" component={PublicDesignAsk} />
+          <Route path="/design/automation" component={PublicDesignActivity} />
           <Route path="/design" component={PublicDesign} />
           <Route component={ProtectedShell} />
         </Switch>

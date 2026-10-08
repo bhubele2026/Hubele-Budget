@@ -95,7 +95,7 @@ export function attentionItems(i: {
       i.dueSoon.length === 1
         ? `${clip(first.name, 24)}${first.amount != null ? ` ${fmtMoney(first.amount)}` : ""} is due ${when}`
         : `${i.dueSoon.length} bills are due today or tomorrow`;
-    out.push({ kind: "bill", title, action: { label: "See bills", href: "/classic/bills/all" } });
+    out.push({ kind: "bill", title, action: { label: "See bills", href: "/plan/bills" } });
   }
   if (i.reviewCount > 0) {
     out.push({

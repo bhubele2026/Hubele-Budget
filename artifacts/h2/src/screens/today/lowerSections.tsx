@@ -189,9 +189,9 @@ export function ComingUp({
       <Note
         kind="empty"
         action={
-          <a href="/classic/bills/all" className={link}>
+          <Link href="/plan/bills" className={link}>
             Open bills
-          </a>
+          </Link>
         }
       >
         Nothing scheduled.

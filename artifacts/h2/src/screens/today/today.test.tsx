@@ -556,7 +556,7 @@ describe("Today — coming up", () => {
     await renderToday();
     const section = screen.getByTestId("section-coming-up");
     expect(section.textContent).toContain("Nothing scheduled.");
-    expect(within(section).getByRole("link", { name: "Open bills" }).getAttribute("href")).toBe("/classic/bills/all");
+    expect(within(section).getByRole("link", { name: "Open bills" }).getAttribute("href")).toBe("/plan/bills");
   });
 });
 
@@ -627,19 +627,16 @@ describe("Today — What's new", () => {
     expect(dialog.textContent).toContain("Your numbers haven't changed — they're just read from a new page.");
     expect(figuresIn(dialog)).toEqual([["$12,346", "12345.67"], ["$412", "412.40"]]);
     await user.click(within(dialog).getByRole("button", { name: "Next" }));
-    expect(dialog.textContent).toContain("H2 will start filing new charges automatically; uncertain ones wait for you in Activity.");
-    const sw = within(dialog).getByRole("switch");
-    expect(sw.getAttribute("aria-checked")).toBe("true");
-    await user.click(sw);
-    expect(sw.getAttribute("aria-checked")).toBe("false");
-    await user.click(sw);
+    expect(dialog.textContent).toContain("H2 files new charges for you.");
+    expect(within(dialog).queryByRole("switch")).toBeNull();
+    expect(within(dialog).getByRole("link", { name: "Open Automation" }).getAttribute("href")).toBe("/household/automation");
     await user.click(within(dialog).getByRole("button", { name: "Next" }));
     expect(dialog.textContent).toContain("A morning text at 7:00 can be turned on in Recap.");
     expect(within(dialog).getByRole("link", { name: "Open Recap" }).getAttribute("href")).toBe("/recap");
     expect(mocks.save).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole("button", { name: "Done" }));
     expect(mocks.save).toHaveBeenCalledTimes(1);
-    expect(mocks.save).toHaveBeenCalledWith({ data: { sidebarCollapsed: true, whatsNewSeen: "h2-1", autoCategorize: true } });
+    expect(mocks.save).toHaveBeenCalledWith({ data: { sidebarCollapsed: true, whatsNewSeen: "h2-1" } });
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -648,7 +645,7 @@ describe("Today — What's new", () => {
     await renderToday();
     await screen.findByRole("dialog");
     await user.keyboard("{Escape}");
-    expect(mocks.save).toHaveBeenCalledWith({ data: { sidebarCollapsed: true, whatsNewSeen: "h2-1", autoCategorize: true } });
+    expect(mocks.save).toHaveBeenCalledWith({ data: { sidebarCollapsed: true, whatsNewSeen: "h2-1" } });
   });
 
   it("does not show again once seen", async () => {

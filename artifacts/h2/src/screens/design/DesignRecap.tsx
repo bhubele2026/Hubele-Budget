@@ -9,7 +9,6 @@ import type {
   RecapDeliveryItem,
   RecapHistoryItem,
   RecapSettings,
-  UiPreferences,
 } from "@workspace/api-client-react";
 import type { Read } from "@/data/todayData";
 import { Note } from "@/kit/Note";
@@ -97,8 +96,7 @@ const ITEMS: PlaidItemDetail[] = [
   item("p4", "Sample Savings Bank", { lastSyncError: "The bank is not answering", lastSyncedAt: "2026-10-06T14:48:00Z", accounts: [acct("p4a", "Savings", "0400", "savings")] }),
 ];
 const ENV = { env: "production", configured: true, nonProdItemCount: 0, nonProdItems: [] } as PlaidEnvironmentInfo;
-const PREFS = { autoCategorize: true } as UiPreferences;
-const banks = (items: PlaidItemDetail[]): BanksData => ({ items: loaded(items), env: loaded(ENV), prefs: loaded(PREFS) });
+const banks = (items: PlaidItemDetail[]): BanksData => ({ items: loaded(items), env: loaded(ENV) });
 
 const ME = { userId: "u1", isOwner: true, displayName: "Sam (sample)", email: "sam@example.com" } as MeResponse;
 const MEMBERS = [

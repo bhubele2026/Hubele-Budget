@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { Bell } from "lucide-react";
 import { Button } from "@/kit/Button";
 import { Disclosure } from "@/kit/Disclosure";
@@ -85,6 +86,25 @@ export default function DesignPage() {
         <h1 className="type-headline text-ink">Paper &amp; rule</h1>
         <p className="type-body text-ink-2">The H2 design system, on one page, for review.</p>
       </header>
+
+      <Section label="Sample pages" data-testid="sample-pages" foot="Each one runs on made-up data and opens without signing in.">
+        <ul className="flex flex-wrap gap-x-6 gap-y-2 type-body">
+          {[
+            ["today", "Today"],
+            ["plan", "Plan"],
+            ["activity", "Activity"],
+            ["recap", "Household and Recap"],
+            ["ask", "Ask"],
+            ["automation", "Automation"],
+          ].map(([k, label]) => (
+            <li key={k}>
+              <Link href={`/design/${k}`} className="text-moss underline decoration-1 underline-offset-4" data-testid={`sample-${k}`}>
+                {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Section>
 
       <Section label="Paper and rules" foot="Paper is the ground. Rules separate; nothing floats.">
         <SwatchGrid tokens={[...PAPERS, "rule", "rule-strong"]} />

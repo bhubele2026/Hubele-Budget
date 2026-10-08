@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "wouter";
 import {
   getGetPlaidEnvironmentQueryKey,
   getListPlaidItemsQueryKey,
@@ -10,9 +11,7 @@ import {
   type PlaidItemDetail,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getGetUiPreferencesQueryKey, useGetUiPreferences, useUpdateUiPreferences, type UiPreferences } from "@workspace/api-client-react/ledger";
 import { readOf, type Read } from "@/data/todayData";
-import { OWN_INVALIDATION } from "@/data/mutationInvalidation";
 import { Button, buttonClass } from "@/kit/Button";
 import { Disclosure } from "@/kit/Disclosure";
 import { Note } from "@/kit/Note";
@@ -22,7 +21,7 @@ import { SkeletonLine } from "@/kit/Skeleton";
 import { StatusWord } from "@/kit/StatusWord";
 import { useToast } from "@/screens/plan/parts";
 import { useBankLink, usePlaidSync } from "./BankLink";
-import { HouseholdFrame, SwitchRow } from "./parts";
+import { HouseholdFrame } from "./parts";
 import {
   FORCE_SENTENCE,
   POST_LINK_POLL_DELAYS_MS,
@@ -40,7 +39,6 @@ import {
 export interface BanksData {
   items: Read<PlaidItemDetail[]>;
   env: Read<PlaidEnvironmentInfo>;
-  prefs: Read<UiPreferences>;
 }
 
 const ITEMS_CACHE = { staleTime: 60_000, gcTime: 30 * 60_000 } as const;
@@ -55,8 +53,7 @@ export function useBanksData(): BanksData {
     },
   });
   const env = useGetPlaidEnvironment({ query: { queryKey: getGetPlaidEnvironmentQueryKey(), staleTime: 30 * 60_000, gcTime: 60 * 60_000 } });
-  const prefs = useGetUiPreferences({ query: { queryKey: getGetUiPreferencesQueryKey(), staleTime: 30 * 60_000, gcTime: 60 * 60_000 } });
-  return { items: readOf(items), env: readOf(env), prefs: readOf(prefs) };
+  return { items: readOf(items), env: readOf(env) };
 }
 
 export default function Household() {
@@ -98,13 +95,12 @@ function ProgressPanel({ status, onDismiss }: { status: PostLinkStatus; onDismis
  * Nothing on this page is a money figure.
  */
 export function BanksView({ data, now, pollDelays = POST_LINK_POLL_DELAYS_MS }: { data: BanksData; now?: Date; pollDelays?: readonly number[] }) {
-  const { items, env, prefs } = data;
+  const { items, env } = data;
   const qc = useQueryClient();
   const { say, node: toast } = useToast();
   const { runSync } = usePlaidSync();
   const del = useDeletePlaidItem();
   const clearDisabled = useClearPlaidItemRefreshDisabled();
-  const savePrefs = useUpdateUiPreferences({ mutation: { meta: OWN_INVALIDATION } });
   const link = useBankLink({ items: items.data, itemsFetched: items.data !== undefined, runSync, say, pollDelays });
   const [syncing, setSyncing] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, string>>({});
@@ -157,23 +153,6 @@ export function BanksView({ data, now, pollDelays = POST_LINK_POLL_DELAYS_MS }: 
     } catch (e) {
       say(apiMessage(e, "Couldn't turn fast refresh back on. Try again."), "error");
     }
-  };
-
-  const autoFile = prefs.data?.autoCategorize !== false;
-  const setAutoFile = (next: boolean) => {
-    if (!prefs.data) return;
-    const merged: UiPreferences = { ...prefs.data, autoCategorize: next };
-    qc.setQueryData(getGetUiPreferencesQueryKey(), merged);
-    savePrefs.mutate(
-      { data: merged },
-      {
-        onSuccess: () => say(next ? "H2 will file new charges for you." : "H2 will leave new charges for you to file."),
-        onError: (e) => {
-          qc.setQueryData(getGetUiPreferencesQueryKey(), prefs.data);
-          say(apiMessage(e, "Couldn't save that. Try again."), "error");
-        },
-      },
-    );
   };
 
   return (
@@ -311,14 +290,9 @@ export function BanksView({ data, now, pollDelays = POST_LINK_POLL_DELAYS_MS }: 
       </Section>
 
       <Section label="Filing" data-testid="section-filing">
-        <SwitchRow
-          label="File new charges for me"
-          on={autoFile}
-          onChange={setAutoFile}
-          disabled={!prefs.data || savePrefs.isPending}
-          hint="When this is off, every new charge waits for you to file it. Turning it off never changes charges already filed."
-          data-testid="auto-file"
-        />
+        <Link href="/household/automation" className={buttonClass({ variant: "link", size: "sm" })} data-testid="automation-link">
+          Automation — filing, rules, what the model may do →
+        </Link>
       </Section>
 
       <Section label="Other tools" data-testid="section-classic">

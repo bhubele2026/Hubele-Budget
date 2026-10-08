@@ -116,6 +116,8 @@ const ROUTES: Row[] = [
   { from: "/plan/proposals", lands: "/plan/proposals", page: "plan-proposals", shell: true },
   { from: "/household/ai", lands: "/household/ai", page: "household-ai", shell: true },
   { from: "/design/ask", lands: "/design/ask", page: "design-ask", shell: true },
+  { from: "/household/automation", lands: "/household/automation", page: "household-ai", shell: true },
+  { from: "/design/automation", lands: "/design/automation", page: "design-activity", shell: true },
   { from: "/sign-in", lands: "/sign-in", page: "sign-in", shell: false },
   { from: "/sign-up", lands: "/sign-up", page: "sign-up", shell: false },
 ];
@@ -173,7 +175,7 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
 
   it("has a row for every path App.tsx declares, and no row for a path it does not", () => {
     const covered = new Set(ROUTES.map((r) => r.from));
-    expect(declared.length).toBeGreaterThanOrEqual(24);
+    expect(declared.length).toBeGreaterThanOrEqual(26);
     expect(declared.filter((p) => !covered.has(p))).toEqual([]);
     expect([...covered].filter((p) => !declared.includes(p))).toEqual([]);
   });

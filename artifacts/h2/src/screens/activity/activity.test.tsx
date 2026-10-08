@@ -451,15 +451,20 @@ describe("Rules", () => {
     ...over,
   });
 
-  it("lists merchant, category, scope, times confirmed and last confirmed; links to the hand-written rules", async () => {
-    installApi([on("GET", "/api/learned-rules", [rule("r1")]), ...baseReads]);
+  it("lists merchant, category, scope, times confirmed and last confirmed; links to Automation and lists the rules you wrote", async () => {
+    installApi([on("GET", "/api/learned-rules", [rule("r1")]), on("GET", "/api/mapping-rules", [{ id: "m1", pattern: "ACME PAYROLL", matchType: "contains", categoryId: "c1", priority: 1 }]), ...baseReads]);
     renderActivity("rules");
     const row = await screen.findByTestId("rule");
     expect(row.textContent).toContain("Corner Market");
     expect(row.textContent).toContain("Confirmed 6 times · last Oct 5");
     expect((within(row).getByTestId("rule-category") as HTMLSelectElement).value).toBe("c1");
     expect((within(row).getByTestId("rule-scope") as HTMLSelectElement).value).toBe("merchant");
-    expect(screen.getByTestId("classic-rules-link").getAttribute("href")).toBe("/classic/mapping-rules");
+    expect(screen.queryByTestId("classic-rules-link")).toBeNull();
+    expect(screen.getByTestId("automation-link").textContent).toContain("How filing works and what the model may do");
+    expect(screen.getByRole("link", { name: /Automation$/ }).getAttribute("href")).toBe("/household/automation");
+    const hand = await screen.findByTestId("hand-rule");
+    expect(hand.textContent).toContain("ACME PAYROLL");
+    expect(within(hand).getByTestId("hand-rule-category").textContent).toBe("Groceries");
   });
 
   it("changing the scope or the category PATCHes the rule; a refusal says so", async () => {

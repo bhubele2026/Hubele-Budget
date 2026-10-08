@@ -3,7 +3,7 @@ import { render, screen, cleanup, within, waitFor } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import type { Invitation, MeResponse, Member, PlaidEnvironmentInfo, PlaidItemDetail, UiPreferences } from "@workspace/api-client-react";
+import type { Invitation, MeResponse, Member, PlaidEnvironmentInfo, PlaidItemDetail } from "@workspace/api-client-react";
 import type { Read } from "@/data/todayData";
 
 /**
@@ -22,7 +22,6 @@ const mocks = vi.hoisted(() => ({
   updateToken: null as unknown as Fn,
   exchange: null as unknown as Fn,
   bulk: null as unknown as Fn,
-  prefs: null as unknown as Fn,
   invite: null as unknown as Fn,
   revoke: null as unknown as Fn,
   resend: null as unknown as Fn,
@@ -58,10 +57,6 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
     listPlaidItems: (...a: unknown[]) => (mocks.liveItems as (...x: unknown[]) => unknown)(...a),
   };
 });
-vi.mock("@workspace/api-client-react/ledger", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/api-client-react/ledger")>();
-  return { ...actual, useUpdateUiPreferences: hook("prefs") };
-});
 
 import { BanksView, type BanksData } from "./Household";
 import { MembersView, type MembersData } from "./Members";
@@ -84,12 +79,11 @@ const REAUTH = item("p2", "Sample Credit Union", { lastSyncErrorCode: "ITEM_LOGI
 const PREP = item("p3", "Sample Card Co", { stillPreparing: true, lastSyncedAt: null });
 const STOPPED = item("p4", "Sample Savings Bank", { lastSyncError: "The bank is not answering" });
 const ENV = { env: "production", configured: true, nonProdItemCount: 0, nonProdItems: [] } as PlaidEnvironmentInfo;
-const PREFS = { autoCategorize: true } as UiPreferences;
-const banks = (items: PlaidItemDetail[] | undefined, over: Partial<BanksData> = {}): BanksData => ({ items: loaded(items), env: loaded(ENV), prefs: loaded(PREFS), ...over });
+const banks = (items: PlaidItemDetail[] | undefined, over: Partial<BanksData> = {}): BanksData => ({ items: loaded(items), env: loaded(ENV), ...over });
 const syncRes = (added: number, extra: Record<string, unknown> = {}) => ({ items: [{ itemId: "x", added, modified: 0, removed: 0, autoCategorized: 0, ruleAttributions: [], ...extra }] });
 
 beforeEach(() => {
-  for (const k of ["sync", "del", "clear", "linkToken", "updateToken", "exchange", "bulk", "prefs", "invite", "revoke", "resend", "removeMember", "liabilities", "liveItems", "plaidOpen"] as const) {
+  for (const k of ["sync", "del", "clear", "linkToken", "updateToken", "exchange", "bulk", "invite", "revoke", "resend", "removeMember", "liabilities", "liveItems", "plaidOpen"] as const) {
     mocks[k] = vi.fn();
   }
   mocks.sync.mockResolvedValue(syncRes(0));
@@ -404,16 +398,13 @@ describe("Reconnect — Plaid's update mode", () => {
   });
 });
 
-describe("Filing — the agent's handled list", () => {
-  it("shows the saved preference and merges the change into what is already stored", async () => {
-    const user = userEvent.setup();
-    mocks.prefs.mockImplementation((_v: unknown, o: { onSuccess: () => void }) => o.onSuccess());
-    mount(<BanksView data={banks([OK], { prefs: loaded({ autoCategorize: true, whatsNewSeen: "x" } as UiPreferences) })} now={NOW} />);
-    const sw = screen.getByTestId("auto-file");
-    expect(sw.getAttribute("aria-checked")).toBe("true");
-    await user.click(sw);
-    expect(mocks.prefs.mock.calls[0]![0]).toEqual({ data: { autoCategorize: false, whatsNewSeen: "x" } });
-    expect((await screen.findByTestId("toast")).textContent).toBe("H2 will leave new charges for you to file.");
+describe("Filing — one row to the Automation screen", () => {
+  it("has no switch of its own; one link goes to Automation", () => {
+    mount(<BanksView data={banks([OK])} now={NOW} />);
+    expect(screen.queryByTestId("auto-file")).toBeNull();
+    const link = screen.getByTestId("automation-link");
+    expect(link.getAttribute("href")).toBe("/household/automation");
+    expect(link.textContent).toBe("Automation — filing, rules, what the model may do →");
   });
 });
 
