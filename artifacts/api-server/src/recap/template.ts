@@ -46,13 +46,11 @@ function planLine(f: RecapFacts): string | null {
   }
 }
 
-function freeLine(f: RecapFacts): string | null {
+function roomLine(f: RecapFacts): string | null {
   const free = f.position.availableUntilPayday;
   if (free === null) return null;
-  if (f.position.horizonKind === "payday" && f.position.paydayWeekday) {
-    return `${usd(free)} free until payday (${f.position.paydayWeekday}).`;
-  }
-  return `${usd(free)} free through Saturday.`;
+  const until = f.position.horizonKind === "payday" && f.position.paydayWeekday ? f.position.paydayWeekday : "Saturday";
+  return `Room in the plan: ${usd(free)} until ${until}.`;
 }
 
 function billsLine(f: RecapFacts): string | null {
@@ -71,20 +69,34 @@ function progressLine(f: RecapFacts): string | null {
   return null;
 }
 
-/** The one finding the recap may mention: unseen, serious enough, and not the stale-bank story told above. */
-function findingLine(f: RecapFacts): string | null {
-  const pick = f.findings.find(
-    (x) => !x.surfaced && x.severity !== "info" && x.kind !== "bank_stale" && FINDING_PHRASES[x.kind],
+/** The one finding the recap may mention: unseen, serious enough, not the stale-bank story, and not the shortfall the action line already tells. */
+function pickFinding(f: RecapFacts) {
+  return f.findings.find(
+    (x) =>
+      !x.surfaced &&
+      x.severity !== "info" &&
+      x.kind !== "bank_stale" &&
+      FINDING_PHRASES[x.kind] &&
+      !(x.kind === "shortfall_before_income" && f.action?.kind === "shortfall"),
   );
+}
+
+function findingLine(f: RecapFacts): string | null {
+  const pick = pickFinding(f);
   return pick ? FINDING_PHRASES[pick.kind]! : null;
 }
 
-/** The finding row the template's text mentions, if any (to mark it surfaced). */
-export function templateFindingId(f: RecapFacts): string | null {
-  const pick = f.findings.find(
-    (x) => !x.surfaced && x.severity !== "info" && x.kind !== "bank_stale" && FINDING_PHRASES[x.kind],
-  );
-  return pick?.id ?? null;
+/**
+ * The finding row the template's text mentions, if any (to mark it surfaced).
+ * It counts only when its sentence survived the length cut: a finding the
+ * member never read stays unseen.
+ */
+export function templateFindingId(f: RecapFacts, opts: { maxLen?: number } = {}): string | null {
+  const pick = pickFinding(f);
+  if (!pick) return null;
+  const max = Math.min(opts.maxLen ?? MAX_TEXT_CHARS, MAX_TEXT_CHARS);
+  const text = renderRecapTemplate(f, { maxLen: max });
+  return text.includes(FINDING_PHRASES[pick.kind]!) ? pick.id : null;
 }
 
 function parts(f: RecapFacts, categories: number): Array<string | null> {
@@ -100,12 +112,13 @@ function parts(f: RecapFacts, categories: number): Array<string | null> {
     f.lateArrivals.count > 0 && f.lateArrivals.fromWeekday
       ? `Arrived late: ${usd(f.lateArrivals.total)} from ${f.lateArrivals.fromWeekday}.`
       : null;
+  // The action line already says "N charges need a look"; do not say it twice.
   const review =
-    f.needsLookCount > 0
+    f.needsLookCount > 0 && f.action?.kind !== "review"
       ? `${f.needsLookCount} ${f.needsLookCount === 1 ? "charge needs" : "charges need"} a look.`
       : null;
   // Most important first; the tail is dropped when the text is too long.
-  return [first.join(" "), freeLine(f), planLine(f), late, review, billsLine(f), progressLine(f), findingLine(f)];
+  return [first.join(" "), roomLine(f), planLine(f), f.action?.text ?? null, late, review, billsLine(f), progressLine(f), findingLine(f)];
 }
 
 export function renderRecapTemplate(f: RecapFacts, opts: { maxLen?: number } = {}): string {

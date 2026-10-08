@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RecapDeliveryItemKind } from "./recapDeliveryItemKind";
+import type { RecapDeliveryItemProvider } from "./recapDeliveryItemProvider";
 import type { RecapDeliveryItemStatus } from "./recapDeliveryItemStatus";
 export interface RecapDeliveryItem {
     id: string;
@@ -13,6 +14,7 @@ export interface RecapDeliveryItem {
     /** @nullable */
     forDate: string | null;
     status: RecapDeliveryItemStatus;
+    provider: RecapDeliveryItemProvider;
     createdAt: string;
 }
 //# sourceMappingURL=recapDeliveryItem.d.ts.map

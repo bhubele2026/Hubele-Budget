@@ -9,7 +9,7 @@ import {
 } from "@workspace/db";
 import { runStructured } from "../ai/structured";
 import { resolvePrompt } from "../ai/prompts";
-import { RecapDraft } from "../ai/prompts/recap.v1";
+import { RecapDraft } from "../ai/prompts/recap.v2";
 
 import type { AiFailureInfo, AiResult, AiUsageSummary } from "../ai/types";
 import { logger } from "../lib/logger";
@@ -60,6 +60,18 @@ function addUsage(acc: ModelDraft["usage"], u: AiUsageSummary | undefined): void
   acc.costUsd = acc.costUsd === null || u.costUsd === null ? null : acc.costUsd + u.costUsd;
 }
 
+/**
+ * The action line is chosen by code, so a draft that left it out gets it
+ * appended; if that no longer validates (too long), the draft is dropped and
+ * the template speaks instead.
+ */
+function withAction(text: string, facts: RecapFacts, link: string): string | null {
+  const action = facts.action?.text;
+  if (!action || text.includes(action)) return text;
+  const next = `${text} ${action}`;
+  return validateRecapDraft({ text: next, factsUsed: [] }, facts, { link }) === null ? next : null;
+}
+
 export async function draftWithModel(
   householdId: string,
   facts: RecapFacts,
@@ -90,7 +102,7 @@ export async function draftWithModel(
     });
     addUsage(out.usage, r.usage);
     if (r.ok) {
-      out.text = normalizeDraftText(r.value.text);
+      out.text = withAction(normalizeDraftText(r.value.text), facts, link);
       out.factsUsed = r.value.factsUsed;
       out.demo = r.demo;
       out.model = r.usage.model;
@@ -221,7 +233,7 @@ export async function generateRecap(
       ? model.factsUsed.includes("findings")
         ? (facts.findings.find((f) => !f.surfaced && f.severity !== "info")?.id ?? null)
         : null
-      : templateFindingId(facts);
+      : templateFindingId(facts, { maxLen: maxTextFor(link) });
     if (mentioned && inserted[0]) {
       await db
         .update(agentFindingsTable)

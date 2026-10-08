@@ -48,13 +48,13 @@ function fullTwilioEnv(): void {
 
 describe("provider selection", () => {
   it("defaults to console and reports it configured", () => {
-    expect(getSmsConfig()).toEqual({ provider: "console", configured: true });
+    expect(getSmsConfig()).toEqual({ provider: "console", configured: false, mode: "preview" });
     expect(getSmsProvider().name).toBe("console");
   });
 
   it("twilio needs sid, token, a sender and the webhook base URL; anything missing falls back to console and never throws", () => {
     process.env.SMS_PROVIDER = "twilio";
-    expect(getSmsConfig()).toEqual({ provider: "twilio", configured: false });
+    expect(getSmsConfig()).toEqual({ provider: "twilio", configured: false, mode: "preview" });
     expect(() => getSmsProvider()).not.toThrow();
     expect(getSmsProvider().name).toBe("console");
 
@@ -64,7 +64,7 @@ describe("provider selection", () => {
     expect(getSmsProvider().name).toBe("console");
 
     fullTwilioEnv();
-    expect(getSmsConfig()).toEqual({ provider: "twilio", configured: true });
+    expect(getSmsConfig()).toEqual({ provider: "twilio", configured: true, mode: "live" });
     expect(getSmsProvider().name).toBe("twilio");
     expect(getStatusCallbackUrl()).toBe("https://h2.example.test/api/sms/status");
   });
@@ -84,10 +84,25 @@ describe("provider selection", () => {
     process.env.NODE_ENV = "production";
     try {
       expect(getSmsProvider().name).toBe("console");
-      expect(getSmsConfig()).toEqual({ provider: "fake", configured: false });
+      expect(getSmsConfig()).toEqual({ provider: "fake", configured: false, mode: "preview" });
     } finally {
       process.env.NODE_ENV = prev;
     }
+  });
+
+  it("mode matrix: live only for twilio with every credential; console, fake and a half-set twilio are preview", () => {
+    expect(getSmsConfig().mode).toBe("preview"); // console
+    process.env.SMS_PROVIDER = "fake";
+    expect(getSmsConfig().mode).toBe("preview");
+    process.env.SMS_PROVIDER = "twilio";
+    expect(getSmsConfig().mode).toBe("preview"); // nothing set
+    for (const missing of ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_MESSAGING_SERVICE_SID", "SMS_WEBHOOK_BASE_URL"]) {
+      fullTwilioEnv();
+      delete process.env[missing];
+      expect(getSmsConfig(), missing).toMatchObject({ provider: "twilio", configured: false, mode: "preview" });
+    }
+    fullTwilioEnv();
+    expect(getSmsConfig()).toMatchObject({ mode: "live", configured: true });
   });
 
   it("the daily cap defaults to 50 and reads SMS_DAILY_SEND_CAP", () => {

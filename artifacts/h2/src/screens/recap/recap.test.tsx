@@ -52,7 +52,18 @@ const loaded = <T,>(data: T | undefined, over: Partial<Read<T>> = {}): Read<T> =
 });
 const mount = (ui: ReactNode) => render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
+const LIVE: RecapSettings["delivery"] = {
+  mode: "live",
+  providerConfigured: true,
+  phoneVerified: false,
+  scheduled: false,
+  sendTimeLocal: "07:00",
+  timezone: "America/Chicago",
+  lastDelivery: null,
+};
+const PREVIEW: RecapSettings["delivery"] = { ...LIVE, mode: "preview", providerConfigured: false };
 const NEW: RecapSettings = {
+  delivery: LIVE,
   enabled: false,
   sendTimeLocal: "07:00",
   timezone: "America/Chicago",
@@ -66,7 +77,7 @@ const NEW: RecapSettings = {
   consentText: CONSENT,
   consentTextVersion: "v1",
 };
-const VERIFIED: RecapSettings = { ...NEW, phoneLast4: "0100", verified: true, consentedAt: "2026-10-05T14:00:00Z" };
+const VERIFIED: RecapSettings = { ...NEW, phoneLast4: "0100", verified: true, consentedAt: "2026-10-05T14:00:00Z", delivery: { ...LIVE, phoneVerified: true } };
 const hist = (id: string, forDate: string, text: string, over: Partial<RecapHistoryItem> = {}): RecapHistoryItem => ({
   id,
   forDate,
@@ -74,10 +85,10 @@ const hist = (id: string, forDate: string, text: string, over: Partial<RecapHist
   source: "template",
   status: "sent",
   generatedAt: `${forDate}T12:00:00Z`,
-  delivery: { status: "sent", createdAt: `${forDate}T12:30:00Z` },
+  delivery: { status: "sent", provider: "twilio", createdAt: `${forDate}T12:30:00Z` },
   ...over,
 });
-const HEALTH = (sms: boolean, ai: boolean) => ({ status: "ok", version: "t", jobs: { mode: "off", started: false, failedLast24h: null, dlq: null }, ai: { enabled: ai, configured: ai, provider: "fake" }, sms: { provider: "console", configured: sms } }) as HealthStatus;
+const HEALTH = (sms: boolean, ai: boolean) => ({ status: "ok", version: "t", jobs: { mode: "off", started: false, failedLast24h: null, dlq: null }, ai: { enabled: ai, configured: ai, provider: "fake" }, sms: { provider: "console", configured: sms, mode: sms ? "live" : "preview" } }) as HealthStatus;
 const data = (settings: RecapSettings | undefined, over: Partial<RecapData> = {}): RecapData => ({
   settings: loaded(settings),
   history: loaded<RecapHistoryItem[]>([]),
@@ -113,12 +124,35 @@ describe("the page has no money figure", () => {
     await user.click(within(screen.getByTestId("recap-error")).getByRole("button", { name: "Retry" }));
     expect(refetch).toHaveBeenCalled();
   });
-  it("a quiet line when texts are in preview mode; none when SMS is configured", () => {
-    const { unmount } = mount(<RecapView data={data(NEW, { health: loaded(HEALTH(false, false)) })} now={NOW} />);
-    expect(screen.getByTestId("sms-preview-mode").textContent).toBe("Texts are in preview mode until SMS is configured.");
-    unmount();
-    mount(<RecapView data={data(NEW)} now={NOW} />);
-    expect(screen.queryByTestId("sms-preview-mode")).toBeNull();
+  it("the status ladder: preview mode is the first row, with its plain words", () => {
+    mount(<RecapView data={data({ ...VERIFIED, delivery: { ...PREVIEW, phoneVerified: true, scheduled: true, lastDelivery: { status: "previewed", provider: "console", at: "2026-10-07T12:00:00Z" } } })} now={NOW} />);
+    const rows = screen.getAllByTestId("ladder-row");
+    expect(rows.map((r) => r.getAttribute("data-row"))).toEqual(["preview", "provider", "phone", "scheduled", "accepted", "delivered"]);
+    expect(screen.getByTestId("preview-note").textContent).toBe("Texts are written to the server log. Nothing is sent until SMS is set up.");
+    expect(within(rows[0]!).getByTestId("ladder-word").textContent).toBe("Yes");
+    expect(rows[1]!.textContent).toContain("No");
+    expect(rows[2]!.textContent).toContain("•••• 0100");
+    expect(rows[3]!.textContent).toBe("Scheduled — 7:00 AM ChicagoYes");
+    expect(within(rows[5]!).getByTestId("ladder-word").textContent).toBe("Preview — not sent");
+    expect(screen.queryByText("Sent")).toBeNull();
+  });
+  it("the ladder in live mode has no preview row; a delivered text reads Yes; Off when not scheduled", () => {
+    mount(<RecapView data={data({ ...VERIFIED, delivery: { ...LIVE, phoneVerified: true, scheduled: false, lastDelivery: { status: "delivered", provider: "twilio", at: "2026-10-07T12:00:00Z" } } })} now={NOW} />);
+    const rows = screen.getAllByTestId("ladder-row");
+    expect(rows.map((r) => r.getAttribute("data-row"))).toEqual(["provider", "phone", "scheduled", "accepted", "delivered"]);
+    expect(screen.queryByTestId("preview-note")).toBeNull();
+    expect(rows[2]!.textContent).toBe("ScheduledOff");
+    expect(rows[3]!.textContent).toBe("Accepted by carrierYes");
+    expect(rows[4]!.textContent).toBe("DeliveredYes");
+  });
+  it("a failed last text reads Failed", () => {
+    mount(<RecapView data={data({ ...VERIFIED, delivery: { ...LIVE, phoneVerified: true, lastDelivery: { status: "undelivered", provider: "twilio", at: "2026-10-07T12:00:00Z" } } })} now={NOW} />);
+    expect(screen.getAllByTestId("ladder-row").at(-1)!.textContent).toBe("FailedYes");
+  });
+  it("the 7:00 default is shown for a new member when scheduled", () => {
+    mount(<RecapView data={data({ ...VERIFIED, enabled: true, delivery: { ...LIVE, phoneVerified: true, scheduled: true } })} now={NOW} />);
+    expect(screen.getAllByTestId("ladder-row").find((r) => r.getAttribute("data-row") === "scheduled")!.textContent).toContain("7:00 AM Chicago");
+    expect((screen.getByTestId("time-input") as HTMLInputElement).value).toBe("07:00");
   });
 });
 
@@ -310,26 +344,31 @@ describe("Step 3 — preview, test text, pause, unsubscribe", () => {
   it("test text: needs a verified number; shows the count left; a 429 is shown as the server wrote it", async () => {
     const user = userEvent.setup();
     const tests: RecapDeliveryItem[] = [
-      { id: "d1", kind: "test", forDate: null, status: "delivered", createdAt: "2026-10-07T13:00:00Z" },
-      { id: "d2", kind: "scheduled", forDate: "2026-10-07", status: "delivered", createdAt: "2026-10-07T12:00:00Z" },
-      { id: "d3", kind: "test", forDate: null, status: "delivered", createdAt: "2026-10-05T13:00:00Z" },
+      { id: "d1", kind: "test", forDate: null, status: "delivered", provider: "twilio", createdAt: "2026-10-07T13:00:00Z" },
+      { id: "d2", kind: "scheduled", forDate: "2026-10-07", status: "delivered", provider: "twilio", createdAt: "2026-10-07T12:00:00Z" },
+      { id: "d3", kind: "test", forDate: null, status: "delivered", provider: "twilio", createdAt: "2026-10-05T13:00:00Z" },
     ];
     const { unmount } = mount(<RecapView data={data(NEW)} now={NOW} />);
     expect((screen.getByTestId("test-send") as HTMLButtonElement).disabled).toBe(true);
     unmount();
     mount(<RecapView data={data(VERIFIED, { deliveries: loaded(tests) })} now={NOW} />);
     expect(screen.getByTestId("tests-left").textContent).toBe("2 left today");
-    ok("test", { status: "sent", deliveryId: "x" });
+    ok("test", { status: "sent", mode: "live", deliveryId: "x", text: null });
     await user.click(screen.getByTestId("test-send"));
     expect(mocks.test).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("test-note").textContent).toBe("Test text sent.");
+    expect(screen.queryByTestId("test-shown")).toBeNull();
+    ok("test", { status: "previewed", mode: "preview", deliveryId: "y", text: "H2 test: your morning recap will arrive at 07:00 America/Chicago." });
+    await user.click(screen.getByTestId("test-send"));
+    expect(screen.getByTestId("test-note").textContent).toBe("Preview shown. No text was sent.");
+    expect(screen.getByTestId("test-shown").textContent).toContain("H2 test:");
     fail("test", { status: 429, data: { error: "That is 3 test texts today. Try again tomorrow.", code: "test_limit" } });
     await user.click(screen.getByTestId("test-send"));
     expect(screen.getByTestId("test-note").textContent).toBe("That is 3 test texts today. Try again tomorrow.");
   });
 
   it("no tests left disables the button", () => {
-    const used: RecapDeliveryItem[] = [1, 2, 3].map((n) => ({ id: `d${n}`, kind: "test", forDate: null, status: "sent", createdAt: "2026-10-07T13:00:00Z" }));
+    const used: RecapDeliveryItem[] = [1, 2, 3].map((n) => ({ id: `d${n}`, kind: "test", forDate: null, status: "sent", provider: "twilio", createdAt: "2026-10-07T13:00:00Z" }));
     mount(<RecapView data={data(VERIFIED, { deliveries: loaded(used) })} now={NOW} />);
     expect(screen.getByTestId("tests-left").textContent).toBe("0 left today");
     expect((screen.getByTestId("test-send") as HTMLButtonElement).disabled).toBe(true);
@@ -371,12 +410,21 @@ describe("Step 3 — preview, test text, pause, unsubscribe", () => {
 
 describe("History — in words", () => {
   const rows: RecapHistoryItem[] = [
-    hist("h1", "2026-10-07", "Model words for the 7th.", { source: "model", delivery: { status: "delivered", createdAt: "2026-10-07T12:30:00Z" } }),
+    hist("h1", "2026-10-07", "Model words for the 7th.", { source: "model", delivery: { status: "delivered", provider: "twilio", createdAt: "2026-10-07T12:30:00Z" } }),
     hist("h2", "2026-10-06", "Template words for the 6th."),
-    hist("h3", "2026-10-05", "Never arrived.", { delivery: { status: "undelivered", createdAt: "2026-10-05T12:30:00Z" } }),
+    hist("h3", "2026-10-05", "Never arrived.", { delivery: { status: "undelivered", provider: "twilio", createdAt: "2026-10-05T12:30:00Z" } }),
     hist("h4", "2026-10-04", "Could not be sent.", { status: "failed", delivery: null }),
     hist("h5", "2026-10-03", "Skipped on a weekend.", { status: "skipped", delivery: null }),
   ];
+  it("a console delivery is never called Sent", () => {
+    const previewed = hist("p1", "2026-10-07", "Never left the server.", { status: "sent", delivery: { status: "sent", provider: "console", createdAt: "2026-10-07T12:30:00Z" } });
+    const mapped = hist("p2", "2026-10-06", "Mapped by the server.", { status: "previewed", delivery: { status: "previewed", provider: "console", createdAt: "2026-10-06T12:30:00Z" } });
+    mount(<RecapView data={data(VERIFIED, { history: loaded([previewed, mapped]) })} now={NOW} />);
+    const list = screen.getAllByTestId("history-row");
+    expect(list.map((r) => r.getAttribute("data-status"))).toEqual(["previewed", "previewed"]);
+    for (const r of list) expect(within(r).getByTestId("history-status").textContent).toBe("Preview — not sent");
+    expect(screen.queryByText("Sent")).toBeNull();
+  });
   it("date, status word, source word; the text sits in a closed Disclosure; failures say why", () => {
     mount(<RecapView data={data(VERIFIED, { history: loaded(rows) })} now={NOW} />);
     const list = screen.getAllByTestId("history-row");

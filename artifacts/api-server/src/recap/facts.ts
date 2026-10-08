@@ -26,6 +26,7 @@ import { computeReviewCount } from "../lib/reviewCount";
 import { TRACKING_START } from "../lib/spendingFacts";
 import { SEVERITY_RANK, type FindingSeverity } from "../monitor/types";
 import { safeName } from "./text";
+import { pickAction, type RecapAction } from "./action";
 
 // (AI-4a) THE RECAP'S FACTS — everything the morning text may say, worked out
 // by code and nothing else. Money is in dollars as plain numbers; every number
@@ -61,6 +62,8 @@ export interface RecapFinding {
   /** One line built by code from the finding's figures. */
   summary: string;
   surfaced: boolean;
+  /** shortfall_before_income only: how far under the buffer cash may dip. */
+  shortBy?: number | null;
 }
 
 export interface RecapFacts {
@@ -93,10 +96,17 @@ export interface RecapFacts {
   needsLookCount: number;
   /** The one next step, chosen by code: review, then a bill due tomorrow, else none. */
   nextStep: "review" | "bill_tomorrow" | null;
-  debt: { payoffPct: number | null; confirmedPaymentsYesterday: number };
+  debt: {
+    payoffPct: number | null;
+    confirmedPaymentsYesterday: number;
+    /** Name of the open debt with the highest APR (no balance, no rate). */
+    topAprName?: string | null;
+  };
   freshness: { stale: boolean; staleReason: string | null; asOfBank: string | null; daysSinceBank: number | null };
   progress: { lowerThanLastWeek: boolean; debtPayment: boolean };
   findings: RecapFinding[];
+  /** The one action line, chosen by code (recap/action.ts); null when the bank data is stale. */
+  action: RecapAction | null;
 }
 
 // ── The categorizer's review count (feature-detected) ───────────────────────
@@ -322,6 +332,9 @@ export async function recapFacts(
       severity: f.severity as FindingSeverity,
       summary: describeFinding(f.kind, (f.payload ?? {}) as Record<string, unknown>),
       surfaced: f.surfacedInRecapId !== null,
+      ...(f.kind === "shortfall_before_income"
+        ? { shortBy: numOrNull((f.payload as Record<string, unknown> | null)?.["shortBy"] as number | string | null | undefined) }
+        : {}),
     }))
     .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0))
     .slice(0, MAX_FINDINGS);
@@ -334,7 +347,10 @@ export async function recapFacts(
     daysSinceBank = Math.max(0, Math.round((Date.parse(forDate) - Date.parse(asOfDay)) / 86_400_000));
   }
 
-  return {
+  const openDebts = debtRows.filter((d) => d.status === "active" && Number(d.balance) > 0);
+  const topDebt = [...openDebts].sort((a, b) => Number(b.apr) - Number(a.apr) || a.name.localeCompare(b.name))[0];
+
+  const core: Omit<RecapFacts, "action"> = {
     forDate,
     yesterday,
     yesterdayWeekday: weekdayOf(yesterday),
@@ -355,7 +371,11 @@ export async function recapFacts(
     categorizationReviewCount: catReview,
     needsLookCount,
     nextStep,
-    debt: { payoffPct: pct === null ? null : Math.round(pct), confirmedPaymentsYesterday: confirmedPayments },
+    debt: {
+      payoffPct: pct === null ? null : Math.round(pct),
+      confirmedPaymentsYesterday: confirmedPayments,
+      topAprName: topDebt && Number(topDebt.apr) > 0 ? safeName(topDebt.name, "a card") : null,
+    },
     freshness: {
       stale: freshness.stale,
       staleReason: freshness.staleReason,
@@ -368,4 +388,5 @@ export async function recapFacts(
     },
     findings,
   };
+  return { ...core, action: pickAction(core) };
 }

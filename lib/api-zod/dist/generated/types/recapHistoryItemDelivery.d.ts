@@ -6,7 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 export type RecapHistoryItemDelivery = {
-    status: "queued" | "sent" | "delivered" | "undelivered" | "failed";
+    status: "queued" | "sent" | "delivered" | "undelivered" | "failed" | "previewed";
+    provider: "twilio" | "console" | "fake";
     createdAt: string;
 } | null;
 //# sourceMappingURL=recapHistoryItemDelivery.d.ts.map

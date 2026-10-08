@@ -27,7 +27,17 @@ import { RecapView, type RecapData } from "@/screens/recap/Recap";
 const NOW = new Date("2026-10-07T15:00:00Z"); // Wednesday, 10:00 in Chicago
 const loaded = <T,>(data: T): Read<T> => ({ data, state: "loaded", isFetching: false, refetch: () => {} });
 
+const DELIVERY_NEW: RecapSettings["delivery"] = {
+  mode: "preview",
+  providerConfigured: false,
+  phoneVerified: false,
+  scheduled: false,
+  sendTimeLocal: "07:00",
+  timezone: "America/Chicago",
+  lastDelivery: null,
+};
 const SETTINGS_NEW: RecapSettings = {
+  delivery: DELIVERY_NEW,
   enabled: false,
   sendTimeLocal: "07:00",
   timezone: "America/Chicago",
@@ -41,7 +51,16 @@ const SETTINGS_NEW: RecapSettings = {
   consentText: "By tapping Send code you agree to get one H2 text each morning at the time you choose, plus a verification code. Message and data rates may apply. Reply STOP to opt out.",
   consentTextVersion: "2026-10-sample",
 };
-const SETTINGS_ON: RecapSettings = { ...SETTINGS_NEW, enabled: true, phoneLast4: "0100", verified: true, skipWeekends: true, consentedAt: "2026-10-05T14:00:00Z" };
+const SETTINGS_ON: RecapSettings = {
+  ...SETTINGS_NEW,
+  enabled: true,
+  phoneLast4: "0100",
+  verified: true,
+  skipWeekends: true,
+  consentedAt: "2026-10-05T14:00:00Z",
+  // The sample is in preview mode: the last text was written to the log, never sent.
+  delivery: { ...DELIVERY_NEW, phoneVerified: true, scheduled: true, lastDelivery: { status: "previewed", provider: "console", at: "2026-10-07T12:00:00Z" } },
+};
 
 const history = (id: string, forDate: string, text: string, over: Partial<RecapHistoryItem>): RecapHistoryItem => ({
   id,
@@ -50,16 +69,16 @@ const history = (id: string, forDate: string, text: string, over: Partial<RecapH
   source: "template",
   status: "sent",
   generatedAt: `${forDate}T12:00:00Z`,
-  delivery: { status: "delivered", createdAt: `${forDate}T12:30:00Z` },
+  delivery: { status: "delivered", provider: "twilio", createdAt: `${forDate}T12:30:00Z` },
   ...over,
 });
 const HISTORY: RecapHistoryItem[] = [
   history("h1", "2026-10-07", "Good morning. You have $145 to spend today and the electric bill lands Friday.", { source: "model" }),
-  history("h2", "2026-10-06", "Good morning. You are on plan this week. Nothing is due today.", { delivery: { status: "undelivered", createdAt: "2026-10-06T12:30:00Z" } }),
+  history("h2", "2026-10-06", "Good morning. You are on plan this week. Nothing is due today.", { delivery: { status: "undelivered", provider: "twilio", createdAt: "2026-10-06T12:30:00Z" } }),
   history("h3", "2026-10-05", "Good morning. A quiet Monday.", { status: "skipped", delivery: null }),
 ];
-const DELIVERIES: RecapDeliveryItem[] = [{ id: "d1", kind: "test", forDate: null, status: "delivered", createdAt: "2026-10-07T13:00:00Z" }];
-const HEALTH_OFF = { status: "ok", version: "sample", jobs: { mode: "off", started: false, failedLast24h: null, dlq: null }, ai: { enabled: false, configured: false, provider: "fake" }, sms: { provider: "console", configured: false } } as HealthStatus;
+const DELIVERIES: RecapDeliveryItem[] = [{ id: "d1", kind: "test", forDate: null, status: "delivered", provider: "twilio", createdAt: "2026-10-07T13:00:00Z" }];
+const HEALTH_OFF = { status: "ok", version: "sample", jobs: { mode: "off", started: false, failedLast24h: null, dlq: null }, ai: { enabled: false, configured: false, provider: "fake" }, sms: { provider: "console", configured: false, mode: "preview" } } as HealthStatus;
 
 const recap = (settings: RecapSettings, hist: RecapHistoryItem[] | undefined, state: "loaded" | "failed" = "loaded"): RecapData => ({
   settings: loaded(settings),

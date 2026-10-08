@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { logger } from "../../lib/logger";
 import { recapV1 } from "./recap.v1";
+import { recapV2 } from "./recap.v2";
 import type { AiTask } from "../config";
 import { categorizeV1 } from "./categorize.v1";
 import { chatV1 } from "./chat.v1";
@@ -27,7 +28,7 @@ export const PROMPTS: PromptRegistry = {
   // (AI-1) The categorization prompt.
   categorize: { v1: categorizeV1 },
   // (AI-4a) The morning recap prompt.
-  recap: { v1: recapV1 },
+  recap: { v1: recapV1, v2: recapV2 },
   // (AI-2) The Ask prompt.
   chat: { v1: chatV1 },
 };

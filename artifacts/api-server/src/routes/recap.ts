@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { addDaysISO, localDateInZone } from "@workspace/avalanche-core";
 import {
   db,
@@ -33,7 +33,7 @@ import {
   UpdateRecapSettingsResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
-import { getSmsProvider } from "../lib/sms";
+import { getSmsConfig, getSmsProvider } from "../lib/sms";
 import { last4, normalizeUsPhone } from "../lib/sms/phone";
 import { sendSms } from "../lib/sms/send";
 import { sendRecapDelivery } from "../recap/deliver";
@@ -79,7 +79,45 @@ function iso(d: Date | null): string | null {
   return d ? d.toISOString() : null;
 }
 
-function view(s: RecapSettings) {
+/** What a client may say about a delivery: a console row never left the server. */
+export function shownStatus(provider: string, status: string): string {
+  return provider === "console" && status !== "failed" ? "previewed" : status;
+}
+
+async function deliveryBlock(s: RecapSettings, now: Date = new Date()) {
+  const [last] = await db
+    .select({
+      status: recapDeliveriesTable.status,
+      provider: recapDeliveriesTable.provider,
+      createdAt: recapDeliveriesTable.createdAt,
+    })
+    .from(recapDeliveriesTable)
+    .where(
+      and(
+        eq(recapDeliveriesTable.householdId, s.householdId),
+        eq(recapDeliveriesTable.userId, s.userId),
+        inArray(recapDeliveriesTable.kind, ["scheduled", "test", "alert"]),
+      ),
+    )
+    .orderBy(desc(recapDeliveriesTable.createdAt))
+    .limit(1);
+  const cfg = getSmsConfig();
+  const phoneVerified = s.verifiedAt !== null && s.phoneE164 !== null;
+  const paused = s.pausedUntil !== null && s.pausedUntil > now;
+  return {
+    mode: cfg.mode,
+    providerConfigured: cfg.configured,
+    phoneVerified,
+    scheduled: s.enabled && phoneVerified && s.optedOutAt === null && !paused,
+    sendTimeLocal: s.sendTimeLocal,
+    timezone: s.timezone,
+    lastDelivery: last
+      ? { status: shownStatus(last.provider, last.status), provider: last.provider, at: last.createdAt.toISOString() }
+      : null,
+  };
+}
+
+function viewBase(s: RecapSettings) {
   return {
     enabled: s.enabled,
     sendTimeLocal: s.sendTimeLocal,
@@ -94,6 +132,10 @@ function view(s: RecapSettings) {
     consentText: CONSENT_TEXT,
     consentTextVersion: CONSENT_TEXT_VERSION,
   };
+}
+
+async function view(s: RecapSettings) {
+  return { ...viewBase(s), delivery: await deliveryBlock(s) };
 }
 
 function who(req: Request): { userId: string; householdId: string } {
@@ -139,7 +181,7 @@ function sameHash(a: string, b: string): boolean {
 
 router.get("/recap/settings", requireAuth, async (req, res): Promise<void> => {
   const { userId, householdId } = who(req);
-  res.json(GetRecapSettingsResponse.parse(view(await ensureSettings(householdId, userId))));
+  res.json(GetRecapSettingsResponse.parse(await view(await ensureSettings(householdId, userId))));
 });
 
 router.put("/recap/settings", requireAuth, async (req, res): Promise<void> => {
@@ -172,7 +214,7 @@ router.put("/recap/settings", requireAuth, async (req, res): Promise<void> => {
     ...(b.skipWeekends !== undefined ? { skipWeekends: b.skipWeekends } : {}),
     ...(b.extraAlerts !== undefined ? { extraAlerts: b.extraAlerts } : {}),
   });
-  res.json(UpdateRecapSettingsResponse.parse(view(row)));
+  res.json(UpdateRecapSettingsResponse.parse(await view(row)));
 });
 
 router.post("/recap/verify/start", requireAuth, async (req, res): Promise<void> => {
@@ -279,7 +321,7 @@ router.post("/recap/verify/confirm", requireAuth, async (req, res): Promise<void
     const settings = await ensureSettings(householdId, userId);
     // A fresh, confirmed verification is fresh consent: it also lifts an earlier opt-out.
     const row = await updateSettings(settings, { phoneE164: v.phoneE164, verifiedAt: new Date(), optedOutAt: null });
-    res.json(ConfirmRecapVerificationResponse.parse(view(row)));
+    res.json(ConfirmRecapVerificationResponse.parse(await view(row)));
   });
 });
 
@@ -304,15 +346,20 @@ router.post("/recap/test-send", requireAuth, async (req, res): Promise<void> => 
       );
     if (n >= TEST_SENDS_PER_DAY) return fail(res, 429, "That is 3 test texts today. Try again tomorrow.", "test_limit");
 
-    const result = await sendRecapDelivery({
-      userId,
-      householdId,
-      kind: "test",
-      body: testBody(settings.sendTimeLocal, settings.timezone),
-    });
+    // A console provider (also the fallback for an unfinished Twilio setup)
+    // never puts the text on a phone: say "previewed", and show the text.
+    const preview = getSmsProvider().name === "console";
+    const body = testBody(settings.sendTimeLocal, settings.timezone);
+    const result = await sendRecapDelivery({ userId, householdId, kind: "test", body });
     if (result.outcome === "blocked") return fail(res, 400, "Texts are not available for this number.", result.blocked);
     if (result.outcome !== "sent") return fail(res, 502, "The text could not be sent. Try again in a few minutes.", "send_failed");
-    res.json(SendRecapTestResponse.parse({ status: "sent", deliveryId: result.deliveryId }));
+    res.json(
+      SendRecapTestResponse.parse(
+        preview
+          ? { status: "previewed", mode: "preview", deliveryId: result.deliveryId, text: body }
+          : { status: "sent", mode: "live", deliveryId: result.deliveryId, text: null },
+      ),
+    );
   });
 });
 
@@ -328,14 +375,14 @@ router.post("/recap/pause", requireAuth, async (req, res): Promise<void> => {
     if (until.getTime() <= Date.now()) until = null;
   }
   const current = await ensureSettings(householdId, userId);
-  res.json(PauseRecapResponse.parse(view(await updateSettings(current, { pausedUntil: until }))));
+  res.json(PauseRecapResponse.parse(await view(await updateSettings(current, { pausedUntil: until }))));
 });
 
 router.post("/recap/unsubscribe", requireAuth, async (req, res): Promise<void> => {
   const { userId, householdId } = who(req);
   const current = await ensureSettings(householdId, userId);
   const row = await updateSettings(current, { optedOutAt: new Date(), enabled: false });
-  res.json(UnsubscribeRecapResponse.parse(view(row)));
+  res.json(UnsubscribeRecapResponse.parse(await view(row)));
 });
 
 router.get("/recap/deliveries", requireAuth, async (req, res): Promise<void> => {
@@ -348,6 +395,7 @@ router.get("/recap/deliveries", requireAuth, async (req, res): Promise<void> => 
       kind: recapDeliveriesTable.kind,
       forDate: recapDeliveriesTable.forDate,
       status: recapDeliveriesTable.status,
+      provider: recapDeliveriesTable.provider,
       createdAt: recapDeliveriesTable.createdAt,
     })
     .from(recapDeliveriesTable)
@@ -355,7 +403,7 @@ router.get("/recap/deliveries", requireAuth, async (req, res): Promise<void> => 
     .orderBy(desc(recapDeliveriesTable.createdAt))
     .limit(q.data.limit ?? 30);
   res.json(
-    ListRecapDeliveriesResponse.parse(rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }))),
+    ListRecapDeliveriesResponse.parse(rows.map((r) => ({ ...r, status: shownStatus(r.provider, r.status), createdAt: r.createdAt.toISOString() }))),
   );
 });
 
@@ -396,15 +444,18 @@ router.post("/recap/preview", requireAuth, async (req, res): Promise<void> => {
   res.json(PreviewRecapResponse.parse({ model: out.model, template: out.template, facts: out.facts }));
 });
 
-function historyItem(r: typeof recapsTable.$inferSelect, d: { status: string; createdAt: Date } | null) {
+function historyItem(r: typeof recapsTable.$inferSelect, d: { status: string; provider: string; createdAt: Date } | null) {
   return {
     id: r.id,
     forDate: r.forDate,
     text: r.text,
     source: r.source,
-    status: r.status,
+    // A recap "sent" through the console provider was previewed, never sent.
+    status: r.status === "sent" && d?.provider === "console" ? "previewed" : r.status,
     generatedAt: r.generatedAt.toISOString(),
-    delivery: d ? { status: d.status, createdAt: d.createdAt.toISOString() } : null,
+    delivery: d
+      ? { status: shownStatus(d.provider, d.status), provider: d.provider, createdAt: d.createdAt.toISOString() }
+      : null,
   };
 }
 
@@ -416,6 +467,7 @@ router.get("/recap/history", requireAuth, async (req, res): Promise<void> => {
     .select({
       recap: recapsTable,
       deliveryStatus: recapDeliveriesTable.status,
+      deliveryProvider: recapDeliveriesTable.provider,
       deliveryCreatedAt: recapDeliveriesTable.createdAt,
     })
     .from(recapsTable)
@@ -429,7 +481,9 @@ router.get("/recap/history", requireAuth, async (req, res): Promise<void> => {
   res.json(
     ListRecapHistoryResponse.parse(
       rows.map((r) =>
-        historyItem(r.recap, r.deliveryStatus && r.deliveryCreatedAt ? { status: r.deliveryStatus, createdAt: r.deliveryCreatedAt } : null),
+        historyItem(r.recap, r.deliveryStatus && r.deliveryCreatedAt
+          ? { status: r.deliveryStatus, provider: r.deliveryProvider ?? "console", createdAt: r.deliveryCreatedAt }
+          : null),
       ),
     ),
   );
@@ -464,7 +518,7 @@ router.post("/recap/generate-now", requireAuth, async (req, res): Promise<void> 
   });
   if (out.preview) return fail(res, 500, "Could not generate the recap.", "generate_failed");
   const [delivery] = await db
-    .select({ status: recapDeliveriesTable.status, createdAt: recapDeliveriesTable.createdAt })
+    .select({ status: recapDeliveriesTable.status, provider: recapDeliveriesTable.provider, createdAt: recapDeliveriesTable.createdAt })
     .from(recapDeliveriesTable)
     .where(and(eq(recapDeliveriesTable.recapId, out.recap.id), eq(recapDeliveriesTable.kind, "scheduled")));
   res.json(GenerateRecapNowResponse.parse({ created: out.created, recap: historyItem(out.recap, delivery ?? null) }));

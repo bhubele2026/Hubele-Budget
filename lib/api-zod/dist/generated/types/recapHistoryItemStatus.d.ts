@@ -11,5 +11,6 @@ export declare const RecapHistoryItemStatus: {
     readonly sent: "sent";
     readonly failed: "failed";
     readonly skipped: "skipped";
+    readonly previewed: "previewed";
 };
 //# sourceMappingURL=recapHistoryItemStatus.d.ts.map
