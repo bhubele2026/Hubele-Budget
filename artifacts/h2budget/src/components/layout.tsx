@@ -549,18 +549,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      {/* (S0) The classic app now lives at /classic while H2 takes over /.
-          One line, on every classic page (the landing included), with a plain
-          <a>: "/" is the other app, so it must be a full page load and must
-          NOT go through wouter, whose base would turn it into /classic/. */}
+      {/* (2026-10-08) The owner restored this app as THE app. While the
+          modernized pages are previewed under /next/*, this line links to
+          them from every page; it goes away when /next becomes the default.
+          "/" still serves the stripped-down app until the switch, so that
+          link is a plain <a> (full page load, not wouter). */}
       <div
         data-testid="classic-retiring-banner"
         className="shrink-0 border-b border-brand-line bg-platinum-3 px-3 py-1.5 text-center text-micro text-brand-ink"
       >
-        Classic app — retiring.{" "}
-        <a href="/" className="font-semibold underline underline-offset-2 hover:text-brand-navy">
-          Back to H2 →
-        </a>
+        Modernization preview:{" "}
+        <Link href="/next/dashboard" className="font-semibold underline underline-offset-2 hover:text-brand-navy">Dashboard</Link>
+        {" · "}
+        <Link href="/next/forecast" className="font-semibold underline underline-offset-2 hover:text-brand-navy">Forecast</Link>
+        {" · "}
+        <Link href="/next/accounts" className="font-semibold underline underline-offset-2 hover:text-brand-navy">Accounts</Link>
+        {" · "}
+        <a href="/" className="underline underline-offset-2 hover:text-brand-navy">Current app →</a>
       </div>
       {/* ── The navy rail: wordmark home control · area ribbon · account.
           Hidden on the landing (/home) — there the tiles ARE the navigation
