@@ -7,8 +7,8 @@ reconciling every displayed number without guessing which hidden rule produced i
 - **The test:** `artifacts/api-server/src/__tests__/householdScenario.integration.test.ts`.
   - It asserts the three columns the app computes today, and (PR-B1, 2026-10-07) the money position's
     columns from `GET /money/position`: remaining, unplanned and needs classification this week and safe
-    to spend now at every step; lowest before payday and available until payday at S6–S8, where today's
-    ledger already yields them.
+    to spend now at every step. Lowest before payday and available until payday are pinned at today's
+    values (lower than this contract) until the funding-bill hooks land; see "PR-B1 delivery".
   - Every other column is an `it.todo` naming the PR that switches it on. Switching it on is part of
     that PR's definition of done.
   - A PR that legitimately changes a rule updates this document, the fixture and the test together —
@@ -59,7 +59,8 @@ column on here.
 - **Lowest before payday (PR9):** the lowest end-of-day expected balance from today until the day
   before the next income that hasn't already been matched away.
 - **Available until payday (PR-B1):** lowest before payday less the $500 cash buffer (and any money
-  held for goals; none here), never below zero.
+  held for goals; none here), never below zero. (PR-B1 round 2) Payday's own day is in the window, read
+  before its paycheck: a bill landing on payday counts.
 - **Safe to spend now (PR-B1):** the smaller of remaining this week and available until payday.
 - **Chase to review (PR13, PR14):** Chase rows this month not marked reviewed. Marking reviewed never
   moves money.
@@ -68,9 +69,9 @@ column on here.
 ## The week
 
 **Asserted now:** cash, spent this week, review count; (PR-B1) remaining, unplanned, needs classification
-and safe to spend now at every step, lowest before payday and available until payday at S6–S8.
-**Contract for later work:** expected on 10/16, Chase to review, stale; lowest before payday and available
-until payday at S1–S5, S9 and S10 (see "PR-B1 delivery" below).
+and safe to spend now at every step. **Contract for later work:** expected on 10/16, Chase to review, stale;
+lowest before payday and available until payday at every step (pinned at today's lower values meanwhile;
+see "PR-B1 delivery" below).
 
 | # | When | Event | Cash | Spent week | Review | Remaining | Unplanned | Needs class. | Expected Fri 10/16 | Lowest before payday | Available until payday | Safe to spend now | Chase to review | Stale |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -204,30 +205,26 @@ that and remaining this week. The week binds at every step, so safe to spend now
 
 - **Switched on, every step:** remaining, unplanned and needs classification this week, and safe to spend
   now — read from `GET /money/position`, whose figures the spine's `position` carries.
-- **Switched on, S6–S8:** lowest before payday and available until payday. On those steps the window is
-  today alone (Thu 10/8; payday Fri 10/9), and today's ledger yields the contract's 2,072.60.
-- **Still pending (`it.todo`, one line each):**
+- **Lowest before payday and available until payday: pending at every step** (`it.todo`, one line each),
+  and pinned meanwhile at what the app reports today, which is lower than this table at every step and never
+  higher:
 
   | Step | Today's ledger (lowest / available) | Why | Turns on with |
   |---|---|---|---|
   | S1, S2 | 2,105.00 Thu 10/8 / 1,605.00 | Last Saturday's $300 Weekly Spend bill is dragged to Mon 10/5; the contract has the $180 Amex payoff | the funding-bill hooks (decision 7, next package) |
   | S3 | 1,725.00 Thu 10/8 / 1,225.00 | The $180 payoff posted, but the $300 Weekly Spend bill due 10/3 is still dragged, to Wed 10/7 | the funding-bill hooks |
   | S4 | 1,680.00 Thu 10/8 / 1,180.00 | The same $300 bill, dragged to Thu 10/8 | the funding-bill hooks |
-  | S5 | 2,072.60 Thu 10/8 / 1,572.60 | A bill due today lands on the next business day (PR6: day 0 equals the bank), so the $95 phone moves to payday, Fri 10/9; the contract counts it on 10/8 | an owner decision on the PR6 rule |
+  | S5 | 1,677.60 Fri 10/9 / 1,177.60 | The $95 phone (due today, landed on payday) now counts before the paycheck, as this table says; the $300 Weekly Spend bill dragged onto payday counts too | the funding-bill hooks |
+  | S6–S8 | 1,772.60 Fri 10/9 / 1,272.60 | The $300 Weekly Spend bill due 10/3 is dragged onto payday and counts before the paycheck | the funding-bill hooks |
   | S9, S10 | 1,412.60 / 1,262.60 Wed 10/14 / 912.60 / 762.60 | Two $300 Weekly Spend bills (10/3 dragged to Mon 10/12, and 10/10) instead of the $337.60 payoff | the funding-bill hooks |
 
-- **Safe to spend now matches at every step** because the week is the smaller ceiling throughout; the hooks
-  change available until payday, not which ceiling binds here.
+- **Round 2 (lead's ruling on the S5 question):** the window runs through payday, and on payday the bills
+  count before the paycheck. Round 1 asserted S6–S8 at 2,072.60 because it stopped the day before payday;
+  that same rule left the $95 phone out at S5 and read high. Counting payday's bills fixes S5's phone and,
+  until the hooks land, also counts the dragged $300 Weekly Spend bill at S5–S8 — reading low, as the law
+  allows. Once the hooks take that bill off the curve, the same rule should read this table's 1,977.60 at
+  S5 and 2,072.60 at S6–S8.
+- **Safe to spend now matches at every step** because the week is the smaller ceiling throughout.
 - **Stale stays pending.** At S3–S7 today's freshness rule already reads `old` (a Plaid balance read
   Sun 08:00 with no sync for over 48 hours), where this table says fresh; the money position reports that
   as `degraded`. The column predates the 48-hour rule and is left for PR3's owner to reconcile.
-
-## PR1 delivery
-
-- **What changed:** test-only. A new fixture, a new integration test and this document. No production
-  code and no change to any displayed figure.
-- **Codex points covered:** 14. The contract columns map to points 1, 2, 3, 4, 6, 7, 8, 9, 10 and 12
-  through the PRs named in the table.
-- **Verification:** see the commit and CI for this PR. The test must pass with every current column
-  asserted, and the pending items must list exactly one known-wrong value (S10 spending, PR7).
-  PR7 switched that value on; no step carries a known-wrong value now.

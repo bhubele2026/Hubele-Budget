@@ -41,16 +41,24 @@ household's largest active income plan, so a small reimbursement never ends the 
 bank row already matched away is not on the curve, so the next one is payday. With no paycheck in the next
 45 days, the window runs through this week's Saturday instead (`horizon.kind = "week_end"`).
 
-**Lowest before payday.** The lowest end-of-day balance the curve expects from today up to the day before
-payday (through Saturday, with no payday). It is read straight off `computeCashSignal().daily`, the same
-curve the Forecast page and the spine's low point use, so every bill, debt minimum and payoff the curve
-holds is in it.
+**Lowest before payday.** The lowest end-of-day balance the curve expects from today **through payday**
+(through Saturday, with no payday). **On payday itself the bills count before the paycheck** (round 2, the
+lead's ruling on Q1): that day reads its end-of-day balance less every income plan dated payday —
+
+    lowestUntilPayday = min( daily[d] for today ≤ d < payday,
+                             daily[payday] − Σ income plans dated payday )
+
+A bill the ledger lands on payday (one due today, which PR6 lands on the next business day, or one simply due
+that day) may post before the deposit; leaving it out read HIGH by that bill. The position says so in its
+assumptions: "bills due on payday are counted before the paycheck". Balances are read straight off
+`computeCashSignal().daily`, the same curve the Forecast page and the spine's low point use, so every bill,
+debt minimum and payoff the curve holds is in it.
 
 **Available until payday** = lowest before payday − the cash buffer − money held for goals (none until goals
 ship), never below zero. **Null with no bank data, or no curve: never a false zero.**
 
-**Committed until payday** = the planned outflows landing in the window (shown, not subtracted again: the
-curve already holds them).
+**Committed until payday** = the planned outflows landing in the window, payday's own bills included (shown,
+not subtracted again: the curve already holds them).
 
 **This week** (Sunday to Saturday, household calendar). Every row of the week runs through PR-H's
 `classifyMovement`, with the ledger's tier-2 bill pairs handed in:
@@ -60,7 +68,9 @@ curve already holds them).
   let the cap read high. Filing it unplanned, or matching it to a bill, gives the room back;
 - **beside the cap, shown on its own:** unplanned spend, and monthly-allowance spend;
 - **not spending at all:** bill-matched rows (confirmed or tier-2), transfers, card payments, debt payments,
-  reimbursables, income.
+  reimbursables, income. ⚠️ Today a reimbursable row that also carries a weekly flag reads `allowance_weekly`
+  (PR-H's step order) and counts. The owner's 2026-09-15 rule excludes it; PR-B2 moves `reimbursable` ahead
+  of the flags inside `classifyMovement`. Round 2 pins today's behaviour in a test marked to flip then.
 
 **Remaining this week** = this week's cap − what counts against it (negative when over). **Pace allowed
 today** = the cap × days elapsed, today included ÷ 7. **Within plan:** `over` when spent is above the cap;
@@ -78,7 +88,15 @@ bank's own stale verdict (`computeBankFreshness`): every figure is still compute
 
 **The weekly cap** comes from `allowance_plans`: the household pool's newest plan that has started by the end
 of the week, or that week's override (`preferences.weeklyAllowanceOverrides`, parsed as `everydayPlan`
-parses it). No plan and no override: no cap.
+parses it). So a row effective on or before the week's Sunday governs the whole week, and a change made
+mid-week with `effective_from` = today governs the week containing today, all of it (round 2, Q3). **No plan,
+a $0 plan, or a $0 override: no cap — never a $0 cap** (round 2, Q2); the backfill writes no row for a $0
+setting.
+
+**The classic Allowances page** (frozen) still saves `settings`. Until settings is retired, `PUT /settings`
+mirrors a changed weekly or monthly allowance into the household pool's plan effective the Sunday of the
+current household week, through the one writer (`allowancePlanWriter.ts`), so the position reads the edit at
+once and past weeks keep the cap they had (round 2, Q4).
 
 **The suggested cap** (`GET /allowance-plans`) = (take-home − committed bills − debt minimums − Avalanche extra
 − goals) per month × 12/52, rounded down to whole $5, never negative. Committed bills leave out the Weekly
@@ -99,6 +117,7 @@ it). A suggestion only: nothing writes it.
 | `artifacts/api-server/src/lib/moneyContext.ts` | `loadMoneyContext` takes the caller's `tier2PairedTxnIds`; `loadMovementRows` (the PR-H test helper's row loader, moved unchanged). First production caller: the money position. |
 | `artifacts/api-server/src/lib/moneyPosition.ts` | `buildMoneyPosition`: one read of the curve (no re-walk), the week, the cap and freshness; `computePosition` does every sum. |
 | `artifacts/api-server/src/lib/allowancePlans.ts`, `allowancePlanWriter.ts` | Reads and the suggestion; **the one writer** of `allowance_plans`. |
+| `artifacts/api-server/src/routes/settings.ts` (round 2) | `PUT /settings` mirrors a changed weekly / monthly allowance into `allowance_plans` (this week's Sunday) through `mirrorSettingsAllowance`, inside the same transaction. The response is unchanged. |
 | `artifacts/api-server/src/routes/money.ts` | `GET /money/position`, `GET /allowance-plans`, `PUT /allowance-plans/:id` (the household's owner only, `source = 'owner'`). |
 | `artifacts/api-server/src/routes/spine.ts` | `position: { safeToSpendNow, remainingWeek, availableUntilPayday, paydayDate, horizonKind, withinPlan, confidence, degraded }` from the same `buildMoneyPosition` call, handed the spine's own cash-signal, freshness and pending-pair reads (one ledger per request). |
 | `lib/api-spec/openapi.yaml` + generated clients | `MoneyPosition`, `SpinePosition`, `AllowancePlan(s)`, `AllowancePlanUpdate`, `WeeklyLimitDerivation`; `Spine.position`; `RecurringItem.amountKind` (+ input). Codegen committed. |
@@ -113,8 +132,8 @@ hand in the test file's header):
 
 | Field | Before | After |
 |---|---|---|
-| `paydayDate` / `horizon` | — | 2026-10-09 / payday, last day 10/08 (the $150 reimbursement on 10/8 is under 25% of $2,000) |
-| `lowestUntilPayday` | — | 2,624.50 on 10/08 (2,814.50 + 150 − 340) |
+| `paydayDate` / `horizon` | — | 2026-10-09 / payday, last day 10/09 (the $150 reimbursement on 10/8 is under 25% of $2,000) |
+| `lowestUntilPayday` | — | 2,624.50 on 10/08 (2,814.50 + 150 − 340; payday 10/09 read before its paycheck ties it) |
 | `committedUntilPayday` | — | 340.00 |
 | `availableUntilPayday` | — | 2,124.50 |
 | `weekCap` / `spentWeekDiscretionary` | — | 250.00 / 105.50 (80.00 weekly + 25.50 unfiled; the 60.00 City Water row is the bill, tier 2) |
@@ -132,14 +151,15 @@ hand in the test file's header):
 | S2 | 158.40 | 0.00 | 0.00 | 158.40 | pending (2,105.00 / 1,605.00) |
 | S3 | 158.40 | 85.00 | 0.00 | 158.40 | pending (1,725.00 / 1,225.00) |
 | S4 | 113.40 | 85.00 | 0.00 | 113.40 | pending (1,680.00 / 1,180.00) |
-| S5 | 111.00 | 85.00 | 0.00 | 111.00 | pending (2,072.60 / 1,572.60) |
-| S6–S8 | 111.00 | 85.00 | 0.00 | 111.00 | **2,072.60 Thu 10/8 / 1,572.60** |
+| S5 | 111.00 | 85.00 | 0.00 | 111.00 | pending (1,677.60 Fri 10/9 / 1,177.60) |
+| S6–S8 | 111.00 | 85.00 | 0.00 | 111.00 | pending (1,772.60 Fri 10/9 / 1,272.60) |
 | S9 | 111.00 | 85.00 | 0.00 | 111.00 | pending (1,412.60 / 912.60) |
 | S10 | 111.00 | 85.00 | 0.00 | 111.00 | pending (1,262.60 / 762.60) |
 
-The pending cells are `it.todo`, one line each: S1–S4, S9, S10 need the funding-bill hooks (today's ledger
-drags the $300 Weekly Spend bill where the contract has the Amex payoff); S5 needs an owner decision (a bill
-due today lands on the next business day — see Residual 3).
+The pending cells are `it.todo`, one line each, and pinned meanwhile at the value shown (lower than the
+contract at every step, never higher). All need the funding-bill hooks: today's ledger carries the $300
+Weekly Spend bill where the contract has the Amex payoff, and from round 2 the copy dragged onto payday
+counts at S5–S8. (Round 1 asserted S6–S8 at 2,072.60 / 1,572.60; see "Round 2".)
 
 **`GET /allowance-plans`, household H1 of `allowancePlans.integration.test.ts`:** suggested weekly — → 430.00
 (take-home 4,333.33 − committed 1,815.99 − minimums 395.00 − extra 250.00 = 1,872.34 a month → 432.08 a week).
@@ -166,7 +186,8 @@ due today lands on the next business day — see Residual 3).
 `bankToday`, `spentWeek` / `spentMonth`, `reviewCount`, `nextBill`, the forecast curve, every bill pair tier,
 `payoffPct`, the golden snapshot, every existing endpoint's existing fields. `everydayPlan(settings)` is
 untouched and still used by nothing new. No existing read path gained a side effect; the three new routes'
-reads write nothing (`GET /allowance-plans` is asserted to leave the table as it found it).
+reads write nothing (`GET /allowance-plans` is asserted to leave the table as it found it). One existing WRITE
+path gained a write (round 2, Q4): `PUT /settings` also upserts the mirrored plan; its response is unchanged.
 
 ## Tests
 
@@ -175,16 +196,20 @@ New or extended (API suite):
 | File | Tests | What |
 |---|---|---|
 | `src/lib/ledgerWalk.test.ts` | 4 | oracle equivalence on 2,000 seeded ledgers (sorted and unsorted, DST windows, non-cent amounts), boundaries |
-| `src/lib/availableToSpend.test.ts` | 28 | payday (25% rule, active-only, today, 45-day fallback), lowest before payday, null on no data, buffer + reserves, committed, unfiled counts, tight/over boundaries to the cent, pace, min, estimates, assumptions, degraded, the credit/debt law |
+| `src/lib/availableToSpend.test.ts` | 33 | payday (25% rule, active-only, today, 45-day fallback), lowest before payday, null on no data, buffer + reserves, committed, unfiled counts, tight/over boundaries to the cent, pace, min, estimates, assumptions, degraded, the credit/debt law |
 | `src/lib/weeklyLimit.test.ts` | 15 | monthly normalisation, exclusions, floor to $5, never negative |
-| `src/lib/everydayPlanFromRows.test.ts` | 7 | parity with `everydayPlan` through the backfill on 1,000 seeded households × 64 weeks; plan in effect; members; overrides |
+| `src/lib/everydayPlanFromRows.test.ts` | 9 | parity with `everydayPlan` through the backfill on 1,000 seeded households × 64 weeks; plan in effect; members; overrides |
 | `src/__tests__/moneyPosition.integration.test.ts` | 4 | the route to the cent, the curve it sits on (tier-2 pair proven), degraded, household scoping |
-| `src/__tests__/allowancePlans.integration.test.ts` | 12 | the real 0040/0041 SQL run three times, parity on real rows, CHECK, GET, PUT owner-only / 404 / 400 / 409, the jobs/ai scan |
+| `src/__tests__/allowancePlans.integration.test.ts` | 13 | the real 0040/0041 SQL run three times, parity on real rows, CHECK, GET, PUT owner-only / 404 / 400 / 409, the classic settings mirror, the jobs/ai scan |
 | `src/__tests__/recurringAmountKind.integration.test.ts` | 2 | `amountKind` through POST / PATCH / GET; bad value refused |
 | `src/__tests__/spineParity.integration.test.ts` | +3 | position = `/money/position` field for field; on the spine's own curve, week and buffer; the law extended |
-| `src/__tests__/householdScenario.integration.test.ts` | 10 (+3 todo) | the position's columns at every step, as above |
+| `src/__tests__/householdScenario.integration.test.ts` | 10 (+6 todo) | the position's columns at every step, as above |
 
 ### Fails before (the branch's test files run on the parent `8148f2a1`)
+
+Round 1's run. Every test added in round 2 calls a function or route the parent does not have
+(`computePosition`, `everydayPlanFromRows`, `/settings`'s mirror into a table the parent lacks), so it fails
+there too.
 
 | File | On `8148f2a1` | Reason |
 |---|---|---|
@@ -197,14 +222,14 @@ New or extended (API suite):
 | `spineParity.integration.test.ts` | 3 fail, **13 pass** | `GET /money/position` → 404 (run with the cap seed guarded, since the parent has no table). The 13 old assertions pass on both. |
 | `householdScenario.integration.test.ts` | 10 of 10 steps fail | `GET /money/position` → 404 (same guard) |
 
-### Mutants — 26 of 26 caught
+### Mutants — 32 of 32 caught (round 2 run)
 
 Each mutant applied alone, its test files run, reverted (scratch runner; the worktree was clean afterwards).
 
 | # | Mutant | Caught by (one of the failing tests) |
 |---|---|---|
 | M1 | payday off by one: a paycheck dated today is payday | "a paycheck dated today is not payday" |
-| M2 | payday's own day counted inside the window | "is the lowest … up to the day BEFORE payday"; position route to the cent |
+| M2 | (round 2) the paycheck counted on payday, ahead of payday's bills | scenario S5–S8; "a bill that lands ON payday counts" |
 | M3 | cash buffer not subtracted | scenario S6–S8; route to the cent |
 | M4 | reserves not subtracted | "subtracts the buffer AND the reserves" |
 | M5 | unplanned counted against the cap too (twice) | scenario S3–S10; "weekly-allowance spend and UNFILED spend count" |
@@ -215,7 +240,7 @@ Each mutant applied alone, its test files run, reverted (scratch runner; the wor
 | M10 | exactly at the cap reads over | "tight and over — the boundaries" |
 | M11 | safe to spend takes the larger ceiling | scenario S1–S10; "safe to spend now = the smaller ceiling" |
 | M12 | no bank data reads a false zero | "is null — never a false zero"; household scoping |
-| M13 | the ledger's tier-2 pairs not handed to the classifier | route to the cent (City Water would read as $60 unfiled) |
+| M13 | the ledger's tier-2 pairs not handed to the classifier `[reanchored]` | route to the cent (City Water would read as $60 unfiled) |
 | M14 | `amountKind` not carried onto the curve | route to the cent (confidence) |
 | M15 | spine `remainingWeek` read from the wrong figure | spine position parity; scenario |
 | M16 | `walkLedger` applies a day's items a day late | golden (all 11 entries); oracle |
@@ -228,20 +253,27 @@ Each mutant applied alone, its test files run, reverted (scratch runner; the wor
 | M23 | backfill writes a $0 plan | "one weekly and one monthly row per non-zero amount …" |
 | M24 | PUT no longer owner-only | "a member of the household is refused" |
 | M25 | the writer keeps the old source | "the owner sets the amount: source 'owner' …" |
-| M26 | estimate tagging ignores the window | "fixed plans, and estimates outside the window, leave it firm" |
+| M26 | estimate tagging ignores the window `[reanchored]` | "fixed plans, and estimates outside the window, leave it firm" |
+| M27 | (round 2) payday's own bills left out of committed | "a bill that lands ON payday counts"; committed test |
+| M28 | (round 2) the window ends the day before payday again (round 1's rule) | scenario S5–S8; route to the cent (horizon) |
+| M29 | (round 2) a classic-page weekly save not mirrored | "the classic Allowances page's save is mirrored …" |
+| M30 | (round 2) the mirror dated today instead of the week's Sunday | the same test (equivalent only on a Sunday) |
+| M31 | (round 2) a $0 week read as a $0 cap in the position | the same test (the $0 override step) |
+| M32 | (round 2) a $0 plan row read as a plan | "(Round 2, Q2) a $0 plan is no plan" |
 
 ## Gates
 
-Run on the branch head, Node 24.18, pnpm 10.34.3, local Postgres (`h2budget_test_prb`).
+Run on the branch head after round 2, Node 24.18, pnpm 10.34.3, local Postgres (`h2budget_test_prb`).
 
 | Gate | Result |
 |---|---|
 | `pnpm run typecheck` | clean |
 | `pnpm --filter @workspace/api-spec run codegen` | no drift (generated output committed) |
 | `CI=true pnpm --filter ./artifacts/h2budget exec vitest run` | 141 files (140 passed, 1 skipped); 1,248 passed, 4 skipped |
-| API suite, serial, `CI=true`, `h2budget_test_prb` | 158 files; 1,681 passed, 10 todo (parent: 151 / 1,606 / 7 — +7 files, +75 tests, +3 todo) |
+| API suite, serial, `CI=true`, `h2budget_test_prb` | 158 files; 1,689 passed, 13 todo (round 1: 1,681 / 10; parent: 151 / 1,606 / 7 — +7 files, +83 tests, +6 todo) |
 | Parent `8148f2a1`, same suite, scratch DB | 151 files; 1,606 passed, 7 todo |
-| Golden under `CI=true` | passes; snapshot files unchanged |
+| Golden under `CI=true` | passes (in the suite and on its own); `git diff --stat 8148f2a1 -- '*__snapshots__*'` empty |
+| Before / after dump (scratch, not committed) | rerun after round 2: identical to `8148f2a1` across the 10 scenario steps and the spine fixture |
 | `pnpm run build` + `node scripts/check-entry-graph.mjs` | build OK; landing route 575.7 KB raw (173.4 KB gz), budget 580 KB — unchanged; no recharts on open |
 | `pnpm audit --prod` | ⚠️ **3 (1 critical, 2 high) — the same 3 on `main` at `8148f2a1`**, none introduced here (no dependency or lockfile change): `proxy-addr` < 2.0.8 via `express`, `compression` < 1.8.2, `braces` ≤ 3.0.3 via `http-proxy-middleware` (no patched release). Needs a security-pin change on `main` (Residual 1). |
 
@@ -254,47 +286,65 @@ Run on the branch head, Node 24.18, pnpm 10.34.3, local Postgres (`h2budget_test
    money package. Flagged to the lead.
 2. **⚠️ Deploy order: the SQL must run before this code serves.** Drizzle reads full `recurring_items` rows in
    the forecast, bills and spine, so once this code is live every one of those reads names `amount_kind`; and
-   the spine reads `allowance_plans`. Production gets both only from `0040`/`0041` through PR-0's migration
-   runner (`preDeployCommand`). This branch must merge after PR-0, and the runner must apply `lib/db/migrations`
-   in name order. Without them the forecast, Bills and the spine fail.
-3. **⚠️ Reads high by a bill due today when the next business day is payday.** The ledger lands an unposted
-   bill due today (and an overdue one) on the next business day, so day 0 equals the bank (PR6). When that
-   day is payday the bill falls outside the window, and available until payday reads high by it for that
-   day (scenario S5: the $95 phone; 1,572.60 where the contract says 1,477.60). The formula follows the
-   specification exactly; counting a due-but-dragged outflow that lands ON payday inside the window would
-   restore "low, never high" and match the contract at S5 once the hooks land. Not changed here: it is a
-   money rule (Question 1).
-4. **The cap reads `allowance_plans`; the classic Allowances page still writes `settings`.** Until settings is
-   retired, an edit on the classic page does not move the position's cap (the backfill ran once). The
-   overrides are still read from `settings.preferences`, as `everydayPlan` reads them (Question 4).
-5. **Funding-bill hooks are the next package.** Until then the Weekly Spend bill is a plain weekly bill on the
-   curve, so lowest before payday and available until payday read lower than the contract at S1–S4, S9, S10
-   (low, not high).
-6. **Bank freshness reads `old` at scenario S3–S7.** The 48-hour quiet-feed rule post-dates the contract's
+   the spine and `PUT /settings` touch `allowance_plans`. Production gets both only from `0040`/`0041` through
+   PR-0's migration runner (`preDeployCommand`). This branch must merge after PR-0, and the runner must apply
+   `lib/db/migrations` in name order. Without them the forecast, Bills, the spine and settings saves fail.
+3. **Funding-bill hooks are the next package.** Until then the Weekly Spend bill is a plain weekly bill on the
+   curve, so lowest before payday and available until payday read lower than the contract at every scenario
+   step (low, not high), pinned at today's values.
+4. **Bank freshness reads `old` at scenario S3–S7.** The 48-hour quiet-feed rule post-dates the contract's
    "Stale" column, which says fresh; the position reports `degraded: true` there. The column stays pending for
    its owner.
-7. **Spine cost.** The spine now also runs the position's reads: the household's income plans and allowance
+5. **Spine cost.** The spine now also runs the position's reads: the household's income plans and allowance
    plans, `loadMoneyContext` (owner, settings, confirmed matches, ledger accounts, Amex cards, categories) and
    the week's rows. The ledger, freshness and pending pairs are shared, not re-read. Not measured against
    production data.
-8. `drizzle-kit push` re-creates the expression unique index on every push (dev and tests only; production
+6. `drizzle-kit push` re-creates the expression unique index on every push (dev and tests only; production
    runs the SQL file, which is idempotent). A known drizzle-kit limit with expression indexes.
-9. `committedUntilPayday` sums planned outflows only; a future-dated real checking row lowers the curve (and
+7. `committedUntilPayday` sums planned outflows only; a future-dated real checking row lowers the curve (and
    so the low) but is not listed as committed.
-10. The position classifies the week with `classifyMovement` as specified, so a row that is both reimbursable
-   and weekly-flagged counts against the cap (PR-H's open question), while `spentWeek` excludes it.
+8. **Reimbursable + weekly-flagged** counts against the cap until PR-B2 reorders `classifyMovement`
+   (pinned; the test says to flip it). `spentWeek` already excludes it.
+9. **Settings mirror scope.** Only `PUT /settings` mirrors. The workbook importer and the import-snapshot
+   restore write `settings` directly and are not mirrored; neither runs on the money position's path. A
+   future-dated plan row (only `PUT /allowance-plans/:id` can write one) governs its whole week as soon as
+   that week starts, even before its own day.
+10. **Parity with `everydayPlan` after a classic edit** holds for the current and later weeks; earlier weeks
+    keep the plan they had, which `everydayPlan` (a single standing amount) cannot express.
 
-## Questions for the owner
+## Round 2 — the lead's rulings on the owner questions (2026-10-07)
 
-1. **A bill due today with payday tomorrow** (Residual 3): should a bill that is already due but dragged onto
-   payday count inside "until payday"? Yes reads safe (low); no is today's formula (high by that bill for a
-   day).
-2. **No allowance set means no cap.** The backfill writes no plan for a $0 setting, so such a household sees
-   "no weekly cap" rather than "over a $0 cap". Right?
-3. **A cap changed mid-week governs the whole week** (the newest plan that has started by Saturday). Or
-   should it start the following Sunday?
-4. **Classic Allowances page vs. `allowance_plans`** (Residual 4): mirror the classic page's writes into the
-   plan until it is retired, or leave the classic page reading its own setting?
-5. **Unfiled spending counts against the weekly cap until it is filed.** Confirm.
-6. **Reimbursable + weekly-flagged** (Residual 10): count it against the cap (the classifier's order today) or
-   leave it out (the 2026-09-15 rule)?
+| Q | Ruling | What changed |
+|---|---|---|
+| 1 | Count payday's bills: window `[today, payday]`, payday read before its paycheck; committed includes payday's bills; say so in the assumptions | `computePosition` (`availableToSpend.ts`); `horizon.lastDay` is now payday; new assumption "bills due on payday are counted before the paycheck"; 4 unit tests (bill on payday, bill the day before, nothing else on payday, every deposit plan on payday held back) |
+| 2 | A $0 setting means no cap, never a $0 cap | Backfill unchanged; `everydayPlanFromRows` reads a $0 row as no plan; the position reads any $0 week (plan or override) as no cap |
+| 3 | The row effective on or before the week's Sunday governs the week; a mid-week change effective today governs the week containing today | Already the rule (newest row started by Saturday); documented, and one named test |
+| 4 | Mirror classic edits now | `PUT /settings` upserts the household pool's plan effective this week's Sunday through `allowancePlanWriter.ts` (`mirrorSettingsAllowance`) when the weekly or monthly amount changes; the scan test now allows `routes/settings.ts`; one integration test (classic edit → position reflects it; same-week re-save updates; unchanged re-save writes nothing; $0 → no cap) |
+| 5 | Unfiled spending counts against the cap | Kept |
+| 6 | Reimbursable excluded regardless of flags — PR-B2 changes the classifier | Not changed here; a unit test pins today's sum (the row counts, 35.00) and says it flips with PR-B2 |
+
+### Figures that moved in round 2 (before → after)
+
+| Where | Field | Round 1 | Round 2 | Why |
+|---|---|---|---|---|
+| Scenario S5 | lowest before payday / available | 2,072.60 Thu 10/8 / 1,572.60 (read HIGH: the $95 phone dragged onto payday was outside) | 1,677.60 Fri 10/9 / 1,177.60 | payday's bills count: the $95 phone **and** the $300 Weekly Spend bill (due 10/3, dragged onto payday) |
+| Scenario S5 | committed until payday | 0.00 | 395.00 | the same two bills |
+| Scenario S6–S8 | lowest before payday / available | 2,072.60 Thu 10/8 / 1,572.60 (asserted = contract) | 1,772.60 Fri 10/9 / 1,272.60 (pinned; contract `it.todo`) | the dragged $300 Weekly Spend bill lands on payday and now counts |
+| Scenario S6–S8 | committed until payday | 0.00 | 300.00 | the same bill |
+| Scenario S1–S4, S9, S10 | lowest / available / committed | — | unchanged | nothing but the paycheck lands on those paydays |
+| Scenario, every step | safe to spend now | as round 1 | unchanged | the week stays the smaller ceiling |
+| Household A (`moneyPosition`) | `horizon.lastDay` | 2026-10-08 | 2026-10-09 | the window now includes payday |
+| Household A | assumptions | 3 entries | + "bills due on payday are counted before the paycheck" | |
+| Household A | every money figure | — | unchanged (payday read before its paycheck ties 10/8's 2,624.50) | |
+| `allowancePlans` H1 | `weekCap` after a classic save of $410 | 320.50 (the edit did not reach the plan) | 410.00 | the mirror |
+
+**S5 does not yet reach the contract's 1,477.60.** The contract's own S5 arithmetic subtracts only the $95
+phone on payday (2,072.60 − 95 = 1,977.60 → 1,477.60 available). Today's ledger also drags last Saturday's
+$300 Weekly Spend bill onto payday (`keepsPreSnapshotRule`), where the contract has the $180 Amex payoff,
+which posted on 10/6 and left nothing due. So S5 reads exactly $300 lower, 1,177.60, and stays `it.todo`
+with that reason until the funding-bill hooks replace the bill. S6–S8 move from asserted to pinned for the
+same $300; once the hooks land, the same rule should yield the contract at S5 (1,977.60) and S6–S8
+(2,072.60).
+
+Nothing outside the new fields moved: the before/after dump harness was rerun (below) and spine parity and
+the golden snapshot pass unchanged.
