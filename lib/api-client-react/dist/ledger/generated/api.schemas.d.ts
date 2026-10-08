@@ -51,6 +51,106 @@ export interface HealthStatus {
     ai: HealthAi;
     sms: HealthSms;
 }
+export interface RecapError {
+    error: string;
+    code?: string;
+}
+export interface RecapSettings {
+    enabled: boolean;
+    /** HH:MM, 24-hour, in `timezone` */
+    sendTimeLocal: string;
+    /** IANA zone */
+    timezone: string;
+    /** @nullable */
+    phoneLast4: string | null;
+    verified: boolean;
+    /**
+     * ISO-8601 instant
+     * @nullable
+     */
+    pausedUntil: string | null;
+    skipWeekends: boolean;
+    extraAlerts: boolean;
+    /**
+     * ISO-8601 instant
+     * @nullable
+     */
+    consentedAt: string | null;
+    /**
+     * ISO-8601 instant
+     * @nullable
+     */
+    optedOutAt: string | null;
+    /** The exact sentence the member agrees to */
+    consentText: string;
+    consentTextVersion: string;
+}
+export interface RecapSettingsInput {
+    enabled?: boolean;
+    sendTimeLocal?: string;
+    timezone?: string;
+    skipWeekends?: boolean;
+    extraAlerts?: boolean;
+}
+export interface RecapVerifyStartInput {
+    /** A US mobile number; any common format is normalised to E.164 */
+    phoneE164: string;
+    /** Must be true */
+    consent: boolean;
+}
+export interface RecapVerifyStartResult {
+    sent: boolean;
+    expiresAt: string;
+    /** Present only outside production when no real provider is configured. */
+    devCode?: string;
+}
+export interface RecapVerifyConfirmInput {
+    code: string;
+}
+export type RecapTestSendResultStatus = (typeof RecapTestSendResultStatus)[keyof typeof RecapTestSendResultStatus];
+export declare const RecapTestSendResultStatus: {
+    readonly queued: "queued";
+    readonly sent: "sent";
+    readonly delivered: "delivered";
+    readonly undelivered: "undelivered";
+    readonly failed: "failed";
+};
+export interface RecapTestSendResult {
+    status: RecapTestSendResultStatus;
+    /** @nullable */
+    deliveryId: string | null;
+}
+export interface RecapPauseInput {
+    /**
+     * ISO-8601 instant
+     * @nullable
+     */
+    until: string | null;
+}
+export type RecapDeliveryItemKind = (typeof RecapDeliveryItemKind)[keyof typeof RecapDeliveryItemKind];
+export declare const RecapDeliveryItemKind: {
+    readonly scheduled: "scheduled";
+    readonly test: "test";
+    readonly verification: "verification";
+    readonly alert: "alert";
+    readonly reply: "reply";
+};
+export type RecapDeliveryItemStatus = (typeof RecapDeliveryItemStatus)[keyof typeof RecapDeliveryItemStatus];
+export declare const RecapDeliveryItemStatus: {
+    readonly queued: "queued";
+    readonly sent: "sent";
+    readonly delivered: "delivered";
+    readonly undelivered: "undelivered";
+    readonly failed: "failed";
+};
+export interface RecapDeliveryItem {
+    id: string;
+    kind: RecapDeliveryItemKind;
+    /** @nullable */
+    forDate: string | null;
+    status: RecapDeliveryItemStatus;
+    createdAt: string;
+}
 export interface OpsJobQueueCount {
     queue: string;
     state: string;

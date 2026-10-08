@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapPauseInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -120,6 +120,208 @@ export declare const useRetryOpsJob: <TError = ErrorType<void>, TContext = unkno
 }) => UseMutationResult<Awaited<ReturnType<typeof retryOpsJob>>, TError, {
     id: string;
 }, TContext>;
+/**
+ * @summary (AI-4b) The caller's own daily-recap text settings (created with defaults
+on first read). Never carries the full phone number: only its last four digits.
+
+ */
+export declare const getGetRecapSettingsUrl: () => string;
+export declare const getRecapSettings: (options?: RequestInit) => Promise<RecapSettings>;
+export declare const getGetRecapSettingsQueryKey: () => readonly ["/api/recap/settings"];
+export declare const getGetRecapSettingsQueryOptions: <TData = Awaited<ReturnType<typeof getRecapSettings>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getRecapSettings>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getRecapSettings>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetRecapSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getRecapSettings>>>;
+export type GetRecapSettingsQueryError = ErrorType<unknown>;
+/**
+ * @summary (AI-4b) The caller's own daily-recap text settings (created with defaults
+on first read). Never carries the full phone number: only its last four digits.
+
+ */
+export declare function useGetRecapSettings<TData = Awaited<ReturnType<typeof getRecapSettings>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getRecapSettings>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary (AI-4b) Change the caller's recap settings. Turning the recap on needs a
+verified phone number and recorded consent, and not an opt-out.
+
+ */
+export declare const getUpdateRecapSettingsUrl: () => string;
+export declare const updateRecapSettings: (recapSettingsInput: RecapSettingsInput, options?: RequestInit) => Promise<RecapSettings>;
+export declare const getUpdateRecapSettingsMutationOptions: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateRecapSettings>>, TError, {
+        data: BodyType<RecapSettingsInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof updateRecapSettings>>, TError, {
+    data: BodyType<RecapSettingsInput>;
+}, TContext>;
+export type UpdateRecapSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateRecapSettings>>>;
+export type UpdateRecapSettingsMutationBody = BodyType<RecapSettingsInput>;
+export type UpdateRecapSettingsMutationError = ErrorType<RecapError>;
+/**
+ * @summary (AI-4b) Change the caller's recap settings. Turning the recap on needs a
+verified phone number and recorded consent, and not an opt-out.
+
+ */
+export declare const useUpdateRecapSettings: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateRecapSettings>>, TError, {
+        data: BodyType<RecapSettingsInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof updateRecapSettings>>, TError, {
+    data: BodyType<RecapSettingsInput>;
+}, TContext>;
+/**
+ * @summary (AI-4b) Record consent and text a 6-digit code (valid 10 minutes, at most
+3 starts per day) to the given US mobile number.
+
+ */
+export declare const getStartRecapVerificationUrl: () => string;
+export declare const startRecapVerification: (recapVerifyStartInput: RecapVerifyStartInput, options?: RequestInit) => Promise<RecapVerifyStartResult>;
+export declare const getStartRecapVerificationMutationOptions: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof startRecapVerification>>, TError, {
+        data: BodyType<RecapVerifyStartInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof startRecapVerification>>, TError, {
+    data: BodyType<RecapVerifyStartInput>;
+}, TContext>;
+export type StartRecapVerificationMutationResult = NonNullable<Awaited<ReturnType<typeof startRecapVerification>>>;
+export type StartRecapVerificationMutationBody = BodyType<RecapVerifyStartInput>;
+export type StartRecapVerificationMutationError = ErrorType<RecapError>;
+/**
+ * @summary (AI-4b) Record consent and text a 6-digit code (valid 10 minutes, at most
+3 starts per day) to the given US mobile number.
+
+ */
+export declare const useStartRecapVerification: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof startRecapVerification>>, TError, {
+        data: BodyType<RecapVerifyStartInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof startRecapVerification>>, TError, {
+    data: BodyType<RecapVerifyStartInput>;
+}, TContext>;
+/**
+ * @summary (AI-4b) Confirm the 6-digit code (5 tries per code). Marks the number verified.
+ */
+export declare const getConfirmRecapVerificationUrl: () => string;
+export declare const confirmRecapVerification: (recapVerifyConfirmInput: RecapVerifyConfirmInput, options?: RequestInit) => Promise<RecapSettings>;
+export declare const getConfirmRecapVerificationMutationOptions: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof confirmRecapVerification>>, TError, {
+        data: BodyType<RecapVerifyConfirmInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof confirmRecapVerification>>, TError, {
+    data: BodyType<RecapVerifyConfirmInput>;
+}, TContext>;
+export type ConfirmRecapVerificationMutationResult = NonNullable<Awaited<ReturnType<typeof confirmRecapVerification>>>;
+export type ConfirmRecapVerificationMutationBody = BodyType<RecapVerifyConfirmInput>;
+export type ConfirmRecapVerificationMutationError = ErrorType<RecapError>;
+/**
+ * @summary (AI-4b) Confirm the 6-digit code (5 tries per code). Marks the number verified.
+ */
+export declare const useConfirmRecapVerification: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof confirmRecapVerification>>, TError, {
+        data: BodyType<RecapVerifyConfirmInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof confirmRecapVerification>>, TError, {
+    data: BodyType<RecapVerifyConfirmInput>;
+}, TContext>;
+/**
+ * @summary (AI-4b) Text the fixed test line to the caller's verified number (3 per day).
+ */
+export declare const getSendRecapTestUrl: () => string;
+export declare const sendRecapTest: (options?: RequestInit) => Promise<RecapTestSendResult>;
+export declare const getSendRecapTestMutationOptions: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof sendRecapTest>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof sendRecapTest>>, TError, void, TContext>;
+export type SendRecapTestMutationResult = NonNullable<Awaited<ReturnType<typeof sendRecapTest>>>;
+export type SendRecapTestMutationError = ErrorType<RecapError>;
+/**
+ * @summary (AI-4b) Text the fixed test line to the caller's verified number (3 per day).
+ */
+export declare const useSendRecapTest: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof sendRecapTest>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof sendRecapTest>>, TError, void, TContext>;
+/**
+ * @summary (AI-4b) Pause recap texts until the given time (null or a past time resumes).
+ */
+export declare const getPauseRecapUrl: () => string;
+export declare const pauseRecap: (recapPauseInput: RecapPauseInput, options?: RequestInit) => Promise<RecapSettings>;
+export declare const getPauseRecapMutationOptions: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof pauseRecap>>, TError, {
+        data: BodyType<RecapPauseInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof pauseRecap>>, TError, {
+    data: BodyType<RecapPauseInput>;
+}, TContext>;
+export type PauseRecapMutationResult = NonNullable<Awaited<ReturnType<typeof pauseRecap>>>;
+export type PauseRecapMutationBody = BodyType<RecapPauseInput>;
+export type PauseRecapMutationError = ErrorType<RecapError>;
+/**
+ * @summary (AI-4b) Pause recap texts until the given time (null or a past time resumes).
+ */
+export declare const usePauseRecap: <TError = ErrorType<RecapError>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof pauseRecap>>, TError, {
+        data: BodyType<RecapPauseInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof pauseRecap>>, TError, {
+    data: BodyType<RecapPauseInput>;
+}, TContext>;
+/**
+ * @summary (AI-4b) Opt out of recap texts and turn the recap off.
+ */
+export declare const getUnsubscribeRecapUrl: () => string;
+export declare const unsubscribeRecap: (options?: RequestInit) => Promise<RecapSettings>;
+export declare const getUnsubscribeRecapMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof unsubscribeRecap>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof unsubscribeRecap>>, TError, void, TContext>;
+export type UnsubscribeRecapMutationResult = NonNullable<Awaited<ReturnType<typeof unsubscribeRecap>>>;
+export type UnsubscribeRecapMutationError = ErrorType<unknown>;
+/**
+ * @summary (AI-4b) Opt out of recap texts and turn the recap off.
+ */
+export declare const useUnsubscribeRecap: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof unsubscribeRecap>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof unsubscribeRecap>>, TError, void, TContext>;
+/**
+ * @summary (AI-4b) The caller's most recent text deliveries (newest first, at most 30).
+ */
+export declare const getListRecapDeliveriesUrl: (params?: ListRecapDeliveriesParams) => string;
+export declare const listRecapDeliveries: (params?: ListRecapDeliveriesParams, options?: RequestInit) => Promise<RecapDeliveryItem[]>;
+export declare const getListRecapDeliveriesQueryKey: (params?: ListRecapDeliveriesParams) => readonly ["/api/recap/deliveries", ...ListRecapDeliveriesParams[]];
+export declare const getListRecapDeliveriesQueryOptions: <TData = Awaited<ReturnType<typeof listRecapDeliveries>>, TError = ErrorType<unknown>>(params?: ListRecapDeliveriesParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listRecapDeliveries>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listRecapDeliveries>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListRecapDeliveriesQueryResult = NonNullable<Awaited<ReturnType<typeof listRecapDeliveries>>>;
+export type ListRecapDeliveriesQueryError = ErrorType<unknown>;
+/**
+ * @summary (AI-4b) The caller's most recent text deliveries (newest first, at most 30).
+ */
+export declare function useListRecapDeliveries<TData = Awaited<ReturnType<typeof listRecapDeliveries>>, TError = ErrorType<unknown>>(params?: ListRecapDeliveriesParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listRecapDeliveries>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
 /**
  * @summary Dashboard summary
  */

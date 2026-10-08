@@ -55,4 +55,19 @@ describe("GET /healthz", () => {
     process.env.AI_ENABLED = "true";
     expect(json).toMatchObject({ ai: { enabled: false }, sms: { provider: "console", configured: true } });
   });
+
+  it("reports twilio as configured only when sid, token, a sender and the webhook base URL are all set", async () => {
+    process.env.TWILIO_AUTH_TOKEN = "t";
+    process.env.TWILIO_MESSAGING_SERVICE_SID = "MG1";
+    process.env.SMS_WEBHOOK_BASE_URL = "https://h2.example.test";
+    try {
+      const { json } = await request("GET", "/healthz");
+      expect((json as { sms: unknown }).sms).toEqual({ provider: "twilio", configured: true });
+      expect(JSON.stringify(json)).not.toContain("MG1");
+    } finally {
+      delete process.env.TWILIO_AUTH_TOKEN;
+      delete process.env.TWILIO_MESSAGING_SERVICE_SID;
+      delete process.env.SMS_WEBHOOK_BASE_URL;
+    }
+  });
 });

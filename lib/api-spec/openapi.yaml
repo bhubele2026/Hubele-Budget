@@ -26,6 +26,7 @@ tags:
   - name: members
   - name: spine
   - name: ops
+  - name: recap
     description: (AI-0) Owner-only operations views (job queues).
 paths:
   /healthz:
@@ -102,6 +103,183 @@ paths:
           description: The job is not in a failed state
         "503":
           description: Jobs are not running on this instance
+
+  /recap/settings:
+    get:
+      operationId: getRecapSettings
+      tags: [recap]
+      summary: |
+        (AI-4b) The caller's own daily-recap text settings (created with defaults
+        on first read). Never carries the full phone number: only its last four digits.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapSettings" }
+    put:
+      operationId: updateRecapSettings
+      tags: [recap]
+      summary: |
+        (AI-4b) Change the caller's recap settings. Turning the recap on needs a
+        verified phone number and recorded consent, and not an opt-out.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecapSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapSettings" }
+        "400":
+          description: Invalid setting, or the recap cannot be turned on yet
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+
+  /recap/verify/start:
+    post:
+      operationId: startRecapVerification
+      tags: [recap]
+      summary: |
+        (AI-4b) Record consent and text a 6-digit code (valid 10 minutes, at most
+        3 starts per day) to the given US mobile number.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecapVerifyStartInput" }
+      responses:
+        "200":
+          description: Code sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapVerifyStartResult" }
+        "400":
+          description: Invalid number, or consent not given
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+        "429":
+          description: Too many starts today
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+        "502":
+          description: The text could not be sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+
+  /recap/verify/confirm:
+    post:
+      operationId: confirmRecapVerification
+      tags: [recap]
+      summary: (AI-4b) Confirm the 6-digit code (5 tries per code). Marks the number verified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecapVerifyConfirmInput" }
+      responses:
+        "200":
+          description: Verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapSettings" }
+        "400":
+          description: Wrong, expired or missing code
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+        "429":
+          description: Too many wrong tries; start again
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+
+  /recap/test-send:
+    post:
+      operationId: sendRecapTest
+      tags: [recap]
+      summary: (AI-4b) Text the fixed test line to the caller's verified number (3 per day).
+      responses:
+        "200":
+          description: Sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapTestSendResult" }
+        "400":
+          description: No verified number, or opted out
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+        "429":
+          description: Test limit reached for today
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+        "502":
+          description: The text could not be sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+
+  /recap/pause:
+    post:
+      operationId: pauseRecap
+      tags: [recap]
+      summary: (AI-4b) Pause recap texts until the given time (null or a past time resumes).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecapPauseInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapSettings" }
+        "400":
+          description: Not a time, or more than a year away
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapError" }
+
+  /recap/unsubscribe:
+    post:
+      operationId: unsubscribeRecap
+      tags: [recap]
+      summary: (AI-4b) Opt out of recap texts and turn the recap off.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecapSettings" }
+
+  /recap/deliveries:
+    get:
+      operationId: listRecapDeliveries
+      tags: [recap]
+      summary: (AI-4b) The caller's most recent text deliveries (newest first, at most 30).
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 30 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecapDeliveryItem" }
 
   /dashboard:
     get:
@@ -2182,6 +2360,97 @@ components:
       properties:
         provider: { type: string, enum: [twilio, console, fake] }
         configured: { type: boolean }
+
+    RecapError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        code: { type: string }
+
+    RecapSettings:
+      type: object
+      required:
+        - enabled
+        - sendTimeLocal
+        - timezone
+        - phoneLast4
+        - verified
+        - pausedUntil
+        - skipWeekends
+        - extraAlerts
+        - consentedAt
+        - optedOutAt
+        - consentText
+        - consentTextVersion
+      properties:
+        enabled: { type: boolean }
+        sendTimeLocal: { type: string, description: "HH:MM, 24-hour, in `timezone`" }
+        timezone: { type: string, description: IANA zone }
+        phoneLast4: { type: ["string", "null"] }
+        verified: { type: boolean }
+        pausedUntil: { type: ["string", "null"], description: ISO-8601 instant }
+        skipWeekends: { type: boolean }
+        extraAlerts: { type: boolean }
+        consentedAt: { type: ["string", "null"], description: ISO-8601 instant }
+        optedOutAt: { type: ["string", "null"], description: ISO-8601 instant }
+        consentText: { type: string, description: The exact sentence the member agrees to }
+        consentTextVersion: { type: string }
+
+    RecapSettingsInput:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        sendTimeLocal: { type: string }
+        timezone: { type: string }
+        skipWeekends: { type: boolean }
+        extraAlerts: { type: boolean }
+
+    RecapVerifyStartInput:
+      type: object
+      required: [phoneE164, consent]
+      properties:
+        phoneE164: { type: string, description: A US mobile number; any common format is normalised to E.164 }
+        consent: { type: boolean, description: Must be true }
+
+    RecapVerifyStartResult:
+      type: object
+      required: [sent, expiresAt]
+      properties:
+        sent: { type: boolean }
+        expiresAt: { type: string }
+        devCode:
+          type: string
+          description: Present only outside production when no real provider is configured.
+
+    RecapVerifyConfirmInput:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string }
+
+    RecapTestSendResult:
+      type: object
+      required: [status, deliveryId]
+      properties:
+        status: { type: string, enum: [queued, sent, delivered, undelivered, failed] }
+        deliveryId: { type: ["string", "null"] }
+
+    RecapPauseInput:
+      type: object
+      required: [until]
+      properties:
+        until: { type: ["string", "null"], description: ISO-8601 instant, or null to resume }
+
+    RecapDeliveryItem:
+      type: object
+      required: [id, kind, forDate, status, createdAt]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [scheduled, test, verification, alert, reply] }
+        forDate: { type: ["string", "null"] }
+        status: { type: string, enum: [queued, sent, delivered, undelivered, failed] }
+        createdAt: { type: string }
 
     OpsJobQueueCount:
       type: object

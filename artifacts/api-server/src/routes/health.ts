@@ -3,7 +3,7 @@ import { HealthCheckResponse, GetVersionResponse } from "@workspace/api-zod";
 import { APP_VERSION } from "../lib/version";
 import { getJobsHealth } from "../jobs/boss";
 import { getAiStatus } from "../ai/client";
-import { getSmsStatus } from "../lib/smsStatus";
+import { getSmsConfig } from "../lib/sms";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -25,7 +25,7 @@ router.get("/healthz", async (_req, res) => {
     version: APP_VERSION,
     jobs,
     ai: getAiStatus(),
-    sms: getSmsStatus(),
+    sms: getSmsConfig(),
   });
   res.json(data);
 });

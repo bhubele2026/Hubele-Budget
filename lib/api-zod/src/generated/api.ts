@@ -105,6 +105,171 @@ export const RetryOpsJobResponse = zod.object({
 });
 
 /**
+ * @summary (AI-4b) The caller's own daily-recap text settings (created with defaults
+on first read). Never carries the full phone number: only its last four digits.
+
+ */
+export const GetRecapSettingsResponse = zod.object({
+  enabled: zod.boolean(),
+  sendTimeLocal: zod.string().describe("HH:MM, 24-hour, in `timezone`"),
+  timezone: zod.string().describe("IANA zone"),
+  phoneLast4: zod.string().nullable(),
+  verified: zod.boolean(),
+  pausedUntil: zod.string().nullable().describe("ISO-8601 instant"),
+  skipWeekends: zod.boolean(),
+  extraAlerts: zod.boolean(),
+  consentedAt: zod.string().nullable().describe("ISO-8601 instant"),
+  optedOutAt: zod.string().nullable().describe("ISO-8601 instant"),
+  consentText: zod.string().describe("The exact sentence the member agrees to"),
+  consentTextVersion: zod.string(),
+});
+
+/**
+ * @summary (AI-4b) Change the caller's recap settings. Turning the recap on needs a
+verified phone number and recorded consent, and not an opt-out.
+
+ */
+export const UpdateRecapSettingsBody = zod.object({
+  enabled: zod.boolean().optional(),
+  sendTimeLocal: zod.string().optional(),
+  timezone: zod.string().optional(),
+  skipWeekends: zod.boolean().optional(),
+  extraAlerts: zod.boolean().optional(),
+});
+
+export const UpdateRecapSettingsResponse = zod.object({
+  enabled: zod.boolean(),
+  sendTimeLocal: zod.string().describe("HH:MM, 24-hour, in `timezone`"),
+  timezone: zod.string().describe("IANA zone"),
+  phoneLast4: zod.string().nullable(),
+  verified: zod.boolean(),
+  pausedUntil: zod.string().nullable().describe("ISO-8601 instant"),
+  skipWeekends: zod.boolean(),
+  extraAlerts: zod.boolean(),
+  consentedAt: zod.string().nullable().describe("ISO-8601 instant"),
+  optedOutAt: zod.string().nullable().describe("ISO-8601 instant"),
+  consentText: zod.string().describe("The exact sentence the member agrees to"),
+  consentTextVersion: zod.string(),
+});
+
+/**
+ * @summary (AI-4b) Record consent and text a 6-digit code (valid 10 minutes, at most
+3 starts per day) to the given US mobile number.
+
+ */
+export const StartRecapVerificationBody = zod.object({
+  phoneE164: zod
+    .string()
+    .describe("A US mobile number; any common format is normalised to E.164"),
+  consent: zod.boolean().describe("Must be true"),
+});
+
+export const StartRecapVerificationResponse = zod.object({
+  sent: zod.boolean(),
+  expiresAt: zod.string(),
+  devCode: zod
+    .string()
+    .optional()
+    .describe(
+      "Present only outside production when no real provider is configured.",
+    ),
+});
+
+/**
+ * @summary (AI-4b) Confirm the 6-digit code (5 tries per code). Marks the number verified.
+ */
+export const ConfirmRecapVerificationBody = zod.object({
+  code: zod.string(),
+});
+
+export const ConfirmRecapVerificationResponse = zod.object({
+  enabled: zod.boolean(),
+  sendTimeLocal: zod.string().describe("HH:MM, 24-hour, in `timezone`"),
+  timezone: zod.string().describe("IANA zone"),
+  phoneLast4: zod.string().nullable(),
+  verified: zod.boolean(),
+  pausedUntil: zod.string().nullable().describe("ISO-8601 instant"),
+  skipWeekends: zod.boolean(),
+  extraAlerts: zod.boolean(),
+  consentedAt: zod.string().nullable().describe("ISO-8601 instant"),
+  optedOutAt: zod.string().nullable().describe("ISO-8601 instant"),
+  consentText: zod.string().describe("The exact sentence the member agrees to"),
+  consentTextVersion: zod.string(),
+});
+
+/**
+ * @summary (AI-4b) Text the fixed test line to the caller's verified number (3 per day).
+ */
+export const SendRecapTestResponse = zod.object({
+  status: zod.enum(["queued", "sent", "delivered", "undelivered", "failed"]),
+  deliveryId: zod.string().nullable(),
+});
+
+/**
+ * @summary (AI-4b) Pause recap texts until the given time (null or a past time resumes).
+ */
+export const PauseRecapBody = zod.object({
+  until: zod.string().nullable().describe("ISO-8601 instant"),
+});
+
+export const PauseRecapResponse = zod.object({
+  enabled: zod.boolean(),
+  sendTimeLocal: zod.string().describe("HH:MM, 24-hour, in `timezone`"),
+  timezone: zod.string().describe("IANA zone"),
+  phoneLast4: zod.string().nullable(),
+  verified: zod.boolean(),
+  pausedUntil: zod.string().nullable().describe("ISO-8601 instant"),
+  skipWeekends: zod.boolean(),
+  extraAlerts: zod.boolean(),
+  consentedAt: zod.string().nullable().describe("ISO-8601 instant"),
+  optedOutAt: zod.string().nullable().describe("ISO-8601 instant"),
+  consentText: zod.string().describe("The exact sentence the member agrees to"),
+  consentTextVersion: zod.string(),
+});
+
+/**
+ * @summary (AI-4b) Opt out of recap texts and turn the recap off.
+ */
+export const UnsubscribeRecapResponse = zod.object({
+  enabled: zod.boolean(),
+  sendTimeLocal: zod.string().describe("HH:MM, 24-hour, in `timezone`"),
+  timezone: zod.string().describe("IANA zone"),
+  phoneLast4: zod.string().nullable(),
+  verified: zod.boolean(),
+  pausedUntil: zod.string().nullable().describe("ISO-8601 instant"),
+  skipWeekends: zod.boolean(),
+  extraAlerts: zod.boolean(),
+  consentedAt: zod.string().nullable().describe("ISO-8601 instant"),
+  optedOutAt: zod.string().nullable().describe("ISO-8601 instant"),
+  consentText: zod.string().describe("The exact sentence the member agrees to"),
+  consentTextVersion: zod.string(),
+});
+
+/**
+ * @summary (AI-4b) The caller's most recent text deliveries (newest first, at most 30).
+ */
+export const listRecapDeliveriesQueryLimitMax = 30;
+
+export const ListRecapDeliveriesQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listRecapDeliveriesQueryLimitMax)
+    .optional(),
+});
+
+export const ListRecapDeliveriesResponseItem = zod.object({
+  id: zod.string(),
+  kind: zod.enum(["scheduled", "test", "verification", "alert", "reply"]),
+  forDate: zod.string().nullable(),
+  status: zod.enum(["queued", "sent", "delivered", "undelivered", "failed"]),
+  createdAt: zod.string(),
+});
+export const ListRecapDeliveriesResponse = zod.array(
+  ListRecapDeliveriesResponseItem,
+);
+
+/**
  * @summary Dashboard summary
  */
 export const GetDashboardResponse = zod.object({

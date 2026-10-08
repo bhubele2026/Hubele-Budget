@@ -64,6 +64,124 @@ export interface HealthStatus {
   sms: HealthSms;
 }
 
+export interface RecapError {
+  error: string;
+  code?: string;
+}
+
+export interface RecapSettings {
+  enabled: boolean;
+  /** HH:MM, 24-hour, in `timezone` */
+  sendTimeLocal: string;
+  /** IANA zone */
+  timezone: string;
+  /** @nullable */
+  phoneLast4: string | null;
+  verified: boolean;
+  /**
+   * ISO-8601 instant
+   * @nullable
+   */
+  pausedUntil: string | null;
+  skipWeekends: boolean;
+  extraAlerts: boolean;
+  /**
+   * ISO-8601 instant
+   * @nullable
+   */
+  consentedAt: string | null;
+  /**
+   * ISO-8601 instant
+   * @nullable
+   */
+  optedOutAt: string | null;
+  /** The exact sentence the member agrees to */
+  consentText: string;
+  consentTextVersion: string;
+}
+
+export interface RecapSettingsInput {
+  enabled?: boolean;
+  sendTimeLocal?: string;
+  timezone?: string;
+  skipWeekends?: boolean;
+  extraAlerts?: boolean;
+}
+
+export interface RecapVerifyStartInput {
+  /** A US mobile number; any common format is normalised to E.164 */
+  phoneE164: string;
+  /** Must be true */
+  consent: boolean;
+}
+
+export interface RecapVerifyStartResult {
+  sent: boolean;
+  expiresAt: string;
+  /** Present only outside production when no real provider is configured. */
+  devCode?: string;
+}
+
+export interface RecapVerifyConfirmInput {
+  code: string;
+}
+
+export type RecapTestSendResultStatus =
+  (typeof RecapTestSendResultStatus)[keyof typeof RecapTestSendResultStatus];
+
+export const RecapTestSendResultStatus = {
+  queued: "queued",
+  sent: "sent",
+  delivered: "delivered",
+  undelivered: "undelivered",
+  failed: "failed",
+} as const;
+
+export interface RecapTestSendResult {
+  status: RecapTestSendResultStatus;
+  /** @nullable */
+  deliveryId: string | null;
+}
+
+export interface RecapPauseInput {
+  /**
+   * ISO-8601 instant
+   * @nullable
+   */
+  until: string | null;
+}
+
+export type RecapDeliveryItemKind =
+  (typeof RecapDeliveryItemKind)[keyof typeof RecapDeliveryItemKind];
+
+export const RecapDeliveryItemKind = {
+  scheduled: "scheduled",
+  test: "test",
+  verification: "verification",
+  alert: "alert",
+  reply: "reply",
+} as const;
+
+export type RecapDeliveryItemStatus =
+  (typeof RecapDeliveryItemStatus)[keyof typeof RecapDeliveryItemStatus];
+
+export const RecapDeliveryItemStatus = {
+  queued: "queued",
+  sent: "sent",
+  delivered: "delivered",
+  undelivered: "undelivered",
+  failed: "failed",
+} as const;
+
+export interface RecapDeliveryItem {
+  id: string;
+  kind: RecapDeliveryItemKind;
+  /** @nullable */
+  forDate: string | null;
+  status: RecapDeliveryItemStatus;
+  createdAt: string;
+}
+
 export interface OpsJobQueueCount {
   queue: string;
   state: string;
@@ -3987,6 +4105,14 @@ export interface DeleteMerchantAliasResult {
   signature: string;
   deleted: boolean;
 }
+
+export type ListRecapDeliveriesParams = {
+  /**
+   * @minimum 1
+   * @maximum 30
+   */
+  limit?: number;
+};
 
 export type ListTransactionsParams = {
   from?: string;

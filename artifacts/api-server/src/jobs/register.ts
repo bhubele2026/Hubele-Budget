@@ -4,6 +4,7 @@ import {
   PRUNE_SYNC_ATTEMPTS_TZ,
   handlePruneSyncAttempts,
 } from "./handlers/maintenance";
+import { handleSmsInbound } from "./handlers/smsInbound";
 import { ALL_QUEUES, QUEUES, dlqName, queueOptions } from "./queues";
 
 // (AI-0) Create every queue (dead-letter queue first — a queue's deadLetter
@@ -25,4 +26,7 @@ export async function registerJobs(boss: PgBoss): Promise<void> {
   await boss.schedule(QUEUES.maintenancePruneSyncAttempts, PRUNE_SYNC_ATTEMPTS_CRON, null, {
     tz: PRUNE_SYNC_ATTEMPTS_TZ,
   });
+
+  // (AI-4b) Inbound texts that are not STOP / START / HELP.
+  await boss.work(QUEUES.smsInbound, handleSmsInbound);
 }
