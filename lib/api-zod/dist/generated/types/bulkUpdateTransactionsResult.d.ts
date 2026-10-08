@@ -22,5 +22,9 @@ export interface BulkUpdateTransactionsResult {
   month queries so per-line actuals refresh.
    */
     affectedMonths: string[];
+    /** (PR-A2) The `user` decisions written when the patch set or cleared
+  categories, one per updated row. Empty otherwise.
+   */
+    decisionIds?: string[];
 }
 //# sourceMappingURL=bulkUpdateTransactionsResult.d.ts.map

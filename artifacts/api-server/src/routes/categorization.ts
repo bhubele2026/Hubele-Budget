@@ -6,6 +6,7 @@ import {
   CorrectCategorizationDecisionParams,
   DeleteTransactionSplitsParams,
   GetTransactionSplitsParams,
+  ListCategoryDecisionsQueryParams,
   ListCategorizationReviewQueryParams,
   ReplaceTransactionSplitsBody,
   ReplaceTransactionSplitsParams,
@@ -18,6 +19,7 @@ import { isAiEnabled } from "../ai/client";
 import { enqueueCategorize, openQueueTxnIds } from "../jobs/handlers/categorize";
 import { runCategorizationBatch } from "../lib/categorizer";
 import { listReviewQueue, resolveDecision, undoDecision } from "../lib/categorizer/review";
+import { listDecisionHistory } from "../lib/categorizer/userDecisions";
 import { deleteSplits, getSplits, replaceSplits } from "../lib/categorizer/splits";
 
 const router: IRouter = Router();
@@ -118,6 +120,21 @@ router.post(
     res.status(out.status).json(out.body);
   },
 );
+
+// (PR-A2) How one charge was filed: its decisions, newest first, at most 20.
+router.get("/category-decisions", requireAuth, async (req, res): Promise<void> => {
+  const q = ListCategoryDecisionsQueryParams.safeParse(req.query);
+  if (!q.success) {
+    res.status(400).json({ error: q.error.message });
+    return;
+  }
+  const out = await listDecisionHistory(req.householdId!, q.data.transactionId);
+  if (!out) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.json(out);
+});
 
 router.post("/category-decisions/:id/undo", requireAuth, async (req, res): Promise<void> => {
   const params = UndoCategoryDecisionParams.safeParse(req.params);

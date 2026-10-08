@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentRunList, AllowancePlan, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, ApplyRetroactivelyResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentRunsParams, ListCategorizationReviewParams, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewQueue, ReviewResolution, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentRunList, AllowancePlan, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, CategorizationRunResult, Category, CategoryDecision, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CorrectDecisionInput, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DebtPlan, DebtPlanReconcileResult, DebtPlanSnapshotResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentRunsParams, ListCategorizationReviewParams, ListCategoryDecisionsParams, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecapDeliveryItem, RecapError, RecapGenerateNowInput, RecapGenerateNowResult, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReplaceTransactionSplitsInput, ReviewQueue, ReviewResolution, RunCategorizationInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SnapshotDebtPlanParams, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, TransactionSplits, UncategorizeByIdsInput, UncategorizeByIdsResult, UndoDecisionResult, UpdateLearnedRuleInput, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -3400,6 +3400,33 @@ export declare const useCorrectCategorizationDecision: <TError = ErrorType<void>
     data: BodyType<CorrectDecisionInput>;
 }, TContext>;
 /**
+ * @summary (PR-A2) How one charge was filed: its decisions, newest first, at most
+20. A charge outside the household answers 404.
+
+ */
+export declare const getListCategoryDecisionsUrl: (params: ListCategoryDecisionsParams) => string;
+export declare const listCategoryDecisions: (params: ListCategoryDecisionsParams, options?: RequestInit) => Promise<CategoryDecision[]>;
+export declare const getListCategoryDecisionsQueryKey: (params?: ListCategoryDecisionsParams) => readonly ["/api/category-decisions", ...ListCategoryDecisionsParams[]];
+export declare const getListCategoryDecisionsQueryOptions: <TData = Awaited<ReturnType<typeof listCategoryDecisions>>, TError = ErrorType<void>>(params: ListCategoryDecisionsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listCategoryDecisions>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listCategoryDecisions>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListCategoryDecisionsQueryResult = NonNullable<Awaited<ReturnType<typeof listCategoryDecisions>>>;
+export type ListCategoryDecisionsQueryError = ErrorType<void>;
+/**
+ * @summary (PR-A2) How one charge was filed: its decisions, newest first, at most
+20. A charge outside the household answers 404.
+
+ */
+export declare function useListCategoryDecisions<TData = Awaited<ReturnType<typeof listCategoryDecisions>>, TError = ErrorType<void>>(params: ListCategoryDecisionsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listCategoryDecisions>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
  * @summary Restore the decision's previous category, clear provisional, stamp
 undone_at and disable the memory it created.
 
@@ -3500,32 +3527,44 @@ export declare const useDeleteLearnedRule: <TError = ErrorType<void>, TContext =
 /**
  * @summary Explicit request: file every unlocked row of this merchant (within the
 rule's scope) into its category. Each write is a `user` decision.
+(PR-A2) With `dryRun=true` nothing is written: the answer is how many
+rows would move and up to five of them. The server also reads
+`{ "dryRun": true }` in the JSON body; the typed client sends the query
+parameter, which keeps existing callers of the mutation unchanged.
 
  */
-export declare const getApplyLearnedRuleRetroactivelyUrl: (id: string) => string;
-export declare const applyLearnedRuleRetroactively: (id: string, options?: RequestInit) => Promise<ApplyRetroactivelyResult>;
+export declare const getApplyLearnedRuleRetroactivelyUrl: (id: string, params?: ApplyLearnedRuleRetroactivelyParams) => string;
+export declare const applyLearnedRuleRetroactively: (id: string, params?: ApplyLearnedRuleRetroactivelyParams, options?: RequestInit) => Promise<ApplyRetroactivelyResult>;
 export declare const getApplyLearnedRuleRetroactivelyMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>, TError, {
         id: string;
+        params?: ApplyLearnedRuleRetroactivelyParams;
     }, TContext>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationOptions<Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>, TError, {
     id: string;
+    params?: ApplyLearnedRuleRetroactivelyParams;
 }, TContext>;
 export type ApplyLearnedRuleRetroactivelyMutationResult = NonNullable<Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>>;
 export type ApplyLearnedRuleRetroactivelyMutationError = ErrorType<void>;
 /**
  * @summary Explicit request: file every unlocked row of this merchant (within the
 rule's scope) into its category. Each write is a `user` decision.
+(PR-A2) With `dryRun=true` nothing is written: the answer is how many
+rows would move and up to five of them. The server also reads
+`{ "dryRun": true }` in the JSON body; the typed client sends the query
+parameter, which keeps existing callers of the mutation unchanged.
 
  */
 export declare const useApplyLearnedRuleRetroactively: <TError = ErrorType<void>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>, TError, {
         id: string;
+        params?: ApplyLearnedRuleRetroactivelyParams;
     }, TContext>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof applyLearnedRuleRetroactively>>, TError, {
     id: string;
+    params?: ApplyLearnedRuleRetroactivelyParams;
 }, TContext>;
 export declare const getGetTransactionSplitsUrl: (id: string) => string;
 export declare const getTransactionSplits: (id: string, options?: RequestInit) => Promise<TransactionSplits>;

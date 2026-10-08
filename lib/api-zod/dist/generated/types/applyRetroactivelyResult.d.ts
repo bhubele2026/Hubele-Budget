@@ -5,7 +5,18 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { RetroactiveSampleRow } from "./retroactiveSampleRow";
 export interface ApplyRetroactivelyResult {
+    /** Rows written. Always 0 on a dry run. */
     updated: number;
+    /** Present and true on a dry run. */
+    dryRun?: boolean;
+    /** Dry run only. Rows the real run would move. */
+    count?: number;
+    /**
+     * Dry run only. Up to five of those rows, newest first.
+     * @maxItems 5
+     */
+    sample?: RetroactiveSampleRow[];
 }
 //# sourceMappingURL=applyRetroactivelyResult.d.ts.map

@@ -23,4 +23,8 @@ updated rows. Clients invalidate the corresponding budget
 month queries so per-line actuals refresh.
  */
   affectedMonths: string[];
+  /** (PR-A2) The `user` decisions written when the patch set or cleared
+categories, one per updated row. Empty otherwise.
+ */
+  decisionIds?: string[];
 }

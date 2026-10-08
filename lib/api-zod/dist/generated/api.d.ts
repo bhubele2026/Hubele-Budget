@@ -1707,6 +1707,8 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
             categoryId: string | null;
         }[];
     }>, zod.ZodNull]>>;
+    decisionId: zod.ZodOptional<zod.ZodString>;
+    learnedRuleId: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     repointedRules: {
         ruleId: string;
@@ -1743,6 +1745,8 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
             categoryId: string | null;
         }[];
     } | null | undefined;
+    decisionId?: string | undefined;
+    learnedRuleId?: string | undefined;
 }, {
     repointedRules: {
         ruleId: string;
@@ -1779,6 +1783,8 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
             categoryId: string | null;
         }[];
     } | null | undefined;
+    decisionId?: string | undefined;
+    learnedRuleId?: string | undefined;
 }>>;
 export declare const DeleteTransactionParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -2209,6 +2215,7 @@ export declare const BulkUpdateTransactionsResponse: zod.ZodObject<{
         error?: string | null | undefined;
     }>, "many">;
     affectedMonths: zod.ZodArray<zod.ZodString, "many">;
+    decisionIds: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
 }, "strip", zod.ZodTypeAny, {
     updated: number;
     affectedMonths: string[];
@@ -2217,6 +2224,7 @@ export declare const BulkUpdateTransactionsResponse: zod.ZodObject<{
         ok: boolean;
         error?: string | null | undefined;
     }[];
+    decisionIds?: string[] | undefined;
 }, {
     updated: number;
     affectedMonths: string[];
@@ -2225,6 +2233,7 @@ export declare const BulkUpdateTransactionsResponse: zod.ZodObject<{
         ok: boolean;
         error?: string | null | undefined;
     }[];
+    decisionIds?: string[] | undefined;
 }>;
 /**
  * @summary (#762 — Phase B) Promote up to 200 transactions into the Review
@@ -2479,6 +2488,8 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
     }>, zod.ZodObject<{
+        splitCount: zod.ZodNumber;
+        categoryProvisional: zod.ZodBoolean;
         runningBalance: zod.ZodNullable<zod.ZodString>;
         balanceAmount: zod.ZodNullable<zod.ZodString>;
         countsInBalance: zod.ZodBoolean;
@@ -2488,6 +2499,8 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         afterToday: zod.ZodBoolean;
         stalePending: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
+        splitCount: number;
+        categoryProvisional: boolean;
         runningBalance: string | null;
         balanceAmount: string | null;
         countsInBalance: boolean;
@@ -2497,6 +2510,8 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         afterToday: boolean;
         stalePending: boolean;
     }, {
+        splitCount: number;
+        categoryProvisional: boolean;
         runningBalance: string | null;
         balanceAmount: string | null;
         countsInBalance: boolean;
@@ -2610,6 +2625,8 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
     } & {
+        splitCount: number;
+        categoryProvisional: boolean;
         runningBalance: string | null;
         balanceAmount: string | null;
         countsInBalance: boolean;
@@ -2684,6 +2701,8 @@ export declare const GetTransactionsLedgerResponse: zod.ZodObject<{
         paymentState?: "claimed" | "confirmed" | null | undefined;
         confirmedByTxnId?: string | null | undefined;
     } & {
+        splitCount: number;
+        categoryProvisional: boolean;
         runningBalance: string | null;
         balanceAmount: string | null;
         countsInBalance: boolean;
@@ -14280,9 +14299,9 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         description: string;
         amount: string;
         account: string | null;
+        decisionId: string;
         transactionId: string;
         confidence: number;
-        decisionId: string;
         currentCategoryId: string | null;
         suggestedCategoryId: string | null;
         band: "queue" | "provisional";
@@ -14299,9 +14318,9 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         description: string;
         amount: string;
         account: string | null;
+        decisionId: string;
         transactionId: string;
         confidence: number;
-        decisionId: string;
         currentCategoryId: string | null;
         suggestedCategoryId: string | null;
         band: "queue" | "provisional";
@@ -14322,9 +14341,9 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         description: string;
         amount: string;
         account: string | null;
+        decisionId: string;
         transactionId: string;
         confidence: number;
-        decisionId: string;
         currentCategoryId: string | null;
         suggestedCategoryId: string | null;
         band: "queue" | "provisional";
@@ -14344,9 +14363,9 @@ export declare const ListCategorizationReviewResponse: zod.ZodObject<{
         description: string;
         amount: string;
         account: string | null;
+        decisionId: string;
         transactionId: string;
         confidence: number;
-        decisionId: string;
         currentCategoryId: string | null;
         suggestedCategoryId: string | null;
         band: "queue" | "provisional";
@@ -14424,8 +14443,8 @@ export declare const AcceptCategorizationDecisionResponse: zod.ZodObject<{
             categoryId: string | null;
         }[];
     } | null;
-    transactionId: string;
     decisionId: string;
+    transactionId: string;
     resolution: "skipped" | "accepted" | "corrected";
     userDecisionId: string | null;
 }, {
@@ -14440,8 +14459,8 @@ export declare const AcceptCategorizationDecisionResponse: zod.ZodObject<{
             categoryId: string | null;
         }[];
     } | null;
-    transactionId: string;
     decisionId: string;
+    transactionId: string;
     resolution: "skipped" | "accepted" | "corrected";
     userDecisionId: string | null;
 }>;
@@ -14511,8 +14530,8 @@ export declare const SkipCategorizationDecisionResponse: zod.ZodObject<{
             categoryId: string | null;
         }[];
     } | null;
-    transactionId: string;
     decisionId: string;
+    transactionId: string;
     resolution: "skipped" | "accepted" | "corrected";
     userDecisionId: string | null;
 }, {
@@ -14527,8 +14546,8 @@ export declare const SkipCategorizationDecisionResponse: zod.ZodObject<{
             categoryId: string | null;
         }[];
     } | null;
-    transactionId: string;
     decisionId: string;
+    transactionId: string;
     resolution: "skipped" | "accepted" | "corrected";
     userDecisionId: string | null;
 }>;
@@ -14610,8 +14629,8 @@ export declare const CorrectCategorizationDecisionResponse: zod.ZodObject<{
             categoryId: string | null;
         }[];
     } | null;
-    transactionId: string;
     decisionId: string;
+    transactionId: string;
     resolution: "skipped" | "accepted" | "corrected";
     userDecisionId: string | null;
 }, {
@@ -14626,11 +14645,97 @@ export declare const CorrectCategorizationDecisionResponse: zod.ZodObject<{
             categoryId: string | null;
         }[];
     } | null;
-    transactionId: string;
     decisionId: string;
+    transactionId: string;
     resolution: "skipped" | "accepted" | "corrected";
     userDecisionId: string | null;
 }>;
+/**
+ * @summary (PR-A2) How one charge was filed: its decisions, newest first, at most
+20. A charge outside the household answers 404.
+
+ */
+export declare const ListCategoryDecisionsQueryParams: zod.ZodObject<{
+    transactionId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    transactionId: string;
+}, {
+    transactionId: string;
+}>;
+export declare const ListCategoryDecisionsResponseItem: zod.ZodObject<{
+    id: zod.ZodString;
+    transactionId: zod.ZodString;
+    source: zod.ZodString;
+    categoryId: zod.ZodNullable<zod.ZodString>;
+    previousCategoryId: zod.ZodNullable<zod.ZodString>;
+    confidence: zod.ZodNumber;
+    band: zod.ZodEnum<["auto", "provisional", "queue"]>;
+    explanation: zod.ZodString;
+    resolution: zod.ZodNullable<zod.ZodString>;
+    undoneAt: zod.ZodNullable<zod.ZodDate>;
+    createdAt: zod.ZodDate;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    createdAt: Date;
+    source: string;
+    categoryId: string | null;
+    previousCategoryId: string | null;
+    transactionId: string;
+    confidence: number;
+    undoneAt: Date | null;
+    band: "queue" | "provisional" | "auto";
+    explanation: string;
+    resolution: string | null;
+}, {
+    id: string;
+    createdAt: Date;
+    source: string;
+    categoryId: string | null;
+    previousCategoryId: string | null;
+    transactionId: string;
+    confidence: number;
+    undoneAt: Date | null;
+    band: "queue" | "provisional" | "auto";
+    explanation: string;
+    resolution: string | null;
+}>;
+export declare const ListCategoryDecisionsResponse: zod.ZodArray<zod.ZodObject<{
+    id: zod.ZodString;
+    transactionId: zod.ZodString;
+    source: zod.ZodString;
+    categoryId: zod.ZodNullable<zod.ZodString>;
+    previousCategoryId: zod.ZodNullable<zod.ZodString>;
+    confidence: zod.ZodNumber;
+    band: zod.ZodEnum<["auto", "provisional", "queue"]>;
+    explanation: zod.ZodString;
+    resolution: zod.ZodNullable<zod.ZodString>;
+    undoneAt: zod.ZodNullable<zod.ZodDate>;
+    createdAt: zod.ZodDate;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    createdAt: Date;
+    source: string;
+    categoryId: string | null;
+    previousCategoryId: string | null;
+    transactionId: string;
+    confidence: number;
+    undoneAt: Date | null;
+    band: "queue" | "provisional" | "auto";
+    explanation: string;
+    resolution: string | null;
+}, {
+    id: string;
+    createdAt: Date;
+    source: string;
+    categoryId: string | null;
+    previousCategoryId: string | null;
+    transactionId: string;
+    confidence: number;
+    undoneAt: Date | null;
+    band: "queue" | "provisional" | "auto";
+    explanation: string;
+    resolution: string | null;
+}>, "many">;
 /**
  * @summary Restore the decision's previous category, clear provisional, stamp
 undone_at and disable the memory it created.
@@ -14649,12 +14754,12 @@ export declare const UndoCategoryDecisionResponse: zod.ZodObject<{
     categoryId: zod.ZodNullable<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     categoryId: string | null;
-    transactionId: string;
     decisionId: string;
+    transactionId: string;
 }, {
     categoryId: string | null;
-    transactionId: string;
     decisionId: string;
+    transactionId: string;
 }>;
 /**
  * @summary Merchant memory, with its evidence counts.
@@ -14809,6 +14914,10 @@ export declare const DeleteLearnedRuleParams: zod.ZodObject<{
 /**
  * @summary Explicit request: file every unlocked row of this merchant (within the
 rule's scope) into its category. Each write is a `user` decision.
+(PR-A2) With `dryRun=true` nothing is written: the answer is how many
+rows would move and up to five of them. The server also reads
+`{ "dryRun": true }` in the JSON body; the typed client sends the query
+parameter, which keeps existing callers of the mutation unchanged.
 
  */
 export declare const ApplyLearnedRuleRetroactivelyParams: zod.ZodObject<{
@@ -14818,12 +14927,54 @@ export declare const ApplyLearnedRuleRetroactivelyParams: zod.ZodObject<{
 }, {
     id: string;
 }>;
+export declare const ApplyLearnedRuleRetroactivelyQueryParams: zod.ZodObject<{
+    dryRun: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    dryRun?: boolean | undefined;
+}, {
+    dryRun?: boolean | undefined;
+}>;
+export declare const applyLearnedRuleRetroactivelyResponseSampleMax = 5;
 export declare const ApplyLearnedRuleRetroactivelyResponse: zod.ZodObject<{
     updated: zod.ZodNumber;
+    dryRun: zod.ZodOptional<zod.ZodBoolean>;
+    count: zod.ZodOptional<zod.ZodNumber>;
+    sample: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        transactionId: zod.ZodString;
+        description: zod.ZodString;
+        occurredOn: zod.ZodDate;
+        amount: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        transactionId: string;
+    }, {
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        transactionId: string;
+    }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     updated: number;
+    count?: number | undefined;
+    sample?: {
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        transactionId: string;
+    }[] | undefined;
+    dryRun?: boolean | undefined;
 }, {
     updated: number;
+    count?: number | undefined;
+    sample?: {
+        occurredOn: Date;
+        description: string;
+        amount: string;
+        transactionId: string;
+    }[] | undefined;
+    dryRun?: boolean | undefined;
 }>;
 export declare const GetTransactionSplitsParams: zod.ZodObject<{
     id: zod.ZodString;

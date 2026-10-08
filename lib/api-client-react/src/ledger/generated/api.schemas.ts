@@ -1243,6 +1243,12 @@ with it. Null on every other row.
 }
 
 export type LedgerRow = Transaction & {
+  /** (PR-A2) How many parts the charge is split into; 0 when it is not split. */
+  splitCount: number;
+  /** (PR-A2) The category was set by the automatic categorizer with
+middling confidence and awaits a person's yes. A hand pick clears it.
+ */
+  categoryProvisional: boolean;
   /**
    * (PR13) The account balance straight after this row, on the
 register of all the account's rows. Null without a bank
@@ -1771,6 +1777,17 @@ transactions too" prompt.
 merchant it would also fit. Reported, never applied.
  */
   retroactiveCandidates?: RetroactiveCandidates | null;
+  /** (PR-A2) The `user` decision written for this hand filing, for
+POST /category-decisions/{id}/undo. Absent when the body named
+no `categoryId`.
+ */
+  decisionId?: string;
+  /** (PR-A2) The learned rule (merchant memory) this choice created,
+re-pointed or confirmed, for POST /learned-rules/{id}/apply-retroactively.
+Absent when no category was set, or the category teaches nothing
+(Uncategorized, Transfer, Ignore, or a clear).
+ */
+  learnedRuleId?: string;
 };
 
 export type CreateTransactionResponse = Transaction & {
@@ -1966,6 +1983,10 @@ updated rows. Clients invalidate the corresponding budget
 month queries so per-line actuals refresh.
  */
   affectedMonths: string[];
+  /** (PR-A2) The `user` decisions written when the patch set or cleared
+categories, one per updated row. Empty otherwise.
+ */
+  decisionIds?: string[];
 }
 
 export interface SendTransactionsToReviewInput {
@@ -5041,8 +5062,56 @@ export interface UpdateLearnedRuleInput {
   disabled?: boolean;
 }
 
+export interface RetroactiveSampleRow {
+  transactionId: string;
+  description: string;
+  occurredOn: string;
+  amount: string;
+}
+
 export interface ApplyRetroactivelyResult {
+  /** Rows written. Always 0 on a dry run. */
   updated: number;
+  /** Present and true on a dry run. */
+  dryRun?: boolean;
+  /** Dry run only. Rows the real run would move. */
+  count?: number;
+  /**
+   * Dry run only. Up to five of those rows, newest first.
+   * @maxItems 5
+   */
+  sample?: RetroactiveSampleRow[];
+}
+
+export type CategoryDecisionBand =
+  (typeof CategoryDecisionBand)[keyof typeof CategoryDecisionBand];
+
+export const CategoryDecisionBand = {
+  auto: "auto",
+  provisional: "provisional",
+  queue: "queue",
+} as const;
+
+export interface CategoryDecision {
+  id: string;
+  transactionId: string;
+  /** locked, rule, memory, recurring, inherited, heuristic, model, user or refund. */
+  source: string;
+  /** @nullable */
+  categoryId: string | null;
+  /** @nullable */
+  previousCategoryId: string | null;
+  confidence: number;
+  band: CategoryDecisionBand;
+  explanation: string;
+  /**
+   * accepted, corrected, skipped or null while open.
+   * @nullable
+   */
+  resolution: string | null;
+  /** @nullable */
+  undoneAt: string | null;
+  createdAt: string;
 }
 
 export interface TransactionSplitInput {

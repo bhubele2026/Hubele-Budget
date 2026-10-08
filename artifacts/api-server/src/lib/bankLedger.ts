@@ -6,6 +6,7 @@ import {
   merchantAliasesTable,
   plaidAccountsTable,
   plaidItemsTable,
+  transactionSplitsTable,
   transactionsTable,
 } from "@workspace/db";
 import {
@@ -882,7 +883,7 @@ async function loadAnnotatedRows(
 ): Promise<Map<string, Record<string, unknown>>> {
   const out = new Map<string, Record<string, unknown>>();
   if (ids.length === 0) return out;
-  const [rows, userRules, aliasRows] = await Promise.all([
+  const [rows, userRules, aliasRows, splitRows] = await Promise.all([
     db
       .select()
       .from(transactionsTable)
@@ -892,8 +893,15 @@ async function loadAnnotatedRows(
       .select({ signature: merchantAliasesTable.signature, alias: merchantAliasesTable.alias })
       .from(merchantAliasesTable)
       .where(eq(merchantAliasesTable.householdId, householdId)),
+    // (PR-A2) One grouped read for the page, never one per row.
+    db
+      .select({ transactionId: transactionSplitsTable.transactionId, n: sql<number>`count(*)::int` })
+      .from(transactionSplitsTable)
+      .where(and(eq(transactionSplitsTable.householdId, householdId), inArray(transactionSplitsTable.transactionId, ids)))
+      .groupBy(transactionSplitsTable.transactionId),
   ]);
   const aliasBySignature = new Map(aliasRows.map((a) => [a.signature, a.alias]));
+  const splitCountById = new Map(splitRows.map((s) => [s.transactionId, Number(s.n)]));
   for (const r of rows) {
     const sig = merchantSignature(r.description);
     const alias = sig ? aliasBySignature.get(sig) : undefined;
@@ -902,6 +910,7 @@ async function loadAnnotatedRows(
       matchedRuleId: findMatchedRuleId(r.description, r.categoryId, userRules),
       merchantSignature: sig,
       displayName: alias ?? cleanMerchant(r.description),
+      splitCount: splitCountById.get(r.id) ?? 0,
     });
   }
   return out;
