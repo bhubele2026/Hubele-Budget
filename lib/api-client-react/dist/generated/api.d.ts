@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AllowancePlan, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentRunList, AllowancePlan, AllowancePlanUpdate, AllowancePlans, AmexAnchor, AmexAnchorInput, AmexWeeklyPayoff, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BadgeCount, BankBalanceExplain, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetAmexWeeklyPayoffParams, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListAgentActionsParams, ListAgentFindingsParams, ListAgentRunsParams, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, Spine, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateRecurringItemResponse, UpdateTransactionResponse, VersionInfo, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -2749,6 +2749,173 @@ export declare const useUpdateAllowancePlan: <TError = ErrorType<void>, TContext
 }) => UseMutationResult<Awaited<ReturnType<typeof updateAllowancePlan>>, TError, {
     id: string;
     data: BodyType<AllowancePlanUpdate>;
+}, TContext>;
+/**
+ * (AI-3) Findings are written by deterministic detectors over the money position, the bills, the budget and the recent rows — no model call. The payload carries ids (refs) and numbers (figures), never a merchant name. `open` = not resolved and not dismissed.
+ * @summary What the proactive monitor noticed (open by default), newest first
+ */
+export declare const getListAgentFindingsUrl: (params?: ListAgentFindingsParams) => string;
+export declare const listAgentFindings: (params?: ListAgentFindingsParams, options?: RequestInit) => Promise<AgentFindingList>;
+export declare const getListAgentFindingsQueryKey: (params?: ListAgentFindingsParams) => readonly ["/api/agent/findings", ...ListAgentFindingsParams[]];
+export declare const getListAgentFindingsQueryOptions: <TData = Awaited<ReturnType<typeof listAgentFindings>>, TError = ErrorType<unknown>>(params?: ListAgentFindingsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAgentFindings>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listAgentFindings>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListAgentFindingsQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentFindings>>>;
+export type ListAgentFindingsQueryError = ErrorType<unknown>;
+/**
+ * @summary What the proactive monitor noticed (open by default), newest first
+ */
+export declare function useListAgentFindings<TData = Awaited<ReturnType<typeof listAgentFindings>>, TError = ErrorType<unknown>>(params?: ListAgentFindingsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAgentFindings>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary Dismiss a finding (it stays in the ledger, out of the open list)
+ */
+export declare const getDismissAgentFindingUrl: (id: string) => string;
+export declare const dismissAgentFinding: (id: string, options?: RequestInit) => Promise<AgentFinding>;
+export declare const getDismissAgentFindingMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof dismissAgentFinding>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof dismissAgentFinding>>, TError, {
+    id: string;
+}, TContext>;
+export type DismissAgentFindingMutationResult = NonNullable<Awaited<ReturnType<typeof dismissAgentFinding>>>;
+export type DismissAgentFindingMutationError = ErrorType<void>;
+/**
+ * @summary Dismiss a finding (it stays in the ledger, out of the open list)
+ */
+export declare const useDismissAgentFinding: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof dismissAgentFinding>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof dismissAgentFinding>>, TError, {
+    id: string;
+}, TContext>;
+/**
+ * @summary Mark a finding resolved (it will not re-fire for 7 days unless it gets more severe)
+ */
+export declare const getResolveAgentFindingUrl: (id: string) => string;
+export declare const resolveAgentFinding: (id: string, options?: RequestInit) => Promise<AgentFinding>;
+export declare const getResolveAgentFindingMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof resolveAgentFinding>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof resolveAgentFinding>>, TError, {
+    id: string;
+}, TContext>;
+export type ResolveAgentFindingMutationResult = NonNullable<Awaited<ReturnType<typeof resolveAgentFinding>>>;
+export type ResolveAgentFindingMutationError = ErrorType<void>;
+/**
+ * @summary Mark a finding resolved (it will not re-fire for 7 days unless it gets more severe)
+ */
+export declare const useResolveAgentFinding: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof resolveAgentFinding>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof resolveAgentFinding>>, TError, {
+    id: string;
+}, TContext>;
+/**
+ * @summary Run the monitor for this household now (owner only)
+ */
+export declare const getRunAgentMonitorUrl: () => string;
+export declare const runAgentMonitor: (options?: RequestInit) => Promise<AgentMonitorRunResult>;
+export declare const getRunAgentMonitorMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof runAgentMonitor>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof runAgentMonitor>>, TError, void, TContext>;
+export type RunAgentMonitorMutationResult = NonNullable<Awaited<ReturnType<typeof runAgentMonitor>>>;
+export type RunAgentMonitorMutationError = ErrorType<void>;
+/**
+ * @summary Run the monitor for this household now (owner only)
+ */
+export declare const useRunAgentMonitor: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof runAgentMonitor>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof runAgentMonitor>>, TError, void, TContext>;
+/**
+ * @summary The agent's recent runs, newest first
+ */
+export declare const getListAgentRunsUrl: (params?: ListAgentRunsParams) => string;
+export declare const listAgentRuns: (params?: ListAgentRunsParams, options?: RequestInit) => Promise<AgentRunList>;
+export declare const getListAgentRunsQueryKey: (params?: ListAgentRunsParams) => readonly ["/api/agent/runs", ...ListAgentRunsParams[]];
+export declare const getListAgentRunsQueryOptions: <TData = Awaited<ReturnType<typeof listAgentRuns>>, TError = ErrorType<unknown>>(params?: ListAgentRunsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAgentRuns>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listAgentRuns>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListAgentRunsQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentRuns>>>;
+export type ListAgentRunsQueryError = ErrorType<unknown>;
+/**
+ * @summary The agent's recent runs, newest first
+ */
+export declare function useListAgentRuns<TData = Awaited<ReturnType<typeof listAgentRuns>>, TError = ErrorType<unknown>>(params?: ListAgentRunsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAgentRuns>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary The Activity trail — what the agent did, newest first
+ */
+export declare const getListAgentActionsUrl: (params?: ListAgentActionsParams) => string;
+export declare const listAgentActions: (params?: ListAgentActionsParams, options?: RequestInit) => Promise<AgentActionList>;
+export declare const getListAgentActionsQueryKey: (params?: ListAgentActionsParams) => readonly ["/api/agent/actions", ...ListAgentActionsParams[]];
+export declare const getListAgentActionsQueryOptions: <TData = Awaited<ReturnType<typeof listAgentActions>>, TError = ErrorType<unknown>>(params?: ListAgentActionsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAgentActions>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listAgentActions>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListAgentActionsQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentActions>>>;
+export type ListAgentActionsQueryError = ErrorType<unknown>;
+/**
+ * @summary The Activity trail — what the agent did, newest first
+ */
+export declare function useListAgentActions<TData = Awaited<ReturnType<typeof listAgentActions>>, TError = ErrorType<unknown>>(params?: ListAgentActionsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listAgentActions>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * Only reversible action types can be undone; today none are (the first, set_category, arrives with the categorizer).
+ * @summary Undo a reversible agent action
+ */
+export declare const getUndoAgentActionUrl: (id: string) => string;
+export declare const undoAgentAction: (id: string, options?: RequestInit) => Promise<unknown>;
+export declare const getUndoAgentActionMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof undoAgentAction>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof undoAgentAction>>, TError, {
+    id: string;
+}, TContext>;
+export type UndoAgentActionMutationResult = NonNullable<Awaited<ReturnType<typeof undoAgentAction>>>;
+export type UndoAgentActionMutationError = ErrorType<void>;
+/**
+ * @summary Undo a reversible agent action
+ */
+export declare const useUndoAgentAction: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof undoAgentAction>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof undoAgentAction>>, TError, {
+    id: string;
 }, TContext>;
 export {};
 //# sourceMappingURL=api.d.ts.map

@@ -17,6 +17,11 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AgentActionList,
+  AgentFinding,
+  AgentFindingList,
+  AgentMonitorRunResult,
+  AgentRunList,
   AllowancePlan,
   AllowancePlanUpdate,
   AllowancePlans,
@@ -88,6 +93,9 @@ import type {
   ImportSummary,
   ImportWorkbookBody,
   Invitation,
+  ListAgentActionsParams,
+  ListAgentFindingsParams,
+  ListAgentRunsParams,
   ListDashboardBudgetsParams,
   ListPlaidLiabilityAccountsParams,
   ListTransactionsParams,
@@ -9641,4 +9649,627 @@ export const useUpdateAllowancePlan = <
   TContext
 > => {
   return useMutation(getUpdateAllowancePlanMutationOptions(options));
+};
+
+/**
+ * (AI-3) Findings are written by deterministic detectors over the money position, the bills, the budget and the recent rows — no model call. The payload carries ids (refs) and numbers (figures), never a merchant name. `open` = not resolved and not dismissed.
+ * @summary What the proactive monitor noticed (open by default), newest first
+ */
+export const getListAgentFindingsUrl = (params?: ListAgentFindingsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/agent/findings?${stringifiedParams}`
+    : `/api/agent/findings`;
+};
+
+export const listAgentFindings = async (
+  params?: ListAgentFindingsParams,
+  options?: RequestInit,
+): Promise<AgentFindingList> => {
+  return customFetch<AgentFindingList>(getListAgentFindingsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAgentFindingsQueryKey = (
+  params?: ListAgentFindingsParams,
+) => {
+  return [`/api/agent/findings`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAgentFindingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAgentFindings>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAgentFindingsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAgentFindings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAgentFindingsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAgentFindings>>
+  > = ({ signal }) => listAgentFindings(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAgentFindings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAgentFindingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAgentFindings>>
+>;
+export type ListAgentFindingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary What the proactive monitor noticed (open by default), newest first
+ */
+
+export function useListAgentFindings<
+  TData = Awaited<ReturnType<typeof listAgentFindings>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAgentFindingsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAgentFindings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAgentFindingsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Dismiss a finding (it stays in the ledger, out of the open list)
+ */
+export const getDismissAgentFindingUrl = (id: string) => {
+  return `/api/agent/findings/${id}/dismiss`;
+};
+
+export const dismissAgentFinding = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AgentFinding> => {
+  return customFetch<AgentFinding>(getDismissAgentFindingUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getDismissAgentFindingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dismissAgentFinding>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof dismissAgentFinding>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["dismissAgentFinding"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof dismissAgentFinding>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return dismissAgentFinding(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DismissAgentFindingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof dismissAgentFinding>>
+>;
+
+export type DismissAgentFindingMutationError = ErrorType<void>;
+
+/**
+ * @summary Dismiss a finding (it stays in the ledger, out of the open list)
+ */
+export const useDismissAgentFinding = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dismissAgentFinding>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof dismissAgentFinding>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDismissAgentFindingMutationOptions(options));
+};
+
+/**
+ * @summary Mark a finding resolved (it will not re-fire for 7 days unless it gets more severe)
+ */
+export const getResolveAgentFindingUrl = (id: string) => {
+  return `/api/agent/findings/${id}/resolve`;
+};
+
+export const resolveAgentFinding = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AgentFinding> => {
+  return customFetch<AgentFinding>(getResolveAgentFindingUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getResolveAgentFindingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resolveAgentFinding>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resolveAgentFinding>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["resolveAgentFinding"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resolveAgentFinding>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return resolveAgentFinding(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResolveAgentFindingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resolveAgentFinding>>
+>;
+
+export type ResolveAgentFindingMutationError = ErrorType<void>;
+
+/**
+ * @summary Mark a finding resolved (it will not re-fire for 7 days unless it gets more severe)
+ */
+export const useResolveAgentFinding = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resolveAgentFinding>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resolveAgentFinding>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getResolveAgentFindingMutationOptions(options));
+};
+
+/**
+ * @summary Run the monitor for this household now (owner only)
+ */
+export const getRunAgentMonitorUrl = () => {
+  return `/api/agent/monitor/run`;
+};
+
+export const runAgentMonitor = async (
+  options?: RequestInit,
+): Promise<AgentMonitorRunResult> => {
+  return customFetch<AgentMonitorRunResult>(getRunAgentMonitorUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRunAgentMonitorMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAgentMonitor>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runAgentMonitor>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["runAgentMonitor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runAgentMonitor>>,
+    void
+  > = () => {
+    return runAgentMonitor(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunAgentMonitorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runAgentMonitor>>
+>;
+
+export type RunAgentMonitorMutationError = ErrorType<void>;
+
+/**
+ * @summary Run the monitor for this household now (owner only)
+ */
+export const useRunAgentMonitor = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAgentMonitor>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runAgentMonitor>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRunAgentMonitorMutationOptions(options));
+};
+
+/**
+ * @summary The agent's recent runs, newest first
+ */
+export const getListAgentRunsUrl = (params?: ListAgentRunsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/agent/runs?${stringifiedParams}`
+    : `/api/agent/runs`;
+};
+
+export const listAgentRuns = async (
+  params?: ListAgentRunsParams,
+  options?: RequestInit,
+): Promise<AgentRunList> => {
+  return customFetch<AgentRunList>(getListAgentRunsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAgentRunsQueryKey = (params?: ListAgentRunsParams) => {
+  return [`/api/agent/runs`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAgentRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAgentRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAgentRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAgentRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAgentRunsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentRuns>>> = ({
+    signal,
+  }) => listAgentRuns(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAgentRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAgentRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAgentRuns>>
+>;
+export type ListAgentRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The agent's recent runs, newest first
+ */
+
+export function useListAgentRuns<
+  TData = Awaited<ReturnType<typeof listAgentRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAgentRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAgentRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAgentRunsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary The Activity trail — what the agent did, newest first
+ */
+export const getListAgentActionsUrl = (params?: ListAgentActionsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/agent/actions?${stringifiedParams}`
+    : `/api/agent/actions`;
+};
+
+export const listAgentActions = async (
+  params?: ListAgentActionsParams,
+  options?: RequestInit,
+): Promise<AgentActionList> => {
+  return customFetch<AgentActionList>(getListAgentActionsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAgentActionsQueryKey = (
+  params?: ListAgentActionsParams,
+) => {
+  return [`/api/agent/actions`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAgentActionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAgentActions>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAgentActionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAgentActions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAgentActionsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAgentActions>>
+  > = ({ signal }) => listAgentActions(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAgentActions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAgentActionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAgentActions>>
+>;
+export type ListAgentActionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The Activity trail — what the agent did, newest first
+ */
+
+export function useListAgentActions<
+  TData = Awaited<ReturnType<typeof listAgentActions>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAgentActionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAgentActions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAgentActionsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Only reversible action types can be undone; today none are (the first, set_category, arrives with the categorizer).
+ * @summary Undo a reversible agent action
+ */
+export const getUndoAgentActionUrl = (id: string) => {
+  return `/api/agent/actions/${id}/undo`;
+};
+
+export const undoAgentAction = async (
+  id: string,
+  options?: RequestInit,
+): Promise<unknown> => {
+  return customFetch<unknown>(getUndoAgentActionUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getUndoAgentActionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoAgentAction>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof undoAgentAction>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["undoAgentAction"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof undoAgentAction>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return undoAgentAction(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UndoAgentActionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof undoAgentAction>>
+>;
+
+export type UndoAgentActionMutationError = ErrorType<void>;
+
+/**
+ * @summary Undo a reversible agent action
+ */
+export const useUndoAgentAction = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoAgentAction>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof undoAgentAction>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getUndoAgentActionMutationOptions(options));
 };

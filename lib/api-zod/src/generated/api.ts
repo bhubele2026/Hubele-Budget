@@ -5710,3 +5710,215 @@ export const UpdateAllowancePlanResponse = zod.object({
     ),
   createdAt: zod.string(),
 });
+
+/**
+ * (AI-3) Findings are written by deterministic detectors over the money position, the bills, the budget and the recent rows — no model call. The payload carries ids (refs) and numbers (figures), never a merchant name. `open` = not resolved and not dismissed.
+ * @summary What the proactive monitor noticed (open by default), newest first
+ */
+export const listAgentFindingsQueryStatusDefault = `open`;
+export const listAgentFindingsQueryLimitDefault = 20;
+export const listAgentFindingsQueryLimitMax = 50;
+
+export const ListAgentFindingsQueryParams = zod.object({
+  status: zod
+    .enum(["open", "all"])
+    .default(listAgentFindingsQueryStatusDefault),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listAgentFindingsQueryLimitMax)
+    .default(listAgentFindingsQueryLimitDefault),
+});
+
+export const ListAgentFindingsResponse = zod.object({
+  findings: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum([
+        "bill_increase",
+        "category_acceleration",
+        "shortfall_before_income",
+        "duplicate_charge",
+        "goal_behind",
+        "limit_near",
+        "bank_stale",
+      ]),
+      severity: zod.enum(["info", "watch", "high"]),
+      confidence: zod.enum(["estimate", "confirmed"]),
+      payload: zod
+        .record(zod.string(), zod.unknown())
+        .describe(
+          "Ids (refs) and numbers (figures) only — never a merchant string.",
+        ),
+      firstSeen: zod.coerce.date(),
+      lastSeen: zod.coerce.date(),
+      resolvedAt: zod.coerce.date().nullable(),
+      dismissedAt: zod.coerce.date().nullable(),
+    }),
+  ),
+});
+
+/**
+ * @summary Dismiss a finding (it stays in the ledger, out of the open list)
+ */
+export const DismissAgentFindingParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const DismissAgentFindingResponse = zod.object({
+  id: zod.string(),
+  kind: zod.enum([
+    "bill_increase",
+    "category_acceleration",
+    "shortfall_before_income",
+    "duplicate_charge",
+    "goal_behind",
+    "limit_near",
+    "bank_stale",
+  ]),
+  severity: zod.enum(["info", "watch", "high"]),
+  confidence: zod.enum(["estimate", "confirmed"]),
+  payload: zod
+    .record(zod.string(), zod.unknown())
+    .describe(
+      "Ids (refs) and numbers (figures) only — never a merchant string.",
+    ),
+  firstSeen: zod.coerce.date(),
+  lastSeen: zod.coerce.date(),
+  resolvedAt: zod.coerce.date().nullable(),
+  dismissedAt: zod.coerce.date().nullable(),
+});
+
+/**
+ * @summary Mark a finding resolved (it will not re-fire for 7 days unless it gets more severe)
+ */
+export const ResolveAgentFindingParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ResolveAgentFindingResponse = zod.object({
+  id: zod.string(),
+  kind: zod.enum([
+    "bill_increase",
+    "category_acceleration",
+    "shortfall_before_income",
+    "duplicate_charge",
+    "goal_behind",
+    "limit_near",
+    "bank_stale",
+  ]),
+  severity: zod.enum(["info", "watch", "high"]),
+  confidence: zod.enum(["estimate", "confirmed"]),
+  payload: zod
+    .record(zod.string(), zod.unknown())
+    .describe(
+      "Ids (refs) and numbers (figures) only — never a merchant string.",
+    ),
+  firstSeen: zod.coerce.date(),
+  lastSeen: zod.coerce.date(),
+  resolvedAt: zod.coerce.date().nullable(),
+  dismissedAt: zod.coerce.date().nullable(),
+});
+
+/**
+ * @summary Run the monitor for this household now (owner only)
+ */
+export const RunAgentMonitorResponse = zod.object({
+  runId: zod.string(),
+  status: zod.enum(["succeeded"]),
+  detected: zod.number().describe("Findings the detectors produced this run"),
+  created: zod.number().describe("Findings new this run (created or re-fired)"),
+  autoResolved: zod
+    .number()
+    .describe("Open findings closed because their cause cleared"),
+  summary: zod.string(),
+});
+
+/**
+ * @summary The agent's recent runs, newest first
+ */
+export const listAgentRunsQueryLimitDefault = 20;
+export const listAgentRunsQueryLimitMax = 30;
+
+export const ListAgentRunsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listAgentRunsQueryLimitMax)
+    .default(listAgentRunsQueryLimitDefault),
+});
+
+export const ListAgentRunsResponse = zod.object({
+  runs: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum([
+        "chat",
+        "categorize",
+        "monitor",
+        "recap",
+        "receipt",
+        "sms_question",
+      ]),
+      trigger: zod.enum(["user", "txn_arrived", "schedule", "sms", "retry"]),
+      status: zod.enum([
+        "running",
+        "succeeded",
+        "failed",
+        "refused",
+        "budget_exceeded",
+      ]),
+      startedAt: zod.coerce.date(),
+      finishedAt: zod.coerce.date().nullable(),
+      summary: zod.string().nullable().describe("Counts and refs only"),
+      inputTokens: zod.number(),
+      outputTokens: zod.number(),
+      costUsd: zod.number().nullable(),
+    }),
+  ),
+});
+
+/**
+ * @summary The Activity trail — what the agent did, newest first
+ */
+export const listAgentActionsQueryLimitDefault = 30;
+export const listAgentActionsQueryLimitMax = 50;
+
+export const ListAgentActionsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listAgentActionsQueryLimitMax)
+    .default(listAgentActionsQueryLimitDefault),
+});
+
+export const ListAgentActionsResponse = zod.object({
+  actions: zod.array(
+    zod.object({
+      id: zod.string(),
+      runId: zod.string(),
+      type: zod.enum([
+        "set_category",
+        "remember",
+        "propose",
+        "wishlist",
+        "finding",
+        "recap",
+      ]),
+      targetKind: zod.string(),
+      targetId: zod.string().nullable(),
+      outcome: zod.enum(["applied", "proposed", "needs_attention"]),
+      reversible: zod.boolean(),
+      undoneAt: zod.coerce.date().nullable(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * Only reversible action types can be undone; today none are (the first, set_category, arrives with the categorizer).
+ * @summary Undo a reversible agent action
+ */
+export const UndoAgentActionParams = zod.object({
+  id: zod.coerce.string(),
+});

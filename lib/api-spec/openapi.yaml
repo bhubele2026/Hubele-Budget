@@ -27,6 +27,8 @@ tags:
   - name: spine
   - name: ops
     description: (AI-0) Owner-only operations views (job queues).
+  - name: agent
+    description: (AI-3) The agent's trail — what the proactive monitor noticed (findings), its runs, and the Activity list of what it did.
   - name: money
     description: (PR-B1) The money position (safe to spend until payday and this week) and the allowance plans behind its weekly cap.
 paths:
@@ -2206,6 +2208,135 @@ paths:
           description: No such plan in this household
         "409":
           description: Another plan for the same member and period already starts on that date
+
+  /agent/findings:
+    get:
+      operationId: listAgentFindings
+      tags: [agent]
+      summary: What the proactive monitor noticed (open by default), newest first
+      description: >-
+        (AI-3) Findings are written by deterministic detectors over the money
+        position, the bills, the budget and the recent rows — no model call. The
+        payload carries ids (refs) and numbers (figures), never a merchant name.
+        `open` = not resolved and not dismissed.
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [open, all], default: open }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentFindingList" }
+
+  /agent/findings/{id}/dismiss:
+    post:
+      operationId: dismissAgentFinding
+      tags: [agent]
+      summary: Dismiss a finding (it stays in the ledger, out of the open list)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentFinding" }
+        "404":
+          description: No such finding in this household
+
+  /agent/findings/{id}/resolve:
+    post:
+      operationId: resolveAgentFinding
+      tags: [agent]
+      summary: Mark a finding resolved (it will not re-fire for 7 days unless it gets more severe)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentFinding" }
+        "404":
+          description: No such finding in this household
+
+  /agent/monitor/run:
+    post:
+      operationId: runAgentMonitor
+      tags: [agent]
+      summary: Run the monitor for this household now (owner only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentMonitorRunResult" }
+        "403":
+          description: Only the household owner runs the monitor
+
+  /agent/runs:
+    get:
+      operationId: listAgentRuns
+      tags: [agent]
+      summary: The agent's recent runs, newest first
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 30, default: 20 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRunList" }
+
+  /agent/actions:
+    get:
+      operationId: listAgentActions
+      tags: [agent]
+      summary: The Activity trail — what the agent did, newest first
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 50, default: 30 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentActionList" }
+
+  /agent/actions/{id}/undo:
+    post:
+      operationId: undoAgentAction
+      tags: [agent]
+      summary: Undo a reversible agent action
+      description: >-
+        Only reversible action types can be undone; today none are (the first,
+        set_category, arrives with the categorizer).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "404":
+          description: No such action in this household
+        "409":
+          description: The action is not reversible, or was already undone
+        "501":
+          description: A reversible action type whose undo has not shipped yet
 
 components:
   schemas:
@@ -6236,3 +6367,93 @@ components:
           type: string
         deleted:
           type: boolean
+
+    AgentFinding:
+      type: object
+      additionalProperties: false
+      required: [id, kind, severity, confidence, payload, firstSeen, lastSeen, resolvedAt, dismissedAt]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [bill_increase, category_acceleration, shortfall_before_income, duplicate_charge, goal_behind, limit_near, bank_stale]
+        severity: { type: string, enum: [info, watch, high] }
+        confidence: { type: string, enum: [estimate, confirmed] }
+        payload:
+          type: object
+          additionalProperties: true
+          description: Ids (refs) and numbers (figures) only — never a merchant string.
+        firstSeen: { type: string, format: date-time }
+        lastSeen: { type: string, format: date-time }
+        resolvedAt: { type: ["string", "null"], format: date-time }
+        dismissedAt: { type: ["string", "null"], format: date-time }
+
+    AgentFindingList:
+      type: object
+      additionalProperties: false
+      required: [findings]
+      properties:
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/AgentFinding" }
+
+    AgentRun:
+      type: object
+      additionalProperties: false
+      required: [id, kind, trigger, status, startedAt, finishedAt, summary, inputTokens, outputTokens, costUsd]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [chat, categorize, monitor, recap, receipt, sms_question] }
+        trigger: { type: string, enum: [user, txn_arrived, schedule, sms, retry] }
+        status: { type: string, enum: [running, succeeded, failed, refused, budget_exceeded] }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: ["string", "null"], format: date-time }
+        summary: { type: ["string", "null"], description: Counts and refs only, at most 300 characters }
+        inputTokens: { type: integer }
+        outputTokens: { type: integer }
+        costUsd: { type: ["number", "null"] }
+
+    AgentRunList:
+      type: object
+      additionalProperties: false
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items: { $ref: "#/components/schemas/AgentRun" }
+
+    AgentAction:
+      type: object
+      additionalProperties: false
+      required: [id, runId, type, targetKind, targetId, outcome, reversible, undoneAt, createdAt]
+      properties:
+        id: { type: string }
+        runId: { type: string }
+        type: { type: string, enum: [set_category, remember, propose, wishlist, finding, recap] }
+        targetKind: { type: string }
+        targetId: { type: ["string", "null"] }
+        outcome: { type: string, enum: [applied, proposed, needs_attention] }
+        reversible: { type: boolean }
+        undoneAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    AgentActionList:
+      type: object
+      additionalProperties: false
+      required: [actions]
+      properties:
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/AgentAction" }
+
+    AgentMonitorRunResult:
+      type: object
+      additionalProperties: false
+      required: [runId, status, detected, created, autoResolved, summary]
+      properties:
+        runId: { type: string }
+        status: { type: string, enum: [succeeded] }
+        detected: { type: integer, description: Findings the detectors produced this run }
+        created: { type: integer, description: Findings new this run (created or re-fired) }
+        autoResolved: { type: integer, description: Open findings closed because their cause cleared }
+        summary: { type: string }

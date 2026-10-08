@@ -4289,6 +4289,174 @@ export interface DeleteMerchantAliasResult {
   deleted: boolean;
 }
 
+export type AgentFindingKind =
+  (typeof AgentFindingKind)[keyof typeof AgentFindingKind];
+
+export const AgentFindingKind = {
+  bill_increase: "bill_increase",
+  category_acceleration: "category_acceleration",
+  shortfall_before_income: "shortfall_before_income",
+  duplicate_charge: "duplicate_charge",
+  goal_behind: "goal_behind",
+  limit_near: "limit_near",
+  bank_stale: "bank_stale",
+} as const;
+
+export type AgentFindingSeverity =
+  (typeof AgentFindingSeverity)[keyof typeof AgentFindingSeverity];
+
+export const AgentFindingSeverity = {
+  info: "info",
+  watch: "watch",
+  high: "high",
+} as const;
+
+export type AgentFindingConfidence =
+  (typeof AgentFindingConfidence)[keyof typeof AgentFindingConfidence];
+
+export const AgentFindingConfidence = {
+  estimate: "estimate",
+  confirmed: "confirmed",
+} as const;
+
+/**
+ * Ids (refs) and numbers (figures) only — never a merchant string.
+ */
+export type AgentFindingPayload = { [key: string]: unknown };
+
+export interface AgentFinding {
+  id: string;
+  kind: AgentFindingKind;
+  severity: AgentFindingSeverity;
+  confidence: AgentFindingConfidence;
+  /** Ids (refs) and numbers (figures) only — never a merchant string. */
+  payload: AgentFindingPayload;
+  firstSeen: string;
+  lastSeen: string;
+  /** @nullable */
+  resolvedAt: string | null;
+  /** @nullable */
+  dismissedAt: string | null;
+}
+
+export interface AgentFindingList {
+  findings: AgentFinding[];
+}
+
+export type AgentRunKind = (typeof AgentRunKind)[keyof typeof AgentRunKind];
+
+export const AgentRunKind = {
+  chat: "chat",
+  categorize: "categorize",
+  monitor: "monitor",
+  recap: "recap",
+  receipt: "receipt",
+  sms_question: "sms_question",
+} as const;
+
+export type AgentRunTrigger =
+  (typeof AgentRunTrigger)[keyof typeof AgentRunTrigger];
+
+export const AgentRunTrigger = {
+  user: "user",
+  txn_arrived: "txn_arrived",
+  schedule: "schedule",
+  sms: "sms",
+  retry: "retry",
+} as const;
+
+export type AgentRunStatus =
+  (typeof AgentRunStatus)[keyof typeof AgentRunStatus];
+
+export const AgentRunStatus = {
+  running: "running",
+  succeeded: "succeeded",
+  failed: "failed",
+  refused: "refused",
+  budget_exceeded: "budget_exceeded",
+} as const;
+
+export interface AgentRun {
+  id: string;
+  kind: AgentRunKind;
+  trigger: AgentRunTrigger;
+  status: AgentRunStatus;
+  startedAt: string;
+  /** @nullable */
+  finishedAt: string | null;
+  /**
+   * Counts and refs only
+   * @nullable
+   */
+  summary: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  /** @nullable */
+  costUsd: number | null;
+}
+
+export interface AgentRunList {
+  runs: AgentRun[];
+}
+
+export type AgentActionType =
+  (typeof AgentActionType)[keyof typeof AgentActionType];
+
+export const AgentActionType = {
+  set_category: "set_category",
+  remember: "remember",
+  propose: "propose",
+  wishlist: "wishlist",
+  finding: "finding",
+  recap: "recap",
+} as const;
+
+export type AgentActionOutcome =
+  (typeof AgentActionOutcome)[keyof typeof AgentActionOutcome];
+
+export const AgentActionOutcome = {
+  applied: "applied",
+  proposed: "proposed",
+  needs_attention: "needs_attention",
+} as const;
+
+export interface AgentAction {
+  id: string;
+  runId: string;
+  type: AgentActionType;
+  targetKind: string;
+  /** @nullable */
+  targetId: string | null;
+  outcome: AgentActionOutcome;
+  reversible: boolean;
+  /** @nullable */
+  undoneAt: string | null;
+  createdAt: string;
+}
+
+export interface AgentActionList {
+  actions: AgentAction[];
+}
+
+export type AgentMonitorRunResultStatus =
+  (typeof AgentMonitorRunResultStatus)[keyof typeof AgentMonitorRunResultStatus];
+
+export const AgentMonitorRunResultStatus = {
+  succeeded: "succeeded",
+} as const;
+
+export interface AgentMonitorRunResult {
+  runId: string;
+  status: AgentMonitorRunResultStatus;
+  /** Findings the detectors produced this run */
+  detected: number;
+  /** Findings new this run (created or re-fired) */
+  created: number;
+  /** Open findings closed because their cause cleared */
+  autoResolved: number;
+  summary: string;
+}
+
 export type ListTransactionsParams = {
   from?: string;
   to?: string;
@@ -4434,4 +4602,37 @@ matched-resolution windowing.
 
 export type ImportWorkbookBody = {
   file: Blob;
+};
+
+export type ListAgentFindingsParams = {
+  status?: ListAgentFindingsStatus;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+};
+
+export type ListAgentFindingsStatus =
+  (typeof ListAgentFindingsStatus)[keyof typeof ListAgentFindingsStatus];
+
+export const ListAgentFindingsStatus = {
+  open: "open",
+  all: "all",
+} as const;
+
+export type ListAgentRunsParams = {
+  /**
+   * @minimum 1
+   * @maximum 30
+   */
+  limit?: number;
+};
+
+export type ListAgentActionsParams = {
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
 };

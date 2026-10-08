@@ -12480,4 +12480,339 @@ export declare const UpdateAllowancePlanResponse: zod.ZodObject<{
     effectiveFrom: string;
     derivation?: unknown;
 }>;
+/**
+ * (AI-3) Findings are written by deterministic detectors over the money position, the bills, the budget and the recent rows — no model call. The payload carries ids (refs) and numbers (figures), never a merchant name. `open` = not resolved and not dismissed.
+ * @summary What the proactive monitor noticed (open by default), newest first
+ */
+export declare const listAgentFindingsQueryStatusDefault = "open";
+export declare const listAgentFindingsQueryLimitDefault = 20;
+export declare const listAgentFindingsQueryLimitMax = 50;
+export declare const ListAgentFindingsQueryParams: zod.ZodObject<{
+    status: zod.ZodDefault<zod.ZodEnum<["open", "all"]>>;
+    limit: zod.ZodDefault<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    status: "open" | "all";
+    limit: number;
+}, {
+    status?: "open" | "all" | undefined;
+    limit?: number | undefined;
+}>;
+export declare const ListAgentFindingsResponse: zod.ZodObject<{
+    findings: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        kind: zod.ZodEnum<["bill_increase", "category_acceleration", "shortfall_before_income", "duplicate_charge", "goal_behind", "limit_near", "bank_stale"]>;
+        severity: zod.ZodEnum<["info", "watch", "high"]>;
+        confidence: zod.ZodEnum<["estimate", "confirmed"]>;
+        payload: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+        firstSeen: zod.ZodDate;
+        lastSeen: zod.ZodDate;
+        resolvedAt: zod.ZodNullable<zod.ZodDate>;
+        dismissedAt: zod.ZodNullable<zod.ZodDate>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        kind: "bill_increase" | "category_acceleration" | "shortfall_before_income" | "duplicate_charge" | "goal_behind" | "limit_near" | "bank_stale";
+        confidence: "estimate" | "confirmed";
+        severity: "high" | "watch" | "info";
+        payload: Record<string, unknown>;
+        firstSeen: Date;
+        lastSeen: Date;
+        resolvedAt: Date | null;
+        dismissedAt: Date | null;
+    }, {
+        id: string;
+        kind: "bill_increase" | "category_acceleration" | "shortfall_before_income" | "duplicate_charge" | "goal_behind" | "limit_near" | "bank_stale";
+        confidence: "estimate" | "confirmed";
+        severity: "high" | "watch" | "info";
+        payload: Record<string, unknown>;
+        firstSeen: Date;
+        lastSeen: Date;
+        resolvedAt: Date | null;
+        dismissedAt: Date | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    findings: {
+        id: string;
+        kind: "bill_increase" | "category_acceleration" | "shortfall_before_income" | "duplicate_charge" | "goal_behind" | "limit_near" | "bank_stale";
+        confidence: "estimate" | "confirmed";
+        severity: "high" | "watch" | "info";
+        payload: Record<string, unknown>;
+        firstSeen: Date;
+        lastSeen: Date;
+        resolvedAt: Date | null;
+        dismissedAt: Date | null;
+    }[];
+}, {
+    findings: {
+        id: string;
+        kind: "bill_increase" | "category_acceleration" | "shortfall_before_income" | "duplicate_charge" | "goal_behind" | "limit_near" | "bank_stale";
+        confidence: "estimate" | "confirmed";
+        severity: "high" | "watch" | "info";
+        payload: Record<string, unknown>;
+        firstSeen: Date;
+        lastSeen: Date;
+        resolvedAt: Date | null;
+        dismissedAt: Date | null;
+    }[];
+}>;
+/**
+ * @summary Dismiss a finding (it stays in the ledger, out of the open list)
+ */
+export declare const DismissAgentFindingParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const DismissAgentFindingResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    kind: zod.ZodEnum<["bill_increase", "category_acceleration", "shortfall_before_income", "duplicate_charge", "goal_behind", "limit_near", "bank_stale"]>;
+    severity: zod.ZodEnum<["info", "watch", "high"]>;
+    confidence: zod.ZodEnum<["estimate", "confirmed"]>;
+    payload: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+    firstSeen: zod.ZodDate;
+    lastSeen: zod.ZodDate;
+    resolvedAt: zod.ZodNullable<zod.ZodDate>;
+    dismissedAt: zod.ZodNullable<zod.ZodDate>;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    kind: "bill_increase" | "category_acceleration" | "shortfall_before_income" | "duplicate_charge" | "goal_behind" | "limit_near" | "bank_stale";
+    confidence: "estimate" | "confirmed";
+    severity: "high" | "watch" | "info";
+    payload: Record<string, unknown>;
+    firstSeen: Date;
+    lastSeen: Date;
+    resolvedAt: Date | null;
+    dismissedAt: Date | null;
+}, {
+    id: string;
+    kind: "bill_increase" | "category_acceleration" | "shortfall_before_income" | "duplicate_charge" | "goal_behind" | "limit_near" | "bank_stale";
+    confidence: "estimate" | "confirmed";
+    severity: "high" | "watch" | "info";
+    payload: Record<string, unknown>;
+    firstSeen: Date;
+    lastSeen: Date;
+    resolvedAt: Date | null;
+    dismissedAt: Date | null;
+}>;
+/**
+ * @summary Mark a finding resolved (it will not re-fire for 7 days unless it gets more severe)
+ */
+export declare const ResolveAgentFindingParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const ResolveAgentFindingResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    kind: zod.ZodEnum<["bill_increase", "category_acceleration", "shortfall_before_income", "duplicate_charge", "goal_behind", "limit_near", "bank_stale"]>;
+    severity: zod.ZodEnum<["info", "watch", "high"]>;
+    confidence: zod.ZodEnum<["estimate", "confirmed"]>;
+    payload: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+    firstSeen: zod.ZodDate;
+    lastSeen: zod.ZodDate;
+    resolvedAt: zod.ZodNullable<zod.ZodDate>;
+    dismissedAt: zod.ZodNullable<zod.ZodDate>;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    kind: "bill_increase" | "category_acceleration" | "shortfall_before_income" | "duplicate_charge" | "goal_behind" | "limit_near" | "bank_stale";
+    confidence: "estimate" | "confirmed";
+    severity: "high" | "watch" | "info";
+    payload: Record<string, unknown>;
+    firstSeen: Date;
+    lastSeen: Date;
+    resolvedAt: Date | null;
+    dismissedAt: Date | null;
+}, {
+    id: string;
+    kind: "bill_increase" | "category_acceleration" | "shortfall_before_income" | "duplicate_charge" | "goal_behind" | "limit_near" | "bank_stale";
+    confidence: "estimate" | "confirmed";
+    severity: "high" | "watch" | "info";
+    payload: Record<string, unknown>;
+    firstSeen: Date;
+    lastSeen: Date;
+    resolvedAt: Date | null;
+    dismissedAt: Date | null;
+}>;
+/**
+ * @summary Run the monitor for this household now (owner only)
+ */
+export declare const RunAgentMonitorResponse: zod.ZodObject<{
+    runId: zod.ZodString;
+    status: zod.ZodEnum<["succeeded"]>;
+    detected: zod.ZodNumber;
+    created: zod.ZodNumber;
+    autoResolved: zod.ZodNumber;
+    summary: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    status: "succeeded";
+    created: number;
+    summary: string;
+    runId: string;
+    detected: number;
+    autoResolved: number;
+}, {
+    status: "succeeded";
+    created: number;
+    summary: string;
+    runId: string;
+    detected: number;
+    autoResolved: number;
+}>;
+/**
+ * @summary The agent's recent runs, newest first
+ */
+export declare const listAgentRunsQueryLimitDefault = 20;
+export declare const listAgentRunsQueryLimitMax = 30;
+export declare const ListAgentRunsQueryParams: zod.ZodObject<{
+    limit: zod.ZodDefault<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    limit: number;
+}, {
+    limit?: number | undefined;
+}>;
+export declare const ListAgentRunsResponse: zod.ZodObject<{
+    runs: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        kind: zod.ZodEnum<["chat", "categorize", "monitor", "recap", "receipt", "sms_question"]>;
+        trigger: zod.ZodEnum<["user", "txn_arrived", "schedule", "sms", "retry"]>;
+        status: zod.ZodEnum<["running", "succeeded", "failed", "refused", "budget_exceeded"]>;
+        startedAt: zod.ZodDate;
+        finishedAt: zod.ZodNullable<zod.ZodDate>;
+        summary: zod.ZodNullable<zod.ZodString>;
+        inputTokens: zod.ZodNumber;
+        outputTokens: zod.ZodNumber;
+        costUsd: zod.ZodNullable<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
+        id: string;
+        kind: "chat" | "categorize" | "monitor" | "recap" | "receipt" | "sms_question";
+        summary: string | null;
+        trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
+        startedAt: Date;
+        finishedAt: Date | null;
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: number | null;
+    }, {
+        status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
+        id: string;
+        kind: "chat" | "categorize" | "monitor" | "recap" | "receipt" | "sms_question";
+        summary: string | null;
+        trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
+        startedAt: Date;
+        finishedAt: Date | null;
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: number | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    runs: {
+        status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
+        id: string;
+        kind: "chat" | "categorize" | "monitor" | "recap" | "receipt" | "sms_question";
+        summary: string | null;
+        trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
+        startedAt: Date;
+        finishedAt: Date | null;
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: number | null;
+    }[];
+}, {
+    runs: {
+        status: "failed" | "succeeded" | "running" | "refused" | "budget_exceeded";
+        id: string;
+        kind: "chat" | "categorize" | "monitor" | "recap" | "receipt" | "sms_question";
+        summary: string | null;
+        trigger: "sms" | "user" | "txn_arrived" | "schedule" | "retry";
+        startedAt: Date;
+        finishedAt: Date | null;
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: number | null;
+    }[];
+}>;
+/**
+ * @summary The Activity trail — what the agent did, newest first
+ */
+export declare const listAgentActionsQueryLimitDefault = 30;
+export declare const listAgentActionsQueryLimitMax = 50;
+export declare const ListAgentActionsQueryParams: zod.ZodObject<{
+    limit: zod.ZodDefault<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    limit: number;
+}, {
+    limit?: number | undefined;
+}>;
+export declare const ListAgentActionsResponse: zod.ZodObject<{
+    actions: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        runId: zod.ZodString;
+        type: zod.ZodEnum<["set_category", "remember", "propose", "wishlist", "finding", "recap"]>;
+        targetKind: zod.ZodString;
+        targetId: zod.ZodNullable<zod.ZodString>;
+        outcome: zod.ZodEnum<["applied", "proposed", "needs_attention"]>;
+        reversible: zod.ZodBoolean;
+        undoneAt: zod.ZodNullable<zod.ZodDate>;
+        createdAt: zod.ZodDate;
+    }, "strip", zod.ZodTypeAny, {
+        type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
+        id: string;
+        createdAt: Date;
+        runId: string;
+        targetKind: string;
+        targetId: string | null;
+        outcome: "applied" | "proposed" | "needs_attention";
+        reversible: boolean;
+        undoneAt: Date | null;
+    }, {
+        type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
+        id: string;
+        createdAt: Date;
+        runId: string;
+        targetKind: string;
+        targetId: string | null;
+        outcome: "applied" | "proposed" | "needs_attention";
+        reversible: boolean;
+        undoneAt: Date | null;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    actions: {
+        type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
+        id: string;
+        createdAt: Date;
+        runId: string;
+        targetKind: string;
+        targetId: string | null;
+        outcome: "applied" | "proposed" | "needs_attention";
+        reversible: boolean;
+        undoneAt: Date | null;
+    }[];
+}, {
+    actions: {
+        type: "recap" | "set_category" | "remember" | "propose" | "wishlist" | "finding";
+        id: string;
+        createdAt: Date;
+        runId: string;
+        targetKind: string;
+        targetId: string | null;
+        outcome: "applied" | "proposed" | "needs_attention";
+        reversible: boolean;
+        undoneAt: Date | null;
+    }[];
+}>;
+/**
+ * Only reversible action types can be undone; today none are (the first, set_category, arrives with the categorizer).
+ * @summary Undo a reversible agent action
+ */
+export declare const UndoAgentActionParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
 //# sourceMappingURL=api.d.ts.map

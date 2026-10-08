@@ -3796,6 +3796,142 @@ export interface DeleteMerchantAliasResult {
     signature: string;
     deleted: boolean;
 }
+export type AgentFindingKind = (typeof AgentFindingKind)[keyof typeof AgentFindingKind];
+export declare const AgentFindingKind: {
+    readonly bill_increase: "bill_increase";
+    readonly category_acceleration: "category_acceleration";
+    readonly shortfall_before_income: "shortfall_before_income";
+    readonly duplicate_charge: "duplicate_charge";
+    readonly goal_behind: "goal_behind";
+    readonly limit_near: "limit_near";
+    readonly bank_stale: "bank_stale";
+};
+export type AgentFindingSeverity = (typeof AgentFindingSeverity)[keyof typeof AgentFindingSeverity];
+export declare const AgentFindingSeverity: {
+    readonly info: "info";
+    readonly watch: "watch";
+    readonly high: "high";
+};
+export type AgentFindingConfidence = (typeof AgentFindingConfidence)[keyof typeof AgentFindingConfidence];
+export declare const AgentFindingConfidence: {
+    readonly estimate: "estimate";
+    readonly confirmed: "confirmed";
+};
+/**
+ * Ids (refs) and numbers (figures) only — never a merchant string.
+ */
+export type AgentFindingPayload = {
+    [key: string]: unknown;
+};
+export interface AgentFinding {
+    id: string;
+    kind: AgentFindingKind;
+    severity: AgentFindingSeverity;
+    confidence: AgentFindingConfidence;
+    /** Ids (refs) and numbers (figures) only — never a merchant string. */
+    payload: AgentFindingPayload;
+    firstSeen: string;
+    lastSeen: string;
+    /** @nullable */
+    resolvedAt: string | null;
+    /** @nullable */
+    dismissedAt: string | null;
+}
+export interface AgentFindingList {
+    findings: AgentFinding[];
+}
+export type AgentRunKind = (typeof AgentRunKind)[keyof typeof AgentRunKind];
+export declare const AgentRunKind: {
+    readonly chat: "chat";
+    readonly categorize: "categorize";
+    readonly monitor: "monitor";
+    readonly recap: "recap";
+    readonly receipt: "receipt";
+    readonly sms_question: "sms_question";
+};
+export type AgentRunTrigger = (typeof AgentRunTrigger)[keyof typeof AgentRunTrigger];
+export declare const AgentRunTrigger: {
+    readonly user: "user";
+    readonly txn_arrived: "txn_arrived";
+    readonly schedule: "schedule";
+    readonly sms: "sms";
+    readonly retry: "retry";
+};
+export type AgentRunStatus = (typeof AgentRunStatus)[keyof typeof AgentRunStatus];
+export declare const AgentRunStatus: {
+    readonly running: "running";
+    readonly succeeded: "succeeded";
+    readonly failed: "failed";
+    readonly refused: "refused";
+    readonly budget_exceeded: "budget_exceeded";
+};
+export interface AgentRun {
+    id: string;
+    kind: AgentRunKind;
+    trigger: AgentRunTrigger;
+    status: AgentRunStatus;
+    startedAt: string;
+    /** @nullable */
+    finishedAt: string | null;
+    /**
+     * Counts and refs only
+     * @nullable
+     */
+    summary: string | null;
+    inputTokens: number;
+    outputTokens: number;
+    /** @nullable */
+    costUsd: number | null;
+}
+export interface AgentRunList {
+    runs: AgentRun[];
+}
+export type AgentActionType = (typeof AgentActionType)[keyof typeof AgentActionType];
+export declare const AgentActionType: {
+    readonly set_category: "set_category";
+    readonly remember: "remember";
+    readonly propose: "propose";
+    readonly wishlist: "wishlist";
+    readonly finding: "finding";
+    readonly recap: "recap";
+};
+export type AgentActionOutcome = (typeof AgentActionOutcome)[keyof typeof AgentActionOutcome];
+export declare const AgentActionOutcome: {
+    readonly applied: "applied";
+    readonly proposed: "proposed";
+    readonly needs_attention: "needs_attention";
+};
+export interface AgentAction {
+    id: string;
+    runId: string;
+    type: AgentActionType;
+    targetKind: string;
+    /** @nullable */
+    targetId: string | null;
+    outcome: AgentActionOutcome;
+    reversible: boolean;
+    /** @nullable */
+    undoneAt: string | null;
+    createdAt: string;
+}
+export interface AgentActionList {
+    actions: AgentAction[];
+}
+export type AgentMonitorRunResultStatus = (typeof AgentMonitorRunResultStatus)[keyof typeof AgentMonitorRunResultStatus];
+export declare const AgentMonitorRunResultStatus: {
+    readonly succeeded: "succeeded";
+};
+export interface AgentMonitorRunResult {
+    runId: string;
+    status: AgentMonitorRunResultStatus;
+    /** Findings the detectors produced this run */
+    detected: number;
+    /** Findings new this run (created or re-fired) */
+    created: number;
+    /** Open findings closed because their cause cleared */
+    autoResolved: number;
+    summary: string;
+}
 export type GetTransactionsLedgerParams = {
     /**
    * `plaid_accounts.id` of the ledger account. Optional; defaults to
