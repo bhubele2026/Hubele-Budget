@@ -60,7 +60,6 @@ import { WeekView } from "./PlanWeek";
 import { BillsView, blankForm, payloadOf, validateForm } from "./PlanBills";
 import { DebtView, LOGGED_TOAST } from "./PlanDebt";
 import { CategoriesView, isEditableLine } from "./PlanCategories";
-import PlanWishlist from "./PlanWishlist";
 import type { BillsData, CategoriesData, DebtData, WeekData } from "./planData";
 
 const NOW = new Date("2026-10-07T15:00:00Z"); // Wednesday, 10:00 in Chicago
@@ -779,19 +778,12 @@ describe("Categories — the month's plan, line by line", () => {
 
 // ── WISH LIST ────────────────────────────────────────────────────────────────
 
-describe("Wish list — a placeholder", () => {
-  it("says it is coming and builds nothing", () => {
-    render(<PlanWishlist />);
-    expect(screen.getByTestId("wishlist-note").textContent).toBe("Wish list arrives with the next update.");
-    expect(screen.getByTestId("afford-note").textContent).toBe("Afford this arrives with the next update.");
-    expect(screen.queryByRole("textbox")).toBeNull();
-  });
-});
+// The wish list is a real page now: see screens/ask/askPages.test.tsx.
 
 // ── THE FRAME ────────────────────────────────────────────────────────────────
 
 describe("the section index", () => {
-  it("five links, the current page marked", () => {
+  it("six links, the current page marked", () => {
     renderUi(<WeekView data={week()} now={NOW} />);
     const nav = screen.getByRole("navigation", { name: "Plan sections" });
     expect(within(nav).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
@@ -800,6 +792,7 @@ describe("the section index", () => {
       ["Debt", "/plan/debt"],
       ["Categories", "/plan/categories"],
       ["Wish list", "/plan/wishlist"],
+      ["Proposals", "/plan/proposals"],
     ]);
     expect(within(nav).getByRole("link", { name: "The week" }).getAttribute("aria-current")).toBe("page");
   });

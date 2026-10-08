@@ -64,6 +64,39 @@ describe("Ledger — rows, days, paging", () => {
     expect(screen.queryByTestId("load-more")).toBeNull();
   });
 
+  it("?txn=<id> (a link from an Ask answer) opens that charge's details sheet", async () => {
+    window.history.replaceState(null, "", "/activity?txn=t2");
+    installApi([on("GET", "/api/transactions/ledger", ledgerPage(ROWS)), ...baseReads]);
+    renderActivity("ledger");
+    const sheet = await screen.findByTestId("row-sheet");
+    expect(within(screen.getByRole("dialog")).getByText("Coffee Cart")).toBeTruthy();
+    expect(sheet.textContent).toContain("Split");
+  });
+
+  it("?txn=<id> pages on to find a charge that is not on the first page", async () => {
+    window.history.replaceState(null, "", "/activity?txn=t4");
+    const api = installApi([
+      on("GET", "/api/transactions/ledger", (c) =>
+        c.query.get("cursor") === "c2"
+          ? ledgerPage([ledgerRow("t4", "2026-10-05", "Hardware Depot", "-64.20", "c1")], null, 4)
+          : ledgerPage(ROWS, "c2", 4),
+      ),
+      ...baseReads,
+    ]);
+    renderActivity("ledger");
+    expect(await screen.findByTestId("row-sheet")).toBeTruthy();
+    expect(within(screen.getByRole("dialog")).getByText("Hardware Depot")).toBeTruthy();
+    expect(api.find("GET", /ledger$/).every((c) => c.query.get("limit") === "50")).toBe(true);
+  });
+
+  it("?txn=<id> for a charge that is in neither month says so", async () => {
+    window.history.replaceState(null, "", "/activity?txn=gone");
+    installApi([on("GET", "/api/transactions/ledger", ledgerPage(ROWS)), ...baseReads]);
+    renderActivity("ledger");
+    expect((await screen.findByTestId("txn-missing")).textContent).toContain("isn't in this month or last month's ledger");
+    expect(screen.queryByTestId("row-sheet")).toBeNull();
+  });
+
   it("this week / last month / needs filing / account all go to the server as filters", async () => {
     const api = installApi([on("GET", "/api/transactions/ledger", ledgerPage(ROWS)), ...baseReads]);
     renderActivity("ledger");

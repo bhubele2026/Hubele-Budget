@@ -87,6 +87,9 @@ export function AccountMenu() {
           <Link href="/recap" role="menuitem" className={ITEM} onMouseEnter={() => prefetchRoute("/recap")} data-testid="menu-recap">
             Recap
           </Link>
+          <Link href="/household/ai" role="menuitem" className={ITEM} onMouseEnter={() => prefetchRoute("/household/ai")} data-testid="menu-ai">
+            AI cost
+          </Link>
           <button
             type="button"
             role="menuitem"

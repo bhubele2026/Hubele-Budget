@@ -11,12 +11,31 @@ import { longDate } from "@/lib/dates";
 import { toAmount } from "@/lib/money";
 import { attentionItems, billsDueSoon, upcomingBills } from "./attention";
 import { Hero } from "./Hero";
-import { ActivitySection, ComingUp, DebtSection, HandledSection, OneThing } from "./sections";
+import { OneThing } from "./sections";
 import { WeekSection } from "./WeekSection";
 
 // The What's-new sheet carries Radix Dialog and the preferences client. It is
 // fetched only for a household that has history, and never on the open path.
 const WhatsNew = lazy(() => import("./WhatsNew"));
+
+// (S5) The two lowest sections load after first paint, in one chunk, to keep the
+// open path inside its cap. Each waits behind a skeleton of its own size.
+const lower = () => import("./lowerSections");
+// Start the download now, in parallel with the spine request, so the sections are there
+// by the time the first figures land. A failure is retried by the lazy() itself.
+if (typeof window !== "undefined") lower().catch(() => {});
+const ActivitySection = lazy(() => lower().then((m) => ({ default: m.ActivitySection })));
+const HandledSection = lazy(() => lower().then((m) => ({ default: m.HandledSection })));
+const ComingUp = lazy(() => lower().then((m) => ({ default: m.ComingUp })));
+const DebtSection = lazy(() => lower().then((m) => ({ default: m.DebtSection })));
+
+function SectionSkeleton({ label, figure = false }: { label: string; figure?: boolean }) {
+  return (
+    <Section label={label} data-testid="section-skeleton">
+      {figure ? <SkeletonFigure size="md" /> : <SkeletonLine className="w-56" />}
+    </Section>
+  );
+}
 
 /**
  * ⭐ TODAY — the morning paper. Top to bottom: the date and how fresh the bank
@@ -177,13 +196,23 @@ export function TodayView({
 
       <OneThing items={items} loading={s == null && spine.state !== "failed"} />
 
-      <ActivitySection ledger={ledger} categories={categories} today={today} />
+      <Suspense fallback={<SectionSkeleton label="Yesterday and today" />}>
+        <ActivitySection ledger={ledger} categories={categories} today={today} />
+      </Suspense>
 
-      <HandledSection trail={trail} now={now} />
+      {(trail.data?.actions.length ?? 0) > 0 && (
+        <Suspense fallback={<SectionSkeleton label="Handled" />}>
+          <HandledSection trail={trail} now={now} />
+        </Suspense>
+      )}
 
-      <ComingUp spine={s} upcoming={upcoming} bills={bills} today={today} />
+      <Suspense fallback={<SectionSkeleton label="Coming up" />}>
+        <ComingUp spine={s} upcoming={upcoming} bills={bills} today={today} />
+      </Suspense>
 
-      <DebtSection spine={s} state={spine.state} />
+      <Suspense fallback={<SectionSkeleton label="Debt" figure />}>
+        <DebtSection spine={s} state={spine.state} />
+      </Suspense>
 
       <div
         className="flex flex-col gap-1 border-t border-rule pt-4 pb-4"

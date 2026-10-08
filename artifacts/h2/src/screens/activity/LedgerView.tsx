@@ -75,10 +75,16 @@ function SplitParts({ id, names }: { id: string; names: Map<string, string> }) {
 export function LedgerView({ now }: { now?: Date }) {
   const today = householdToday(now);
   const asked = useSearch();
+  // (S5) `?txn=<id>`: a link from an Ask answer. The ledger starts on this month, looks for
+  // that charge (paging, then last month) and opens its details sheet.
+  const txn = new URLSearchParams(asked).get("txn");
   const [filters, setFilters] = useState<LedgerFilters>(() => ({
     ...DEFAULT_FILTERS,
     unfiled: new URLSearchParams(asked).get("unfiled") === "1",
+    ...(txn ? { range: "month" as RangeKey } : {}),
   }));
+  const [txnOpened, setTxnOpened] = useState(false);
+  const [txnMissing, setTxnMissing] = useState(false);
   const [typed, setTyped] = useState("");
   const search = useDebounced(typed, 250);
   const ledger = useLedger(ledgerParams({ ...filters, search }, today));
@@ -104,6 +110,20 @@ export function LedgerView({ now }: { now?: Date }) {
     }
     return out;
   }, [rows]);
+
+  useEffect(() => {
+    if (!txn || txnOpened || txnMissing || ledger.state === "cold") return;
+    const row = ledger.rows.find((r) => r.id === txn);
+    if (row) {
+      setMenu(row);
+      setTxnOpened(true);
+    } else if (ledger.hasNextPage) {
+      if (!ledger.isFetchingNextPage) ledger.fetchNextPage();
+    } else if (!ledger.isFetching) {
+      if (filters.range === "month") setFilters((f) => ({ ...f, range: "last-month" }));
+      else setTxnMissing(true);
+    }
+  }, [txn, txnOpened, txnMissing, ledger, filters.range]);
 
   const set = (patch: Partial<LedgerFilters>) => setFilters((f) => ({ ...f, ...patch }));
   const accountLabel = (r: LedgerRowData): string | null => {
@@ -288,6 +308,11 @@ export function LedgerView({ now }: { now?: Date }) {
         </div>
       )}
 
+      {txnMissing && (
+        <div className="pt-4" data-testid="txn-missing">
+          <Note kind="empty">That charge isn't in this month or last month's ledger.</Note>
+        </div>
+      )}
       <CategoryPickerSheet
         open={picking != null}
         onOpenChange={(o) => !o && setPicking(null)}

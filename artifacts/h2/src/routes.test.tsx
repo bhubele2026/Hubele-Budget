@@ -58,6 +58,12 @@ vi.mock("./lib/routePrefetch", () => {
     importHouseholdMembers: page("household-members"),
     importRecap: page("recap"),
     importDesignRecap: page("design-recap"),
+    importVersionUpdatePrompt: () => Promise.resolve({ default: () => null }),
+    importAsk: page("ask"),
+    importAskMemory: page("ask-memory"),
+    importPlanProposals: page("plan-proposals"),
+    importHouseholdAi: page("household-ai"),
+    importDesignAsk: page("design-ask"),
     routeImporters: {},
     prefetchRoute: () => {},
   };
@@ -70,7 +76,6 @@ vi.mock("./screens/auth/Auth", () => ({
   SignInPage: () => <div data-testid="page-sign-in" />,
   SignUpPage: () => <div data-testid="page-sign-up" />,
 }));
-vi.mock("./shell/VersionUpdatePrompt", () => ({ VersionUpdatePrompt: () => null }));
 vi.mock("./data/spineRecovery", () => ({ askForSpineAgainIfFailed: () => () => {} }));
 
 import App from "./App";
@@ -106,6 +111,11 @@ const ROUTES: Row[] = [
   { from: "/household/members", lands: "/household/members", page: "household-members", shell: true },
   { from: "/recap", lands: "/recap", page: "recap", shell: true },
   { from: "/design/recap", lands: "/design/recap", page: "design-recap", shell: true },
+  { from: "/ask", lands: "/ask", page: "ask", shell: true },
+  { from: "/ask/memory", lands: "/ask/memory", page: "ask-memory", shell: true },
+  { from: "/plan/proposals", lands: "/plan/proposals", page: "plan-proposals", shell: true },
+  { from: "/household/ai", lands: "/household/ai", page: "household-ai", shell: true },
+  { from: "/design/ask", lands: "/design/ask", page: "design-ask", shell: true },
   { from: "/sign-in", lands: "/sign-in", page: "sign-in", shell: false },
   { from: "/sign-up", lands: "/sign-up", page: "sign-up", shell: false },
 ];
@@ -163,7 +173,7 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
 
   it("has a row for every path App.tsx declares, and no row for a path it does not", () => {
     const covered = new Set(ROUTES.map((r) => r.from));
-    expect(declared.length).toBeGreaterThanOrEqual(19);
+    expect(declared.length).toBeGreaterThanOrEqual(24);
     expect(declared.filter((p) => !covered.has(p))).toEqual([]);
     expect([...covered].filter((p) => !declared.includes(p))).toEqual([]);
   });
@@ -186,18 +196,23 @@ describe("App.tsx, this table and routePrefetch.ts move in lockstep", () => {
       "/activity",
       "/activity/review",
       "/activity/rules",
+      "/ask",
+      "/ask/memory",
       "/design",
       "/design/activity",
+      "/design/ask",
       "/design/plan",
       "/design/recap",
       "/design/today",
       "/household",
+      "/household/ai",
       "/household/members",
       "/plaid-oauth",
       "/plan",
       "/plan/bills",
       "/plan/categories",
       "/plan/debt",
+      "/plan/proposals",
       "/plan/wishlist",
       "/recap",
     ]);
