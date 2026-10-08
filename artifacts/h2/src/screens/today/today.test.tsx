@@ -305,6 +305,16 @@ describe("Today — the assumptions sheet", () => {
 });
 
 describe("Today — this week", () => {
+  it("the Afford button sits directly under This week, quiet and full width; the sheet is not mounted until it is pressed", async () => {
+    await renderToday();
+    const week = screen.getByTestId("section-week");
+    const button = screen.getByRole("button", { name: "Can we afford something?" });
+    expect(week.nextElementSibling).toBe(button);
+    expect(button.className).toContain("w-full");
+    expect(button.className).toContain("border-rule-strong");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("spent of the limit from the position; status word from withinPlan", async () => {
     await renderToday();
     const week = screen.getByTestId("section-week");

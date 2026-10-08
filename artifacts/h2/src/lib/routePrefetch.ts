@@ -14,6 +14,8 @@
 // (S5) Not a route: the "a new version is out" banner and its version check load after first paint,
 // so their hook and icon stay off the open path.
 export const importVersionUpdatePrompt = () => import("../shell/VersionUpdatePrompt").then((m) => ({ default: m.VersionUpdatePrompt }));
+// (S5b) Not a route: the Afford sheet loads on first press (warmed on hover or focus of its button).
+export const importAfford = () => import("../screens/afford/AffordSheet");
 export const importDesign = () => import("../screens/design/Design");
 export const importDesignToday = () => import("../screens/design/DesignToday");
 export const importDesignActivity = () => import("../screens/design/DesignActivity");

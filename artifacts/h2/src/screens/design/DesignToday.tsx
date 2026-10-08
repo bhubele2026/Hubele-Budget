@@ -1,4 +1,7 @@
+import { lazy, Suspense, useState } from "react";
+import { useSearch } from "wouter";
 import type {
+  AffordResult,
   AgentActionList,
   AllowancePlans,
   BillsSummary,
@@ -10,6 +13,7 @@ import type {
 import type { LedgerPage } from "@workspace/api-client-react/ledger";
 import type { Read, TodayData } from "@/data/todayData";
 import { Note } from "@/kit/Note";
+import { importAfford } from "@/lib/routePrefetch";
 import { TodayView } from "@/screens/today/Today";
 
 /**
@@ -158,13 +162,57 @@ const SAMPLE: TodayData = {
   unfiled: loaded({ rows: [], nextCursor: null, limit: 1, matchingCount: 2 } as unknown as LedgerPage),
 };
 
+const AffordSheet = lazy(importAfford);
+
+// The Afford sheet's open state on made-up figures: `?afford=fits|tight|dip|overdraw|later`
+// (any other value is "tight"). The worked $300-on-Saturday example from the PR-F1 note.
+const fig = (safe: string, week: string, payday: string, lowest: string) => ({
+  safeToSpendNow: safe, remainingWeek: week, availableUntilPayday: payday, lowest, lowestDate: "2026-10-13",
+  debtFreeEarliest: "2027-03", debtFreeLatest: "2027-06", totalInterestLow: "1800.00",
+});
+function affordSample(kind: string): AffordResult {
+  const base = {
+    amount: "300.00", dateISO: "2026-10-10",
+    baseline: fig("144.50", "144.50", "2124.50", "2624.50"),
+    proposed: fig("0.00", "-155.50", "2124.50", "2324.50"),
+    delta: { safeToSpendNow: "-144.50", remainingWeek: "-300.00", availableUntilPayday: "0.00", lowest: "-300.00", lowestDate: "2026-10-13", debtFreeEarliest: 0, debtFreeLatest: 0, totalInterestLow: "0.00" },
+    category: { categoryId: "c1", remainingBefore: "274.50", remainingAfter: "-25.50" },
+    debt: { affected: false, cut: "0.00", cutMonth: null, debtFreeMonthShift: 0, interestDelta: "0.00" },
+    verdict: "tight",
+    assumptions: ["Bank data from Oct 7.", "The purchase counts against this week's limit.", "Available credit is not counted."],
+  };
+  if (kind === "fits") return { ...base, amount: "40.00", proposed: fig("104.50", "104.50", "2084.50", "2584.50"), category: { categoryId: "c1", remainingBefore: "274.50", remainingAfter: "234.50" }, verdict: "fits" } as AffordResult;
+  if (kind === "dip") return { ...base, proposed: fig("0.00", "-155.50", "1824.50", "400.00"), verdict: "breaks_buffer" } as AffordResult;
+  if (kind === "overdraw") return { ...base, amount: "2800.00", proposed: fig("0.00", "-2655.50", "-675.50", "-175.50"), verdict: "breaks_zero" } as AffordResult;
+  if (kind === "later") {
+    return {
+      ...base,
+      proposed: { ...fig("0.00", "-155.50", "1824.50", "2324.50"), debtFreeEarliest: "2027-04", debtFreeLatest: "2027-07", totalInterestLow: "1830.00" },
+      debt: { affected: true, cut: "300.00", cutMonth: "2026-10", debtFreeMonthShift: 1, interestDelta: "30.00" },
+    } as AffordResult;
+  }
+  return base as AffordResult;
+}
+
 export default function DesignToday() {
+  const kind = new URLSearchParams(useSearch()).get("afford");
+  const [open, setOpen] = useState(kind != null);
   return (
     <div className="flex flex-col gap-6" data-testid="page-design-today">
       <Note kind="empty" data-testid="sample-note">
         Sample — every figure on this page is made up.
       </Note>
       <TodayView data={SAMPLE} now={NOW} live={false} />
+      {kind != null && (
+        <Suspense fallback={null}>
+        <AffordSheet
+          open={open}
+          onOpenChange={setOpen}
+          now={NOW}
+          sample={{ amount: affordSample(kind).amount, date: affordSample(kind).dateISO, categoryId: "c1", categoryName: "Dining", result: affordSample(kind) }}
+        />
+        </Suspense>
+      )}
     </div>
   );
 }

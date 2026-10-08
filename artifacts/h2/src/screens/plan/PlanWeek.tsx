@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useUpdateAllowancePlan, type AllowancePlan, type AllowancePlans } from "@workspace/api-client-react";
+import { AffordLauncher } from "@/screens/afford/AffordLauncher";
 import { Button } from "@/kit/Button";
 import { Figure } from "@/kit/Figure";
 import { FreshnessBadge } from "@/kit/FreshnessBadge";
@@ -251,6 +252,9 @@ export function WeekView({ data, now }: { data: WeekData; now?: Date }) {
         ) : (
           <Meter label="Spent so far" spent={spent} limit={limit} status={within ? STATUS[within] : "on"} words={words} data-testid="meter-week" />
         )}
+        <div className="mt-4">
+          <AffordLauncher variant="link" data-testid="afford-open-week" />
+        </div>
       </Section>
 
       <Section label="Where the suggestion comes from" data-testid="section-suggestion">
