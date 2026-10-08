@@ -70,6 +70,20 @@ export const CAT8: readonly string[] = [
 ];
 
 /**
+ * Account identity accents — the same hexes as the `--color-acct-*` tokens in
+ * `index.css`. Used for chart series and legends so a line is the colour of
+ * the chip that names it. Distinct from each other by construction (pinned by
+ * a test); `checking` is the brand navy on purpose.
+ */
+export const ACCOUNT_ACCENT = {
+  checking: "#19315b",
+  amex: "#0f766e",
+  card2: "#5b4bb3",
+  other: "#5d6674",
+} as const;
+export type AccountAccent = keyof typeof ACCOUNT_ACCENT;
+
+/**
  * Desaturated neutral grey for the "All others" rollup band.
  *
  * ⚠️ THIS VALUE IS LOAD-BEARING AND IS PINNED BY A TEST. It used to be

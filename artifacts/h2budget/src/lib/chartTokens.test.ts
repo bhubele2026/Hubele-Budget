@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  ACCOUNT_ACCENT,
   CAT8,
   CHART,
   NAVY_RAMP,
@@ -230,5 +231,14 @@ describe("CssBars geometry — value to width, sign to colour", () => {
     expect(barColorForSign(-12)).toBe(CHART.orangeDeep);
     expect(barColorForSign(0)).toBe(CHART.mist);
     expect(barColorForSign(Number.NaN)).toBe(CHART.mist);
+  });
+});
+
+describe("ACCOUNT_ACCENT — account identity colours", () => {
+  it("has four distinct hexes, none equal to the Other rollup grey", () => {
+    const hexes = Object.values(ACCOUNT_ACCENT);
+    expect(new Set(hexes).size).toBe(4);
+    expect(hexes).not.toContain(OTHER_GREY);
+    expect(ACCOUNT_ACCENT.checking).toBe(CHART.navy);
   });
 });

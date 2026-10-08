@@ -90,6 +90,9 @@ vi.mock("./lib/routePrefetch", () => {
     importAllowances: page("allowances"),
     importMappingRules: page("mapping-rules"),
     importSettings: page("settings"),
+    importNextDashboard: page("next-dashboard"),
+    importNextForecast: page("next-forecast"),
+    importNextAccounts: page("next-accounts"),
     prefetchRoute: () => {},
   };
 });
@@ -170,6 +173,12 @@ const OLD_ROUTES: Row[] = [
   { from: "/reports/behavior", lands: "/reports/behavior", page: "reports-behavior", area: "no area" },
   { from: "/mapping-rules", lands: "/mapping-rules", page: "mapping-rules", area: "no area" },
   { from: "/settings", lands: "/settings", page: "settings", area: "no area" },
+  // The /next preview pages: reachable by URL, outside every area (the ribbon
+  // is the five destinations) until the owner approves them.
+  { from: "/next/dashboard", lands: "/next/dashboard", page: "next-dashboard", area: "no area" },
+  { from: "/next/forecast", lands: "/next/forecast", page: "next-forecast", area: "no area" },
+  { from: "/next/accounts", lands: "/next/accounts", page: "next-accounts", area: "no area" },
+  { from: "/next/accounts/:plaidAccountId", lands: "/next/accounts/:plaidAccountId", page: "next-accounts", area: "no area" },
   { from: "/plaid-oauth", lands: "/plaid-oauth", page: "plaid-oauth", area: "no area" },
 ];
 

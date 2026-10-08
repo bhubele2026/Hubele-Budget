@@ -78,6 +78,25 @@
   --color-info: #19315b;
   --color-info-bg: #eef3fa;
 
+  /* ── ACCOUNT ACCENTS ─────────────────────────────────────────────────────
+     Identity for money: checking/Chase in navy, the Amex card in teal-green,
+     any other card in violet, everything else in steel grey. Used on chips,
+     panel edges, chart series and the forecast legend. Colour reinforces the
+     identity; a LABEL always says it too. `-bg` is the quiet tint behind a
+     chip. (Teal-green and violet are the only hues outside navy/orange/
+     platinum and they are reserved for account identity — never status.) */
+  --color-acct-checking: #19315b;
+  --color-acct-checking-bg: #e9eef7;
+  --color-acct-amex: #0f766e;
+  --color-acct-amex-bg: #e2f1ef;
+  --color-acct-card2: #5b4bb3;
+  --color-acct-card2-bg: #eeebf8;
+  --color-acct-other: #5d6674;
+  --color-acct-other-bg: #eef0f3;
+
+  /* The gap between panels on the 12-column grid. */
+  --grid-gap: 1rem;
+
   /* ── TYPE SCALE ──────────────────────────────────────────────────────────
      Six steps and no more. Ad-hoc font sizes are the single loudest
      "nobody designed this" signal on a screen, because nothing lines up and
@@ -411,6 +430,56 @@
 }
 
 @layer components {
+  /* ── PANELS + THE 12-COLUMN GRID ("H2 evolved") ──────────────────────────
+     .panel is a card with a head; .panel-accent-* adds a 4px identity edge.
+     .grid-12 is 12 columns from 1024px, 6 from 640px, 1 below; .span-N are
+     the responsive spans (see the media blocks). Motion uses the dials, so
+     reduced motion zeroes it with everything else. */
+  .panel {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-platinum-0);
+    border: 1px solid var(--color-brand-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-rest);
+  }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.625rem 1rem;
+    border-bottom: 1px solid var(--color-brand-line);
+  }
+  .panel-link {
+    transition: box-shadow calc(96ms * var(--anim-speed)) var(--ease-move);
+  }
+  .panel-link:hover { box-shadow: var(--shadow-lift); }
+  .panel-accent-checking { border-left: 4px solid var(--color-acct-checking); }
+  .panel-accent-amex { border-left: 4px solid var(--color-acct-amex); }
+  .panel-accent-card2 { border-left: 4px solid var(--color-acct-card2); }
+  .panel-accent-other { border-left: 4px solid var(--color-acct-other); }
+
+  .grid-12 {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--grid-gap, 1rem);
+  }
+  .grid-12 > * { min-width: 0; }
+  .span-3, .span-4, .span-6, .span-8, .span-12 { grid-column: 1 / -1; }
+  @media (min-width: 640px) {
+    .grid-12 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .span-3, .span-4 { grid-column: span 3 / span 3; }
+    .span-6, .span-8, .span-12 { grid-column: 1 / -1; }
+  }
+  @media (min-width: 1024px) {
+    .grid-12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+    .span-3 { grid-column: span 3 / span 3; }
+    .span-4 { grid-column: span 4 / span 4; }
+    .span-6 { grid-column: span 6 / span 6; }
+    .span-8 { grid-column: span 8 / span 8; }
+    .span-12 { grid-column: 1 / -1; }
+  }
+
   /* ── The platinum surface ───────────────────────────────────────────────
      A machined edge, not a drawn border. Three cheap layers do all the work:
      a barely perceptible vertical gradient so a card isn't a flat slab; a 1px
