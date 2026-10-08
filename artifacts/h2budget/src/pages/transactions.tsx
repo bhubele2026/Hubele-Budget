@@ -1230,7 +1230,7 @@ export default function TransactionsPage({
         data-testid={`badge-forecast-state-${tx.id}`}
       >
         <Link
-          href="/forecast#bucket"
+          href="/review"
           className={`chip ${state.tone} press inline-flex items-center gap-1 hover:bg-platinum-5`}
           title="Match this in the Forecast Review Bucket"
           data-testid={`link-forecast-state-${tx.id}`}
@@ -1299,11 +1299,16 @@ export default function TransactionsPage({
   const handleQuickCategorize = async (
     tx: Transaction,
     categoryId: string | null,
+    rememberPattern?: string | null,
   ) => {
     try {
       const updated = await updateTx.mutateAsync({
         id: tx.id,
-        data: { categoryId },
+        data: {
+          categoryId,
+          // (D5) The picker's "Remember" choice rides the same PATCH as Amex.
+          ...(rememberPattern ? { rememberPattern } : {}),
+        },
       });
       queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
       queryClient.invalidateQueries({
@@ -1320,8 +1325,12 @@ export default function TransactionsPage({
       // toast on click. Avoids the parent toast lingering after Undo
       // is consumed.
       const categorizedToast = toast({
-        title: "Categorized",
-        ...(ruleDescription ? { description: ruleDescription } : {}),
+        title: rememberPattern && !ruleDescription ? "Categorized & remembered" : "Categorized",
+        ...(ruleDescription
+          ? { description: ruleDescription }
+          : rememberPattern
+            ? { description: `Future "${rememberPattern}" will auto-categorize.` }
+            : {}),
       });
       const undoAction = buildRuleUndoAction(
         updated.ruleAction,
@@ -2537,7 +2546,7 @@ export default function TransactionsPage({
             "All reconciled" is a claim, and a null count cannot make it. */}
         {awaitingMatchCount != null && awaitingMatchCount > 0 ? (
           <Link
-            href="/forecast#bucket"
+            href="/review"
             data-testid="link-bucket-pending-count"
             className="chip warn press inline-flex items-center gap-1.5 hover:bg-platinum-5 hover:text-brand-navy"
             title="Open the Forecast Review Bucket to match these"
@@ -2777,7 +2786,9 @@ export default function TransactionsPage({
                       selected={selected.has(tx.id)}
                       onToggleSelect={() => toggleOne(tx.id)}
                       categories={categories ?? []}
-                      onCategoryChange={(id) => handleQuickCategorize(tx, id)}
+                      onCategoryChange={(id, remember) =>
+                        handleQuickCategorize(tx, id, remember)
+                      }
                       onBucketToggle={(b, next) =>
                         handleToggleBucket(tx, b, next)
                       }
@@ -2908,7 +2919,9 @@ export default function TransactionsPage({
                       selected={selected.has(tx.id)}
                       onToggleSelect={() => toggleOne(tx.id)}
                       categories={categories ?? []}
-                      onCategoryChange={(id) => handleQuickCategorize(tx, id)}
+                      onCategoryChange={(id, remember) =>
+                        handleQuickCategorize(tx, id, remember)
+                      }
                       onBucketToggle={(b, next) =>
                         handleToggleBucket(tx, b, next)
                       }

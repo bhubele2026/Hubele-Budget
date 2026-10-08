@@ -230,3 +230,46 @@ describe("(round 3, 4) the save says what happened to the bill's match", () => {
     expect(lastToast()).toEqual({ title: "Moved this bill" });
   });
 });
+
+describe("(D13) editing a quarterly or annual bill keeps its cadence and amount kind", () => {
+  const QUARTERLY = {
+    ...ROOF,
+    id: "bill-ins",
+    name: "Insurance",
+    amount: "450",
+    frequency: "quarterly",
+    dayOfMonth: 5,
+    anchorDate: "2026-07-05",
+    amountKind: "estimate",
+  };
+  const ANNUAL = { ...QUARTERLY, id: "bill-dmv", name: "Registration", frequency: "annual", amountKind: "fixed" };
+
+  it("a quarterly estimate saves back as quarterly / estimate with its dates unchanged", async () => {
+    items = [QUARTERLY as unknown as Item];
+    renderPage();
+    fireEvent.click(screen.getByTestId("row-bill-bill-ins"));
+    await screen.findByTestId("input-anchor-date");
+    fireEvent.click(screen.getByTestId("button-save"));
+    expect(updateItemMock).toHaveBeenCalledTimes(1);
+    expect(updateItemMock).toHaveBeenCalledWith({
+      id: "bill-ins",
+      data: expect.objectContaining({
+        name: "Insurance",
+        amount: "450",
+        frequency: "quarterly",
+        dayOfMonth: 5,
+        anchorDate: "2026-07-05",
+        amountKind: "estimate",
+      }),
+    });
+  });
+
+  it("an annual bill saves back as annual", async () => {
+    items = [ANNUAL as unknown as Item];
+    renderPage();
+    fireEvent.click(screen.getByTestId("row-bill-bill-dmv"));
+    await screen.findByTestId("input-anchor-date");
+    fireEvent.click(screen.getByTestId("button-save"));
+    expect(updateItemMock.mock.calls[0]![0].data).toMatchObject({ frequency: "annual", amountKind: "fixed", anchorDate: "2026-07-05" });
+  });
+});

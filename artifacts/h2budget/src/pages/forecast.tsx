@@ -33,7 +33,8 @@ import {
   getGetDashboardQueryKey,
   type RecurringItemInput,
 } from "@workspace/api-client-react";
-import { Link } from "wouter";
+import { Link, Redirect } from "wouter";
+import { hashTabRedirect } from "./forecast/hashTab";
 import { AvalancheScheduleCard } from "@/components/avalanche-schedule-card";
 import {
   card as kitCard,
@@ -368,25 +369,18 @@ export default function ForecastPage({
     }
   }, [forecastFromDate]);
 
-  // Active tab is controlled so deep-links from other pages (e.g. the
-  // Chase page's "N awaiting match in Review Bucket" chip) can land
-  // directly on the Review Bucket via `/forecast#bucket`.
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    if (typeof window !== "undefined" && window.location.hash === "#bucket") {
-      return "bucket";
-    }
-    return "register";
-  });
+  // (D6) Deep links `/forecast#bucket` and `/review#register` land on the
+  // route that shows them. (The old `activeTab` state was never read.)
+  const [hash, setHash] = useState(() =>
+    typeof window === "undefined" ? "" : window.location.hash,
+  );
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onHashChange = () => {
-      if (window.location.hash === "#bucket") setActiveTab("bucket");
-      else if (window.location.hash === "" || window.location.hash === "#register")
-        setActiveTab("register");
-    };
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
+    const onHash = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
   }, []);
+  const hashRedirectTo = hashTabRedirect(mode, hash);
 
   const { data, isLoading, isError: forecastError, refetch: refetchForecast } = useGetForecast({ days: deferredHorizonDays });
   // (Decision 16, PR-K round 2) ONE CACHE ENTRY PER HORIZON. With look-back
@@ -3682,6 +3676,8 @@ export default function ForecastPage({
       </Dialog>
 </>
   );
+
+  if (hashRedirectTo && !renderNext) return <Redirect to={hashRedirectTo} replace />;
 
   if (renderNext) {
     return (

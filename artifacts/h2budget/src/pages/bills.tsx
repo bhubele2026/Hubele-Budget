@@ -86,6 +86,8 @@ type Frequency =
   | "biweekly"
   | "semimonthly"
   | "monthly"
+  | "quarterly"
+  | "annual"
   | "onetime";
 
 type ItemKind = "income" | "bill";
@@ -104,6 +106,10 @@ type FormState = {
   // bill-rollup so manually entered bills feed their planned amount
   // into the right envelope. Empty string = "— None —" (unlinked).
   categoryId: string;
+  // (D13) The stored amount kind and, for cadences that do not edit one, the
+  // stored day of month. Carried through an edit so a save never rewrites them.
+  amountKind: "fixed" | "estimate";
+  keptDayOfMonth: number | null;
 };
 
 // (#690) Sentinel used in the Select since shadcn/ui's <Select> forbids
@@ -198,6 +204,8 @@ const DEFAULT_FORM: FormState = {
   oneTimeDate: "",
   active: true,
   categoryId: "",
+  amountKind: "fixed",
+  keptDayOfMonth: null,
 };
 
 function buildPayload(form: FormState): RecurringItemInput {
@@ -210,8 +218,12 @@ function buildPayload(form: FormState): RecurringItemInput {
     dayOfMonth: null,
     anchorDate: null,
     categoryId: form.categoryId ? form.categoryId : null,
+    amountKind: form.amountKind,
   };
-  if (form.frequency === "monthly" || form.frequency === "semimonthly") {
+  if (form.frequency === "quarterly" || form.frequency === "annual") {
+    base.dayOfMonth = form.keptDayOfMonth;
+    base.anchorDate = form.anchorDate || null;
+  } else if (form.frequency === "monthly" || form.frequency === "semimonthly") {
     const day = parseInt(form.dayOfMonth, 10);
     base.dayOfMonth = Number.isFinite(day) && day >= 1 && day <= 31 ? day : 1;
     base.anchorDate = form.anchorDate || null;
@@ -224,7 +236,7 @@ function buildPayload(form: FormState): RecurringItemInput {
 }
 
 function toFormState(item: RecurringItem): FormState {
-  const freq = (["weekly", "biweekly", "semimonthly", "monthly", "onetime"].includes(item.frequency)
+  const freq = (["weekly", "biweekly", "semimonthly", "monthly", "quarterly", "annual", "onetime"].includes(item.frequency)
     ? item.frequency
     : "monthly") as Frequency;
   return {
@@ -237,6 +249,8 @@ function toFormState(item: RecurringItem): FormState {
     oneTimeDate: freq === "onetime" ? item.anchorDate ?? "" : "",
     active: isActive(item),
     categoryId: item.categoryId ?? "",
+    amountKind: item.amountKind === "estimate" ? "estimate" : "fixed",
+    keptDayOfMonth: item.dayOfMonth ?? null,
   };
 }
 
@@ -500,6 +514,7 @@ export default function BillsPage() {
       // unlink the bill from its envelope (and from any backing debt).
       categoryId: item.categoryId ?? null,
       debtId: item.debtId ?? null,
+      amountKind: item.amountKind,
     };
     updateItem.mutate(
       { id: item.id, data: payload },
@@ -1107,6 +1122,8 @@ export default function BillsPage() {
                     <SelectItem value="biweekly">Bi-weekly</SelectItem>
                     <SelectItem value="semimonthly">Semi-monthly</SelectItem>
                     <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="quarterly">Quarterly</SelectItem>
+                    <SelectItem value="annual">Annual</SelectItem>
                     <SelectItem value="onetime">One time</SelectItem>
                   </SelectContent>
                 </Select>
