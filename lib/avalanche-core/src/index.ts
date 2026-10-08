@@ -823,3 +823,19 @@ export function payoffPct(
   if (sumOrig <= 0) return null;
   return Math.max(0, Math.min(1, (sumOrig - sumBal) / sumOrig)) * 100;
 }
+
+// (PR-E) The daily progress metrics: pure sums over assembled inputs.
+export {
+  METRICS_VERSION,
+  POINT_IN_TIME_FIELDS,
+  accountsSilentDaysOf,
+  computeDailyMetrics,
+  discretionaryCents,
+  keepPointInTime,
+  monthStartOf,
+  type DailyMetrics,
+  type DailyMetricsInputs,
+  type MetricsSnapshotRow,
+  type MetricsSpendRow,
+  type MetricsWithinPlan,
+} from "./metrics";

@@ -103,6 +103,7 @@ import type {
   GetBillsSummaryParams,
   GetForecastCashSignalParams,
   GetForecastParams,
+  GetMetricsParams,
   GetReportsBehaviorFactsParams,
   GetReportsBudgetFactsParams,
   GetReportsSpendingFactsParams,
@@ -134,6 +135,8 @@ import type {
   Member,
   MemoryItem,
   MemoryList,
+  MetricsRecomputeResult,
+  MetricsResponse,
   MoneyPosition,
   OpsJobRetryResult,
   OpsJobsReport,
@@ -170,6 +173,7 @@ import type {
   RecapVerifyStartResult,
   RecategorizeByPatternInput,
   RecategorizeByPatternResult,
+  RecomputeMetricsParams,
   RecurringItem,
   RecurringItemInput,
   RefreshBankInput,
@@ -10617,6 +10621,198 @@ export const useSnapshotDebtPlan = <
   TContext
 > => {
   return useMutation(getSnapshotDebtPlanMutationOptions(options));
+};
+
+/**
+ * Rows of the nightly `household_metrics_daily` snapshot, oldest first, for `from`..`to` inclusive (default: the last 30 days ending today; at most 93 days). `latest` is the newest row on or before `to`, even when it is older than `from`. Read-only: nothing is computed on this request.
+ * @summary The household's daily progress metrics over a range of days
+ */
+export const getGetMetricsUrl = (params?: GetMetricsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/metrics?${stringifiedParams}`
+    : `/api/metrics`;
+};
+
+export const getMetrics = async (
+  params?: GetMetricsParams,
+  options?: RequestInit,
+): Promise<MetricsResponse> => {
+  return customFetch<MetricsResponse>(getGetMetricsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMetricsQueryKey = (params?: GetMetricsParams) => {
+  return [`/api/metrics`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMetricsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMetrics>>,
+  TError = ErrorType<void>,
+>(
+  params?: GetMetricsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMetrics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMetricsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMetrics>>> = ({
+    signal,
+  }) => getMetrics(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMetrics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMetricsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMetrics>>
+>;
+export type GetMetricsQueryError = ErrorType<void>;
+
+/**
+ * @summary The household's daily progress metrics over a range of days
+ */
+
+export function useGetMetrics<
+  TData = Awaited<ReturnType<typeof getMetrics>>,
+  TError = ErrorType<void>,
+>(
+  params?: GetMetricsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMetrics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMetricsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Writes the day's debt progress snapshots, reached milestones and metrics row. `date` defaults to today and may not be in the future. A past day is rebuilt from the stored snapshots; its point-in-time fields are kept.
+ * @summary (Owner) Run the nightly snapshot for one day now
+ */
+export const getRecomputeMetricsUrl = (params?: RecomputeMetricsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/metrics/recompute?${stringifiedParams}`
+    : `/api/metrics/recompute`;
+};
+
+export const recomputeMetrics = async (
+  params?: RecomputeMetricsParams,
+  options?: RequestInit,
+): Promise<MetricsRecomputeResult> => {
+  return customFetch<MetricsRecomputeResult>(getRecomputeMetricsUrl(params), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRecomputeMetricsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recomputeMetrics>>,
+    TError,
+    { params?: RecomputeMetricsParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recomputeMetrics>>,
+  TError,
+  { params?: RecomputeMetricsParams },
+  TContext
+> => {
+  const mutationKey = ["recomputeMetrics"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recomputeMetrics>>,
+    { params?: RecomputeMetricsParams }
+  > = (props) => {
+    const { params } = props ?? {};
+
+    return recomputeMetrics(params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecomputeMetricsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recomputeMetrics>>
+>;
+
+export type RecomputeMetricsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (Owner) Run the nightly snapshot for one day now
+ */
+export const useRecomputeMetrics = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recomputeMetrics>>,
+    TError,
+    { params?: RecomputeMetricsParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recomputeMetrics>>,
+  TError,
+  { params?: RecomputeMetricsParams },
+  TContext
+> => {
+  return useMutation(getRecomputeMetricsMutationOptions(options));
 };
 
 /**

@@ -5995,6 +5995,110 @@ export const SnapshotDebtPlanResponse = zod.object({
 });
 
 /**
+ * Rows of the nightly `household_metrics_daily` snapshot, oldest first, for `from`..`to` inclusive (default: the last 30 days ending today; at most 93 days). `latest` is the newest row on or before `to`, even when it is older than `from`. Read-only: nothing is computed on this request.
+ * @summary The household's daily progress metrics over a range of days
+ */
+export const GetMetricsQueryParams = zod.object({
+  from: zod.coerce.string().optional(),
+  to: zod.coerce.string().optional(),
+});
+
+export const GetMetricsResponse = zod.object({
+  from: zod.string(),
+  to: zod.string(),
+  rows: zod.array(
+    zod.object({
+      asOf: zod.string(),
+      version: zod.number(),
+      computedAt: zod.string(),
+      metrics: zod
+        .object({
+          totalDebtEffective: zod.number().nullable(),
+          debtPaidDownGenuineMtd: zod.number(),
+          interestChargedMtd: zod.number(),
+          newChargesMtd: zod.number(),
+          discretionaryWtd: zod.number().nullable(),
+          discretionaryMtd: zod.number().nullable(),
+          weeklyCap: zod.number().nullable(),
+          withinPlan: zod
+            .union([
+              zod.literal("over"),
+              zod.literal("tight"),
+              zod.literal("yes"),
+              zod.literal(null),
+            ])
+            .nullable(),
+          confirmedPaymentsMtd: zod.number(),
+          milestonesReached: zod.number(),
+          uncategorizedCount: zod.number().nullable(),
+          reviewQueueSize: zod.number().nullable(),
+          dataCompleteness: zod.object({
+            stale: zod.boolean().nullable(),
+            staleReason: zod.string().nullable(),
+            accountsSilentDays: zod.number().nullable(),
+          }),
+        })
+        .describe(
+          "Definitions: lib\/avalanche-core\/src\/metrics.ts and docs\/reviews\/2026-10-08-pre-metrics.md. Point-in-time fields are null on a past day that has no stored observation.",
+        ),
+    }),
+  ),
+  latest: zod.union([
+    zod.object({
+      asOf: zod.string(),
+      version: zod.number(),
+      computedAt: zod.string(),
+      metrics: zod
+        .object({
+          totalDebtEffective: zod.number().nullable(),
+          debtPaidDownGenuineMtd: zod.number(),
+          interestChargedMtd: zod.number(),
+          newChargesMtd: zod.number(),
+          discretionaryWtd: zod.number().nullable(),
+          discretionaryMtd: zod.number().nullable(),
+          weeklyCap: zod.number().nullable(),
+          withinPlan: zod
+            .union([
+              zod.literal("over"),
+              zod.literal("tight"),
+              zod.literal("yes"),
+              zod.literal(null),
+            ])
+            .nullable(),
+          confirmedPaymentsMtd: zod.number(),
+          milestonesReached: zod.number(),
+          uncategorizedCount: zod.number().nullable(),
+          reviewQueueSize: zod.number().nullable(),
+          dataCompleteness: zod.object({
+            stale: zod.boolean().nullable(),
+            staleReason: zod.string().nullable(),
+            accountsSilentDays: zod.number().nullable(),
+          }),
+        })
+        .describe(
+          "Definitions: lib\/avalanche-core\/src\/metrics.ts and docs\/reviews\/2026-10-08-pre-metrics.md. Point-in-time fields are null on a past day that has no stored observation.",
+        ),
+    }),
+    zod.null(),
+  ]),
+});
+
+/**
+ * Writes the day's debt progress snapshots, reached milestones and metrics row. `date` defaults to today and may not be in the future. A past day is rebuilt from the stored snapshots; its point-in-time fields are kept.
+ * @summary (Owner) Run the nightly snapshot for one day now
+ */
+export const RecomputeMetricsQueryParams = zod.object({
+  date: zod.coerce.string().optional(),
+});
+
+export const RecomputeMetricsResponse = zod.object({
+  asOf: zod.string(),
+  snapshotsWritten: zod.number(),
+  milestonesInserted: zod.array(zod.string()),
+  metricsWritten: zod.boolean(),
+});
+
+/**
  * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */

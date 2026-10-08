@@ -26,6 +26,8 @@ tags:
   - name: members
   - name: spine
   - name: debt-plan
+  - name: metrics
+    description: (PR-E) The nightly progress metrics (one row per household per day).
   - name: ops
   - name: recap
     description: (AI-0) Owner-only operations views (job queues).
@@ -2429,6 +2431,54 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DebtPlanSnapshotResult" }
+  /metrics:
+    get:
+      operationId: getMetrics
+      tags: [metrics]
+      summary: The household's daily progress metrics over a range of days
+      description: >-
+        Rows of the nightly `household_metrics_daily` snapshot, oldest first,
+        for `from`..`to` inclusive (default: the last 30 days ending today;
+        at most 93 days). `latest` is the newest row on or before `to`, even
+        when it is older than `from`. Read-only: nothing is computed on this
+        request.
+      parameters:
+        - in: query
+          name: from
+          required: false
+          schema: { type: string }
+        - in: query
+          name: to
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetricsResponse" }
+        "400":
+          description: Bad range (not YYYY-MM-DD, from after to, or more than 93 days)
+  /metrics/recompute:
+    post:
+      operationId: recomputeMetrics
+      tags: [metrics]
+      summary: (Owner) Run the nightly snapshot for one day now
+      description: >-
+        Writes the day's debt progress snapshots, reached milestones and metrics
+        row. `date` defaults to today and may not be in the future. A past day
+        is rebuilt from the stored snapshots; its point-in-time fields are kept.
+      parameters:
+        - in: query
+          name: date
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetricsRecomputeResult" }
   /spine:
     get:
       operationId: getSpine
@@ -3547,6 +3597,75 @@ components:
         asOf: { type: string }
         snapshotsWritten: { type: integer }
         milestonesInserted: { type: array, items: { type: string } }
+    DailyMetrics:
+      type: object
+      description: >-
+        Definitions: lib/avalanche-core/src/metrics.ts and
+        docs/reviews/2026-10-08-pre-metrics.md. Point-in-time fields are null on
+        a past day that has no stored observation.
+      required:
+        - totalDebtEffective
+        - debtPaidDownGenuineMtd
+        - interestChargedMtd
+        - newChargesMtd
+        - discretionaryWtd
+        - discretionaryMtd
+        - weeklyCap
+        - withinPlan
+        - confirmedPaymentsMtd
+        - milestonesReached
+        - uncategorizedCount
+        - reviewQueueSize
+        - dataCompleteness
+      properties:
+        totalDebtEffective: { type: ["number", "null"] }
+        debtPaidDownGenuineMtd: { type: number }
+        interestChargedMtd: { type: number }
+        newChargesMtd: { type: number }
+        discretionaryWtd: { type: ["number", "null"] }
+        discretionaryMtd: { type: ["number", "null"] }
+        weeklyCap: { type: ["number", "null"] }
+        withinPlan: { type: ["string", "null"], enum: [over, tight, yes, null] }
+        confirmedPaymentsMtd: { type: number }
+        milestonesReached: { type: integer }
+        uncategorizedCount: { type: ["integer", "null"] }
+        reviewQueueSize: { type: ["integer", "null"] }
+        dataCompleteness:
+          type: object
+          required: [stale, staleReason, accountsSilentDays]
+          properties:
+            stale: { type: ["boolean", "null"] }
+            staleReason: { type: ["string", "null"] }
+            accountsSilentDays: { type: ["integer", "null"] }
+    MetricsDay:
+      type: object
+      required: [asOf, version, computedAt, metrics]
+      properties:
+        asOf: { type: string }
+        version: { type: integer }
+        computedAt: { type: string }
+        metrics: { $ref: "#/components/schemas/DailyMetrics" }
+    MetricsResponse:
+      type: object
+      required: [from, to, rows, latest]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/MetricsDay" }
+        latest:
+          anyOf:
+            - { $ref: "#/components/schemas/MetricsDay" }
+            - { type: "null" }
+    MetricsRecomputeResult:
+      type: object
+      required: [asOf, snapshotsWritten, milestonesInserted, metricsWritten]
+      properties:
+        asOf: { type: string }
+        snapshotsWritten: { type: integer }
+        milestonesInserted: { type: array, items: { type: string } }
+        metricsWritten: { type: boolean }
     SpineNextBill:
       type: object
       required: [name, amount, dueDate]

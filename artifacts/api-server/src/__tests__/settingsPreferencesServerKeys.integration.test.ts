@@ -22,8 +22,10 @@ const TEST_USER = `settings-prefs-${process.pid}-${randomUUID().slice(0, 8)}`;
 let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (
+  requireAuth: async (
     req: {
+      method?: string;
+      originalUrl?: string;
       userId?: string;
       actualUserId?: string;
       householdId?: string;
@@ -36,6 +38,8 @@ vi.mock("../middlewares/requireAuth", () => ({
     req.actualUserId = TEST_USER;
     req.householdId = TEST_HOUSEHOLD_ID;
     req.householdOwnerId = TEST_USER;
+    // (PR-E) a read no longer runs the budget passes; run them as the read used to.
+    await (await import("./_helpers/budgetPassesOnRead")).runBudgetPassesOnRead(req);
     next();
   },
 }));

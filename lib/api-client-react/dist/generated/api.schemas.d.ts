@@ -420,6 +420,66 @@ export interface DebtPlanSnapshotResult {
     snapshotsWritten: number;
     milestonesInserted: string[];
 }
+/**
+ * @nullable
+ */
+export type DailyMetricsWithinPlan = (typeof DailyMetricsWithinPlan)[keyof typeof DailyMetricsWithinPlan] | null;
+export declare const DailyMetricsWithinPlan: {
+    readonly over: "over";
+    readonly tight: "tight";
+    readonly yes: "yes";
+};
+export type DailyMetricsDataCompleteness = {
+    /** @nullable */
+    stale: boolean | null;
+    /** @nullable */
+    staleReason: string | null;
+    /** @nullable */
+    accountsSilentDays: number | null;
+};
+/**
+ * Definitions: lib/avalanche-core/src/metrics.ts and docs/reviews/2026-10-08-pre-metrics.md. Point-in-time fields are null on a past day that has no stored observation.
+ */
+export interface DailyMetrics {
+    /** @nullable */
+    totalDebtEffective: number | null;
+    debtPaidDownGenuineMtd: number;
+    interestChargedMtd: number;
+    newChargesMtd: number;
+    /** @nullable */
+    discretionaryWtd: number | null;
+    /** @nullable */
+    discretionaryMtd: number | null;
+    /** @nullable */
+    weeklyCap: number | null;
+    /** @nullable */
+    withinPlan: DailyMetricsWithinPlan;
+    confirmedPaymentsMtd: number;
+    milestonesReached: number;
+    /** @nullable */
+    uncategorizedCount: number | null;
+    /** @nullable */
+    reviewQueueSize: number | null;
+    dataCompleteness: DailyMetricsDataCompleteness;
+}
+export interface MetricsDay {
+    asOf: string;
+    version: number;
+    computedAt: string;
+    metrics: DailyMetrics;
+}
+export interface MetricsResponse {
+    from: string;
+    to: string;
+    rows: MetricsDay[];
+    latest: MetricsDay | null;
+}
+export interface MetricsRecomputeResult {
+    asOf: string;
+    snapshotsWritten: number;
+    milestonesInserted: string[];
+    metricsWritten: boolean;
+}
 export interface SpineNextBill {
     name: string;
     amount: string;
@@ -4958,6 +5018,13 @@ export type ImportWorkbookBody = {
     file: Blob;
 };
 export type SnapshotDebtPlanParams = {
+    date?: string;
+};
+export type GetMetricsParams = {
+    from?: string;
+    to?: string;
+};
+export type RecomputeMetricsParams = {
     date?: string;
 };
 export type ListAgentFindingsParams = {

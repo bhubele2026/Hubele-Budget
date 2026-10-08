@@ -5,6 +5,7 @@ import {
   handlePruneSyncAttempts,
 } from "./handlers/maintenance";
 import { handleCategorizeJobs } from "./handlers/categorize";
+import { METRICS_CRON, METRICS_TZ, handleMetricsSnapshot } from "./handlers/metricsSnapshot";
 import { MONITOR_CRON, MONITOR_TZ, handleMonitorJobs } from "./handlers/monitor";
 import { handleRecapGenerate, handleRecapSend } from "./handlers/recapJobs";
 import { RECAP_TICK_CRON, RECAP_TICK_KEY, RECAP_TICK_TZ, handleRecapTick } from "./handlers/recapTick";
@@ -35,6 +36,9 @@ export async function registerJobs(boss: PgBoss): Promise<void> {
   // (AI-3) The proactive monitor: a worker, and one daily fan-out tick.
   await boss.work(QUEUES.monitorHousehold, handleMonitorJobs);
   await boss.schedule(QUEUES.monitorHousehold, MONITOR_CRON, { fanout: true }, { tz: MONITOR_TZ });
+  // (PR-E) The nightly progress snapshot: a worker, and one 03:30 fan-out tick.
+  await boss.work(QUEUES.metricsSnapshot, handleMetricsSnapshot);
+  await boss.schedule(QUEUES.metricsSnapshot, METRICS_CRON, { fanout: true }, { tz: METRICS_TZ });
   // (AI-1) A sync landed rows → categorize the ambiguous ones and run the monitor.
   await boss.work(QUEUES.txnArrived, handleTxnArrived);
   await boss.work(QUEUES.categorizeBatch, handleCategorizeJobs);

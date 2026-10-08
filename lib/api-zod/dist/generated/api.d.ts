@@ -13318,6 +13318,381 @@ export declare const SnapshotDebtPlanResponse: zod.ZodObject<{
     milestonesInserted: string[];
 }>;
 /**
+ * Rows of the nightly `household_metrics_daily` snapshot, oldest first, for `from`..`to` inclusive (default: the last 30 days ending today; at most 93 days). `latest` is the newest row on or before `to`, even when it is older than `from`. Read-only: nothing is computed on this request.
+ * @summary The household's daily progress metrics over a range of days
+ */
+export declare const GetMetricsQueryParams: zod.ZodObject<{
+    from: zod.ZodOptional<zod.ZodString>;
+    to: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    from?: string | undefined;
+    to?: string | undefined;
+}, {
+    from?: string | undefined;
+    to?: string | undefined;
+}>;
+export declare const GetMetricsResponse: zod.ZodObject<{
+    from: zod.ZodString;
+    to: zod.ZodString;
+    rows: zod.ZodArray<zod.ZodObject<{
+        asOf: zod.ZodString;
+        version: zod.ZodNumber;
+        computedAt: zod.ZodString;
+        metrics: zod.ZodObject<{
+            totalDebtEffective: zod.ZodNullable<zod.ZodNumber>;
+            debtPaidDownGenuineMtd: zod.ZodNumber;
+            interestChargedMtd: zod.ZodNumber;
+            newChargesMtd: zod.ZodNumber;
+            discretionaryWtd: zod.ZodNullable<zod.ZodNumber>;
+            discretionaryMtd: zod.ZodNullable<zod.ZodNumber>;
+            weeklyCap: zod.ZodNullable<zod.ZodNumber>;
+            withinPlan: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"over">, zod.ZodLiteral<"tight">, zod.ZodLiteral<"yes">, zod.ZodLiteral<null>]>>;
+            confirmedPaymentsMtd: zod.ZodNumber;
+            milestonesReached: zod.ZodNumber;
+            uncategorizedCount: zod.ZodNullable<zod.ZodNumber>;
+            reviewQueueSize: zod.ZodNullable<zod.ZodNumber>;
+            dataCompleteness: zod.ZodObject<{
+                stale: zod.ZodNullable<zod.ZodBoolean>;
+                staleReason: zod.ZodNullable<zod.ZodString>;
+                accountsSilentDays: zod.ZodNullable<zod.ZodNumber>;
+            }, "strip", zod.ZodTypeAny, {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            }, {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            }>;
+        }, "strip", zod.ZodTypeAny, {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        }, {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        version: number;
+        asOf: string;
+        computedAt: string;
+        metrics: {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        };
+    }, {
+        version: number;
+        asOf: string;
+        computedAt: string;
+        metrics: {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        };
+    }>, "many">;
+    latest: zod.ZodUnion<[zod.ZodObject<{
+        asOf: zod.ZodString;
+        version: zod.ZodNumber;
+        computedAt: zod.ZodString;
+        metrics: zod.ZodObject<{
+            totalDebtEffective: zod.ZodNullable<zod.ZodNumber>;
+            debtPaidDownGenuineMtd: zod.ZodNumber;
+            interestChargedMtd: zod.ZodNumber;
+            newChargesMtd: zod.ZodNumber;
+            discretionaryWtd: zod.ZodNullable<zod.ZodNumber>;
+            discretionaryMtd: zod.ZodNullable<zod.ZodNumber>;
+            weeklyCap: zod.ZodNullable<zod.ZodNumber>;
+            withinPlan: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"over">, zod.ZodLiteral<"tight">, zod.ZodLiteral<"yes">, zod.ZodLiteral<null>]>>;
+            confirmedPaymentsMtd: zod.ZodNumber;
+            milestonesReached: zod.ZodNumber;
+            uncategorizedCount: zod.ZodNullable<zod.ZodNumber>;
+            reviewQueueSize: zod.ZodNullable<zod.ZodNumber>;
+            dataCompleteness: zod.ZodObject<{
+                stale: zod.ZodNullable<zod.ZodBoolean>;
+                staleReason: zod.ZodNullable<zod.ZodString>;
+                accountsSilentDays: zod.ZodNullable<zod.ZodNumber>;
+            }, "strip", zod.ZodTypeAny, {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            }, {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            }>;
+        }, "strip", zod.ZodTypeAny, {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        }, {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        version: number;
+        asOf: string;
+        computedAt: string;
+        metrics: {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        };
+    }, {
+        version: number;
+        asOf: string;
+        computedAt: string;
+        metrics: {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        };
+    }>, zod.ZodNull]>;
+}, "strip", zod.ZodTypeAny, {
+    from: string;
+    to: string;
+    rows: {
+        version: number;
+        asOf: string;
+        computedAt: string;
+        metrics: {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        };
+    }[];
+    latest: {
+        version: number;
+        asOf: string;
+        computedAt: string;
+        metrics: {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        };
+    } | null;
+}, {
+    from: string;
+    to: string;
+    rows: {
+        version: number;
+        asOf: string;
+        computedAt: string;
+        metrics: {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        };
+    }[];
+    latest: {
+        version: number;
+        asOf: string;
+        computedAt: string;
+        metrics: {
+            totalDebtEffective: number | null;
+            debtPaidDownGenuineMtd: number;
+            interestChargedMtd: number;
+            newChargesMtd: number;
+            discretionaryWtd: number | null;
+            discretionaryMtd: number | null;
+            weeklyCap: number | null;
+            withinPlan: "tight" | "over" | "yes" | null;
+            confirmedPaymentsMtd: number;
+            milestonesReached: number;
+            uncategorizedCount: number | null;
+            reviewQueueSize: number | null;
+            dataCompleteness: {
+                stale: boolean | null;
+                staleReason: string | null;
+                accountsSilentDays: number | null;
+            };
+        };
+    } | null;
+}>;
+/**
+ * Writes the day's debt progress snapshots, reached milestones and metrics row. `date` defaults to today and may not be in the future. A past day is rebuilt from the stored snapshots; its point-in-time fields are kept.
+ * @summary (Owner) Run the nightly snapshot for one day now
+ */
+export declare const RecomputeMetricsQueryParams: zod.ZodObject<{
+    date: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    date?: string | undefined;
+}, {
+    date?: string | undefined;
+}>;
+export declare const RecomputeMetricsResponse: zod.ZodObject<{
+    asOf: zod.ZodString;
+    snapshotsWritten: zod.ZodNumber;
+    milestonesInserted: zod.ZodArray<zod.ZodString, "many">;
+    metricsWritten: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    asOf: string;
+    snapshotsWritten: number;
+    milestonesInserted: string[];
+    metricsWritten: boolean;
+}, {
+    asOf: string;
+    snapshotsWritten: number;
+    milestonesInserted: string[];
+    metricsWritten: boolean;
+}>;
+/**
  * Every figure the app's headline surfaces show, read once at one instant so no two tiles can quote different moments. Each field is produced by the same function the owning page's endpoint calls — bank/forecast from computeCashSignal, spend from buildSpendingFacts, bills from buildBillsSummary, payoff from @workspace/avalanche-core, review count from computeReviewCount, position from buildMoneyPosition (as GET /money/position) — and an integration test asserts each one equals the owning endpoint's value to the cent. The debt field carries a PERCENTAGE ONLY; this response never contains a balance or an amount owed, because it is what the landing page paints.
  * @summary One shared snapshot of the household's core numbers (the spine)
  */
@@ -13423,21 +13798,21 @@ export declare const GetSpineResponse: zod.ZodObject<{
         degraded: zod.ZodBoolean;
     }, "strip", zod.ZodTypeAny, {
         confidence: "firm" | "estimated";
+        withinPlan: "tight" | "over" | "yes" | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
         availableUntilPayday: string | null;
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
-        withinPlan: "tight" | "over" | "yes" | null;
         degraded: boolean;
     }, {
         confidence: "firm" | "estimated";
+        withinPlan: "tight" | "over" | "yes" | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
         availableUntilPayday: string | null;
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
-        withinPlan: "tight" | "over" | "yes" | null;
         degraded: boolean;
     }>;
 }, "strip", zod.ZodTypeAny, {
@@ -13477,12 +13852,12 @@ export declare const GetSpineResponse: zod.ZodObject<{
     reviewCount: number;
     position: {
         confidence: "firm" | "estimated";
+        withinPlan: "tight" | "over" | "yes" | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
         availableUntilPayday: string | null;
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
-        withinPlan: "tight" | "over" | "yes" | null;
         degraded: boolean;
     };
 }, {
@@ -13522,12 +13897,12 @@ export declare const GetSpineResponse: zod.ZodObject<{
     reviewCount: number;
     position: {
         confidence: "firm" | "estimated";
+        withinPlan: "tight" | "over" | "yes" | null;
         safeToSpendNow: string | null;
         remainingWeek: string | null;
         availableUntilPayday: string | null;
         paydayDate: string | null;
         horizonKind: "payday" | "week_end";
-        withinPlan: "tight" | "over" | "yes" | null;
         degraded: boolean;
     };
 }>;
@@ -13609,6 +13984,7 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     weekStart: string;
     weekEnd: string;
     assumptions: string[];
+    withinPlan: "tight" | "over" | "yes" | null;
     safeToSpendNow: string | null;
     remainingWeek: string | null;
     availableUntilPayday: string | null;
@@ -13618,7 +13994,6 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
         itemId: string;
         label: string;
     } | null;
-    withinPlan: "tight" | "over" | "yes" | null;
     degraded: boolean;
     todayISO: string;
     horizon: {
@@ -13650,6 +14025,7 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
     weekStart: string;
     weekEnd: string;
     assumptions: string[];
+    withinPlan: "tight" | "over" | "yes" | null;
     safeToSpendNow: string | null;
     remainingWeek: string | null;
     availableUntilPayday: string | null;
@@ -13659,7 +14035,6 @@ export declare const GetMoneyPositionResponse: zod.ZodObject<{
         itemId: string;
         label: string;
     } | null;
-    withinPlan: "tight" | "over" | "yes" | null;
     degraded: boolean;
     todayISO: string;
     horizon: {

@@ -24,6 +24,7 @@ import {
   type PendingEntry,
 } from "../lib/debtPending";
 import { confirmDebtPaymentClaims } from "../lib/debtPaymentConfirm";
+import { syncDebtBudgetAfterWrite } from "../lib/budgetDebtSync";
 
 const router: IRouter = Router();
 
@@ -490,6 +491,7 @@ router.post("/debts", requireAuth, async (req, res): Promise<void> => {
     .returning();
   await recordBalanceSnapshot(req.userId!, req.householdId!, row.id, row.balance);
   const pendingByDebt = await loadPendingPayments(req.householdId!, [row]);
+  await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
   res.status(201).json(shapeDebt(row, new Map(), new Map(), pendingByDebt));
 });
 
@@ -538,6 +540,7 @@ router.post("/debts/sync-minimums", requireAuth, async (req, res): Promise<void>
       newMin: newMinStr,
     });
   }
+  await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
   res.json({ updated });
 });
 
@@ -638,6 +641,7 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
   const accountIds = row.plaidAccountId ? [row.plaidAccountId] : [];
   const { accountById, itemById } = await loadAccountContext(req.householdId!, accountIds);
   const pendingByDebt = await loadPendingPayments(req.householdId!, [row]);
+  await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
   res.json(shapeDebt(row, accountById, itemById, pendingByDebt));
 });
 
@@ -743,6 +747,7 @@ router.post(
     }
     const { accountById, itemById } = await loadAccountContext(householdId, [plaidAccountId]);
     const pendingByDebt = await loadPendingPayments(householdId, [refreshed]);
+    await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
     res.json(shapeDebt(refreshed, accountById, itemById, pendingByDebt));
   },
 );
@@ -770,6 +775,7 @@ router.post(
       return;
     }
     const pendingByDebt = await loadPendingPayments(householdId, [row]);
+    await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
     res.json(shapeDebt(row, new Map(), new Map(), pendingByDebt));
   },
 );
@@ -814,6 +820,7 @@ router.post(
       result.debt.plaidAccountId!,
     ]);
     const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
+    await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
     res.json(shapeDebt(result.debt, accountById, itemById, pendingByDebt));
   },
 );
@@ -913,6 +920,7 @@ router.post(
     const accountIds = result.debt.plaidAccountId ? [result.debt.plaidAccountId] : [];
     const { accountById, itemById } = await loadAccountContext(householdId, accountIds);
     const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
+    await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
     res.status(201).json({
       debt: shapeDebt(result.debt, accountById, itemById, pendingByDebt),
       transaction,
@@ -932,6 +940,7 @@ router.delete("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     .where(
       and(eq(debtsTable.id, String(params.data.id)), eq(debtsTable.householdId, req.householdId!)),
     );
+  await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
   res.sendStatus(204);
 });
 
