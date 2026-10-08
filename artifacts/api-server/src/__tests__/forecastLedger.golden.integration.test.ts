@@ -39,6 +39,8 @@ import {
   plaidItemsTable,
   debtsTable,
   avalancheSettingsTable,
+  allowancePlansTable,
+  settingsTable,
 } from "@workspace/db";
 import { computeCashSignal } from "../lib/cashSignal";
 import { createTestHousehold } from "./_helpers/testHousehold";
@@ -156,6 +158,9 @@ async function txn(opts: {
   createdAt?: Date;
   /** The institution's own transaction time (`occurred_at`). */
   occurredAt?: string;
+  /** (PR-B2) Allowance flags; the column defaults (false) when omitted. */
+  weeklyAllowance?: boolean;
+  unplannedAllowance?: boolean;
 }) {
   const [t] = await db
     .insert(transactionsTable)
@@ -167,6 +172,8 @@ async function txn(opts: {
       amount: opts.amount,
       plaidAccountId: opts.plaidAccountId ?? null,
       source: opts.source ?? "manual",
+      weeklyAllowance: opts.weeklyAllowance ?? false,
+      unplannedAllowance: opts.unplannedAllowance ?? false,
       pending: opts.pending ?? false,
       forecastFlag: opts.forecastFlag ?? false,
       plaidTransactionId: opts.plaidTransactionId ?? null,
@@ -373,5 +380,61 @@ describe("PR4b golden — the snapshot rule", () => {
     const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 45 });
     expect(sig.bankToday).toBe("3130.00");
     expect(normalised(sig)).toMatchSnapshot();
+  });
+});
+
+/**
+ * ⭐ (PR-B2, decision 7) THE EVERYDAY HOOKS — the one golden entry PR-B2 adds; every
+ * entry above is byte-identical (no fixture above has a weekly-cadence expense or an
+ * income pair a consumed runner-up made ambiguous). Thu 05-14; balance 1,500.00 read
+ * Fri 05-08; a Weekly Spend hook stored at $300 on Saturdays; weekly allowance $250;
+ * Amex Platinum (weekly) last week $120, this week $40 weekly + $25 unplanned.
+ *   05-09's week closed unpaid → −120 on Fri 05-15 (`overdue_assumed_unpaid`);
+ *   05-16 → 65 charges + (250 − 40) = −275; each later Saturday −250;
+ *   `hookAmountIgnored` names the item and its stored 300.00.
+ */
+describe("PR-B2 golden — the everyday hooks", () => {
+  it("a Weekly Spend hook: every occurrence is the Amex payoff, the stored amount ignored", async () => {
+    const chase = await chaseAccount();
+    await settings({ balance: "1500", at: new Date("2026-05-08T15:00:00Z"), cashBuffer: "200" });
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotAccountId: chase.id, bankSnapshotMask: "1111", bankSnapshotSource: "plaid" })
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+    const [amexItem] = await db
+      .insert(plaidItemsTable)
+      .values({ userId: TEST_USER, householdId: HOUSEHOLD, itemId: `item-${randomUUID()}`, accessToken: "test-token", institutionSlug: "amex" })
+      .returning();
+    await db.insert(plaidAccountsTable).values({
+      userId: TEST_USER,
+      householdId: HOUSEHOLD,
+      itemId: amexItem!.id,
+      accountId: "golden-amex-plat",
+      name: "Amex Platinum",
+      mask: "1001",
+      type: "credit",
+      subtype: "credit card",
+    });
+    const spend = await recurring({ name: "Weekly Spend", kind: "bill", amount: "300", frequency: "weekly", dayOfMonth: null, anchorDate: "2026-05-16" });
+    await recurring({ name: "Electric", amount: "140", dayOfMonth: 20, anchorDate: "2026-01-20" });
+    await db.delete(allowancePlansTable).where(eq(allowancePlansTable.householdId, HOUSEHOLD));
+    await db.delete(settingsTable).where(eq(settingsTable.userId, TEST_USER));
+    await db.insert(allowancePlansTable).values({ householdId: HOUSEHOLD, memberUserId: null, period: "weekly", amount: "250.00", effectiveFrom: "2026-05-01", source: "owner" });
+    await db.insert(settingsTable).values({
+      userId: TEST_USER,
+      householdId: HOUSEHOLD,
+      preferences: { everydayHooks: { weekly: { recurringItemId: spend!.id }, monthly: null } },
+    });
+    try {
+      await txn({ occurredOn: "2026-05-05", amount: "-120", plaidAccountId: "golden-amex-plat", source: "plaid:amex", plaidTransactionId: "h-last-week", weeklyAllowance: true });
+      await txn({ occurredOn: "2026-05-11", amount: "-40", plaidAccountId: "golden-amex-plat", source: "plaid:amex", plaidTransactionId: "h-weekly", weeklyAllowance: true });
+      await txn({ occurredOn: "2026-05-12", amount: "-25", plaidAccountId: "golden-amex-plat", source: "plaid:amex", plaidTransactionId: "h-unplanned", unplannedAllowance: true });
+      const sig = await computeCashSignal(HOUSEHOLD, TEST_USER, { horizonDays: 30 });
+      expect(sig.hookAmountIgnored).toEqual([{ itemId: spend!.id, cadence: "weekly", storedAmount: "300.00" }]);
+      expect(normalised(sig)).toMatchSnapshot();
+    } finally {
+      await db.delete(settingsTable).where(eq(settingsTable.userId, TEST_USER));
+      await db.delete(allowancePlansTable).where(eq(allowancePlansTable.householdId, HOUSEHOLD));
+    }
   });
 });

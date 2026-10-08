@@ -703,7 +703,16 @@ describe("SERVER_OWNED_PREFERENCE_KEYS matches the server's preference writers",
   it("the scan still sees every server-owned key being written", () => {
     const writes = scanWrites();
     const seen = new Set(writes.map((w) => w.key));
+    // (PR-B2) A key only a SQL migration writes: the migration must write it.
+    const writtenByMigration: Record<string, string> = {
+      everydayHooks: "lib/db/migrations/0042_everyday_hooks.sql",
+    };
     for (const key of SERVER_OWNED_PREFERENCE_KEYS) {
+      const migration = writtenByMigration[key];
+      if (migration) {
+        expect(readFileSync(join(REPO_ROOT, migration), "utf8"), `${migration} writes ${key}`).toContain(`'${key}'`);
+        continue;
+      }
       expect(seen.has(key), `scan no longer sees a write of ${key}`).toBe(true);
     }
     // The repo-root scripts/ folder is scanned too.

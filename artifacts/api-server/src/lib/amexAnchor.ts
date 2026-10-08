@@ -15,7 +15,7 @@ import { loadSupersededPendingIds } from "./supersededPending";
 import { cleanMerchant } from "./merchantNameExtract";
 import { parseISO, fmtISO, addDays, weekStartFor, weekEndFor } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
-import { normalizeCardAmount } from "@workspace/avalanche-core";
+import { classifyOutflow, normalizeCardAmount } from "@workspace/avalanche-core";
 import {
   classifyAmexBrand,
   discoverAmexCards,
@@ -253,6 +253,16 @@ export async function computeWeeklyPayoff(
   householdId: string,
   weekStartArg?: string,
   ownerUserId?: string,
+  opts: {
+    /**
+     * ⭐ (PR-B2, decision 7) Every purchase on the card, filed or not — what the
+     * forecast's everyday hooks owe the card. The Amex page (the default, false)
+     * keeps its own rule: categorized real spend only. An unfiled charge is still
+     * owed, and the hooks' remaining allowance already counts it as spent, so
+     * leaving it out of the charges would read HIGH by exactly that charge.
+     */
+    allCoverages?: boolean;
+  } = {},
 ): Promise<AmexWeeklyPayoff> {
   const weekStart =
     weekStartArg && /^\d{4}-\d{2}-\d{2}$/.test(weekStartArg)
@@ -388,7 +398,10 @@ export async function computeWeeklyPayoff(
     if (replacedPendingIds.has(t.id)) continue;
     // (PR7) The one spending rule, with one exception: a reimbursable charge
     // is still owed to Amex, so it stays in what to pay this card.
-    if (!isRealSpend(t, ctx, { reimbursableIsSpend: true })) {
+    const owed = opts.allCoverages
+      ? classifyOutflow(t, ctx, { reimbursableIsSpend: true }).kind === "spend"
+      : isRealSpend(t, ctx, { reimbursableIsSpend: true });
+    if (!owed) {
       continue;
     }
     const amt = spendAmount(t);

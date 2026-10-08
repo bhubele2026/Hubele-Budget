@@ -3749,7 +3749,7 @@ export const GetForecastResponse = zod.object({
                 .string()
                 .nullish()
                 .describe(
-                  "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n`remainder_assumed_unpaid` (decision 13, round 4): due after\ntoday, a tier-1\/2 pair paid part of it (`offCurve` stays\nfalse for an underpayment), and only the unpaid remainder\nlands — on the plan's OWN date, never dragged to a business\nday like the overdue sibling above.\n",
+                  "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n(PR-B2) `dragged_past_due` is retired: weekly-cadence\nexpenses follow the overdue rule like any bill.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n`remainder_assumed_unpaid` (decision 13, round 4): due after\ntoday, a tier-1\/2 pair paid part of it (`offCurve` stays\nfalse for an underpayment), and only the unpaid remainder\nlands — on the plan's OWN date, never dragged to a business\nday like the overdue sibling above.\n",
                 ),
               occurrenceKey: zod
                 .string()
@@ -3766,6 +3766,18 @@ export const GetForecastResponse = zod.object({
             }),
           )
           .optional(),
+        hookAmountIgnored: zod
+          .array(
+            zod.object({
+              itemId: zod.string(),
+              cadence: zod.enum(["weekly", "monthly"]),
+              storedAmount: zod.string(),
+            }),
+          )
+          .optional()
+          .describe(
+            "(PR-B2, decision 7) The everyday hooks in force: the Weekly \/ Monthly\nSpend items whose occurrences the forecast replaces with the card\npayoff (the period's card charges plus what is left of the\nallowance while the period is open). `storedAmount` is the item's\nown amount, which the forecast ignores — banner data for the UI.\nPresent only when the household has a hook.\n",
+          ),
         overdueOutsideForecast: zod
           .array(
             zod
@@ -4113,7 +4125,7 @@ export const GetForecastCashSignalResponse = zod.object({
           .string()
           .nullish()
           .describe(
-            "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n`dragged_past_due`: the pre-PR6 rule, kept for\nweekly-cadence expenses due before today until PR8.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n`remainder_assumed_unpaid` (decision 13, round 4): due after\ntoday, a tier-1\/2 pair paid part of it (`offCurve` stays\nfalse for an underpayment), and only the unpaid remainder\nlands — on the plan's OWN date, never dragged to a business\nday like the overdue sibling above.\n",
+            "(PR6) Why the plan is not on its due date, or null.\n`overdue_assumed_unpaid`: due in the last 14 days,\nunresolved and not confidently paid by a bank row, so it\nlands on the next business day. `due_today_not_posted`:\ndue today, lands on the next business day (day 0 equals\nthe bank). `overdue_remainder_assumed_unpaid` (PR6 review):\noverdue, a bank row paid part of it, and the unpaid\nremainder lands on the next business day.\n(PR-B2) `dragged_past_due` is retired: weekly-cadence\nexpenses follow the overdue rule like any bill.\n`pre_window_on_first_day`: no snapshot, due before the\nwindow, placed on its first day.\n`remainder_assumed_unpaid` (decision 13, round 4): due after\ntoday, a tier-1\/2 pair paid part of it (`offCurve` stays\nfalse for an underpayment), and only the unpaid remainder\nlands — on the plan's OWN date, never dragged to a business\nday like the overdue sibling above.\n",
           ),
         occurrenceKey: zod
           .string()
@@ -4130,6 +4142,18 @@ export const GetForecastCashSignalResponse = zod.object({
       }),
     )
     .optional(),
+  hookAmountIgnored: zod
+    .array(
+      zod.object({
+        itemId: zod.string(),
+        cadence: zod.enum(["weekly", "monthly"]),
+        storedAmount: zod.string(),
+      }),
+    )
+    .optional()
+    .describe(
+      "(PR-B2, decision 7) The everyday hooks in force: the Weekly \/ Monthly\nSpend items whose occurrences the forecast replaces with the card\npayoff (the period's card charges plus what is left of the\nallowance while the period is open). `storedAmount` is the item's\nown amount, which the forecast ignores — banner data for the UI.\nPresent only when the household has a hook.\n",
+    ),
   overdueOutsideForecast: zod
     .array(
       zod

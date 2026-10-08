@@ -698,3 +698,56 @@ describe("plansPaidInFullByName — a row tagged to the debt", () => {
     ]);
   });
 });
+
+// ⭐ (PR-B2, PR9's pin R2-2) The biweekly paycheck fix. A runner-up whose row (or plan)
+// an EARLIER pair of the pass already took cannot be this pair's row (or plan): for
+// INCOME it no longer makes the pair ambiguous. Outflows keep the old flag exactly.
+describe("(PR-B2) a runner-up an earlier pair already consumed casts no doubt — income only", () => {
+  const biweekly = (amount: number, label: string) => [
+    plan("pay", "2026-05-01", amount, label),
+    plan("pay", "2026-05-15", amount, label),
+  ];
+
+  it("income: 05-14's early deposit pairs with 05-15 first; 05-01's $100-short deposit is then NOT ambiguous", () => {
+    const out = match(biweekly(2000, "Acme Payroll"), [
+      row("short", "2026-05-01", 1900, "ACME PAYROLL"),
+      row("early", "2026-05-14", 2000, "ACME PAYROLL"),
+    ]);
+    expect(out.find((m) => m.planDate === "2026-05-15")).toMatchObject({ txnId: "early", ambiguous: false, tier: 2, offCurve: true });
+    expect(out.find((m) => m.planDate === "2026-05-01")).toMatchObject({ txnId: "short", ambiguous: false, tier: 3, offCurve: false });
+  });
+
+  it("outflow mirror: the same shape as a bill keeps 05-01's pair ambiguous (tier 3, on the curve)", () => {
+    const out = match(biweekly(-2000, "Acme Loan"), [
+      row("short", "2026-05-01", -1900, "ACME LOAN"),
+      row("early", "2026-05-14", -2000, "ACME LOAN"),
+    ]);
+    expect(out.find((m) => m.planDate === "2026-05-15")).toMatchObject({ txnId: "early", ambiguous: false, tier: 2, offCurve: true });
+    expect(out.find((m) => m.planDate === "2026-05-01")).toMatchObject({ txnId: "short", ambiguous: true, tier: 3, offCurve: false });
+  });
+
+  it("income: a runner-up whose row is still FREE still casts doubt (two nameless deposits a day apart)", () => {
+    const out = match([plan("pay", "2026-04-15", 2000, "Acme Payroll")], [
+      row("d1", "2026-04-15", 2000, "DIRECT DEP 1111"),
+      row("d2", "2026-04-16", 2000, "DIRECT DEP 2222"),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ txnId: "d1", ambiguous: true, tier: 3 });
+  });
+
+  // A rival sharing this pair's ROW whose PLAN an earlier pair took: 05-01's paycheck
+  // took its own deposit first, so the 05-10 deposit can only be 05-15's (early).
+  const planTaken = (sign: 1 | -1, label: string, desc: string) =>
+    match(
+      [plan("p", "2026-05-01", sign * 2000, label), plan("p", "2026-05-15", sign * 2000, label)],
+      [row("own", "2026-05-01", sign * 2000, desc), row("early", "2026-05-10", sign * 2000, desc)],
+    ).find((m) => m.planDate === "2026-05-15");
+
+  it("income: a runner-up whose PLAN an earlier pair took casts no doubt — 05-15's early deposit is tier 2", () => {
+    expect(planTaken(1, "Acme Payroll", "ACME PAYROLL")).toMatchObject({ txnId: "early", ambiguous: false, tier: 2, offCurve: true });
+  });
+
+  it("outflow mirror: the same shape as a bill stays ambiguous (tier 3, on the curve)", () => {
+    expect(planTaken(-1, "Acme Loan", "ACME LOAN")).toMatchObject({ txnId: "early", ambiguous: true, tier: 3, offCurve: false });
+  });
+});

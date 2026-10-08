@@ -395,8 +395,10 @@ describe("mode 'forward' — decision 12: a confirmed bill match stops counting"
   });
 });
 
-describe("mode 'forward' — reimbursable + an allowance flag counts under its flag", () => {
-  it("today excludes it; forward counts the flagged one only — a plain reimbursable row stays out", async () => {
+// (PR-B2) `reimbursable` now outranks every allowance flag (the owner's rule of
+// 2026-09-15): before PR-B2 forward mode counted the flagged one ($35.00, 1 row).
+describe("mode 'forward' — (PR-B2) a reimbursable row never counts, flagged or not", () => {
+  it("today and forward both exclude the flagged and the plain reimbursable row", async () => {
     const hh = await household("d2");
     await db.insert(transactionsTable).values([
       {
@@ -422,7 +424,7 @@ describe("mode 'forward' — reimbursable + an allowance flag counts under its f
     expect(facts.householdSpend.total).toBe(0);
     const { rows, money, spend } = await classifierSpendForRange(hh.householdId, "2026-08-01", "2026-08-31");
     expect(spend).toEqual(facts.householdSpend);
-    expect(classifierHouseholdSpend(rows, money, { mode: "forward" })).toEqual({ total: 35, transactionCount: 1 });
+    expect(classifierHouseholdSpend(rows, money, { mode: "forward" })).toEqual({ total: 0, transactionCount: 0 });
   });
 });
 

@@ -38,20 +38,18 @@
 //      empty. (`reimbursable` is not an allowance flag, so an unflagged
 //      reimbursable row on a tier-2 pair reads bill_matched, the same as it
 //      does on a confirmed match.)
-//   3. `unplanned_allowance` → unplanned;
-//   4. `monthly_allowance`   → allowance_monthly;
-//   5. `weekly_allowance`    → allowance_weekly;
-//   6. `reimbursable`        → reimbursable;
+//   3. `reimbursable`        → reimbursable (PR-B2: ahead of every flag);
+//   4. `unplanned_allowance` → unplanned;
+//   5. `monthly_allowance`   → allowance_monthly;
+//   6. `weekly_allowance`    → allowance_weekly;
 //   7. otherwise             → needs_classification.
 //
-// ⚠️ Steps 3-5 outrank step 6 ON PURPOSE (plan section A): a row that is BOTH
-// `reimbursable` and flagged reads as its flag's coverage, never
-// `reimbursable`. Today's `classifyOutflow`-based rules (`spendingFacts.ts`,
-// `budgetActuals.ts`) exclude a reimbursable row before any flag is looked at.
-// The parity helpers' "today" mode reproduces that; their "forward" mode shows
-// the difference. The owner's 2026-09-15 rule ("a reimbursable charge shows as
-// its own row") sides with today here — PR8r decides before it switches a
-// figure (see the review note).
+// ⭐ (PR-B2, the owner's rule of 2026-09-15: "a reimbursable charge is its own
+// row") Step 3 outranks the flags: a row that is BOTH `reimbursable` and flagged
+// reads `reimbursable`, never its flag's coverage — exactly what today's
+// `classifyOutflow`-based rules (`spendingFacts.ts`, `budgetActuals.ts`) already
+// do. Before PR-B2 the flags outranked it (plan section A's first order), and
+// the "forward" parity mode counted such a row under its flag.
 //
 // An inflow (`classifyOutflow`'s "not_outflow": the row is not an outflow at
 // all) is not covered by the outflow rule, so it is decided on its own
@@ -228,10 +226,14 @@ export function classifyMovement(
   if (!flagged && ctx.tier2PairedTxnIds?.has(row.id)) {
     return { coverage: "bill_matched", timing };
   }
+  // ⭐ (PR-B2, the owner's rule of 2026-09-15) A REIMBURSABLE CHARGE IS ITS OWN ROW:
+  // it comes ahead of every allowance flag, as `classifyOutflow`'s own rule 7 and
+  // today's Spending report and Budget card already treat it. Before PR-B2 a
+  // reimbursable row the household also flagged weekly counted against the week.
+  if (row.reimbursable) return { coverage: "reimbursable", timing };
   if (row.unplannedAllowance) return { coverage: "unplanned", timing };
   if (row.monthlyAllowance) return { coverage: "allowance_monthly", timing };
   if (row.weeklyAllowance) return { coverage: "allowance_weekly", timing };
-  if (row.reimbursable) return { coverage: "reimbursable", timing };
   return { coverage: "needs_classification", timing };
 }
 

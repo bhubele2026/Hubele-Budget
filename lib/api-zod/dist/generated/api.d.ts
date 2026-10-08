@@ -6850,6 +6850,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
             assumption?: string | null | undefined;
             occurrenceKey?: string | undefined;
         }>, "many">>;
+        hookAmountIgnored: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            itemId: zod.ZodString;
+            cadence: zod.ZodEnum<["weekly", "monthly"]>;
+            storedAmount: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            itemId: string;
+            cadence: "weekly" | "monthly";
+            storedAmount: string;
+        }, {
+            itemId: string;
+            cadence: "weekly" | "monthly";
+            storedAmount: string;
+        }>, "many">>;
         overdueOutsideForecast: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
             planKey: zod.ZodString;
             itemId: zod.ZodString;
@@ -7033,6 +7046,11 @@ export declare const GetForecastResponse: zod.ZodObject<{
             date: string;
             balance: string;
         }[] | undefined;
+        hookAmountIgnored?: {
+            itemId: string;
+            cadence: "weekly" | "monthly";
+            storedAmount: string;
+        }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
             itemId: string;
@@ -7116,6 +7134,11 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+        }[] | undefined;
+        hookAmountIgnored?: {
+            itemId: string;
+            cadence: "weekly" | "monthly";
+            storedAmount: string;
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
@@ -7354,6 +7377,11 @@ export declare const GetForecastResponse: zod.ZodObject<{
             date: string;
             balance: string;
         }[] | undefined;
+        hookAmountIgnored?: {
+            itemId: string;
+            cadence: "weekly" | "monthly";
+            storedAmount: string;
+        }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
             itemId: string;
@@ -7537,6 +7565,11 @@ export declare const GetForecastResponse: zod.ZodObject<{
         daily?: {
             date: string;
             balance: string;
+        }[] | undefined;
+        hookAmountIgnored?: {
+            itemId: string;
+            cadence: "weekly" | "monthly";
+            storedAmount: string;
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
@@ -7864,6 +7897,19 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         assumption?: string | null | undefined;
         occurrenceKey?: string | undefined;
     }>, "many">>;
+    hookAmountIgnored: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        itemId: zod.ZodString;
+        cadence: zod.ZodEnum<["weekly", "monthly"]>;
+        storedAmount: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        itemId: string;
+        cadence: "weekly" | "monthly";
+        storedAmount: string;
+    }, {
+        itemId: string;
+        cadence: "weekly" | "monthly";
+        storedAmount: string;
+    }>, "many">>;
     overdueOutsideForecast: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
         planKey: zod.ZodString;
         itemId: zod.ZodString;
@@ -8047,6 +8093,11 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         date: string;
         balance: string;
     }[] | undefined;
+    hookAmountIgnored?: {
+        itemId: string;
+        cadence: "weekly" | "monthly";
+        storedAmount: string;
+    }[] | undefined;
     overdueOutsideForecast?: {
         amount: string;
         itemId: string;
@@ -8130,6 +8181,11 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     daily?: {
         date: string;
         balance: string;
+    }[] | undefined;
+    hookAmountIgnored?: {
+        itemId: string;
+        cadence: "weekly" | "monthly";
+        storedAmount: string;
     }[] | undefined;
     overdueOutsideForecast?: {
         amount: string;
@@ -10546,8 +10602,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        brand: "blue" | "silver" | "gold";
         cadence: "weekly" | "monthly";
+        brand: "blue" | "silver" | "gold";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -10563,8 +10619,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        brand: "blue" | "silver" | "gold";
         cadence: "weekly" | "monthly";
+        brand: "blue" | "silver" | "gold";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -10586,8 +10642,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        brand: "blue" | "silver" | "gold";
         cadence: "weekly" | "monthly";
+        brand: "blue" | "silver" | "gold";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;
@@ -10609,8 +10665,8 @@ export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
         displayName: string | null;
         name: string;
         accountId: string;
-        brand: "blue" | "silver" | "gold";
         cadence: "weekly" | "monthly";
+        brand: "blue" | "silver" | "gold";
         periodLabel: string;
         weekCharges: number;
         chargeCount: number;

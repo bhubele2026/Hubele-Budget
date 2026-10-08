@@ -21,6 +21,8 @@ import {
   MATCH_CONFIRMED_DESCRIPTORS,
   MATCH_EARLY_DAYS,
   matchPlansToRows,
+  nextHookOccurrence,
+  payoffsPaidBy,
   plansPaidInFullByName,
   SUPERSEDE_MAX_DAYS,
   type PaidInFull,
@@ -29,7 +31,11 @@ import {
   type MatchPlan,
   type MatchRow,
   type PlanRowMatch,
+  type DuePayoff,
+  type HookCadence,
+  type PayoffPaymentRow,
 } from "@workspace/avalanche-core";
+import { loadHookPayoffs, readHookSettings, type HookOccurrence, type HookPayoff } from "./everydayHooks";
 import {
   addDays,
   expandItem,
@@ -91,9 +97,9 @@ export type LedgerPlan = {
    *   tier-1/2 pair paid part of it (offCurve is false for an underpayment), and
    *   only the unpaid remainder lands — on the plan's OWN date, never dragged to
    *   a business day like the overdue sibling above;
-   * - `dragged_past_due`: the pre-PR6 drag of a weekly-cadence expense due BEFORE
-   *   today (`keepsPreSnapshotRule`, until PR8); due today it is
-   *   `due_today_not_posted` like any other plan;
+   * (PR-B2) `dragged_past_due` is retired with `keepsPreSnapshotRule`: a
+   * weekly-cadence expense follows the overdue rule like any bill, and an
+   * everyday hook's closed-period payoff lands as `overdue_assumed_unpaid`.
    * - `pre_window_on_first_day`: no snapshot, and due before the window, so it lands on the window's first day.
    */
   assumption?:
@@ -101,7 +107,6 @@ export type LedgerPlan = {
     | "overdue_remainder_assumed_unpaid"
     | "remainder_assumed_unpaid"
     | "due_today_not_posted"
-    | "dragged_past_due"
     | "pre_window_on_first_day";
 };
 
@@ -207,6 +212,16 @@ export type ForecastLedger = {
   incomeNotArrived: LedgerListedPlan[];
   /** (PR6 review) Overdue expenses a bank row is taken to have paid. Sorted by due date. */
   overdueAssumedPaid: LedgerAssumedPaidPlan[];
+  /**
+   * ⭐ (PR-B2, decision 7) The everyday hooks in force, each with its item's
+   * stored amount — which the forecast IGNORES: every occurrence is the card
+   * payoff instead (`everydayHooks.ts`). Banner data for the UI. Empty with no hooks.
+   * (Round 2) A hook whose periods have no allowance at all keeps its stored
+   * amount, so it is not listed.
+   */
+  hookAmountIgnored: Array<{ itemId: string; cadence: HookCadence; storedAmount: string }>;
+  /** (PR-B2) Each hook occurrence's payoff, keyed like `matches[].planKey`. */
+  hookPayoffs: Map<string, HookPayoff>;
 };
 
 /** (PR6) How far back an overdue expense still drags onto the curve (#803's floor). */
@@ -214,20 +229,6 @@ export const DRAG_LOOKBACK_DAYS = 14;
 
 /** Resolution statuses that close a plan occurrence for the curve. */
 const CLOSING_STATUSES: ReadonlySet<string> = new Set(["matched", "skipped", "missed", "dismissed"]);
-
-/**
- * ⚠️ (PR6, temporary — PR8 deletes this) Weekly-cadence EXPENSES keep the
- * pre-PR6 rule: the pre-snapshot drop (#666) with its one-day exception (#688),
- * and the drag as it was. The Weekly Spend reserve is a plain weekly bill that no
- * bank row ever pays, so the overdue rule would drag up to two weeks of it onto
- * one day. PR8 replaces the funding bills with Amex payoff events.
- */
-export function keepsPreSnapshotRule(
-  item: { frequency: string } | undefined,
-  amount: number,
-): boolean {
-  return !!item && amount < 0 && (item.frequency === "weekly" || item.frequency === "biweekly");
-}
 
 /**
  * ⭐ THE FORECAST LEDGER — everything the cash curve is made of, before any of
@@ -279,8 +280,19 @@ export function keepsPreSnapshotRule(
  *       4. otherwise on its own (rescheduled) date.
  *     Occurrences dated before their item existed (anchor date, else created
  *     date; a debt's created date for its minimum) are never overdue.
- *     ⚠️ Weekly-cadence expenses keep the old rule until PR8
- *     (`keepsPreSnapshotRule`).
+ *   - ⭐ (PR-B2, decision 7) THE EVERYDAY HOOKS. The items named by
+ *     `preferences.everydayHooks` (the Weekly / Monthly Spend bills) are DATES,
+ *     not amounts: each occurrence is the card payoff for its period — charges
+ *     plus what is left of the allowance while the period is open
+ *     (`loadHookPayoffs`); the item's stored amount is ignored
+ *     (`hookAmountIgnored`) — (round 2) unless the period has no allowance at
+ *     all, when the stored amount stands (never $0). A due payoff (on or before today) is paid only on
+ *     evidence (`payoffsPaidBy`: an Amex payment covering it after the
+ *     occurrence); unpaid, it lands on the next business day — "a closed week
+ *     not yet paid lands on the next business day". Hooks never enter the
+ *     bill matcher. `keepsPreSnapshotRule` (PR6's temporary carve-out for
+ *     weekly-cadence expenses) is deleted: any other weekly bill follows the
+ *     overdue rule like every bill.
  */
 export async function buildForecastLedger(
   householdId: string,
@@ -393,6 +405,20 @@ export async function buildForecastLedger(
       linkedRecurringByDebt.set(r.debtId, r);
     }
   }
+  // ⭐ (PR-B2, decision 7) The everyday hooks: active, non-income items only.
+  const hookSettings = await readHookSettings(ownerUserId);
+  const hookCadenceByItem = new Map<string, HookCadence>();
+  const hookAmountIgnored: ForecastLedger["hookAmountIgnored"] = [];
+  for (const [cadence, hook] of [
+    ["weekly", hookSettings.hooks.weekly],
+    ["monthly", hookSettings.hooks.monthly],
+  ] as const) {
+    if (!hook) continue;
+    const item = recurring.find((r) => r.id === hook.recurringItemId);
+    if (!item || item.active !== "true" || item.kind === "income") continue;
+    hookCadenceByItem.set(item.id, cadence);
+    hookAmountIgnored.push({ itemId: item.id, cadence, storedAmount: (Math.abs(Number(item.amount)) || 0).toFixed(2) });
+  }
   const events: CashEvent[] = [];
   for (const item of recurring) events.push(...expandItem(item, expandStart, to));
   // (#687) Synthetic events (debt minimums for debts WITHOUT a linked
@@ -468,8 +494,6 @@ export async function buildForecastLedger(
     const start = itemStartISO(ev.itemId);
     return start != null && ev.date < start;
   };
-  const keepsOldRule = (ev: CashEvent): boolean =>
-    keepsPreSnapshotRule(recurringById.get(ev.itemId), ev.amount);
   // (PR-B1) A plan's amount kind travels with it onto the curve.
   const amountKindOf = (itemId: string): "fixed" | "estimate" =>
     recurringById.get(itemId)?.amountKind === "estimate" ? "estimate" : "fixed";
@@ -829,6 +853,8 @@ export async function buildForecastLedger(
   const listRowFromISO = addDaysISO(listFromISO, -MATCH_EARLY_DAYS);
   const rowReadFromISO = listRowFromISO < rowMatchFromISO ? listRowFromISO : rowMatchFromISO;
   for (const ev of events) {
+    // (PR-B2) A hook is a date, not a bill: it never competes for a row.
+    if (hookCadenceByItem.has(ev.itemId)) continue;
     const key = `${ev.itemId}|${ev.date}`;
     if (
       matchedPlanKeys.has(key) ||
@@ -841,12 +867,12 @@ export async function buildForecastLedger(
     const planDate = rescheduledByKey.get(key) ?? ev.date;
     if (planDate > planMatchToISO) continue;
     const inMatchWindow = planDate >= planMatchFromISO;
-    const forListing = !inMatchWindow && planDate >= listFromISO && planDate <= dragCutoffISO && !keepsOldRule(ev);
+    const forListing = !inMatchWindow && planDate >= listFromISO && planDate <= dragCutoffISO;
     if (!inMatchWindow && !forListing) continue;
     if (closedAtMovedDate(ev, planDate)) continue;
     // (PR6) An occurrence from before its item existed is never due, so it never
     // competes for a row (nor holds back a later occurrence's pair).
-    if (planDate <= dragCutoffISO && !keepsOldRule(ev) && beforeItemExisted(ev)) continue;
+    if (planDate <= dragCutoffISO && beforeItemExisted(ev)) continue;
     // (Decision 13) The plan's own category (the only bill in it is tier-2 evidence)
     // and the debt a row's tag must name (tier 1) travel with it.
     const plan: MatchPlan = {
@@ -868,7 +894,9 @@ export async function buildForecastLedger(
   let cardPayments: PaidInFull[] = [];
   // Pairs that count as overdue evidence (decision 13): tier 1 or 2, so never a row tagged to another debt.
   let evidencePairs: PlanRowMatch[] = [];
-  if (matchPlans.length > 0 || listingPlans.length > 0) {
+  // (PR-B2) Checking rows no pair used, for the hooks' payment evidence.
+  let hookPaymentRows: PayoffPaymentRow[] = [];
+  if (matchPlans.length > 0 || listingPlans.length > 0 || hookCadenceByItem.size > 0) {
     const candidateRowsAll = await db
       .select()
       .from(transactionsTable)
@@ -984,7 +1012,7 @@ export async function buildForecastLedger(
     }
     const rowDateById = new Map(matchRows.map((r) => [r.txnId, r.occurredOn] as const));
     // The rule applies where `offCurve` decides the curve — a plan due after the
-    // cutoff, or a weekly-cadence expense (`keepsPreSnapshotRule`) — and a pair it
+    // cutoff (PR-B2: `keepsPreSnapshotRule` is gone) — and a pair it
     // holds back drops to tier 3, so `offCurve` stays `tier ≤ 2`. A plan already due
     // is paid on its evidence instead (the plans loop), as before.
     // (PR-B2 round 4) The rows of the pairs it holds back, kept for `usedRows` below.
@@ -993,9 +1021,7 @@ export async function buildForecastLedger(
       if (m.tier > 2) return m;
       const plan = planByKey.get(m.planKey);
       if (!plan) return m;
-      const curveUsesOffCurve =
-        plan.date > dragCutoffISO || keepsPreSnapshotRule(recurringById.get(plan.itemId), plan.amount);
-      if (!curveUsesOffCurve) return m;
+      if (plan.date <= dragCutoffISO) return m;
       const rowDate = rowDateById.get(m.txnId) ?? "";
       const earlierUnpaid = (unpaidByItem.get(m.planItemId) ?? []).some(
         (d) => d < m.planDate && d <= rowDate,
@@ -1041,7 +1067,53 @@ export async function buildForecastLedger(
       );
     }
     evidencePairs = [...matches, ...listingMatches].filter(isEvidence);
+    // (PR-B2) What is left for the hooks: rows on checking that no pair used and
+    // no card-minimum rule spent, and that carry no debt tag.
+    const cardPaymentTxnIds = new Set(cardPayments.map((c) => c.txnId));
+    hookPaymentRows = matchRows
+      .filter((r) => r.onChecking && !r.debtId && !usedRows.has(r.txnId) && !cardPaymentTxnIds.has(r.txnId))
+      .map((r) => ({ txnId: r.txnId, occurredOn: r.occurredOn, amount: r.amount, description: r.description }));
   }
+
+  // ⭐ (PR-B2, decision 7) EACH HOOK OCCURRENCE IS ITS CARD PAYOFF. Sized after the
+  // matcher so the remaining allowance reads the ledger's own tier-2 pairs, exactly
+  // as the money position does. Occurrences that can never reach the curve (older
+  // than the drag floor) are not sized.
+  const hookOccurrences: HookOccurrence[] = [];
+  const hookDatesByItem = new Map<string, string[]>();
+  for (const ev of events) {
+    const cadence = hookCadenceByItem.get(ev.itemId);
+    if (!cadence) continue;
+    const key = `${ev.itemId}|${ev.date}`;
+    const list = hookDatesByItem.get(ev.itemId) ?? [];
+    list.push(ev.date);
+    hookDatesByItem.set(ev.itemId, list);
+    if ((rescheduledByKey.get(key) ?? ev.date) < dragFloorISO) continue;
+    const storedCents = Math.round(Math.abs(Number(recurringById.get(ev.itemId)?.amount ?? 0)) * 100) || 0;
+    hookOccurrences.push({ key, cadence, occurrenceDate: ev.date, storedCents });
+  }
+  for (const list of hookDatesByItem.values()) list.sort();
+  const hookPayoffs = await loadHookPayoffs({
+    householdId,
+    ownerUserId,
+    todayISO,
+    settings: hookSettings,
+    occurrences: hookOccurrences,
+    tier2PairedTxnIds: new Set(matches.filter((m) => m.tier === 2 && m.offCurve).map((m) => m.txnId)),
+  });
+  // A due payoff is paid on evidence only (`payoffsPaidBy`). Answered occurrences
+  // never compete for a row.
+  const duePayoffs: DuePayoff[] = [];
+  for (const o of hookOccurrences) {
+    const eff = rescheduledByKey.get(o.key) ?? o.occurrenceDate;
+    if (eff > dragCutoffISO) continue;
+    if (matchedPlanKeys.has(o.key) || skippedPlanKeys.has(o.key) || missedPlanKeys.has(o.key) || partialTxnByKey.has(o.key)) continue;
+    const itemId = o.key.slice(0, o.key.lastIndexOf("|"));
+    const dates = hookDatesByItem.get(itemId) ?? [];
+    const next = dates.find((d) => d > o.occurrenceDate) ?? nextHookOccurrence(o.cadence, o.occurrenceDate);
+    duePayoffs.push({ key: o.key, occurrenceDate: o.occurrenceDate, nextOccurrenceDate: next, amountCents: hookPayoffs.get(o.key)?.amountCents ?? 0 });
+  }
+  const hookPaidBy = payoffsPaidBy(duePayoffs, hookPaymentRows);
   // (Decision 13) Only tier-1/2 pairs (`offCurve`) take a plan off the curve; tier 3 is a suggestion.
   const probablyPaidKeys = new Set(matches.filter((m) => m.offCurve).map((m) => m.planKey));
   // ⭐ (PR6 review H1, decision 13) EVIDENCE THAT AN OVERDUE PLAN WAS PAID: a tier-1
@@ -1083,33 +1155,69 @@ export async function buildForecastLedger(
     if (missedPlanKeys.has(origKey)) continue;
     // (PR6) A pre-PR6 Mark missed / Skip / match sent on the moved-to date.
     if (closedAtMovedDate(ev, rawEffectiveDate)) continue;
+    // ⭐ (PR-B2, decision 7) A hook occurrence is its card payoff; the item's
+    // stored amount is never read. A $0 payoff (nothing charged, nothing left to
+    // spend) puts nothing on the curve.
+    const hookCadence = hookCadenceByItem.get(ev.itemId);
+    const baseAmount = hookCadence ? -((hookPayoffs.get(origKey)?.amountCents ?? 0) / 100) : ev.amount;
+    if (hookCadence && baseAmount === 0) continue;
     // (PR5) A partial confirmation leaves only the unpaid remainder scheduled.
-    let planAmount = ev.amount;
+    let planAmount = baseAmount;
     const partialTxn = partialTxnByKey.get(origKey);
     if (partialTxn) {
       const paid = resolvedTxnAmount.get(partialTxn);
       if (paid != null) {
-        const remainder = Math.round((ev.amount - paid) * 100) / 100;
-        if (Math.abs(remainder) <= 1 || Math.sign(remainder) !== Math.sign(ev.amount)) continue;
+        const remainder = Math.round((baseAmount - paid) * 100) / 100;
+        if (Math.abs(remainder) <= 1 || Math.sign(remainder) !== Math.sign(baseAmount)) continue;
         planAmount = remainder;
       }
     }
-    // ⚠️ (PR6, until PR8) WEEKLY-CADENCE EXPENSES KEEP THE PRE-PR6 RULE
-    // (`keepsPreSnapshotRule`): (#666) a plan dated before the snapshot is
-    // dropped, except (#688) an expense dated the day before it.
-    const oldRule = keepsOldRule(ev);
     // (PR5) A plan a bank row probably paid (`offCurve`) is off the curve until the
     // user confirms or rejects the suggestion; the row already counts. This holds
-    // for a plan due after today, and for weekly-cadence expenses at any date.
-    // (PR6 review) A plan already due uses the evidence rule below instead.
-    if ((rawEffectiveDate > dragCutoffISO || oldRule) && probablyPaidKeys.has(origKey)) continue;
-    if (oldRule && snapshotISO && rawEffectiveDate < snapshotISO) {
-      const oneDayBeforeSnap = fmtISO(addDays(parseISO(snapshotISO), -1));
-      const stillEligibleForDrag =
-        ev.amount < 0 &&
-        rawEffectiveDate >= oneDayBeforeSnap &&
-        rawEffectiveDate <= dragCutoffISO;
-      if (!stillEligibleForDrag) continue;
+    // for a plan due after today. (PR6 review) A plan already due uses the
+    // evidence rule below instead. (PR-B2) Weekly-cadence expenses no longer
+    // keep the pre-PR6 rule (`keepsPreSnapshotRule`, deleted).
+    if (rawEffectiveDate > dragCutoffISO && probablyPaidKeys.has(origKey)) continue;
+    // ⭐ (PR-B2) A DUE HOOK PAYOFF: paid on evidence (an Amex payment covering it
+    // after the occurrence) → off the curve and listed in `overdueAssumedPaid`;
+    // otherwise "a closed week not yet paid lands on the next business day" (due
+    // today: the next business day too, so day 0 equals the bank). Older than the
+    // drag floor: off the curve, as weekly bills were before. A closed period's
+    // charges are real whenever the hook item was created, so the item's start
+    // date does not apply.
+    if (hookCadence && rawEffectiveDate <= dragCutoffISO) {
+      if (rawEffectiveDate < dragFloorISO) continue;
+      const dueBeforeToday = rawEffectiveDate < todayISO;
+      const paidBy = hookPaidBy.get(origKey);
+      if (paidBy) {
+        overdueAssumedPaid.push({
+          planKey: origKey,
+          itemId: ev.itemId,
+          occurrenceDate: ev.date,
+          dueDate: rawEffectiveDate,
+          label: ev.label,
+          daysOverdue: Math.round((todayDateOnly.getTime() - parseISO(rawEffectiveDate).getTime()) / 86_400_000),
+          planAmount,
+          txnId: paidBy.txnId,
+          txnAmount: paidBy.amount,
+          confidence: "card_payment",
+          unpaidRemainder: 0,
+        });
+        continue;
+      }
+      plans.push({
+        kind: "plan",
+        eventKind: ev.kind,
+        date: dragTargetISO,
+        originalDate: rawEffectiveDate,
+        occurrenceDate: ev.date,
+        amount: planAmount,
+        itemId: ev.itemId,
+        label: ev.label,
+        amountKind: amountKindOf(ev.itemId),
+        assumption: dueBeforeToday ? "overdue_assumed_unpaid" : "due_today_not_posted",
+      });
+      continue;
     }
     // ⭐ (PR6) DUE ON OR BEFORE TODAY (or the snapshot day, when that is later) AND
     // UNRESOLVED (handled above). Nothing lands on today, so day 0 equals the bank:
@@ -1123,22 +1231,6 @@ export async function buildForecastLedger(
     //     as before. A paycheck that has not landed never raises the curve.
     if (rawEffectiveDate <= dragCutoffISO) {
       const dueBeforeToday = rawEffectiveDate < todayISO;
-      if (oldRule) {
-        if (rawEffectiveDate < dragFloorISO) continue;
-        plans.push({
-          kind: "plan",
-          eventKind: ev.kind,
-          date: dragTargetISO,
-          originalDate: rawEffectiveDate,
-          occurrenceDate: ev.date,
-          amount: planAmount,
-          itemId: ev.itemId,
-          label: ev.label,
-          amountKind: amountKindOf(ev.itemId),
-          assumption: dueBeforeToday ? "dragged_past_due" : "due_today_not_posted",
-        });
-        continue;
-      }
       // Never due: an occurrence from before its item existed (weekly/biweekly
       // expansion walks back past the anchor, semimonthly ignores it, a debt
       // minimum starts on the debt's created day, the Avalanche extra on the day
@@ -1315,5 +1407,12 @@ export async function buildForecastLedger(
     overdueOutsideForecast,
     incomeNotArrived,
     overdueAssumedPaid,
+    // (Round 2) The banner names a hook only where its stored amount really is
+    // ignored: not when every occurrence sized fell back to it (no allowance at all).
+    hookAmountIgnored: hookAmountIgnored.filter((h) => {
+      const sized = hookOccurrences.filter((o) => o.key.startsWith(`${h.itemId}|`)).map((o) => hookPayoffs.get(o.key));
+      return sized.length === 0 || sized.some((p) => p && !p.fromStoredAmount);
+    }),
+    hookPayoffs,
   };
 }

@@ -620,18 +620,33 @@ export function matchPlansToRows(
   const out: PlanRowMatch[] = [];
   for (const c of all) {
     if (usedPlans.has(c.plan.key) || usedRows.has(c.row.txnId)) continue;
+    // ⭐ (PR-B2, the biweekly paycheck fix — PR9's pin R2-2) What an EARLIER pair of
+    // this pass already took, before `c` is added: for income, a runner-up whose
+    // other side is gone is no rival.
+    const takenEarlier = (o: Candidate): boolean =>
+      o.plan.key === c.plan.key ? usedRows.has(o.row.txnId) : usedPlans.has(o.plan.key);
     usedPlans.add(c.plan.key);
     usedRows.add(c.row.txnId);
     const margin = Math.max(100, Math.abs(c.score) * 0.1);
     // A close runner-up makes a pair ambiguous only when it is of the same or a
     // better rank: a pair that proves nothing, or a manual twin of a Plaid row,
     // never casts doubt on one that ranks above it.
+    // ⭐ (PR-B2) INCOME ONLY: a runner-up whose row (or plan) an earlier pair of this
+    // pass already took cannot be this pair's row (or plan), so it casts no doubt.
+    // Before, a paycheck deposited early (taken by its own occurrence first) made the
+    // previous occurrence's off-amount deposit ambiguous — "not arrived" — and the
+    // hold-back then kept the early paycheck on the curve while it was already in
+    // cash: one paycheck counted twice, reading HIGH.
+    // ⚠️ Outflow pairs keep the old flag exactly: un-flagging a bill pair can make it
+    // tier 2 (`tierOf`), which takes the bill off the curve and could read high.
+    const income = c.plan.amount > 0;
     const ambiguous = all.some(
       (o) =>
         o !== c &&
         o.rank <= c.rank &&
         (o.plan.key === c.plan.key || o.row.txnId === c.row.txnId) &&
-        o.score - c.score <= margin,
+        o.score - c.score <= margin &&
+        !(income && takenEarlier(o)),
     );
     const p = cents(c.plan.amount);
     const confidence: MatchConfidence =

@@ -101,6 +101,9 @@ export const SERVER_OWNED_PREFERENCE_KEYS = [
   "budgetCategoriesV2",
   "budgetMay2026AmountsV1",
   "defaultsSeededAt",
+  // (PR-B2, decision 7) Which recurring items are the everyday hooks. Set once
+  // per household by 0042_everyday_hooks.sql; a settings PUT never moves it.
+  "everydayHooks",
 ] as const;
 
 /**

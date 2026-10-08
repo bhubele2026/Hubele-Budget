@@ -243,8 +243,8 @@ export type CashSignal = {
     /**
      * (PR6) Why the plan is not on its due date: `overdue_assumed_unpaid`,
      * `overdue_remainder_assumed_unpaid` (PR6 review: a bank row paid part of it),
-     * `due_today_not_posted`, `dragged_past_due` (weekly-cadence expenses due
-     * before today, until PR8) or `pre_window_on_first_day`; null on its own date.
+     * `due_today_not_posted` or `pre_window_on_first_day`; null on its own date.
+     * (PR-B2) `dragged_past_due` is retired with the weekly-cadence carve-out.
      */
     assumption: string | null;
     /** (PR6) `<itemId>|<occurrenceDate>` — the resolution key. */
@@ -258,6 +258,13 @@ export type CashSignal = {
   incomeNotArrived?: CashSignalListedPlan[];
   /** (PR6 review) Overdue expenses the forecast treats as paid by a bank row (never silent). */
   overdueAssumedPaid?: CashSignalAssumedPaidPlan[];
+  /**
+   * ⭐ (PR-B2, decision 7) The everyday hooks in force — the Weekly / Monthly
+   * Spend items whose occurrences the forecast replaces with the card payoff —
+   * each with the item's stored amount, which the forecast ignores. Banner data
+   * for the UI. Present only when the household has a hook.
+   */
+  hookAmountIgnored?: Array<{ itemId: string; cadence: "weekly" | "monthly"; storedAmount: string }>;
   /**
    * (PR5) Plans a bank row probably paid: each one is off the curve until the
    * user confirms ("matched"/"partial") or rejects ("not_match") it. Amounts are
@@ -505,6 +512,7 @@ export async function computeCashSignalDetailed(
       confidence: p.confidence,
       unpaidRemainder: r2(p.unpaidRemainder),
     })),
+    ...(ledger.hookAmountIgnored.length > 0 ? { hookAmountIgnored: ledger.hookAmountIgnored.map((h) => ({ ...h })) } : {}),
   };
   return { signal, ledger };
 }

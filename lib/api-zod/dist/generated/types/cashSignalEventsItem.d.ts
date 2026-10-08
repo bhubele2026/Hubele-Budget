@@ -27,8 +27,8 @@ export type CashSignalEventsItem = {
   the bank). `overdue_remainder_assumed_unpaid` (PR6 review):
   overdue, a bank row paid part of it, and the unpaid
   remainder lands on the next business day.
-  `dragged_past_due`: the pre-PR6 rule, kept for
-  weekly-cadence expenses due before today until PR8.
+  (PR-B2) `dragged_past_due` is retired: weekly-cadence
+  expenses follow the overdue rule like any bill.
   `pre_window_on_first_day`: no snapshot, due before the
   window, placed on its first day.
   `remainder_assumed_unpaid` (decision 13, round 4): due after
