@@ -26,9 +26,13 @@ import {
  * built from the *transactions* feeding the page — so a duplicate
  * `plaid_accounts` row with no transactions yet (the typical mid-
  * re-link shape) has its id absent from the set and its debt is
- * skipped. The Ending Balance tile therefore shows the sum of the
+ * skipped. The month's ending balance is therefore the sum of the
  * three real debts, NOT the four-debt total. Once dedupe lands and
- * `/api/debts` returns three again, the tile is unchanged.
+ * `/api/debts` returns three again, it is unchanged.
+ *
+ * (C10 repair) The Ending Balance tile this spec read is never rendered
+ * (parity AX-33); the newest row's running balance — seeded from the same
+ * ending balance — carries the figure now.
  *
  * Seeding strategy: same mock-the-payload approach as
  * `amex-three-cards-aggregation.spec.ts`. We mutate the mocked
@@ -270,16 +274,19 @@ test.describe("Amex page — re-link duplicate window doesn't double Ending Bala
 
     const expectedTotal = DEBT_BALANCES.reduce((s, n) => s + n, 0); // 2500
     const inflatedTotal = expectedTotal + DUP_DEBT_BALANCE; // 3000
-    const tile = page.getByTestId("stat-ending-balance");
+    // (C10 repair) The Ending Balance tile (`stat-ending-balance`) is never
+    // rendered (parity AX-33). The per-row running balance is seeded from the
+    // SAME month ending balance, so the NEWEST row's "bal" (card 3003, 11:00)
+    // carries the aggregate this spec guards. (The tile's "From debt row"
+    // source footer is not on screen anywhere.)
+    const tile = page.getByTestId(`text-running-balance-${TXN_ROW_IDS[2]}`);
 
-    // --- Phase 1: duplicate window. Tile must equal the sum of the
-    //     three REAL debts (2500), not the inflated four-debt total
-    //     (3000). The "From debt row" footer confirms we're on the
-    //     debt-derived aggregation branch (the regression target).
+    // --- Phase 1: duplicate window. The ending balance must equal the sum
+    //     of the three REAL debts (2500), not the inflated four-debt total
+    //     (3000).
     await expect(tile).toContainText(fmtCurrency(expectedTotal), {
       timeout: 15_000,
     });
-    await expect(tile).toContainText("From debt row");
     await expect(tile).not.toContainText(fmtCurrency(inflatedTotal));
 
     // --- Phase 2: dedupe lands. Flip the mock so `/api/debts` now
@@ -302,13 +309,11 @@ test.describe("Amex page — re-link duplicate window doesn't double Ending Bala
       .poll(() => debtsRequestCount, { timeout: 15_000 })
       .toBeGreaterThan(requestsBeforeReload);
 
-    // Tile is unchanged — the duplicate never contributed in the
-    // first place, so removing it leaves the value at 2500 and the
-    // "From debt row" branch label intact.
+    // Unchanged — the duplicate never contributed in the first place, so
+    // removing it leaves the ending balance at 2500.
     await expect(tile).toContainText(fmtCurrency(expectedTotal), {
       timeout: 15_000,
     });
-    await expect(tile).toContainText("From debt row");
     await expect(tile).not.toContainText(fmtCurrency(inflatedTotal));
   });
 });

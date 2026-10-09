@@ -21,7 +21,8 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
   ], isLoading: false }),
   useListCategories: () => ({ data: [{ id: "c1", name: "Dining" }] }),
 }));
-vi.mock("@/pages/amex", () => ({ default: (p: object) => { h.amexProps(p); return <div data-testid="amex-ledger" />; } }));
+// (C10) The Amex page renders the host's `lead` (the Summary panel) itself.
+vi.mock("@/pages/amex", () => ({ default: (p: { lead?: ReactNode }) => { h.amexProps(p); return <div data-testid="amex-ledger">{p.lead}</div>; } }));
 // (C9) The Chase page renders the host's `lead` (the Summary panel) itself.
 vi.mock("@/pages/transactions", () => ({ default: (p: { lead?: ReactNode }) => { h.chaseProps(p); return <div data-testid="chase-ledger">{p.lead}</div>; } }));
 
@@ -126,53 +127,29 @@ describe("checking variant", () => {
   });
 });
 
-describe("embedded ledgers stick (C0)", () => {
+describe("an account = its page's own layout (C9 checking, C10 card)", () => {
   /**
-   * An `overflow: hidden` panel is a scroll container, so the ledger's sticky
-   * pane and bulk bar stuck to the panel — which never moves — instead of to
-   * <main>. The Activity panel is sticky-safe (`overflow: clip`, pinned in
-   * index.css.test) and flush, with the padding moved inside so the pane can
-   * bleed back over it.
+   * One account experience: `/next/accounts/:id` renders the same layout as
+   * `/transactions` (checking) or `/amex` (card), embedded (no title), full
+   * width, with the account Summary as the first panel of its figures row.
+   * The ledger's own panel is sticky-safe (pinned in `chaseLayout.test.tsx`
+   * and `amexLayout.test.tsx`), so nothing between this cell and the page may
+   * be a scroll container either.
    */
-  it.each([["/next/accounts/ext-amex", "amex-ledger"]])(
-    "%s: the Activity panel is sticky-safe and flush, the ledger padded inside it",
-    async (path, ledger) => {
-      seed(); renderAt(path);
-      await waitFor(() => expect(screen.getByTestId(ledger)).toBeTruthy());
-      const panel = screen.getByTestId("account-activity");
-      expect(panel.className).toContain("panel-sticky-safe");
-      expect(panel.className).toContain("panel-flush");
-      // No `overflow-hidden` utility sneaks back in on top of the clip.
-      expect(panel.className).not.toMatch(/\boverflow-(hidden|auto|scroll)\b/);
-      // Nothing between the panel and the ledger is a scroll container either.
-      let el = screen.getByTestId(ledger).parentElement;
-      while (el && el !== panel) {
-        expect(el.className).not.toMatch(/\boverflow-(hidden|auto|scroll)\b/);
-        el = el.parentElement;
-      }
-      expect(screen.getByTestId(ledger).closest(".p-4")).toBeTruthy();
-    },
-  );
-});
-
-describe("checking account = the Chase page's own layout (C9)", () => {
-  /**
-   * One account experience: `/next/accounts/:id` for a checking account renders
-   * the same layout as `/transactions` (embedded: no title), full width, with
-   * the account Summary as the first panel of its figures row. The ledger's own
-   * panel is sticky-safe (pinned in `chaseLayout.test.tsx`), so nothing between
-   * this cell and the page may be a scroll container either.
-   */
-  it("spans the grid, passes the Summary as the lead, and adds no scroll container", async () => {
-    seed(); renderAt("/next/accounts/ext-chk");
-    await waitFor(() => expect(screen.getByTestId("chase-ledger")).toBeTruthy());
+  it.each([
+    ["/next/accounts/ext-chk", "chase-ledger", { accountKey: "r-chk" }, "$2,500.00"],
+    ["/next/accounts/ext-amex", "amex-ledger", { accountId: "ext-amex" }, "$1,234.50"],
+  ])("%s spans the grid, passes the Summary as the lead, and adds no scroll container", async (path, ledger, props, figure) => {
+    seed(); renderAt(path);
+    await waitFor(() => expect(screen.getByTestId(ledger)).toBeTruthy());
     const cell = screen.getByTestId("account-activity");
     expect(cell.className).toContain("span-12");
     expect(cell.className).not.toContain("panel");
-    expect(h.chaseProps).toHaveBeenCalledWith(expect.objectContaining({ embedded: true, accountKey: "r-chk", lead: expect.anything() }));
-    // The Summary is inside the Chase layout (its lead), not beside it.
-    expect(within(screen.getByTestId("chase-ledger")).getByTestId("account-summary").textContent).toContain("$2,500.00");
-    let el: HTMLElement | null = screen.getByTestId("chase-ledger");
+    const spy = ledger === "chase-ledger" ? h.chaseProps : h.amexProps;
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ embedded: true, ...props, lead: expect.anything() }));
+    // The Summary is inside the account's layout (its lead), not beside it.
+    expect(within(screen.getByTestId(ledger)).getByTestId("account-summary").textContent).toContain(figure);
+    let el: HTMLElement | null = screen.getByTestId(ledger);
     while (el && el !== document.body) {
       expect(el.className ?? "").not.toMatch(/\boverflow-(hidden|auto|scroll)\b|panel-link|\bpanel\b/);
       el = el.parentElement;

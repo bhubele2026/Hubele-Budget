@@ -118,29 +118,36 @@ export default function NextAccountsPage() {
                 />
               </Suspense>
             </div>
+          ) : selected && selected.identity.isCard ? (
+            // (C10) A card opens the Amex page's own layout the same way: full
+            // width, the card's Summary first in its card row, the ledger in
+            // its own sticky-safe panel.
+            <div className="span-12 min-w-0" data-testid="account-activity">
+              <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
+                <AmexLedger
+                  embedded
+                  accountId={selected.plaidAccountId}
+                  lead={
+                    <AccountSummary
+                      entry={selected}
+                      debt={debtFor(selected.rowId)}
+                      payoffCard={(payoff?.cards ?? []).find((c) => c.plaidAccountId === selected.plaidAccountId) ?? null}
+                      snapshot={null}
+                    />
+                  }
+                />
+              </Suspense>
+            </div>
           ) : selected ? (
             <>
               <AccountSummary
                 entry={selected}
                 debt={debtFor(selected.rowId)}
-                payoffCard={(payoff?.cards ?? []).find((c) => c.plaidAccountId === selected.plaidAccountId) ?? null}
-                snapshot={selected.identity.isCard ? null : snapshotFor(selected.rowId)}
+                payoffCard={null}
+                snapshot={snapshotFor(selected.rowId)}
               />
-              {/* (C0) Sticky-safe so the ledger's sticky pane and bulk bar
-                  stick to <main> (an `overflow: hidden` panel held them in
-                  place); flush, with the padding moved inside, so the pane
-                  can bleed back over it (`-mx-4 px-4` in the embedded pane)
-                  and span the panel when it sticks. */}
-              <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" variant={["sticky-safe", "flush"]} data-testid="account-activity">
-                <div className="p-4">
-                  <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
-                    {selected.identity.isCard ? (
-                      <AmexLedger embedded accountId={selected.plaidAccountId} />
-                    ) : (
-                      <p className={emptyNote}>This account type has no activity view yet.</p>
-                    )}
-                  </Suspense>
-                </div>
+              <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" variant="static" data-testid="account-activity">
+                <p className={emptyNote}>This account type has no activity view yet.</p>
               </Panel>
             </>
           ) : (

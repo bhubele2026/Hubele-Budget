@@ -121,20 +121,24 @@ export function AccountTransactionRow({
         aria-label="Select"
         className="shrink-0"
       />
-      {/* Merchant (flex column) + inline status chip (metaNode). The name is
-          the row's most-read text, so a long one wraps the chip to a second
-          line rather than being truncated to make room for it. */}
-      {/* Narrow: the merchant owns the line beside the checkbox (its basis is
-          the rest of the row), so a long name never leaves the checkbox alone
-          on a line of its own. The grid ignores the basis. */}
+      {/* Merchant + its status chip (metaNode). The name is the row's
+          most-read text and is never cut to make room for the chip: the name
+          and its rename pencil are one unit, and the chip follows on the same
+          line when it fits (a 40 px row) and on its own trailing line only
+          when it would not.
+          Narrow ledger: the merchant owns the line beside the checkbox (its
+          basis is the rest of the row), so a long name never leaves the
+          checkbox alone on a line. The grid ignores the basis. */}
       <div className="flex min-w-0 grow basis-[calc(100%-2rem)] flex-wrap items-center gap-x-2 gap-y-0.5">
-        <span
-          className="max-w-full truncate font-medium text-neutral-700"
-          title={tx.description}
-        >
-          {tx.displayName || tx.description}
+        <span className="inline-flex min-w-0 max-w-full items-center gap-1" data-testid={`merchant-${tx.id}`}>
+          <span
+            className="min-w-0 truncate font-medium text-neutral-700"
+            title={tx.description}
+          >
+            {tx.displayName || tx.description}
+          </span>
+          <MerchantRenamePopover tx={tx} />
         </span>
-        <MerchantRenamePopover tx={tx} />
         {metaNode}
       </div>
       {/* Card / source */}
@@ -157,6 +161,8 @@ export function AccountTransactionRow({
           categories={categories}
           description={tx.description}
           onChange={onCategoryChange}
+          // Fills the 12rem category column on a wide ledger.
+          triggerClassName="@6xl:w-full"
         />
         {chipsNode}
       </div>
