@@ -212,6 +212,19 @@ describe("app shell chrome", () => {
     expect(screen.getByTestId("h2-wordmark").getAttribute("aria-label")).toBe("H2 Budget");
   });
 
+  it("(F8) the header carries the Ask launcher on every page, marked when you are on Ask, and warms it", () => {
+    mount("/banking");
+    const ask = screen.getByTestId("header-ask");
+    expect(ask.getAttribute("href")).toBe("/ask");
+    expect(ask.getAttribute("aria-label")).toBe("Ask H2");
+    expect(ask.getAttribute("aria-current")).toBeNull();
+    fireEvent.mouseEnter(ask);
+    expect(prefetchRoute).toHaveBeenCalledWith("/ask");
+    cleanup();
+    mount("/ask");
+    expect(screen.getByTestId("header-ask").getAttribute("aria-current")).toBe("page");
+  });
+
   it("(C11) keeps the header on the landing: /home is the dashboard, not a door", () => {
     mount("/home");
     expect(screen.getByTestId("app-header")).toBeTruthy();

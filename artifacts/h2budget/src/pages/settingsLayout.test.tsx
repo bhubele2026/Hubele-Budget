@@ -30,6 +30,7 @@ vi.mock("@/hooks/use-plaid-sync", () => ({
 vi.mock("./settings/AutomationTab", () => ({ default: () => <div data-testid="stub-automation" /> }));
 vi.mock("./settings/MorningTextTab", () => ({ default: () => <div data-testid="stub-morning-text" /> }));
 vi.mock("./settings/AiCostTab", () => ({ default: () => <div data-testid="stub-ai-cost" /> }));
+vi.mock("./settings/MemoryTab", () => ({ default: () => <div data-testid="stub-memory" /> }));
 
 const updateSettings = vi.hoisted(() => vi.fn());
 vi.mock("@workspace/api-client-react", () => {
@@ -115,7 +116,7 @@ afterEach(() => {
 });
 
 describe("(C8) the tab model", () => {
-  it("seven tabs; Banks is plain /settings; anything unknown is Banks", () => {
+  it("eight tabs; Banks is plain /settings; anything unknown is Banks", () => {
     expect(SETTINGS_TABS.map((t) => t.label)).toEqual([
       "Banks",
       "Household",
@@ -123,6 +124,7 @@ describe("(C8) the tab model", () => {
       "Automation",
       "Morning text",
       "AI cost",
+      "Memory",
       "Privacy",
     ]);
     expect(tabHref("banks")).toBe("/settings");
@@ -230,7 +232,7 @@ describe("(C8) Settings — tabs", () => {
     expect(screen.getByTestId("panel-privacy").textContent).toContain("Plaid brokers the bank connection.");
   });
 
-  it("the three fold-in tabs load their own chunks", async () => {
+  it("the four fold-in tabs (Automation, Morning text, AI cost, Memory) load their own chunks", async () => {
     open("/settings?tab=automation");
     expect(await screen.findByTestId("stub-automation")).toBeTruthy();
     cleanup();
@@ -239,6 +241,9 @@ describe("(C8) Settings — tabs", () => {
     cleanup();
     open("/settings?tab=ai");
     expect(await screen.findByTestId("stub-ai-cost")).toBeTruthy();
+    cleanup();
+    open("/settings?tab=memory");
+    expect(await screen.findByTestId("stub-memory")).toBeTruthy();
   });
 
   it("an unknown tab is Banks, never a blank page", () => {

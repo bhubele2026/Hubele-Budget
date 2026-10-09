@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { UserButton } from "@clerk/react";
-import { Menu } from "lucide-react";
+import { Menu, MessageCircleQuestion } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getDashboard,
@@ -718,6 +718,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </span>
                 </Link>
               )}
+              {/* (F8) The Ask launcher: a plain link, on every page with the
+                  header. The page itself says when AI is off (the header
+                  reads no AI state, so it stays off the features client). */}
+              <Link
+                href="/ask"
+                data-testid="header-ask"
+                aria-label="Ask H2"
+                aria-current={location === "/ask" ? "page" : undefined}
+                onMouseEnter={() => prefetch("/ask")}
+                onFocus={() => prefetch("/ask")}
+                className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-white/70 hover:bg-white/10 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+              >
+                <MessageCircleQuestion className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">Ask</span>
+              </Link>
               <UserButton />
             </div>
           </div>

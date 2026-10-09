@@ -94,6 +94,8 @@ vi.mock("./lib/routePrefetch", () => {
     importWishlist: page("wishlist"),
     importMappingRules: page("mapping-rules"),
     importSettings: page("settings"),
+    importAsk: page("ask"),
+    importSuggestions: page("review-suggestions"),
     importNextForecast: page("next-forecast"),
     importNextAccounts: page("next-accounts"),
     prefetchRoute: () => {},
@@ -181,6 +183,9 @@ const OLD_ROUTES: Row[] = [
   { from: "/reports/behavior", lands: "/reports/behavior", page: "reports-behavior", area: "no area" },
   { from: "/mapping-rules", lands: "/mapping-rules", page: "mapping-rules", area: "no area" },
   { from: "/settings", lands: "/settings", page: "settings", area: "no area" },
+  // (F8) Ask sits outside the five areas; Suggestions is Review's own page.
+  { from: "/ask", lands: "/ask", page: "ask", area: "no area" },
+  { from: "/review/suggestions", lands: "/review/suggestions", page: "review-suggestions", area: "Review" },
   // The /next preview pages: reachable by URL, outside every area (the ribbon
   // is the five destinations) until the owner approves them.
   // /next/dashboard became the landing: it redirects to /home.

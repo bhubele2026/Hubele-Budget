@@ -40,6 +40,9 @@ export const importAllowances = () => import("../pages/allowances");
 export const importMappingRules = () => import("../pages/mapping-rules");
 export const importWishlist = () => import("../pages/wishlist");
 export const importSettings = () => import("../pages/settings");
+// (F8) Ask, outside the five areas, and Review › Suggestions (its proposals).
+export const importAsk = () => import("../pages/ask/Ask");
+export const importSuggestions = () => import("../pages/ask/Suggestions");
 // The /next preview pages (lazy; outside the ribbon until the owner approves).
 export const importNextForecast = () => import("../pages/next/Forecast");
 export const importNextAccounts = () => import("../pages/next/Accounts");
@@ -56,6 +59,7 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/forecast": importForecast,
   "/review": importForecast,
   "/review/categories": importReviewCategories,
+  "/review/suggestions": importSuggestions,
   "/avalanche": importAvalanche,
   "/amex": importAmex,
   "/transactions": importTransactions,
@@ -70,6 +74,7 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/reports/budget": importReportsBudget,
   "/reports/behavior": importReportsBehavior,
   "/settings": importSettings,
+  "/ask": importAsk,
   "/mapping-rules": importMappingRules,
   "/next/forecast": importNextForecast,
   "/next/accounts": importNextAccounts,

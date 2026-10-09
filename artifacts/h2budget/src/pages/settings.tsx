@@ -100,6 +100,7 @@ import {
   importAiCostTab,
   importAutomationTab,
   importMorningTextTab,
+  importMemoryTab,
 } from "./settings/settingsTabs";
 import { TabSkeleton } from "./settings/parts";
 
@@ -108,6 +109,7 @@ import { TabSkeleton } from "./settings/parts";
 const AutomationTab = lazy(importAutomationTab);
 const MorningTextTab = lazy(importMorningTextTab);
 const AiCostTab = lazy(importAiCostTab);
+const MemoryTab = lazy(importMemoryTab);
 /** A settings row: label on the left, its control hard right. */
 const settingRow =
   "flex flex-wrap items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0";
@@ -1386,6 +1388,7 @@ export default function SettingsPage() {
     : tab === "automation" ? lazyTab(<AutomationTab />)
     : tab === "morning-text" ? lazyTab(<MorningTextTab />)
     : tab === "ai" ? lazyTab(<AiCostTab />)
+    : tab === "memory" ? lazyTab(<MemoryTab />)
     : tab === "privacy" ? privacyTab
     : banksTab;
 
