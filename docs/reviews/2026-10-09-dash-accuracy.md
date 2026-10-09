@@ -231,8 +231,17 @@ These are the same panel's figures counted over different populations. Each item
 
 ---
 
-## Gates
-- Root `pnpm run typecheck`, the web suite (TZ=UTC and TZ=America/Chicago), the API suite on `h2budget_test_dashacc`, build + `check-entry-graph`, and `pnpm audit --prod`. Results are in the hand-off report.
+## Gates (all green on the final commit)
+- Root `pnpm run typecheck`: pass.
+- Web suite: TZ=UTC 1816 passed / 3 skipped; TZ=America/Chicago 1817 passed / 2 skipped (204 files).
+- API suite on `h2budget_test_dashacc`: 237 files, 2572 passed, 2 todo.
+- `pnpm run build` + `check-entry-graph`: landing JS **622.0 KB**, cap 622.0 KB, main 620.4 KB.
+  - These helpers add +1.6 KB to the landing path:
+    - `resolveTxnAccount` ~0.9 KB. It lives in `accountIdentity.ts`, which is on the entry path, so the lazy Recent activity's use of it still lands there.
+    - `lowPointView` ~0.5 KB.
+    - CashPanel ~0.2 KB.
+  - The cap is unchanged, but **headroom is now ~0**. Builder B's move of Upcoming and Spending behind lazy skeletons has to free bytes before the new header can go in.
+- `pnpm audit --prod`: exit 0. The one high is the already-ignored `braces` advisory (`pnpm-workspace.yaml` `auditConfig`).
 - E2E needs Clerk keys and was not run.
 
 ## Status
