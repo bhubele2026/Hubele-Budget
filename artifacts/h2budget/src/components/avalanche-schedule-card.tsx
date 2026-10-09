@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { card, cardHead, th, td, tdNum, Help, Foot } from "@/ui";
+import { th, td, tdNum, Help, Foot } from "@/ui";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useGetForecastAvalancheSchedule } from "@workspace/api-client-react";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -33,8 +33,8 @@ export function AvalancheScheduleCard() {
 
   if (isLoading || !data) {
     return (
-      <div className={card} data-testid="card-avalanche-schedule">
-        <div className={cardHead}>
+      <div className="panel tile-in" data-testid="card-avalanche-schedule">
+        <div className="panel-head">
           <Skeleton className="h-4 w-44" />
         </div>
         <div className="space-y-2 p-4">
@@ -51,8 +51,8 @@ export function AvalancheScheduleCard() {
   const target = data.currentAvalancheTarget;
 
   return (
-    <div className={card} data-testid="card-avalanche-schedule">
-      <div className={cardHead}>
+    <div className="panel tile-in" data-testid="card-avalanche-schedule">
+      <div className="panel-head">
         <span className="text-title font-semibold text-brand-navy">Schedule</span>
         {target && (
           <span className="truncate text-micro uppercase tracking-wide text-neutral-400">

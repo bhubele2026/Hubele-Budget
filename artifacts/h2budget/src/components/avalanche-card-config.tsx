@@ -8,7 +8,7 @@ import {
   getListDebtsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { card, cardHead, th, td, tdNum, inputInline, Help } from "@/ui";
+import { th, td, tdNum, inputInline, Help } from "@/ui";
 import {
   BRAND_LABEL,
   brandColor,
@@ -132,8 +132,8 @@ export function AvalancheCardConfig() {
   if (cards.length === 0) return null;
 
   return (
-    <div className={card}>
-      <div className={cardHead}>
+    <div className="panel tile-in">
+      <div className="panel-head">
         <span className="text-title font-semibold text-brand-navy">Amex cards</span>
         <Help className="ml-auto">
           Tier sets the cadence — Blue is a monthly card, Platinum is weekly.

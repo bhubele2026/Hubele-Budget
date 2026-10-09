@@ -109,7 +109,7 @@ export function DebtLastSynced({ debt }: { debt: Debt }) {
   if (debt.plaidLastSyncError) {
     return (
       <div
-        className="text-[10px] text-destructive flex items-center gap-1"
+        className="text-[10px] text-bad flex items-center gap-1"
         data-testid={`text-debt-sync-error-${debt.id}`}
         title={`Sync failing: ${debt.plaidLastSyncError}\nLast healthy sync: ${
           debt.plaidLastSyncedAt
@@ -129,7 +129,7 @@ export function DebtLastSynced({ debt }: { debt: Debt }) {
   }
   return (
     <div
-      className="text-[10px] text-muted-foreground"
+      className="text-[10px] text-neutral-500"
       data-testid={`text-debt-synced-${debt.id}`}
       title={debt.plaidLastSyncedAt ?? ""}
     >
@@ -151,12 +151,12 @@ export function DebtPlaidSource({ debt }: { debt: Debt }) {
       title={fullLabel}
     >
       {inst ? (
-        <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground truncate max-w-[96px]">
+        <span className="rounded bg-platinum-3 px-1 py-0.5 text-[10px] text-neutral-500 truncate max-w-[96px]">
           {inst}
         </span>
       ) : null}
       {a.mask ? (
-        <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+        <span className="text-[11px] text-neutral-500 tabular-nums whitespace-nowrap">
           •• {a.mask}
         </span>
       ) : null}
@@ -628,7 +628,7 @@ function PlaidAccountPicker({
         </DialogHeader>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-neutral-500">
               Pick a credit, loan, or mortgage account to sync balance, APR, and
               minimum payment.
             </p>
@@ -657,7 +657,7 @@ function PlaidAccountPicker({
             </Button>
           </div>
           {accounts.isLoading ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
+            <div className="py-8 text-center text-sm text-neutral-500">
               Loading accounts…
             </div>
           ) : items.length === 0 ? (
@@ -665,7 +665,7 @@ function PlaidAccountPicker({
               className="py-6 px-3 text-center text-sm space-y-3"
               data-testid={`text-debt-picker-empty-${debt.id}`}
             >
-              <p className="text-muted-foreground">
+              <p className="text-neutral-500">
                 No linked Plaid accounts look like debts. Link a bank or
                 card first.
               </p>
@@ -684,7 +684,7 @@ function PlaidAccountPicker({
               className="py-6 px-3 text-center text-sm space-y-3 border rounded-md bg-muted/30"
               data-testid={`text-debt-picker-no-matches-${debt.id}`}
             >
-              <p className="text-muted-foreground">
+              <p className="text-neutral-500">
                 None of your linked accounts look like {debt.name}. Link a
                 new bank or card to continue.
               </p>
@@ -698,7 +698,7 @@ function PlaidAccountPicker({
               </div>
               <button
                 type="button"
-                className="text-xs underline text-muted-foreground hover:text-foreground"
+                className="text-xs underline text-neutral-500 hover:text-brand-navy"
                 onClick={() => setShowAllAccounts(true)}
                 data-testid={`button-debt-picker-show-all-${debt.id}`}
               >
@@ -722,12 +722,12 @@ function PlaidAccountPicker({
                       <div className="text-sm font-medium truncate">
                         {a.name ?? a.officialName ?? "Account"}{" "}
                         {a.mask ? (
-                          <span className="text-muted-foreground">
+                          <span className="text-neutral-500">
                             •••• {a.mask}
                           </span>
                         ) : null}
                       </div>
-                      <div className="text-xs text-muted-foreground truncate">
+                      <div className="text-xs text-neutral-500 truncate">
                         {a.institutionName ?? ""}
                         {a.subtype ? ` · ${a.subtype}` : ""}
                         {a.balance ? ` · bal $${Number(a.balance).toFixed(2)}` : ""}
@@ -786,7 +786,7 @@ function PlaidAccountPicker({
             </div>
           )}
           <div className="pt-2 border-t">
-            <p className="text-xs text-muted-foreground mb-2">
+            <p className="text-xs text-neutral-500 mb-2">
               Don't see your account? Link another institution:
             </p>
             <PlaidLinkButton
@@ -953,7 +953,7 @@ export function DebtReauthBanner({ debts }: { debts: Debt[] | null | undefined }
 
   return (
     <div
-      className="relative flex items-center gap-3 rounded-lg border border-warning/50 bg-warning/10 px-4 py-3 text-foreground"
+      className="relative flex items-center gap-3 rounded-lg border border-warning/50 bg-warning/10 px-4 py-3 text-brand-navy"
       data-testid="banner-debt-reauth"
       role="alert"
     >
