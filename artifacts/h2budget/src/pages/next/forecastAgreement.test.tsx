@@ -245,12 +245,18 @@ describe("/forecast and /review are the one forecast screen (C13)", () => {
     // FC-28: the classic big-bill marker is on the screen's chart (rent, $800).
     expect(screen.getByTestId("big-bill-marker-2026-06-15")).toBeTruthy();
 
-    // The register panel: sticky-safe; this route's view selected; the views are links.
+    // The register panel: sticky-safe; the views are links to the two routes
+    // in a nav (aria-current marks this route's), not tabs: no role="tab",
+    // and no aria-controls pointing at a pane that is not on the page.
     const panel = screen.getByTestId("register-panel");
     expect(panel.className).toContain("panel-sticky-safe");
-    expect(screen.getByTestId("tab-plan").getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByTestId("tab-register").getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByTestId("tab-plan").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("tab-register").getAttribute("aria-current")).toBeNull();
     expect(screen.getByTestId("tab-register").tagName).toBe("A");
+    expect(screen.getByTestId("tab-register").getAttribute("href")).toBe("/review");
+    expect(screen.getByRole("navigation", { name: "Register views" })).toBeTruthy();
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(document.querySelector('[aria-controls^="register-pane"]')).toBeNull();
     // The overall view holds the past-due card AND the planned list (FC-24, FC-49).
     expect(within(panel).getByTestId("dragging-plans-list")).toBeTruthy();
     expect(within(panel).getByRole("heading", { name: "Planned items" })).toBeTruthy();
@@ -263,12 +269,29 @@ describe("/forecast and /review are the one forecast screen (C13)", () => {
   it("/review: the 'Register & reconcile' view under the 'Review' title; the overall-only cards stay out", () => {
     mount(<ForecastPage mode="review" />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Review");
-    expect(screen.getByTestId("tab-register").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("tab-register").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("tab-plan").getAttribute("href")).toBe("/forecast");
     const panel = screen.getByTestId("register-panel");
     expect(within(panel).queryByTestId("dragging-plans-list")).toBeNull();
     expect(within(panel).queryByTestId("card-bank-snapshot")).toBeNull();
     // The headline and the chart are on every view.
     expect(screen.getByTestId("card-forecast-hero")).toBeTruthy();
     expect(screen.getByTestId("card-projected-balance-chart")).toBeTruthy();
+    // (D8) The register's month picker heads the review view.
+    expect(within(panel).getByTestId("review-month-row")).toBeTruthy();
+  });
+
+  it("/next/forecast: the same screen, its views real tabs over one tabpanel that is always on the page", () => {
+    mount(<NextForecastPage />);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((t) => t.getAttribute("data-testid"))).toEqual(["tab-register", "tab-plan"]);
+    for (const t of tabs) expect(t.getAttribute("aria-controls")).toBe("register-pane");
+    const pane = screen.getByRole("tabpanel");
+    expect(pane.id).toBe("register-pane");
+    expect(pane.getAttribute("aria-labelledby")).toBe("register-tab-register");
+    fireEvent.click(screen.getByTestId("tab-plan"));
+    expect(screen.getByTestId("tab-plan").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe("register-tab-plan");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Forecast");
   });
 });

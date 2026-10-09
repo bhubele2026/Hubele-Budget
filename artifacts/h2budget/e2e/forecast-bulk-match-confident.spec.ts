@@ -227,23 +227,20 @@ test.describe("Forecast inbox bulk match-confident (#323)", () => {
     // for `today + 9` to stay in-month), the bank inbox is only reachable
     // with the register on that month.
     // (C13 repair) The old "Review Bucket" / "Active Register" tabs are
-    // gone, and `/review` has no month picker (parity D8): the month is
-    // picked in the "Month & bank" view. `/next/forecast` switches the two
-    // views in place on one page — the same screen as `/review` since the
-    // cut-over — so the chosen month carries over to the register there.
+    // gone. `/review` now carries the register's month picker at its head
+    // (parity D8, `review-month-row`), so the month is switched in place.
     if (dates.needSwitchMonth) {
-      await page.goto("/next/forecast");
-      await page.getByTestId("tab-plan").click();
-      const monthTrigger = page.getByTestId("select-month-filter");
+      const monthTrigger = page
+        .getByTestId("review-month-row")
+        .getByTestId("select-month-filter");
       await expect(monthTrigger).toBeVisible({ timeout: 15_000 });
       await monthTrigger.click();
       await page
         .getByRole("option", { name: dates.monthKey, exact: true })
         .click();
-      await page.getByTestId("tab-register").click();
-      await expect(page.getByTestId("card-from-bank")).toBeVisible({
-        timeout: 15_000,
-      });
+      await expect(page.getByTestId("card-from-bank")).toContainText(
+        `From Chase · ${dates.monthKey}`,
+      );
     }
 
     // (#478) The register's inbox now shows one pending row at a

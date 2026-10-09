@@ -206,6 +206,9 @@ export function ForecastBody({
     [tab, onTab],
   );
 
+  const tabLabel = (id: RegisterTab) =>
+    `${TABS.find((t) => t.id === id)!.label}${id === "register" && ctx.inboxCount > 0 ? ` · ${ctx.inboxCount}` : ""}`;
+
   // The sticky head's height, published for the rows that pin under it.
   // ⚠️ The head sticks from `md` up only: on a phone its horizons wrap to
   // three lines (≈ 135 px of an 844 px screen) and nothing pins under it —
@@ -242,7 +245,7 @@ export function ForecastBody({
       </div>
 
       <PageGrid className="mt-4">
-        <p className="span-12 text-micro text-neutral-500" data-testid="filters-note">
+        <p className="span-12 text-micro text-neutral-600" data-testid="filters-note">
           What filters do: the horizon and look-back are sent to the forecast, so they change the curve and every figure
           around it. The month picker and the register views only change which rows are listed.
         </p>
@@ -263,58 +266,63 @@ export function ForecastBody({
             head (FC-44); an `overflow: hidden` panel would hold it in place.
             No entrance transform here — the register hosts the drag overlay. */}
         <Panel
-          title={tab === "register" ? "Register & reconcile" : "Month & bank"}
+          title={
+            // On a phone the two view tabs fill the head (≈ 284 of 332 px), so
+            // the title — the selected tab's own words — is read, not shown.
+            <span className="max-sm:sr-only">{tab === "register" ? "Register & reconcile" : "Month & bank"}</span>
+          }
           span={8}
           variant={["sticky-safe", "static"]}
           className="min-w-0"
           data-testid="register-panel"
           actions={
-            <div role="tablist" aria-label="Register views" className="flex flex-wrap items-center gap-1">
-              {TABS.map((t) => {
-                const on = tab === t.id;
-                const label = (
-                  <>
-                    {t.label}
-                    {t.id === "register" && ctx.inboxCount > 0 ? ` · ${ctx.inboxCount}` : ""}
-                  </>
-                );
-                return onTab ? (
+            // ⚠️ Two shapes, one look. In place (`/next/forecast`) the views are
+            // real tabs over one tabpanel. On `/forecast` and `/review` each
+            // view is the other ROUTE, so they are links in a nav with
+            // `aria-current` — a "tab" that navigates away is not a tab, and an
+            // `aria-controls` pointing at a pane that is not on the page is an
+            // axe violation (a11y-smoke scans /review).
+            onTab ? (
+              <div role="tablist" aria-label="Register views" className="flex flex-wrap items-center gap-1">
+                {TABS.map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     role="tab"
                     id={`register-tab-${t.id}`}
-                    aria-selected={on}
-                    aria-controls={`register-pane-${t.id}`}
+                    aria-selected={tab === t.id}
+                    aria-controls="register-pane"
                     onClick={() => onTab(t.id)}
                     data-testid={`tab-${t.id}`}
-                    className={tabClass(on)}
+                    className={tabClass(tab === t.id)}
                   >
-                    {label}
+                    {tabLabel(t.id)}
                   </button>
-                ) : (
+                ))}
+              </div>
+            ) : (
+              <nav aria-label="Register views" className="flex flex-wrap items-center gap-1">
+                {TABS.map((t) => (
                   <Link
                     key={t.id}
                     href={t.href}
-                    role="tab"
                     id={`register-tab-${t.id}`}
-                    aria-selected={on}
-                    aria-controls={`register-pane-${t.id}`}
+                    aria-current={tab === t.id ? "page" : undefined}
                     data-testid={`tab-${t.id}`}
-                    className={tabClass(on)}
+                    className={tabClass(tab === t.id)}
                   >
-                    {label}
+                    {tabLabel(t.id)}
                   </Link>
-                );
-              })}
-            </div>
+                ))}
+              </nav>
+            )
           }
         >
           <div
             key={tab}
-            role="tabpanel"
-            id={`register-pane-${tab}`}
-            aria-labelledby={`register-tab-${tab}`}
+            role={onTab ? "tabpanel" : undefined}
+            id="register-pane"
+            aria-labelledby={onTab ? `register-tab-${tab}` : undefined}
             className="space-y-4"
           >
             {tab === "register" ? (

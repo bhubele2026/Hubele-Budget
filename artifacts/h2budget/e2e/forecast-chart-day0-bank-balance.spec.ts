@@ -220,6 +220,12 @@ test.describe("Forecast chart day-0 starts at bank balance (#667)", () => {
     //     over the SVG surface, so we drive Playwright's mouse straight
     //     onto the leftmost plotted x. ---
     const surface = chartCard.locator("svg.recharts-surface");
+    // (C13 repair) The screen's chart sits below the headline and the
+    // summary figures and is 460 px tall, so at 1280×720 its middle is
+    // below the fold: bring it into view before reading its box, or the
+    // mouse lands outside the viewport and no tooltip ever opens.
+    await surface.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
     const surfaceBox = await surface.boundingBox();
     expect(surfaceBox).not.toBeNull();
     if (!surfaceBox) throw new Error("chart surface has no bounding box");

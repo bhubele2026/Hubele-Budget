@@ -2384,7 +2384,7 @@ export default function ForecastPage({
               </button>
               {data.plaidCheckingAccounts.length > 0 && (
                 <Select onValueChange={onLinkChecking}>
-                  <SelectTrigger className="h-7 w-44 text-micro">
+                  <SelectTrigger className="h-7 w-44 text-micro" aria-label="Link a checking account">
                     <SelectValue placeholder="Link a checking account" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2423,8 +2423,11 @@ export default function ForecastPage({
         />
       )}
       <Select value={monthFilter} onValueChange={setMonthFilter}>
+        {/* A combobox takes its name from a label, never from its value
+            (axe button-name; a11y-smoke scans /review). */}
         <SelectTrigger
           className="w-56"
+          aria-label="Month"
           data-testid="select-month-filter"
           data-pending={monthSwitchPending ? "true" : undefined}
           aria-busy={monthSwitchPending || undefined}

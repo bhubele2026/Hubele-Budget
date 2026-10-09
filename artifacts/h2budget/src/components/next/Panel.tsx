@@ -26,7 +26,10 @@ const ACCENT: Record<AccountAccentName, string> = {
 };
 
 export type PanelProps = {
-  title: string;
+  /** Usually a string. (C13) A node lets a page hide the words visually on a
+   *  phone while the heading keeps its name (the forecast register panel,
+   *  whose view tabs fill a phone-width head). */
+  title: ReactNode;
   sub?: string;
   accent?: AccountAccentName;
   actions?: ReactNode;

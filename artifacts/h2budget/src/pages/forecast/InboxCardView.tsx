@@ -172,7 +172,7 @@ export function InboxCardView({
               if (p) onMatchPick(p);
             }}
           >
-            <SelectTrigger className="h-8 w-[140px] text-micro">
+            <SelectTrigger className="h-8 w-[140px] text-micro" aria-label="Choose a planned item">
               <SelectValue placeholder="Choose a planned item" />
             </SelectTrigger>
             <SelectContent>
