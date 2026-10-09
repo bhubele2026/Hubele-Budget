@@ -224,21 +224,29 @@ test.describe("Forecast inbox bulk match-confident (#323)", () => {
     });
 
     // If the trio fell into next month (today is too late in this month
-    // for `today + 9` to stay in-month), switch monthFilter via the
-    // bucket-tab month dropdown so the bank inbox is reachable. The
-    // setting persists across tab switches.
+    // for `today + 9` to stay in-month), the bank inbox is only reachable
+    // with the register on that month.
+    // (C13 repair) The old "Review Bucket" / "Active Register" tabs are
+    // gone, and `/review` has no month picker (parity D8): the month is
+    // picked in the "Month & bank" view. `/next/forecast` switches the two
+    // views in place on one page — the same screen as `/review` since the
+    // cut-over — so the chosen month carries over to the register there.
     if (dates.needSwitchMonth) {
-      await page.getByRole("tab", { name: /Review Bucket/i }).click();
-      const monthCombobox = page.getByRole("combobox").first();
-      await expect(monthCombobox).toBeVisible({ timeout: 5_000 });
-      await monthCombobox.click();
+      await page.goto("/next/forecast");
+      await page.getByTestId("tab-plan").click();
+      const monthTrigger = page.getByTestId("select-month-filter");
+      await expect(monthTrigger).toBeVisible({ timeout: 15_000 });
+      await monthTrigger.click();
       await page
         .getByRole("option", { name: dates.monthKey, exact: true })
         .click();
-      await page.getByRole("tab", { name: /Active Register/i }).click();
+      await page.getByTestId("tab-register").click();
+      await expect(page.getByTestId("card-from-bank")).toBeVisible({
+        timeout: 15_000,
+      });
     }
 
-    // (#478) The Active Register inbox now shows one pending row at a
+    // (#478) The register's inbox now shows one pending row at a
     // time with a Prev/Next pager — only the first row's checkbox is in
     // the DOM until we page over to the others.
     await expect(page.getByTestId("bank-inbox-pager-indicator")).toContainText(

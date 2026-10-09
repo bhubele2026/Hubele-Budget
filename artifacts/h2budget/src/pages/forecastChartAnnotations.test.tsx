@@ -120,6 +120,9 @@ vi.mock("recharts", () => {
     RadarChart: Stub,
     ReferenceLine: RefStub,
     ReferenceDot: RefStub,
+    // (C13) The screen draws the expanded chart, whose risk tints are
+    // ReferenceAreas (this fixture dips under the buffer).
+    ReferenceArea: Stub,
     Label,
   };
 });

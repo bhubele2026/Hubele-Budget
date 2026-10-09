@@ -12,8 +12,9 @@ class ResizeObserverStub {
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??
   ResizeObserverStub;
 
+// (C13) Links keep their props (test ids, roles): the screen's view tabs are links.
 vi.mock("wouter", () => ({
-  Link: ({ children }: { children?: React.ReactNode }) => <a>{children}</a>,
+  Link: ({ children, ...rest }: { children?: React.ReactNode; [k: string]: unknown }) => <a {...rest}>{children}</a>,
 }));
 
 vi.mock("@/components/plaid-reauth-banner", () => ({
@@ -215,5 +216,59 @@ describe("/next/forecast agrees with the classic page", () => {
       expect(screen.getByTestId(`legend-${k}`)).toBeTruthy();
     }
     expect(screen.getAllByTestId("risk-below-buffer").length).toBeGreaterThan(0);
+  });
+});
+
+describe("/forecast and /review are the one forecast screen (C13)", () => {
+  /**
+   * The routes render `ForecastBody` over the page's own sections: a sticky
+   * head (title, Help, Bills, Settings, horizons) that publishes
+   * `--page-sticky-top`; the hero with its footnotes beside the summary
+   * figures; the expanded chart with the classic big-bill markers; the
+   * register panel (sticky-safe, so the review inbox pins to <main>) whose
+   * two views are the two routes; the selected day and the date balance.
+   */
+  it("/forecast: the 'Month & bank' view, with the head, hero, figures, chart markers and date balance", () => {
+    mount(<ForecastPage mode="overall" />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Forecast");
+    const head = screen.getByTestId("forecast-sticky-head");
+    expect(head.className).toMatch(/page-sticky-head sticky top-0 z-30/);
+    expect(within(head).getByTestId("link-manage-bills")).toBeTruthy();
+    expect(within(head).getByTestId("horizon-30")).toBeTruthy();
+    expect(screen.getByTestId("forecast-screen").style.getPropertyValue("--page-sticky-top")).toMatch(/px$/);
+
+    // FC-20: the headline and its footnotes, from the same signal.
+    expect(screen.getByTestId("hero-forecast-balance").textContent).toBe("$1,200.00");
+    expect(screen.getByText(/^Matched impact/).textContent).toContain("$200.00");
+    expect(screen.getByTestId("forecast-kpis")).toBeTruthy();
+
+    // FC-28: the classic big-bill marker is on the screen's chart (rent, $800).
+    expect(screen.getByTestId("big-bill-marker-2026-06-15")).toBeTruthy();
+
+    // The register panel: sticky-safe; this route's view selected; the views are links.
+    const panel = screen.getByTestId("register-panel");
+    expect(panel.className).toContain("panel-sticky-safe");
+    expect(screen.getByTestId("tab-plan").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("tab-register").getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByTestId("tab-register").tagName).toBe("A");
+    // The overall view holds the past-due card AND the planned list (FC-24, FC-49).
+    expect(within(panel).getByTestId("dragging-plans-list")).toBeTruthy();
+    expect(within(panel).getByRole("heading", { name: "Planned items" })).toBeTruthy();
+
+    // FC-23: the balance on a chosen date, beside the selected day.
+    const side = screen.getByTestId("selected-day-panel").parentElement!;
+    expect(within(side).getByTestId("forecast-date-balance")).toBeTruthy();
+  });
+
+  it("/review: the 'Register & reconcile' view under the 'Review' title; the overall-only cards stay out", () => {
+    mount(<ForecastPage mode="review" />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Review");
+    expect(screen.getByTestId("tab-register").getAttribute("aria-selected")).toBe("true");
+    const panel = screen.getByTestId("register-panel");
+    expect(within(panel).queryByTestId("dragging-plans-list")).toBeNull();
+    expect(within(panel).queryByTestId("card-bank-snapshot")).toBeNull();
+    // The headline and the chart are on every view.
+    expect(screen.getByTestId("card-forecast-hero")).toBeTruthy();
+    expect(screen.getByTestId("card-projected-balance-chart")).toBeTruthy();
   });
 });

@@ -26,9 +26,12 @@ vi.mock("recharts", () => {
     ),
   };
 });
+// (C13) The chart takes its recharts primitives from the kit now (`Rc*`), so
+// the kit is the real one — over the recharts stub above — with only the
+// tick measurer stubbed.
 vi.mock("@/lib/charts", async () => {
-  const tokens = await vi.importActual<Record<string, unknown>>("@/lib/chartTokens");
-  return { ...tokens, useXTicks: () => [] };
+  const kit = await vi.importActual<Record<string, unknown>>("@/lib/charts");
+  return { ...kit, useXTicks: () => [] };
 });
 
 import { ProjectedBalanceChart, type DayEvent } from "./ProjectedBalanceChart";

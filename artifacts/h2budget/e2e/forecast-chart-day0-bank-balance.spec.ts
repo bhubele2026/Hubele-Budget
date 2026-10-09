@@ -31,7 +31,7 @@ import {
  *   - The Projected Balance chart's first visible point (cash signal
  *     `daily[0].balance`) equals the Bank Balance card to the cent.
  *   - The Lowest Point KPI card equals the Bank Balance card.
- *   - There are no "Pending plans dragging this day" entries on day 0.
+ *   - There are no "Dragged onto this day" entries on day 0.
  *
  * Seeding strategy: a pre-snapshot monthly income (anchored last month,
  * larger amount, falling on a day BEFORE the bill each cycle) and a
@@ -215,7 +215,7 @@ test.describe("Forecast chart day-0 starts at bank balance (#667)", () => {
     //     tooltip the user actually sees. This is the load-bearing
     //     assertion for task #667: the projected balance chart's first
     //     visible point reads as the bank snapshot to the cent, and the
-    //     tooltip carries no "Pending plans dragging this day" section
+    //     tooltip carries no "Dragged onto this day" section
     //     on day 0. Recharts triggers its tooltip via native mousemove
     //     over the SVG surface, so we drive Playwright's mouse straight
     //     onto the leftmost plotted x. ---
@@ -223,10 +223,10 @@ test.describe("Forecast chart day-0 starts at bank balance (#667)", () => {
     const surfaceBox = await surface.boundingBox();
     expect(surfaceBox).not.toBeNull();
     if (!surfaceBox) throw new Error("chart surface has no bounding box");
-    // YAxis width is configured at 60 in forecast.tsx; the plot area
-    // begins immediately after it. Nudging a couple px past that lands
-    // squarely on the first data point's x coordinate.
-    const firstPointX = surfaceBox.x + 60 + 2;
+    // YAxis width is configured at 56 in ProjectedBalanceChart.tsx; the
+    // plot area begins immediately after it. Nudging a couple px past that
+    // lands squarely on the first data point's x coordinate.
+    const firstPointX = surfaceBox.x + 56 + 2;
     const midY = surfaceBox.y + surfaceBox.height / 2;
     // Move the mouse off the chart first so the subsequent move
     // generates a fresh mouseenter Recharts will pick up.
@@ -246,11 +246,16 @@ test.describe("Forecast chart day-0 starts at bank balance (#667)", () => {
     // The user-visible balance row on day 0 must read as the bank
     // snapshot — to the cent — exactly as displayed in the Bank
     // Balance card above.
-    await expect(tooltip).toContainText(`Balance: ${SNAPSHOT_DISPLAY}`);
-    // No "Pending plans dragging this day" section may render on
-    // day 0; the #666 fix dropped every pre-snapshot event, so that
-    // tooltip group must be entirely absent.
-    await expect(tooltip).not.toContainText("Pending plans dragging this day");
+    // (C13 repair) "Balance" and its figure are two cells of one row, so
+    // the text reads "Balance$5,000.00" — never "Balance: …".
+    await expect(tooltip).toContainText(
+      new RegExp(`Balance\\s*${SNAPSHOT_DISPLAY.replace(/[$.,]/g, "\\$&")}`),
+    );
+    // No "Dragged onto this day" section may render on day 0; the #666
+    // fix dropped every pre-snapshot event, so that tooltip group must be
+    // entirely absent. (C13 repair: the section was renamed from "Pending
+    // plans dragging this day", so the old absence check passed trivially.)
+    await expect(tooltip).not.toContainText(/dragged onto this day/i);
 
     // --- Belt & suspenders on the underlying contract: read the same
     //     /api/forecast/cash-signal payload the chart consumes and

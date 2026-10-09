@@ -14,8 +14,22 @@ import {
  * "Rescheduled into <month>" bucket panel surfaces an Undo affordance that
  * deletes the override and restores the row at its original date.
  *
- * The dialog rejects past dates and today with a visible inline error
- * (data-testid="move-error") instead of POSTing to the API.
+ * The dialog rejects a day outside today…today+30 and the day the row is
+ * already on with a visible inline error (data-testid="move-error") instead
+ * of POSTing to the API.
+ *
+ * (C13 repair) The spec had drifted from the page before the cut-over:
+ * - #888 changed the move rules: any day from today through today+30 (an
+ *   EARLIER day than the original included); only the row's current day and
+ *   days outside that window are refused ("Pick a day within the next 30
+ *   days." / "That's already its current day."). The server bounds it to
+ *   today-1 … today+60 and no longer requires a later date.
+ * - The dialog is "Move occurrence to another day"; the buckets read
+ *   "Moved · <month>" and "Missed · <month>"; clicking a plan row marks it
+ *   missed at once with an Undo toast (#480), no confirm().
+ * - The screen (C13) is the shared forecast layout: its h1 is "Forecast",
+ *   and the month is picked with `select-month-filter` in the "Month & bank"
+ *   view, which is what `/forecast` shows.
  *
  * This spec drives the full UI flow (open dialog → reject yesterday & today
  * → accept a future date → assert re-listing → undo) end-to-end against a
@@ -128,6 +142,24 @@ function pickMoveDates(): {
   };
 }
 
+/** The forecast screen's own title (C13: "Forecast" on /forecast). */
+const forecastHeading = (page: Page) =>
+  page.getByRole("heading", { level: 1, name: /^forecast$/i });
+
+/** Pick the register's month in the "Month & bank" view (`/forecast`). */
+async function pickMonth(page: Page, monthKey: string): Promise<void> {
+  const trigger = page.getByTestId("select-month-filter");
+  await expect(trigger).toBeVisible({ timeout: 5_000 });
+  await trigger.click();
+  await page.getByRole("option", { name: monthKey, exact: true }).click();
+}
+
+/** A household-calendar-agnostic local ISO day `n` days from today. */
+function dayFromToday(n: number): string {
+  const t = new Date();
+  return fmtDate(new Date(t.getFullYear(), t.getMonth(), t.getDate() + n));
+}
+
 /** Drive React's controlled date input directly so we can submit values that
  *  the dialog's `min={tomorrow}` constraint would otherwise filter out at
  *  the browser level. We need to surface the dialog's JS-side guards
@@ -147,7 +179,7 @@ async function setDateInput(page: Page, value: string): Promise<void> {
 }
 
 test.describe("Forecast Move-to date picker (#107)", () => {
-  test("rejects past/today, accepts a future date, re-lists the row at the new date, and Undo restores it", async ({
+  test("refuses days outside the window and the current day, accepts a day inside it, re-lists the row at the new date, and Undo restores it", async ({
     browser,
   }) => {
     const { email, password } = await createTestUser(
@@ -159,9 +191,7 @@ test.describe("Forecast Move-to date picker (#107)", () => {
 
     await signInAndOpen(page, email, password, "/forecast");
 
-    await expect(
-      page.getByRole("heading", { name: /plan register/i }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(forecastHeading(page)).toBeVisible({ timeout: 15_000 });
 
     // --- Compute deterministic anchor / new-date pair, then seed a
     // one-time recurring item via the API so the page has a plan row we
@@ -187,22 +217,11 @@ test.describe("Forecast Move-to date picker (#107)", () => {
 
     // Reload so the GET /api/forecast query picks up the new event.
     await page.goto("/forecast");
-    await expect(
-      page.getByRole("heading", { name: /plan register/i }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(forecastHeading(page)).toBeVisible({ timeout: 15_000 });
 
-    // If anchor/newD live in next month, switch monthFilter via the bucket
-    // tab's month Select so the rescheduled-bucket-panel is reachable
-    // later. monthFilter is component-level state that persists across tab
-    // switches, so we can flip it once and switch back to the register.
-    if (dates.needSwitchMonth) {
-      const monthCombobox = page.getByRole("combobox").first();
-      await expect(monthCombobox).toBeVisible({ timeout: 5_000 });
-      await monthCombobox.click();
-      await page
-        .getByRole("option", { name: dates.monthKey, exact: true })
-        .click();
-    }
+    // If anchor/newD live in next month, switch the register's month so the
+    // rescheduled-bucket-panel is reachable later.
+    if (dates.needSwitchMonth) await pickMonth(page, dates.monthKey);
 
     const moveButton = page.getByTestId(
       `move-plan-${item.id}-${dates.anchorISO}`,
@@ -213,7 +232,7 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     await moveButton.click();
 
     const dialogTitle = page.getByRole("heading", {
-      name: /Move occurrence to a future date/i,
+      name: /Move occurrence to another day/i,
     });
     await expect(dialogTitle).toBeVisible({ timeout: 5_000 });
 
@@ -239,15 +258,23 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     await saveButton.click();
     const errorYesterday = page.getByTestId("move-error");
     await expect(errorYesterday).toBeVisible({ timeout: 5_000 });
-    await expect(errorYesterday).toHaveText(/Pick a date after today/i);
+    await expect(errorYesterday).toHaveText(/Pick a day within the next 30 days/i);
     await expect(dialogTitle).toBeVisible();
 
-    // --- Today rejection: same inline error, dialog stays mounted.
-    await setDateInput(page, dates.todayISO);
+    // --- Past the window (today+31): same inline error, dialog stays mounted.
+    await setDateInput(page, dayFromToday(31));
     await saveButton.click();
-    const errorToday = page.getByTestId("move-error");
-    await expect(errorToday).toBeVisible({ timeout: 5_000 });
-    await expect(errorToday).toHaveText(/Pick a date after today/i);
+    const errorFar = page.getByTestId("move-error");
+    await expect(errorFar).toBeVisible({ timeout: 5_000 });
+    await expect(errorFar).toHaveText(/Pick a day within the next 30 days/i);
+    await expect(dialogTitle).toBeVisible();
+
+    // --- The day it is already on: a no-op, refused.
+    await setDateInput(page, dates.anchorISO);
+    await saveButton.click();
+    const errorSame = page.getByTestId("move-error");
+    await expect(errorSame).toBeVisible({ timeout: 5_000 });
+    await expect(errorSame).toHaveText(/already its current day/i);
     await expect(dialogTitle).toBeVisible();
 
     // Give the page a beat for any (unwanted) request to flush before
@@ -312,21 +339,20 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     const rescheduledPanel = page.getByTestId("rescheduled-bucket-panel");
     await expect(rescheduledPanel).toBeVisible({ timeout: 10_000 });
     await expect(rescheduledPanel).toContainText(
-      `Moved from ${dates.monthKey}`,
+      `Moved · ${dates.monthKey}`,
     );
     await expect(
       rescheduledPanel.getByTestId(`rescheduled-undo-${savedBody.id}`),
     ).toBeVisible();
 
     // --- "Another action moves it there": clicking the moved plan row
-    // triggers a window.confirm() that, on accept, upserts a `missed`
-    // resolution. Because the upsert key is (recurringItemId, anchor),
-    // it replaces the prior rescheduled override — so the row reverts
-    // to its original date with status=missed, the rescheduled panel
-    // disappears, and the missed-bucket-panel takes over with its own
-    // missed-undo-{id} affordance. That panel is the acceptance target
-    // for task #107's Undo coverage.
-    page.once("dialog", (dialog) => dialog.accept());
+    // marks it missed at once (#480: no confirm, an Undo toast instead),
+    // upserting a `missed` resolution. Because the upsert key is
+    // (recurringItemId, anchor), it replaces the prior rescheduled override
+    // — so the row reverts to its original date with status=missed, the
+    // rescheduled panel disappears, and the missed-bucket-panel takes over
+    // with its own missed-undo-{id} affordance. That panel is the acceptance
+    // target for task #107's Undo coverage.
 
     const upsertMissedPromise = page.waitForResponse(
       (res) =>
@@ -369,7 +395,7 @@ test.describe("Forecast Move-to date picker (#107)", () => {
 
     const missedPanel = page.getByTestId("missed-bucket-panel");
     await expect(missedPanel).toBeVisible({ timeout: 10_000 });
-    await expect(missedPanel).toContainText(`Missed in ${dates.monthKey}`);
+    await expect(missedPanel).toContainText(`Missed · ${dates.monthKey}`);
 
     const missedUndo = missedPanel.getByTestId(`missed-undo-${missedBody.id}`);
     await expect(missedUndo).toBeVisible();
@@ -401,16 +427,15 @@ test.describe("Forecast Move-to date picker (#107)", () => {
   });
 
   /**
-   * Task #300: the dialog has a third client-side guard rejecting any date
-   * that isn't strictly after the original occurrence. Spec #107 covers
-   * "pick a date" and "pick a date after today"; this case fills the picker
-   * with a future-but-before-original date (anchor = today + 7,
-   * draft = today + 5) and asserts the inline error fires without any POST
-   * to /api/forecast/resolutions. Also pokes the server's mirror guard
-   * directly to confirm it returns 400 when called with rescheduledTo
-   * <= occurrenceDate.
+   * Task #300, as #888 changed it: an occurrence may now move EARLIER than
+   * its original date, inside the window (anchor = today + 7, draft =
+   * today + 5): the dialog POSTs, the row re-lists at the earlier day. The
+   * server mirrors the window (today-1 … today+60): a day past it, or before
+   * it, is refused with 400 "rescheduledTo out of allowed window".
+   * (C13 repair: the old guard "Pick a date after the original occurrence"
+   * and the server's "rescheduledTo must be after occurrenceDate" are gone.)
    */
-  test("rejects a future date that's not after the original occurrence (and the server mirrors the guard)", async ({
+  test("moves an occurrence earlier than its original date inside the window (#888), and the server mirrors the window", async ({
     browser,
   }) => {
     const { email, password } = await createTestUser(
@@ -421,16 +446,11 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     const page = await context.newPage();
 
     await signInAndOpen(page, email, password, "/forecast");
+    await expect(forecastHeading(page)).toBeVisible({ timeout: 15_000 });
 
-    await expect(
-      page.getByRole("heading", { name: /plan register/i }),
-    ).toBeVisible({ timeout: 15_000 });
-
-    // Pick anchor = today + 7, draft = today + 5. Both must be strictly
-    // after today (so we exercise the *third* guard, not the
-    // "after today" one). If today + 7 would cross a month boundary we
-    // shift both into next month and bump the monthFilter so the plan
-    // row is reachable in the active register.
+    // Pick anchor = today + 7, draft = today + 5, in one month (shift both
+    // into next month's 8th/6th when today + 7 crosses the month end; the
+    // 6th of next month is still inside today+30).
     const today = new Date();
     const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     let anchor = new Date(t);
@@ -468,60 +488,42 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     );
 
     await page.goto("/forecast");
-    await expect(
-      page.getByRole("heading", { name: /plan register/i }),
-    ).toBeVisible({ timeout: 15_000 });
-
-    if (needSwitchMonth) {
-      const monthCombobox = page.getByRole("combobox").first();
-      await expect(monthCombobox).toBeVisible({ timeout: 5_000 });
-      await monthCombobox.click();
-      await page
-        .getByRole("option", { name: monthKey, exact: true })
-        .click();
-    }
+    await expect(forecastHeading(page)).toBeVisible({ timeout: 15_000 });
+    if (needSwitchMonth) await pickMonth(page, monthKey);
 
     const moveButton = page.getByTestId(`move-plan-${item.id}-${anchorISO}`);
     await expect(moveButton).toBeVisible({ timeout: 15_000 });
     await moveButton.click();
 
     const dialogTitle = page.getByRole("heading", {
-      name: /Move occurrence to a future date/i,
+      name: /Move occurrence to another day/i,
     });
     await expect(dialogTitle).toBeVisible({ timeout: 5_000 });
 
-    const saveButton = page.getByTestId("button-save-move");
-    await expect(saveButton).toBeVisible();
-
-    // Watch for any POST to /api/forecast/resolutions during the
-    // attempted save: the third guard must short-circuit client-side.
-    let resolutionPostsDuringInvalid = 0;
-    const countResolutionPosts = (req: import("@playwright/test").Request) => {
-      if (
-        req.method() === "POST" &&
-        new URL(req.url()).pathname === "/api/forecast/resolutions"
-      ) {
-        resolutionPostsDuringInvalid += 1;
-      }
-    };
-    page.on("request", countResolutionPosts);
-
+    const savePromise = page.waitForResponse(
+      (res) =>
+        res.request().method() === "POST" &&
+        new URL(res.url()).pathname === "/api/forecast/resolutions",
+      { timeout: 10_000 },
+    );
     await setDateInput(page, draftISO);
-    await saveButton.click();
+    await page.getByTestId("button-save-move").click();
+    const saveRes = await savePromise;
+    expect(saveRes.status()).toBe(200);
+    const savedBody = (await saveRes.json()) as {
+      status: string;
+      rescheduledTo: string | null;
+      occurrenceDate: string | null;
+    };
+    expect(savedBody.status).toBe("rescheduled");
+    expect(savedBody.rescheduledTo).toBe(draftISO);
+    expect(savedBody.occurrenceDate).toBe(anchorISO);
+    await expect(dialogTitle).toBeHidden({ timeout: 5_000 });
+    await expect(
+      page.getByTestId(`move-plan-${item.id}-${draftISO}`),
+    ).toBeVisible({ timeout: 10_000 });
 
-    const error = page.getByTestId("move-error");
-    await expect(error).toBeVisible({ timeout: 5_000 });
-    await expect(error).toHaveText(/Pick a date after the original occurrence\./i);
-    await expect(dialogTitle).toBeVisible();
-
-    await page.waitForTimeout(250);
-    page.off("request", countResolutionPosts);
-    expect(resolutionPostsDuringInvalid).toBe(0);
-
-    // --- Bonus: hit the server directly to confirm the mirror guard.
-    // Equal date (rescheduledTo == occurrenceDate) and a strictly-earlier
-    // date both must 400. We use page.evaluate to issue an authenticated
-    // fetch that returns status + parsed body without throwing on 4xx.
+    // --- The server's own window: outside today-1 … today+60 is a 400.
     const probe = async (rescheduledTo: string) =>
       page.evaluate(
         async (args) => {
@@ -554,23 +556,17 @@ test.describe("Forecast Move-to date picker (#107)", () => {
         },
       );
 
-    const equalRes = await probe(anchorISO);
-    expect(equalRes.status).toBe(400);
-    expect(JSON.stringify(equalRes.body)).toMatch(
-      /rescheduledTo must be after occurrenceDate/i,
-    );
-
-    const earlierRes = await probe(draftISO);
-    expect(earlierRes.status).toBe(400);
-    expect(JSON.stringify(earlierRes.body)).toMatch(
-      /rescheduledTo must be after occurrenceDate/i,
-    );
+    for (const outside of [dayFromToday(62), dayFromToday(-3)]) {
+      const res = await probe(outside);
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(res.body)).toMatch(/out of allowed window/i);
+    }
 
     await context.close();
   });
 
   /**
-   * Task #298: end-to-end coverage for the "Moved from <month>" sub-panel
+   * Task #298: end-to-end coverage for the "Moved · <month>" sub-panel
    * Undo affordance. Spec #107 above already covers Move + Undo via the
    * missed-bucket-panel path (where a follow-up missed resolution overwrites
    * the rescheduled one). This case exercises the *direct* rescheduled
@@ -578,7 +574,7 @@ test.describe("Forecast Move-to date picker (#107)", () => {
    *   - seed a one-time plan row in month A
    *   - open the Move-to dialog and reschedule it into month B (a different
    *     calendar month), so the row leaves month A entirely
-   *   - keep monthFilter on month A so the "Moved from <A>" panel surfaces
+   *   - keep monthFilter on month A so the "Moved · <A>" panel surfaces
    *     the rescheduled override with its rescheduled-undo-<id> button
    *   - click that Undo, assert the DELETE /api/forecast/resolutions/<id>
    *     fires and 204s, the panel disappears (no rescheduled rows left in
@@ -597,9 +593,7 @@ test.describe("Forecast Move-to date picker (#107)", () => {
 
     await signInAndOpen(page, email, password, "/forecast");
 
-    await expect(
-      page.getByRole("heading", { name: /plan register/i }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(forecastHeading(page)).toBeVisible({ timeout: 15_000 });
 
     // Anchor in month A (today + 2, or first week of next month if today
     // is too late in the current month). newD lives in month B, the
@@ -617,7 +611,14 @@ test.describe("Forecast Move-to date picker (#107)", () => {
       anchor = new Date(next.getFullYear(), next.getMonth(), 3);
       needSwitchMonth = true;
     }
-    const newD = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 15);
+    // (C13 repair) #888 bounds a move to today…today+30, so month B is the
+    // 1st of the month after the anchor's when that is inside the window;
+    // on the rare day it is not (the 1st of a 31-day month), the move stays
+    // in month A — the rescheduled Undo under test is the same either way.
+    let newD = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+    if (fmtDate(newD) > dayFromToday(30)) {
+      newD = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + 7);
+    }
     const anchorISO = fmtDate(anchor);
     const newDISO = fmtDate(newD);
     const anchorMonthKey = `${anchor.getFullYear()}-${pad(anchor.getMonth() + 1)}`;
@@ -639,24 +640,14 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     );
 
     await page.goto("/forecast");
-    await expect(
-      page.getByRole("heading", { name: /plan register/i }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(forecastHeading(page)).toBeVisible({ timeout: 15_000 });
 
     // monthFilter must sit on the anchor's month so (a) the Move-to button
     // is visible in the active register and (b) the rescheduled-bucket
     // panel surfaces the override after we move it to month B. Default
     // monthFilter is the current calendar month, so we only need to flip
     // it when the anchor was pushed into next month.
-    if (needSwitchMonth) {
-      const monthCombobox = page.getByRole("combobox").first();
-      await expect(monthCombobox).toBeVisible({ timeout: 5_000 });
-      await monthCombobox.click();
-      await page
-        .getByRole("option", { name: anchorMonthKey, exact: true })
-        .click();
-    }
-    expect(anchorMonthKey).not.toBe(`${newD.getFullYear()}-${pad(newD.getMonth() + 1)}`);
+    if (needSwitchMonth) await pickMonth(page, anchorMonthKey);
     // currentMonthKey is captured for log readability if this test ever
     // fails on a month-boundary edge case.
     expect(currentMonthKey).toMatch(/^\d{4}-\d{2}$/);
@@ -666,7 +657,7 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     await moveButton.click();
 
     const dialogTitle = page.getByRole("heading", {
-      name: /Move occurrence to a future date/i,
+      name: /Move occurrence to another day/i,
     });
     await expect(dialogTitle).toBeVisible({ timeout: 5_000 });
 
@@ -709,7 +700,7 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     const rescheduledPanel = page.getByTestId("rescheduled-bucket-panel");
     await expect(rescheduledPanel).toBeVisible({ timeout: 10_000 });
     await expect(rescheduledPanel).toContainText(
-      `Moved from ${anchorMonthKey}`,
+      `Moved · ${anchorMonthKey}`,
     );
     const rescheduledRow = rescheduledPanel.getByTestId(
       `rescheduled-row-${savedBody.id}`,

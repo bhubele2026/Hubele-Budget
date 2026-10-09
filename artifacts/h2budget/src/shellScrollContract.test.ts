@@ -24,8 +24,10 @@ describe("the shell publishes its scroller and padding", () => {
 
 describe("the page sticky heads read the shell's geometry", () => {
   // (C9, C10) Chase and Amex no longer have a page-wide sticky head: their
-  // pinned pane is the ledger panel's (below).
-  for (const page of ["pages/forecast.tsx"]) {
+  // pinned pane is the ledger panel's (below). (C13) The forecast screen's
+  // sticky head lives in its layout, `ForecastBody` (/forecast, /review,
+  // /next/forecast).
+  for (const page of ["pages/forecast/ForecastBody.tsx"]) {
     const src = read(page);
     it(`${page}: the head is .page-sticky-head, with no hard-coded bleed left`, () => {
       expect(src).toMatch(/"page-sticky-head sticky top-0 z-30 /);
@@ -35,14 +37,21 @@ describe("the page sticky heads read the shell's geometry", () => {
     });
     it(`${page}: publishes the head's height as --page-sticky-top`, () => {
       expect(src).toContain('["--page-sticky-top" as string]');
+      expect(src).toMatch(/usePaneHeight\(headRef/);
     });
   }
 
-  it("forecast: the pinned inbox sits under the head via the variable and bleeds like it", () => {
+  it("forecast (C13): the pinned inbox sits under the head via the variable, spanning the sticky-safe register panel", () => {
     const src = read("pages/forecast.tsx");
     expect(src).toContain('{ top: "var(--page-sticky-top, 0px)" }');
-    expect(src).toMatch(/"page-bleed-x sticky z-20 /);
+    // It bleeds over the register panel's own p-4, not the shell's padding.
+    expect(src).toMatch(/"-mx-4 px-4 sticky z-20 /);
     expect(src).not.toMatch(/-mx-4 md:-mx-8/);
+    expect(src).not.toContain("page-bleed-x");
+    // The register panel is sticky-safe, so the inbox sticks to <main>.
+    expect(read("pages/forecast/ForecastBody.tsx")).toMatch(
+      /variant=\{\["sticky-safe", "static"\]\}[\s\S]*data-testid="register-panel"/,
+    );
   });
 
   it.each([
