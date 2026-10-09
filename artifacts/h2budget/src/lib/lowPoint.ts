@@ -1,4 +1,14 @@
-import { fmtMoney, toAmount } from "@/lib/money";
+import { formatCurrency } from "@/lib/utils";
+
+// (Bundle) Deliberately not `@/lib/money`: this file is on the landing path
+// (CashPanel), and importing that module there pulled all of it into the entry
+// chunk. `formatCurrency` is already in it; a value is only formatted here once
+// `num` has said it is a real number, so its "$0.00" fallback is never reached.
+const num = (v: string | number | null | undefined): number | null => {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 /**
  * ⭐ THE PROJECTED LOW POINT, IN WORDS — one pure reading of `spine.forecast`
@@ -52,14 +62,14 @@ export function lowPointView(
   opts: { buffer?: string | number | null; stale?: boolean } = {},
 ): LowPointView {
   const stale = opts.stale === true;
-  const value = toAmount(forecast?.lowPoint ?? null);
+  const value = num(forecast?.lowPoint);
   const kind: LowPointKind =
     !forecast || forecast.status === "no_data" || value == null ? "none" : (KIND[forecast.status] ?? "none");
   if (kind === "none") {
     return { kind, value: null, date: null, words: "No bank balance yet, so no forecast", tone: "neutral", stale };
   }
-  const buffer = toAmount(opts.buffer ?? forecast?.cashBuffer ?? null);
-  const yours = buffer == null ? "your buffer" : `your ${fmtMoney(buffer, { whole: buffer === Math.round(buffer) })} buffer`;
+  const buffer = num(opts.buffer ?? forecast?.cashBuffer);
+  const yours = buffer == null ? "your buffer" : `your ${formatCurrency(buffer).replace(/\.00$/, "")} buffer`;
   const phrase = kind === "below" ? `below ${yours}` : kind === "tight" ? `just above ${yours}` : `above ${yours}`;
   return {
     kind,

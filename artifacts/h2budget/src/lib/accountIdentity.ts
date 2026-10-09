@@ -137,20 +137,12 @@ export interface TxnAccountEntry {
 /** The account a transaction belongs to; `known` is false for every fallback. */
 export type ResolvedTxnAccount = AccountIdentity & { known: boolean };
 
-const KNOWN_INSTITUTIONS: Readonly<Record<string, string>> = {
-  chase: "Chase",
-  amex: "American Express",
-  american_express: "American Express",
-};
-
+/** A linked item's name for the slug, else the slug title-cased ("wells-fargo" → "Wells Fargo"). */
 function institutionFromSlug(slug: string, entries: readonly TxnAccountEntry[]): string {
-  const s = slug.trim().toLowerCase();
-  for (const e of entries) {
-    if (norm(e.institutionSlug) === s && (e.institutionName ?? "").trim()) return e.institutionName!.trim();
-  }
-  if (KNOWN_INSTITUTIONS[s]) return KNOWN_INSTITUTIONS[s]!;
-  const words = s.split(/[-_\s]+/).filter(Boolean);
-  return words.length ? words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : "Bank";
+  const hit = entries.find((e) => norm(e.institutionSlug) === slug && norm(e.institutionName));
+  if (hit) return hit.institutionName!.trim();
+  if (slug === "amex") return "American Express";
+  return slug.split(/[-_\s]+/).filter(Boolean).map((w) => w[0]!.toUpperCase() + w.slice(1)).join(" ") || "Bank";
 }
 
 /**
@@ -169,41 +161,30 @@ export function resolveTxnAccount(
   txn: TxnAccountRef,
   entries: readonly TxnAccountEntry[] | ReadonlyMap<string, TxnAccountEntry>,
 ): ResolvedTxnAccount {
-  const all = (): readonly TxnAccountEntry[] =>
-    Array.isArray(entries)
-      ? (entries as readonly TxnAccountEntry[])
-      : Array.from((entries as ReadonlyMap<string, TxnAccountEntry>).values());
+  const list: readonly TxnAccountEntry[] = Array.isArray(entries)
+    ? entries
+    : [...(entries as ReadonlyMap<string, TxnAccountEntry>).values()];
   const ext = (txn.plaidAccountId ?? "").trim();
-  if (ext) {
-    const hit = Array.isArray(entries)
-      ? all().find((e) => e.plaidAccountId === ext)
-      : (entries as ReadonlyMap<string, TxnAccountEntry>).get(ext);
-    if (hit) return { ...hit.identity, known: true };
-  }
+  const hit = ext ? list.find((e) => e.plaidAccountId === ext) : undefined;
+  if (hit) return { ...hit.identity, known: true };
   const source = norm(txn.source);
-  const tail = ext ? `:${ext}` : "";
+  const id = `${source}:${ext}`;
+  let input: IdentityInput;
   if (source === "amex") {
-    return {
-      ...identityOf({ id: `source:amex${tail}`, name: "Amex (imported)", type: "credit", institutionSlug: "amex" }),
-      known: false,
+    input = { id, name: "Amex (imported)", type: "credit", institutionSlug: "amex" };
+  } else if (source === "manual") {
+    input = { id, name: "Manual entry" };
+  } else if (source.startsWith("plaid:")) {
+    const slug = source.slice(6);
+    const amex = /amex|american/.test(slug);
+    input = {
+      id,
+      name: `${institutionFromSlug(slug, list)} (no longer linked)`,
+      type: amex ? "credit" : null,
+      institutionSlug: amex ? "amex" : null,
     };
+  } else {
+    input = { id, name: "Unknown account" };
   }
-  if (source === "manual") {
-    return { ...identityOf({ id: `source:manual${tail}`, name: "Manual entry" }), known: false };
-  }
-  if (source.startsWith("plaid:")) {
-    const slug = source.slice("plaid:".length);
-    const inst = institutionFromSlug(slug, all());
-    const amex = slug.includes("amex") || slug.includes("american");
-    return {
-      ...identityOf({
-        id: `source:${source}${tail}`,
-        name: `${inst} (no longer linked)`,
-        type: amex ? "credit" : null,
-        institutionSlug: amex ? "amex" : null,
-      }),
-      known: false,
-    };
-  }
-  return { ...identityOf({ id: `source:unknown${tail}`, name: "Unknown account" }), known: false };
+  return { ...identityOf(input), known: false };
 }

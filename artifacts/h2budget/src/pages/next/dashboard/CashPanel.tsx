@@ -19,7 +19,6 @@ export default function CashPanel() {
           const p = s!.position;
           // Only `no_data` blanks the low point; under the buffer (`not_yet`) is shown.
           const lp = lowPointView(f, { buffer: f.cashBuffer, stale: s!.bank.stale });
-          const noForecast = lp.kind === "none";
           const low = lp.value;
           const buf = Number(f.cashBuffer);
           const under = low != null && Number.isFinite(buf) && low < buf ? buf - low : null;
@@ -45,14 +44,14 @@ export default function CashPanel() {
               />
               <StatBlock
                 label="Low point"
-                value={noForecast ? "—" : money(lp.value)}
+                value={money(lp.value)}
                 tone={lp.tone}
                 hint={
                   <>
-                    {!noForecast && lp.date ? <span>{dayLabel(lp.date)}</span> : null}
-                    <span data-testid="dash-low-words">{!noForecast && lp.date ? " · " : null}{lp.words}</span>
+                    {lp.date ? <span>{dayLabel(lp.date)}</span> : null}
+                    <span data-testid="dash-low-words">{lp.date ? " · " : null}{lp.words}</span>
                     {under != null ? <span data-testid="dash-under-buffer"> · short by {formatCurrency(under)}</span> : null}
-                    {!noForecast ? (
+                    {low != null ? (
                       <span data-testid="dash-runway">
                         {" · "}
                         {f.runwayDays != null ? `negative in ${f.runwayDays} days` : "stays positive, next 90 days"}
