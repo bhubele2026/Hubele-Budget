@@ -191,7 +191,7 @@ export default function AccountsPanel() {
                         </p>
                       )}
                     </dl>
-                    <div className="col-start-2 row-start-1 flex justify-end md:col-start-3">
+                    <div className="col-start-2 row-start-1 flex items-start justify-end self-start md:col-start-3 md:self-center">
                       {firstOfItem ? <SyncOne itemId={item.id} /> : null}
                     </div>
                   </li>

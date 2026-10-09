@@ -273,7 +273,7 @@ describe("summary row: four figures, status-aware", () => {
     h.spine.data = spine({ bank: { ...spine().bank, asOfDate: "2026-10-05T15:00:00Z", stale: true, staleReason: "old" } });
     h.Q.explain = ok({ ledger: { anchorDay: "2026-10-05", sinceAnchor: { rowCount: 2, net: "-24.00" }, recentRows: [] } });
     const a = wrap(<SummaryRow />);
-    expect(screen.getByTestId("dash-since-snapshot").textContent).toContain("includes 2 entries since the Oct 5 snapshot");
+    expect(screen.getByTestId("dash-since-snapshot").textContent).toContain("Includes 2 entries since the Oct 5 snapshot");
     a.unmount();
     // Same-day snapshot: nothing rolled on top, nothing said.
     h.spine.data = spine({ bank: { ...spine().bank, asOfDate: "2026-10-08T15:00:00Z" } });

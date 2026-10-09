@@ -75,8 +75,8 @@ function CheckingCell({ s }: { s: Spine }) {
         <span className="inline-flex flex-wrap items-center gap-x-2 text-micro text-neutral-500" data-testid="dash-freshness">
           <FreshnessLine bank={s.bank} />
           {since && since.rowCount > 0 ? (
-            <span data-testid="dash-since-snapshot">
-              · includes {since.rowCount} {since.rowCount === 1 ? "entry" : "entries"} since the {dayLabel(snapDay)} snapshot
+            <span data-testid="dash-since-snapshot" className="block w-full">
+              Includes {since.rowCount} {since.rowCount === 1 ? "entry" : "entries"} since the {dayLabel(snapDay)} snapshot
             </span>
           ) : null}
           <BankBalanceWhy />
