@@ -11,5 +11,15 @@ export interface MappingRuleInput {
     /** @nullable */
     categoryId?: string | null;
     priority?: number;
+    /**
+     * (WP5b) Optional: why the rule is being created or changed. Kept
+  with that change in the rule's history (GET
+  /mapping-rules/{id}/history), never on the rule itself. A PATCH
+  that changes nothing records nothing, note included.
+  
+     * @maxLength 500
+     * @nullable
+     */
+    note?: string | null;
 }
 //# sourceMappingURL=mappingRuleInput.d.ts.map

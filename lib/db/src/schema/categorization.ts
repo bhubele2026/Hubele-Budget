@@ -8,6 +8,7 @@ import {
   uniqueIndex,
   index,
   check,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { householdsTable, transactionsTable } from "./index";
@@ -17,6 +18,7 @@ import { householdsTable, transactionsTable } from "./index";
 // schemaMigrations test replays the SQL and compares column for column).
 // (V1) `resolved_via` comes from 0111_category_decisions_resolved_via.sql.
 // (V7) resolution 'unreviewed' comes from 0116_category_decisions_unreviewed.sql.
+// (WP5b) `mapping_rule_history` (at the end) comes from 0170_mapping_rule_history.sql.
 
 /**
  * One row per categorization decision: what the engine (or a person) decided
@@ -163,3 +165,61 @@ export const transactionSplitsTable = pgTable(
   ],
 );
 export type TransactionSplit = typeof transactionSplitsTable.$inferSelect;
+
+/**
+ * (WP5b) A mapping rule's state as the history records it: the four fields
+ * that decide which charges it files, and where.
+ */
+export type MappingRuleSnapshot = {
+  pattern: string;
+  matchType: string;
+  categoryId: string | null;
+  priority: number;
+};
+
+/** (WP5b) Every kind of change the rule history records. */
+export const MAPPING_RULE_HISTORY_ACTIONS = [
+  "created",
+  "updated",
+  "deleted",
+  "reordered",
+  "seeded",
+] as const;
+export type MappingRuleHistoryAction = (typeof MAPPING_RULE_HISTORY_ACTIONS)[number];
+
+/**
+ * (WP5b) One row per change to a mapping rule: what it was (`previous`), what
+ * it became (`next`), who changed it and why. Created by
+ * lib/db/migrations/0170_mapping_rule_history.sql — keep the two equal.
+ *
+ * - `actor`: the user id for a person's change; 'seed' for the starter rules;
+ *   'script:<name>' for a maintenance script; 'system' for H2's own tidy-ups.
+ * - `previous` is null for created/seeded; `next` is null for deleted.
+ * - `rule_id` has no foreign key on purpose: a deleted rule keeps its history.
+ *
+ * Written only through `recordRuleChange` (api-server lib/mappingRuleAudit.ts).
+ */
+export const mappingRuleHistoryTable = pgTable(
+  "mapping_rule_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    ruleId: uuid("rule_id").notNull(),
+    action: text("action").notNull().$type<MappingRuleHistoryAction>(),
+    actor: text("actor").notNull(),
+    previous: jsonb("previous").$type<MappingRuleSnapshot | null>(),
+    next: jsonb("next").$type<MappingRuleSnapshot | null>(),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("mapping_rule_history_rule_idx").on(t.householdId, t.ruleId, t.createdAt),
+    check(
+      "mapping_rule_history_action_ck",
+      sql`${t.action} IN ('created', 'updated', 'deleted', 'reordered', 'seeded')`,
+    ),
+  ],
+);
+export type MappingRuleHistoryRow = typeof mappingRuleHistoryTable.$inferSelect;

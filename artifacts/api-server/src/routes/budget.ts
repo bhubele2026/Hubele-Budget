@@ -54,6 +54,13 @@ import { planSourceOf, rollUpPlanBySource } from "../lib/budgetPlanSource";
 import { buildAllowanceRollup } from "../lib/budgetAllowance";
 import { monthEndExclusive, daysInMonth } from "../lib/monthBounds";
 import { syncAutoDebtCategories } from "../lib/budgetDebtSync";
+import {
+  SEED_ACTOR,
+  SYSTEM_ACTOR,
+  recordRuleChanges,
+  ruleSnapshot,
+  type RuleChange,
+} from "../lib/mappingRuleAudit";
 
 const router: IRouter = Router();
 
@@ -605,15 +612,33 @@ async function migrateBudgetCategoriesV2(
           ),
         );
 
-      await tx
+      // (WP5b) Unreachable today — a rule on the old category leaves it in
+      // place above — but should that guard ever loosen, the re-point is
+      // still recorded: an edit (stamps updated_at) by the system.
+      const repointedRules = await tx
         .update(mappingRulesTable)
-        .set({ categoryId: newCat.id })
+        .set({ categoryId: newCat.id, updatedAt: sql`now()` })
         .where(
           and(
             eq(mappingRulesTable.householdId, householdId),
             eq(mappingRulesTable.categoryId, oldCat.id),
           ),
-        );
+        )
+        .returning();
+      await recordRuleChanges(
+        tx,
+        repointedRules.map(
+          (r): RuleChange => ({
+            householdId,
+            ruleId: r.id,
+            action: "updated",
+            actor: SYSTEM_ACTOR,
+            previous: { ...ruleSnapshot(r), categoryId: oldCat.id },
+            next: ruleSnapshot(r),
+            note: `Category "${oldName}" was merged into "${newName}".`,
+          }),
+        ),
+      );
 
       await tx
         .update(avalancheSettingsTable)
@@ -1264,20 +1289,35 @@ async function seedDefaultsForUser(
         existingRules.map((r) => r.pattern.toLowerCase()),
       );
       let mappingRulesInserted = 0;
+      // (WP5b) Each starter rule is recorded as "seeded" by the seed, in this
+      // same transaction.
+      const seededRules: RuleChange[] = [];
       for (const seed of SEED_MAPPING_RULES) {
         if (existingPatterns.has(seed.pattern.toLowerCase())) continue;
         const cat = byName.get(seed.categoryName);
         if (!cat) continue;
-        await tx.insert(mappingRulesTable).values({
-          userId,
+        const [seeded] = await tx
+          .insert(mappingRulesTable)
+          .values({
+            userId,
+            householdId,
+            pattern: seed.pattern,
+            matchType: "contains",
+            categoryId: cat.id,
+            priority: SEED_MAPPING_PRIORITY,
+          })
+          .returning();
+        seededRules.push({
           householdId,
-          pattern: seed.pattern,
-          matchType: "contains",
-          categoryId: cat.id,
-          priority: SEED_MAPPING_PRIORITY,
+          ruleId: seeded!.id,
+          action: "seeded",
+          actor: SEED_ACTOR,
+          previous: null,
+          next: ruleSnapshot(seeded!),
         });
         mappingRulesInserted++;
       }
+      await recordRuleChanges(tx, seededRules);
 
       return {
         categoriesInserted,
