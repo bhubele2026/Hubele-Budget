@@ -56,3 +56,8 @@ export function bankLines(items: readonly PlaidItemDetail[] | undefined, now: nu
   }
   return out;
 }
+
+/** Whether any real bank is linked (the synthetic workbook item does not count). */
+export function hasLinkedBank(items: readonly PlaidItemDetail[] | undefined): boolean {
+  return (items ?? []).some((it) => !isSyntheticPlaidItem(it));
+}

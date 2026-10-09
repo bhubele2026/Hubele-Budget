@@ -4,6 +4,8 @@ import {
   useListDebts, getListDebtsQueryKey,
   useGetAmexWeeklyPayoff, getGetAmexWeeklyPayoffQueryKey,
   useGetBillsSummary, getGetBillsSummaryQueryKey,
+  useListPlaidLiabilityAccounts, getListPlaidLiabilityAccountsQueryKey,
+  useGetForecastBankBalanceExplain, getGetForecastBankBalanceExplainQueryKey,
   // (F3b) The first screen's one fold-in read comes from the MAIN module, on
   // purpose. This file is on the entry path, and importing `/features` here
   // pulled the WHOLE sub-module into the entry chunk (Rollup keeps a module
@@ -45,3 +47,26 @@ export const useMoneyPositionQ = () =>
 
 export const useBillsSummaryQ = () =>
   useGetBillsSummary(undefined, { query: { queryKey: getGetBillsSummaryQueryKey(), staleTime: 5 * MIN, gcTime: GC } });
+
+/**
+ * The card and loan figures Plaid's liabilities product stored (balance,
+ * minimum, due day), for an account that is not on the debt list. Asked ONLY
+ * when such an account exists (`enabled`), never with `refresh`, so it reads
+ * the stored columns. ⚠️ The endpoint makes one opportunistic liabilities
+ * fetch when the household has NEVER had liability data; a household with
+ * cards on the debt list never asks.
+ */
+export const useLiabilityAccountsQ = (enabled: boolean) =>
+  useListPlaidLiabilityAccounts(undefined, {
+    query: { queryKey: getListPlaidLiabilityAccountsQueryKey(), staleTime: 30 * MIN, gcTime: GC, enabled },
+  });
+
+/**
+ * "Why this number?"'s own read-only diagnostic (no Plaid call), asked by the
+ * checking figure only when the snapshot is from an earlier day, so it can say
+ * how many ledger rows the balance rolls forward on top of it.
+ */
+export const useBankExplainQ = (enabled: boolean) =>
+  useGetForecastBankBalanceExplain({
+    query: { queryKey: getGetForecastBankBalanceExplainQueryKey(), staleTime: 5 * MIN, gcTime: GC, enabled },
+  });

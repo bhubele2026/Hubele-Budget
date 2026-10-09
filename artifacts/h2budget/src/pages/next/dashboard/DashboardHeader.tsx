@@ -8,7 +8,7 @@ import { useSpine } from "@/hooks/useSpine";
 import { btn, btnSecondary } from "@/ui";
 import { cn } from "@/lib/utils";
 import { useBillsSummaryQ, usePlaidItemsQ } from "./queries";
-import { bankLines } from "./bankState";
+import { bankLines, hasLinkedBank } from "./bankState";
 import { money, rise, weekdayLabel } from "./shared";
 
 /** The quiet second control beside a more urgent action: Afford stays one tap away. */
@@ -43,7 +43,8 @@ export default function DashboardHeader() {
       reviewCount: s.reviewCount,
     });
   }, [s, bills.data, today]);
-  const action = attention ? headerActionOf(attention) : { kind: "afford" as const };
+  const noBank = items.data !== undefined && !hasLinkedBank(items.data);
+  const action = headerActionOf(attention ?? [], { noBank });
   const banks = bankLines(items.data, now);
 
   // One line of facts, each said only when it is known.
@@ -78,7 +79,9 @@ export default function DashboardHeader() {
                       {f.text}
                     </span>
                   ))
-                : "Nothing scheduled and nothing waiting."}
+                : noBank
+                  ? "No bank is linked yet. Link checking and your cards, and this page fills in from them."
+                  : "Nothing scheduled and nothing waiting."}
             </p>
           ) : spine.state === "failed" ? null : (
             <div className="skeleton mt-2 h-4 w-72 max-w-full rounded" aria-busy="true" />
@@ -99,7 +102,9 @@ export default function DashboardHeader() {
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="dash-header-action" data-kind={action.kind}>
-          {action.kind === "reconnect" ? (
+          {action.kind === "link" ? (
+            <Link href={action.href} className={btn} data-testid="dash-link-bank">{action.label}</Link>
+          ) : action.kind === "reconnect" ? (
             <>
               <Link href={action.href} className={btn} data-testid="dash-reconnect">{action.label}</Link>
               <AffordLauncher className={QUIET} />

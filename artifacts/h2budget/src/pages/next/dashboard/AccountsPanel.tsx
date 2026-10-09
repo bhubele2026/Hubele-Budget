@@ -10,9 +10,9 @@ import { FreshnessLine } from "@/components/data-state";
 import { isSyntheticPlaidItem, plaidReauthReason } from "@/components/plaid-reconnect-button";
 import { btnSecondarySm } from "@/ui";
 import { cn } from "@/lib/utils";
-import { useAmexQ, useCashSignalQ, useDebtsQ, usePlaidItemsQ } from "./queries";
+import { useCashSignalQ, useDebtsQ, useLiabilityAccountsQ, usePlaidItemsQ } from "./queries";
 import { connectionState, STATE_WORD } from "./bankState";
-import { dayLabel, Empty, Gate, LABEL, LINK, money, ordinal, rise } from "./shared";
+import { dayLabel, Gate, LABEL, LINK, money, ordinal, rise } from "./shared";
 
 export { connectionState } from "./bankState";
 export type { AccountState } from "./bankState";
@@ -55,7 +55,6 @@ export default function AccountsPanel() {
   const items = usePlaidItemsQ();
   const cash = useCashSignalQ(90);
   const debts = useDebtsQ();
-  const amex = useAmexQ();
   const { data: spine } = useSpine();
   const now = Date.now();
 
@@ -73,6 +72,16 @@ export default function AccountsPanel() {
     return list.map((r) => ({ ...r, identity: identityOf(asInput(r), { cardOrder }) }));
   }, [items.data]);
 
+  const debtFor = (acct: PlaidAccount) =>
+    (debts.data ?? []).find(
+      (d) => d.status !== "archived" && (d.plaidAccountId === acct.id || d.plaidAccountId === acct.accountId),
+    );
+  // A card or loan that is not on the debt list reads Plaid's stored
+  // liability figures instead (asked only when such an account exists).
+  const needLiabilities =
+    debts.data !== undefined && rows.some((r) => (r.identity.isCard || r.identity.kind === "loan") && !debtFor(r.acct));
+  const liab = useLiabilityAccountsQ(needLiabilities);
+
   return (
     <Panel
       title="Accounts"
@@ -85,7 +94,10 @@ export default function AccountsPanel() {
       <Gate q={items} what="Accounts" rows={3}>
         {() =>
           rows.length === 0 ? (
-            <div className="p-4"><Empty>No bank accounts are linked yet. Link one in Settings.</Empty></div>
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4" data-testid="dash-accounts-empty">
+              <p className="text-body text-neutral-600">No bank accounts are linked yet.</p>
+              <Link href="/settings" className={btnSecondarySm} data-testid="dash-accounts-link-bank">Link a bank in Settings</Link>
+            </div>
           ) : (
             <ul className="list-none divide-y divide-brand-line p-0">
               {rows.map(({ item, acct, identity, firstOfItem }) => {
@@ -95,12 +107,16 @@ export default function AccountsPanel() {
                 const isCash =
                   identity.kind === "checking" && !!csAcct && csAcct.via !== "unresolved" &&
                   (csAcct.mask ?? "") === (acct.mask ?? "");
-                const debt = (debts.data ?? []).find(
-                  (d) => d.status !== "archived" && (d.plaidAccountId === acct.id || d.plaidAccountId === acct.accountId),
-                );
-                const card = (amex.data?.cards ?? []).find((c) => c.plaidAccountId === acct.id);
+                const debt = debtFor(acct);
                 const liability = identity.isCard || identity.kind === "loan";
                 const pending = debt ? pendingPaymentTotalOf(debt) : 0;
+                const la = !debt && liability ? (liab.data ?? []).find((l) => l.id === acct.id || l.accountId === acct.accountId) : undefined;
+                // One basis per row: the debt row when the account is on the
+                // debt list, else Plaid's stored liability figures. A field
+                // neither source has is left out, never drawn as $0.
+                const owed = debt ? debt.balance : la?.balance ?? null;
+                const minPay = debt ? (Number(debt.minPayment) > 0 ? debt.minPayment : null) : la?.minPayment && Number(la.minPayment) > 0 ? la.minPayment : null;
+                const dueDay = debt ? debt.dueDay ?? null : la?.suggestedDebt?.dueDay ?? null;
                 const noBank = isCash && !spine?.bank.source && !spine?.bank.asOfDate;
                 return (
                   <li key={acct.id} data-testid="dash-account" data-state={st} data-accent={identity.accent}
@@ -145,17 +161,22 @@ export default function AccountsPanel() {
                     </div>
                     <dl className="flex min-w-0 flex-wrap gap-x-6 gap-y-2 pl-3 md:pl-0" data-testid="dash-account-facts">
                       {liability ? (
-                        debt ? (
+                        owed != null || minPay != null || dueDay != null ? (
                           <>
-                            <Fact label="Owed" value={<span className="font-semibold text-brand-navy" data-testid="dash-account-balance">{money(debt.balance)}</span>} />
-                            {card && card.statementBalance != null ? <Fact label="Statement" value={money(card.statementBalance)} testid="dash-account-statement" /> : null}
-                            {Number(debt.minPayment) > 0 ? <Fact label="Minimum" value={money(debt.minPayment)} testid="dash-account-min" /> : null}
-                            {debt.dueDay ? <Fact label="Due" value={`the ${ordinal(debt.dueDay)}`} testid="dash-account-due" /> : null}
+                            {owed != null ? (
+                              <Fact label="Owed" value={<span className="font-semibold text-brand-navy" data-testid="dash-account-balance">{money(owed)}</span>} />
+                            ) : (
+                              <Fact label="Owed" value={<span className="font-sans text-neutral-500" data-testid="dash-account-noowed">not reported</span>} />
+                            )}
+                            {minPay != null ? <Fact label="Minimum" value={money(minPay)} testid="dash-account-min" /> : null}
+                            {dueDay ? <Fact label="Due" value={`the ${ordinal(dueDay)}`} testid="dash-account-due" /> : null}
                             {pending > 0 ? <Fact label="Paid, not posted" value={money(pending)} testid="dash-account-pending" /> : null}
                           </>
+                        ) : debts.data === undefined || (needLiabilities && liab.data === undefined && !liab.isError) ? (
+                          <span className="skeleton block h-8 w-48 rounded" aria-busy="true" />
                         ) : (
                           <p className="text-label text-neutral-500" data-testid="dash-account-nodebt">
-                            Not on the debt list yet, so no balance or due date is tracked here.
+                            No balance, minimum or due date reported for this card yet.
                           </p>
                         )
                       ) : isCash ? (

@@ -127,11 +127,15 @@ export function attentionItems(i: {
  * header keeps the everyday question: "Can we afford something?". Pure.
  */
 export type HeaderAction =
+  | { kind: "link"; label: string; href: string }
   | { kind: "reconnect"; label: string; href: string }
   | { kind: "wayBack" }
   | { kind: "afford" };
 
-export function headerActionOf(items: readonly Attention[]): HeaderAction {
+/** With no bank linked at all there is nothing to afford against yet: the one
+ *  action is the app's existing link path (Settings › Banks, Link a bank). */
+export function headerActionOf(items: readonly Attention[], opts: { noBank?: boolean } = {}): HeaderAction {
+  if (opts.noBank) return { kind: "link", label: "Link a bank", href: "/settings" };
   for (const a of items) {
     if (a.kind === "reconnect") return { kind: "reconnect", label: a.action?.label ?? "Reconnect", href: a.action?.href ?? "/settings" };
     if (a.kind === "over" && a.wayBack) return { kind: "wayBack" };
