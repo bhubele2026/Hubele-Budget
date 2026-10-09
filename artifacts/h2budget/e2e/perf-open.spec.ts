@@ -6,18 +6,24 @@ import {
 } from "./helpers/clerk";
 
 /**
- * (PR A2) Fast-open guard: opening the app must not pull the charts vendor
- * bundle or any transaction rows.
+ * Fast-open guard: opening the app must not pull the charts vendor bundle
+ * before the document has loaded, and must not pull a transaction LEDGER.
+ *
+ * (C11, 2026-10-09) THE LANDING IS NOW THE DASHBOARD. The old landing was a door
+ * that rendered from one aggregate and requested no transactions at all. The
+ * dashboard's Spending and Activity panels read two BOUNDED transaction windows
+ * (CLAUDE.md section 2: `from`/`to` and a small `limit`, never the banned
+ * `limit=5000` pull), and its forecast panel lazy-loads the chart chunk once the
+ * cash signal answers. So the contract changes with the page, and keeps its
+ * point:
  *
  * - vendor-charts-*.js must NOT be requested during the open window
- *   (navigation → app shell interactive). After the shell is up, the layout's
- *   requestIdleCallback route-warming deliberately prefetches /forecast and
- *   /avalanche chunks — which DO import vendor-charts — so the assertion is
- *   scoped to the open window, not "ever". That background prefetch is the
- *   design (instant first click into charts), not a regression.
- * - /api/transactions must not fire AT ALL on /home, including through
- *   network-idle: the landing renders from aggregates, and idle warming only
- *   imports route chunks, never transaction data.
+ *   (navigation -> app shell interactive -> document `load`). It may load right
+ *   after, when the forecast panel's data arrives: that is lazy by design.
+ * - /api/transactions may fire on /home, but only as bounded list reads: every
+ *   request carries `from`, `to` and a `limit` of at most 100, and there are no
+ *   more than two of them (Spending, Activity). Idle warming still only imports
+ *   route chunks.
  */
 
 const provisionedUserIds: string[] = [];
@@ -27,7 +33,7 @@ test.afterAll(async () => {
 });
 
 test.describe("perf: app open stays light", () => {
-  test("/home requests no vendor-charts chunk and no /api/transactions", async ({
+  test("/home requests no vendor-charts chunk during open and only bounded /api/transactions reads", async ({
     browser,
   }) => {
     const { email, password } = await createTestUser(
@@ -65,13 +71,20 @@ test.describe("perf: app open stays light", () => {
       `vendor-charts must not load during app open; saw:\n${chartChunkRequests.join("\n")}`,
     ).toEqual([]);
 
-    // Let idle prefetch and any straggler fetches settle, then confirm no
-    // transaction pull happened at any point.
+    // Let idle prefetch and any straggler fetches settle, then confirm the only
+    // transaction reads were the dashboard's two bounded windows.
     await page.waitForLoadState("networkidle");
     expect(
-      transactionRequests,
-      `/api/transactions must never fire on /home; saw:\n${transactionRequests.join("\n")}`,
-    ).toEqual([]);
+      transactionRequests.length,
+      `at most two bounded /api/transactions reads on /home; saw:\n${transactionRequests.join("\n")}`,
+    ).toBeLessThanOrEqual(2);
+    for (const url of transactionRequests) {
+      const q = new URL(url).searchParams;
+      expect(q.get("from"), `unbounded read (no from): ${url}`).toBeTruthy();
+      expect(q.get("to"), `unbounded read (no to): ${url}`).toBeTruthy();
+      expect(Number(q.get("limit")), `unbounded read (limit): ${url}`).toBeGreaterThan(0);
+      expect(Number(q.get("limit")), `read too large: ${url}`).toBeLessThanOrEqual(100);
+    }
 
     await context.close();
   });
