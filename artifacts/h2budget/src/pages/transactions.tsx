@@ -198,7 +198,6 @@ function readInitialChaseAccount(): string | null {
   }
 }
 
-
 /**
  * `embedded` + `accountKey` are used by `/next/accounts/:plaidAccountId`: the
  * page drops its own title and opens on one linked account (the internal
