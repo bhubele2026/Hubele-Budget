@@ -1,6 +1,6 @@
 import { StackBar } from "@/components/viz";
 import { CHART } from "@/lib/chartTokens";
-import { card, cardHead, fieldLabel, Foot, Help } from "@/ui";
+import { fieldLabel, Foot, Help } from "@/ui";
 import { formatCurrency } from "@/lib/utils";
 import type { BudgetMonthDetail } from "@workspace/api-client-react";
 
@@ -45,8 +45,8 @@ export function PlanStrip({
   ].filter((s) => s.value > 0);
 
   return (
-    <section className={card} data-testid="budget-plan-strip">
-      <div className={cardHead}>
+    <section className="panel tile-in span-4" data-testid="budget-plan-strip">
+      <div className="panel-head">
         <span className={`${fieldLabel} flex-1 truncate`}>
           Where the plan comes from
         </span>

@@ -536,3 +536,18 @@ describe("Budget envelope grid — word diet", () => {
     expect(screen.getByRole("heading", { name: /^budget$/i })).toBeTruthy();
   });
 });
+
+describe("Budget — C2 grid placement", () => {
+  it("puts the hero beside the plan strip, the tiles inside the hero, and sections full width", () => {
+    renderPage();
+    const hero = screen.getByTestId("budget-hero");
+    expect(hero.className).toContain("span-8");
+    expect(screen.getByTestId("budget-plan-strip").className).toContain("span-4");
+    for (const id of ["tile-spent", "tile-left-to-earn", "tile-income"]) {
+      expect(hero.contains(screen.getByTestId(id))).toBe(true);
+    }
+    expect(screen.getByTestId("section-allowance").className).toContain("span-12");
+    expect(screen.getByTestId("section-bills").className).toContain("span-12");
+    expect(document.querySelector(".grid-12")).not.toBeNull();
+  });
+});

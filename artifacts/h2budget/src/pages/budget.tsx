@@ -82,8 +82,8 @@ type BudgetLineWithActual = {
 import { formatCurrency, cn } from "@/lib/utils";
 import { householdToday } from "@/lib/householdDay";
 import {
-  card,
-  cardHead,
+
+
   btnLink,
   btnSm,
   btnSecondarySm,
@@ -93,8 +93,8 @@ import {
   inputInline,
   Foot,
   Help,
-  Stat,
 } from "@/ui";
+import { PageGrid, StatBlock } from "@/components/next";
 // `@/lib/cssBars` and NOT `@/lib/charts`: the latter statically imports
 // recharts, and this page draws no chart. Reaching for the barrel would put
 // ~450 KB behind a route that needs a coloured `<span>`.
@@ -741,11 +741,12 @@ export default function BudgetPage() {
   // a skeleton there would defeat the whole point of the smoother swap.
   if ((isLoadingBudget && !budgetData) || (isLoadingCategories && !categories)) {
     return (
-      <div className="space-y-4">
-        <div className="skeleton h-8 w-40" />
-        <div className="skeleton h-24 w-full" />
-        <div className="skeleton h-64 w-full" />
-      </div>
+      <PageGrid>
+        <div className="skeleton span-12 h-8 w-40" />
+        <div className="skeleton span-8 h-24 w-full" />
+        <div className="skeleton span-4 h-24 w-full" />
+        <div className="skeleton span-12 h-64 w-full" />
+      </PageGrid>
     );
   }
 
@@ -771,8 +772,8 @@ export default function BudgetPage() {
   const overCommitted = plannedIncome > 0 && plannedTotal > plannedIncome;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <PageGrid>
+      <div className="span-12 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-display font-semibold text-brand-navy">Budget</h1>
         <div className="flex flex-wrap items-center gap-2">
           <span className="flex items-center gap-1.5">
@@ -829,7 +830,10 @@ export default function BudgetPage() {
           the strongest anchor the app has. The old page's biggest type was a
           `Stat` inside a five-up grid, so nothing on it was the point. */}
       {plan && (
-        <section className={card} data-testid="budget-hero">
+        <section
+          className={`panel tile-in ${allowance ? "span-8" : "span-12"}`}
+          data-testid="budget-hero"
+        >
           <div className="flex flex-col gap-4 px-5 pb-5 pt-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
               <div className={fieldLabel}>Planned this month</div>
@@ -853,24 +857,21 @@ export default function BudgetPage() {
                 </Help>
               </div>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <Stat
-                index={0}
+            <div className="flex flex-wrap gap-x-8 gap-y-3">
+              <StatBlock
                 data-testid="tile-spent"
                 label="Spent so far"
                 value={formatCurrency(actualTotal)}
                 hint={`of ${formatCurrency(plannedTotal)} planned`}
               />
-              <Stat
-                index={1}
+              <StatBlock
                 data-testid="tile-left-to-earn"
                 label="Left over"
                 value={formatCurrency(Number(plan.net))}
-                tone={Number(plan.net) < 0 ? "bad" : "navy"}
+                tone={Number(plan.net) < 0 ? "bad" : "neutral"}
                 hint="income less the plan"
               />
-              <Stat
-                index={2}
+              <StatBlock
                 data-testid="tile-income"
                 label="Income"
                 value={formatCurrency(plannedIncome)}
@@ -968,6 +969,7 @@ export default function BudgetPage() {
       )}
 
       {summary && (
+        <div className="span-12">
         <Foot data-testid="budget-basis-note">
           Every figure on this page is the server's, for {monthName}. Spend
           counts a pending purchase once, at its final amount when it posts —{" "}
@@ -975,8 +977,9 @@ export default function BudgetPage() {
           all envelopes, of which {formatCurrency(actualTotal)} sits against the
           plan.
         </Foot>
+        </div>
       )}
-    </div>
+    </PageGrid>
   );
 }
 
@@ -1010,11 +1013,11 @@ function PlanSection({
 
   return (
     <section
-      className={`${card} tile-in`}
+      className="panel tile-in span-12"
       style={{ animationDelay: `calc(${Math.min(index, 12)} * var(--stagger))` }}
       data-testid={def.testId}
     >
-      <div className={cardHead}>
+      <div className="panel-head">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-title font-semibold text-brand-navy">

@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { CssFillMeter } from "@/lib/cssBars";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
-import { btnLink, card, cardHead, Foot, Help } from "@/ui";
+import { btnLink, Foot, Help } from "@/ui";
 import { formatCurrency } from "@/lib/utils";
 import type { BudgetMonthDetail } from "@workspace/api-client-react";
 
@@ -59,11 +59,11 @@ export function AllowanceCard({
 
   return (
     <section
-      className={`${card} tile-in`}
+      className="panel tile-in span-12"
       style={{ animationDelay: `calc(${Math.min(index, 12)} * var(--stagger))` }}
       data-testid="section-allowance"
     >
-      <div className={cardHead}>
+      <div className="panel-head">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-title font-semibold text-brand-navy">
