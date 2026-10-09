@@ -1,9 +1,12 @@
 import type { Debt } from "@workspace/api-client-react";
 import type { SimDebt } from "@workspace/avalanche-core";
+// (Dashboard refinement) From the `pendingDebt` sub-path, not the package
+// index: the landing's debt tile imports this module, and the index would bring
+// the whole payoff simulator into the entry chunk with it.
 import {
   effectiveDebtBalance as effectiveDebtBalanceCore,
   pendingPaymentTotalOf as pendingPaymentTotalOfCore,
-} from "@workspace/avalanche-core";
+} from "@workspace/avalanche-core/pendingDebt";
 
 /**
  * ⭐ THE ONE DEBT-BALANCE BASIS FOR THE WHOLE APP.
