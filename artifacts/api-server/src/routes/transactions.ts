@@ -99,6 +99,19 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   if (q.data.categoryId) {
     conds.push(eq(transactionsTable.categoryId, q.data.categoryId));
   }
+  if (q.data.plaidAccountId !== undefined) {
+    // (WP7) One Plaid account's rows, by its external `account_id`: a card's own
+    // ledger asks with it instead of the source list, so it never lists another
+    // card's rows. Exact match. A row with no Plaid account (null, or the empty
+    // string the sync treats as none) never matches, so an empty value matches
+    // nothing rather than every row. Postgres refuses a NUL byte in text.
+    const plaidAccountId = q.data.plaidAccountId;
+    if (plaidAccountId.includes("\u0000")) {
+      res.status(400).json({ error: "plaidAccountId must not contain a NUL byte" });
+      return;
+    }
+    conds.push(plaidAccountId === "" ? sql`false` : eq(transactionsTable.plaidAccountId, plaidAccountId));
+  }
   if (q.data.search) {
     conds.push(ilike(transactionsTable.description, `%${q.data.search}%`));
   }

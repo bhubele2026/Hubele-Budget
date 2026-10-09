@@ -1512,6 +1512,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         anchorDate?: string | null | undefined;
     }[];
 }>;
+export declare const listTransactionsQueryPlaidAccountIdMax = 128;
 export declare const ListTransactionsQueryParams: zod.ZodObject<{
     from: zod.ZodOptional<zod.ZodString>;
     to: zod.ZodOptional<zod.ZodString>;
@@ -1524,11 +1525,13 @@ export declare const ListTransactionsQueryParams: zod.ZodObject<{
     minAmount: zod.ZodOptional<zod.ZodString>;
     maxAmount: zod.ZodOptional<zod.ZodString>;
     categoryId: zod.ZodOptional<zod.ZodString>;
+    plaidAccountId: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     limit?: number | undefined;
     source?: string | undefined;
     categoryId?: string | undefined;
     reimbursable?: boolean | undefined;
+    plaidAccountId?: string | undefined;
     from?: string | undefined;
     to?: string | undefined;
     uncategorized?: boolean | undefined;
@@ -1541,6 +1544,7 @@ export declare const ListTransactionsQueryParams: zod.ZodObject<{
     source?: string | undefined;
     categoryId?: string | undefined;
     reimbursable?: boolean | undefined;
+    plaidAccountId?: string | undefined;
     from?: string | undefined;
     to?: string | undefined;
     uncategorized?: boolean | undefined;

@@ -39,9 +39,10 @@ import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
  *      which the Chase page has always shown as one account (#462). Manual rows
  *      are in because the bank balance counts them; a client that hides rows the
  *      register counts breaks the running-balance chain, so it must not.
- *      (PR14, review H1) Another Chase depository account of the household may
- *      be asked for: its rows and its twins' rows only, no manual rows, with
- *      totals and review counts but no balance (`snapshotAccount: false`).
+ *      (PR14, review H1; WP7 widened it from Chase to any bank) Another
+ *      depository account of the household may be asked for: its rows and its
+ *      twins' rows only, no manual rows, with totals and review counts but no
+ *      balance (`snapshotAccount: false`). Cards and loans are refused.
  *
  *   2. WHAT EACH ROW MOVES — `classifyCashRows` (PR4e), the cash rule the bank
  *      balance uses, run over the account's WHOLE history with no anchor. A
@@ -277,7 +278,7 @@ export type LedgerAccounts = {
   via: SnapshotAccountResolution["via"];
   /**
    * (PR14, review H1) True for the snapshot's account and its twins, the only
-   * account with a register. False for another Chase depository account of the
+   * account with a register. False for another depository account of the
    * household: `accountExternalId` and `plaidAccountIds` are then that account
    * and its twins, no manual row is on it, and no balance is computed for it.
    */
@@ -318,21 +319,24 @@ function isMaskTwin(a: AccountRow, b: AccountRow): boolean {
 }
 
 /**
- * An account the Chase page's picker can offer: the kinds `listCheckingAccounts`
- * (routes/forecast.ts) lists, at an institution whose name contains "chase".
+ * An account that may have a bank ledger: the kinds `listCheckingAccounts`
+ * (routes/forecast.ts) lists — checking, savings, any depository account — at
+ * ANY institution. (WP7, owner's OK 2026-10-09: any checking or savings account
+ * opens its own ledger.) Until WP7 the institution's name had to contain
+ * "chase", so a credit union's checking account was refused here and the page
+ * fell back to the main Chase ledger under the other account's title. A card
+ * (`credit`) or a loan (`loan`) is never a depository account and stays refused.
  */
-function isChaseDepository(a: AccountRow): boolean {
-  return (
-    (a.institutionName ?? "").toLowerCase().includes("chase") &&
-    (a.subtype === "checking" || a.type === "depository" || a.subtype === "savings")
-  );
+function isDepository(a: AccountRow): boolean {
+  return a.subtype === "checking" || a.type === "depository" || a.subtype === "savings";
 }
 
 /**
  * Which rows are on the ledger. `account` (a `plaid_accounts.id`) is optional.
  * The resolved account or one of its twins is the snapshot's ledger. (PR14,
- * review H1) Any other Chase depository account of the household is accepted
- * with its own twins, as a list with no register (`snapshotAccount: false`).
+ * review H1; WP7: any bank, not only Chase) Any other depository account of the
+ * household is accepted with its own twins, as a list with no register
+ * (`snapshotAccount: false`).
  * Anything else is refused, so a page that asks for one account is never
  * silently answered for another.
  */
@@ -388,8 +392,8 @@ export async function resolveLedgerAccounts(
     };
   }
   const picked = accounts.find((a) => a.id === account);
-  if (!picked || !isChaseDepository(picked)) {
-    throw bad("account_not_ledger", "account is not a Chase checking or savings account of this household");
+  if (!picked || !isDepository(picked)) {
+    throw bad("account_not_ledger", "account is not a checking or savings account of this household");
   }
   const scope = accounts.filter((a) => a.id === picked.id || isMaskTwin(picked, a));
   return {
