@@ -28,6 +28,7 @@ import {
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import { RowDateControls } from "@/components/row-date-controls";
 import { AccountTransactionRow } from "@/components/account-page/transaction-row";
+import { SplitByCategoryButton } from "@/components/splits/SplitByCategoryButton";
 import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
 import {
   useBulkRecategorizePrompt,
@@ -3015,6 +3016,7 @@ export default function TransactionsPage({
                             <>
                               {renderSendForecastAction(tx)}
                               <Button variant="ghost" size="sm" disabled={reviewWrites.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button>
+                              <SplitByCategoryButton tx={tx} categories={categories ?? []} splitCount={(tx as { splitCount?: number }).splitCount} />
                               <Button
                                 variant="ghost"
                                 size="icon"

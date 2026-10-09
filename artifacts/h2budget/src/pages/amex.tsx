@@ -19,6 +19,7 @@ import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { RowDateControls } from "@/components/row-date-controls";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import { AccountTransactionRow } from "@/components/account-page/transaction-row";
+import { SplitByCategoryButton } from "@/components/splits/SplitByCategoryButton";
 import {
   useBulkRecategorizePrompt,
   bulkRuleFromRepointed,
@@ -2269,6 +2270,7 @@ export default function AmexPage({
                           disabled={updateTx.isPending}
                         />
                       )}
+                      <SplitByCategoryButton tx={t} categories={categories ?? []} idSuffix="-mobile" />
                       {/* (#607) Transfer rows are excluded from budget
                           actuals, so weekly/monthly/unplanned bubbles
                           would never affect any roll-up. Hide them on
@@ -2410,6 +2412,7 @@ export default function AmexPage({
                             ? (accentByPlaidAccountId.get(t.plaidAccountId) ?? null)
                             : null
                         }
+                        actionsNode={<SplitByCategoryButton tx={t} categories={categories ?? []} />}
                         metaNode={
                           t.notes ? (
                             <div

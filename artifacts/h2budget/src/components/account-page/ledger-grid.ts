@@ -12,17 +12,18 @@
  * header and the rows it labels cannot drift apart.
  *
  * Columns: select · merchant · card · category · buckets · amount · actions.
- * `LEDGER_GRID` is the Amex ledger's (its only row action is the date).
+ * `LEDGER_GRID` is the Amex ledger's (its row actions are the date and, since F4,
+ * "Split" by category: 8rem).
  *
  * ⚠️ A plain module, not `transaction-row.tsx`: page tests mock that file
  * with a fixed export list, so a new constant there would throw in them.
  */
 export const LEDGER_GRID =
-  "@6xl:grid-cols-[1.75rem_minmax(0,1fr)_8.5rem_12rem_6.75rem_7rem_5rem]";
+  "@6xl:grid-cols-[1.75rem_minmax(0,1fr)_8.5rem_12rem_6.75rem_7rem_8rem]";
 
 /**
  * The Chase ledger: the same columns with room for its row actions (date,
- * send to Forecast, Mark reviewed, edit, delete — 15.6rem measured), which
+ * send to Forecast, Mark reviewed, split by category, edit, delete — 19rem; 15.6rem before F4's Split button), which
  * overflowed the old 12.5rem and ran over the amount.
  *
  * (C10) Both tracks were retuned so the merchant column gets the room the
@@ -33,4 +34,4 @@ export const LEDGER_GRID =
  * one 40 px line unless the name is long — then the chip takes a second line.
  */
 export const LEDGER_GRID_WIDE_ACTIONS =
-  "@6xl:grid-cols-[1.75rem_minmax(0,1fr)_8.5rem_12rem_6.75rem_7rem_16rem]";
+  "@6xl:grid-cols-[1.75rem_minmax(0,1fr)_8.5rem_12rem_6.75rem_7rem_19rem]";
