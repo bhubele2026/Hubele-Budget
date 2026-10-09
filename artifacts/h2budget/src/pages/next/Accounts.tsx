@@ -95,7 +95,30 @@ export default function NextAccountsPage() {
               <p role="status" className="mt-2 text-label text-neutral-600">That account is not linked here. Showing all accounts.</p>
             ) : null}
           </div>
-          {selected ? (
+          {selected && !selected.identity.isCard && selected.identity.kind === "checking" ? (
+            // (C9) One account experience: a checking account opens the Chase
+            // page's own layout (the same as /transactions, minus the title the
+            // account page already shows), full width, with the Summary as the
+            // first panel of its figures row. Nothing between this cell and the
+            // ledger is a scroll container: the ledger panel inside is
+            // sticky-safe, so its pane and bulk bar stick to <main>.
+            <div className="span-12 min-w-0" data-testid="account-activity">
+              <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
+                <ChaseLedger
+                  embedded
+                  accountKey={selected.rowId}
+                  lead={
+                    <AccountSummary
+                      entry={selected}
+                      debt={debtFor(selected.rowId)}
+                      payoffCard={null}
+                      snapshot={snapshotFor(selected.rowId)}
+                    />
+                  }
+                />
+              </Suspense>
+            </div>
+          ) : selected ? (
             <>
               <AccountSummary
                 entry={selected}
@@ -113,8 +136,6 @@ export default function NextAccountsPage() {
                   <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
                     {selected.identity.isCard ? (
                       <AmexLedger embedded accountId={selected.plaidAccountId} />
-                    ) : selected.identity.kind === "checking" ? (
-                      <ChaseLedger embedded accountKey={selected.rowId} />
                     ) : (
                       <p className={emptyNote}>This account type has no activity view yet.</p>
                     )}

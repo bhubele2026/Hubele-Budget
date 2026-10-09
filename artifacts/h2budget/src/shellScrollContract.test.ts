@@ -22,8 +22,10 @@ describe("the shell publishes its scroller and padding", () => {
   });
 });
 
-describe("the three page sticky heads read the shell's geometry", () => {
-  for (const page of ["pages/forecast.tsx", "pages/transactions.tsx", "pages/amex.tsx"]) {
+describe("the page sticky heads read the shell's geometry", () => {
+  // (C9) Chase no longer has a page-wide sticky head: its pinned pane is the
+  // ledger panel's (below).
+  for (const page of ["pages/forecast.tsx", "pages/amex.tsx"]) {
     const src = read(page);
     it(`${page}: the head is .page-sticky-head, with no hard-coded bleed left`, () => {
       expect(src).toMatch(/"page-sticky-head sticky top-0 z-30 /);
@@ -41,6 +43,22 @@ describe("the three page sticky heads read the shell's geometry", () => {
     expect(src).toContain('{ top: "var(--page-sticky-top, 0px)" }');
     expect(src).toMatch(/"page-bleed-x sticky z-20 /);
     expect(src).not.toMatch(/-mx-4 md:-mx-8/);
+  });
+
+  it("Chase (C9): the pinned pane is the ledger panel's, sticky at the top of <main>, its height published as --page-sticky-top", () => {
+    const page = read("pages/transactions.tsx");
+    const panel = read("components/account-page/ledger-panel.tsx");
+    // The page measures the ledger pane and publishes it; nothing hard-codes the shell's bleed.
+    expect(page).toContain('["--page-sticky-top" as string]');
+    expect(page).toMatch(/usePaneHeight\(paneRef/);
+    expect(page).toMatch(/<LedgerPanel[\s\S]*paneRef=\{paneRef\}/);
+    expect(page).not.toContain("page-sticky-head");
+    for (const literal of ["md:-mx-8", "md:-mt-8", "-mt-4", "md:px-8", "-mx-4"]) {
+      expect(page, `transactions.tsx still has ${literal}`).not.toContain(literal);
+    }
+    // The pane sticks at the top of the scroller, inside a panel that is not a scroll container.
+    expect(panel).toMatch(/className="sticky top-0 z-30 /);
+    expect(panel).toMatch(/variant=\{\["sticky-safe", "flush", "static"\]\}/);
   });
 
   it("Chase and Amex: bulk bars and day headers pin under the head via the variable", () => {

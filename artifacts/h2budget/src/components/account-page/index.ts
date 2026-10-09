@@ -10,6 +10,8 @@ export type {
 } from "./balance-trend-chart";
 export { DayGroup, formatDayHeader } from "./day-group";
 export { LedgerColumns } from "./ledger-columns";
+export { LEDGER_GRID, LEDGER_GRID_WIDE_ACTIONS } from "./ledger-grid";
+export { LedgerPanel, usePaneHeight } from "./ledger-panel";
 export {
   MonthNavigator,
   monthKeyOf,

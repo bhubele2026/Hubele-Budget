@@ -6,6 +6,8 @@ import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import { RowDateControls } from "@/components/row-date-controls";
 import { cn } from "@/lib/utils";
+import type { AccountAccentName } from "@/lib/accountIdentity";
+import { LEDGER_GRID } from "./ledger-grid";
 // Note: amount/balance formatting is supplied by the page via `amountNode`.
 
 /**
@@ -31,16 +33,9 @@ import { cn } from "@/lib/utils";
  * so they look identical on both pages. Chase just lights up fewer
  * allowance bubbles; the skeleton is the same.
  */
-/**
- * ⭐ THE LEDGER'S COLUMN GEOMETRY, IN ONE PLACE.
- *
- * The row is a flex wrap on narrow screens and a fixed-column grid from `xl`
- * up. Exported because `LedgerColumns` renders the column HEADS against the
- * same track list — a header whose columns are declared separately from the
- * rows it labels is a header that drifts one edit later.
- */
-export const LEDGER_GRID =
-  "xl:grid-cols-[1.75rem_minmax(0,1fr)_7rem_13.5rem_8rem_7rem_12.5rem]";
+// The column geometry lives in `ledger-grid.ts` (container-query tracks);
+// re-exported here so existing imports keep working.
+export { LEDGER_GRID } from "./ledger-grid";
 
 export type AccountTransactionRowProps = {
   tx: Transaction;
@@ -63,6 +58,21 @@ export type AccountTransactionRowProps = {
   testId?: string;
   /** Extra data-* attributes (e.g. data-reviewed) spread onto the row. */
   rowData?: Record<string, string>;
+  /**
+   * The account's identity accent: a dot before the card label, the same dot
+   * the account's chip and panels carry. Colour only reinforces it — the label
+   * still names the account (and the dot adds no text).
+   */
+  cardAccent?: AccountAccentName | null;
+  /** Column tracks (`ledger-grid.ts`); the page's `LedgerColumns` must match. */
+  gridClass?: string;
+};
+
+const ACCENT_DOT: Record<AccountAccentName, string> = {
+  checking: "bg-acct-checking",
+  amex: "bg-acct-amex",
+  card2: "bg-acct-card2",
+  other: "bg-acct-other",
 };
 
 export function AccountTransactionRow({
@@ -83,21 +93,23 @@ export function AccountTransactionRow({
   actionsNode,
   testId,
   rowData,
+  cardAccent,
+  gridClass = LEDGER_GRID,
 }: AccountTransactionRowProps) {
   return (
     <div
       className={cn(
-        // `td` spacing, so a ledger row and a table row in this app are the
-        // same object at the same rhythm.
-        "px-4 py-2 text-body transition-colors hover:bg-brand-tint",
-        // Narrow: wrap (never a horizontal scrollbar). Wide (xl+): a
-        // fixed-column grid so every row's source / category / bubbles /
-        // amount / actions line up in true columns. Only the merchant column
-        // flexes (1fr), so the fixed columns sit at the same x on every row.
-        // xl (not md) is the threshold so the fixed columns always have room.
+        // Compact ledger rhythm: 40 px for a one-line row (the 36 px category
+        // control and bucket marks plus 2 px each side), the "36–40 px rows"
+        // the design asks of a transaction table.
+        "min-h-10 px-4 py-0.5 text-body transition-colors hover:bg-brand-tint",
+        // Narrow ledger: wrap (never a horizontal scrollbar). Wide ledger
+        // (`@6xl`, the ledger's own width — `ledger-grid.ts`): a fixed-column
+        // grid so every row's source / category / bubbles / amount / actions
+        // line up in true columns. Only the merchant column flexes (1fr).
         "flex flex-wrap items-center gap-x-3 gap-y-1",
-        "xl:grid xl:items-center xl:gap-y-0",
-        LEDGER_GRID,
+        "@6xl:grid @6xl:items-center @6xl:gap-y-0",
+        gridClass,
         dimmed && "opacity-50",
       )}
       data-testid={testId}
@@ -109,8 +121,13 @@ export function AccountTransactionRow({
         aria-label="Select"
         className="shrink-0"
       />
-      {/* Merchant (flex column) + inline status chip (metaNode). */}
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+      {/* Merchant (flex column) + inline status chip (metaNode). The name is
+          the row's most-read text, so a long one wraps the chip to a second
+          line rather than being truncated to make room for it. */}
+      {/* Narrow: the merchant owns the line beside the checkbox (its basis is
+          the rest of the row), so a long name never leaves the checkbox alone
+          on a line of its own. The grid ignores the basis. */}
+      <div className="flex min-w-0 grow basis-[calc(100%-2rem)] flex-wrap items-center gap-x-2 gap-y-0.5">
         <span
           className="max-w-full truncate font-medium text-neutral-700"
           title={tx.description}
@@ -121,13 +138,20 @@ export function AccountTransactionRow({
         {metaNode}
       </div>
       {/* Card / source */}
-      <div
-        className="shrink-0 truncate text-micro text-neutral-500"
-        data-testid={`text-card-${tx.id}`}
-      >
-        {cardLabel || "—"}
+      <div className="flex min-w-0 shrink-0 items-center gap-1.5" title={cardLabel || undefined}>
+        {cardAccent && cardLabel ? (
+          <span aria-hidden className={cn("size-2 shrink-0 rounded-full", ACCENT_DOT[cardAccent])} />
+        ) : null}
+        <span
+          className="truncate text-micro text-neutral-500"
+          data-testid={`text-card-${tx.id}`}
+        >
+          {cardLabel || "—"}
+        </span>
       </div>
-      <div className="shrink-0 flex items-center gap-1.5 min-w-0">
+      {/* Wraps: a row label ("After today", "Not counted") goes under the
+          picker rather than over the bucket column. */}
+      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-1.5">
         <CategoryPicker
           value={tx.categoryId ?? null}
           categories={categories}
@@ -152,10 +176,10 @@ export function AccountTransactionRow({
       </div>
       {/* `tdNum`: money is mono, tabular and right-aligned so a column of it
           lines up and never reflows as it updates. */}
-      <div className="shrink-0 whitespace-nowrap text-right font-mono text-label tabular-nums xl:justify-self-end">
+      <div className="shrink-0 whitespace-nowrap text-right font-mono text-label tabular-nums @6xl:justify-self-end">
         {amountNode}
       </div>
-      <div className="shrink-0 flex gap-0.5 items-center xl:justify-self-end">
+      <div className="shrink-0 flex gap-0.5 items-center @6xl:justify-self-end">
         {/* Pending rows are restamped by Plaid on the next sync, so the date
             editor is hidden there to avoid a fix that silently reverts. */}
         {!hideDate && (

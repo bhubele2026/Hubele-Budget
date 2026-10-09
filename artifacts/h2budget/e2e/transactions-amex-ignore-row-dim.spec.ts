@@ -9,12 +9,21 @@ import {
  * End-to-end coverage for task #629:
  *
  * Rows whose category is the system-managed "Ignore" get a purely
- * visual dim treatment on the Transactions page (`opacity-60
- * bg-muted/20`) and on the Amex page (`opacity-50`, both layouts).
- * The dim is gated on `data-ignored="true"` and is independent of
- * the WK/MO/UN/RE bubble state, so toggling a bubble afterwards
- * must not cancel it. Switching the row back to a non-Ignore
- * category restores full opacity and `data-ignored="false"`.
+ * visual dim treatment (`opacity-50`) on the Transactions page and on
+ * the Amex page (both layouts). The dim is gated on
+ * `data-ignored="true"` and is independent of the WK/MO/UN/RE bubble
+ * state, so toggling a bubble afterwards must not cancel it. Switching
+ * the row back to a non-Ignore category restores full opacity and
+ * `data-ignored="false"`.
+ *
+ * (C9 repair) The Chase rows are the shared account-page row now: the
+ * category is the row's `CategoryPicker` (`button-category-picker`, its
+ * options in a command list), not the old inline badge
+ * (`badge-category-*`), and the dim is `opacity-50`, not
+ * `opacity-60 bg-muted/20`. A Chase row ALSO dims when it is in the
+ * forecast (CH-37), and a posted checking row always is — so the Chase
+ * case seeds a row dated TOMORROW (unflagged, so not in the forecast)
+ * to see the Ignore dim on its own.
  *
  * The behavior was previously verified only by inspection — this
  * spec locks it in.
@@ -83,6 +92,18 @@ function todayIso(): string {
   return `${y}-${m}-${day}`;
 }
 
+/** A day on the HOUSEHOLD calendar (America/Chicago), `offset` days from today. */
+function householdIso(offset = 0): string {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const [y, m, d] = today.split("-").map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! + offset)).toISOString().slice(0, 10);
+}
+
 type Category = { id: string; name: string };
 
 async function fetchCategories(page: Page): Promise<Category[]> {
@@ -101,7 +122,10 @@ test.describe("Ignore'd row dimming (#629)", () => {
       provisionedUserIds,
     );
 
-    const monthStart = thisMonthStart();
+    // Tomorrow, on the household calendar, and the month it falls in: the
+    // Month view lists a day after today (labelled, never totalled).
+    const tomorrow = householdIso(1);
+    const monthStart = `${tomorrow.slice(0, 7)}-01`;
     await signInAndOpen(
       page,
       email,
@@ -117,9 +141,8 @@ test.describe("Ignore'd row dimming (#629)", () => {
     const ignoreCat = cats.find((c) => c.name === "Ignore");
     expect(ignoreCat, "Ignore should be lazy-seeded").toBeTruthy();
 
-    // A real (non-system) category to start the row on, so the
-    // InlineCategoryPicker (which only shows when categoryId is set)
-    // renders. We then pick Ignore from its dropdown.
+    // A real (non-system) category to start the row on, and a second one to
+    // restore it to after Ignore.
     const suffix = Math.random().toString(36).slice(2, 8);
     const groceriesName = `Groceries629-${suffix}`;
     const diningName = `Dining629-${suffix}`;
@@ -136,15 +159,18 @@ test.describe("Ignore'd row dimming (#629)", () => {
       { name: diningName, kind: "expense", groupName: "Food" },
     );
 
+    // Dated tomorrow and not flagged: not in the forecast, so not dimmed for
+    // that reason (a posted checking row always is — CH-37).
     const txn = await apiCall<{ id: string }>(
       page,
       "POST",
       "/api/transactions",
       {
-        occurredOn: todayIso(),
+        occurredOn: tomorrow,
         description: `IGNORE-DIM-${suffix.toUpperCase()} MARKET`,
         amount: "-12.34",
         categoryId: groceries.id,
+        forecastFlag: false,
       },
     );
 
@@ -156,22 +182,20 @@ test.describe("Ignore'd row dimming (#629)", () => {
     const row = page.getByTestId(`row-tx-${txn.id}`);
     await expect(row).toBeVisible({ timeout: 15_000 });
 
-    // Baseline: not ignored, no dim.
+    // Baseline: not ignored, not in the forecast, no dim.
     await expect(row).toHaveAttribute("data-ignored", "false");
-    await expect(row).not.toHaveClass(/opacity-60/);
-    await expect(row).not.toHaveClass(/bg-muted\/20/);
+    await expect(row).toHaveAttribute("data-sent", "false");
+    await expect(row).not.toHaveClass(/opacity-50/);
 
-    // --- Pick Ignore through the inline category picker.
     const isPatch = (req: { method: () => string; url: () => string }) =>
       req.method() === "PATCH" &&
       new URL(req.url()).pathname === `/api/transactions/${txn.id}`;
 
+    // --- Pick Ignore through the row's category picker.
     {
       const reqP = page.waitForRequest(isPatch, { timeout: 10_000 });
-      await page.getByTestId(`badge-category-${txn.id}`).click();
-      await page
-        .getByTestId(`option-inline-category-${txn.id}-${ignoreCat!.id}`)
-        .click();
+      await row.getByTestId("button-category-picker").click();
+      await page.getByTestId("option-ignore").click();
       const req = await reqP;
       const sent = JSON.parse(req.postData() ?? "{}") as Record<
         string,
@@ -180,12 +204,11 @@ test.describe("Ignore'd row dimming (#629)", () => {
       expect(sent.categoryId).toBe(ignoreCat!.id);
     }
 
-    // The row picks up data-ignored + the dim classes.
+    // The row picks up data-ignored + the dim.
     await expect(row).toHaveAttribute("data-ignored", "true", {
       timeout: 10_000,
     });
-    await expect(row).toHaveClass(/opacity-60/);
-    await expect(row).toHaveClass(/bg-muted\/20/);
+    await expect(row).toHaveClass(/opacity-50/);
 
     // --- Toggling a WK bubble must not undo the dim. Bubble is a
     // button labeled "Weekly bucket" (BucketBubbles' `title` prop).
@@ -200,16 +223,13 @@ test.describe("Ignore'd row dimming (#629)", () => {
       expect(sent.weeklyAllowance).toBe(true);
     }
     await expect(row).toHaveAttribute("data-ignored", "true");
-    await expect(row).toHaveClass(/opacity-60/);
-    await expect(row).toHaveClass(/bg-muted\/20/);
+    await expect(row).toHaveClass(/opacity-50/);
 
     // --- Restoring to a non-Ignore category clears the dim.
     {
       const reqP = page.waitForRequest(isPatch, { timeout: 10_000 });
-      await page.getByTestId(`badge-category-${txn.id}`).click();
-      await page
-        .getByTestId(`option-inline-category-${txn.id}-${dining.id}`)
-        .click();
+      await row.getByTestId("button-category-picker").click();
+      await page.getByRole("option", { name: diningName }).click();
       const req = await reqP;
       const sent = JSON.parse(req.postData() ?? "{}") as Record<
         string,
@@ -220,8 +240,7 @@ test.describe("Ignore'd row dimming (#629)", () => {
     await expect(row).toHaveAttribute("data-ignored", "false", {
       timeout: 10_000,
     });
-    await expect(row).not.toHaveClass(/opacity-60/);
-    await expect(row).not.toHaveClass(/bg-muted\/20/);
+    await expect(row).not.toHaveClass(/opacity-50/);
   });
 
   test("Amex page (desktop + mobile): picking Ignore dims both row layouts, WK bubble doesn't undo the dim, restoring the category clears it", async ({

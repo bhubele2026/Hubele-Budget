@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import {
   cleanupTestUsers,
   createTestUser,
@@ -14,6 +14,16 @@ import {
  * exactly the rows the original bulk touched, skipping any the user has
  * since toggled back by hand, and surfaces a "Restored N transactions"
  * confirmation toast.
+ *
+ * (C9 repair) Two things the page changed under this spec:
+ * - A row's selection is its "Select" checkbox (the shared account row),
+ *   not a `select-<id>` test id.
+ * - A POSTED checking row is always in the forecast (`inForecast`); bulk
+ *   Send skips it and bulk Remove records "not a planned payment" instead of
+ *   flipping its flag (CH-40). The flag write this spec is about therefore
+ *   happens only for rows dated AFTER today, so the three rows are seeded on
+ *   future household days, all in one month, and the page opens on that
+ *   month.
  */
 
 const provisionedUserIds: string[] = [];
@@ -71,13 +81,34 @@ function thisMonthStart(): string {
   return `${year}-${month}-01`;
 }
 
-function isoDay(offsetDays: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+/** A day on the HOUSEHOLD calendar (America/Chicago), `offset` days from today. */
+function householdIso(offset = 0): string {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const [y, m, d] = today.split("-").map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! + offset)).toISOString().slice(0, 10);
+}
+
+/**
+ * `n` consecutive days after today, all in one calendar month (so one Month
+ * view lists them): tomorrow onwards, or the 1st of next month onwards when
+ * tomorrow's run would cross the month end.
+ */
+function futureDaysInOneMonth(n: number): string[] {
+  let start = 1;
+  if (householdIso(start).slice(0, 7) !== householdIso(start + n - 1).slice(0, 7)) {
+    while (householdIso(start).slice(8) !== "01") start += 1;
+  }
+  return Array.from({ length: n }, (_, i) => householdIso(start + i));
+}
+
+/** The shared account row's own selection checkbox ("Select day" is the day head's). */
+async function selectRow(row: Locator): Promise<void> {
+  await row.getByRole("checkbox", { name: "Select", exact: true }).click();
 }
 
 test.describe("Transactions bulk Send-to-Forecast Undo (#215)", () => {
@@ -89,7 +120,10 @@ test.describe("Transactions bulk Send-to-Forecast Undo (#215)", () => {
       provisionedUserIds,
     );
 
-    const monthStart = thisMonthStart();
+    // Three days after today, in one month: unflagged future rows are the
+    // ones a bulk Send flips (posted checking rows are always in the forecast).
+    const days = futureDaysInOneMonth(3);
+    const monthStart = `${days[0]!.slice(0, 7)}-01`;
     await signInAndOpen(
       page,
       email,
@@ -100,9 +134,9 @@ test.describe("Transactions bulk Send-to-Forecast Undo (#215)", () => {
       page.getByRole("heading", { name: /^chase$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
-    // --- Seed a category and three categorized manual rows. Manual rows
-    // (no plaid_account_id) are treated as bank/checking by canSendToForecast,
-    // so they're eligible for the bulk Send-to-Forecast flow.
+    // --- Seed a category and three categorized manual rows, dated after
+    // today. Manual rows (no plaid_account_id) are treated as bank/checking by
+    // canSendToForecast, so they're eligible for the bulk Send-to-Forecast flow.
     const suffix = Math.random().toString(36).slice(2, 8);
     const cat = await apiCall<{ id: string; name: string }>(
       page,
@@ -116,10 +150,11 @@ test.describe("Transactions bulk Send-to-Forecast Undo (#215)", () => {
       "POST",
       "/api/transactions",
       {
-        occurredOn: isoDay(-3),
+        occurredOn: days[0]!,
         description: `BULKFC-${suffix} ROW A`,
         amount: "-12.34",
         categoryId: cat.id,
+        forecastFlag: false,
       },
     );
     const b = await apiCall<{ id: string; forecastFlag: boolean }>(
@@ -127,10 +162,11 @@ test.describe("Transactions bulk Send-to-Forecast Undo (#215)", () => {
       "POST",
       "/api/transactions",
       {
-        occurredOn: isoDay(-2),
+        occurredOn: days[1]!,
         description: `BULKFC-${suffix} ROW B`,
         amount: "-23.45",
         categoryId: cat.id,
+        forecastFlag: false,
       },
     );
     const c = await apiCall<{ id: string; forecastFlag: boolean }>(
@@ -138,10 +174,11 @@ test.describe("Transactions bulk Send-to-Forecast Undo (#215)", () => {
       "POST",
       "/api/transactions",
       {
-        occurredOn: isoDay(-1),
+        occurredOn: days[2]!,
         description: `BULKFC-${suffix} ROW C`,
         amount: "-34.56",
         categoryId: cat.id,
+        forecastFlag: false,
       },
     );
 
@@ -159,9 +196,9 @@ test.describe("Transactions bulk Send-to-Forecast Undo (#215)", () => {
     await expect(rowC).toBeVisible();
 
     // Select all three rows via the per-row checkbox.
-    await rowA.getByTestId(`select-${a.id}`).click();
-    await rowB.getByTestId(`select-${b.id}`).click();
-    await rowC.getByTestId(`select-${c.id}`).click();
+    await selectRow(rowA);
+    await selectRow(rowB);
+    await selectRow(rowC);
     await expect(page.getByTestId("bulk-bar")).toContainText("3 selected");
 
     // --- Bulk Send-to-Forecast. Watch the request so we can confirm the
@@ -265,9 +302,10 @@ test.describe("Transactions bulk Send-to-Forecast Undo (#215)", () => {
     const rowB2 = page.getByTestId(`row-tx-${b.id}`);
     const rowC2 = page.getByTestId(`row-tx-${c.id}`);
     await expect(rowA2).toBeVisible({ timeout: 15_000 });
-    await rowA2.getByTestId(`select-${a.id}`).click();
-    await rowB2.getByTestId(`select-${b.id}`).click();
-    await rowC2.getByTestId(`select-${c.id}`).click();
+    await selectRow(rowA2);
+    await selectRow(rowB2);
+    await selectRow(rowC2);
+    await expect(page.getByTestId("bulk-bar")).toContainText("3 selected");
 
     const removeReqPromise = page.waitForRequest(
       (req) =>

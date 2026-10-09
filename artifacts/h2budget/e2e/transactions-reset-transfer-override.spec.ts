@@ -17,15 +17,20 @@ import {
  *
  * This spec locks in the web flow:
  *   - With a row that has `isTransfer=false` AND `isTransferUserOverridden=true`,
- *     the row renders the `badge-transfer-overridden-cleared-<id>` "Manually set"
- *     chip.
- *   - Opening that row's Edit dialog renders the `transfer-override-hint` block
- *     with the "Transfer status manually set" copy and the "Reset to auto"
- *     button.
+ *     opening that row's Edit dialog renders the `transfer-override-hint`
+ *     block with the "Transfer status manually set" copy and the "Reset to
+ *     auto" button.
  *   - Clicking "Reset to auto" fires POST
  *     `/api/transactions/:id/clear-transfer-override`, surfaces the
- *     "Reset to auto" toast, and after the list refresh the row's hint chip
- *     disappears (server-side `isTransferUserOverridden` is false now).
+ *     "Reset to auto" toast, and the hint disappears (server-side
+ *     `isTransferUserOverridden` is false now); reopening the dialog after
+ *     the list refresh shows no hint either.
+ *
+ * (C9 repair) The Chase row carries no "Manually set" chip
+ * (`badge-transfer-overridden-cleared-<id>`): that chip belonged to the old
+ * row-chip cluster, which /transactions no longer renders (parity CH-64; it
+ * survives on the Amex phone rows only). The override is shown, and reset,
+ * in the Edit dialog (CH-38), which is what this spec now pins.
  */
 
 const provisionedUserIds: string[] = [];
@@ -158,14 +163,6 @@ test.describe("Transactions Edit dialog 'Reset to auto' for transfer override (#
     const row = page.getByTestId(`row-tx-${seeded.id}`);
     await expect(row).toBeVisible({ timeout: 15_000 });
 
-    // The row should render the "Manually set" hint chip (the
-    // `!isTransfer && isTransferUserOverridden` branch).
-    const overrideChip = page.getByTestId(
-      `badge-transfer-overridden-cleared-${seeded.id}`,
-    );
-    await expect(overrideChip).toBeVisible();
-    await expect(overrideChip).toHaveText(/manually set/i);
-
     // Open the Edit dialog and assert the override hint block is visible
     // with the "Transfer status manually set" copy + the Reset button.
     await page.getByTestId(`button-edit-tx-${seeded.id}`).click();
@@ -204,10 +201,22 @@ test.describe("Transactions Edit dialog 'Reset to auto' for transfer override (#
     const clearRes = await clearResPromise;
     expect(clearRes.status()).toBe(200);
 
-    // After the list invalidation, the row's "Manually set" hint chip should
-    // disappear (the `isTransferUserOverridden=false` branch) — this is the
-    // user-visible regression net the task asks for.
-    await expect(overrideChip).toBeHidden({ timeout: 10_000 });
+    // The hint leaves the open dialog at once, and stays gone when the
+    // dialog is reopened from the refreshed row — the user-visible
+    // regression net the task asks for.
+    await expect(
+      page.getByRole("region", { name: /notifications/i }).getByText(/^Reset to auto$/),
+    ).toBeVisible({ timeout: 5_000 });
+    await expect(hint).toBeHidden({ timeout: 10_000 });
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    // Reload, so the dialog opens from the server's row, not a cached copy.
+    await page.reload();
+    await expect(page.getByTestId(`row-tx-${seeded.id}`)).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId(`button-edit-tx-${seeded.id}`).click();
+    await expect(page.getByRole("dialog").getByText("Edit Transaction")).toBeVisible();
+    await expect(page.getByTestId("transfer-override-hint")).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
     // Server-side: GET /api/transactions reflects the cleared override so
     // future Plaid syncs are free to re-derive `isTransfer` from the

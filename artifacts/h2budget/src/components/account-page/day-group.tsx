@@ -23,6 +23,16 @@ export function formatDayHeader(iso: string) {
  * hover stain across the top ~78px of a card, which on a head-less card of
  * twenty rows would tint the first two ledger rows on any hover. It is a
  * head treatment; a card with no head does not get it.
+ *
+ * `variant="flush"` (C9) is the same group drawn as a section of a ledger
+ * PANEL (`LedgerPanel`): the head is a full-width bar with hairlines, the rows
+ * sit directly under it with no card of their own — a table, not a stack of
+ * cards inside a card. The head sticks under `--page-sticky-top` either way.
+ *
+ * ⚠️ THE ROW BOX IS THE LEDGER'S `@container`. Rows and `LedgerColumns` switch
+ * to their column grid on the ledger's width (`ledger-grid.ts`), so whatever
+ * hosts a day group needs no container of its own. The head stays OUTSIDE the
+ * container box, so it keeps sticking to `<main>`.
  */
 export function DayGroup({
   dayKey,
@@ -36,6 +46,7 @@ export function DayGroup({
   todayBadgeLabel = "Today",
   containerRef,
   columnHeader,
+  variant = "card",
   children,
 }: {
   dayKey: string;
@@ -58,6 +69,8 @@ export function DayGroup({
   /** Column-head strip, passed only by the first group so the ledger is
    *  labelled once rather than once per day. */
   columnHeader?: ReactNode;
+  /** `card` (a rounded card per day) or `flush` (a section of a ledger panel). */
+  variant?: "card" | "flush";
   children: ReactNode;
 }) {
   // Pending is "watch", not "bad" — grey. Everything else is the resting navy.
@@ -66,6 +79,57 @@ export function DayGroup({
       ? "ring-neutral-300 bg-warn-bg"
       : "ring-brand-navy/25 bg-ok-bg";
   const accentChip = todayAccent === "amber" ? "chip warn" : "chip info";
+  const head = (
+    <>
+      <div className="flex min-w-0 items-center gap-3">
+        <Checkbox
+          checked={selectionState}
+          onCheckedChange={(v) => onToggleAll(!!v)}
+          aria-label="Select day"
+        />
+        <div className="truncate text-body font-semibold text-brand-navy">
+          {headerLabel ?? formatDayHeader(dayKey)}
+        </div>
+        {isToday && <span className={accentChip}>{todayBadgeLabel}</span>}
+        <span className="chip gray">
+          {count} txn{count === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="font-mono text-label font-semibold tabular-nums">
+        {totalNode}
+      </div>
+    </>
+  );
+  if (variant === "flush") {
+    // Pending is "watch" (the warn tint); today is the resting navy tint.
+    const flushTint =
+      todayAccent === "amber" ? "bg-warn-bg" : "bg-ok-bg";
+    return (
+      <div
+        ref={containerRef}
+        data-day-group={dayKey}
+        data-variant="flush"
+        // "Scroll to today" lands the group's head BELOW the pinned pane, not
+        // under it.
+        style={{ scrollMarginTop: "var(--page-sticky-top, 0px)" }}
+      >
+        <div
+          className={cn(
+            "sticky z-10 flex min-h-9 items-center justify-between gap-3 border-y border-brand-line px-4 py-1",
+            isToday ? flushTint : "bg-platinum-1",
+          )}
+          style={{ top: "var(--page-sticky-top, 0px)" }}
+          data-testid={`day-head-${dayKey}`}
+        >
+          {head}
+        </div>
+        <div className="@container">
+          {columnHeader}
+          {children}
+        </div>
+      </div>
+    );
+  }
   return (
     <div ref={containerRef} className="space-y-2">
       <div
@@ -75,25 +139,9 @@ export function DayGroup({
         )}
         style={{ top: "var(--page-sticky-top, 0px)" }}
       >
-        <div className="flex min-w-0 items-center gap-3">
-          <Checkbox
-            checked={selectionState}
-            onCheckedChange={(v) => onToggleAll(!!v)}
-            aria-label="Select day"
-          />
-          <div className="truncate text-body font-semibold text-brand-navy">
-            {headerLabel ?? formatDayHeader(dayKey)}
-          </div>
-          {isToday && <span className={accentChip}>{todayBadgeLabel}</span>}
-          <span className="chip gray">
-            {count} txn{count === 1 ? "" : "s"}
-          </span>
-        </div>
-        <div className="font-mono text-label font-semibold tabular-nums">
-          {totalNode}
-        </div>
+        {head}
       </div>
-      <div className="surface overflow-hidden rounded-card ring-1 ring-brand-line">
+      <div className="@container surface overflow-hidden rounded-card ring-1 ring-brand-line">
         {columnHeader}
         {children}
       </div>
