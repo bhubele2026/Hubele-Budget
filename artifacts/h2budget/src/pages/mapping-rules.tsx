@@ -425,6 +425,9 @@ export default function MappingRulesPage() {
   const [editMatchType, setEditMatchType] = useState("contains");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editPriority, setEditPriority] = useState<string>("");
+  // (WP5b) Optional "why" for this edit. Sent as the PATCH `note` only when
+  // filled in; the server keeps it with the change in the rule's history.
+  const [editNote, setEditNote] = useState("");
   // Snapshot of the rule at edit-start. We need the original `categoryId`
   // to compute `fromCategoryId` for the bulk recategorize on save (the
   // server's preview endpoint also derives fromCategoryId from the rule's
@@ -1054,6 +1057,7 @@ export default function MappingRulesPage() {
     setEditMatchType(rule.matchType);
     setEditCategoryId(rule.categoryId ?? "");
     setEditPriority(String(rule.priority));
+    setEditNote("");
     setEditingOriginal({
       id: rule.id,
       categoryId: rule.categoryId ?? null,
@@ -1136,6 +1140,7 @@ export default function MappingRulesPage() {
           matchType: editMatchType,
           categoryId: editCategoryId,
           ...(Number.isFinite(priorityNum) ? { priority: priorityNum } : {}),
+          ...(editNote.trim() ? { note: editNote.trim() } : {}),
         },
       },
       {
@@ -1328,6 +1333,14 @@ export default function MappingRulesPage() {
     for (const c of categories ?? []) m.set(c.id, c);
     return m;
   }, [categories]);
+
+  // (WP5b) Names a category in a rule's history: the rows show "Uncategorized"
+  // for no category, and a category that no longer exists says so.
+  const categoryNameOf = (id: string | null): string =>
+    id === null
+      ? "Uncategorized"
+      : (catById.get(id)?.name ??
+        (categories ? "a deleted category" : "a category"));
 
   const handleDragStart = (e: DragStartEvent) => {
     setActiveDragId(String(e.active.id));
@@ -2388,6 +2401,18 @@ export default function MappingRulesPage() {
                                           Cancel
                                         </button>
                                       </div>
+                                      {/* (WP5b) Kept with this change in the rule's history. */}
+                                      <input
+                                        value={editNote}
+                                        onChange={(e) =>
+                                          setEditNote(e.target.value)
+                                        }
+                                        maxLength={500}
+                                        placeholder="Why (optional) — kept in the rule's history"
+                                        className={`${input} py-1 text-micro`}
+                                        aria-label="Why this change (optional)"
+                                        data-testid={`rule-edit-note-${rule.id}`}
+                                      />
                                       {editPreview &&
                                         editPreview.toCategoryId ===
                                           editCategoryId &&
@@ -2467,6 +2492,7 @@ export default function MappingRulesPage() {
                                     onMove={moveRule}
                                     onStartEdit={startEdit}
                                     onDelete={handleDeleteRule}
+                                    categoryName={categoryNameOf}
                                   />
                                 );
                               })}

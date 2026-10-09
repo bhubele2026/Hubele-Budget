@@ -3522,6 +3522,17 @@ export interface MappingRule {
   /** @nullable */
   categoryId?: string | null;
   priority: number;
+  /**
+   * (WP5b) When this rule was last edited directly: its pattern, match
+type, category or priority (PATCH /mapping-rules/{id}, or the rule
+re-point that rides on POST /transactions/recategorize-by-pattern).
+Null when it has not been edited since rule history began. A
+reorder is recorded in the rule's history but is not an edit, so it
+leaves this alone. Every change is in GET /mapping-rules/{id}/history.
+
+   * @nullable
+   */
+  updatedAt?: string | null;
 }
 
 export type CreateMappingRuleResponse = MappingRule & {
@@ -3547,6 +3558,85 @@ export interface MappingRuleInput {
   /** @nullable */
   categoryId?: string | null;
   priority?: number;
+  /**
+   * (WP5b) Optional: why the rule is being created or changed. Kept
+with that change in the rule's history (GET
+/mapping-rules/{id}/history), never on the rule itself. A PATCH
+that changes nothing records nothing, note included.
+
+   * @maxLength 500
+   * @nullable
+   */
+  note?: string | null;
+}
+
+/**
+ * (WP5b) A mapping rule's state as its history records it: the four
+fields that decide which charges it files, and where.
+
+ */
+export interface MappingRuleSnapshot {
+  pattern: string;
+  matchType: string;
+  /** @nullable */
+  categoryId: string | null;
+  priority: number;
+}
+
+/**
+ * created / seeded (H2's starter rules): `previous` is null.
+deleted: `next` is null. updated (a direct edit) and reordered
+(moved in the list; only the priority differs): both are present.
+
+ */
+export type MappingRuleHistoryEntryAction =
+  (typeof MappingRuleHistoryEntryAction)[keyof typeof MappingRuleHistoryEntryAction];
+
+export const MappingRuleHistoryEntryAction = {
+  created: "created",
+  updated: "updated",
+  deleted: "deleted",
+  reordered: "reordered",
+  seeded: "seeded",
+} as const;
+
+export type MappingRuleHistoryEntryActorKind =
+  (typeof MappingRuleHistoryEntryActorKind)[keyof typeof MappingRuleHistoryEntryActorKind];
+
+export const MappingRuleHistoryEntryActorKind = {
+  person: "person",
+  seed: "seed",
+  script: "script",
+  system: "system",
+} as const;
+
+export interface MappingRuleHistoryEntry {
+  id: string;
+  ruleId: string;
+  /** created / seeded (H2's starter rules): `previous` is null.
+deleted: `next` is null. updated (a direct edit) and reordered
+(moved in the list; only the priority differs): both are present.
+ */
+  action: MappingRuleHistoryEntryAction;
+  /** Who made the change: a user id, 'seed', 'script:<name>' or 'system'.
+   */
+  actor: string;
+  actorKind: MappingRuleHistoryEntryActorKind;
+  /** True when the person asking made this change. */
+  byYou: boolean;
+  previous: MappingRuleSnapshot | null;
+  next: MappingRuleSnapshot | null;
+  /** @nullable */
+  note: string | null;
+  createdAt: string;
+}
+
+export interface MappingRuleHistory {
+  ruleId: string;
+  /** Newest first, at most 100. */
+  entries: MappingRuleHistoryEntry[];
+  /** True when the rule has more than 100 recorded changes and only the newest 100 are listed. */
+  truncated: boolean;
 }
 
 export interface ReorderMappingRulesInput {

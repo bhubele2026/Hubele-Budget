@@ -6,6 +6,7 @@
   },
   "include": [
     "src",
-    "../artifacts/api-server/src/lib/canonicalCategoryMap.ts"
+    "../artifacts/api-server/src/lib/canonicalCategoryMap.ts",
+    "../artifacts/api-server/src/lib/mappingRuleAudit.ts"
   ]
 }

@@ -48,6 +48,10 @@ import {
   findAmbiguous,
   matchesEntry,
 } from "../../artifacts/api-server/src/lib/canonicalCategoryMap";
+import {
+  recordRuleChange,
+  scriptActor,
+} from "../../artifacts/api-server/src/lib/mappingRuleAudit";
 
 type ParsedArgs = {
   userId: string;
@@ -430,6 +434,18 @@ async function main() {
         categoryId: r.categoryId,
         priority: args.priority,
       });
+      // (WP5b) Every rule write is audited, in this same transaction.
+      if (result.ruleId && result.status !== "noop") {
+        await recordRuleChange(tx, {
+          householdId,
+          ruleId: result.ruleId,
+          action: result.status === "inserted" ? "created" : "updated",
+          actor: scriptActor("recategorize"),
+          previous: result.previous,
+          next: result.next,
+          note: `Canonical merchant map, ${args.source} ${args.from}..${args.to}.`,
+        });
+      }
       if (result.status === "inserted") inserted++;
       else if (result.status === "updated") updated++;
       else noop++;
