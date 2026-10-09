@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { LEDGER_GRID } from "./transaction-row";
+import { LEDGER_GRID } from "./ledger-grid";
 
 /**
  * ⭐ THE LEDGER FINALLY SAYS WHAT ITS COLUMNS ARE.
@@ -13,25 +13,28 @@ import { LEDGER_GRID } from "./transaction-row";
  * day-group only; repeating it above all thirty groups would turn a header
  * into wallpaper.
  *
- * ⚠️ `xl` ONLY. Below that the row is a wrapping flex, so there are no
- * columns to head — labelling them there would print seven words over a
- * layout that does not have them.
+ * ⚠️ WIDE LEDGER ONLY (`@6xl`, the ledger's own width — `ledger-grid.ts`).
+ * Below that the row is a wrapping flex, so there are no columns to head —
+ * labelling them there would print seven words over a layout that does not
+ * have them. Pass the same `gridClass` the rows use.
  */
 export function LedgerColumns({
   amountLabel = "Amount · Bal",
   actionsLabel = "",
+  gridClass = LEDGER_GRID,
 }: {
   /** Chase and Amex both stack a running balance under the amount. */
   amountLabel?: string;
   actionsLabel?: string;
+  gridClass?: string;
 }) {
   const th =
     "text-micro font-semibold uppercase tracking-wide text-neutral-400";
   return (
     <div
       className={cn(
-        "hidden border-b border-brand-line bg-platinum-2 px-4 py-2 xl:grid xl:items-center xl:gap-x-3",
-        LEDGER_GRID,
+        "hidden border-b border-brand-line bg-platinum-2 px-4 py-2 @6xl:grid @6xl:items-center @6xl:gap-x-3",
+        gridClass,
       )}
       aria-hidden
       data-testid="ledger-columns"

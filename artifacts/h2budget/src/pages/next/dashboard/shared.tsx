@@ -24,22 +24,8 @@ export function ordinal(n: number): string {
   return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
-/** Entry stagger on the existing dial. Literal strings so Tailwind sees them. */
-const RISE = [
-  "[animation-delay:calc(0*var(--stagger))]",
-  "[animation-delay:calc(1*var(--stagger))]",
-  "[animation-delay:calc(2*var(--stagger))]",
-  "[animation-delay:calc(3*var(--stagger))]",
-  "[animation-delay:calc(4*var(--stagger))]",
-  "[animation-delay:calc(5*var(--stagger))]",
-  "[animation-delay:calc(6*var(--stagger))]",
-  "[animation-delay:calc(7*var(--stagger))]",
-  "[animation-delay:calc(8*var(--stagger))]",
-  "[animation-delay:calc(9*var(--stagger))]",
-];
-export function rise(i: number): string {
-  return cn("tile-in", RISE[Math.min(Math.max(i, 0), RISE.length - 1)]);
-}
+/** Entry stagger on the existing dial (shared with the account pages). */
+export { rise } from "@/components/next/PageGrid";
 
 export function PanelSkeleton({ rows = 3 }: { rows?: number }) {
   return (

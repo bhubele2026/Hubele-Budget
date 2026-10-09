@@ -20,6 +20,8 @@ import {
  *   3. The dialog's apply button still triggers the existing
  *      POST /api/transactions/recategorize-by-pattern flow.
  *
+ * (C9 repair: the category control is the row's CategoryPicker now.)
+ *
  * The unit + integration tests already lock the API contract; this spec
  * exercises the full UI flow against a fresh Clerk-provisioned user since
  * the app is invite-only and not reachable via the runTest harness.
@@ -118,7 +120,7 @@ test.describe("Transactions bulk re-categorize preview (#187)", () => {
     ).toBeVisible({ timeout: 15_000 });
 
     // --- Seed deterministic categories + rule + transactions via the API.
-    // The trigger row is uncategorized so the CategorizeChip is rendered;
+    // The trigger row is uncategorized so its picker reads "Uncategorized";
     // the two historical rows sit in the "Misc Buffer" category that the
     // mapping rule currently points at, so picking the new debt category
     // on the trigger should repoint the rule and report candidateCount=2.
@@ -185,8 +187,8 @@ test.describe("Transactions bulk re-categorize preview (#187)", () => {
         // Server-side auto-categorize on POST /transactions (added in
         // main-repl/main) would otherwise pre-assign this row via the
         // mapping rule we just created. Pass an explicit null so the
-        // trigger stays uncategorized and the test can drive the
-        // CategorizeChip via `badge-uncategorized-…`.
+        // trigger stays uncategorized and the test can drive the row's
+        // category picker.
         categoryId: null,
       },
     );
@@ -200,14 +202,23 @@ test.describe("Transactions bulk re-categorize preview (#187)", () => {
     const triggerRow = page.getByTestId(`row-tx-${trigger.id}`);
     await expect(triggerRow).toBeVisible({ timeout: 15_000 });
 
-    // --- Open the CategorizeChip popover on the trigger row and pick the
+    // --- Open the category picker on the trigger row and pick the
     // debt category. The PATCH that fires from this click is what triggers
     // the auto-relearn + repoint-rule flow under test.
-    await triggerRow
-      .getByTestId(`badge-uncategorized-${trigger.id}`)
-      .click();
+    // (C9 repair) The row's category control is the shared account row's
+    // CategoryPicker (`button-category-picker`), not the old CategorizeChip
+    // (`badge-uncategorized-*`). Its "Remember" box is on by default and
+    // would send a `rememberPattern`; the old chip sent the category alone,
+    // which is what drives the server's own auto-relearn (the flow under
+    // test), so it is unticked first.
+    await triggerRow.getByTestId("button-category-picker").click();
+    await page.getByTestId("checkbox-remember-picker").click();
+    await expect(page.getByTestId("checkbox-remember-picker")).toHaveAttribute(
+      "data-state",
+      "unchecked",
+    );
 
-    const picker = page.getByPlaceholder(/search category/i);
+    const picker = page.getByPlaceholder(/^search/i);
     await expect(picker).toBeVisible();
     await picker.fill(debtName);
     await page.getByRole("option", { name: debtName }).first().click();

@@ -15,6 +15,8 @@ import {
 /**
  * End-to-end coverage for task #740.
  *
+ * (C9 repair: the row's category control is the shared CategoryPicker.)
+ *
  * The pinned "Pending" group at the top of /transactions historically
  * rendered a stripped-down row that omitted the categorize affordances
  * (no InlineCategoryPicker, no CategorizeChip, no BucketBubbles, no
@@ -125,16 +127,13 @@ test.describe("Pending-row categorize affordances on /transactions (#740)", () =
       ) ??
       allCategories[0];
 
-    // Pre-state: no category badge, but the Categorize/Other… popover
-    // trigger is present. CategorizeChip always renders the
-    // `badge-uncategorized-<id>` popover trigger — whether or not the
-    // description happens to hit a heuristic suggestion — so the testid
-    // is a stable handle independent of the suggestion path.
-    await expect(
-      row.getByTestId(`badge-category-${seeded.id}`),
-    ).toHaveCount(0);
-    const pickerTrigger = row.getByTestId(`badge-uncategorized-${seeded.id}`);
+    // Pre-state: the row's category picker (the shared account row's
+    // CategoryPicker — C9 repair; the old CategorizeChip and its
+    // `badge-uncategorized-<id>` / `badge-category-<id>` handles are gone)
+    // is present on the pending row and reads "Uncategorized".
+    const pickerTrigger = row.getByTestId("button-category-picker");
     await expect(pickerTrigger).toBeVisible();
+    await expect(pickerTrigger).toHaveText("Uncategorized");
 
     const patchPromise = page.waitForResponse(
       (res) =>
@@ -143,11 +142,8 @@ test.describe("Pending-row categorize affordances on /transactions (#740)", () =
       { timeout: 10_000 },
     );
     await pickerTrigger.click();
-    // Command items are rendered by the cmdk library with role="option".
-    // The "All categories" group always includes every category, so
-    // `.first()` deterministically picks the entry from that group
-    // (which may also appear duplicated in a "Suggested" group when
-    // the description hits a heuristic match).
+    // Command items are rendered by the cmdk library with role="option";
+    // each category is listed once (`.first()` is belt and braces).
     await page
       .getByRole("option", { name: targetCategory.name, exact: true })
       .first()
@@ -156,15 +152,14 @@ test.describe("Pending-row categorize affordances on /transactions (#740)", () =
     const patchRes = await patchPromise;
     expect(patchRes.status()).toBe(200);
 
-    // Post-state: the chosen category badge appears in place on the
-    // same pending row (the row is still inside the pinned Pending
-    // group — assigning a category must not graduate it to the
-    // posted day-groups).
-    const assignedBadge = pendingGroup.getByTestId(
-      `badge-category-${seeded.id}`,
-    );
+    // Post-state: the picker on the same pending row shows the chosen
+    // category (the row is still inside the pinned Pending group —
+    // assigning a category must not graduate it to the posted day-groups).
+    const assignedBadge = pendingGroup
+      .getByTestId(`row-tx-${seeded.id}`)
+      .getByTestId("button-category-picker");
     await expect(assignedBadge).toBeVisible({ timeout: 5_000 });
-    await expect(assignedBadge).toHaveText(targetCategory.name);
+    await expect(assignedBadge).toHaveText(targetCategory.name, { timeout: 5_000 });
     await expect(row).toHaveAttribute("data-pending", "true");
 
     // Server-side persistence — the category really landed on the

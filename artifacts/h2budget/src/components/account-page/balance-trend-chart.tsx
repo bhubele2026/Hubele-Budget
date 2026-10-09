@@ -14,7 +14,8 @@ import {
 } from "@/lib/charts";
 import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Panel } from "@/components/next/Panel";
+import type { AccountAccentName } from "@/lib/accountIdentity";
 import { cn, formatCurrency } from "@/lib/utils";
 
 export type TrendPoint = {
@@ -68,6 +69,8 @@ type SingleSeriesProps = {
   window?: WindowConfig;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  /** The account's identity edge on the chart panel. */
+  accent?: AccountAccentName;
 };
 
 type MultiSeriesProps = {
@@ -94,45 +97,77 @@ type MultiSeriesProps = {
   testId?: string;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  /** The account's identity edge on the chart panel. */
+  accent?: AccountAccentName;
 };
 
 type BalanceTrendChartProps = SingleSeriesProps | MultiSeriesProps;
 
-/** Shared collapsible caption header — a chevron toggles the chart body. */
-function ChartHeader({
+/**
+ * The chart's frame (C9): a full-width panel on the grid — the caption is the
+ * panel title, the window range and the collapse control sit in its head, and
+ * the body is a FIXED height so `ResponsiveContainer` always has a sized box
+ * (never 0 px on the first frame). Collapsed, the body is hidden but stays
+ * mounted, so expanding never replays the draw from nothing.
+ */
+function ChartFrame({
+  testId,
   caption,
   subtitle,
   collapsed,
   onToggle,
+  accent,
+  children,
 }: {
+  testId: string;
   caption: string;
   subtitle?: ReactNode;
   collapsed?: boolean;
   onToggle?: () => void;
+  accent?: AccountAccentName;
+  children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={!collapsed}
-      data-testid="chart-collapse-toggle"
-      className="w-full flex items-baseline justify-between gap-2 px-2 py-1 -mx-1 mb-1 text-left rounded-md cursor-pointer hover:bg-muted/60 transition-colors"
-    >
-      <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-muted-foreground">
-        <ChevronDown
-          className={cn(
-            "h-3 w-3 transition-transform",
-            collapsed && "-rotate-90",
+    <Panel
+      title={caption}
+      span={12}
+      variant="static"
+      accent={accent}
+      data-testid={testId}
+      bodyClassName={cn("space-y-2", collapsed && "hidden")}
+      actions={
+        <>
+          {subtitle != null && (
+            <span className="hidden text-micro text-neutral-500 sm:inline">{subtitle}</span>
           )}
-        />
-        {caption}
-      </span>
-      {subtitle != null && (
-        <span className="text-[10px] text-muted-foreground">{subtitle}</span>
-      )}
-    </button>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? `Show ${caption}` : `Hide ${caption}`}
+            title={collapsed ? "Show chart" : "Hide chart"}
+            data-testid="chart-collapse-toggle"
+            className="press inline-flex h-7 w-7 items-center justify-center rounded-control text-neutral-500 ring-1 ring-brand-line hover:bg-platinum-2 hover:text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+          >
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 transition-transform duration-[var(--dur-soft)]",
+                collapsed && "-rotate-90",
+              )}
+            />
+          </button>
+        </>
+      }
+    >
+      {children}
+    </Panel>
   );
 }
+
+/** Chart body height: large enough to read, fixed so the container has a size. */
+const CHART_BOX = "h-[220px] w-full md:h-[260px]";
+/** Axis ticks one step up from the old 10 px, so the axes read at a glance. */
+const TICK = { fontSize: 11 };
 
 function isMultiSeries(
   props: BalanceTrendChartProps,
@@ -189,6 +224,7 @@ function SingleSeriesBalanceTrendChart({
   window,
   collapsed,
   onToggleCollapsed,
+  accent,
 }: SingleSeriesProps) {
   if (window) {
     // (#809) Render the fixed window (axes, month ticks, today marker)
@@ -197,15 +233,15 @@ function SingleSeriesBalanceTrendChart({
     // accumulated any points; the frame should still show so the chart
     // never disappears mid-month.
     return (
-      <Card data-testid={testId}>
-        <CardContent className="p-3 pt-4">
-          <ChartHeader
-            caption={caption}
-            subtitle={window.subtitle}
-            collapsed={collapsed}
-            onToggle={onToggleCollapsed}
-          />
-          <div className={cn("h-[120px] w-full", collapsed && "hidden")}>
+      <ChartFrame
+        testId={testId}
+        caption={caption}
+        subtitle={window.subtitle}
+        collapsed={collapsed}
+        onToggle={onToggleCollapsed}
+        accent={accent}
+      >
+          <div className={CHART_BOX}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={window.series}
@@ -218,7 +254,7 @@ function SingleSeriesBalanceTrendChart({
                   scale="time"
                   domain={window.domain}
                   ticks={window.monthTicks}
-                  tick={{ fontSize: 10 }}
+                  tick={TICK}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v: number) =>
@@ -226,7 +262,7 @@ function SingleSeriesBalanceTrendChart({
                   }
                 />
                 <YAxis
-                  tick={{ fontSize: 10 }}
+                  tick={TICK}
                   tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
                   width={44}
                   tickLine={false}
@@ -277,22 +313,21 @@ function SingleSeriesBalanceTrendChart({
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </CardContent>
-      </Card>
+      </ChartFrame>
     );
   }
 
   if (data.length === 0) return null;
   return (
-    <Card data-testid={testId}>
-      <CardContent className="p-3 pt-4">
-        <ChartHeader
-          caption={caption}
-          subtitle={`${data[0].label} – ${data[data.length - 1].label}`}
-          collapsed={collapsed}
-          onToggle={onToggleCollapsed}
-        />
-        <div className={cn("h-[120px] w-full", collapsed && "hidden")}>
+    <ChartFrame
+      testId={testId}
+      caption={caption}
+      subtitle={`${data[0].label} – ${data[data.length - 1].label}`}
+      collapsed={collapsed}
+      onToggle={onToggleCollapsed}
+      accent={accent}
+    >
+        <div className={CHART_BOX}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={data}
@@ -301,14 +336,14 @@ function SingleSeriesBalanceTrendChart({
               <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.7} vertical={false} />
               <XAxis
                 dataKey="shortLabel"
-                tick={{ fontSize: 10 }}
+                tick={TICK}
                 tickLine={false}
                 axisLine={false}
                 interval="preserveStartEnd"
                 minTickGap={16}
               />
               <YAxis
-                tick={{ fontSize: 10 }}
+                tick={TICK}
                 tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
                 width={44}
                 tickLine={false}
@@ -357,8 +392,7 @@ function SingleSeriesBalanceTrendChart({
             </LineChart>
           </ResponsiveContainer>
         </div>
-      </CardContent>
-    </Card>
+    </ChartFrame>
   );
 }
 
@@ -391,6 +425,7 @@ function MultiSeriesBalanceTrendChart({
   testId = "card-balance-trend",
   collapsed,
   onToggleCollapsed,
+  accent,
 }: MultiSeriesProps) {
   // Merge the three weekly series into one date-keyed row set. The
   // historical and actual-from-today series are folded into a single
@@ -431,35 +466,41 @@ function MultiSeriesBalanceTrendChart({
   }
 
   return (
-    <Card data-testid={testId}>
-      <CardContent className="p-3 pt-4">
-        <ChartHeader
-          caption={caption}
-          subtitle={
-            subtitle ? (
-              <span data-testid="text-trend-subtitle">{subtitle}</span>
-            ) : null
-          }
-          collapsed={collapsed}
-          onToggle={onToggleCollapsed}
-        />
-        <div className={cn("flex items-center gap-3 px-1 mb-1", collapsed && "hidden")}>
-          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+    <ChartFrame
+      testId={testId}
+      caption={caption}
+      subtitle={
+        subtitle ? (
+          <span data-testid="text-trend-subtitle">{subtitle}</span>
+        ) : null
+      }
+      collapsed={collapsed}
+      onToggle={onToggleCollapsed}
+      accent={accent}
+    >
+        {/* The legend says it in words: solid is what happened, dashed is the
+            projection. Colour never carries it alone. */}
+        <div className="flex items-center gap-4" data-testid="trend-legend">
+          <span className="flex items-center gap-1.5 text-micro text-neutral-600">
             <span
-              className="inline-block h-[2px] w-4 rounded"
+              className="inline-block h-[2px] w-5 rounded"
               style={{ background: actualColor }}
             />
             Actual
           </span>
-          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-micro text-neutral-600">
             <span
-              className="inline-block h-0 w-4 border-t-2 border-dashed"
+              className="inline-block h-0 w-5 border-t-2 border-dashed"
               style={{ borderColor: forecastColor }}
             />
             Forecast
           </span>
+          <span className="flex items-center gap-1.5 text-micro text-neutral-600">
+            <span className="inline-block h-3 w-0 border-l border-dashed border-neutral-400" />
+            Today
+          </span>
         </div>
-        <div className={cn("h-[140px] w-full", collapsed && "hidden")}>
+        <div className={CHART_BOX}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={merged}
@@ -470,13 +511,13 @@ function MultiSeriesBalanceTrendChart({
                 dataKey="date"
                 ticks={monthTicks}
                 tickFormatter={monthTickLabel}
-                tick={{ fontSize: 10 }}
+                tick={TICK}
                 tickLine={false}
                 axisLine={false}
                 minTickGap={8}
               />
               <YAxis
-                tick={{ fontSize: 10 }}
+                tick={TICK}
                 tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
                 width={44}
                 tickLine={false}
@@ -622,7 +663,6 @@ function MultiSeriesBalanceTrendChart({
             </LineChart>
           </ResponsiveContainer>
         </div>
-      </CardContent>
-    </Card>
+    </ChartFrame>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useCreateTransaction,
@@ -100,6 +100,9 @@ import {
   BalanceTrendChart,
   DayGroup,
   LedgerColumns,
+  LedgerPanel,
+  LEDGER_GRID_WIDE_ACTIONS,
+  usePaneHeight,
   MonthNavigator,
   monthKeyOf,
   monthKeyFromISO,
@@ -108,6 +111,9 @@ import {
   type BalanceSeriesPoint,
 } from "@/components/account-page";
 import { ChaseLogo } from "@/components/brand-logos";
+import { PageGrid, rise } from "@/components/next/PageGrid";
+import { Panel } from "@/components/next/Panel";
+import { identityOf } from "@/lib/accountIdentity";
 import { ChaseInsightStrip } from "@/components/chase-insight-strip";
 import { invalidateForecastFamily } from "@/lib/invalidateForecast";
 import {
@@ -187,11 +193,17 @@ function readInitialChaseAccount(): string | null {
  * `embedded` + `accountKey` are used by `/next/accounts/:plaidAccountId`: the
  * page drops its own title and opens on one linked account (the internal
  * plaid_accounts id). Without props it behaves exactly as before.
+ *
+ * (C9) `lead` is a panel the host puts first in the figures row (the account
+ * page's Summary, span-4); the two range panels then take span-4 each, so the
+ * embedded account reads as one row of three. Standalone there is no lead and
+ * they take span-6.
  */
 export default function TransactionsPage({
   embedded = false,
   accountKey,
-}: { embedded?: boolean; accountKey?: string; params?: unknown } = {}) {
+  lead,
+}: { embedded?: boolean; accountKey?: string; lead?: ReactNode; params?: unknown } = {}) {
   // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
   // charges — banks sync only on the manual Sync button now.
   //
@@ -1267,6 +1279,7 @@ export default function TransactionsPage({
         <Button
           variant="ghost"
           size="icon"
+          className="h-8 w-8"
           disabled
           title="Categorize this transaction first to send it to Forecast"
           data-testid={`button-send-forecast-${tx.id}`}
@@ -1284,6 +1297,7 @@ export default function TransactionsPage({
       <Button
         variant="ghost"
         size="icon"
+        className="h-8 w-8"
         onClick={() => handleToggleForecast(tx)}
         disabled={updateTx.isPending}
         title="Send to Forecast"
@@ -2181,19 +2195,12 @@ export default function TransactionsPage({
     return () => clearTimeout(t);
   }, [focusTxId, isLoading, groups.length]);
 
-  // Measure the pinned top pane so day-group headers (and the bulk bar)
-  // can stick directly beneath it via a CSS variable.
+  // (C9) Measure the ledger's pinned pane so the day-group heads and the bulk
+  // bar stick directly beneath it, via `--page-sticky-top` on the page root.
+  // The pane mounts after the cold skeleton, hence the re-attach on the
+  // first page's arrival.
   const paneRef = useRef<HTMLDivElement | null>(null);
-  const [paneH, setPaneH] = useState(0);
-  useEffect(() => {
-    const el = paneRef.current;
-    if (!el) return;
-    const measure = () => setPaneH(el.offsetHeight);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [isLoading]);
+  const paneH = usePaneHeight(paneRef, [isLoading, !!registerPage]);
 
   // Gate on data only — global keepPreviousData keeps the previous
   // transactions list visible during refetches so we never flash a
@@ -2301,9 +2308,147 @@ export default function TransactionsPage({
   const isPlaidLinked =
     !isManualAccount && !!effectiveAccountInternalId;
 
+  // (C9) The account on screen, as its identity: accent, name, ••mask. Shown
+  // as a chip under the title, as the accent edge on this account's panels,
+  // and as the dot + digits in every row's card column.
+  const accountIdentity = selectedPlaidAccount
+    ? identityOf({
+        id: selectedPlaidAccount.id,
+        name: selectedPlaidAccount.name,
+        mask: selectedPlaidAccount.mask,
+        type: "depository",
+        subtype: selectedPlaidAccount.subtype ?? "checking",
+        institutionName: selectedPlaidAccount.institutionName,
+      })
+    : null;
+  // The row's card column: the source ("Chase · Plaid", CH-26) plus the
+  // selected account's digits when the row is that account's.
+  const rowCard = (tx: Transaction): { label: string; accent: "checking" | null } => {
+    const label = formatTransactionSource(tx.source);
+    const own =
+      !!tx.plaidAccountId &&
+      !!chasePlaidAccountIds &&
+      chasePlaidAccountIds.has(tx.plaidAccountId);
+    const mask = own ? (accountIdentity?.mask4 ?? "") : "";
+    return {
+      label: mask && label ? `${label} ••${mask}` : label,
+      accent: own || (tx.source ?? "").toLowerCase().startsWith("plaid:") ? "checking" : null,
+    };
+  };
+
+  const pageActions = (
+    <>
+      <Button onClick={handleOpenNew} variant="outline" size="sm" data-testid="button-add-transaction">
+        <Plus className="w-4 h-4 mr-1.5" /> Add transaction
+      </Button>
+      <SyncButton relevantItemIds={relevantPlaidItemIds} />
+      <PlaidLinkButton
+        label="Connect a bank"
+        onImportReady={() => void invalidateBankLedger(queryClient)}
+        inlineProgress={false}
+      />
+    </>
+  );
+
+  // (cleanup) The verbose "Plaid · Chase ··5526 · Current balance … Last
+  // auto-updated" snapshot line was removed — the balance already shows in the
+  // stat panels, and the single "Last synced" note next to the Sync button is
+  // the one source of truth for freshness now that background auto-updates
+  // are disabled.
+  const manualMeta =
+    !usingSnapshotAccount && isManualAccount ? (
+      <div
+        className="flex items-center gap-1.5 text-micro text-neutral-500"
+        data-testid="text-snapshot-meta"
+      >
+        <span className={fieldLabel}>Manual entries</span>
+        <Help>
+          Hand-entered rows carry no bank balance, so no snapshot anchors
+          this view.
+        </Help>
+      </div>
+    ) : null;
+
+  // (#422) Header pending-count chip — at-a-glance signal of how many "sent"
+  // rows for this account/period are still sitting in the Forecast Review
+  // Bucket awaiting a match. Clickable so the user can jump straight to the
+  // bucket and resolve them.
+  const bucketSummary = (
+    <div className="flex items-center gap-2 flex-wrap" data-testid="chase-bucket-summary">
+      {/* An unknown count (the spine is loading or failed) shows nothing:
+          "All reconciled" is a claim, and a null count cannot make it. */}
+      {awaitingMatchCount != null && awaitingMatchCount > 0 ? (
+        <Link
+          href="/review"
+          data-testid="link-bucket-pending-count"
+          className="chip warn press inline-flex items-center gap-1.5 hover:bg-platinum-5 hover:text-brand-navy"
+          title="Open the Forecast Review Bucket to match these"
+        >
+          <Inbox className="h-3 w-3" />
+          {/* Wording is asserted by e2e/transactions-bucket-badge.spec.ts and
+              is already a label, not a sentence — restyled, not reworded. */}
+          <span>
+            Match{" "}
+            <span className="font-mono tabular-nums">{awaitingMatchCount}</span>{" "}
+            {awaitingMatchCount === 1 ? "item" : "items"} in Review
+          </span>
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      ) : awaitingMatchCount === 0 ? (
+        <span className="chip gray" data-testid="text-bucket-empty">
+          All reconciled
+        </span>
+      ) : null}
+    </div>
+  );
+
+  // (#797) Show the picker only when there are 2+ *Chase* checking accounts to
+  // switch between. When there are no Chase accounts the picker hides
+  // entirely and the page falls through to the existing source-based fallback
+  // (`isChaseFallbackSource`), which still renders Chase + manual rows. The
+  // dead "Manual entries" pseudo-account option was removed — it was leaking
+  // a non-Chase view onto the Chase page.
+  const accountPicker =
+    chaseOnlyPlaidCheckingAccounts.length > 1 ? (
+      <div className="flex items-center gap-2" data-testid="chase-account-picker">
+        <span className={fieldLabel}>Account</span>
+        <Select
+          value={effectiveAccountKey}
+          onValueChange={(v) => setSelectedAccountKey(v)}
+        >
+          <SelectTrigger aria-label="View account" className="h-8 text-xs w-64" data-testid="select-chase-account">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent data-testid="chase-account-options">
+            {chaseOnlyPlaidCheckingAccounts.map((a) => {
+              const name = a.institutionName ?? a.name ?? "Checking";
+              const mask = a.mask ?? null;
+              const isSnapshot = bankSnapshot?.accountId === a.id;
+              return (
+                <SelectItem
+                  key={a.id}
+                  value={a.id}
+                  data-testid={`option-chase-account-${a.id}`}
+                >
+                  {name}
+                  {mask ? ` ••${mask}` : ""}
+                  {isSnapshot ? " · snapshot" : ""}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+    ) : null;
+
+  // The register's row actions: date controls, send to Forecast, review, edit
+  // and delete. Icon buttons are 32 px so a one-line row stays 40 px.
+  const rowIcon = "h-8 w-8";
+
   return (
     <div
-      className="space-y-3"
+      className="space-y-4"
+      data-testid="chase-page"
       style={{ ["--page-sticky-top" as string]: `${paneH}px` } as React.CSSProperties}
     >
       {/* (#357) Suppress the global Plaid re-auth banner while the user
@@ -2318,137 +2463,129 @@ export default function TransactionsPage({
           link toast. */}
       <PostLinkProgressBanner viewTransactionsPath="/transactions" />
       {register.isRefetchError && <div role="alert" className={errorBanner}>Chase refresh failed. Showing the last loaded transactions. <button className={btnLink} onClick={() => void register.refetch()}>Retry transactions</button></div>}
-      {/* Embedded, the pane bleeds over the p-4 that /next/accounts puts
-          around this ledger inside its flush, sticky-safe panel, so it spans
-          the panel's width when it sticks to <main>. Full page, it is the
-          page's sticky head (`.page-sticky-head`, index.css). */}
-      <div
-        ref={paneRef}
-        className={embedded ? "sticky top-0 z-30 -mx-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pb-3" : "page-sticky-head sticky top-0 z-30 space-y-3 border-b border-brand-line bg-platinum-1 pt-3 pb-3 md:pt-4"}
-      >
-      {embedded ? (
-        <div className="flex flex-wrap items-start justify-end gap-2">
-          <>
-            <Button onClick={handleOpenNew} variant="outline" size="sm" data-testid="button-add-transaction">
-              <Plus className="w-4 h-4 mr-1.5" /> Add transaction
-            </Button>
-            <SyncButton relevantItemIds={relevantPlaidItemIds} />
-            <PlaidLinkButton
-              label="Connect a bank"
-              onImportReady={() => void invalidateBankLedger(queryClient)}
-              inlineProgress={false}
-            />
-          </>
-        </div>
-      ) : (
-        <AccountPageHeader
-        title="Chase"
-        icon={<ChaseLogo className="h-7 w-7" />}
-        actions={
-          <>
-            <Button onClick={handleOpenNew} variant="outline" size="sm" data-testid="button-add-transaction">
-              <Plus className="w-4 h-4 mr-1.5" /> Add transaction
-            </Button>
-            <SyncButton relevantItemIds={relevantPlaidItemIds} />
-            <PlaidLinkButton
-              label="Connect a bank"
-              onImportReady={() => void invalidateBankLedger(queryClient)}
-              inlineProgress={false}
-            />
-          </>
-        }
-      />
-      )}
 
-      <div className="space-y-3">
-        {/* Weekly-first range control. Month stepper only when in Month mode. */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
+      {/* (C9) The account page on the 12-column grid: head, controls, the two
+          range figures, the household strip, the trend chart, then the ledger
+          panel. The same layout standalone and embedded (`/next/accounts/:id`),
+          where the account's own page supplies the title. */}
+      <PageGrid>
+        <div className="span-12">
+          {embedded ? (
+            <div className="flex flex-wrap items-start justify-end gap-2" data-testid="chase-embedded-actions">
+              {pageActions}
+            </div>
+          ) : (
+            <AccountPageHeader
+              title="Chase"
+              icon={<ChaseLogo className="h-7 w-7" />}
+              identity={accountIdentity}
+              meta={manualMeta}
+              actions={pageActions}
+            />
+          )}
+        </div>
+
+        {/* Weekly-first range control (Month stepper only in Month mode), the
+            account picker and the Review drilldown. */}
+        <div className="span-12 flex flex-wrap items-center justify-between gap-3" data-testid="chase-controls">
+          <div className="flex flex-wrap items-center gap-3">
             <TimeRangeToggle value={rangeMode} onChange={setRangeMode} />
             <span className="text-sm font-medium tabular-nums text-muted-foreground">
               {range.label}
             </span>
+            {rangeMode === "mo" && (
+              <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+            )}
           </div>
-          {rangeMode === "mo" && (
-            <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {embedded ? manualMeta : null}
+            {accountPicker}
+            {bucketSummary}
+          </div>
         </div>
 
+        {lead}
+
         {hasLinkedChecking ? (
-          <div className="stagger-children grid items-start gap-3 lg:grid-cols-2">
+          <>
             {/* Money in vs out + net */}
-            <div className={card} data-testid="chase-stats-in-out">
-              <div className={cardHead}>
-                <span className="text-title font-semibold text-brand-navy">
-                  Money in vs out
-                </span>
-                <Help className="ml-auto">
+            <Panel
+              title="Money in vs out"
+              span={lead ? 4 : 6}
+              variant="static"
+              accent="checking"
+              className={rise(0)}
+              data-testid="chase-stats-in-out"
+              actions={
+                <Help>
                   Deposits against withdrawals in this range, through today, on
                   the ledger's amounts. Rows dated after today are not counted.
                 </Help>
-              </div>
-              <div className="p-4">
-                <div className="mb-3 flex items-baseline justify-between gap-2">
-                  <span className={fieldLabel}>Change</span>
-                  {/* No start balance, or a start of $0 to the cent (the roll-back
-                      sums decimals, so a true $0 can land a hair off zero): there
-                      is no percentage to state, so no pill. Never a "0%", nor an
-                      absurd figure divided by a rounding error. A display gate,
-                      not money maths. */}
-                  {rangeTotals && rangeBalances.startBal != null && Math.abs(rangeBalances.startBal) >= 0.005 ? (
-                    <DeltaPill
-                      value={(rangeTotals.net / Math.abs(rangeBalances.startBal)) * 100}
-                    />
-                  ) : (
-                    <span className="font-mono text-label tabular-nums text-neutral-400">—</span>
-                  )}
-                </div>
-                {rangeTotals ? (
-                  <StackBar
-                    segments={[
-                      { label: "In", value: rangeTotals.moneyIn, color: "hsl(var(--positive))" },
-                      { label: "Out", value: rangeTotals.moneyOut, color: "hsl(var(--negative))" },
-                    ]}
-                    legendMax={2}
+              }
+            >
+              <div className="mb-3 flex items-baseline justify-between gap-2">
+                <span className={fieldLabel}>Change</span>
+                {/* No start balance, or a start of $0 to the cent (the roll-back
+                    sums decimals, so a true $0 can land a hair off zero): there
+                    is no percentage to state, so no pill. Never a "0%", nor an
+                    absurd figure divided by a rounding error. A display gate,
+                    not money maths. */}
+                {rangeTotals && rangeBalances.startBal != null && Math.abs(rangeBalances.startBal) >= 0.005 ? (
+                  <DeltaPill
+                    value={(rangeTotals.net / Math.abs(rangeBalances.startBal)) * 100}
                   />
                 ) : (
-                  <div className="grid h-10 place-items-center text-micro text-neutral-400">
-                    {/* (PR14 review LOW-3) Say which: no day through today, a failed
-                        load, or a new range still loading. */}
-                    {register.isLoadingError
-                      ? "Couldn't load"
-                      : !register.enabled
-                        ? "No rows through today"
-                        : "—"}
-                  </div>
+                  <span className="font-mono text-label tabular-nums text-neutral-400">—</span>
                 )}
-                <div className="mt-3 flex items-baseline gap-2">
-                  <span className={fieldLabel}>Net</span>
-                  {rangeTotals ? (
-                    <MoneyText
-                      amount={rangeTotals.net}
-                      colored
-                      signed
-                      className="font-mono text-title font-semibold tabular-nums"
-                    />
-                  ) : (
-                    <span className="font-mono text-title font-semibold tabular-nums text-neutral-400">
-                      —
-                    </span>
-                  )}
-                </div>
               </div>
-            </div>
+              {rangeTotals ? (
+                <StackBar
+                  segments={[
+                    { label: "In", value: rangeTotals.moneyIn, color: "hsl(var(--positive))" },
+                    { label: "Out", value: rangeTotals.moneyOut, color: "hsl(var(--negative))" },
+                  ]}
+                  legendMax={2}
+                />
+              ) : (
+                <div className="grid h-10 place-items-center text-micro text-neutral-400">
+                  {/* (PR14 review LOW-3) Say which: no day through today, a failed
+                      load, or a new range still loading. */}
+                  {register.isLoadingError
+                    ? "Couldn't load"
+                    : !register.enabled
+                      ? "No rows through today"
+                      : "—"}
+                </div>
+              )}
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className={fieldLabel}>Net</span>
+                {rangeTotals ? (
+                  <MoneyText
+                    amount={rangeTotals.net}
+                    colored
+                    signed
+                    className="font-mono text-title font-semibold tabular-nums"
+                  />
+                ) : (
+                  <span className="font-mono text-title font-semibold tabular-nums text-neutral-400">
+                    —
+                  </span>
+                )}
+              </div>
+            </Panel>
 
             {/* Checking balance trend across the range */}
-            <div className={card} data-testid="chase-stats-balance">
-              <div className={cardHead}>
-                <span className="text-title font-semibold text-brand-navy">
-                  Checking balance
-                </span>
-                {balanceUnavailable ? (
+            <Panel
+              title="Checking balance"
+              span={lead ? 4 : 6}
+              variant="static"
+              accent="checking"
+              className={rise(1)}
+              data-testid="chase-stats-balance"
+              actions={
+                balanceUnavailable ? (
                   <span
-                    className="ml-auto text-label font-semibold text-neutral-500"
+                    className="text-label font-semibold text-neutral-500"
                     title="Only the account the bank balance reads has a balance here."
                     data-testid="chase-balance-unavailable"
                   >
@@ -2457,60 +2594,64 @@ export default function TransactionsPage({
                 ) : checkingEnd != null ? (
                   <MoneyText
                     amount={checkingEnd}
-                    className="ml-auto font-mono text-title font-semibold tabular-nums text-brand-navy"
+                    className="font-mono text-title font-semibold tabular-nums text-brand-navy"
                   />
                 ) : (
-                  <span className="ml-auto font-mono text-title font-semibold tabular-nums text-neutral-400">
+                  <span className="font-mono text-title font-semibold tabular-nums text-neutral-400">
                     —
                   </span>
-                )}
-              </div>
-              <div className="p-4">
-                {rangeBalances.series.length > 1 ? (
-                  <Sparkline
-                    data={rangeBalances.series}
-                    variant="area"
-                    color={
-                      (rangeBalances.endBal ?? 0) < 0
-                        ? "hsl(var(--negative))"
-                        : "hsl(var(--chart-1))"
-                    }
-                    height={40}
-                  />
-                ) : (
-                  <div className="grid h-10 place-items-center text-micro text-neutral-400">
-                    No trend yet
-                  </div>
-                )}
-                <div className="mt-2 flex justify-between text-micro text-neutral-500">
-                  <span className={fieldLabel}>
-                    Start{" "}
-                    {rangeBalances.startBal != null ? (
-                      <MoneyText
-                        amount={rangeBalances.startBal}
-                        className="font-mono tabular-nums text-brand-navy"
-                      />
-                    ) : (
-                      <span className="font-mono tabular-nums text-neutral-400">—</span>
-                    )}
-                  </span>
-                  <span className={fieldLabel}>
-                    End{" "}
-                    {rangeBalances.endBal != null ? (
-                      <MoneyText
-                        amount={rangeBalances.endBal}
-                        className="font-mono tabular-nums text-brand-navy"
-                      />
-                    ) : (
-                      <span className="font-mono tabular-nums text-neutral-400">—</span>
-                    )}
-                  </span>
+                )
+              }
+            >
+              {rangeBalances.series.length > 1 ? (
+                <Sparkline
+                  data={rangeBalances.series}
+                  variant="area"
+                  color={
+                    (rangeBalances.endBal ?? 0) < 0
+                      ? "hsl(var(--negative))"
+                      : "hsl(var(--chart-1))"
+                  }
+                  height={56}
+                />
+              ) : (
+                <div className="grid h-14 place-items-center text-micro text-neutral-400">
+                  No trend yet
                 </div>
+              )}
+              <div className="mt-2 flex justify-between text-micro text-neutral-500">
+                <span className={fieldLabel}>
+                  Start{" "}
+                  {rangeBalances.startBal != null ? (
+                    <MoneyText
+                      amount={rangeBalances.startBal}
+                      className="font-mono tabular-nums text-brand-navy"
+                    />
+                  ) : (
+                    <span className="font-mono tabular-nums text-neutral-400">—</span>
+                  )}
+                </span>
+                <span className={fieldLabel}>
+                  End{" "}
+                  {rangeBalances.endBal != null ? (
+                    <MoneyText
+                      amount={rangeBalances.endBal}
+                      className="font-mono tabular-nums text-brand-navy"
+                    />
+                  ) : (
+                    <span className="font-mono tabular-nums text-neutral-400">—</span>
+                  )}
+                </span>
               </div>
-            </div>
-          </div>
+            </Panel>
+          </>
         ) : (
-          <div className={card} data-testid="chase-stats-no-account">
+          <Panel
+            title="Checking balance"
+            span={lead ? 8 : 12}
+            variant="static"
+            data-testid="chase-stats-no-account"
+          >
             {/* "No checking account linked" is a claim: only once the forecast
                 bundle, which names the linked accounts, has answered. */}
             <div className={emptyNote}>
@@ -2520,115 +2661,403 @@ export default function TransactionsPage({
                   : "Loading checking account…"
                 : "No checking account linked."}
             </div>
-          </div>
+          </Panel>
         )}
-      </div>
 
-      {/* (cleanup) The verbose "Plaid · Chase ··5526 · Current balance …
-          Last auto-updated" snapshot line was removed — the balance already
-          shows in the stat tiles, and the single "Last synced" note next to
-          the Sync button is the one source of truth for freshness now that
-          background auto-updates are disabled. */}
-      {!usingSnapshotAccount && isManualAccount && (
-        <div
-          className="flex items-center gap-1.5 text-micro text-neutral-500"
-          data-testid="text-snapshot-meta"
+        {/* Week-over-week spend + category mix — the HOUSEHOLD's, every
+            account (CH-15), so it carries no account accent. */}
+        <div className={cn("span-12", rise(2))}>
+          <ChaseInsightStrip range={range} />
+        </div>
+
+        {balanceTrend && (
+          <BalanceTrendChart
+            caption="Checking balance — actual vs forecast"
+            subtitle={balanceTrend.subtitle}
+            historicalActual={balanceTrend.historicalActual}
+            forecastFromToday={balanceTrend.forecastFromToday}
+            actualFromToday={balanceTrend.actualFromToday}
+            axisDates={balanceTrend.axisDates}
+            todayISO={todayISO}
+            valueLabel="Balance"
+            accent="checking"
+          />
+        )}
+
+        <LedgerPanel
+          title="Transactions"
+          accent="checking"
+          paneRef={paneRef}
+          data-testid="chase-ledger"
+          pane={
+            <ChaseReviewControls
+              toReview={toReviewCount}
+              hideReviewed={hideReviewed}
+              onToggleHide={() => {
+                setHideReviewed(!hideReviewed);
+                clearSelection();
+              }}
+              onSelectPage={selectPage}
+              canSelectPage={pageIds.length > 0}
+              freshness={<FreshnessLine bank={spine.data?.bank} />}
+            />
+          }
         >
-          <span className={fieldLabel}>Manual entries</span>
-          <Help>
-            Hand-entered rows carry no bank balance, so no snapshot anchors
-            this view.
-          </Help>
-        </div>
-      )}
-      {/* (#422) Header pending-count chip — at-a-glance signal of how
-          many "sent" rows for this account/period are still sitting in
-          the Forecast Review Bucket awaiting a match. Clickable so the
-          user can jump straight to the bucket and resolve them. */}
-      <div className="flex items-center gap-2 flex-wrap" data-testid="chase-bucket-summary">
-        {/* An unknown count (the spine is loading or failed) shows nothing:
-            "All reconciled" is a claim, and a null count cannot make it. */}
-        {awaitingMatchCount != null && awaitingMatchCount > 0 ? (
-          <Link
-            href="/review"
-            data-testid="link-bucket-pending-count"
-            className="chip warn press inline-flex items-center gap-1.5 hover:bg-platinum-5 hover:text-brand-navy"
-            title="Open the Forecast Review Bucket to match these"
-          >
-            <Inbox className="h-3 w-3" />
-            {/* Wording is asserted by e2e/transactions-bucket-badge.spec.ts and
-                is already a label, not a sentence — restyled, not reworded. */}
-            <span>
-              Match{" "}
-              <span className="font-mono tabular-nums">{awaitingMatchCount}</span>{" "}
-              {awaitingMatchCount === 1 ? "item" : "items"} in Review
-            </span>
-            <ArrowRight className="h-3 w-3" />
-          </Link>
-        ) : awaitingMatchCount === 0 ? (
-          <span className="chip gray" data-testid="text-bucket-empty">
-            All reconciled
-          </span>
-        ) : null}
-      </div>
-      {(() => {
-        // (#797) Show the picker only when there are 2+ *Chase* checking
-        // accounts to switch between. When there are no Chase accounts the
-        // picker hides entirely and the page falls through to the existing
-        // source-based fallback (`isChaseFallbackSource`), which still
-        // renders Chase + manual rows. The dead "Manual entries" pseudo-
-        // account option was removed — it was leaking a non-Chase view onto
-        // the Chase page.
-        return chaseOnlyPlaidCheckingAccounts.length > 1;
-      })() && (
-        <div className="flex items-center gap-2" data-testid="chase-account-picker">
-          <span className={fieldLabel}>Account</span>
-          <Select
-            value={effectiveAccountKey}
-            onValueChange={(v) => setSelectedAccountKey(v)}
-          >
-            <SelectTrigger aria-label="View account" className="h-7 text-xs w-64" data-testid="select-chase-account">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent data-testid="chase-account-options">
-              {chaseOnlyPlaidCheckingAccounts.map((a) => {
-                const name = a.institutionName ?? a.name ?? "Checking";
-                const mask = a.mask ?? null;
-                const isSnapshot = bankSnapshot?.accountId === a.id;
-                return (
-                  <SelectItem
-                    key={a.id}
-                    value={a.id}
-                    data-testid={`option-chase-account-${a.id}`}
-                  >
-                    {name}
-                    {mask ? ` ••${mask}` : ""}
-                    {isSnapshot ? " · snapshot" : ""}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+          {register.isLoadingError &&
+            register.errorCode !== "account_not_ledger" &&
+            register.errorCode !== "invalid_account" && (
+              <div className="px-4 pt-3">
+                <div role="alert" className={cn(errorBanner, "mb-0")} data-testid="chase-ledger-error">
+                  Chase transactions could not load.{" "}
+                  <button className={btnLink} onClick={() => void register.refetch()}>
+                    Retry transactions
+                  </button>
+                </div>
+              </div>
+            )}
+          {selectAllBannerShown && (
+            <div className="border-b border-brand-line px-4 py-2">
+              <ChaseSelectAllBanner
+                pageSelected={pageIds.length}
+                postedCount={postedCount}
+                allMatchingCount={allMatching?.count ?? null}
+                canSelectAll={!register.isPlaceholderData && postedCount != null}
+                onSelectAll={selectAllMatching}
+                onClear={clearSelection}
+              />
+            </div>
+          )}
+          {(selected.size > 0 || allMatching) && (
+            <div
+              className="sticky z-20 flex flex-wrap items-center gap-3 border-b border-brand-navy/25 bg-ok-bg px-4 py-2"
+              style={{ top: "var(--page-sticky-top, 0px)" }}
+              data-testid="bulk-bar"
+            >
+              <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+                {allMatching ? allMatching.count.toLocaleString("en-US") : selected.size} selected
+              </span>
+              {/* Forecast actions need row ids; "all matching" reviews by filter only. */}
+              {!allMatching && (
+              <>
+              <Button
+                size="sm"
+                onClick={() => bulkSetForecast(true)}
+                disabled={bulkSetForecastFlag.isPending}
+                data-testid="bulk-send-forecast"
+              >
+                <Send className="w-3.5 h-3.5 mr-1.5" /> Send to Forecast
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => bulkSetForecast(false)}
+                disabled={bulkSetForecastFlag.isPending}
+                data-testid="bulk-remove-forecast"
+              >
+                Remove from Forecast
+              </Button>
+              </>
+              )}
+              <Button size="sm" variant="outline" disabled={reviewWrites.isPending} onClick={() => void (allMatching ? reviewAllMatching(true) : reviewSelection())} data-testid="bulk-mark-reviewed">Mark reviewed</Button>
+              <Button size="sm" variant="outline" disabled={reviewWrites.isPending} onClick={() => void (allMatching ? reviewAllMatching(false) : setReviewed(filtered.filter(t => selected.has(t.id)), false))} data-testid="bulk-mark-unreviewed">Mark unreviewed</Button>
+              {/* Single-flow restore: "Send to Forecast" IS "in Review" now.
+                  The separate bulk Send-to-Review button (#762 Phase B) is
+                  gone — a forecast-flagged row shows up in the Review tab
+                  and on the curve immediately. */}
+              <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
+                Clear selection
+              </Button>
+            </div>
+          )}
 
-      </div>
+          {(registerPage || !register.enabled) &&
+            !register.isLoadingError &&
+            groups.length === 0 &&
+            visiblePending.length === 0 && (
+              <div className={emptyNote} data-testid="chase-empty">
+                {hideReviewed && reviewedCount > 0
+                  ? "Review complete. Reviewed transactions are hidden."
+                  : "No transactions in this range."}
+              </div>
+            )}
 
-      {/* Week-over-week spend + category mix. */}
-      <ChaseInsightStrip range={range} />
+          {/* (#728) Pinned "Pending" section above the dated day-groups.
+              Renders the same row markup as the day-groups (reusing
+              DayGroup) so quick-categorize, the matched-rule chip, and
+              row selection work identically — only the header and
+              ordering change. dayKey is "pending" so the existing
+              selection / day-net handlers can address it the same way
+              as any other day-group. Hidden when no pending rows exist
+              so we don't render an empty header. */}
+          {visiblePending.length > 0 && (() => {
+            const items = visiblePending;
+            const ids = items.map((t) => t.id);
+            const allSelected = ids.every((id) => selected.has(id));
+            const someSelected =
+              !allSelected && ids.some((id) => selected.has(id));
+            // (PR14 review M1) Counted rows only, and never a row dated after today.
+            const dayNet = sumCounted(items.filter((t) => !t.afterToday));
+            const dayNetNode = (
+              <span
+                className={cn("tabular-nums", moneyColorClass(dayNet))}
+                data-testid="day-net-pending"
+              >
+                {dayNet > 0 ? `+${formatCurrency(dayNet)}` : formatCurrency(dayNet)}
+              </span>
+            );
+            return (
+              <DayGroup
+                key="pending"
+                dayKey="pending"
+                headerLabel="Pending"
+                todayBadgeLabel="Pending"
+                count={items.length}
+                isToday
+                todayAccent="amber"
+                variant="flush"
+                selectionState={
+                  allSelected ? true : someSelected ? "indeterminate" : false
+                }
+                onToggleAll={(on) => toggleDay(ids, on)}
+                totalNode={dayNetNode}
+                columnHeader={<LedgerColumns gridClass={LEDGER_GRID_WIDE_ACTIONS} />}
+              >
+                <div
+                  className="divide-y divide-brand-line/70"
+                  data-testid="group-pending"
+                >
+                    {items.map((tx) => {
+                      const isIgnored =
+                        !!ignoreCatId && tx.categoryId === ignoreCatId;
+                      const card = rowCard(tx);
+                      return (
+                        <AccountTransactionRow
+                          key={tx.id}
+                          tx={tx}
+                          selected={selected.has(tx.id)}
+                          onToggleSelect={() => toggleOne(tx.id)}
+                          categories={categories ?? []}
+                          onCategoryChange={(id, remember) =>
+                            handleQuickCategorize(tx, id, remember)
+                          }
+                          onBucketToggle={(b, next) =>
+                            handleToggleBucket(tx, b, next)
+                          }
+                          onQuickDate={(raw) => handleQuickDate(tx, raw)}
+                          disabled={updateTx.isPending}
+                          dimmed={isInForecastRow(tx) || isIgnored}
+                          hideDate
+                          cardLabel={card.label}
+                          cardAccent={card.accent}
+                          gridClass={LEDGER_GRID_WIDE_ACTIONS}
+                          testId={`row-tx-${tx.id}`}
+                          rowData={{ "data-pending": "true" }}
+                          metaNode={renderForecastChip(tx)}
+                          amountNode={
+                            <span
+                              className={cn(
+                                "tabular-nums font-medium",
+                                moneyColorClass(parseSigned(tx.amount)),
+                              )}
+                              data-testid={`amount-${tx.id}`}
+                            >
+                              {formatCurrency(parseSigned(tx.amount))}
+                            </span>
+                          }
+                          chipsNode={<LedgerRowLabels row={tx} />}
+                          actionsNode={<>{renderSendForecastAction(tx)}<Button variant="ghost" size="sm" disabled={reviewWrites.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button></>}
+                        />
+                      );
+                    })}
+                    {pendingLedger.hasNextPage && (
+                      <div className="flex justify-center py-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={pendingLedger.fetchNextPage}
+                          disabled={pendingLedger.isFetchingNextPage}
+                          data-testid="chase-load-more-pending"
+                        >
+                          More pending
+                        </Button>
+                      </div>
+                    )}
+                </div>
+              </DayGroup>
+            );
+          })()}
 
-      {balanceTrend && (
-        <BalanceTrendChart
-          caption="Checking balance — actual vs forecast"
-          subtitle={balanceTrend.subtitle}
-          historicalActual={balanceTrend.historicalActual}
-          forecastFromToday={balanceTrend.forecastFromToday}
-          actualFromToday={balanceTrend.actualFromToday}
-          axisDates={balanceTrend.axisDates}
-          todayISO={todayISO}
-          valueLabel="Balance"
-        />
-      )}
+          {afterLedger.hasNextPage && (
+            <div className="flex justify-center py-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={afterLedger.fetchNextPage}
+                disabled={afterLedger.isFetchingNextPage}
+                data-testid="chase-load-more-after-today"
+              >
+                More after today
+              </Button>
+            </div>
+          )}
+          {groups.map(([dayKey, items], groupIndex) => {
+            const ids = items.map((t) => t.id);
+            const allSelected = ids.every((id) => selected.has(id));
+            const someSelected = !allSelected && ids.some((id) => selected.has(id));
+            const isToday = dayKey === todayKey;
+            // (PR14 review M1) What the ledger counts: a mask-twin, duplicate or replaced
+            // row adds 0, so the day reconciles with the card.
+            const dayNet = sumCounted(items);
+            // (PR14 second review NIT) A day after today is listed, never totalled, as in
+            // the Pending group and the card.
+            const afterTodayDay = items.every((t) => t.afterToday);
+            const dayNetNode = afterTodayDay ? (
+              <span
+                className="tabular-nums text-neutral-400"
+                title="Days after today are not totalled"
+                data-testid={`day-net-${dayKey}`}
+              >
+                —
+              </span>
+            ) : dayKey === partialDayKey ? (
+                <span
+                  className="tabular-nums text-neutral-400"
+                  title="More rows for this day on the next page"
+                  data-testid={`day-net-${dayKey}`}
+                >
+                  —
+                </span>
+              ) : (
+                <span
+                  className={cn("tabular-nums", moneyColorClass(dayNet))}
+                  data-testid={`day-net-${dayKey}`}
+                >
+                  {dayNet > 0 ? `+${formatCurrency(dayNet)}` : formatCurrency(dayNet)}
+                </span>
+              );
+            return (
+              <div key={dayKey} data-day-group-key={dayKey}>
+              <DayGroup
+                dayKey={dayKey}
+                count={items.length}
+                isToday={isToday}
+                todayAccent="emerald"
+                variant="flush"
+                containerRef={(el) => {
+                  if (isToday) todayRef.current = el;
+                }}
+                selectionState={
+                  allSelected ? true : someSelected ? "indeterminate" : false
+                }
+                onToggleAll={(on) => toggleDay(ids, on)}
+                totalNode={dayNetNode}
+                // Once per ledger. The pinned Pending group above already carries
+                // the column heads when it is present.
+                columnHeader={
+                  groupIndex === 0 && pendingItems.length === 0 ? (
+                    <LedgerColumns gridClass={LEDGER_GRID_WIDE_ACTIONS} />
+                  ) : undefined
+                }
+              >
+                <div className="divide-y divide-brand-line/70">
+                    {items.map((tx) => {
+                      // (#629) Dim Ignore'd rows the same way forecast-sent rows
+                      // are dimmed, so the bubble lights don't make a held-out
+                      // line look "active".
+                      const isIgnored =
+                        !!ignoreCatId && tx.categoryId === ignoreCatId;
+                      const card = rowCard(tx);
+                      return (
+                        <AccountTransactionRow
+                          key={tx.id}
+                          tx={tx}
+                          selected={selected.has(tx.id)}
+                          onToggleSelect={() => toggleOne(tx.id)}
+                          categories={categories ?? []}
+                          onCategoryChange={(id, remember) =>
+                            handleQuickCategorize(tx, id, remember)
+                          }
+                          onBucketToggle={(b, next) =>
+                            handleToggleBucket(tx, b, next)
+                          }
+                          onQuickDate={(raw) => handleQuickDate(tx, raw)}
+                          disabled={updateTx.isPending}
+                          dimmed={isInForecastRow(tx) || isIgnored}
+                          cardLabel={card.label}
+                          cardAccent={card.accent}
+                          gridClass={LEDGER_GRID_WIDE_ACTIONS}
+                          testId={`row-tx-${tx.id}`}
+                          rowData={{
+                            "data-sent": isInForecastRow(tx) ? "true" : "false",
+                            "data-ignored": isIgnored ? "true" : "false",
+                          }}
+                          chipsNode={<LedgerRowLabels row={tx} />}
+                          metaNode={renderForecastChip(tx)}
+                          amountNode={
+                            <div className="flex flex-col items-end">
+                              <InlineAmountEditor
+                                tx={tx}
+                                onSave={(raw) => handleQuickAmount(tx, raw)}
+                                onFlipKind={() => handleQuickFlipKind(tx)}
+                                disabled={updateTx.isPending}
+                              />
+                              {tx.runningBalance != null && (
+                                <span
+                                  className="font-mono text-micro tabular-nums text-neutral-400"
+                                  data-testid={`text-running-balance-${tx.id}`}
+                                >
+                                  bal {formatCurrency(Number(tx.runningBalance))}
+                                </span>
+                              )}
+                            </div>
+                          }
+                          actionsNode={
+                            <>
+                              {renderSendForecastAction(tx)}
+                              <Button variant="ghost" size="sm" disabled={reviewWrites.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={rowIcon}
+                                onClick={() => handleOpenEdit(tx)}
+                                title="Edit"
+                                data-testid={`button-edit-tx-${tx.id}`}
+                              >
+                                <Edit2 className="w-4 h-4 text-muted-foreground" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={rowIcon}
+                                onClick={() => handleDelete(tx.id)}
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </>
+                          }
+                        />
+                      );
+                    })}
+                </div>
+              </DayGroup>
+              </div>
+            );
+          })}
+          {registerPage && !statsStale && (
+            <div className="border-t border-brand-line">
+              <ChaseLedgerPager
+                showing={registerRows.length}
+                matching={registerPage.matchingCount}
+                toReview={toReviewCount}
+                hasMore={register.hasNextPage}
+                loading={register.isFetchingNextPage}
+                onLoadMore={register.fetchNextPage}
+              />
+            </div>
+          )}
+        </LedgerPanel>
+      </PageGrid>
 
       <TransactionEditDialog
         isDialogOpen={isDialogOpen}
@@ -2648,357 +3077,6 @@ export default function TransactionsPage({
       />
 
       {previewDialog}
-
-      <ChaseReviewControls
-        toReview={toReviewCount}
-        hideReviewed={hideReviewed}
-        onToggleHide={() => {
-          setHideReviewed(!hideReviewed);
-          clearSelection();
-        }}
-        onSelectPage={selectPage}
-        canSelectPage={pageIds.length > 0}
-        freshness={<FreshnessLine bank={spine.data?.bank} />}
-      />
-      {register.isLoadingError &&
-        register.errorCode !== "account_not_ledger" &&
-        register.errorCode !== "invalid_account" && (
-          <div role="alert" className={errorBanner} data-testid="chase-ledger-error">
-            Chase transactions could not load.{" "}
-            <button className={btnLink} onClick={() => void register.refetch()}>
-              Retry transactions
-            </button>
-          </div>
-        )}
-      {selectAllBannerShown && (
-          <ChaseSelectAllBanner
-            pageSelected={pageIds.length}
-            postedCount={postedCount}
-            allMatchingCount={allMatching?.count ?? null}
-            canSelectAll={!register.isPlaceholderData && postedCount != null}
-            onSelectAll={selectAllMatching}
-            onClear={clearSelection}
-          />
-        )}
-      {(selected.size > 0 || allMatching) && (
-        <div
-          className="surface sticky z-20 flex flex-wrap items-center gap-3 rounded-control px-4 py-2 ring-1 ring-brand-navy/25"
-          style={{ top: "var(--page-sticky-top, 0px)" }}
-          data-testid="bulk-bar"
-        >
-          <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
-            {allMatching ? allMatching.count.toLocaleString("en-US") : selected.size} selected
-          </span>
-          {/* Forecast actions need row ids; "all matching" reviews by filter only. */}
-          {!allMatching && (
-          <>
-          <Button
-            size="sm"
-            onClick={() => bulkSetForecast(true)}
-            disabled={bulkSetForecastFlag.isPending}
-            data-testid="bulk-send-forecast"
-          >
-            <Send className="w-3.5 h-3.5 mr-1.5" /> Send to Forecast
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => bulkSetForecast(false)}
-            disabled={bulkSetForecastFlag.isPending}
-            data-testid="bulk-remove-forecast"
-          >
-            Remove from Forecast
-          </Button>
-          </>
-          )}
-          <Button size="sm" variant="outline" disabled={reviewWrites.isPending} onClick={() => void (allMatching ? reviewAllMatching(true) : reviewSelection())} data-testid="bulk-mark-reviewed">Mark reviewed</Button>
-          <Button size="sm" variant="outline" disabled={reviewWrites.isPending} onClick={() => void (allMatching ? reviewAllMatching(false) : setReviewed(filtered.filter(t => selected.has(t.id)), false))} data-testid="bulk-mark-unreviewed">Mark unreviewed</Button>
-          {/* Single-flow restore: "Send to Forecast" IS "in Review" now.
-              The separate bulk Send-to-Review button (#762 Phase B) is
-              gone — a forecast-flagged row shows up in the Review tab
-              and on the curve immediately. */}
-          <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
-            Clear selection
-          </Button>
-        </div>
-      )}
-
-      {(registerPage || !register.enabled) &&
-        !register.isLoadingError &&
-        groups.length === 0 &&
-        visiblePending.length === 0 && (
-          <div className={card}>
-            <div className={emptyNote} data-testid="chase-empty">
-              {hideReviewed && reviewedCount > 0
-                ? "Review complete. Reviewed transactions are hidden."
-                : "No transactions in this range."}
-            </div>
-          </div>
-        )}
-
-      {/* (#728) Pinned "Pending" section above the dated day-groups.
-          Renders the same row markup as the day-groups (reusing
-          DayGroup) so quick-categorize, the matched-rule chip, and
-          row selection work identically — only the header and
-          ordering change. dayKey is "pending" so the existing
-          selection / day-net handlers can address it the same way
-          as any other day-group. Hidden when no pending rows exist
-          so we don't render an empty header. */}
-      {visiblePending.length > 0 && (() => {
-        const items = visiblePending;
-        const ids = items.map((t) => t.id);
-        const allSelected = ids.every((id) => selected.has(id));
-        const someSelected =
-          !allSelected && ids.some((id) => selected.has(id));
-        // (PR14 review M1) Counted rows only, and never a row dated after today.
-        const dayNet = sumCounted(items.filter((t) => !t.afterToday));
-        const dayNetNode = (
-          <span
-            className={cn("tabular-nums", moneyColorClass(dayNet))}
-            data-testid="day-net-pending"
-          >
-            {dayNet > 0 ? `+${formatCurrency(dayNet)}` : formatCurrency(dayNet)}
-          </span>
-        );
-        return (
-          <DayGroup
-            key="pending"
-            dayKey="pending"
-            headerLabel="Pending"
-            todayBadgeLabel="Pending"
-            count={items.length}
-            isToday
-            todayAccent="amber"
-            selectionState={
-              allSelected ? true : someSelected ? "indeterminate" : false
-            }
-            onToggleAll={(on) => toggleDay(ids, on)}
-            totalNode={dayNetNode}
-            columnHeader={<LedgerColumns />}
-          >
-            <div
-              className="divide-y divide-brand-line/70"
-              data-testid="group-pending"
-            >
-                {items.map((tx) => {
-                  const isIgnored =
-                    !!ignoreCatId && tx.categoryId === ignoreCatId;
-                  return (
-                    <AccountTransactionRow
-                      key={tx.id}
-                      tx={tx}
-                      selected={selected.has(tx.id)}
-                      onToggleSelect={() => toggleOne(tx.id)}
-                      categories={categories ?? []}
-                      onCategoryChange={(id, remember) =>
-                        handleQuickCategorize(tx, id, remember)
-                      }
-                      onBucketToggle={(b, next) =>
-                        handleToggleBucket(tx, b, next)
-                      }
-                      onQuickDate={(raw) => handleQuickDate(tx, raw)}
-                      disabled={updateTx.isPending}
-                      dimmed={isInForecastRow(tx) || isIgnored}
-                      hideDate
-                      cardLabel={formatTransactionSource(tx.source)}
-                      testId={`row-tx-${tx.id}`}
-                      rowData={{ "data-pending": "true" }}
-                      metaNode={renderForecastChip(tx)}
-                      amountNode={
-                        <span
-                          className={cn(
-                            "tabular-nums font-medium",
-                            moneyColorClass(parseSigned(tx.amount)),
-                          )}
-                          data-testid={`amount-${tx.id}`}
-                        >
-                          {formatCurrency(parseSigned(tx.amount))}
-                        </span>
-                      }
-                      chipsNode={<LedgerRowLabels row={tx} />}
-                      actionsNode={<>{renderSendForecastAction(tx)}<Button variant="ghost" size="sm" disabled={reviewWrites.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button></>}
-                    />
-                  );
-                })}
-                {pendingLedger.hasNextPage && (
-                  <div className="flex justify-center py-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={pendingLedger.fetchNextPage}
-                      disabled={pendingLedger.isFetchingNextPage}
-                      data-testid="chase-load-more-pending"
-                    >
-                      More pending
-                    </Button>
-                  </div>
-                )}
-            </div>
-          </DayGroup>
-        );
-      })()}
-
-      {afterLedger.hasNextPage && (
-        <div className="flex justify-center">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={afterLedger.fetchNextPage}
-            disabled={afterLedger.isFetchingNextPage}
-            data-testid="chase-load-more-after-today"
-          >
-            More after today
-          </Button>
-        </div>
-      )}
-      {groups.map(([dayKey, items], groupIndex) => {
-        const ids = items.map((t) => t.id);
-        const allSelected = ids.every((id) => selected.has(id));
-        const someSelected = !allSelected && ids.some((id) => selected.has(id));
-        const isToday = dayKey === todayKey;
-        // (PR14 review M1) What the ledger counts: a mask-twin, duplicate or replaced
-        // row adds 0, so the day reconciles with the card.
-        const dayNet = sumCounted(items);
-        // (PR14 second review NIT) A day after today is listed, never totalled, as in
-        // the Pending group and the card.
-        const afterTodayDay = items.every((t) => t.afterToday);
-        const dayNetNode = afterTodayDay ? (
-          <span
-            className="tabular-nums text-neutral-400"
-            title="Days after today are not totalled"
-            data-testid={`day-net-${dayKey}`}
-          >
-            —
-          </span>
-        ) : dayKey === partialDayKey ? (
-            <span
-              className="tabular-nums text-neutral-400"
-              title="More rows for this day on the next page"
-              data-testid={`day-net-${dayKey}`}
-            >
-              —
-            </span>
-          ) : (
-            <span
-              className={cn("tabular-nums", moneyColorClass(dayNet))}
-              data-testid={`day-net-${dayKey}`}
-            >
-              {dayNet > 0 ? `+${formatCurrency(dayNet)}` : formatCurrency(dayNet)}
-            </span>
-          );
-        return (
-          <div key={dayKey} data-day-group-key={dayKey}>
-          <DayGroup
-            dayKey={dayKey}
-            count={items.length}
-            isToday={isToday}
-            todayAccent="emerald"
-            containerRef={(el) => {
-              if (isToday) todayRef.current = el;
-            }}
-            selectionState={
-              allSelected ? true : someSelected ? "indeterminate" : false
-            }
-            onToggleAll={(on) => toggleDay(ids, on)}
-            totalNode={dayNetNode}
-            // Once per ledger. The pinned Pending group above already carries
-            // the column heads when it is present.
-            columnHeader={
-              groupIndex === 0 && pendingItems.length === 0 ? (
-                <LedgerColumns />
-              ) : undefined
-            }
-          >
-            <div className="divide-y divide-brand-line/70">
-                {items.map((tx) => {
-                  // (#629) Dim Ignore'd rows the same way forecast-sent rows
-                  // are dimmed, so the bubble lights don't make a held-out
-                  // line look "active".
-                  const isIgnored =
-                    !!ignoreCatId && tx.categoryId === ignoreCatId;
-                  return (
-                    <AccountTransactionRow
-                      key={tx.id}
-                      tx={tx}
-                      selected={selected.has(tx.id)}
-                      onToggleSelect={() => toggleOne(tx.id)}
-                      categories={categories ?? []}
-                      onCategoryChange={(id, remember) =>
-                        handleQuickCategorize(tx, id, remember)
-                      }
-                      onBucketToggle={(b, next) =>
-                        handleToggleBucket(tx, b, next)
-                      }
-                      onQuickDate={(raw) => handleQuickDate(tx, raw)}
-                      disabled={updateTx.isPending}
-                      dimmed={isInForecastRow(tx) || isIgnored}
-                      cardLabel={formatTransactionSource(tx.source)}
-                      testId={`row-tx-${tx.id}`}
-                      rowData={{
-                        "data-sent": isInForecastRow(tx) ? "true" : "false",
-                        "data-ignored": isIgnored ? "true" : "false",
-                      }}
-                      chipsNode={<LedgerRowLabels row={tx} />}
-                      metaNode={renderForecastChip(tx)}
-                      amountNode={
-                        <div className="flex flex-col items-end">
-                          <InlineAmountEditor
-                            tx={tx}
-                            onSave={(raw) => handleQuickAmount(tx, raw)}
-                            onFlipKind={() => handleQuickFlipKind(tx)}
-                            disabled={updateTx.isPending}
-                          />
-                          {tx.runningBalance != null && (
-                            <span
-                              className="font-mono text-micro tabular-nums text-neutral-400"
-                              data-testid={`text-running-balance-${tx.id}`}
-                            >
-                              bal {formatCurrency(Number(tx.runningBalance))}
-                            </span>
-                          )}
-                        </div>
-                      }
-                      actionsNode={
-                        <>
-                          {renderSendForecastAction(tx)}
-                          <Button variant="ghost" size="sm" disabled={reviewWrites.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenEdit(tx)}
-                            title="Edit"
-                            data-testid={`button-edit-tx-${tx.id}`}
-                          >
-                            <Edit2 className="w-4 h-4 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(tx.id)}
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        </>
-                      }
-                    />
-                  );
-                })}
-            </div>
-          </DayGroup>
-          </div>
-        );
-      })}
-      {registerPage && !statsStale && (
-        <ChaseLedgerPager
-          showing={registerRows.length}
-          matching={registerPage.matchingCount}
-          toReview={toReviewCount}
-          hasMore={register.hasNextPage}
-          loading={register.isFetchingNextPage}
-          onLoadMore={register.fetchNextPage}
-        />
-      )}
     </div>
   );
 }

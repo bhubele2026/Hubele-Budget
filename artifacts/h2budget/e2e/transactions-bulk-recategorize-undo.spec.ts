@@ -17,6 +17,9 @@ import {
  * dialog) — and explicitly asserts the affected rows visually snap back to
  * their original category badge in the UI after Undo, which is what
  * regresses if the React Query invalidations or toast wiring break.
+ *
+ * (C9 repair: the category control is the row's CategoryPicker now; its
+ * button shows the category name, which is what the row assertions read.)
  */
 
 const provisionedUserIds: string[] = [];
@@ -166,9 +169,9 @@ test.describe("Transactions bulk re-categorize Undo (#191)", () => {
         occurredOn: isoDay(-1),
         description: `${pattern} PMT TRIGGER`,
         amount: "-150.00",
-        // Force the trigger uncategorized so the CategorizeChip renders;
-        // omitting `categoryId` would let the server's auto-categorize
-        // pipeline pre-assign it via the mapping rule we just made.
+        // Force the trigger uncategorized (the picker reads
+        // "Uncategorized"); omitting `categoryId` would let the server's
+        // auto-categorize pipeline pre-assign it via the rule we just made.
         categoryId: null,
       },
     );
@@ -194,11 +197,20 @@ test.describe("Transactions bulk re-categorize Undo (#191)", () => {
     // --- Quick-categorize the trigger onto the new debt category. The
     // PATCH that fires from this click drives the auto-relearn flow that
     // repoints the seeded rule and reports candidateCount = 2.
-    await triggerRow
-      .getByTestId(`badge-uncategorized-${trigger.id}`)
-      .click();
+    // (C9 repair) The row's category control is the shared account row's
+    // CategoryPicker (`button-category-picker`), not the old CategorizeChip
+    // (`badge-uncategorized-*`). Its "Remember" box is on by default and
+    // would send a `rememberPattern`; the old chip sent the category alone,
+    // which is what drives the server's own auto-relearn (the flow under
+    // test), so it is unticked first.
+    await triggerRow.getByTestId("button-category-picker").click();
+    await page.getByTestId("checkbox-remember-picker").click();
+    await expect(page.getByTestId("checkbox-remember-picker")).toHaveAttribute(
+      "data-state",
+      "unchecked",
+    );
 
-    const picker = page.getByPlaceholder(/search category/i);
+    const picker = page.getByPlaceholder(/^search/i);
     await expect(picker).toBeVisible();
     await picker.fill(debtName);
     await page.getByRole("option", { name: debtName }).first().click();

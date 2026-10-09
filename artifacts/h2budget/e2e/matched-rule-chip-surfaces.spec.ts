@@ -8,25 +8,27 @@ import {
 /**
  * End-to-end coverage for task #208:
  *
- * The MatchedRuleChip (introduced in #192 for the Transactions and Amex
- * pages) was extended to three additional transaction-list surfaces:
+ * The MatchedRuleChip says why a row is in its category: a "rule: <pattern>"
+ * link that deep-links to /mapping-rules?focus=<id> when the row's
+ * `categoryId` matches the mapping rule auto-categorize would attribute
+ * *right now*, or a "Manual" hint when the row has a category but no current
+ * rule matches in it.
  *
- *   - Dashboard "Recent Transactions" widget.
- *   - Dashboard "ReimbursementsBox" rows.
- *   - The recategorize-by-pattern preview Dialog on the Transactions page.
+ * (C9 repair) #208 put the chip on three surfaces. Two of them — the old
+ * `/dashboard` "Recent Transactions" widget and its ReimbursementsBox — are
+ * gone (`/dashboard` redirects to `/banking`, which has neither), so the
+ * spec now pins the surfaces that carry the chip today, both reached from
+ * the Chase page:
  *
- * For each surface the chip should:
+ *   - the transaction Edit dialog's category field (CH-38): the
+ *     rule-attributed row shows the rule link, the hand-filed row "Manual";
+ *   - the recategorize-by-pattern preview Dialog (CH-28), reached from the
+ *     row's CategoryPicker (`button-category-picker`; the old CategorizeChip
+ *     `badge-uncategorized-*` is gone), where each historical row shows
+ *     "Manual" once the rule has been repointed away from its category.
  *
- *   - Render a "rule: <pattern>" link that deep-links to
- *     /mapping-rules?focus=<id> when the row's `categoryId` matches the
- *     mapping rule that auto-categorize would attribute *right now*.
- *   - Render a "manually categorized" hint when the row has a category
- *     but no current rule matches in that category.
- *
- * Plaid pull surfaces no preview UI today — the sync just imports — so
- * this spec covers all UI surfaces actually shipped under #208.
+ * Plaid pull surfaces no preview UI today — the sync just imports.
  */
-
 const provisionedUserIds: string[] = [];
 
 test.afterAll(async () => {
@@ -94,7 +96,7 @@ function isoDay(offsetDays: number): string {
 }
 
 test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () => {
-  test("dashboard recent activity, reimbursements box, and recategorize preview dialog all surface the chip with the same rule-vs-manual semantics", async ({
+  test("the Chase Edit dialog and the recategorize preview dialog surface the chip with the same rule-vs-manual semantics", async ({
     page,
   }) => {
     const { email, password } = await createTestUser(
@@ -102,22 +104,17 @@ test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () =>
       provisionedUserIds,
     );
 
-    // Land on the dashboard so the user is provisioned in the DB.
-    // The dashboard route is `/dashboard` (root `/` redirects there);
-    // the page's only h1 lives in the loading branch, and CardTitle is
-    // a styled div, so anchor on the persistent "Recent Transactions"
-    // text instead.
-    await signInAndOpen(page, email, password, "/dashboard");
+    const monthStart = thisMonthStart();
+    await signInAndOpen(page, email, password, `/transactions?month=${monthStart}`);
     await expect(
-      page.getByText("Recent Transactions", { exact: true }).first(),
-    ).toBeVisible({ timeout: 30_000 });
+      page.getByRole("heading", { name: /^chase$/i }),
+    ).toBeVisible({ timeout: 15_000 });
 
-    // --- Seed deterministic categories + a mapping rule + transactions.
+    // --- Seed deterministic categories + mapping rules + transactions.
     // The rule pattern must be ≥ 2 whitespace-separated tokens so the
     // auto-relearn flow treats it as "specific" (see isPatternSpecific
     // in api-server/routes/transactions.ts) and therefore eligible for
-    // both rule-attributed chip rendering and the bulk-recategorize
-    // preview dialog later in the test.
+    // the bulk-recategorize preview dialog later in the test.
     const suffix = Math.random().toString(36).slice(2, 8);
     const groceriesName = `Groceries-${suffix}`;
     const diningName = `Dining-${suffix}`;
@@ -135,15 +132,14 @@ test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () =>
       "/api/budget/categories",
       { name: diningName, kind: "expense", groupName: "Other" },
     );
-    const reimbCat = await apiCall<{ id: string; name: string }>(
+    await apiCall<{ id: string; name: string }>(
       page,
       "POST",
       "/api/budget/categories",
       { name: reimbName, kind: "expense", groupName: "Other" },
     );
 
-    // Pattern A: matches the auto-categorized "recent" row on the
-    // dashboard (will render the rule chip).
+    // Pattern A: attributes the auto-categorized row (rule link).
     const patternA = `E2EROW-A-${suffix.toUpperCase()}`;
     const ruleA = await apiCall<{ id: string; pattern: string }>(
       page,
@@ -157,13 +153,9 @@ test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () =>
       },
     );
 
-    // Pattern B: powers the recategorize-by-pattern preview dialog
-    // later. Two historical rows in `diningCat` plus a trigger row
-    // we'll quick-categorize into reimbCat. Must be ≥ 2
-    // whitespace-separated tokens so isPatternSpecific() in
-    // api-server/routes/transactions.ts treats it as "specific" and
-    // therefore eligible to repoint — single-token patterns are
-    // treated as catch-alls and the bulk-recategorize toast won't fire.
+    // Pattern B: powers the recategorize-by-pattern preview dialog. Two
+    // historical rows in `diningCat` plus a trigger row we quick-categorize
+    // into reimbCat.
     const patternB = `E2EROW B-${suffix.toUpperCase()}`;
     await apiCall<{ id: string }>(page, "POST", "/api/mapping-rules", {
       pattern: patternB,
@@ -172,7 +164,7 @@ test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () =>
       priority: 50,
     });
 
-    // Auto-categorized recent row — rule A matches in groceriesCat.
+    // Auto-categorized row — rule A matches in groceriesCat.
     const recentAuto = await apiCall<{ id: string }>(
       page,
       "POST",
@@ -184,9 +176,8 @@ test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () =>
         categoryId: groceriesCat.id,
       },
     );
-    // Manually categorized recent row — has a category but no rule
-    // matches its description, so the chip should read "manually
-    // categorized".
+    // Manually categorized row — has a category but no rule matches its
+    // description, so the chip should read "Manual".
     const recentManual = await apiCall<{ id: string }>(
       page,
       "POST",
@@ -199,23 +190,6 @@ test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () =>
       },
     );
 
-    // Reimbursable row — feeds the ReimbursementsBox. Manually
-    // categorized so its chip reads "manually categorized".
-    const reimbursable = await apiCall<{ id: string }>(
-      page,
-      "POST",
-      "/api/transactions",
-      {
-        occurredOn: isoDay(-1),
-        description: `REIMB-${suffix} LUNCH`,
-        amount: "-15.00",
-        categoryId: reimbCat.id,
-        reimbursable: true,
-      },
-    );
-
-    // Two historical rows in diningCat + a trigger row used to drive
-    // the recategorize-by-pattern preview dialog.
     const histB1 = await apiCall<{ id: string }>(
       page,
       "POST",
@@ -246,58 +220,53 @@ test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () =>
         occurredOn: isoDay(-1),
         description: `${patternB} CAFE TRIGGER`,
         amount: "-10.00",
-        // Server-side auto-categorize on POST /transactions (added in
-        // main-repl/main) would otherwise pre-assign this row to
-        // diningCat via ruleB. Pass an explicit null so the trigger
-        // stays uncategorized and the test can drive the picker via
-        // `badge-uncategorized-…`.
+        // Server-side auto-categorize on POST /transactions would otherwise
+        // pre-assign this row to diningCat via ruleB. Pass an explicit null
+        // so the trigger stays uncategorized.
         categoryId: null,
       },
     );
 
-    // ===== Surface 1 + 2: Dashboard recent activity + reimbursements.
-    await page.goto("/dashboard");
-    await expect(
-      page.getByText("Recent Transactions", { exact: true }).first(),
-    ).toBeVisible({ timeout: 30_000 });
-
-    const recentAutoRow = page.getByTestId(`row-recent-${recentAuto.id}`);
-    await expect(recentAutoRow).toBeVisible({ timeout: 15_000 });
-    const recentAutoChip = page.getByTestId(
-      `link-matched-rule-recent-${recentAuto.id}`,
-    );
-    await expect(recentAutoChip).toBeVisible();
-    await expect(recentAutoChip).toContainText(patternA);
-    await expect(recentAutoChip).toHaveAttribute(
-      "href",
-      `/mapping-rules?focus=${ruleA.id}`,
-    );
-
-    const recentManualRow = page.getByTestId(`row-recent-${recentManual.id}`);
-    await expect(recentManualRow).toBeVisible();
-    await expect(
-      page.getByTestId(`text-no-rule-recent-${recentManual.id}`),
-    ).toBeVisible();
-
-    // ReimbursementsBox row chip — manually categorized.
-    await expect(
-      page.getByTestId(`text-no-rule-reimburse-${reimbursable.id}`),
-    ).toBeVisible({ timeout: 10_000 });
-
-    // ===== Surface 3: recategorize-by-pattern preview dialog.
-    const monthStart = thisMonthStart();
     await page.goto(`/transactions?month=${monthStart}`);
     await expect(
       page.getByRole("heading", { name: /^chase$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
+    // ===== Surface 1: the Edit dialog's category field.
+    await expect(page.getByTestId(`row-tx-${recentAuto.id}`)).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId(`button-edit-tx-${recentAuto.id}`).click();
+    const editDialog = page.getByRole("dialog");
+    await expect(editDialog.getByText("Edit Transaction")).toBeVisible();
+    const ruleChip = page.getByTestId("link-matched-rule-new-tx-dialog");
+    await expect(ruleChip).toBeVisible();
+    await expect(ruleChip).toContainText(patternA);
+    await expect(ruleChip).toHaveAttribute(
+      "href",
+      new RegExp(`/mapping-rules\\?focus=${ruleA.id}$`),
+    );
+    await page.keyboard.press("Escape");
+    await expect(editDialog).toBeHidden();
+
+    await page.getByTestId(`button-edit-tx-${recentManual.id}`).click();
+    await expect(page.getByRole("dialog").getByText("Edit Transaction")).toBeVisible();
+    await expect(page.getByTestId("text-no-rule-new-tx-dialog")).toBeVisible();
+    await expect(page.getByTestId("link-matched-rule-new-tx-dialog")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    // ===== Surface 2: recategorize-by-pattern preview dialog.
     const triggerRow = page.getByTestId(`row-tx-${triggerB.id}`);
     await expect(triggerRow).toBeVisible({ timeout: 15_000 });
-    await triggerRow
-      .getByTestId(`badge-uncategorized-${triggerB.id}`)
-      .click();
+    // The row's CategoryPicker; "Remember" unticked so the PATCH carries the
+    // category alone and the server's own auto-relearn repoints ruleB.
+    await triggerRow.getByTestId("button-category-picker").click();
+    await page.getByTestId("checkbox-remember-picker").click();
+    await expect(page.getByTestId("checkbox-remember-picker")).toHaveAttribute(
+      "data-state",
+      "unchecked",
+    );
 
-    const picker = page.getByPlaceholder(/search category/i);
+    const picker = page.getByPlaceholder(/^search/i);
     await expect(picker).toBeVisible();
     await picker.fill(reimbName);
     await page.getByRole("option", { name: reimbName }).first().click();
@@ -312,8 +281,8 @@ test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () =>
 
     // Each historical row in the dialog renders the chip. Because the
     // bulk repoint already happened on the server side before samples
-    // were computed, the chip reads "manually categorized" — there's
-    // no longer a rule pointing at diningCat for these descriptions.
+    // were computed, the chip reads "Manual" — there's no longer a rule
+    // pointing at diningCat for these descriptions.
     await expect(
       page.getByTestId(`text-no-rule-rule-match-${histB1.id}`),
     ).toBeVisible();

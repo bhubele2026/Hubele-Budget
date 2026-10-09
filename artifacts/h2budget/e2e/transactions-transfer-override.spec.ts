@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import {
   cleanupTestUsers,
   createTestUser,
@@ -10,11 +10,11 @@ import {
  *
  * The Transfer override flow has API-level integration tests
  * (`transferOverride.integration.test.ts`) but the user-facing surface
- * was only verified by hand. This spec exercises the three entry
+ * was only verified by hand. This spec exercises the entry
  * points the operator uses on the transactions page:
  *
- *   1. Clicking the X on a row's Transfer pill clears the flag and
- *      the row stops being marked as a transfer after a reload.
+ *   1. A Transfer row is marked on the row: it carries no allowance
+ *      bucket marks (CH-29 hides them on transfers).
  *   2. Picking a category on a Transfer row routes through the same
  *      `handleQuickCategorize` PATCH used by uncategorized rows.
  *      The server flips `isTransfer` to false as a side-effect (see
@@ -24,6 +24,15 @@ import {
  *   3. Toggling the Transfer checkbox in the Edit dialog persists
  *      `isTransfer` (and `isTransferUserOverridden`) server-side so
  *      a follow-up reload still reflects the user's choice.
+ *
+ * (C9 repair) The Chase row is the shared account row now. The old row
+ * chips — the Transfer pill with its clear "X" (`badge-transfer-*`,
+ * `button-clear-transfer-*`) and the inline category badge
+ * (`badge-category-*`) — are not rendered on /transactions (parity CH-64:
+ * the pill's handler is dead code there; the Amex rows keep theirs). So:
+ * the pill pass became the row-marker check (1), the category is picked in
+ * the row's CategoryPicker with "Remember" unticked (the old badge sent the
+ * category alone), and "is a transfer" is read from the row's bucket marks.
  */
 
 const provisionedUserIds: string[] = [];
@@ -112,8 +121,17 @@ function actualForCategory(month: BudgetMonth, categoryId: string): number {
   return 0;
 }
 
+/**
+ * A Chase row is a transfer when it carries no allowance bucket marks: the
+ * shared row hides WK/MO/UN/RE on transfer rows (CH-29), and shows all four
+ * otherwise.
+ */
+async function isTransferRow(row: Locator): Promise<boolean> {
+  return (await row.getByRole("button", { name: /weekly bucket/i }).count()) === 0;
+}
+
 test.describe("Transfer override flow on the transactions page (#494)", () => {
-  test("Transfer pill X clears the flag, picking a category on a Transfer row joins budget actuals, and the Edit dialog Transfer checkbox round-trips", async ({
+  test("a Transfer row reads as one, picking a category on a Transfer row joins budget actuals, and the Edit dialog Transfer checkbox round-trips", async ({
     browser,
   }) => {
     const { email, password } = await createTestUser(
@@ -151,19 +169,14 @@ test.describe("Transfer override flow on the transactions page (#494)", () => {
       { name: groceriesName, kind: "expense", groupName: "Food" },
     );
 
-    // ===== Pass 1: clear the Transfer pill on a row that has a
-    // category (so the row's chips include the inline picker AND the
-    // Transfer pill). The server's PATCH branch sets
-    // isTransferUserOverridden=true on isTransfer=false.
+    // ===== Pass 1: a Transfer row shows as one on the row — no allowance
+    // bucket marks (CH-29) — and has no clear-pill on /transactions (CH-64).
     const pillRow = await apiCall<{
       id: string;
       isTransfer: boolean;
       categoryId: string | null;
     }>(page, "POST", "/api/transactions", {
       occurredOn: isoDay(-1),
-      // Use a description that matches no suggestion heuristic so the
-      // CategorizeChip's "Categorize as X" suggestion doesn't appear
-      // in pass 2 and steal the click. (#494)
       description: `XFER-PILL-${suffix.toUpperCase()}-ZZZZZ`,
       amount: "-50.00",
       categoryId: transfersCat.id,
@@ -178,41 +191,12 @@ test.describe("Transfer override flow on the transactions page (#494)", () => {
 
     const pillRowEl = page.getByTestId(`row-tx-${pillRow.id}`);
     await expect(pillRowEl).toBeVisible({ timeout: 15_000 });
-    const transferBadge = page.getByTestId(`badge-transfer-${pillRow.id}`);
-    await expect(transferBadge).toBeVisible();
-
-    const clearReqPromise = page.waitForRequest(
-      (req) =>
-        req.method() === "PATCH" &&
-        new URL(req.url()).pathname === `/api/transactions/${pillRow.id}`,
-      { timeout: 10_000 },
-    );
-    await page.getByTestId(`button-clear-transfer-${pillRow.id}`).click();
-    const clearReq = await clearReqPromise;
-    const clearBody = JSON.parse(clearReq.postData() ?? "{}");
-    expect(clearBody.isTransfer).toBe(false);
-
-    const notifications = page.getByRole("region", { name: /notifications/i });
+    expect(await isTransferRow(pillRowEl)).toBe(true);
     await expect(
-      notifications.getByText(/^Cleared Transfer flag$/),
-    ).toBeVisible({ timeout: 5_000 });
-
-    // Reload — the server-persisted state should keep the pill gone.
-    await page.reload();
-    await expect(
-      page.getByRole("heading", { name: /^chase$/i }),
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId(`row-tx-${pillRow.id}`)).toBeVisible();
-    await expect(
-      page.getByTestId(`badge-transfer-${pillRow.id}`),
+      page.getByTestId(`button-clear-transfer-${pillRow.id}`),
     ).toHaveCount(0);
 
-    const afterClearList = await apiCall<
-      Array<{ id: string; isTransfer: boolean; isTransferUserOverridden: boolean }>
-    >(page, "GET", "/api/transactions");
-    const afterClear = afterClearList.find((t) => t.id === pillRow.id);
-    expect(afterClear?.isTransfer).toBe(false);
-    expect(afterClear?.isTransferUserOverridden).toBe(true);
+    const notifications = page.getByRole("region", { name: /notifications/i });
 
     // ===== Pass 2: a Transfer row with a category — switch the
     // category via the inline picker. The server's PATCH branch
@@ -251,14 +235,17 @@ test.describe("Transfer override flow on the transactions page (#494)", () => {
 
     const xferCatRowEl = page.getByTestId(`row-tx-${xferCatRow.id}`);
     await expect(xferCatRowEl).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByTestId(`badge-transfer-${xferCatRow.id}`),
-    ).toBeVisible();
+    expect(await isTransferRow(xferCatRowEl)).toBe(true);
 
-    const inlineBadge = page.getByTestId(`badge-category-${xferCatRow.id}`);
+    const inlineBadge = xferCatRowEl.getByTestId("button-category-picker");
     await expect(inlineBadge).toBeVisible();
     await expect(inlineBadge).toHaveText(transfersName);
     await inlineBadge.click();
+    await page.getByTestId("checkbox-remember-picker").click();
+    await expect(page.getByTestId("checkbox-remember-picker")).toHaveAttribute(
+      "data-state",
+      "unchecked",
+    );
 
     const pickReqPromise = page.waitForRequest(
       (req) =>
@@ -266,11 +253,7 @@ test.describe("Transfer override flow on the transactions page (#494)", () => {
         new URL(req.url()).pathname === `/api/transactions/${xferCatRow.id}`,
       { timeout: 10_000 },
     );
-    await page
-      .getByTestId(
-        `option-inline-category-${xferCatRow.id}-${groceriesCat.id}`,
-      )
-      .click();
+    await page.getByRole("option", { name: groceriesName }).click();
 
     const pickReq = await pickReqPromise;
     const pickBody = JSON.parse(pickReq.postData() ?? "{}");
@@ -332,9 +315,7 @@ test.describe("Transfer override flow on the transactions page (#494)", () => {
     ).toBeVisible({ timeout: 15_000 });
     const dialogRowEl = page.getByTestId(`row-tx-${dialogRow.id}`);
     await expect(dialogRowEl).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByTestId(`badge-transfer-${dialogRow.id}`),
-    ).toHaveCount(0);
+    expect(await isTransferRow(dialogRowEl)).toBe(false);
 
     await page.getByTestId(`button-edit-tx-${dialogRow.id}`).click();
     const dialog = page.getByRole("dialog");
@@ -371,15 +352,16 @@ test.describe("Transfer override flow on the transactions page (#494)", () => {
 
     await expect(dialog).toBeHidden();
 
-    // Reload — the Transfer pill should now be on the row, and the
-    // server-side row should reflect the override flag.
+    // Reload — the row should now read as a Transfer (no bucket marks), and
+    // the server-side row should reflect the override flag.
     await page.reload();
     await expect(
       page.getByRole("heading", { name: /^chase$/i }),
     ).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByTestId(`badge-transfer-${dialogRow.id}`),
-    ).toBeVisible();
+    await expect(dialogRowEl).toBeVisible({ timeout: 15_000 });
+    await expect
+      .poll(() => isTransferRow(dialogRowEl), { timeout: 10_000 })
+      .toBe(true);
 
     const afterToggleOnList = await apiCall<
       Array<{ id: string; isTransfer: boolean; isTransferUserOverridden: boolean }>
@@ -408,9 +390,9 @@ test.describe("Transfer override flow on the transactions page (#494)", () => {
     expect(offBody.isTransfer).toBe(false);
 
     await expect(dialog).toBeHidden();
-    await expect(
-      page.getByTestId(`badge-transfer-${dialogRow.id}`),
-    ).toHaveCount(0);
+    await expect
+      .poll(() => isTransferRow(dialogRowEl), { timeout: 10_000 })
+      .toBe(false);
 
     const finalList = await apiCall<
       Array<{ id: string; isTransfer: boolean; isTransferUserOverridden: boolean }>

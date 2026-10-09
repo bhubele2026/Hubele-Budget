@@ -77,6 +77,8 @@ export function RowDateControls({
           <Button
             variant="ghost"
             size="icon"
+            // 32 px, the ledger row's control height (C9: 40 px rows).
+            className="h-8 w-8"
             disabled={disabled}
             title="Move to a different day"
             data-testid={`button-inline-date-${tx.id}`}

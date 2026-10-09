@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, within, waitFor } from "@testing-library/react";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
+import type { ReactNode } from "react";
 
 const h = vi.hoisted(() => ({
   items: [] as unknown[], debts: [] as unknown[], payoff: null as unknown, forecast: null as unknown,
@@ -21,7 +22,8 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
   useListCategories: () => ({ data: [{ id: "c1", name: "Dining" }] }),
 }));
 vi.mock("@/pages/amex", () => ({ default: (p: object) => { h.amexProps(p); return <div data-testid="amex-ledger" />; } }));
-vi.mock("@/pages/transactions", () => ({ default: (p: object) => { h.chaseProps(p); return <div data-testid="chase-ledger" />; } }));
+// (C9) The Chase page renders the host's `lead` (the Summary panel) itself.
+vi.mock("@/pages/transactions", () => ({ default: (p: { lead?: ReactNode }) => { h.chaseProps(p); return <div data-testid="chase-ledger">{p.lead}</div>; } }));
 
 import NextAccountsPage from "./Accounts";
 import { buildEntries } from "./accounts/entries";
@@ -132,7 +134,7 @@ describe("embedded ledgers stick (C0)", () => {
    * index.css.test) and flush, with the padding moved inside so the pane can
    * bleed back over it.
    */
-  it.each([["/next/accounts/ext-amex", "amex-ledger"], ["/next/accounts/ext-chk", "chase-ledger"]])(
+  it.each([["/next/accounts/ext-amex", "amex-ledger"]])(
     "%s: the Activity panel is sticky-safe and flush, the ledger padded inside it",
     async (path, ledger) => {
       seed(); renderAt(path);
@@ -151,6 +153,31 @@ describe("embedded ledgers stick (C0)", () => {
       expect(screen.getByTestId(ledger).closest(".p-4")).toBeTruthy();
     },
   );
+});
+
+describe("checking account = the Chase page's own layout (C9)", () => {
+  /**
+   * One account experience: `/next/accounts/:id` for a checking account renders
+   * the same layout as `/transactions` (embedded: no title), full width, with
+   * the account Summary as the first panel of its figures row. The ledger's own
+   * panel is sticky-safe (pinned in `chaseLayout.test.tsx`), so nothing between
+   * this cell and the page may be a scroll container either.
+   */
+  it("spans the grid, passes the Summary as the lead, and adds no scroll container", async () => {
+    seed(); renderAt("/next/accounts/ext-chk");
+    await waitFor(() => expect(screen.getByTestId("chase-ledger")).toBeTruthy());
+    const cell = screen.getByTestId("account-activity");
+    expect(cell.className).toContain("span-12");
+    expect(cell.className).not.toContain("panel");
+    expect(h.chaseProps).toHaveBeenCalledWith(expect.objectContaining({ embedded: true, accountKey: "r-chk", lead: expect.anything() }));
+    // The Summary is inside the Chase layout (its lead), not beside it.
+    expect(within(screen.getByTestId("chase-ledger")).getByTestId("account-summary").textContent).toContain("$2,500.00");
+    let el: HTMLElement | null = screen.getByTestId("chase-ledger");
+    while (el && el !== document.body) {
+      expect(el.className ?? "").not.toMatch(/\boverflow-(hidden|auto|scroll)\b|panel-link|\bpanel\b/);
+      el = el.parentElement;
+    }
+  });
 });
 
 describe("blanks never become zero", () => {

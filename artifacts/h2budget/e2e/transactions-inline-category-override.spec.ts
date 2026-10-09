@@ -16,6 +16,12 @@ import {
  * `handleQuickCategorize` flow, so the same "Categorized" toast
  * fires and the change is persisted server-side. The pencil/edit
  * dialog is left untouched as a secondary path.
+ *
+ * (C9 repair) The row's category control is the shared account row's
+ * CategoryPicker (`button-category-picker`, options in a command list), not
+ * the old inline badge (`badge-category-*`). Its "Remember" box is on by
+ * default; it is unticked so the PATCH carries the category alone, as the
+ * old badge's did, and the toast reads "Categorized".
  */
 
 const provisionedUserIds: string[] = [];
@@ -146,13 +152,18 @@ test.describe("Inline category override on rule-categorized rows (#451)", () => 
     const row = page.getByTestId(`row-tx-${seeded.id}`);
     await expect(row).toBeVisible({ timeout: 15_000 });
 
-    // The inline category badge should show the current category and
-    // act as the picker trigger (no edit dialog needed).
-    const badge = page.getByTestId(`badge-category-${seeded.id}`);
+    // The row's category picker shows the current category and opens in
+    // place (no edit dialog needed).
+    const badge = row.getByTestId("button-category-picker");
     await expect(badge).toBeVisible();
     await expect(badge).toHaveText(groceriesName);
 
     await badge.click();
+    await page.getByTestId("checkbox-remember-picker").click();
+    await expect(page.getByTestId("checkbox-remember-picker")).toHaveAttribute(
+      "data-state",
+      "unchecked",
+    );
 
     // Picker opens with all categories searchable. Pick the second one.
     const patchPromise = page.waitForRequest(
@@ -167,9 +178,7 @@ test.describe("Inline category override on rule-categorized rows (#451)", () => 
         new URL(res.url()).pathname === `/api/transactions/${seeded.id}`,
       { timeout: 10_000 },
     );
-    await page
-      .getByTestId(`option-inline-category-${seeded.id}-${diningCat.id}`)
-      .click();
+    await page.getByRole("option", { name: diningName }).click();
 
     const patchReq = await patchPromise;
     const patchRes = await resPromise;
@@ -177,8 +186,8 @@ test.describe("Inline category override on rule-categorized rows (#451)", () => 
     const body = JSON.parse(patchReq.postData() ?? "{}");
     expect(body.categoryId).toBe(diningCat.id);
 
-    // The "Categorized" toast (same one handleQuickCategorize fires
-    // for the uncategorized-row CategorizeChip) should show.
+    // The "Categorized" toast (the one handleQuickCategorize fires for
+    // every row pick) should show.
     const notifications = page.getByRole("region", { name: /notifications/i });
     await expect(notifications.getByText(/^Categorized$/)).toBeVisible({
       timeout: 5_000,
@@ -191,7 +200,7 @@ test.describe("Inline category override on rule-categorized rows (#451)", () => 
     const persisted = list.find((t) => t.id === seeded.id);
     expect(persisted?.categoryId).toBe(diningCat.id);
 
-    // Badge label updates to reflect the new category.
+    // The picker's label updates to reflect the new category.
     await expect(badge).toHaveText(diningName);
 
     await context.close();
