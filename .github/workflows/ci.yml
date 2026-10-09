@@ -246,9 +246,9 @@ jobs:
       # recharts (vendor-charts), react-dom must live only in vendor-react,
       # and total landing JS stays under the byte budget. Fails the PR the
       # moment an import chain re-eagerizes a heavy vendor chunk. Run once per
-      # app: the classic app (served at /classic) keeps its 580 KB cap; H2
+      # app: the classic app (served at /classic) keeps its 634 KB cap (C11); H2
       # (served at /) is capped at 400 KB from its first build.
-      - name: Entry-graph guard, classic app (no recharts on open, 580 KB)
+      - name: Entry-graph guard, classic app (no recharts on open, 634 KB)
         run: node scripts/check-entry-graph.mjs
       - name: Entry-graph guard, H2 (no recharts on open, 400 KB)
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}

@@ -402,3 +402,43 @@ describe("briefing", () => {
     expect(screen.getByTestId("dash-action").textContent).toContain("Nothing needs you today");
   });
 });
+
+describe("C11 gap closure: what the command center showed and the dashboard lacked", () => {
+  it("the cash panel says the runway: negative in N days, or stays positive", () => {
+    h.spine = { data: spine({ forecast: { lowPoint: "-50.00", lowPointDate: "2026-10-20", runwayDays: 12, cashBuffer: "500.00", status: "tight" } }), state: "loaded", refetch: () => {} };
+    const a = wrap(<CashPanel />);
+    expect(screen.getByTestId("dash-runway").textContent).toContain("negative in 12 days");
+    a.unmount();
+    h.spine = { data: spine(), state: "loaded", refetch: () => {} };
+    wrap(<CashPanel />);
+    expect(screen.getByTestId("dash-runway").textContent).toContain("stays positive");
+  });
+
+  it("the spending panel quotes the household's spent this week and month from the spine", () => {
+    h.Q.pos = ok({ spentWeekDiscretionary: "100.00", weekCap: "300.00" });
+    h.Q.budget = ok({ summary: { expenses: { actual: "500.00", budget: "900.00" } } });
+    h.Q.settings = ok({ weeklyAllowanceAmount: "300", monthlyAllowanceAmount: "0", unplannedAllowanceAmount: "0", preferences: {} });
+    h.Q.recurring = ok([]);
+    h.Q.txns = ok([]);
+    wrap(<SpendingPanel />);
+    expect(screen.getByTestId("dash-spent-week").textContent).toBe("$120.00");
+    expect(screen.getByTestId("dash-spent-month").textContent).toBe("$900.00");
+  });
+
+  it("the biggest-charges bars show the top 8, not 5", () => {
+    h.Q.pos = ok({ spentWeekDiscretionary: "0.00", weekCap: "300.00" });
+    h.Q.budget = ok({ summary: { expenses: { actual: "0.00", budget: "0.00" } } });
+    h.Q.settings = ok({ weeklyAllowanceAmount: "300", monthlyAllowanceAmount: "0", unplannedAllowanceAmount: "0", preferences: {} });
+    h.Q.recurring = ok([]);
+    h.Q.txns = ok(
+      Array.from({ length: 10 }, (_, i) => ({
+        id: `t${i}`, occurredOn: "2026-10-05", description: `Store${String.fromCharCode(65 + i)}`, amount: String(-(100 + i * 10)),
+        reimbursable: false, isTransfer: false, isExternalCardPayment: false, weeklyAllowance: false, monthlyAllowance: false, unplannedAllowance: false,
+      })),
+    );
+    wrap(<SpendingPanel />);
+    // CssBars keeps hidden rows mounted (aria-hidden, opacity 0); count the active ones.
+    const active = Array.from(screen.getByTestId("dash-biggest").querySelectorAll<HTMLElement>("[aria-hidden='false']"));
+    expect(active).toHaveLength(8);
+  });
+});

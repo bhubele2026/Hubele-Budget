@@ -34,8 +34,8 @@ import { SignInPage, SignUpPage } from "./pages/auth";
 // splitting it into its own chunk bought nothing but a guaranteed extra network
 // round trip on the one screen that has to feel instant. It is cheap to carry
 // in the entry precisely because it holds zero charts and one query.
-import LandingPage from "./pages/landing";
-import { LandingSkeleton } from "./pages/landing";
+import DashboardPage from "./pages/next/Dashboard";
+import { DashboardSkeleton } from "./pages/next/dashboard/DashboardSkeleton";
 import { PageSkeleton } from "@/components/page-skeleton";
 // (#perf) Route-chunk importers live in one shared module so the hover/idle
 // prefetch map (lib/routePrefetch) and these lazy() calls can never point at
@@ -62,7 +62,6 @@ import {
   importWishlist,
   importMappingRules,
   importSettings,
-  importNextDashboard,
   importNextForecast,
   importNextAccounts,
 } from "./lib/routePrefetch";
@@ -92,7 +91,6 @@ const AllowancesPage = lazy(importAllowances);
 const WishlistPage = lazy(importWishlist);
 const MappingRulesPage = lazy(importMappingRules);
 const SettingsPage = lazy(importSettings);
-const NextDashboardPage = lazy(importNextDashboard);
 const NextForecastPage = lazy(importNextForecast);
 const NextAccountsPage = lazy(importNextAccounts);
 const PlaidOAuthPage = lazy(() => import("./pages/plaid-oauth"));
@@ -439,7 +437,7 @@ function ProtectedShell() {
     return (
       <AppLayout>
         {location === "/home" ? (
-          <LandingSkeleton />
+          <DashboardSkeleton />
         ) : (
           <div data-testid="route-loading">
             <PageSkeleton />
@@ -458,7 +456,7 @@ function ProtectedShell() {
           <PageErrorBoundary resetKey={location}>
           <Suspense fallback={<RouteFallback />}>
           <Switch>
-            <Route path="/home" component={LandingPage} />
+            <Route path="/home" component={DashboardPage} />
             <Route path="/banking" component={CommandCenterPage} />
             <Route path="/dashboard">
               <Redirect to="/banking" />
@@ -490,7 +488,9 @@ function ProtectedShell() {
             <Route path="/wishlist" component={WishlistPage} />
             <Route path="/mapping-rules" component={MappingRulesPage} />
             <Route path="/settings" component={SettingsPage} />
-            <Route path="/next/dashboard" component={NextDashboardPage} />
+            <Route path="/next/dashboard">
+              <Redirect to="/home" />
+            </Route>
             <Route path="/next/forecast" component={NextForecastPage} />
             <Route path="/next/accounts" component={NextAccountsPage} />
             <Route path="/next/accounts/:plaidAccountId" component={NextAccountsPage} />

@@ -102,23 +102,33 @@ describe("the entry path and the generated client's sub-modules", () => {
     expect(files.has("components/layout.tsx")).toBe(true);
     expect(files.has("lib/mutationInvalidation.ts")).toBe(true);
     // …and the lazy pages are not: `lazy(() => import(…))` is the boundary.
-    expect(files.has("pages/next/dashboard/queries.ts")).toBe(false);
     expect(files.has("pages/transactions.tsx")).toBe(false);
+    expect(files.has("pages/wishlist.tsx")).toBe(false);
+    // (C11) The dashboard is the landing and statically imported, so its own
+    // queries file IS on the entry path (the one allowance, below).
+    expect(files.has("pages/next/dashboard/queries.ts")).toBe(true);
     // The main module IS imported on the entry path, which is the whole reason
     // the sub-modules exist.
     expect(Array.from(graph.values()).some((edges) => edges.some((e) => e.spec === MAIN))).toBe(true);
   });
 
   it("nothing on the entry path imports @workspace/api-client-react/features or /ledger", () => {
+    // (C11) ONE ALLOWANCE: the landing is the dashboard, and its queries file
+    // reads two `features` operations (the recap preview and the money
+    // position). Only the hooks it USES join the entry chunk; the rest of the
+    // module stays out, and every other entry-path file is still held to this.
+    const ALLOWED = new Set(["pages/next/dashboard/queries.ts"]);
     const offenders: string[] = [];
     for (const [file, edges] of graph) {
-      for (const e of edges) if (e.spec === FEATURES || e.spec === LEDGER) offenders.push(`${rel(file)} → ${e.spec}`);
+      for (const e of edges) {
+        if (e.spec === LEDGER || (e.spec === FEATURES && !ALLOWED.has(rel(file)))) offenders.push(`${rel(file)} → ${e.spec}`);
+      }
     }
     expect(offenders).toEqual([]);
   });
 
   it("the features module is in use by a lazy page (so the guard above is live)", () => {
-    const code = readFileSync(join(SRC, "pages/next/dashboard/queries.ts"), "utf8");
+    const code = readFileSync(join(SRC, "pages/wishlist.tsx"), "utf8");
     expect(staticEdges(code).some((e) => e.spec === FEATURES)).toBe(true);
   });
 
