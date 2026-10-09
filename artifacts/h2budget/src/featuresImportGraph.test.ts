@@ -105,7 +105,8 @@ describe("the entry path and the generated client's sub-modules", () => {
     expect(files.has("pages/transactions.tsx")).toBe(false);
     expect(files.has("pages/wishlist.tsx")).toBe(false);
     // (C11) The dashboard is the landing and statically imported, so its own
-    // queries file IS on the entry path (the one allowance, below).
+    // queries file IS on the entry path (the one allowance, in the last
+    // guard below: two operations from the MAIN module, never `/features`).
     expect(files.has("pages/next/dashboard/queries.ts")).toBe(true);
     // The main module IS imported on the entry path, which is the whole reason
     // the sub-modules exist.
@@ -113,15 +114,16 @@ describe("the entry path and the generated client's sub-modules", () => {
   });
 
   it("nothing on the entry path imports @workspace/api-client-react/features or /ledger", () => {
-    // (C11) ONE ALLOWANCE: the landing is the dashboard, and its queries file
-    // reads two `features` operations (the recap preview and the money
-    // position). Only the hooks it USES join the entry chunk; the rest of the
-    // module stays out, and every other entry-path file is still held to this.
-    const ALLOWED = new Set(["pages/next/dashboard/queries.ts"]);
+    // (F8) NO ALLOWANCE, the landing included. C11 let the dashboard's queries
+    // file import `/features`, on the belief that only the hooks it used would
+    // join the entry chunk. Rollup keeps a module whole in one chunk, so every
+    // `features` hook any LAZY page used rode the landing instead (Ask alone
+    // measured +5.7 KB). The landing's two fold-in reads now come from the
+    // main module (allowed by name in the last guard below).
     const offenders: string[] = [];
     for (const [file, edges] of graph) {
       for (const e of edges) {
-        if (e.spec === LEDGER || (e.spec === FEATURES && !ALLOWED.has(rel(file)))) offenders.push(`${rel(file)} → ${e.spec}`);
+        if (e.spec === LEDGER || e.spec === FEATURES) offenders.push(`${rel(file)} → ${e.spec}`);
       }
     }
     expect(offenders).toEqual([]);
@@ -139,14 +141,27 @@ describe("the entry path and the generated client's sub-modules", () => {
     expect(featureNames.has("useGetMoneyPosition")).toBe(true);
     // …and not the review queue, which the entry-resident badge will read.
     expect(featureNames.has("useListCategorizationReview")).toBe(false);
+    // (F8) ONE NAMED ALLOWANCE: the landing (on the entry path, where the main
+    // module already is) reads these two operations from the main module, so
+    // `/features` never has to be on the open path. Anything else is an
+    // offender; a lazy page importing one of these from the main module is too.
+    const LANDING = "pages/next/dashboard/queries.ts";
+    const LANDING_ALLOWED = new Set(["useGetMoneyPosition", "getGetMoneyPositionQueryKey", "previewRecap"]);
     const offenders: string[] = [];
+    const landingUses: string[] = [];
     for (const file of allSourceFiles(SRC)) {
       for (const e of staticEdges(readFileSync(file, "utf8"))) {
         if (e.spec !== MAIN) continue;
-        for (const n of e.names) if (featureNames.has(n)) offenders.push(`${rel(file)}: ${n}`);
+        for (const n of e.names) {
+          if (!featureNames.has(n)) continue;
+          if (rel(file) === LANDING && LANDING_ALLOWED.has(n)) landingUses.push(n);
+          else offenders.push(`${rel(file)}: ${n}`);
+        }
       }
     }
     expect(offenders).toEqual([]);
+    // Positive control: the allowance is in use (so the guard above is live).
+    expect(landingUses.sort()).toEqual(["getGetMoneyPositionQueryKey", "previewRecap", "useGetMoneyPosition"]);
   });
 
   it("(C11b) the below-the-fold dashboard panels, their queries and the chart are not on the entry path", () => {

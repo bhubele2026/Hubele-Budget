@@ -11,13 +11,18 @@ import {
   useListRecurringItems, getListRecurringItemsQueryKey,
   useListTransactions, getListTransactionsQueryKey,
         type ListTransactionsParams,
-} from "@workspace/api-client-react";
-// (C0) Fold-in operations come from the features module, which only lazy
-// pages import — from the main module they would sit in the landing chunk.
-import {
+  // ⚠️ (F8) The landing's two fold-in reads come from the MAIN module, never
+  // `/features`. Rollup keeps a module whole in one chunk: the moment anything
+  // on the open path imports `/features`, that module sits in the entry chunk
+  // and EVERY features hook ANY lazy page uses (Ask, Settings, Wish list…)
+  // rides the landing with it — measured +5.7 KB for Ask alone. The main
+  // module is on the open path anyway, so these two cost nothing here, and
+  // `/features` stays a lazy chunk (featuresImportGraph.test.ts pins both).
+  // At the switch (`features` excluded from the main module) these two need
+  // their own home off `/features`; the typecheck will say so.
   useGetMoneyPosition, getGetMoneyPositionQueryKey,
   previewRecap,
-} from "@workspace/api-client-react/features";
+} from "@workspace/api-client-react";
 
 /**
  * Every query the dashboard reads, each with an explicit key and staleTime so
