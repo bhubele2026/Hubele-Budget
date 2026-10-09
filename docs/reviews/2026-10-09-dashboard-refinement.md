@@ -183,6 +183,17 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 | `stale`: manual row rolled into checking ($4,788.37) | Intended. PR #22's roll-forward counts bank rows and manual entries on the account after the snapshot day (`/forecast/bank-balance-explain` says "manual rows on the account count"). Labelled: "Includes 1 entry since the Oct 6 snapshot". The helper gives the row count, not a manual-only count, so the label says "entries" |
 | Weekly Spend −$477.57 beside $450 | Fixed: "card payoff · plan $450.00" |
 
+## Polish round (lead, after the first shots)
+| Ask | Outcome |
+|---|---|
+| 1. One next obligation, one amount | Done. The header "Next:", Needs attention "due today / tomorrow" and Coming up all read the same cash-signal event (`dashboard/obligations.ts`). Hook items read "Weekly Spend · card payoff $477.57 (plan $450) · Sat Oct 10". The morning text and Bills page keep the stored $450, and the note under Header says why. The bills-summary read left the landing (it was only for "due soon") |
+| 2. "See where it runs short" | Done. Order: Link a bank → Reconnect → runs short (`lowPointView` `below`, or a negative low point) → Pick a way back → Afford. Tested in `lib/attention.test.ts` and on the header |
+| 3. Debt copy | Done. "$18,500.00 left on HELOC" for one; "left across A and B" (an and-list) for several |
+| 4. Chart | Done. Ticks read "Oct 9"; "Low $X" sits below the dot (never on the line) and is anchored inward at the edges, so it does not clip on a phone |
+| 5. Last row sizes to content | Done. Needs attention and Recent activity have no minimum height and `self-start`. The phone order is unchanged |
+| 6. Phone title "H2 Budget" | Not changed. It is C12's shell-wide fallback for a route with no nav area (see Header); the one-line `/home` → "Home" case is a proposal |
+| 7. Ribbon | Done (harness only): bottom-left, in the kit and in this worktree's copy. The kit also gains `checks.sh` + `e2e/zz-fixture/checks.spec.ts` (the Phase 3 checks below) |
+
 ## Relocation map (every action on the old dashboard)
 | Old action / figure (panel) | New location |
 |---|---|
