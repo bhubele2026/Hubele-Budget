@@ -48,6 +48,12 @@ export default function CashPanel() {
                   <>
                     {!noForecast && f.lowPointDate ? <span>{dayLabel(f.lowPointDate)}</span> : null}
                     {under != null ? <span data-testid="dash-under-buffer"> · under the buffer by {formatCurrency(under)}</span> : null}
+                    {!noForecast ? (
+                      <span data-testid="dash-runway">
+                        {" · "}
+                        {f.runwayDays != null ? `negative in ${f.runwayDays} days` : "stays positive, next 90 days"}
+                      </span>
+                    ) : null}
                   </>
                 }
                 data-testid="dash-low"

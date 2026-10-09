@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   useListLearnedRules,
@@ -43,7 +44,7 @@ import {
 } from "@/lib/learnedRules";
 import { shortDate } from "@/lib/dates";
 import { fmtMoney } from "@/lib/money";
-import { btnLink, btnLinkDanger, btnSm, emptyNote, fieldLabel, input } from "@/ui";
+import { Foot, btnLink, btnLinkDanger, btnSm, emptyNote, fieldLabel, input } from "@/ui";
 import { cn } from "@/lib/utils";
 
 /**
@@ -66,7 +67,8 @@ import { cn } from "@/lib/utils";
  *
  * Behaviour ported from h2's `screens/activity/RulesView.tsx` (not imported).
  * Its "Rules you wrote" half is not ported: the pattern rules above are the
- * superset (parity review F2).
+ * superset (parity review F2). Its link to Automation is the Foot below
+ * (Settings › Automation, C8).
  */
 
 const RULES_CACHE = { staleTime: 5 * 60_000, gcTime: 30 * 60_000 } as const;
@@ -543,6 +545,15 @@ export function LearnedRulesPanel({
       }
     >
       {body}
+      <Foot data-testid="automation-link">
+        How filing works and what the model may do:{" "}
+        <Link
+          href="/settings?tab=automation"
+          className="font-semibold text-brand-navy underline-offset-2 hover:underline"
+        >
+          Settings › Automation
+        </Link>
+      </Foot>
     </Panel>
   );
 }

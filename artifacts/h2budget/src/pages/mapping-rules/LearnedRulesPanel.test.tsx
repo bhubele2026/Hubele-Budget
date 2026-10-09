@@ -382,6 +382,12 @@ describe("LearnedRulesPanel (F2)", () => {
       "H2 hasn't learned a merchant yet",
     );
     expect(screen.queryByTestId("learned-rules-count")).toBeNull();
+    // (C8/F5) How filing works lives on Settings › Automation.
+    const foot = screen.getByTestId("automation-link");
+    expect(foot.textContent).toContain("How filing works and what the model may do");
+    expect(within(foot).getByRole("link", { name: "Settings › Automation" }).getAttribute("href")).toBe(
+      "/settings?tab=automation",
+    );
   });
 
   it("a failed load says so — never 'nothing learned' — and Try again asks again", async () => {

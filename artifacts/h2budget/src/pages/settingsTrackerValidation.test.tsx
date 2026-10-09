@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
@@ -93,6 +93,12 @@ function renderPage() {
 
 beforeEach(() => {
   cleanup();
+  // (C8) Trackers live on the Household tab (`/settings?tab=household`).
+  window.history.replaceState(null, "", "/settings?tab=household");
+});
+
+afterEach(() => {
+  window.history.replaceState(null, "", "/");
 });
 
 describe("Settings — Behavior Tracker rule validation blocks save", () => {

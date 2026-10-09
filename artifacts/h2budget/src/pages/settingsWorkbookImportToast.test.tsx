@@ -44,6 +44,8 @@ vi.mock("@/hooks/use-plaid-sync", () => ({
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/settings", navigateFn] as const,
+  // (C8) Workbook import lives on the Data tab (`/settings?tab=data`).
+  useSearch: () => "tab=data",
   Link: ({ children }: { children?: unknown }) => children ?? null,
 }));
 

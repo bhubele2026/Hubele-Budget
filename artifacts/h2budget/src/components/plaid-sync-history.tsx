@@ -39,7 +39,7 @@ function CopyRequestIdButton({
     <button
       type="button"
       onClick={handleCopy}
-      className="inline-flex items-center gap-0.5 ml-1 px-1 py-0.5 rounded hover:bg-muted text-muted-foreground/80 hover:text-foreground"
+      className="inline-flex items-center gap-0.5 ml-1 px-1 py-0.5 rounded hover:bg-platinum-3 text-neutral-500 hover:text-brand-navy"
       data-testid={`sync-attempt-copy-request-id-${attemptId}`}
       aria-label="Copy request id"
       title="Copy request id"
@@ -96,7 +96,7 @@ function PendingCleanupDetail({
       </span>
       <button
         type="button"
-        className="inline-flex items-center gap-0.5 self-start text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+        className="inline-flex items-center gap-0.5 self-start text-[11px] text-neutral-500 hover:text-brand-navy hover:underline"
         onClick={() => setOpen((v) => !v)}
         data-testid={`sync-attempt-cleanup-toggle-${attemptId}`}
         aria-expanded={open}
@@ -110,11 +110,11 @@ function PendingCleanupDetail({
       </button>
       {open && (
         <div
-          className="mt-1 rounded border border-border/60 bg-muted/30 overflow-hidden"
+          className="mt-1 rounded border border-brand-line bg-platinum-1 overflow-hidden"
           data-testid={`sync-attempt-cleanup-details-${attemptId}`}
         >
           <table className="w-full text-[11px]">
-            <thead className="bg-muted/50 text-muted-foreground">
+            <thead className="bg-platinum-2 text-neutral-500">
               <tr>
                 <th className="text-left font-medium px-2 py-1">Date</th>
                 <th className="text-left font-medium px-2 py-1">Description</th>
@@ -126,17 +126,17 @@ function PendingCleanupDetail({
               {details.items.map((it, i) => (
                 <tr
                   key={`${it.plaidTransactionId}-${i}`}
-                  className="border-t border-border/60"
+                  className="border-t border-brand-line"
                   data-testid={`sync-attempt-cleanup-item-${attemptId}-${i}`}
                 >
-                  <td className="px-2 py-1 whitespace-nowrap text-muted-foreground">
+                  <td className="px-2 py-1 whitespace-nowrap text-neutral-500">
                     {it.occurredOn}
                   </td>
                   <td className="px-2 py-1">{it.description ?? "—"}</td>
                   <td className="px-2 py-1 text-right whitespace-nowrap font-mono">
                     {it.amount}
                   </td>
-                  <td className="px-2 py-1 font-mono text-muted-foreground/80 break-all">
+                  <td className="px-2 py-1 font-mono text-neutral-500 break-all">
                     {it.plaidTransactionId}
                   </td>
                 </tr>
@@ -225,7 +225,7 @@ export function PlaidSyncHistory({
         <Button
           variant="ghost"
           size="sm"
-          className="h-auto py-1 px-2 -ml-2 text-xs text-muted-foreground"
+          className="h-auto py-1 px-2 -ml-2 text-xs text-neutral-500"
           data-testid={`button-toggle-sync-history-${itemId}`}
         >
           {open ? (
@@ -235,7 +235,7 @@ export function PlaidSyncHistory({
           )}
           Recent activity
           {failureSummary && open && (
-            <span className="ml-2 text-muted-foreground/80">
+            <span className="ml-2 text-neutral-500">
               · {failureSummary}
             </span>
           )}
@@ -243,15 +243,15 @@ export function PlaidSyncHistory({
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div
-          className="mt-2 ml-4 rounded-md border border-border bg-background/60 overflow-hidden"
+          className="mt-2 ml-4 rounded-control border border-brand-line bg-white overflow-hidden"
           data-testid={`sync-history-${itemId}`}
         >
           {isLoading && (
-            <div className="text-xs text-muted-foreground p-3">Loading…</div>
+            <div className="text-xs text-neutral-500 p-3">Loading…</div>
           )}
           {isError && (
             <div
-              className="text-xs text-destructive p-3"
+              className="text-xs text-bad p-3"
               data-testid={`sync-history-error-${itemId}`}
             >
               Couldn't load recent activity.
@@ -259,7 +259,7 @@ export function PlaidSyncHistory({
           )}
           {!isLoading && !isError && sorted.length === 0 && (
             <div
-              className="text-xs text-muted-foreground p-3"
+              className="text-xs text-neutral-500 p-3"
               data-testid={`sync-history-empty-${itemId}`}
             >
               No sync attempts recorded yet.
@@ -267,7 +267,7 @@ export function PlaidSyncHistory({
           )}
           {!isLoading && !isError && sorted.length > 0 && (
             <table className="w-full text-xs">
-              <thead className="bg-muted/40 text-muted-foreground">
+              <thead className="bg-platinum-2 text-neutral-500">
                 <tr>
                   <th className="text-left font-medium px-2 py-1.5">
                     <button
@@ -306,28 +306,28 @@ export function PlaidSyncHistory({
                 {sorted.map((a) => (
                   <tr
                     key={a.id}
-                    className="border-t border-border/60"
+                    className="border-t border-brand-line"
                     data-testid={`sync-attempt-row-${a.id}`}
                   >
-                    <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-neutral-500">
                       {new Date(a.attemptedAt).toLocaleString()}
                     </td>
                     <td className="px-2 py-1.5">{kindLabel(a.kind)}</td>
                     <td className="px-2 py-1.5">
                       {a.kind === "pending_cleanup" ? (
                         <span
-                          className="text-muted-foreground"
+                          className="text-neutral-500"
                           data-testid={`sync-attempt-cleanup-status-${a.id}`}
                         >
                           Tidied up
                         </span>
                       ) : a.success ? (
-                        <span className="text-positive">
+                        <span className="text-ok">
                           OK
                         </span>
                       ) : (
                         <span
-                          className="text-destructive"
+                          className="text-bad"
                           data-testid={`sync-attempt-failed-${a.id}`}
                         >
                           Failed
@@ -336,7 +336,7 @@ export function PlaidSyncHistory({
                       )}
                     </td>
                     <td
-                      className="px-2 py-1.5 text-muted-foreground"
+                      className="px-2 py-1.5 text-neutral-500"
                       title={
                         a.plaidDisplayMessage ?? a.errorMessage ?? undefined
                       }
@@ -364,7 +364,7 @@ export function PlaidSyncHistory({
                           </span>
                           {(a.requestId || a.httpStatus !== null) && (
                             <span
-                              className="text-[10px] text-muted-foreground/70 font-mono"
+                              className="text-[10px] text-neutral-400 font-mono"
                               data-testid={`sync-attempt-meta-${a.id}`}
                             >
                               {a.httpStatus !== null && a.httpStatus !== undefined
@@ -408,7 +408,7 @@ export function PlaidSyncHistory({
                           )}
                         </div>
                       ) : (
-                        <span className="text-muted-foreground/60">—</span>
+                        <span className="text-neutral-400">—</span>
                       )}
                     </td>
                   </tr>

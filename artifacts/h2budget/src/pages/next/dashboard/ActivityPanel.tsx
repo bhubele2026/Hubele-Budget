@@ -1,10 +1,13 @@
 import { displayAmount } from "@/lib/amountDisplay";
 import { useMemo } from "react";
 import { Link } from "wouter";
+import { cn } from "@/lib/utils";
 import { Panel, TxnTable, type TxnRow } from "@/components/next";
 import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
-import { useCategoriesQ, usePlaidItemsQ, useTxnsQ } from "./queries";
+import { usePlaidItemsQ, useTxnsQ } from "./queries";
+import { useCategoriesQ } from "./queriesLazy";
+import { BELOW_FOLD } from "./belowFoldSizes";
 import { Gate, rise } from "./shared";
 
 export const ACTIVITY_ROWS = 12;
@@ -43,7 +46,7 @@ export default function ActivityPanel() {
   }, [txns.data, items.data, cats.data]);
 
   return (
-    <Panel title="Recent activity" sub={`Newest ${ACTIVITY_ROWS} across accounts`} span={8} className={rise(6)} data-testid="dash-activity"
+    <Panel title="Recent activity" sub={`Newest ${ACTIVITY_ROWS} across accounts`} span={8} className={cn(rise(BELOW_FOLD.activity.rise), BELOW_FOLD.activity.minH)} data-testid="dash-activity"
       actions={<Link href="/next/accounts" className="text-label font-semibold text-brand-navy underline">All accounts</Link>}>
       <Gate q={txns} what="Recent activity" rows={6}>{() => <TxnTable rows={rows} />}</Gate>
     </Panel>

@@ -110,19 +110,22 @@ export type WouterOverrides = {
   useLocation?: () => readonly [string, (path: string) => void];
 };
 
-// Default `wouter` mock shape covering the two exports the page uses
-// (`useSearch` for the ?focus= deep-link param and `useLocation` for
-// programmatic navigation).
+// Default `wouter` mock shape covering the exports the page uses
+// (`useSearch` for the ?focus= deep-link param, `useLocation` for
+// programmatic navigation, and `Link` in the learned-rules panel's foot).
 export function defaultMappingRulesWouterMock(
   overrides: WouterOverrides = {},
 ): {
   useSearch: () => string;
   useLocation: () => readonly [string, (path: string) => void];
+  Link: (props: { href: string; children?: unknown; className?: string }) => unknown;
 } {
   return {
     useSearch: overrides.useSearch ?? (() => ""),
     useLocation:
       overrides.useLocation ??
       (() => ["/mapping-rules", vi.fn()] as const),
+    // (C8) The learned-rules panel links to Settings › Automation.
+    Link: ({ children }) => children ?? null,
   };
 }

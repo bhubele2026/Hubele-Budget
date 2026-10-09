@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import {
   useGetSettings,
   useUpdateSettings,
@@ -21,7 +21,7 @@ import {
   getListTransactionsQueryKey,
   getGetForecastQueryKey,
 } from "@workspace/api-client-react";
-import { useLocation, Link } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
 import { useQueryClient } from "@tanstack/react-query";
 import { ToastAction } from "@/components/ui/toast";
@@ -41,7 +41,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus, GitMerge, ChevronRight, Zap } from "lucide-react";
+import { UploadCloud, Download, RefreshCw, Trash2, Plus, Zap } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import {
@@ -77,8 +77,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  card,
-  cardHead,
   btn,
   btnSecondary,
   btnSecondarySm,
@@ -94,8 +92,22 @@ import {
   errorBanner,
 } from "@/ui";
 
-/** Card heading — the same string budget.tsx and bills.tsx inline. */
-const cardTitle = "text-title font-semibold text-brand-navy";
+import { AccountChip, PageGrid, Panel } from "@/components/next";
+import { cardOrderOf, identityOf, type AccountIdentity } from "@/lib/accountIdentity";
+import { SettingsTabBar } from "./settings/SettingsTabBar";
+import {
+  tabOf,
+  importAiCostTab,
+  importAutomationTab,
+  importMorningTextTab,
+} from "./settings/settingsTabs";
+import { TabSkeleton } from "./settings/parts";
+
+// (C8) The fold-in tabs are their own lazy chunks (hooks from the `features`
+// client only); the classic sections below stay in this module.
+const AutomationTab = lazy(importAutomationTab);
+const MorningTextTab = lazy(importMorningTextTab);
+const AiCostTab = lazy(importAiCostTab);
 /** A settings row: label on the left, its control hard right. */
 const settingRow =
   "flex flex-wrap items-center justify-between gap-3 border-b border-brand-line/70 px-4 py-2.5 last:border-b-0";
@@ -521,6 +533,28 @@ export default function SettingsPage() {
     });
   };
 
+  const tab = tabOf(useSearch());
+
+  // (C8) Every linked account's identity (accent, label, ••mask), for the
+  // AccountChips on the bank panels. Cards are numbered across ALL banks.
+  const accountIdentities = useMemo(() => {
+    const out = new Map<string, AccountIdentity>();
+    const rows = (plaidItems ?? []).flatMap((item) =>
+      item.accounts.map((a) => ({
+        id: a.id,
+        name: a.name ?? a.officialName ?? null,
+        mask: a.mask,
+        type: a.type,
+        subtype: a.subtype,
+        institutionName: item.institutionName,
+        institutionSlug: item.institutionSlug,
+      })),
+    );
+    const cardOrder = cardOrderOf(rows);
+    for (const r of rows) out.set(r.id, identityOf(r, { cardOrder }));
+    return out;
+  }, [plaidItems]);
+
   // Stale-while-revalidate: only skeleton on a genuine cold load (no cached
   // settings yet); once data exists, render it and revalidate in the background.
   if (isLoading && !settings) {
@@ -529,108 +563,23 @@ export default function SettingsPage() {
 
   const errors = form.formState.errors;
 
-  return (
-    <div className="mx-auto w-full max-w-3xl space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-display font-semibold text-brand-navy">Settings</h1>
-        {plaidEnv?.env && (
-          <span
-            className={`chip ${plaidEnv.env === "production" ? "ok" : "warn"}`}
-            data-testid="badge-plaid-env"
-            title={`Plaid is running in ${plaidEnv.env} mode`}
-          >
-            Plaid: {plaidEnv.env}
-          </span>
-        )}
-      </div>
-
-      <Link href="/mapping-rules" className="block">
-        <div
-          className={`${card} press flex items-center gap-3 px-4 py-3 hover:ring-brand-navy/25`}
-          data-testid="card-mapping-rules"
-        >
-          <GitMerge className="h-4 w-4 shrink-0 text-brand-navy" />
-          <div className="min-w-0 flex-1">
-            <div className="text-body font-semibold text-brand-navy">
-              Mapping rules
-            </div>
-            <div className="text-micro text-neutral-400">Merchant → category</div>
-          </div>
-          <Help>
-            Rules that auto-categorize a transaction from its description. Open
-            the page to review, add, reorder, or delete them.
-          </Help>
-          <ChevronRight className="h-4 w-4 shrink-0 text-neutral-400" />
-        </div>
-      </Link>
-
-      <OwnerInvitationsSection />
-
-      <OwnerBankHealthSweepSection />
-
-      <section className={card}>
-        <div className={cardHead}>
-          <h2 className={cardTitle}>Allowances</h2>
-          <Help>
-            Target dollar amounts for discretionary spending. Changes flow into
-            the Budget page's bucket caps for any month without an override.
-          </Help>
-        </div>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="p-4">
-          <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-3">
-            <Field label="Weekly">
-              <input
-                className={input}
-                type="number"
-                step="1"
-                aria-label="Weekly allowance"
-                {...form.register("weeklyAllowanceAmount")}
-              />
-            </Field>
-            <Field label="Monthly">
-              <input
-                className={input}
-                type="number"
-                step="1"
-                aria-label="Monthly allowance"
-                {...form.register("monthlyAllowanceAmount")}
-              />
-            </Field>
-            <Field label="Unplanned">
-              <input
-                className={input}
-                type="number"
-                step="1"
-                aria-label="Unplanned allowance"
-                {...form.register("unplannedAllowanceAmount")}
-              />
-            </Field>
-          </div>
-          {(errors.weeklyAllowanceAmount ||
-            errors.monthlyAllowanceAmount ||
-            errors.unplannedAllowanceAmount) && (
-            <p className="mb-3 text-micro text-bad" data-testid="allowance-form-error">
-              Every allowance needs an amount.
-            </p>
-          )}
-          <button type="submit" className={btn} disabled={updateSettings.isPending}>
-            Save
-          </button>
-        </form>
-      </section>
-
-      <section className={card}>
-        <div className={cardHead}>
-          <h2 className={cardTitle}>Banks</h2>
-          <Help>
-            Linked through Plaid. Transactions and balances import
-            automatically; your bank login is never seen or stored here.
-          </Help>
-          <div className="ml-auto">
-            <PlaidLinkButton />
-          </div>
-        </div>
-
+  // ⭐ C8 — ONE SETTINGS AREA, A LOCAL TAB BAR. The tab rides `?tab=`
+  // (settings/settingsTabs.ts), so every link to /settings still lands on
+  // Banks. Every hook and handler above is the classic page's, unchanged, and
+  // runs whichever tab is open: an unsaved allowance or tracker edit survives
+  // a look at another tab, and the bank list keeps its 90 s poll. The three
+  // fold-in tabs (Automation, Morning text, AI cost) are their own lazy chunks
+  // and read the `features` client only.
+  const banksTab = (
+    <PageGrid data-testid="settings-banks">
+      <Panel
+        title="Banks"
+        sub="Linked through Plaid. Transactions and balances import automatically; your bank login is never seen or stored here."
+        span={12}
+        variant={["static", "flush"]}
+        data-testid="panel-banks"
+        actions={<PlaidLinkButton />}
+      >
         {plaidEnv && !plaidEnv.configured && (
           <div className="px-4 pt-3">
             <p className={errorBanner} data-testid="text-plaid-not-configured">
@@ -643,71 +592,6 @@ export default function SettingsPage() {
         {plaidEnv?.configError && (
           <div className="px-4 pt-3">
             <p className={errorBanner}>{plaidEnv.configError}</p>
-          </div>
-        )}
-
-        {import.meta.env.DEV && plaidEnv && plaidEnv.nonProdItemCount > 0 && (
-          <div className="px-4 pt-3">
-            <div
-              className="rounded-control bg-bad-bg px-3 py-2.5 ring-1 ring-bad/15"
-              data-testid="banner-non-prod-cleanup"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="chip bad">Wrong environment</span>
-                <span className="text-body font-medium text-brand-navy">
-                  {plaidEnv.nonProdItemCount} link
-                  {plaidEnv.nonProdItemCount === 1 ? "" : "s"} not from Plaid
-                  Production
-                </span>
-                <Help>
-                  Their access tokens will not work against Plaid Production and
-                  will fail to sync. Remove them so only real, Production-linked
-                  banks remain.
-                </Help>
-              </div>
-              <ul className="mt-1.5 text-micro text-neutral-500">
-                {plaidEnv.nonProdItems.map((it) => (
-                  <li key={it.id}>
-                    {it.institutionName ?? "Unnamed institution"}{" "}
-                    <span className="uppercase tracking-wide">
-                      ({it.env ?? "unknown"})
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className={`${btnDanger} mt-2.5`}
-                disabled={cleanupNonProd.isPending}
-                onClick={() => {
-                  if (
-                    !confirm(
-                      `Permanently remove ${plaidEnv.nonProdItemCount} non-production Plaid link(s)? Imported transactions stay; new syncs from these institutions will stop.`,
-                    )
-                  )
-                    return;
-                  cleanupNonProd.mutate(undefined, {
-                    onSuccess: (res) => {
-                      queryClient.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
-                      queryClient.invalidateQueries({ queryKey: getGetPlaidEnvironmentQueryKey() });
-                      toast({
-                        title: "Cleanup complete",
-                        description: `Removed ${res.removed} non-production link(s).`,
-                      });
-                    },
-                    onError: (err) =>
-                      toast({
-                        title: "Cleanup failed",
-                        description: String(err),
-                        variant: "destructive",
-                      }),
-                  });
-                }}
-                data-testid="button-cleanup-non-prod"
-              >
-                Remove these links
-              </button>
-            </div>
           </div>
         )}
 
@@ -789,31 +673,32 @@ export default function SettingsPage() {
             </span>
           </div>
         )}
+      </Panel>
 
-        {(plaidItems ?? []).map((item) => {
-          const isSyncing = isSyncPending && syncingItemId === item.id;
-          const isAnySyncing = isSyncPending;
-          // (#710) Synthetic seed rows (item_id like 'seed-…') aren't real
-          // Plaid links — Reconnect would no-op. Hide the badge + CTA for
-          // them so the user isn't pushed to relink a placeholder.
-          const needsReconnect =
-            isPlaidReauthCode(item.lastSyncErrorCode) &&
-            !isSyntheticPlaidItem({ itemId: item.itemId });
-          return (
-            <div
-              key={item.id}
-              className="border-b border-brand-line/70 px-4 py-3 last:border-b-0"
-              data-testid={`plaid-item-${item.id}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-2.5">
-                  <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-body font-semibold text-brand-navy">
-                        {item.institutionName || "Linked institution"}
-                      </span>
-                      {needsReconnect && (
+      {(plaidItems ?? []).map((item) => {
+        const isSyncing = isSyncPending && syncingItemId === item.id;
+        const isAnySyncing = isSyncPending;
+        // (#710) Synthetic seed rows (item_id like 'seed-…') aren't real
+        // Plaid links — Reconnect would no-op. Hide the badge + CTA for
+        // them so the user isn't pushed to relink a placeholder.
+        const needsReconnect =
+          isPlaidReauthCode(item.lastSyncErrorCode) &&
+          !isSyntheticPlaidItem({ itemId: item.itemId });
+        // The bank's identity edge: the accent of its first account.
+        const firstAccount = item.accounts[0];
+        const accent = firstAccount ? accountIdentities.get(firstAccount.id)?.accent : undefined;
+        return (
+          <Panel
+            key={item.id}
+            title={item.institutionName || "Linked institution"}
+            span={6}
+            accent={accent}
+            variant={["static", "flush"]}
+            data-testid={`plaid-item-${item.id}`}
+          >
+            <div className="space-y-1.5 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2 empty:hidden">
+                {needsReconnect && (
                         <span
                           className="chip bad"
                           data-testid={`badge-needs-reconnect-${item.id}`}
@@ -850,8 +735,8 @@ export default function SettingsPage() {
                           })()}
                         </span>
                       )}
-                    </div>
-                    <div
+              </div>
+              <div
                       className="text-micro text-neutral-400"
                       data-testid={`text-last-synced-${item.id}`}
                     >
@@ -1013,10 +898,8 @@ export default function SettingsPage() {
                         )}
                       </div>
                     )}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {needsReconnect && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                {needsReconnect && (
                     <PlaidReconnectButton
                       itemId={item.id}
                       institutionName={item.institutionName ?? null}
@@ -1066,22 +949,21 @@ export default function SettingsPage() {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
-                </div>
               </div>
-              <div className="ml-6 mt-2">
-                <PlaidSyncHistory
-                  itemId={item.id}
-                  institutionName={item.institutionName}
-                />
-              </div>
-              {item.accounts.length > 0 && (
-                <ul className="ml-6 mt-2 space-y-1.5 text-micro text-neutral-500">
-                  {item.accounts.map((a) => (
+            </div>
+            {item.accounts.length > 0 && (
+              <ul className="space-y-2 border-t border-brand-line px-4 py-3" data-testid={`plaid-item-accounts-${item.id}`}>
+                {item.accounts.map((a) => {
+                  const identity = accountIdentities.get(a.id);
+                  return (
                     <li key={a.id} className="space-y-1">
-                      <div>
-                        {a.name || a.officialName || "Account"}
-                        {a.mask ? ` ••${a.mask}` : ""}
-                        {a.subtype ? ` · ${a.subtype}` : ""}
+                      <div className="flex flex-wrap items-center gap-2 text-micro text-neutral-500">
+                        {identity ? (
+                          <AccountChip identity={identity} />
+                        ) : (
+                          <span>{a.name || a.officialName || "Account"}</span>
+                        )}
+                        {a.subtype ? <span>{a.subtype}</span> : null}
                       </div>
                       {/* (#361) First-sync dedupe gate. Once the
                           account has completed its first sync the
@@ -1098,22 +980,93 @@ export default function SettingsPage() {
                         />
                       )}
                     </li>
-                  ))}
-                </ul>
-              )}
+                  );
+                })}
+              </ul>
+            )}
+            <div className="border-t border-brand-line px-4 py-2">
+              <PlaidSyncHistory
+                itemId={item.id}
+                institutionName={item.institutionName}
+              />
             </div>
-          );
-        })}
-      </section>
+          </Panel>
+        );
+      })}
 
-      <section className={card}>
-        <div className={cardHead}>
-          <h2 className={cardTitle}>Weekly bucket names</h2>
-          <Help>
-            Renames the four weekly spending buckets on screen. The underlying
+      <OwnerBankHealthSweepSection />
+    </PageGrid>
+  );
+
+  const householdTab = (
+    <PageGrid data-testid="settings-household">
+      <OwnerInvitationsSection />
+        <Panel
+          title="Allowances"
+          span={6}
+          variant={["static", "flush"]}
+          data-testid="panel-allowances"
+          actions={
+            <Help>
+            Target dollar amounts for discretionary spending. Changes flow into
+            the Budget page's bucket caps for any month without an override.
+          </Help>
+          }
+        >
+        <form onSubmit={form.handleSubmit(onSubmit)} className="p-4">
+          <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-3">
+            <Field label="Weekly">
+              <input
+                className={input}
+                type="number"
+                step="1"
+                aria-label="Weekly allowance"
+                {...form.register("weeklyAllowanceAmount")}
+              />
+            </Field>
+            <Field label="Monthly">
+              <input
+                className={input}
+                type="number"
+                step="1"
+                aria-label="Monthly allowance"
+                {...form.register("monthlyAllowanceAmount")}
+              />
+            </Field>
+            <Field label="Unplanned">
+              <input
+                className={input}
+                type="number"
+                step="1"
+                aria-label="Unplanned allowance"
+                {...form.register("unplannedAllowanceAmount")}
+              />
+            </Field>
+          </div>
+          {(errors.weeklyAllowanceAmount ||
+            errors.monthlyAllowanceAmount ||
+            errors.unplannedAllowanceAmount) && (
+            <p className="mb-3 text-micro text-bad" data-testid="allowance-form-error">
+              Every allowance needs an amount.
+            </p>
+          )}
+          <button type="submit" className={btn} disabled={updateSettings.isPending}>
+            Save
+          </button>
+        </form>
+              </Panel>
+        <Panel
+          title="Weekly bucket names"
+          span={6}
+          variant={["static", "flush"]}
+          data-testid="panel-bucket-names"
+          actions={
+            <Help>
+            Renames the five weekly spending buckets on screen. The underlying
             tags stay the same, so existing transactions keep their bucket.
           </Help>
-        </div>
+          }
+        >
         <div className="p-4">
           <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
             {SUB_BUCKETS.map((b) => (
@@ -1144,17 +1097,20 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-      </section>
-
-      <section className={card}>
-        <div className={cardHead}>
-          <h2 className={cardTitle}>Trackers</h2>
-          <Help>
+              </Panel>
+        <Panel
+          title="Trackers"
+          span={12}
+          variant={["static", "flush"]}
+          data-testid="panel-trackers"
+          actions={
+            <Help>
             The "days since last…" tiles on Reports → Behavior. Match a category
             name or a keyword in the description; separate keywords with a pipe
             for an "or" match, e.g. starbucks|coffee|cafe.
           </Help>
-        </div>
+          }
+        >
         <div className="p-4">
           {trackers.length === 0 && (
             <p className={emptyNote}>No trackers yet.</p>
@@ -1261,16 +1217,24 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
-      </section>
+              </Panel>
+    </PageGrid>
+  );
 
-      <section className={card}>
-        <div className={cardHead}>
-          <h2 className={cardTitle}>Workbook import</h2>
-          <Help>
+  const dataTab = (
+    <PageGrid data-testid="settings-data">
+        <Panel
+          title="Workbook import"
+          span={6}
+          variant={["static", "flush"]}
+          data-testid="panel-workbook-import"
+          actions={
+            <Help>
             Bootstraps the ledger from a populated Hubele Family Budget
             spreadsheet — transactions, debts, recurring bills, and settings.
           </Help>
-        </div>
+          }
+        >
         <div className="flex flex-wrap items-center gap-2 p-4">
           <span className={`${btnSecondary} relative inline-flex cursor-pointer items-center`}>
             <UploadCloud className="mr-1.5 inline h-4 w-4 align-[-3px]" />
@@ -1293,12 +1257,91 @@ export default function SettingsPage() {
             Sample workbook
           </a>
         </div>
-      </section>
+              </Panel>
+      {import.meta.env.DEV && plaidEnv && plaidEnv.nonProdItemCount > 0 && (
+        <Panel
+          title="Plaid links from the wrong environment"
+          span={6}
+          variant={["static", "flush"]}
+          data-testid="panel-non-prod-cleanup"
+        >
+        {import.meta.env.DEV && plaidEnv && plaidEnv.nonProdItemCount > 0 && (
+          <div className="px-4 pt-3">
+            <div
+              className="rounded-control bg-bad-bg px-3 py-2.5 ring-1 ring-bad/15"
+              data-testid="banner-non-prod-cleanup"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="chip bad">Wrong environment</span>
+                <span className="text-body font-medium text-brand-navy">
+                  {plaidEnv.nonProdItemCount} link
+                  {plaidEnv.nonProdItemCount === 1 ? "" : "s"} not from Plaid
+                  Production
+                </span>
+                <Help>
+                  Their access tokens will not work against Plaid Production and
+                  will fail to sync. Remove them so only real, Production-linked
+                  banks remain.
+                </Help>
+              </div>
+              <ul className="mt-1.5 text-micro text-neutral-500">
+                {plaidEnv.nonProdItems.map((it) => (
+                  <li key={it.id}>
+                    {it.institutionName ?? "Unnamed institution"}{" "}
+                    <span className="uppercase tracking-wide">
+                      ({it.env ?? "unknown"})
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className={`${btnDanger} mt-2.5`}
+                disabled={cleanupNonProd.isPending}
+                onClick={() => {
+                  if (
+                    !confirm(
+                      `Permanently remove ${plaidEnv.nonProdItemCount} non-production Plaid link(s)? Imported transactions stay; new syncs from these institutions will stop.`,
+                    )
+                  )
+                    return;
+                  cleanupNonProd.mutate(undefined, {
+                    onSuccess: (res) => {
+                      queryClient.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
+                      queryClient.invalidateQueries({ queryKey: getGetPlaidEnvironmentQueryKey() });
+                      toast({
+                        title: "Cleanup complete",
+                        description: `Removed ${res.removed} non-production link(s).`,
+                      });
+                    },
+                    onError: (err) =>
+                      toast({
+                        title: "Cleanup failed",
+                        description: String(err),
+                        variant: "destructive",
+                      }),
+                  });
+                }}
+                data-testid="button-cleanup-non-prod"
+              >
+                Remove these links
+              </button>
+            </div>
+          </div>
+        )}
+        </Panel>
+      )}
+    </PageGrid>
+  );
 
-      <section className={card}>
-        <div className={cardHead}>
-          <h2 className={cardTitle}>Privacy</h2>
-        </div>
+  const privacyTab = (
+    <PageGrid data-testid="settings-privacy">
+        <Panel
+          title="Privacy"
+          span={8}
+          variant={["static", "flush"]}
+          data-testid="panel-privacy"
+        >
         <div className="space-y-2 p-4 text-body text-neutral-600">
           <p>
             <span className="font-medium text-brand-navy">
@@ -1319,7 +1362,54 @@ export default function SettingsPage() {
           H2 Budget is a personal budgeting tool. It does not provide investment,
           tax, or legal advice.
         </Foot>
-      </section>
+              </Panel>
+    </PageGrid>
+  );
+
+  const lazyTab = (node: React.ReactNode) => (
+    <Suspense
+      fallback={
+        <PageGrid>
+          <Panel title="Loading" span={12} variant={["static", "flush"]}>
+            <TabSkeleton testId="settings-tab-loading" />
+          </Panel>
+        </PageGrid>
+      }
+    >
+      {node}
+    </Suspense>
+  );
+
+  const content =
+    tab === "household" ? householdTab
+    : tab === "data" ? dataTab
+    : tab === "automation" ? lazyTab(<AutomationTab />)
+    : tab === "morning-text" ? lazyTab(<MorningTextTab />)
+    : tab === "ai" ? lazyTab(<AiCostTab />)
+    : tab === "privacy" ? privacyTab
+    : banksTab;
+
+  return (
+    <div className="space-y-4" data-testid="settings-page">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-display font-semibold text-brand-navy">Settings</h1>
+        {plaidEnv?.env && (
+          <span
+            className={`chip ${plaidEnv.env === "production" ? "ok" : "warn"}`}
+            data-testid="badge-plaid-env"
+            title={`Plaid is running in ${plaidEnv.env} mode`}
+          >
+            Plaid: {plaidEnv.env}
+          </span>
+        )}
+      </div>
+
+      <SettingsTabBar current={tab} />
+
+      {/* Keyed on the tab: only the tab's content rises in on a switch. */}
+      <div key={tab} className="section-enter" data-testid={`settings-tab-${tab}`}>
+        {content}
+      </div>
 
       <AlertDialog
         open={disconnectGuardItem !== null}
@@ -1377,6 +1467,7 @@ export default function SettingsPage() {
   );
 }
 
+
 // (#361) Per-account picker for the first-sync `importCutoffDate`
 // override. Only mounted while the account's `firstSyncCompletedAt`
 // is null (the parent gates the render). On submit it PATCHes the
@@ -1424,13 +1515,13 @@ function PlaidImportCutoffPicker({
   };
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor={`cutoff-${accountId}`} className={fieldLabel}>
+      <label htmlFor={`cutoff-${accountId}`} className={`${fieldLabel} whitespace-nowrap`}>
         Import after
       </label>
       <input
         id={`cutoff-${accountId}`}
         type="date"
-        className={`${input} w-36 py-1 text-micro`}
+        className={`${input} max-w-[10rem] py-1 text-micro`}
         value={value}
         onChange={(e) => setValue(e.target.value)}
       />
