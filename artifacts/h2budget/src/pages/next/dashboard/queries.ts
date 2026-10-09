@@ -11,13 +11,15 @@ import {
   useListRecurringItems, getListRecurringItemsQueryKey,
   useListTransactions, getListTransactionsQueryKey,
         type ListTransactionsParams,
-} from "@workspace/api-client-react";
-// (C0) Fold-in operations come from the features module, which only lazy
-// pages import — from the main module they would sit in the landing chunk.
-import {
+  // (F3b) The first screen's two fold-in reads come from the MAIN module, on
+  // purpose. This file is on the entry path, and importing `/features` here
+  // pulled the WHOLE sub-module into the entry chunk (Rollup keeps a module
+  // whole in the chunk that statically imports it, and retains every export a
+  // lazy chunk uses). The main module is in the entry chunk anyway and carries
+  // the same two operations; featuresImportGraph.test.ts allows exactly these.
   useGetMoneyPosition, getGetMoneyPositionQueryKey,
   previewRecap,
-} from "@workspace/api-client-react/features";
+} from "@workspace/api-client-react";
 
 /**
  * Every query the dashboard reads, each with an explicit key and staleTime so

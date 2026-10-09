@@ -26,7 +26,7 @@
  *
  * Usage (both run in CI after the build):
  *   node scripts/check-entry-graph.mjs
- *       the classic app at artifacts/h2budget/dist/public, 633,000 bytes
+ *       the classic app at artifacts/h2budget/dist/public, 622,000 bytes
  *   node scripts/check-entry-graph.mjs --dist artifacts/h2/dist/public --max 400000
  *       H2 (S0, 2026-10-07): the new app's open path is capped at 400 KB
  * `--dist` resolves from the repo root (an absolute path is used as is).
@@ -53,6 +53,15 @@ import { gzipSync } from "node:zlib";
 // (briefing, accounts, cash, spending, upcoming) stays eager, and no panel was
 // trimmed.
 //
+// 2026-10-09 (F3b): 633,000 -> 622,000. The dashboard's queries file imported two
+// operations from the generated `features` sub-module. Rollup keeps a module whole
+// in the chunk that statically imports it and retains every export a lazy chunk
+// uses, so the WHOLE sub-module (agent trail, wishlist, learned rules, AI usage,
+// ...) sat in the entry chunk. Those two now come from the main module (which is
+// in the entry chunk anyway) and the sub-module is its own lazy `api-*` chunk.
+// Measured open path: 632.1 KB before, 616.6 KB after; the cap is that plus 5 KB.
+// No panel or behaviour changed.
+//
 // History: 1,059.4 KB → 608.4 KB (2026-08-23, vendor-charts evicted from the
 // landing graph) → 571.1 KB (2026-08-25, the Budget overhaul dropped dnd-kit
 // from that route). Cap ratcheted 620 → 580 KB to lock the win in; the real
@@ -68,7 +77,7 @@ import { gzipSync } from "node:zlib";
 // regression risk on pages that were just rebuilt, traded against roughly a
 // tenth of a second on a warm open. Not worth it. If someone revisits this,
 // revisit it as a deliberate piece of work — not as a leftover chore.
-const DEFAULT_MAX_TOTAL_BYTES = 633_000;
+const DEFAULT_MAX_TOTAL_BYTES = 622_000;
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

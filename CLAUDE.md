@@ -56,7 +56,7 @@ to get the household out of debt; correctness and trust beat everything.
 - **Prefetch** a route's primary queries on nav-link **hover/focus** or on idle.
 - **The open path is budgeted per app, and CI enforces it.**
   `node scripts/check-entry-graph.mjs` runs against each web app's build:
-  **h2budget caps landing JS at 633 KB (the frozen `artifacts/h2` at 400 KB until it is deleted).** It fails the build if
+  **h2budget caps landing JS at 622 KB (the frozen `artifacts/h2` at 400 KB until it is deleted).** It fails the build if
   landing JS exceeds its cap, if react-dom lands outside `vendor-react`, or if
   a chart library reaches a preloaded chunk. **Never add a chart to the open
   path.** Charts are lazy and never imported by anything the landing route
@@ -66,6 +66,10 @@ to get the household out of debt; correctness and trust beat everything.
   (cap = measured + 5 KB). No panel was trimmed to fit; charts stay lazy.
   Lowered 640 → 633 KB the same day (C11b): the four below-the-fold panels load
   as one lazy chunk after first paint, and the open path measured 627.2 KB.
+  Lowered 633 → 622 KB the same day (F3b): the dashboard's queries file imported
+  two `features` operations, which kept the whole generated sub-module in the
+  entry chunk; they now come from the main module, the sub-module is its own
+  lazy chunk, and the open path measured 616.6 KB (cap = measured + 5 KB).
 - **`routePrefetch.ts` and `App.tsx` move in lockstep on any route change —
   in each app.**
 
@@ -167,7 +171,7 @@ by **the same function the owning page's endpoint calls** — never reimplemente
 - **Send-to-Forecast is a single flow.** Sent = in review = on the curve. Never
   re-add a separate review gate.
 - **Bundle:** the landing path is budgeted (`scripts/check-entry-graph.mjs`,
-  h2budget 633 KB). Investigate chunking (route-level chunks, lazy panels,
+  h2budget 622 KB). Investigate chunking (route-level chunks, lazy panels,
   `vendor-charts`) before removing a capability; a cap may rise only with a
   written justification in the PR.
 

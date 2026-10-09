@@ -91,6 +91,19 @@ function featureValueNames(): Set<string> {
   return new Set(Array.from(code.matchAll(/^export (?:const|function|async function) ([A-Za-z_$][\w$]*)/gm), (m) => m[1]!));
 }
 
+/**
+ * (F3b) The ONLY `features` operations an entry-path file may take from the
+ * MAIN module. The dashboard is the landing and its first screen reads the
+ * money position and the recap preview. The main module is in the entry chunk
+ * whole anyway and carries both, so this costs about 1 KB; importing them from
+ * `/features` would drag that whole sub-module into the entry chunk (~20 KB).
+ * Everything else a page needs from `features` stays a lazy `/features` import.
+ */
+const ENTRY_MAIN_FEATURES = {
+  file: "pages/next/dashboard/queries.ts",
+  names: new Set(["useGetMoneyPosition", "getGetMoneyPositionQueryKey", "previewRecap"]),
+};
+
 const graph = entryGraph();
 const rel = (f: string) => relative(SRC, f);
 
@@ -105,7 +118,8 @@ describe("the entry path and the generated client's sub-modules", () => {
     expect(files.has("pages/transactions.tsx")).toBe(false);
     expect(files.has("pages/wishlist.tsx")).toBe(false);
     // (C11) The dashboard is the landing and statically imported, so its own
-    // queries file IS on the entry path (the one allowance, below).
+    // queries file IS on the entry path (the one allowance, below, is for two
+    // MAIN-module names).
     expect(files.has("pages/next/dashboard/queries.ts")).toBe(true);
     // The main module IS imported on the entry path, which is the whole reason
     // the sub-modules exist.
@@ -113,15 +127,16 @@ describe("the entry path and the generated client's sub-modules", () => {
   });
 
   it("nothing on the entry path imports @workspace/api-client-react/features or /ledger", () => {
-    // (C11) ONE ALLOWANCE: the landing is the dashboard, and its queries file
-    // reads two `features` operations (the recap preview and the money
-    // position). Only the hooks it USES join the entry chunk; the rest of the
-    // module stays out, and every other entry-path file is still held to this.
-    const ALLOWED = new Set(["pages/next/dashboard/queries.ts"]);
+    // (F3b) NO ALLOWANCE. C11 let the dashboard's queries file import two
+    // operations from `/features`; that was wrong: Rollup keeps a module whole
+    // in the chunk that statically imports it and retains every export a lazy
+    // chunk uses, so the whole sub-module (agent, wishlist, learned rules, AI
+    // usage…) rode in the entry chunk. The two now come from the main module
+    // (see ENTRY_MAIN_FEATURES below).
     const offenders: string[] = [];
     for (const [file, edges] of graph) {
       for (const e of edges) {
-        if (e.spec === LEDGER || (e.spec === FEATURES && !ALLOWED.has(rel(file)))) offenders.push(`${rel(file)} → ${e.spec}`);
+        if (e.spec === LEDGER || e.spec === FEATURES) offenders.push(`${rel(file)} → ${e.spec}`);
       }
     }
     expect(offenders).toEqual([]);
@@ -143,10 +158,24 @@ describe("the entry path and the generated client's sub-modules", () => {
     for (const file of allSourceFiles(SRC)) {
       for (const e of staticEdges(readFileSync(file, "utf8"))) {
         if (e.spec !== MAIN) continue;
-        for (const n of e.names) if (featureNames.has(n)) offenders.push(`${rel(file)}: ${n}`);
+        for (const n of e.names) {
+          if (!featureNames.has(n)) continue;
+          // The narrow, named exception: the first screen's own reads.
+          if (rel(file) === ENTRY_MAIN_FEATURES.file && ENTRY_MAIN_FEATURES.names.has(n)) continue;
+          offenders.push(`${rel(file)}: ${n}`);
+        }
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("(F3b) the allowlist is exactly the dashboard's money position and recap preview, on the entry path", () => {
+    expect(graph.has(join(SRC, ENTRY_MAIN_FEATURES.file))).toBe(true);
+    expect([...ENTRY_MAIN_FEATURES.names].sort()).toEqual(["getGetMoneyPositionQueryKey", "previewRecap", "useGetMoneyPosition"]);
+    // It is used: the file really imports each name from the main module.
+    const edges = staticEdges(readFileSync(join(SRC, ENTRY_MAIN_FEATURES.file), "utf8")).filter((e) => e.spec === MAIN);
+    const imported = new Set(edges.flatMap((e) => e.names));
+    for (const n of ENTRY_MAIN_FEATURES.names) expect(imported.has(n), n).toBe(true);
   });
 
   it("(C11b) the below-the-fold dashboard panels, their queries and the chart are not on the entry path", () => {
