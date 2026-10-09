@@ -4,7 +4,6 @@ import {
   useListDebts, getListDebtsQueryKey,
   useGetAmexWeeklyPayoff, getGetAmexWeeklyPayoffQueryKey,
   useListPlaidLiabilityAccounts, getListPlaidLiabilityAccountsQueryKey,
-  useGetForecastBankBalanceExplain, getGetForecastBankBalanceExplainQueryKey,
   // (F3b) The first screen's one fold-in read comes from the MAIN module, on
   // purpose. This file is on the entry path, and importing `/features` here
   // pulled the WHOLE sub-module into the entry chunk (Rollup keeps a module
@@ -55,14 +54,4 @@ export const useMoneyPositionQ = () =>
 export const useLiabilityAccountsQ = (enabled: boolean) =>
   useListPlaidLiabilityAccounts(undefined, {
     query: { queryKey: getListPlaidLiabilityAccountsQueryKey(), staleTime: 30 * MIN, gcTime: GC, enabled },
-  });
-
-/**
- * "Why this number?"'s own read-only diagnostic (no Plaid call), asked by the
- * checking figure only when the snapshot is from an earlier day, so it can say
- * how many ledger rows the balance rolls forward on top of it.
- */
-export const useBankExplainQ = (enabled: boolean) =>
-  useGetForecastBankBalanceExplain({
-    query: { queryKey: getGetForecastBankBalanceExplainQueryKey(), staleTime: 5 * MIN, gcTime: GC, enabled },
   });

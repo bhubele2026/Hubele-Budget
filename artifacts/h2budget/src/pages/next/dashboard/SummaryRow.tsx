@@ -4,12 +4,12 @@ import { AccountChip } from "@/components/next";
 import { BankBalanceWhy } from "@/components/bank-balance-why";
 import { FreshnessLine } from "@/components/data-state";
 import { identityOf } from "@/lib/accountIdentity";
+import { bankBalanceView, sinceSnapshotWords } from "@/lib/bankBalance";
 import { remainingDebtScope } from "@/lib/debtBalance";
 import { lowPointView } from "@/lib/lowPoint";
 import { useSpine } from "@/hooks/useSpine";
-import { householdDayOfAt, householdToday } from "@/lib/householdDay";
 import { cn } from "@/lib/utils";
-import { useBankExplainQ, useCashSignalQ, useDebtsQ, useMoneyPositionQ } from "./queries";
+import { useDebtsQ, useMoneyPositionQ } from "./queries";
 import { dayLabel, Kpi, money, PanelError, rise, weekdayLabel } from "./shared";
 
 /** "$500" for a round amount, "$512.40" otherwise (the buffer is usually round). */
@@ -48,21 +48,20 @@ export function roomLines(p: Spine["position"], buffer: string, reservesHeld?: s
 }
 
 function CheckingCell({ s }: { s: Spine }) {
-  const cash = useCashSignalQ(90);
-  const acct = cash.data?.account;
-  const identity = acct && acct.via !== "unresolved"
+  // (WP1) The checking balance's one model, from the spine itself: the figure
+  // (the snapshot rolled forward through the ledger — bank rows AND manual
+  // entries on the account, by design, PR #22), whose account it is, and how
+  // many entries rolled on top of the snapshot. No second request: the label
+  // used to wait on the cash signal and the count on the "Why this number?"
+  // diagnostic.
+  const v = bankBalanceView(s.bank);
+  const acct = v.account;
+  const identity = acct
     ? identityOf({ id: "cash", name: acct.name, mask: acct.mask, subtype: acct.subtype, type: "depository", institutionName: null })
     : null;
-  const noBank = !s.bank.source && !s.bank.asOfDate;
+  const noBank = v.balance == null;
   const bal = Number(s.bank.balance);
-  // The figure is the snapshot rolled forward through the ledger (bank rows AND
-  // manual entries on the account, by design — PR #22). When the snapshot is
-  // from an earlier day, say how many rows it adds, from the diagnostic
-  // "Why this number?" reads (asked only then).
-  const snapDay = s.bank.asOfDate ? householdDayOfAt(s.bank.asOfDate) : null;
-  const rolled = !!snapDay && snapDay < householdToday(new Date());
-  const explain = useBankExplainQ(rolled);
-  const since = rolled ? explain.data?.ledger.sinceAnchor ?? null : null;
+  const since = sinceSnapshotWords(v);
   return (
     // `relative`: "Why this number?" pins itself to the corner of its box.
     <div className="relative">
@@ -76,11 +75,7 @@ function CheckingCell({ s }: { s: Spine }) {
         identity ? <AccountChip identity={identity} size="sm" wrap /> : <span>Checking</span>,
         <span className="inline-flex flex-wrap items-center gap-x-2 text-micro text-neutral-500" data-testid="dash-freshness">
           <FreshnessLine bank={s.bank} />
-          {since && since.rowCount > 0 ? (
-            <span data-testid="dash-since-snapshot" className="block w-full">
-              Includes {since.rowCount} {since.rowCount === 1 ? "entry" : "entries"} since the {dayLabel(snapDay)} snapshot
-            </span>
-          ) : null}
+          {since ? <span data-testid="dash-since-snapshot" className="block w-full">{since}</span> : null}
           <BankBalanceWhy />
         </span>,
       ]}

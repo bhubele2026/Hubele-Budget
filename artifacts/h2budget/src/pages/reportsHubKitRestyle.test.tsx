@@ -64,7 +64,17 @@ const SPENDING_FACTS = {
 // snapshot instead of this would show a different number.
 const SPINE = {
   asOf: "2026-05-15T12:00:00.000Z",
-  bank: { balance: "3120.45", asOfDate: "2026-05-14" },
+  // (WP1) The bank carries the snapshot under the balance and the account it
+  // rolls forward on — the bank tile's label reads these, not a second request.
+  bank: {
+    balance: "3120.45",
+    asOfDate: "2026-05-14T15:00:00.000Z",
+    source: "plaid",
+    stale: false,
+    snapshot: { balance: "3300.00", at: "2026-05-14T15:00:00.000Z", source: "plaid" },
+    sinceSnapshot: { net: "-179.55", count: 3, through: "2026-05-15" },
+    account: { rowId: "row-chk", externalId: "ext-chk", name: "Total Checking", mask: "5526", subtype: "checking", via: "pointer" },
+  },
   spentMonth: 195.75,
   spentWeek: 75.5,
   nextBill: null,
@@ -85,6 +95,8 @@ const listTransactionsSpy = vi.fn((..._args: unknown[]) => ({
   data: [],
   isLoading: false,
 }));
+// (WP1) Nor for the forecast bundle: the bank tile's label is the spine's.
+const getForecastSpy = vi.fn((..._args: unknown[]) => ({ data: undefined, isError: false }));
 
 vi.mock("wouter", () => ({
   Link: ({
@@ -105,9 +117,7 @@ const hub = vi.hoisted(() => ({
   factsFailed: false,
   spine: "default" as unknown,
   spineFailed: false,
-  forecast: null as unknown,
   liabilities: [] as unknown,
-  forecastFailed: false,
   liabilitiesFailed: false,
 }));
 
@@ -122,7 +132,7 @@ vi.mock("@workspace/api-client-react", () => ({
   }),
   useListDebts: () => ({ data: [{ id: "d1", balance: "5000.00", status: "active" }] }),
   useListDebtBalanceHistory: () => ({ data: [] }),
-  useGetForecast: () => ({ data: hub.forecast, isError: hub.forecastFailed }),
+  useGetForecast: (...args: unknown[]) => getForecastSpy(...args),
   useGetDashboard: () => ({ data: { totalDebt: "5000.00", activeDebtCount: 1 } }),
   useGetSpine: () => ({
     data: hub.spine === "default" ? SPINE : hub.spine,
@@ -153,10 +163,9 @@ beforeEach(() => {
   hub.factsFailed = false;
   hub.spine = "default";
   hub.spineFailed = false;
-  hub.forecast = null;
   hub.liabilities = [];
-  hub.forecastFailed = false;
   hub.liabilitiesFailed = false;
+  getForecastSpy.mockClear();
 });
 
 afterEach(() => {
@@ -224,6 +233,39 @@ describe("Reports hub — one basis, no local money maths", () => {
     expect(screen.getByTestId("reports-tile-bank").textContent).toContain(
       "$3,120.45",
     );
+    expect(screen.getByTestId("reports-tile-bank").textContent).not.toContain("$3,300.00");
+  });
+
+  it("(WP1) names the account the balance rolls forward on, from the spine — and never asks for the forecast bundle", () => {
+    renderPage();
+    expect(screen.getByTestId("reports-tile-bank").textContent).toContain("Plaid · Total Checking ··5526");
+    expect(getForecastSpy).not.toHaveBeenCalled();
+  });
+
+  it("(WP1) a typed-in snapshot says Manual; an unresolved account is named 'Bank'", () => {
+    hub.spine = {
+      ...SPINE,
+      bank: {
+        ...SPINE.bank,
+        source: "manual",
+        snapshot: { ...SPINE.bank.snapshot, source: "manual" },
+        account: { rowId: null, externalId: null, name: null, mask: null, subtype: null, via: "unresolved" },
+      },
+    };
+    renderPage();
+    expect(screen.getByTestId("reports-tile-bank").textContent).toContain("Manual · Bank");
+  });
+
+  it("(WP1) no bank balance at all: an em dash, as on the dashboard — never the starting balance or $0.00", () => {
+    hub.spine = {
+      ...SPINE,
+      bank: { ...SPINE.bank, balance: "0.00", asOfDate: null, source: null, snapshot: null, sinceSnapshot: null },
+    };
+    renderPage();
+    const tile = screen.getByTestId("reports-tile-bank").textContent ?? "";
+    expect(tile).toContain("—");
+    expect(tile).toContain("No checking snapshot yet");
+    expect(tile).not.toContain("$0.00");
   });
 
   it("takes the cash-buffer verdict and the low point from one snapshot", () => {
@@ -359,8 +401,8 @@ describe("Reports hub — no claims before the figures arrive", () => {
     expect(tileText("reports-tile-cash-buffer")).toContain("Couldn't load");
   });
 
-  it("before the account and card queries answer, no 'No checking snapshot yet' and no 'Link an Amex card'", () => {
-    hub.forecast = undefined;
+  it("before the spine and card queries answer, no 'No checking snapshot yet' and no 'Link an Amex card'", () => {
+    hub.spine = undefined;
     hub.liabilities = undefined;
     renderPage();
     expect(tileText("reports-tile-bank")).not.toContain("No checking snapshot yet");
@@ -368,6 +410,7 @@ describe("Reports hub — no claims before the figures arrive", () => {
   });
 
   it("once they answer with nothing, says so", () => {
+    hub.spine = { ...SPINE, bank: { ...SPINE.bank, snapshot: null, sinceSnapshot: null } };
     renderPage();
     expect(tileText("reports-tile-bank")).toContain("No checking snapshot yet");
     expect(tileText("reports-tile-amex")).toContain("Link an Amex card");
@@ -375,9 +418,9 @@ describe("Reports hub — no claims before the figures arrive", () => {
 });
 
 describe("Reports hub — the account and card hints after a failure", () => {
-  it("says couldn't load when the forecast bundle or the card accounts failed, never blank for good", () => {
-    hub.forecast = undefined;
-    hub.forecastFailed = true;
+  it("says couldn't load when the spine or the card accounts failed, never blank for good", () => {
+    hub.spine = undefined;
+    hub.spineFailed = true;
     hub.liabilities = undefined;
     hub.liabilitiesFailed = true;
     renderPage();

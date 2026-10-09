@@ -42,14 +42,13 @@ import {
   useGetDashboard,
   useListDebts,
   useListPlaidLiabilityAccounts,
-  type ForecastBundle,
 } from "@workspace/api-client-react";
 import { useSpine } from "@/hooks/useSpine";
+import { useBankBalanceView } from "@/hooks/useBankBalanceView";
 import { pendingPaymentTotalOf } from "@/lib/debtBalance";
 import { Switch } from "@/components/ui/switch";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { rangeForMode, rangeDays as rangeDaysOf, type RangeMode } from "@/lib/timeRange";
-import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
   AMEX_BALANCE_DISTINCTION,
   resolveAmexRevolvingBalance,
@@ -301,45 +300,28 @@ export function Stat(props: {
  *     request while the low point beside it came from the spine, so the word
  *     and the number could describe two different instants.
  *
- * Both now read `useSpine()`. The `forecast` bundle stays for the account's
- * NAME — a label, not a figure.
+ * Both now read the spine. (WP1) So does the bank tile's LABEL: it used to name
+ * the account the forecast bundle's snapshot remembered — a second request,
+ * and not always the account whose rows roll the balance forward. It now reads
+ * the checking model every surface shares (`useBankBalanceView`): the figure,
+ * where the snapshot came from, and whose account it is, from one response. With
+ * no bank balance at all the figure is "—" (as on the dashboard), never the
+ * starting balance or $0.00.
  */
-export function ReportsBalanceTiles({
-  forecast,
-  forecastError = false,
-}: {
-  forecast: ForecastBundle | null | undefined;
-  /** The forecast bundle's query failed: with no bundle, the bank hint says so. */
-  forecastError?: boolean;
-}) {
+export function ReportsBalanceTiles() {
   const { data: dashboard } = useGetDashboard();
   const { data: spine, state: spineState } = useSpine();
+  const { view: bank } = useBankBalanceView();
 
-  const bankSnapshot = forecast?.bankSnapshot ?? null;
-  const accountSnapshots = forecast?.accountSnapshots ?? {};
-  const plaidCheckingAccounts = forecast?.plaidCheckingAccounts ?? [];
-  // Identity only — which account the figure belongs to, and where it came
-  // from. The BALANCE is the spine's.
-  const effective = useMemo(
-    () =>
-      deriveEffectiveSnapshot({
-        bankSnapshot,
-        accountSnapshots,
-        selectedAccountInternalId: bankSnapshot?.accountId ?? null,
-        plaidCheckingAccounts,
-      }),
-    [bankSnapshot, accountSnapshots, plaidCheckingAccounts],
-  );
-
-  const bankValue =
-    spine?.bank?.balance != null ? formatCurrency(spine.bank.balance) : "—";
-  const bankSub = effective
-    ? `${effective.source === "plaid" ? "Plaid" : "Manual"} · ${effective.name ?? "Bank"}${effective.mask ? ` ··${effective.mask}` : ""}`
-    : forecast === undefined
-      ? forecastError
-        ? "Couldn't load"
-        : undefined // the bundle has not answered: no claim about a snapshot yet
-      : "No checking snapshot yet";
+  const bankValue = bank?.balance != null ? formatCurrency(bank.balance) : "—";
+  const acct = bank?.account;
+  const bankSub = bank
+    ? bank.snapshot
+      ? `${bank.snapshot.source === "plaid" ? "Plaid" : "Manual"} · ${acct?.name ?? "Bank"}${acct?.mask ? ` ··${acct.mask}` : ""}`
+      : "No checking snapshot yet"
+    : spineState === "failed"
+      ? "Couldn't load"
+      : undefined; // the spine has not answered: no claim about a snapshot yet
 
   const { data: amexCardAccounts, isError: amexCardAccountsError } = useListPlaidLiabilityAccounts();
   const amex = useMemo(
