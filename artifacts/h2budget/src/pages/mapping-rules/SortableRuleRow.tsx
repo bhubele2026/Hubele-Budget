@@ -103,7 +103,7 @@ export function SortableRuleRow({
       // ⚠️ No `press` here: dnd-kit drives this element's transform from
       // inline style, and a class-level transform transition would smear
       // every drag frame behind the pointer.
-      className={`flex items-center gap-2 px-4 py-2 transition-colors hover:bg-platinum-2 ${stateBg} ${
+      className={`flex items-center gap-2 px-3 py-2 transition-colors hover:bg-platinum-2 ${stateBg} ${
         isDragging ? "surface shadow-lift ring-2 ring-brand-navy/40" : ""
       }`}
       data-testid={`rule-row-${rule.id}`}
@@ -176,24 +176,35 @@ export function SortableRuleRow({
       >
         {rule.priority}
       </span>
-      {/* ⚠️ The tint hugs the TEXT, not the column. Painting the flex child
-          itself stretched the pill into a ~700px empty bar on a wide row,
-          which read as a broken input rather than a pattern. */}
-      <span className="min-w-0 flex-[2]">
-        <span className="inline-block max-w-full truncate rounded bg-platinum-3 px-2 py-0.5 align-middle font-mono text-micro text-brand-navy">
-          {rule.pattern}
+      {/* (C7) On a phone the pattern takes its own line and the match type
+          and category sit under it; from `sm` up they share one line. Fixed
+          bases (8rem pattern, 10rem match type + category, growing 1:2) keep
+          the columns aligned down a card and leave the category room in a
+          ~500 px three-column card — the old content-sized 2:1 split left
+          "D…" there, and one line on a 340 px card left the pattern a single
+          letter. */}
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+        {/* ⚠️ The tint hugs the TEXT, not the column. Painting the flex child
+            itself stretched the pill into a ~700px empty bar on a wide row,
+            which read as a broken input rather than a pattern. */}
+        <span className="min-w-0 sm:flex-[1_1_8rem]">
+          <span className="inline-block max-w-full truncate rounded bg-platinum-3 px-2 py-0.5 align-middle font-mono text-micro text-brand-navy">
+            {rule.pattern}
+          </span>
         </span>
-      </span>
-      <span className={`${fieldLabel} whitespace-nowrap`}>
-        {rule.matchType.replace("_", " ")}
-      </span>
-      <span
-        className={`min-w-0 flex-1 truncate text-body ${
-          category ? "text-neutral-700" : "italic text-neutral-400"
-        }`}
-        data-testid={`rule-category-${rule.id}`}
-      >
-        {category?.name ?? "Uncategorized"}
+        <span className="flex min-w-0 items-center gap-2 sm:flex-[2_1_10rem]">
+          <span className={`${fieldLabel} whitespace-nowrap`}>
+            {rule.matchType.replace("_", " ")}
+          </span>
+          <span
+            className={`min-w-0 flex-1 truncate text-body ${
+              category ? "text-neutral-700" : "italic text-neutral-400"
+            }`}
+            data-testid={`rule-category-${rule.id}`}
+          >
+            {category?.name ?? "Uncategorized"}
+          </span>
+        </span>
       </span>
       {isWinner ? (
         <span className="chip ok">Winner</span>

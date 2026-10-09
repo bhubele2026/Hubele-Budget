@@ -89,6 +89,13 @@ type MappingRule = {
 
 let rulesState: MappingRule[] = [];
 
+vi.mock("@workspace/api-client-react/features", async () => {
+  const { defaultMappingRulesFeaturesMock } = await import(
+    "./__test-helpers__/mapping-rules-mocks"
+  );
+  return defaultMappingRulesFeaturesMock();
+});
+
 vi.mock("@workspace/api-client-react", async () => {
   const { defaultMappingRulesApiClientMock } = await import(
     "./__test-helpers__/mapping-rules-mocks"
