@@ -1,8 +1,8 @@
 import {
   useListCategories, getListCategoriesQueryKey,
-  useListCategorizationReview, getListCategorizationReviewQueryKey,
   useGetDuplicateTransactionCount, getGetDuplicateTransactionCountQueryKey,
 } from "@workspace/api-client-react";
+import { useCategorizationQueue } from "@/hooks/useCategorizationQueue";
 
 /**
  * (C11b) The queries only the below-the-fold panels read (Recent activity,
@@ -15,13 +15,9 @@ const GC = 30 * MIN;
 export const useCategoriesQ = () =>
   useListCategories({ query: { queryKey: getListCategoriesQueryKey(), staleTime: 10 * MIN, gcTime: GC } });
 
-/** Only the queue total is used, so the page asks for one row. */
-export const useReviewQueueQ = () => {
-  const params = { limit: 1 };
-  return useListCategorizationReview(params, {
-    query: { queryKey: getListCategorizationReviewQueryKey(params), staleTime: MIN, gcTime: GC },
-  });
-};
+/** (F1) Only the queue total is used here, but the read shares the Review
+ *  badge's key (`useCategorizationQueue`) so the queue is fetched once. */
+export const useReviewQueueQ = () => useCategorizationQueue();
 
 export const useDuplicateCountQ = () =>
   useGetDuplicateTransactionCount({

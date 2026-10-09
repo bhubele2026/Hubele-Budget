@@ -328,7 +328,7 @@ describe("needs review", () => {
     h.Q.queue = ok({ total: 7 });
     h.Q.dups = ok({ duplicateCount: 0 });
     wrap(<ReviewPanel />);
-    expect(screen.getByTestId("dash-review-cats").getAttribute("href")).toBe("/activity/review");
+    expect(screen.getByTestId("dash-review-cats").getAttribute("href")).toBe("/review/categories");
   });
   it("(D20) a queue that is loading or failed is never 'Nothing is waiting'", () => {
     h.spine.data = spine({ reviewCount: 0 });

@@ -9,10 +9,9 @@ import { Empty, Gate, rise } from "./shared";
 const ROW_CLASS =
   "flex items-baseline justify-between gap-2 rounded-control px-2 py-1.5 text-label hover:bg-platinum-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40";
 
-/** The categorization queue's screen lives in the app served at the site root
- *  (`/activity/review`); this app is mounted under `/classic`, so the link must
- *  leave the router's base and is a plain anchor. */
-export const CATEGORIZATION_QUEUE_HREF = "/activity/review";
+/** (F1) The categorization queue's own screen, Review › Categories. It replaced
+ *  the temporary link out to the old app's `/activity/review`. */
+export const CATEGORIZATION_QUEUE_HREF = "/review/categories";
 
 function Row({ href, count, label, testid, external }: { href: string; count: number; label: string; testid: string; external?: boolean }) {
   const inner = (
@@ -74,7 +73,7 @@ export default function ReviewPanel() {
               {!catKnown ? (
                 <PendingRow failed={!!queue.isError} label="Categories to confirm" testid="dash-review-cats-pending" onRetry={queue.refetch ? () => void queue.refetch() : undefined} />
               ) : cat > 0 ? (
-                <Row href={CATEGORIZATION_QUEUE_HREF} external count={cat} label="Categories to confirm" testid="dash-review-cats" />
+                <Row href={CATEGORIZATION_QUEUE_HREF} count={cat} label="Categories to confirm" testid="dash-review-cats" />
               ) : null}
               {!dupKnown ? (
                 <PendingRow failed={!!dups.isError} label="Possible duplicates" testid="dash-review-dups-pending" onRetry={dups.refetch ? () => void dups.refetch() : undefined} />
