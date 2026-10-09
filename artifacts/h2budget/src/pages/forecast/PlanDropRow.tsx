@@ -258,7 +258,10 @@ export function PlanDropRow({
           )}
         </div>
       </div>
-      <div className="flex w-full items-center justify-end gap-3 sm:w-auto sm:gap-4">
+      {/* Wraps (C13): in the register panel a phone row is ≈ 300 px, less
+          than the chip, amount and two buttons — without the wrap they ran
+          off the row's left edge, clipping the status chip. */}
+      <div className="flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2 sm:w-auto sm:gap-x-4">
         {statusBadge(
           pp
             ? pp.needsReview === "partial"

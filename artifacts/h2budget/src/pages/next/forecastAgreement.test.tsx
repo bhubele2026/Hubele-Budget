@@ -232,7 +232,7 @@ describe("/forecast and /review are the one forecast screen (C13)", () => {
     mount(<ForecastPage mode="overall" />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Forecast");
     const head = screen.getByTestId("forecast-sticky-head");
-    expect(head.className).toMatch(/page-sticky-head sticky top-0 z-30/);
+    expect(head.className).toMatch(/page-sticky-head z-30 .*md:sticky md:top-0/);
     expect(within(head).getByTestId("link-manage-bills")).toBeTruthy();
     expect(within(head).getByTestId("horizon-30")).toBeTruthy();
     expect(screen.getByTestId("forecast-screen").style.getPropertyValue("--page-sticky-top")).toMatch(/px$/);

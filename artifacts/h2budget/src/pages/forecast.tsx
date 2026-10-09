@@ -2404,8 +2404,73 @@ export default function ForecastPage({
       </div>
   );
 
+  // (FC-34) The register's month: current + 6 prior + every month the
+  // register or a close touches, closed months marked ✓ / "$ off" /
+  // "(closed)". It only changes which rows are listed — never the curve.
+  // (C13, parity D8, owner OK) Review mode has it too, at the head of the
+  // register: before, `/review` always listed the current month, so a pending
+  // bank row from an earlier month never reached the inbox.
+  const monthPicker = (
+    <>
+      <Label className="text-micro font-semibold uppercase tracking-wide text-neutral-500">
+        Month
+      </Label>
+      {monthSwitchPending && (
+        <RefreshCw
+          className="h-3 w-3 animate-spin text-neutral-400"
+          data-testid="month-filter-pending"
+          aria-hidden="true"
+        />
+      )}
+      <Select value={monthFilter} onValueChange={setMonthFilter}>
+        <SelectTrigger
+          className="w-56"
+          data-testid="select-month-filter"
+          data-pending={monthSwitchPending ? "true" : undefined}
+          aria-busy={monthSwitchPending || undefined}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {monthsAvailable.map((m) => {
+            const snap = monthSnapshotsMap[m];
+            const isMClosed = closedMonths.has(m);
+            let suffix = "";
+            if (isMClosed) {
+              if (snap?.reconciled) {
+                suffix = " ✓";
+              } else if (snap?.gap != null) {
+                const g = Number(snap.gap);
+                suffix = Number.isFinite(g)
+                  ? ` · ${formatCurrency(g)} off`
+                  : " (closed)";
+              } else {
+                suffix = " (closed)";
+              }
+            }
+            return (
+              <SelectItem key={m} value={m}>
+                {m}
+                {suffix}
+              </SelectItem>
+            );
+          })}
+        </SelectContent>
+      </Select>
+      {isClosed && <span className="chip gray">Closed</span>}
+    </>
+  );
+
   const registerBlock = (
 <>
+      {mode === "review" && (
+        <div
+          className="flex flex-wrap items-center gap-3"
+          data-testid="review-month-row"
+        >
+          {monthPicker}
+        </div>
+      )}
       {mode === "review" && bankInbox.length === 0 && (
         // Single-flow restore: a forecast-flagged checking txn IS in
         // Review, so an empty Review just means nothing's flagged /
@@ -3168,52 +3233,7 @@ export default function ForecastPage({
         <div className="space-y-4 mt-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex flex-wrap items-center gap-3">
-              <Label className="text-micro font-semibold uppercase tracking-wide text-neutral-500">
-                Month
-              </Label>
-              {monthSwitchPending && (
-                <RefreshCw
-                  className="h-3 w-3 animate-spin text-neutral-400"
-                  data-testid="month-filter-pending"
-                  aria-hidden="true"
-                />
-              )}
-              <Select value={monthFilter} onValueChange={setMonthFilter}>
-                <SelectTrigger
-                  className="w-56"
-                  data-testid="select-month-filter"
-                  data-pending={monthSwitchPending ? "true" : undefined}
-                  aria-busy={monthSwitchPending || undefined}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {monthsAvailable.map((m) => {
-                    const snap = monthSnapshotsMap[m];
-                    const isMClosed = closedMonths.has(m);
-                    let suffix = "";
-                    if (isMClosed) {
-                      if (snap?.reconciled) {
-                        suffix = " ✓";
-                      } else if (snap?.gap != null) {
-                        const g = Number(snap.gap);
-                        suffix = Number.isFinite(g)
-                          ? ` · ${formatCurrency(g)} off`
-                          : " (closed)";
-                      } else {
-                        suffix = " (closed)";
-                      }
-                    }
-                    return (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                        {suffix}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-              {isClosed && <span className="chip gray">Closed</span>}
+              {monthPicker}
               {isClosed && monthSnapshotsMap[monthFilter]?.reconciled && (
                 <span className="chip ok" data-testid="month-reconciled-at-close">
                   Reconciled at close

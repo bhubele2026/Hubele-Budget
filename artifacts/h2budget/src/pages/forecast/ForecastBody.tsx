@@ -16,9 +16,10 @@ import type { ForecastNextCtx } from "../next/forecast/types";
  * register, drag-and-drop, month close and dialogs are the page's own
  * elements, and every figure is the page's own derived value.
  *
- * - A sticky head: the title (Forecast / Review) and its Help, the Bills link,
- *   Settings, and the horizon controls (FC-15/16/17). Its measured height is
- *   `--page-sticky-top`, so the pinned review inbox (FC-44) sits right under it.
+ * - A head, sticky from `md` up: the title (Forecast / Review) and its Help,
+ *   the Bills link, Settings, and the horizon controls (FC-15/16/17). Its
+ *   measured height is `--page-sticky-top`, so the pinned review inbox (FC-44)
+ *   sits right under it.
  * - The headline: "Forecast balance" with its footnotes and the "Inbox
  *   cleared" badge (FC-20/21) beside the six summary figures (FC-22).
  * - The projected-cash chart (FC-28/29, B2's expanded chart, with the classic
@@ -206,6 +207,10 @@ export function ForecastBody({
   );
 
   // The sticky head's height, published for the rows that pin under it.
+  // ⚠️ The head sticks from `md` up only: on a phone its horizons wrap to
+  // three lines (≈ 135 px of an 844 px screen) and nothing pins under it —
+  // the review inbox pins only at ≥ 768 px wide (`canPinInbox`), the same
+  // width as `md` — so there it scrolls away with the page.
   const headRef = useRef<HTMLDivElement | null>(null);
   const headH = usePaneHeight(headRef, []);
   const stickyTop = { ["--page-sticky-top" as string]: `${headH}px` } as CSSProperties;
@@ -214,7 +219,7 @@ export function ForecastBody({
     <div style={stickyTop} data-testid="forecast-screen">
       <div
         ref={headRef}
-        className="page-sticky-head sticky top-0 z-30 space-y-2 border-b border-brand-line bg-platinum-1 pt-2 pb-2 md:pt-3"
+        className="page-sticky-head z-30 space-y-2 border-b border-brand-line bg-platinum-1 pt-2 pb-2 md:sticky md:top-0 md:pt-3"
         data-testid="forecast-sticky-head"
       >
         <div className="flex flex-wrap items-center gap-2">

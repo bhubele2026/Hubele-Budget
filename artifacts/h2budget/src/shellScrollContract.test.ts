@@ -30,7 +30,9 @@ describe("the page sticky heads read the shell's geometry", () => {
   for (const page of ["pages/forecast/ForecastBody.tsx"]) {
     const src = read(page);
     it(`${page}: the head is .page-sticky-head, with no hard-coded bleed left`, () => {
-      expect(src).toMatch(/"page-sticky-head sticky top-0 z-30 /);
+      // (C13) Sticky from `md` up only: on a phone the head scrolls away.
+      expect(src).toMatch(/"page-sticky-head z-30 [^"]*md:sticky md:top-0 /);
+      expect(src).not.toMatch(/"page-sticky-head sticky top-0/);
       for (const literal of ["md:-mx-8", "md:-mt-8", "-mt-4", "md:px-8"]) {
         expect(src, `${page} still has ${literal}`).not.toContain(literal);
       }
