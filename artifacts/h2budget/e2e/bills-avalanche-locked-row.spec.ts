@@ -142,7 +142,7 @@ test.describe("Bills locked-row affordance + Avalanche deep-link (Task #70)", ()
     ).toBeVisible({ timeout: 15_000 });
     const focusedRow = page.getByTestId(`row-debt-${debtPlaid.id}`);
     await expect(focusedRow).toBeVisible();
-    await expect(focusedRow).toHaveClass(/ring-primary/, { timeout: 3_000 });
+    await expect(focusedRow).toHaveClass(/ring-brand-navy/, { timeout: 3_000 });
 
     await context.close();
   });

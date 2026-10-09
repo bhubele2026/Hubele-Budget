@@ -75,8 +75,9 @@ test.describe("Bills celebratory 'Stops at payoff' row after auto-archive (Task 
     const row = page.getByTestId(`row-debt-${debt.id}`);
     await expect(row).toBeVisible({ timeout: 15_000 });
 
-    // Open the edit dialog via the row's pencil button.
-    await row.getByRole("button").last().click();
+    // Open the edit dialog via the row's ⋯ actions menu (the only way in).
+    await page.getByTestId(`button-debt-actions-${debt.id}`).click();
+    await page.getByTestId(`button-debt-edit-${debt.id}`).click();
     await expect(
       page.getByRole("heading", { name: `Edit ${debt.name}` }),
     ).toBeVisible({ timeout: 5_000 });
