@@ -120,6 +120,7 @@ const DESTINATIONS: Destination[] = [
       { name: "Spending", href: "/reports/spending" },
       { name: "Budget", href: "/budget" },
       { name: "Allowances", href: "/allowances" },
+      { name: "Wish list", href: "/wishlist" },
       { name: "Reports", href: "/reports" },
     ],
     // The Reports hub is an EXACT match only — its own subpages
@@ -129,6 +130,7 @@ const DESTINATIONS: Destination[] = [
       { path: "/reports/spending" },
       { path: "/budget" },
       { path: "/allowances" },
+      { path: "/wishlist" },
       { path: "/reports", exact: true },
     ],
   },

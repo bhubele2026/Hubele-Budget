@@ -286,7 +286,7 @@ describe("the area model", () => {
 
   it("shows Spending's ribbon on /reports/spending", () => {
     mount("/reports/spending");
-    expect(tabLabels()).toEqual(["Spending", "Budget", "Allowances", "Reports"]);
+    expect(tabLabels()).toEqual(["Spending", "Budget", "Allowances", "Wish list", "Reports"]);
     expect(activeTabHref()).toBe("/reports/spending");
   });
 
@@ -353,6 +353,7 @@ describe("the phone drawer reaches every page a ribbon reaches", () => {
     "/amex",
     "/budget",
     "/allowances",
+    "/wishlist",
     "/forecast/overview",
     "/forecast",
     "/bills",
@@ -414,6 +415,7 @@ describe("the phone drawer reaches every page a ribbon reaches", () => {
         "Spending /reports/spending",
         "Budget /budget",
         "Allowances /allowances",
+        "Wish list /wishlist",
         "Reports /reports",
       ],
       ["Review /review", "Chase /transactions", "Amex /amex"],

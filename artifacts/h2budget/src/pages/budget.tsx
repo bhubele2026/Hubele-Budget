@@ -95,6 +95,7 @@ import {
   Help,
 } from "@/ui";
 import { PageGrid, StatBlock } from "@/components/next";
+import { AffordLauncher } from "@/components/afford/AffordLauncher";
 // `@/lib/cssBars` and NOT `@/lib/charts`: the latter statically imports
 // recharts, and this page draws no chart. Reaching for the barrel would put
 // ~450 KB behind a route that needs a coloured `<span>`.
@@ -776,6 +777,7 @@ export default function BudgetPage() {
       <div className="span-12 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-display font-semibold text-brand-navy">Budget</h1>
         <div className="flex flex-wrap items-center gap-2">
+          <AffordLauncher />
           <span className="flex items-center gap-1.5">
             <button
               type="button"
