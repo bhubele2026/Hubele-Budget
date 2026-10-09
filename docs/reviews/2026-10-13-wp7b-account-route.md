@@ -38,6 +38,7 @@ Built on `resolveTxnAccount` (the row's identity, by the EXTERNAL account id), `
 - **Accounts page on an items error:** "No linked accounts yet." and false notes → the failure line with Try again, rows unknown.
 - **Minor:** `lib/accountBalance.ts computeBalanceAtEndOfDate` was dead (its only caller was the deleted `chaseEndingBalance.ts`) and untested: deleted. The stale comment that named it (`api-server/src/__tests__/cashSignal.integration.test.ts:1808`) now points at the server ledger.
 - Tests: `accountRoute.test.ts` (+1, unknown), `dashboard.test.tsx` (+2: items loading, items failed), `Accounts.test.tsx` (+3: failed, failed on an account page, loading).
+- Gates on ac476c51: typecheck clean; web UTC 1,885 passed / 3 skipped, America/Chicago 1,886 / 2 (204 files); build + entry graph OK at 618.4 KB; audit exit 0 (1 ignored high).
 
 ### Dead code removed
 - `lib/chaseScope.ts`, `lib/chaseEndingBalance.ts` and both tests (no product caller since the Chase page reads the server ledger; `docs/reviews/2026-10-08-parity-verified.md:680-681`). `accountBalance.ts` keeps its own test.
