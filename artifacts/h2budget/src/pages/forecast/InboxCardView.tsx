@@ -98,7 +98,11 @@ export function InboxCardView({
           onMatchPick(oneClickSuggestion);
         }
       }}
-      className={`surface flex items-center gap-3 rounded-card p-3 outline-none ring-1 transition-all hover:ring-brand-navy/30 focus-visible:ring-2 focus-visible:ring-brand-navy/40 ${
+      // ⭐ Wraps on a narrow card (C13): on a phone the four actions cannot
+      // share a line with the description and amount — they used to run off
+      // the card's right edge, out of reach. They now drop to their own line,
+      // right-aligned; on a desktop register the card stays one line.
+      className={`surface flex flex-wrap items-center gap-3 rounded-card p-3 outline-none ring-1 transition-all hover:ring-brand-navy/30 focus-visible:ring-2 focus-visible:ring-brand-navy/40 ${
         canOneClick ? "ring-brand-navy/25" : "ring-brand-line"
       } ${isDragging ? "opacity-30" : ""} ${
         isOverlay ? "cursor-grabbing shadow-lift ring-2 ring-brand-navy/40" : ""
@@ -146,7 +150,7 @@ export function InboxCardView({
         {formatCurrency(card.bank.amount)}
       </span>
       {!isOverlay && (
-        <div className="flex items-center gap-1">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
           {oneClickSuggestion && (
             <Button
               size="sm"
@@ -168,7 +172,7 @@ export function InboxCardView({
               if (p) onMatchPick(p);
             }}
           >
-            <SelectTrigger className="h-8 w-[140px] text-micro">
+            <SelectTrigger className="h-8 w-[140px] text-micro" aria-label="Choose a planned item">
               <SelectValue placeholder="Choose a planned item" />
             </SelectTrigger>
             <SelectContent>

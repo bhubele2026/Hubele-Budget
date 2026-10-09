@@ -16,7 +16,7 @@ import {
 /**
  * Task #684 — UI coverage for task #682.
  *
- * The "Pending plans dragging this day" tooltip on the today+1 dip
+ * The "Dragged onto this day" tooltip section on the today+1 dip
  * exposes a per-plan "Mark missed" affordance so the user can clear
  * the drag from the chart itself. Tapping it writes a `missed`
  * forecast_resolution and the dip disappears on next refresh.
@@ -24,6 +24,11 @@ import {
  * Seed: one recurring expense dated yesterday (past-due, unresolved).
  * It is the only plan dragging onto today+1, so day-1 == snapshot
  * minus its amount before the click, and day-1 == snapshot after.
+ *
+ * (C13 repair) The tooltip section is "Dragged onto this day" (it read
+ * "Pending plans dragging this day"), and the screen's chart is the
+ * expanded one: its y-axis is 56 px wide (the plot starts after it), and a
+ * hover also selects the day — the tooltip is unchanged by that.
  */
 
 const provisionedUserIds: string[] = [];
@@ -184,7 +189,7 @@ test.describe("Forecast tooltip Mark missed (#682)", () => {
 
     // Hover the chart's today+1 point so the tooltip renders with our
     // dragging row. The plot starts immediately after the y-axis
-    // (width=60 in forecast.tsx); today+1 is the second column.
+    // (width=56 in ProjectedBalanceChart.tsx); today+1 is the second column.
     const surfaceBox = await surface.boundingBox();
     expect(surfaceBox).not.toBeNull();
     if (!surfaceBox) throw new Error("chart surface has no bounding box");
@@ -193,13 +198,13 @@ test.describe("Forecast tooltip Mark missed (#682)", () => {
     // tooltip — Recharts hasn't bound final coordinates yet.
     await page.waitForTimeout(1500);
 
-    // YAxis width is 60 in forecast.tsx; right margin is 16. Compute a
+    // YAxis width is 56 in ProjectedBalanceChart.tsx; right margin is 16. Compute a
     // per-day step from the actual plot width and walk over to today+1.
     const targetIdx = before.daily.findIndex((d) => d.date === targetDate);
     expect(targetIdx, "targetDate not in daily series").toBeGreaterThan(0);
     const horizonDays = Math.max(1, before.daily.length - 1);
-    const day0X = surfaceBox.x + 60 + 2;
-    const step = (surfaceBox.width - 60 - 16 - 2) / horizonDays;
+    const day0X = surfaceBox.x + 56 + 2;
+    const step = (surfaceBox.width - 56 - 16 - 2) / horizonDays;
     const midY = surfaceBox.y + surfaceBox.height / 2;
     const tooltip = page.locator(".recharts-tooltip-wrapper").first();
 
@@ -217,9 +222,9 @@ test.describe("Forecast tooltip Mark missed (#682)", () => {
       await page.waitForTimeout(120);
       lastText = await tooltip.innerText().catch(() => "");
       // CSS textTransform: uppercase turns the section header into
-      // "PENDING PLANS DRAGGING THIS DAY" in rendered innerText —
-      // match case-insensitively.
-      if (/pending plans dragging this day/i.test(lastText)) {
+      // "DRAGGED ONTO THIS DAY" in rendered innerText — match
+      // case-insensitively.
+      if (/dragged onto this day/i.test(lastText)) {
         matched = true;
         break;
       }
@@ -230,7 +235,7 @@ test.describe("Forecast tooltip Mark missed (#682)", () => {
     ).toBe(true);
     // CSS uppercases the section header; assert with a case-insensitive
     // regex so the test isn't coupled to the textTransform style.
-    await expect(tooltip).toContainText(/pending plans dragging this day/i);
+    await expect(tooltip).toContainText(/dragged onto this day/i);
     await expect(tooltip).toContainText(seedName);
 
     // Tap the Mark missed button inside the tooltip.

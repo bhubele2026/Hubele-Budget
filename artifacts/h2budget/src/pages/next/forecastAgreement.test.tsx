@@ -12,8 +12,9 @@ class ResizeObserverStub {
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??
   ResizeObserverStub;
 
+// (C13) Links keep their props (test ids, roles): the screen's view tabs are links.
 vi.mock("wouter", () => ({
-  Link: ({ children }: { children?: React.ReactNode }) => <a>{children}</a>,
+  Link: ({ children, ...rest }: { children?: React.ReactNode; [k: string]: unknown }) => <a {...rest}>{children}</a>,
 }));
 
 vi.mock("@/components/plaid-reauth-banner", () => ({
@@ -137,6 +138,8 @@ vi.mock("@/hooks/useSpine", () => ({
 
 import ForecastPage from "../forecast";
 import NextForecastPage from "./Forecast";
+import { ForecastBody } from "../forecast/ForecastBody";
+import type { ForecastNextCtx } from "./forecast/types";
 
 function mount(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
@@ -215,5 +218,108 @@ describe("/next/forecast agrees with the classic page", () => {
       expect(screen.getByTestId(`legend-${k}`)).toBeTruthy();
     }
     expect(screen.getAllByTestId("risk-below-buffer").length).toBeGreaterThan(0);
+  });
+});
+
+describe("/forecast and /review are the one forecast screen (C13)", () => {
+  /**
+   * The routes render `ForecastBody` over the page's own sections: a sticky
+   * head (title, Help, Bills, Settings, horizons) that publishes
+   * `--page-sticky-top`; the hero with its footnotes beside the summary
+   * figures; the expanded chart with the classic big-bill markers; the
+   * register panel (sticky-safe, so the review inbox pins to <main>) whose
+   * two views are the two routes; the selected day and the date balance.
+   */
+  it("/forecast: the 'Month & bank' view, with the head, hero, figures, chart markers and date balance", () => {
+    mount(<ForecastPage mode="overall" />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Forecast");
+    const head = screen.getByTestId("forecast-sticky-head");
+    expect(head.className).toMatch(/page-sticky-head z-30 .*md:sticky md:top-0/);
+    expect(within(head).getByTestId("link-manage-bills")).toBeTruthy();
+    expect(within(head).getByTestId("horizon-30")).toBeTruthy();
+    expect(screen.getByTestId("forecast-screen").style.getPropertyValue("--page-sticky-top")).toMatch(/px$/);
+
+    // FC-20: the headline and its footnotes, from the same signal.
+    expect(screen.getByTestId("hero-forecast-balance").textContent).toBe("$1,200.00");
+    expect(screen.getByText(/^Matched impact/).textContent).toContain("$200.00");
+    expect(screen.getByTestId("forecast-kpis")).toBeTruthy();
+
+    // FC-28: the classic big-bill marker is on the screen's chart (rent, $800).
+    expect(screen.getByTestId("big-bill-marker-2026-06-15")).toBeTruthy();
+
+    // The register panel: sticky-safe; the views are links to the two routes
+    // in a nav (aria-current marks this route's), not tabs: no role="tab",
+    // and no aria-controls pointing at a pane that is not on the page.
+    const panel = screen.getByTestId("register-panel");
+    expect(panel.className).toContain("panel-sticky-safe");
+    expect(screen.getByTestId("tab-plan").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("tab-register").getAttribute("aria-current")).toBeNull();
+    expect(screen.getByTestId("tab-register").tagName).toBe("A");
+    expect(screen.getByTestId("tab-register").getAttribute("href")).toBe("/review");
+    expect(screen.getByRole("navigation", { name: "Register views" })).toBeTruthy();
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(document.querySelector('[aria-controls^="register-pane"]')).toBeNull();
+    // The overall view holds the past-due card AND the planned list (FC-24, FC-49).
+    expect(within(panel).getByTestId("dragging-plans-list")).toBeTruthy();
+    expect(within(panel).getByRole("heading", { name: "Planned items" })).toBeTruthy();
+
+    // FC-23: the balance on a chosen date, beside the selected day.
+    const side = screen.getByTestId("selected-day-panel").parentElement!;
+    expect(within(side).getByTestId("forecast-date-balance")).toBeTruthy();
+  });
+
+  it("/review: the 'Register & reconcile' view under the 'Review' title; the overall-only cards stay out", () => {
+    mount(<ForecastPage mode="review" />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Review");
+    expect(screen.getByTestId("tab-register").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("tab-plan").getAttribute("href")).toBe("/forecast");
+    const panel = screen.getByTestId("register-panel");
+    expect(within(panel).queryByTestId("dragging-plans-list")).toBeNull();
+    expect(within(panel).queryByTestId("card-bank-snapshot")).toBeNull();
+    // The headline and the chart are on every view.
+    expect(screen.getByTestId("card-forecast-hero")).toBeTruthy();
+    expect(screen.getByTestId("card-projected-balance-chart")).toBeTruthy();
+    // (D8) The register's month picker heads the review view.
+    expect(within(panel).getByTestId("review-month-row")).toBeTruthy();
+  });
+
+  it("FC-21: the hero carries 'Inbox cleared' only when the inbox is empty AND was just reconciled, on either view", () => {
+    const ctx = (over: Partial<ForecastNextCtx>) =>
+      ({
+        mode: "overall", horizonDays: 30, horizonControls: null, draggingCard: null, bankGrid: null,
+        registerBlock: null, monthBlock: null, proj: SIGNAL, projReady: true, dailySeries: [], cashBufferNum: 500,
+        lowestPoint: null, bigBillMarkers: [], eventsByDate: new Map(), partialPlanKeys: new Set(),
+        jumpToPlan: () => {}, onMarkMissed: () => {}, onSkipDraggingPlan: () => {}, openSnapshot: () => {},
+        openSettings: () => {}, cashProjectionLoading: false, bankBalance: "1000", bankAccountName: "Checking",
+        bankAccountMask: null, debtLinks: new Map(), inboxCount: 0, fromDate: "2026-06-10", lookbackOpen: false,
+        highlightedPlanKey: null, reconciledNow: true, dateBalance: null, ...over,
+      }) as unknown as ForecastNextCtx;
+    const body = (c: ForecastNextCtx, tab: "register" | "plan") =>
+      mount(<ForecastBody ctx={c} tab={tab} selectedDate={null} setSelectedDate={() => {}} title="Forecast" />);
+    for (const tab of ["register", "plan"] as const) {
+      const v = body(ctx({}), tab);
+      expect(within(screen.getByTestId("card-forecast-hero")).getByTestId("badge-inbox-cleared").textContent).toBe("Inbox cleared");
+      v.unmount();
+    }
+    let v = body(ctx({ inboxCount: 2 }), "register");
+    expect(screen.queryByTestId("badge-inbox-cleared")).toBeNull();
+    v.unmount();
+    v = body(ctx({ reconciledNow: false }), "plan");
+    expect(screen.queryByTestId("badge-inbox-cleared")).toBeNull();
+    v.unmount();
+  });
+
+  it("/next/forecast: the same screen, its views real tabs over one tabpanel that is always on the page", () => {
+    mount(<NextForecastPage />);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((t) => t.getAttribute("data-testid"))).toEqual(["tab-register", "tab-plan"]);
+    for (const t of tabs) expect(t.getAttribute("aria-controls")).toBe("register-pane");
+    const pane = screen.getByRole("tabpanel");
+    expect(pane.id).toBe("register-pane");
+    expect(pane.getAttribute("aria-labelledby")).toBe("register-tab-register");
+    fireEvent.click(screen.getByTestId("tab-plan"));
+    expect(screen.getByTestId("tab-plan").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe("register-tab-plan");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Forecast");
   });
 });

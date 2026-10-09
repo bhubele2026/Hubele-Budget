@@ -198,17 +198,17 @@ describe("index.css — the shell scroll contract (C0)", () => {
   });
 
   /**
-   * ⚠️ PIXEL PARITY. The three sticky heads used `-mx-4 -mt-4 px-4` and
-   * `md:-mx-8 md:-mt-8 md:px-8` — 16 px and 32 px. Shell pad + the legacy
-   * overshoot must add up to exactly those, at both sizes, or every page under
-   * those heads moves (measured: the content below a head sits 4/12 px higher
-   * because of the overshoot; see the note on `:root`).
+   * (C13) The legacy overshoot is retired. C0 kept the three sticky heads'
+   * old 16 px / 32 px bleed (`-mx-4 -mt-4`, `md:-mx-8 md:-mt-8`) as shell pad +
+   * a 4/12 px overshoot so no pixel moved; the restyles took those pixels on
+   * purpose (D18): Chase and Amex dropped their heads, and the forecast head
+   * now bleeds exactly the shell pad — 0 at both sizes.
    */
-  it("pad + overshoot = the heads' old 16 px / 32 px bleed, so no pixel moves", () => {
-    expect(px(at("--shell-pad-x", false)) + px(at("--page-head-overshoot", false))).toBe(16);
-    expect(px(at("--shell-pad-y", false)) + px(at("--page-head-overshoot", false))).toBe(16);
-    expect(px(at("--shell-pad-x", true)) + px(at("--page-head-overshoot", true))).toBe(32);
-    expect(px(at("--shell-pad-y", true)) + px(at("--page-head-overshoot", true))).toBe(32);
+  it("the overshoot is 0 at both sizes: a head bleeds exactly the shell pad", () => {
+    expect(at("--page-head-overshoot", false)).toBe("0px");
+    // The md block no longer sets it, so it stays 0 there too.
+    const mdHits = valuesOf("--page-head-overshoot").filter((d) => MD.test(d.stack.join(" ")));
+    expect(mdHits).toEqual([]);
   });
 
   it("the head and bleed classes are built from the variables, in @layer utilities (so a parent's space-y-* cannot zero the margin)", () => {

@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+// (C13) Through the kit, never from "recharts" directly (`chartsDoor.test.ts`).
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ReferenceLine,
-  ReferenceDot,
-  ReferenceArea,
-  Label as RechartsLabel,
-} from "recharts";
-import {
+  RcResponsiveContainer as ResponsiveContainer,
+  RcAreaChart as AreaChart,
+  RcArea as Area,
+  RcXAxis as XAxis,
+  RcYAxis as YAxis,
+  RcCartesianGrid as CartesianGrid,
+  RcTooltip as RechartsTooltip,
+  RcReferenceLine as ReferenceLine,
+  RcReferenceDot as ReferenceDot,
+  RcReferenceArea as ReferenceArea,
+  RcLabel as RechartsLabel,
   ANIM_AREA,
   AXIS_TICK,
   CHART,
@@ -477,17 +476,21 @@ export function ProjectedBalanceChart({
               />
             </ReferenceLine>
           )}
-          {(expanded ? [] : bigBillMarkers).map((m) => {
+          {bigBillMarkers.map((m) => {
             const top = m.bills.find((b) => !!b.itemId) ?? m.bills[0];
+            // (C13) The expanded chart already draws a kind marker on every
+            // event day, so a big bill is a navy RING around its day's marker
+            // there: the ring jumps to the plan (FC-28), the marker inside
+            // still selects the day. The classic chart keeps its filled dot.
             return (
               <ReferenceDot
                 key={`big-bill-${m.date}`}
                 x={m.date}
                 y={m.balance}
-                r={5}
-                fill={CHART.navy}
-                stroke="#ffffff"
-                strokeWidth={1.5}
+                r={expanded ? 10 : 5}
+                fill={expanded ? "none" : CHART.navy}
+                stroke={expanded ? CHART.navy : "#ffffff"}
+                strokeWidth={expanded ? 2 : 1.5}
                 ifOverflow="extendDomain"
                 isFront
                 data-testid={`big-bill-marker-${m.date}`}

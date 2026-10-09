@@ -224,21 +224,26 @@ test.describe("Forecast inbox bulk match-confident (#323)", () => {
     });
 
     // If the trio fell into next month (today is too late in this month
-    // for `today + 9` to stay in-month), switch monthFilter via the
-    // bucket-tab month dropdown so the bank inbox is reachable. The
-    // setting persists across tab switches.
+    // for `today + 9` to stay in-month), the bank inbox is only reachable
+    // with the register on that month.
+    // (C13 repair) The old "Review Bucket" / "Active Register" tabs are
+    // gone. `/review` now carries the register's month picker at its head
+    // (parity D8, `review-month-row`), so the month is switched in place.
     if (dates.needSwitchMonth) {
-      await page.getByRole("tab", { name: /Review Bucket/i }).click();
-      const monthCombobox = page.getByRole("combobox").first();
-      await expect(monthCombobox).toBeVisible({ timeout: 5_000 });
-      await monthCombobox.click();
+      const monthTrigger = page
+        .getByTestId("review-month-row")
+        .getByTestId("select-month-filter");
+      await expect(monthTrigger).toBeVisible({ timeout: 15_000 });
+      await monthTrigger.click();
       await page
         .getByRole("option", { name: dates.monthKey, exact: true })
         .click();
-      await page.getByRole("tab", { name: /Active Register/i }).click();
+      await expect(page.getByTestId("card-from-bank")).toContainText(
+        `From Chase · ${dates.monthKey}`,
+      );
     }
 
-    // (#478) The Active Register inbox now shows one pending row at a
+    // (#478) The register's inbox now shows one pending row at a
     // time with a Prev/Next pager — only the first row's checkbox is in
     // the DOM until we page over to the others.
     await expect(page.getByTestId("bank-inbox-pager-indicator")).toContainText(

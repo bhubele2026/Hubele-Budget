@@ -89,6 +89,7 @@ export {
   Cell as RcCell,
   ReferenceLine as RcReferenceLine,
   ReferenceDot as RcReferenceDot,
+  ReferenceArea as RcReferenceArea,
   Label as RcLabel,
 } from "recharts";
 export type {
