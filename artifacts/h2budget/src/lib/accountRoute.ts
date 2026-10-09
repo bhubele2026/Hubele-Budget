@@ -33,6 +33,13 @@ export { accountPageHref } from "./accountPage";
  *   4. otherwise opens nowhere (`href: null`) and says why: a Plaid row whose
  *      account is no longer linked is on no ledger H2 has.
  *
+ * ⚠️ UNKNOWN IS NOT "NO LONGER LINKED". Rules 1, 2 and 4 for a row with a Plaid
+ * account need the linked accounts. While they are loading, or after they
+ * failed (`entriesKnown: false`), such a row opens nowhere and says nothing
+ * (`kind: "unknown"`), and its chip names only the institution: an empty list
+ * would otherwise call every linked account "no longer linked". Rows that need
+ * no account (a workbook row, a manual row) still open where they always do.
+ *
  * Each href carries `?tx=<row id>&month=<YYYY-MM-01>`: the row to open, and the
  * month it is in, so the ledger opens on the right page of history.
  */
@@ -52,7 +59,9 @@ export type TxnRouteKind =
   /** The checking ledger, which lists manual rows. */
   | "bank"
   /** No ledger lists the row. */
-  | "none";
+  | "none"
+  /** The linked accounts are not known (loading or failed): where it opens is not known either. */
+  | "unknown";
 
 export interface TxnRoute {
   kind: TxnRouteKind;
@@ -83,14 +92,30 @@ function labelWithMask(identity: ResolvedTxnAccount): string {
   return identity.mask4 ? `${identity.label} ••${identity.mask4}` : identity.label;
 }
 
+const NO_LONGER_LINKED = / \(no longer linked\)$/;
+
 export function txnRoute(
   txn: TxnRouteRef,
   entries: readonly TxnAccountEntry[] | ReadonlyMap<string, TxnAccountEntry>,
-  opts: { extra?: Record<string, string | null | undefined> } = {},
+  opts: {
+    extra?: Record<string, string | null | undefined>;
+    /** False while the linked accounts load or after they failed (see the ⚠️ above). Default true. */
+    entriesKnown?: boolean;
+  } = {},
 ): TxnRoute {
   const identity = resolveTxnAccount(txn, entries);
   const query = rowQuery(txn, opts.extra ?? {});
   const ext = (txn.plaidAccountId ?? "").trim();
+  const plaidSource = (txn.source ?? "").trim().toLowerCase().startsWith("plaid:");
+  if (opts.entriesKnown === false && (ext || plaidSource)) {
+    // Its account cannot be told yet: name the institution only, claim nothing.
+    const neutral: ResolvedTxnAccount = {
+      ...identity,
+      label: identity.label.replace(NO_LONGER_LINKED, ""),
+      shortLabel: identity.shortLabel.replace(NO_LONGER_LINKED, ""),
+    };
+    return { kind: "unknown", href: null, label: neutral.label, note: null, identity: neutral };
+  }
   // 1. A linked account: its own page.
   if (identity.known) {
     return {
