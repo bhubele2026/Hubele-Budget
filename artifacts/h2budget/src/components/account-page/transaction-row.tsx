@@ -66,6 +66,8 @@ export type AccountTransactionRowProps = {
   cardAccent?: AccountAccentName | null;
   /** Column tracks (`ledger-grid.ts`); the page's `LedgerColumns` must match. */
   gridClass?: string;
+  /** (F4) Offers "Split by category…" in the merchant popover. */
+  onSplit?: () => void;
 };
 
 const ACCENT_DOT: Record<AccountAccentName, string> = {
@@ -95,6 +97,7 @@ export function AccountTransactionRow({
   rowData,
   cardAccent,
   gridClass = LEDGER_GRID,
+  onSplit,
 }: AccountTransactionRowProps) {
   return (
     <div
@@ -137,7 +140,7 @@ export function AccountTransactionRow({
           >
             {tx.displayName || tx.description}
           </span>
-          <MerchantRenamePopover tx={tx} />
+          <MerchantRenamePopover tx={tx} onSplit={onSplit} />
         </span>
         {metaNode}
       </div>

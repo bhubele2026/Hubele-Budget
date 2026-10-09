@@ -28,7 +28,7 @@ import {
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import { RowDateControls } from "@/components/row-date-controls";
 import { AccountTransactionRow } from "@/components/account-page/transaction-row";
-import { SplitByCategoryButton } from "@/components/splits/SplitByCategoryButton";
+import { SplitByCategoryHost } from "@/components/splits/SplitByCategoryHost";
 import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
 import {
   useBulkRecategorizePrompt,
@@ -787,6 +787,8 @@ export default function TransactionsPage({
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  // (F4) The charge whose "Split by category" dialog is open (from the edit dialog).
+  const [splitTx, setSplitTx] = useState<Transaction | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -1199,6 +1201,17 @@ export default function TransactionsPage({
   // "Remove" button that read like a "go/advance" action. Shared by the pending
   // and posted row blocks so they can't drift. Returns null when the row isn't
   // in the forecast.
+  // (F4) A split charge says so, in the merchant cell's spare room (no new
+  // column). Rows carry `splitCount`; 0 / absent = not split.
+  const renderSplitChip = (tx: Transaction) => {
+    const n = (tx as { splitCount?: number }).splitCount ?? 0;
+    return n > 0 ? (
+      <span className="chip gray shrink-0" title="Split between categories" data-testid={`chip-split-${tx.id}`}>
+        Split ×{n}
+      </span>
+    ) : null;
+  };
+
   const renderForecastChip = (tx: Transaction) => {
     if (!isInForecastRow(tx)) return null;
     const r = resolutionByTxnId.get(tx.id);
@@ -2993,7 +3006,7 @@ export default function TransactionsPage({
                             "data-ignored": isIgnored ? "true" : "false",
                           }}
                           chipsNode={<LedgerRowLabels row={tx} />}
-                          metaNode={renderForecastChip(tx)}
+                          metaNode={<>{renderForecastChip(tx)}{renderSplitChip(tx)}</>}
                           amountNode={
                             <div className="flex flex-col items-end">
                               <InlineAmountEditor
@@ -3016,7 +3029,6 @@ export default function TransactionsPage({
                             <>
                               {renderSendForecastAction(tx)}
                               <Button variant="ghost" size="sm" disabled={reviewWrites.isPending} onClick={() => void setReviewed([tx], !tx.reviewed)}>{tx.reviewed ? "Reviewed" : "Mark reviewed"}</Button>
-                              <SplitByCategoryButton tx={tx} categories={categories ?? []} splitCount={(tx as { splitCount?: number }).splitCount} />
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -3076,7 +3088,9 @@ export default function TransactionsPage({
         clearTransferOverride={clearTransferOverride}
         createTx={createTx}
         updateTx={updateTx}
+        onSplit={setSplitTx}
       />
+      <SplitByCategoryHost tx={splitTx} categories={categories ?? []} onClose={() => setSplitTx(null)} />
 
       {previewDialog}
     </div>

@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Transaction } from "@workspace/api-client-react";
 import { Toaster } from "@/components/ui/toaster";
-import { SplitByCategoryButton } from "./SplitByCategoryButton";
+import { SplitByCategoryHost } from "./SplitByCategoryHost";
+import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 
 /**
  * (F4) Split by category against a fake server (the real generated hooks run).
@@ -32,10 +33,20 @@ function installApi(opts: { splits?: unknown; post?: number; del?: number } = {}
 
 const TX = { id: "t1", description: "CORNER MARKET", displayName: "Corner Market", amount: "-18.40", occurredOn: "2026-10-07", categoryId: "c1" } as unknown as Transaction;
 const CATS = [{ id: "c1", name: "Groceries" }, { id: "c2", name: "Dining out" }];
-const mount = (splitCount?: number) =>
+/** The host as a ledger page uses it: the charge is chosen from the row's detail, the dialog closes by clearing it. */
+function Page({ initial }: { initial: Transaction | null }) {
+  const [tx, setTx] = React.useState<Transaction | null>(initial);
+  return (
+    <>
+      <MerchantRenamePopover tx={TX as never} onSplit={() => setTx(TX)} />
+      <SplitByCategoryHost tx={tx} categories={CATS} onClose={() => setTx(null)} />
+    </>
+  );
+}
+const mount = (initial: Transaction | null = TX) =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <SplitByCategoryButton tx={TX} categories={CATS} splitCount={splitCount} />
+      <Page initial={initial} />
       <Toaster />
     </QueryClientProvider>,
   );
@@ -43,21 +54,27 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-const open = async () => {
-  fireEvent.click(screen.getByTestId("button-split-category-t1"));
-  return screen.findByTestId("split-form");
-};
+const open = async () => screen.findByTestId("split-form");
 const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
 describe("Split by category", () => {
-  it("is labelled apart from the allowance-bucket split, and shows the row's split count", async () => {
+  it("opens from the row's merchant popover, not from a button on the row; labelled apart from the allowance-bucket split", async () => {
     installApi();
-    mount(3);
-    expect(screen.getByTestId("button-split-category-t1").textContent).toBe("Split ×3");
-    expect(screen.getByLabelText("Split Corner Market by category")).toBeTruthy();
+    mount(null);
+    expect(screen.queryByTestId("split-dialog")).toBeNull();
+    expect(document.querySelector('[data-testid="button-split-category-t1"]')).toBeNull();
+    fireEvent.click(screen.getByTestId("rename-merchant-t1"));
+    fireEvent.click(await screen.findByTestId("split-category-t1"));
     await open();
     expect(screen.getByRole("dialog").textContent).toContain("Split by category");
     expect(screen.getByRole("dialog").textContent).toContain("not the allowance-bucket split");
+  });
+
+  it("the popover offers no split unless the page wires one", () => {
+    installApi();
+    render(<QueryClientProvider client={new QueryClient()}><MerchantRenamePopover tx={TX as never} /></QueryClientProvider>);
+    fireEvent.click(screen.getByTestId("rename-merchant-t1"));
+    expect(screen.queryByTestId("split-category-t1")).toBeNull();
   });
 
   it("Save stays off until the remainder reads $0.00, then POSTs signed parts", async () => {
@@ -121,7 +138,7 @@ describe("Split by category", () => {
         ],
       },
     });
-    mount(2);
+    mount();
     await open();
     expect((screen.getByLabelText("Amount for part 1") as HTMLInputElement).value).toBe("10.00");
     expect((screen.getByLabelText("Category for part 2") as HTMLSelectElement).value).toBe("c2");

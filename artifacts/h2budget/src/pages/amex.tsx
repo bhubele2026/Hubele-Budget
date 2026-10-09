@@ -19,7 +19,7 @@ import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { RowDateControls } from "@/components/row-date-controls";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import { AccountTransactionRow } from "@/components/account-page/transaction-row";
-import { SplitByCategoryButton } from "@/components/splits/SplitByCategoryButton";
+import { SplitByCategoryHost } from "@/components/splits/SplitByCategoryHost";
 import {
   useBulkRecategorizePrompt,
   bulkRuleFromRepointed,
@@ -236,6 +236,8 @@ export default function AmexPage({
   const { toast } = useToast();
   const qc = useQueryClient();
   const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
+  // (F4) The charge whose "Split by category" dialog is open (from its merchant popover).
+  const [splitTx, setSplitTx] = useState<Transaction | null>(null);
 
   // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
   // charges — banks sync only on the manual Sync button now.
@@ -2212,7 +2214,7 @@ export default function AmexPage({
                           >
                             {t.displayName || t.description}
                           </span>
-                          <MerchantRenamePopover tx={t} />
+                          <MerchantRenamePopover tx={t} onSplit={() => setSplitTx(t)} />
                         </div>
                         {t.notes && (
                           <div className="break-words text-micro text-neutral-500" title={t.notes}>
@@ -2270,7 +2272,6 @@ export default function AmexPage({
                           disabled={updateTx.isPending}
                         />
                       )}
-                      <SplitByCategoryButton tx={t} categories={categories ?? []} idSuffix="-mobile" />
                       {/* (#607) Transfer rows are excluded from budget
                           actuals, so weekly/monthly/unplanned bubbles
                           would never affect any roll-up. Hide them on
@@ -2412,7 +2413,7 @@ export default function AmexPage({
                             ? (accentByPlaidAccountId.get(t.plaidAccountId) ?? null)
                             : null
                         }
-                        actionsNode={<SplitByCategoryButton tx={t} categories={categories ?? []} />}
+                        onSplit={() => setSplitTx(t)}
                         metaNode={
                           t.notes ? (
                             <div
@@ -2494,6 +2495,7 @@ export default function AmexPage({
           <option key={p} value={p} />
         ))}
       </datalist>
+      <SplitByCategoryHost tx={splitTx} categories={categories ?? []} onClose={() => setSplitTx(null)} />
       {previewDialog}
     </div>
   );
