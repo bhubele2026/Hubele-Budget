@@ -24,6 +24,9 @@ const TEST_USER = `spine-parity-${process.pid}-${Date.now()}-${randomUUID().slic
 let TEST_HOUSEHOLD_ID: string;
 /** The debt carrying the tagged-but-unposted payment (see the C10 seed). */
 let VISA_DEBT_ID: string;
+/** (WP1) The checking account the snapshot points at: its row id and Plaid account_id. */
+let CHECKING_ROW_ID: string;
+let CHECKING_EXTERNAL_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (
@@ -182,6 +185,8 @@ beforeAll(async () => {
       type: "depository",
     })
     .returning();
+  CHECKING_ROW_ID = acct!.id;
+  CHECKING_EXTERNAL_ID = externalId;
   await db.insert(forecastSettingsTable).values({
     userId: TEST_USER,
     householdId: TEST_HOUSEHOLD_ID,
@@ -497,9 +502,24 @@ type BankFreshness = {
   staleReason: "refresh_failed" | "old" | "manual_old" | null;
 };
 
+type CashSignalAccount = {
+  rowId: string | null;
+  externalId: string | null;
+  name: string | null;
+  mask: string | null;
+  subtype: string | null;
+  via: string;
+};
+
 type Spine = {
   asOf: string;
-  bank: { balance: string; asOfDate: string | null } & BankFreshness;
+  bank: {
+    balance: string;
+    asOfDate: string | null;
+    snapshot: { balance: string; at: string; source: "plaid" | "manual" } | null;
+    sinceSnapshot: { net: string; count: number; through: string } | null;
+    account: CashSignalAccount;
+  } & BankFreshness;
   spentMonth: number;
   spentWeek: number;
   nextBill: { name: string; amount: string; dueDate: string } | null;
@@ -557,8 +577,18 @@ type CashSignal = {
   cashBuffer: string;
   status: string;
   snapshotAt: string | null;
+  account: CashSignalAccount;
   daily?: Array<{ date: string; balance: string }>;
 };
+
+type BankBalanceExplain = {
+  displayed: { bankToday: string };
+  snapshot: { balance: string | null; at: string | null; source: string | null };
+  ledger: { anchorDay: string | null; sinceAnchor: { rowCount: number; net: string } | null };
+};
+
+/** Whole cents, so "to the cent" is integer arithmetic. */
+const cents = (v: string): number => Math.round(Number(v) * 100);
 
 describe("GET /spine — parity with the endpoints that own each number", () => {
   it("bank balance + as-of match /forecast/cash-signal (the roll-forward)", async () => {
@@ -589,16 +619,111 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(lastFailureAt).toBeNull();
 
     // The landing-law scan below skips `bank`, so lock its shape here: these
-    // seven fields and nothing else, and nothing that reads like a debt figure.
+    // ten fields and nothing else (WP1 added snapshot, sinceSnapshot and
+    // account), and nothing that reads like a debt figure.
     expect(Object.keys(spine.bank).sort()).toEqual([
+      "account",
       "asOfDate",
       "balance",
       "lastContactAt",
       "lastFailureAt",
+      "sinceSnapshot",
+      "snapshot",
       "source",
       "stale",
       "staleReason",
     ]);
+  });
+
+  it("⚠️ (WP1) nothing under bank, at any depth, names a debt, an amount owed, credit or a limit", async () => {
+    // `bank` is exempt from the landing-law scans below because its `balance`
+    // is the household's own cash. It now carries nested objects (the snapshot,
+    // what rolled since, the account), so scan every key in it here instead.
+    const spine = await get<Spine>("/spine");
+    const keys: string[] = [];
+    const walk = (v: unknown) => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") {
+        for (const [k, x] of Object.entries(v)) {
+          keys.push(k);
+          walk(x);
+        }
+      }
+    };
+    walk(spine.bank);
+    // Not vacuous: the nested objects were walked.
+    expect(keys).toEqual(expect.arrayContaining(["snapshot", "sinceSnapshot", "account", "net", "count", "through", "rowId", "externalId", "via"]));
+    expect(keys.filter((k) => /owed|debt|credit|limit/i.test(k))).toEqual([]);
+  });
+
+  it("(WP1) bank.account is /forecast/cash-signal's account, ids included", async () => {
+    const spine = await get<Spine>("/spine");
+    const signal = await get<CashSignal>("/forecast/cash-signal?horizonDays=90");
+
+    expect(spine.bank.account).toEqual(signal.account);
+    // Not vacuous: the fixture's pointer resolves, and the ids are the account's
+    // own — the row id the pointer stores and the account_id rows carry.
+    expect(spine.bank.account).toEqual({
+      rowId: CHECKING_ROW_ID,
+      externalId: CHECKING_EXTERNAL_ID,
+      name: "Chase Checking",
+      mask: null,
+      subtype: null,
+      via: "pointer",
+    });
+  });
+
+  it("(WP1) bank.snapshot and bank.sinceSnapshot are what /forecast/bank-balance-explain reports", async () => {
+    const spine = await get<Spine>("/spine");
+    const explain = await get<BankBalanceExplain>("/forecast/bank-balance-explain");
+
+    // The snapshot as read: the explain route's own fields.
+    expect(spine.bank.snapshot).not.toBeNull();
+    expect(spine.bank.snapshot).toEqual({
+      balance: explain.snapshot.balance,
+      at: explain.snapshot.at,
+      source: explain.snapshot.source,
+    });
+    // ... and the spine's own freshness fields say the same thing.
+    expect(spine.bank.snapshot!.at).toBe(spine.bank.asOfDate);
+    expect(spine.bank.snapshot!.source).toBe(spine.bank.source);
+
+    // ⭐ What the roll adds: the ledger's `cashThroughToday` on the spine, and
+    // `classifyLedgerRowsThroughToday` (its own query) on the explain route.
+    expect(spine.bank.sinceSnapshot).not.toBeNull();
+    expect(explain.ledger.sinceAnchor).not.toBeNull();
+    expect({ rowCount: spine.bank.sinceSnapshot!.count, net: spine.bank.sinceSnapshot!.net }).toEqual(
+      explain.ledger.sinceAnchor,
+    );
+    expect(spine.bank.sinceSnapshot!.through).toBe(TODAY_ISO);
+
+    // Not vacuous: the snapshot is the seeded one, and past the snapshot day
+    // (the 1st) the fixture's checking purchases roll on top of it.
+    expect(spine.bank.snapshot).toEqual({
+      balance: "4200.00",
+      at: new Date(`${MONTH_START_ISO}T12:00:00-05:00`).toISOString(),
+      source: "manual",
+    });
+    if (TODAY_ISO > MONTH_START_ISO) {
+      expect(spine.bank.sinceSnapshot!.count).toBeGreaterThan(0);
+      expect(cents(spine.bank.sinceSnapshot!.net)).toBeLessThan(0);
+    }
+  });
+
+  it("⭐ (WP1) snapshot + sinceSnapshot = balance, to the cent — and the balance is still the cash signal's", async () => {
+    const spine = await get<Spine>("/spine");
+    const signal = await get<CashSignal>("/forecast/cash-signal?horizonDays=90");
+    const { snapshot, sinceSnapshot, balance } = spine.bank;
+
+    expect(snapshot).not.toBeNull();
+    expect(sinceSnapshot).not.toBeNull();
+    expect(cents(snapshot!.balance) + cents(sinceSnapshot!.net)).toBe(cents(balance));
+    expect(balance).toBe(signal.bankToday);
+    // Not vacuous: past the snapshot day the two halves are both non-zero, so
+    // the identity is not "balance + 0".
+    if (TODAY_ISO > MONTH_START_ISO) {
+      expect(cents(balance)).not.toBe(cents(snapshot!.balance));
+    }
   });
 
   it("forecast low point + runway match /forecast/cash-signal", async () => {

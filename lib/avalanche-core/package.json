@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./householdTime": "./src/householdTime.ts",
-    "./pendingDebt": "./src/pendingDebt.ts"
+    "./pendingDebt": "./src/pendingDebt.ts",
+    "./freshness": "./src/freshness.ts"
   }
 }
