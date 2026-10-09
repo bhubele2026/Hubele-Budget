@@ -640,22 +640,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      {/* (2026-10-08) The owner restored this app as THE app. While the
-          modernized pages are previewed under /next/*, this line links to
-          them from every page; it goes away when /next becomes the default.
-          "/" still serves the stripped-down app until the switch, so that
-          link is a plain <a> (full page load, not wouter). */}
-      <div
-        data-testid="classic-retiring-banner"
-        className="shrink-0 border-b border-brand-line bg-platinum-3 px-3 py-1.5 text-center text-micro text-brand-ink"
-      >
-        Modernization preview:{" "}
-        <Link href="/next/forecast" className="font-semibold underline underline-offset-2 hover:text-brand-navy">Forecast</Link>
-        {" · "}
-        <Link href="/next/accounts" className="font-semibold underline underline-offset-2 hover:text-brand-navy">Accounts</Link>
-        {" · "}
-        <a href="/" className="underline underline-offset-2 hover:text-brand-navy">Current app →</a>
-      </div>
+      {/* (The switch, 2026-10-09) The "Modernization preview" top line (SH-01)
+          is gone: this app is served at `/` and IS the current app. */}
       {/* ── The navy rail: wordmark home control · area ribbon · account.
           (C11) Shown on every page, the landing included: /home is the
           dashboard now, not a door with its own hero. ───────────────────── */}

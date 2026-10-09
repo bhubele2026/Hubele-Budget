@@ -15,7 +15,7 @@ import {
 } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import { mountWebApps } from "./webMounts";
+import { mountWebApp, resolveWebDistDir } from "./webMounts";
 
 const app: Express = express();
 
@@ -126,20 +126,23 @@ app.use(
 
 app.use("/api", router);
 
-// (Render migration) Serve the built web apps from the same origin as the API.
-// Render is a single Web Service, so Express serves the SPAs itself; the web
+// (Render migration) Serve the built web app from the same origin as the API.
+// Render is a single Web Service, so Express serves the SPA itself; the web
 // calls the API with same-origin relative `/api` + credentialed Clerk cookies,
-// so co-serving is exactly what the clients already assume.
+// so co-serving is exactly what the client already assumes.
 //
-// Two apps now (see webMounts.ts): H2 at `/`, the frozen classic app at
-// `/classic`. WEB_DIST_DIR / CLASSIC_DIST_DIR override the locations; the
-// defaults resolve the builds relative to this bundle, which runs from
-// artifacts/api-server/dist/index.mjs.
+// (The switch, 2026-10-09) One app: `artifacts/h2budget`, built with
+// `BASE_PATH=/`, at `/`; its old preview address `/classic/*` redirects there
+// (webMounts.ts). WEB_DIST_DIR overrides the location only when it holds a
+// build; the default resolves the build relative to this bundle, which runs
+// from artifacts/api-server/dist/index.mjs.
 const bundleDir = path.dirname(fileURLToPath(import.meta.url));
-mountWebApps(app, {
-  webDistDir: process.env.WEB_DIST_DIR ?? path.resolve(bundleDir, "../../h2/dist/public"),
-  classicDistDir:
-    process.env.CLASSIC_DIST_DIR ?? path.resolve(bundleDir, "../../h2budget/dist/public"),
+mountWebApp(app, {
+  distDir: resolveWebDistDir(
+    process.env.WEB_DIST_DIR,
+    path.resolve(bundleDir, "../../h2budget/dist/public"),
+    (msg) => logger.warn(msg),
+  ),
 });
 
 export default app;

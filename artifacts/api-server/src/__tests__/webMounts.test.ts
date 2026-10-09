@@ -5,14 +5,16 @@ import type { AddressInfo } from "node:net";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { mountWebApps } from "../webMounts";
+import { mountWebApp, resolveWebDistDir } from "../webMounts";
 
 /**
- * ⭐ TWO WEB APPS ON ONE ORIGIN: H2 at `/`, the classic app at `/classic`.
+ * ⭐ ONE WEB APP AT `/` (the switch). The app that was previewed under
+ * `/classic` is served at the root; `/classic/*` redirects there.
  *
- * Built against throwaway dist folders (no database, no real build): each URL
- * must get the right app's `index.html` or the right asset, with the right
- * cache header, and `/api` must never be answered with HTML.
+ * Built against a throwaway dist folder (no database, no real build): each URL
+ * must get the app's `index.html` or the right asset with the right cache
+ * header, `/classic` must 301 with the query kept, Plaid's redirect URI must be
+ * answered in place, and `/api` must never be answered with HTML.
  */
 
 let root: string;
@@ -26,17 +28,23 @@ function makeDist(dir: string, marker: string, asset: string): void {
 }
 
 async function get(url: string) {
-  const res = await fetch(`${base}${url}`);
-  return { status: res.status, body: await res.text(), cache: res.headers.get("cache-control") };
+  const res = await fetch(`${base}${url}`, { redirect: "manual" });
+  return {
+    status: res.status,
+    body: await res.text(),
+    cache: res.headers.get("cache-control"),
+    location: res.headers.get("location"),
+    type: res.headers.get("content-type"),
+  };
 }
 
-function boot(dirs: { webDistDir: string; classicDistDir: string }): Promise<void> {
+function boot(distDir: string): Promise<void> {
   const app = express();
   // Stand-in for the API router: an unknown /api path answers JSON 404.
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "not found" });
   });
-  mountWebApps(app, dirs);
+  mountWebApp(app, { distDir });
   return new Promise((resolve) => {
     server = app.listen(0, () => {
       base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -45,80 +53,111 @@ function boot(dirs: { webDistDir: string; classicDistDir: string }): Promise<voi
   });
 }
 
-describe("mountWebApps — both builds present", () => {
+describe("mountWebApp — the app's build is present", () => {
   beforeAll(async () => {
-    root = mkdtempSync(path.join(tmpdir(), "web-mounts-"));
-    makeDist(path.join(root, "h2"), "H2-INDEX", "index-h2abc.js");
-    makeDist(path.join(root, "classic"), "CLASSIC-INDEX", "index-clxyz.js");
-    await boot({ webDistDir: path.join(root, "h2"), classicDistDir: path.join(root, "classic") });
+    root = mkdtempSync(path.join(tmpdir(), "web-mount-"));
+    makeDist(path.join(root, "app"), "APP-INDEX", "index-abc123.js");
+    await boot(path.join(root, "app"));
   });
   afterAll(() => {
     server.close();
     rmSync(root, { recursive: true, force: true });
   });
 
-  it.each(["/", "/design", "/plaid-oauth", "/sign-in/factor-one", "/classicfoo"])(
-    "%s → H2's index.html, never cached",
+  it.each(["/", "/home", "/review", "/settings?tab=automation", "/sign-in/factor-one", "/today", "/classicfoo", "/apiary"])(
+    "%s → the app's index.html, never cached",
     async (url) => {
       const r = await get(url);
       expect(r.status).toBe(200);
-      expect(r.body).toContain("H2-INDEX");
+      expect(r.body).toContain("APP-INDEX");
       expect(r.cache).toBe("no-cache");
     },
   );
 
-  it.each(["/classic/", "/classic/home", "/classic/review", "/classic/sign-in/factor-one"])(
-    "%s → the classic index.html, never cached",
-    async (url) => {
-      const r = await get(url);
-      expect(r.status).toBe(200);
-      expect(r.body).toContain("CLASSIC-INDEX");
-      expect(r.cache).toBe("no-cache");
-    },
-  );
-
-  it("/classic without a slash redirects to /classic/ (express.static's directory redirect)", async () => {
-    const res = await fetch(`${base}/classic`, { redirect: "manual" });
-    expect(res.status).toBe(301);
-    expect(res.headers.get("location")).toBe("/classic/");
+  it("Plaid's redirect URI (/plaid-oauth) is answered in place with the shell — no redirect, so oauth_state_id round-trips", async () => {
+    const r = await get("/plaid-oauth?oauth_state_id=abc-123");
+    expect(r.status).toBe(200);
+    expect(r.location).toBeNull();
+    expect(r.body).toContain("APP-INDEX");
   });
 
-  it("each app's hashed assets are served from its own build and cached for a year", async () => {
-    const h2 = await get("/assets/index-h2abc.js");
-    expect(h2.body).toContain("H2-INDEX");
-    expect(h2.cache).toBe("public, max-age=31536000");
-    const classic = await get("/classic/assets/index-clxyz.js");
-    expect(classic.body).toContain("CLASSIC-INDEX");
-    expect(classic.cache).toBe("public, max-age=31536000");
+  it.each([
+    ["/classic", "/"],
+    ["/classic/", "/"],
+    ["/classic/home", "/home"],
+    ["/classic/review/categories", "/review/categories"],
+    ["/classic/settings?tab=automation", "/settings?tab=automation"],
+    ["/classic/transactions?month=2026-10&tx=t1", "/transactions?month=2026-10&tx=t1"],
+    ["/classic/plaid-oauth?oauth_state_id=abc", "/plaid-oauth?oauth_state_id=abc"],
+    ["/classic/?d=2026-10-09", "/?d=2026-10-09"],
+  ])("%s → 301 to %s (the query kept)", async (from, to) => {
+    const r = await get(from);
+    expect(r.status).toBe(301);
+    expect(r.location).toBe(to);
   });
 
-  it("a classic asset is not reachable at the root, nor an H2 asset under /classic", async () => {
-    expect((await get("/assets/index-clxyz.js")).body).toContain("H2-INDEX"); // SPA fallback, not the file
-    expect((await get("/classic/assets/index-h2abc.js")).body).toContain("CLASSIC-INDEX");
+  it("the /classic redirect never becomes protocol-relative (no open redirect)", async () => {
+    expect((await get("/classic//evil.example/x")).location).toBe("/evil.example/x");
+    expect((await get("/classic///evil.example")).location).toBe("/evil.example");
   });
 
-  it("/api is never answered with an HTML shell", async () => {
-    const r = await get("/api/no-such-route");
+  it("hashed assets are served and cached for a year; a missing one is a plain 404, not the shell", async () => {
+    const hit = await get("/assets/index-abc123.js");
+    expect(hit.status).toBe(200);
+    expect(hit.body).toContain("APP-INDEX");
+    expect(hit.cache).toBe("public, max-age=31536000");
+    const miss = await get("/assets/index-old999.js");
+    expect(miss.status).toBe(404);
+    expect(miss.body).not.toContain("APP-INDEX");
+    expect(miss.type).toMatch(/^text\/plain/);
+  });
+
+  it("an old /classic asset URL redirects to the root, where a stale hash 404s", async () => {
+    const r = await get("/classic/assets/index-old999.js");
+    expect(r.status).toBe(301);
+    expect(r.location).toBe("/assets/index-old999.js");
+    expect((await get("/assets/index-old999.js")).status).toBe(404);
+  });
+
+  it.each(["/api/no-such-route", "/api"])("%s is never answered with an HTML shell", async (url) => {
+    const r = await get(url);
     expect(r.status).toBe(404);
     expect(r.body).toContain('"error"');
     expect(r.body).not.toContain("INDEX");
   });
 });
 
-describe("mountWebApps — no classic build", () => {
+describe("mountWebApp — no build (local dev, the API tests)", () => {
   beforeAll(async () => {
-    root = mkdtempSync(path.join(tmpdir(), "web-mounts-"));
-    makeDist(path.join(root, "h2"), "H2-INDEX", "index-h2abc.js");
-    await boot({ webDistDir: path.join(root, "h2"), classicDistDir: path.join(root, "missing") });
+    root = mkdtempSync(path.join(tmpdir(), "web-mount-"));
+    await boot(path.join(root, "missing"));
   });
   afterAll(() => {
     server.close();
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("/classic/* falls through to H2, which shows its not-found screen in its shell", async () => {
-    const r = await get("/classic/home");
-    expect(r.status).toBe(200);
-    expect(r.body).toContain("H2-INDEX");
+  it("serves nothing at the root, but /classic still redirects", async () => {
+    expect((await get("/home")).status).toBe(404);
+    const r = await get("/classic/home?x=1");
+    expect(r.status).toBe(301);
+    expect(r.location).toBe("/home?x=1");
+  });
+});
+
+describe("resolveWebDistDir", () => {
+  it("uses WEB_DIST_DIR when it holds a build, else the default — a stale value never blanks the app", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "web-dist-"));
+    try {
+      makeDist(path.join(dir, "built"), "X", "a.js");
+      const warnings: string[] = [];
+      expect(resolveWebDistDir(undefined, "/default")).toBe("/default");
+      expect(resolveWebDistDir("  ", "/default")).toBe("/default");
+      expect(resolveWebDistDir(path.join(dir, "built"), "/default")).toBe(path.join(dir, "built"));
+      expect(resolveWebDistDir(path.join(dir, "gone"), "/default", (m) => warnings.push(m))).toBe("/default");
+      expect(warnings).toHaveLength(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

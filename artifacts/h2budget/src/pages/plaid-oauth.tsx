@@ -62,16 +62,18 @@ export default function PlaidOAuthPage() {
 
   const goBack = useCallback(
     (delayMs = 0) => {
-      // (S0) The Link button stores `window.location.pathname`, which under the
-      // /classic/ base is "/classic/settings". wouter's setLocation is
-      // base-relative, so the stored path is stripped back to "/settings"
-      // first — otherwise it would land on /classic/classic/settings.
+      // The Link button stores `window.location.pathname`. wouter's
+      // setLocation is base-relative, so a stored path that carries the base
+      // is stripped back first. (The switch) The app is served at `/` now; a
+      // link started before it, under the old `/classic/` base, stored
+      // "/classic/settings", which is stripped the same way.
       const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       const stored = returnTo || "/dashboard";
-      const target =
-        base && (stored === base || stored.startsWith(`${base}/`))
-          ? stored.slice(base.length) || "/"
-          : stored;
+      const strip = (path: string, prefix: string) =>
+        prefix && (path === prefix || path.startsWith(`${prefix}/`))
+          ? path.slice(prefix.length) || "/"
+          : path;
+      const target = strip(strip(stored, "/classic"), base);
       window.setTimeout(() => setLocation(target), delayMs);
     },
     [returnTo, setLocation],

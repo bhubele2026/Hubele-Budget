@@ -54,13 +54,13 @@ to get the household out of debt; correctness and trust beat everything.
 - **Prefer stale-while-revalidate:** render cached data immediately, revalidate
   in the background. **Skeletons are for genuine cold loads only.**
 - **Prefetch** a route's primary queries on nav-link **hover/focus** or on idle.
-- **The open path is budgeted per app, and CI enforces it.**
-  `node scripts/check-entry-graph.mjs` runs against each web app's build:
-  **h2budget caps landing JS at 622 KB (the frozen `artifacts/h2` at 400 KB until it is deleted).** It fails the build if
+- **The open path is budgeted, and CI enforces it.**
+  `node scripts/check-entry-graph.mjs` runs against the app's build:
+  **h2budget caps landing JS at 622 KB.** It fails the build if
   landing JS exceeds its cap, if react-dom lands outside `vendor-react`, or if
   a chart library reaches a preloaded chunk. **Never add a chart to the open
   path.** Charts are lazy and never imported by anything the landing route
-  pulls in (classic: recharts, in `vendor-charts`; h2: small SVG only).
+  pulls in (recharts, in `vendor-charts`).
   *Cap history:* raised 580 → 640 KB on 2026-10-09 (C11; 635 KB measured on main with the settings, Amex and plan panels merged beside it): the landing is now the
   full dashboard, not a six-tile door, and the measured open path is 628.6 KB
   (cap = measured + 5 KB). No panel was trimmed to fit; charts stay lazy.
@@ -70,25 +70,26 @@ to get the household out of debt; correctness and trust beat everything.
   two `features` operations, which kept the whole generated sub-module in the
   entry chunk; they now come from the main module, the sub-module is its own
   lazy chunk, and the open path measured 616.6 KB (cap = measured + 5 KB).
-- **`routePrefetch.ts` and `App.tsx` move in lockstep on any route change —
-  in each app.**
+- **`routePrefetch.ts` and `App.tsx` move in lockstep on any route change.**
+  Old links from the interim app (`/today`, `/activity`, `/plan/*`,
+  `/household/*`, `/recap`, `/design`) are mapped in `lib/legacyRoutes.ts`,
+  read by the lazy not-found page; they are not routes.
 
 ## 3. UI — one app, modernized (direction set by the owner on 2026-10-08)
 
 ### Which app
 
-- **`artifacts/h2budget` IS the app.** It holds the mature product (forecast,
-  review and reconciliation, Chase and Amex views, reports, budget, allowances,
-  bills, debts, mapping rules, settings) and is being **modernized in place**:
-  new design system, real dashboard, expanded forecast, account identity, and
-  the automation screens folded in. It is served at `/classic` until the owner
-  approves the preview under `/classic/next/*`; then it serves `/`.
-- **`artifacts/h2` is frozen** (the stripped-down replacement the owner
-  rejected): no features, no redesign; it keeps serving `/` only until the
-  switch, then it is deleted. Its pure logic (`attention.ts`, `splitMath.ts`,
-  `format.ts`, money/date helpers, the data layer) moves to `lib/` or into
-  `h2budget`; its kit is not imported — components are rebuilt on h2budget's
-  primitives. Never import across the two apps.
+- **`artifacts/h2budget` IS the app, the only one.** It holds the mature
+  product (forecast, review and reconciliation, Chase and Amex views, reports,
+  budget, allowances, bills, debts, mapping rules, settings), modernized in
+  place: new design system, real dashboard, expanded forecast, account
+  identity, and the automation screens folded in. It is built with
+  `BASE_PATH=/` and served at `/` (`artifacts/api-server/src/webMounts.ts`);
+  its preview address `/classic/*` 301s to the same path at the root.
+- **The interim stripped-down app (`artifacts/h2`) was deleted at the switch
+  (2026-10-09).** Its pure logic had already been ported into `h2budget/src/lib`
+  with its tests. Do not bring a second web app back: a new screen is a route
+  here.
 - **A fresh appearance never reduces functionality or financial visibility.**
   Every capability in `docs/reviews/2026-10-08-parity-inventory.md` must stay
   accessible in the modernized app; a link to the old page is a temporary
@@ -207,9 +208,8 @@ by **the same function the owning page's endpoint calls** — never reimplemente
 
 - **Stack:** pnpm workspaces, Node 24, TS 5.9. API = Express 5 + Drizzle +
   PostgreSQL + Zod + Orval. Web = React + Vite + TanStack Query + wouter + Clerk.
-- **Packages:** `artifacts/api-server` (Express `/api/*`), `artifacts/h2budget`
-  (THE web app, being modernized; `/classic` until the switch, then `/`),
-  `artifacts/h2` (frozen, deleted at the switch), `lib/api-spec`
+- **Packages:** `artifacts/api-server` (Express `/api/*`, and it serves the
+  web build), `artifacts/h2budget` (THE web app, at `/`), `lib/api-spec`
   (OpenAPI), `lib/api-zod` + `lib/api-client-react` (generated), `lib/db`
   (Drizzle schema + `migrate.ts` runner, exported as `@workspace/db/migrate`),
   `lib/db/migrations` (the SQL that production runs), `lib/avalanche-core`
@@ -218,15 +218,14 @@ by **the same function the owning page's endpoint calls** — never reimplemente
 - **Commands:**
   - `pnpm run typecheck` — singleton-dep check + typecheck all packages (the green gate)
   - `pnpm run build` — typecheck + build every package
-  - `node scripts/check-entry-graph.mjs` — open-path weight guard (run after a build, per app)
+  - `node scripts/check-entry-graph.mjs` — open-path weight guard (run after a build)
   - `pnpm --filter @workspace/api-spec run codegen` — regen API hooks + Zod
   - `pnpm --filter @workspace/db run push` — push DB schema (dev and tests only)
   - `node artifacts/api-server/dist/migrate.mjs` (or `pnpm --filter
     @workspace/api-server run migrate`) — apply pending `lib/db/migrations`
     files to `DATABASE_URL`; idempotent (after a build). The server does the
     same at boot unless `MIGRATE_ON_BOOT=false`.
-- **Tests:** `pnpm --filter h2budget exec vitest run` (the web app) and
-  `pnpm --filter ./artifacts/h2 exec vitest run` (frozen h2), both jsdom, and
+- **Tests:** `pnpm --filter h2budget exec vitest run` (the web app, jsdom) and
   `pnpm --filter api-server exec vitest run` (API
   integration — needs a real Postgres and `DATABASE_URL` + `ALLOW_TEST_DB=1`).
   Parallel agents must use **separate test databases**. The API suite runs

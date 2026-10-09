@@ -761,11 +761,14 @@ describe("(C12) the fold-in sub-items, the account menu and the chrome tokens", 
     }
   });
 
-  it("(SH-01) the top line stays on every page, the landing included, until the switch", () => {
-    for (const path of ["/home", "/banking", "/settings"]) {
+  it("(SH-01) the top line is gone at the switch: no preview line, no link to a 'current app', on any page", () => {
+    for (const path of ["/home", "/banking", "/settings", "/next/forecast"]) {
       mount(path);
-      const line = screen.getByTestId("classic-retiring-banner");
-      expect(linksIn(line)).toEqual(["Forecast /next/forecast", "Accounts /next/accounts", "Current app → /"]);
+      expect(screen.queryByTestId("classic-retiring-banner")).toBeNull();
+      expect(screen.queryByText(/modernization preview/i)).toBeNull();
+      expect(screen.queryByText(/current app/i)).toBeNull();
+      // The header is the first thing in the shell now.
+      expect(screen.getByTestId("app-header").previousElementSibling).toBeNull();
       cleanup();
     }
   });
