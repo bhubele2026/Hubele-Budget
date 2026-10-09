@@ -28,6 +28,10 @@ export interface DueBill {
   name: string;
   amount: number | null;
   dueOn: string;
+  /** Words already built by the caller (the dashboard's hook-aware
+   *  "Weekly Spend · card payoff $477.57 (plan $450)"). When present the item
+   *  reads it as its title, whole, and says when in the detail. */
+  label?: string;
 }
 
 export const ATTENTION_TITLE_MAX = 60;
@@ -113,11 +117,16 @@ export function attentionItems(i: {
   if (i.dueSoon.length > 0) {
     const first = i.dueSoon[0]!;
     const when = first.dueOn === i.today ? "today" : "tomorrow";
-    const title =
-      i.dueSoon.length === 1
-        ? `${clip(first.name, 24)}${first.amount != null ? ` ${formatCurrency(first.amount)}` : ""} is due ${when}`
-        : `${i.dueSoon.length} bills are due today or tomorrow`;
-    out.push({ kind: "bill", title, action: { label: "See bills", href: "/bills" } });
+    if (i.dueSoon.length === 1 && first.label) {
+      out.push({ kind: "bill", title: first.label, detail: `Due ${when}`, action: { label: "See bills", href: "/bills" } });
+    } else {
+      const title =
+        i.dueSoon.length === 1
+          ? `${clip(first.name, 24)}${first.amount != null ? ` ${formatCurrency(first.amount)}` : ""} is due ${when}`
+          : `${i.dueSoon.length} bills are due today or tomorrow`;
+      const detail = i.dueSoon.length > 1 && first.label ? `First: ${first.label}, ${first.dueOn === i.today ? "today" : "tomorrow"}` : undefined;
+      out.push({ kind: "bill", title, detail, action: { label: "See bills", href: "/bills" } });
+    }
   }
   if (i.reviewCount > 0) {
     out.push({
@@ -131,26 +140,35 @@ export function attentionItems(i: {
 }
 
 /**
- * The dashboard header's ONE action, chosen by the same priority as the list
- * above: the first item that needs a household decision wins. A failed bank
- * connection asks for Reconnect; a week over its plan offers "Pick a way
- * back". Anything else (an old balance, a bill due, charges to match) has its
- * own row in Needs attention and the account list's per-bank Sync, so the
- * header keeps the everyday question: "Can we afford something?". Pure.
+ * The dashboard header's ONE action. A failed or expired bank connection asks
+ * for Reconnect; a forecast that runs short points at where; a week over its
+ * plan offers "Pick a way back". Anything else (an old balance, a bill due,
+ * charges to match) has its own row in Needs attention and the account list's
+ * per-bank Sync, so the header keeps the everyday question: "Can we afford
+ * something?". Pure.
  */
 export type HeaderAction =
   | { kind: "link"; label: string; href: string }
   | { kind: "reconnect"; label: string; href: string }
+  | { kind: "short"; label: string; href: string }
   | { kind: "wayBack" }
   | { kind: "afford" };
 
-/** With no bank linked at all there is nothing to afford against yet: the one
- *  action is the app's existing link path (Settings › Banks, Link a bank). */
-export function headerActionOf(items: readonly Attention[], opts: { noBank?: boolean } = {}): HeaderAction {
+/**
+ * Order (lead, 2026-10-09): Link a bank → Reconnect → the forecast runs short
+ * → Pick a way back → Afford. With no bank linked there is nothing to afford
+ * against: the action is the app's existing link path (Settings › Banks).
+ * `runsShort` is the caller's reading of the low point (`lowPointView`: under
+ * the buffer, or below zero, inside the horizon).
+ */
+export function headerActionOf(
+  items: readonly Attention[],
+  opts: { noBank?: boolean; runsShort?: boolean } = {},
+): HeaderAction {
   if (opts.noBank) return { kind: "link", label: "Link a bank", href: "/settings" };
-  for (const a of items) {
-    if (a.kind === "reconnect") return { kind: "reconnect", label: a.action?.label ?? "Reconnect", href: a.action?.href ?? "/settings" };
-    if (a.kind === "over" && a.wayBack) return { kind: "wayBack" };
-  }
+  const reconnect = items.find((a) => a.kind === "reconnect");
+  if (reconnect) return { kind: "reconnect", label: reconnect.action?.label ?? "Reconnect", href: reconnect.action?.href ?? "/settings" };
+  if (opts.runsShort) return { kind: "short", label: "See where it runs short", href: "/forecast" };
+  if (items.some((a) => a.kind === "over" && a.wayBack)) return { kind: "wayBack" };
   return { kind: "afford" };
 }

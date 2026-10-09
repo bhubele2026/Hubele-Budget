@@ -4,11 +4,12 @@ import { cn } from "@/lib/utils";
 import { Panel } from "@/components/next";
 import { FindingsList } from "@/components/agent/FindingsList";
 import { useOpenFindings } from "@/components/agent/agentHooks";
-import { attentionItems, billsDueSoon } from "@/lib/attention";
+import { attentionItems } from "@/lib/attention";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { categoriesByIdOf, isInflowFiledAsExpense } from "@/lib/categoryDirection";
 import { useSpine } from "@/hooks/useSpine";
-import { useBillsSummaryQ, usePlaidItemsQ } from "./queries";
+import { useCashSignalQ, usePlaidItemsQ } from "./queries";
+import { dueSoonOf, upcomingRows } from "./obligations";
 import { bankLines } from "./bankState";
 import { RECENT_LIMIT, RECENT_WINDOW_DAYS, useCategoriesQ, useDuplicateCountQ, useRecentTxnsQ, useReviewQueueQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
@@ -79,7 +80,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 export default function AttentionPanel() {
   const minH = useFoldMinH("attention");
   const spine = useSpine();
-  const bills = useBillsSummaryQ();
+  const cash = useCashSignalQ(90);
   const queue = useReviewQueueQ();
   const dups = useDuplicateCountQ();
   const findingsQ = useOpenFindings();
@@ -97,12 +98,12 @@ export default function AttentionPanel() {
       bank: s.bank,
       withinPlan: s.position.withinPlan,
       overBy: rem != null && rem < 0 ? -rem : null,
-      dueSoon: billsDueSoon(bills.data, today),
+      dueSoon: dueSoonOf(upcomingRows({ signal: cash.data, today, count: 50 }), today, addDaysISO(today, 1)),
       today,
       reviewCount: 0, // the review queue has its own rows below
       reauthBanks: bankLines(items.data, Date.now()).filter((b) => b.state === "reauth").map((b) => b.institution),
     }).filter((a) => a.kind !== "nothing");
-  }, [s, bills.data, today, items.data]);
+  }, [s, cash.data, today, items.data]);
 
   // (dash-accuracy) "Income filed under an expense category", by the shared
   // pure rule, over the recent window Recent activity reads (one request).
@@ -127,7 +128,7 @@ export default function AttentionPanel() {
 
   return (
     <Panel title="Needs attention" span={7} variant="static"
-      className={cn(rise(BELOW_FOLD.attention.rise), minH)} data-testid="dash-attention">
+      className={cn(rise(BELOW_FOLD.attention.rise), minH, "self-start")} data-testid="dash-attention">
       <Gate q={q} what="Needs attention" rows={4}>
         {() =>
           allClear ? (

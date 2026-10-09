@@ -2,12 +2,14 @@ import { lazy, Suspense, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { WaysBackLauncher } from "@/components/ways-back/WaysBackLauncher";
-import { attentionItems, billsDueSoon, headerActionOf } from "@/lib/attention";
-import { householdToday } from "@/lib/householdDay";
+import { attentionItems, headerActionOf } from "@/lib/attention";
+import { lowPointView } from "@/lib/lowPoint";
+import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { useSpine } from "@/hooks/useSpine";
 import { btn, btnSecondary } from "@/ui";
 import { cn } from "@/lib/utils";
-import { useBillsSummaryQ, usePlaidItemsQ } from "./queries";
+import { useCashSignalQ, usePlaidItemsQ } from "./queries";
+import { dueSoonOf, obligationLine, upcomingRows } from "./obligations";
 import { bankLines, hasLinkedBank } from "./bankState";
 import { money, rise, weekdayLabel } from "./shared";
 
@@ -25,11 +27,13 @@ const RecapPreview = lazy(() => import("./RecapPreview"));
 export default function DashboardHeader() {
   const spine = useSpine();
   const items = usePlaidItemsQ();
-  const bills = useBillsSummaryQ();
+  // The same hook-aware cash-signal events Coming up lists (shared by key).
+  const cash = useCashSignalQ(90);
   const [recapOpen, setRecapOpen] = useState(false);
   const today = householdToday(new Date());
   const s = spine.data;
   const now = Date.now();
+  const obligations = useMemo(() => upcomingRows({ signal: cash.data, today, count: 50 }), [cash.data, today]);
 
   const attention = useMemo(() => {
     if (!s) return null;
@@ -38,14 +42,17 @@ export default function DashboardHeader() {
       bank: s.bank,
       withinPlan: s.position.withinPlan,
       overBy: rem != null && rem < 0 ? -rem : null,
-      dueSoon: billsDueSoon(bills.data, today),
+      dueSoon: dueSoonOf(obligations, today, addDaysISO(today, 1)),
       today,
       reviewCount: s.reviewCount,
       reauthBanks: bankLines(items.data, Date.now()).filter((b) => b.state === "reauth").map((b) => b.institution),
     });
-  }, [s, bills.data, today, items.data]);
+  }, [s, obligations, today, items.data]);
   const noBank = items.data !== undefined && !hasLinkedBank(items.data);
-  const action = headerActionOf(attention ?? [], { noBank });
+  // Under the buffer, or below zero, inside the forecast's 90 days.
+  const low = s ? lowPointView(s.forecast, { buffer: s.forecast.cashBuffer }) : null;
+  const runsShort = !!low && (low.kind === "below" || (low.value != null && low.value < 0));
+  const action = headerActionOf(attention ?? [], { noBank, runsShort });
   const banks = bankLines(items.data, now);
 
   // One line of facts, each said only when it is known.
@@ -56,8 +63,8 @@ export default function DashboardHeader() {
       const until = p.horizonKind === "payday" && p.paydayDate ? ` until payday ${weekdayLabel(p.paydayDate)}` : " this week";
       facts.push({ key: "room", text: `${money(p.safeToSpendNow)} room to spend${until}` });
     }
-    if (s.nextBill) {
-      facts.push({ key: "next", text: `Next: ${s.nextBill.name} ${money(s.nextBill.amount)} on ${weekdayLabel(s.nextBill.dueDate)}` });
+    if (obligations[0]) {
+      facts.push({ key: "next", text: `Next: ${obligationLine(obligations[0])}` });
     }
     if (s.reviewCount > 0) {
       facts.push({ key: "review", text: s.reviewCount === 1 ? "1 charge to match" : `${s.reviewCount} charges to match` });
@@ -75,9 +82,9 @@ export default function DashboardHeader() {
             <p className="mt-1 text-body text-brand-ink" data-testid="dash-facts">
               {facts.length
                 ? facts.map((f, i) => (
-                    <span key={f.key} data-testid={`dash-fact-${f.key}`}>
+                    <span key={f.key}>
                       {i > 0 ? <span aria-hidden className="text-neutral-400"> · </span> : null}
-                      {f.text}
+                      <span data-testid={`dash-fact-${f.key}`}>{f.text}</span>
                     </span>
                   ))
                 : noBank
@@ -105,6 +112,11 @@ export default function DashboardHeader() {
         <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="dash-header-action" data-kind={action.kind}>
           {action.kind === "link" ? (
             <Link href={action.href} className={btn} data-testid="dash-link-bank">{action.label}</Link>
+          ) : action.kind === "short" ? (
+            <>
+              <Link href={action.href} className={btn} data-testid="dash-runs-short">{action.label}</Link>
+              <AffordLauncher className={QUIET} />
+            </>
           ) : action.kind === "reconnect" ? (
             <>
               <Link href={action.href} className={btn} data-testid="dash-reconnect">{action.label}</Link>

@@ -50,7 +50,7 @@ export default function ActivityPanel() {
   return (
     <Panel title="Recent activity" sub={`Newest ${ACTIVITY_ROWS} across accounts`} span={5}
       variant={["flush", "static"]}
-      className={cn(rise(BELOW_FOLD.activity.rise), minH)} data-testid="dash-activity"
+      className={cn(rise(BELOW_FOLD.activity.rise), minH, "self-start")} data-testid="dash-activity"
       actions={<Link href="/transactions" className={cn(LINK, "text-label")} data-testid="dash-all-activity">All activity</Link>}>
       <Gate q={txns} what="Recent activity" rows={6}>{() => <TxnTable rows={rows} layout="list" />}</Gate>
     </Panel>

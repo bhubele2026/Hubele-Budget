@@ -96,3 +96,21 @@ describe("attentionItems — a card's bank needing a new login (dashboard refine
     expect(items[0]!.detail).toContain("American Express.");
   });
 });
+
+describe("headerActionOf — the forecast running short (lead, 2026-10-09)", () => {
+  const over = { ...base, withinPlan: "over" as const, overBy: 25 };
+  it("order: Link a bank → Reconnect → runs short → Pick a way back → Afford", () => {
+    expect(headerActionOf(attentionItems(over), { noBank: true, runsShort: true }).kind).toBe("link");
+    expect(headerActionOf(attentionItems({ ...over, reauthBanks: ["Amex"] }), { runsShort: true }).kind).toBe("reconnect");
+    expect(headerActionOf(attentionItems(over), { runsShort: true })).toEqual({ kind: "short", label: "See where it runs short", href: "/forecast" });
+    expect(headerActionOf(attentionItems(over), { runsShort: false })).toEqual({ kind: "wayBack" });
+    expect(headerActionOf(attentionItems(base), {})).toEqual({ kind: "afford" });
+  });
+});
+
+describe("a due-soon payment with words built by the caller", () => {
+  it("reads the label whole, and says when in the detail", () => {
+    const items = attentionItems({ ...base, dueSoon: [{ name: "Weekly Spend", amount: 477.57, dueOn: "2026-10-09", label: "Weekly Spend · card payoff $477.57 (plan $450)" }] });
+    expect(items[0]).toMatchObject({ kind: "bill", title: "Weekly Spend · card payoff $477.57 (plan $450)", detail: "Due tomorrow" });
+  });
+});

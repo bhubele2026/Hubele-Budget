@@ -149,7 +149,13 @@ function DebtCell({ s }: { s: Spine }) {
     const scope = remainingDebtScope(debts.data);
     left = scope.names.length === 0
       ? <span data-testid="dash-debt-left">No balance left on any active debt.</span>
-      : <span data-testid="dash-debt-left"><span className="font-mono tabular-nums text-brand-ink">{money(scope.total)}</span> left across {joinNames(scope.names)}</span>;
+      : (
+        <span data-testid="dash-debt-left">
+          <span className="font-mono tabular-nums text-brand-ink">{money(scope.total)}</span>
+          {scope.names.length === 1 ? " left on " : " left across "}
+          {joinNames(scope.names)}
+        </span>
+      );
   }
   const noDebts = debts.data !== undefined && !debts.data.some((d) => d.status === "active");
   return (

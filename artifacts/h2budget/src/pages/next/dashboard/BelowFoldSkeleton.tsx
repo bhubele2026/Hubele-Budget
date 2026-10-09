@@ -15,7 +15,7 @@ export function BelowFoldSkeleton({ slot }: { slot: BelowFoldSlot }) {
           key={k}
           data-testid={`below-fold-skeleton-${k}`}
           aria-busy="true"
-          className={cn("panel p-4", `span-${BELOW_FOLD[k].span}`, !compact && BELOW_FOLD[k].minH)}
+          className={cn("panel p-4", `span-${BELOW_FOLD[k].span}`, !compact && BELOW_FOLD[k].minH, !BELOW_FOLD[k].minH && "self-start")}
         >
           <div className="skeleton h-4 w-32 rounded" />
           <div className="mt-4 space-y-2">

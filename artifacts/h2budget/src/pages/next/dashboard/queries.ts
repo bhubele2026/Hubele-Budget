@@ -3,7 +3,6 @@ import {
   useGetForecastCashSignal, getGetForecastCashSignalQueryKey,
   useListDebts, getListDebtsQueryKey,
   useGetAmexWeeklyPayoff, getGetAmexWeeklyPayoffQueryKey,
-  useGetBillsSummary, getGetBillsSummaryQueryKey,
   useListPlaidLiabilityAccounts, getListPlaidLiabilityAccountsQueryKey,
   useGetForecastBankBalanceExplain, getGetForecastBankBalanceExplainQueryKey,
   // (F3b) The first screen's one fold-in read comes from the MAIN module, on
@@ -44,9 +43,6 @@ export const useAmexQ = () =>
 
 export const useMoneyPositionQ = () =>
   useGetMoneyPosition({ query: { queryKey: getGetMoneyPositionQueryKey(), staleTime: MIN, gcTime: GC } });
-
-export const useBillsSummaryQ = () =>
-  useGetBillsSummary(undefined, { query: { queryKey: getGetBillsSummaryQueryKey(), staleTime: 5 * MIN, gcTime: GC } });
 
 /**
  * The card and loan figures Plaid's liabilities product stored (balance,

@@ -12,8 +12,10 @@ export const BELOW_FOLD = {
   upcoming: { span: 4, minH: "min-h-[29rem]", rise: 4, slot: "forecast" },
   spending: { span: 6, minH: "min-h-[19rem]", rise: 5, slot: "lower" },
   debt: { span: 6, minH: "min-h-[19rem]", rise: 6, slot: "lower" },
-  attention: { span: 7, minH: "min-h-[20rem]", rise: 7, slot: "lower" },
-  activity: { span: 5, minH: "min-h-[20rem]", rise: 8, slot: "lower" },
+  // The last row sizes to its own content (lead, 2026-10-09): nothing below it
+  // but the version line, and both panels arrive in the same slot together.
+  attention: { span: 7, minH: "", rise: 7, slot: "lower" },
+  activity: { span: 5, minH: "", rise: 8, slot: "lower" },
 } as const;
 
 export type BelowFoldKey = keyof typeof BELOW_FOLD;

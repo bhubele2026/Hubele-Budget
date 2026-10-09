@@ -19,7 +19,6 @@ vi.mock("./queries", () => ({
   useDebtsQ: () => get("debts"),
   useAmexQ: () => get("amex"),
   useMoneyPositionQ: () => get("pos"),
-  useBillsSummaryQ: () => get("bills"),
   useLiabilityAccountsQ: () => get("liab"),
   useBankExplainQ: () => get("explain"),
 }));
@@ -54,6 +53,7 @@ import SummaryRow, { joinNames, roomLines } from "./SummaryRow";
 import AccountsPanel from "./AccountsPanel";
 import SpendingPanel from "./SpendingPanel";
 import UpcomingPanel, { upcomingRows } from "./UpcomingPanel";
+import { obligationLine } from "./obligations";
 import ForecastPanel from "./ForecastPanel";
 import DebtPanel from "./DebtPanel";
 import ActivityPanel from "./ActivityPanel";
@@ -94,7 +94,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); });
 // ── Header ────────────────────────────────────────────────────────────────
 describe("header", () => {
   beforeEach(() => {
-    h.Q.bills = ok({ bills: [], debtMins: [], income: [], monthly: {} });
+    h.Q.cash = ok({ account: cashAcct, events: [{ date: "2026-10-10", label: "Rent", amount: "-1200.00", itemId: "r2" }] });
     h.Q.items = ok([
       item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })], { lastSyncedAt: "2026-10-08T15:00:00Z" }),
       item("b", "American Express", "amex", [acct("x1", { name: "Platinum", mask: "1005", type: "credit", subtype: "credit card" })],
@@ -105,7 +105,7 @@ describe("header", () => {
     wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-today").textContent).toBe("Today · Thu Oct 8");
     expect(screen.getByTestId("dash-fact-room").textContent).toBe("$210.00 room to spend until payday Fri Oct 16");
-    expect(screen.getByTestId("dash-fact-next").textContent).toContain("Next: Rent $1,200.00 on Sat Oct 10");
+    expect(screen.getByTestId("dash-fact-next").textContent).toBe("Next: Rent $1,200.00 · Sat Oct 10");
     expect(screen.getByTestId("dash-fact-review").textContent).toContain("3 charges to match");
     const banks = screen.getByTestId("dash-bank-fresh").textContent!;
     expect(banks).toContain("Chase · synced 2 h ago");
@@ -125,25 +125,42 @@ describe("header", () => {
     const a2 = wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("reconnect");
     a2.unmount();
-    // …so with every bank connected, a week over plan offers the way back.
+    // …so with every bank connected and the forecast above its buffer, a week over plan offers the way back.
     h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);
+    h.spine.data = spine({ forecast: { ...spine().forecast, lowPoint: "1500.00", status: "ready" }, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00" } });
     const b = wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("wayBack");
     expect(screen.getByTestId("ways-back-open").textContent).toBe("Pick a way back");
     b.unmount();
     // An old balance or a bill due is not the header's action: those have their own rows.
-    h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "old" } });
+    h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "old" }, forecast: { ...spine().forecast, lowPoint: "1500.00", status: "ready" } });
     wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("afford");
     expect(screen.getByTestId("afford-open").textContent).toBe("Can we afford something?");
   });
   it("no bank linked: the one action is the app's link path, and the facts say why the page is empty", () => {
     h.Q.items = ok([]);
+    h.Q.cash = ok({ account: cashAcct, events: [] });
     h.spine.data = spine({ nextBill: null, reviewCount: 0, position: { ...spine().position, safeToSpendNow: null } });
     wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("link");
     expect(screen.getByTestId("dash-link-bank").getAttribute("href")).toBe("/settings");
     expect(screen.getByTestId("dash-facts").textContent).toContain("No bank is linked yet");
+  });
+  it("the forecast running short takes the one action (after Reconnect, before Pick a way back)", () => {
+    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);
+    // spine(): low point $350 under the $500 buffer (not_yet), and over the week's plan.
+    h.spine.data = spine({ position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00" } });
+    const a = wrap(<DashboardHeader />);
+    expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("short");
+    expect(screen.getByTestId("dash-runs-short").getAttribute("href")).toBe("/forecast");
+    expect(screen.getByTestId("dash-runs-short").textContent).toBe("See where it runs short");
+    expect(screen.getByTestId("afford-open")).toBeTruthy();
+    a.unmount();
+    // Above the buffer: back to the week's way back.
+    h.spine.data = spine({ forecast: { ...spine().forecast, lowPoint: "1500.00", status: "ready" }, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00" } });
+    wrap(<DashboardHeader />);
+    expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("wayBack");
   });
   it("the morning text is behind a disclosure and only loads when opened", async () => {
     wrap(<DashboardHeader />);
@@ -156,6 +173,7 @@ describe("header", () => {
     expect(t.getAttribute("aria-expanded")).toBe("true");
   });
   it("leaves out a fact it does not know rather than printing $0", () => {
+    h.Q.cash = ok({ account: cashAcct, events: [] });
     h.spine.data = spine({ nextBill: null, reviewCount: 0, position: { ...spine().position, safeToSpendNow: null } });
     wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-facts").textContent).toBe("Nothing scheduled and nothing waiting.");
@@ -285,6 +303,11 @@ describe("summary row: four figures, status-aware", () => {
     wrap(<SummaryRow />);
     expect(screen.getByTestId("dash-kpi-room-value").textContent).toBe("$0.00");
     expect(screen.getByTestId("dash-room-week").textContent).toBe("This week's plan $25.00 over");
+  });
+  it("one debt is 'left on' it; several are 'left across' an and-list", () => {
+    h.Q.debts = ok([debt("h1", "HELOC", "18500.00")]);
+    wrap(<SummaryRow />);
+    expect(screen.getByTestId("dash-debt-left").textContent).toBe("$18,500.00 left on HELOC");
   });
   it("the debt line says when its amount did not load, and never a balance on loading", () => {
     h.Q.debts = failed;
@@ -449,26 +472,36 @@ describe("coming up", () => {
     wrap(<UpcomingPanel />);
     const hook = screen.getAllByTestId("dash-up-row")[1]!;
     expect(hook.textContent).toContain("Weekly Spend");
-    expect(within(hook).getByTestId("dash-up-hook").textContent).toContain("card payoff · plan $450.00");
+    expect(within(hook).getByTestId("dash-up-hook").textContent).toContain("card payoff (plan $450)");
   });
-  it("⭐ the next-bill amount and the upcoming list agree (the header quotes the spine's next bill)", () => {
-    // A regular bill: the row IS the next bill, at the same single-payment amount.
-    let rows = upcomingRows({ signal: signal as never, recurring: [], debts: [], nextBill: { name: "Rent", amount: "1200.00", dueDate: "2026-10-10" }, today: "2026-10-08" });
-    const rent = rows.find((r) => r.isNextBill)!;
-    expect(rent.label).toBe("Rent");
-    expect(Math.abs(rent.amount)).toBe(1200);
-    // A hook item: the next bill's single payment ($450) is the row's PLAN amount, beside the card payoff the forecast pays.
-    rows = upcomingRows({ signal: signal as never, recurring: [{ id: "r6", frequency: "weekly" }], debts: [], nextBill: { name: "Weekly Spend", amount: "450.00", dueDate: "2026-10-10" }, today: "2026-10-08" });
-    const ws = rows.find((r) => r.isNextBill)!;
-    expect(ws.hook!.storedAmount).toBe(450);
-    // And on screen, the header and the list show the same figure.
-    h.spine.data = spine();
-    h.Q.bills = ok({ bills: [], debtMins: [], income: [], monthly: {} });
+  it("⭐ ONE next obligation, ONE amount: header, Needs attention and Coming up read the same hook-aware event", () => {
+    // The hooked Weekly Spend is due TOMORROW and is the first thing to leave checking.
+    h.Q.cash = ok({
+      account: cashAcct,
+      hookAmountIgnored: [{ itemId: "r6", cadence: "weekly", storedAmount: "450.00" }],
+      events: [
+        { date: "2026-10-09", label: "Weekly Spend", amount: "-477.57", itemId: "r6" },
+        { date: "2026-10-12", label: "Spectrum Internet", amount: "-79.99", itemId: "r5" },
+      ],
+    });
+    h.spine.data = spine({ reviewCount: 0 }); // the spine's own nextBill ($1,200 Rent) is NOT what the dashboard quotes now
     h.Q.items = ok([]);
-    wrap(<><DashboardHeader /><UpcomingPanel /></>);
-    const marked = screen.getAllByTestId("dash-up-row").find((r) => r.getAttribute("data-next-bill") === "true")!;
-    const amount = marked.querySelector("[data-testid='dash-up-amount']")!.textContent!;
-    expect(screen.getByTestId("dash-fact-next").textContent).toContain(amount);
+    h.Q.queue = ok({ total: 0 }); h.Q.dups = ok({ duplicateCount: 0 }); h.Q.findings = ok({ findings: [] });
+    h.Q.txns = ok([]); h.Q.cats = ok([]);
+    wrap(<><DashboardHeader /><UpcomingPanel /><AttentionPanel /></>);
+    const words = "Weekly Spend · card payoff $477.57 (plan $450)";
+    expect(screen.getByTestId("dash-fact-next").textContent).toBe(`Next: ${words} · Fri Oct 9`);
+    const first = screen.getAllByTestId("dash-up-row")[0]!;
+    expect(first.getAttribute("data-next")).toBe("true");
+    expect(within(first).getByTestId("dash-up-amount").textContent).toBe("$477.57");
+    expect(within(first).getByTestId("dash-up-hook").textContent).toContain("card payoff (plan $450)");
+    const due = screen.getByTestId("dash-att-bill");
+    expect(due.textContent).toContain(words);
+    expect(due.textContent).toContain("Due tomorrow");
+    // The stored $450 alone (what the Bills page and morning text quote) appears nowhere as the amount.
+    expect(screen.getByTestId("dash-fact-next").textContent).not.toMatch(/Weekly Spend \$450/);
+    // And a regular bill reads its one payment.
+    expect(obligationLine(upcomingRows({ signal: { events: [{ date: "2026-10-10", label: "Rent", amount: "-1200.00" }] } as never, today: "2026-10-08" })[0]!)).toBe("Rent $1,200.00 · Sat Oct 10");
   });
   it("says so when nothing is scheduled", () => {
     h.Q.cash = ok({ account: { via: "unresolved" }, events: [] });
@@ -585,7 +618,7 @@ describe("debt progress", () => {
 // ── Needs attention ───────────────────────────────────────────────────────
 describe("needs attention", () => {
   beforeEach(() => {
-    h.Q.bills = ok({ bills: [], debtMins: [], income: [], monthly: {} });
+    h.Q.cash = h.Q.cash ?? ok({ account: cashAcct, events: [] });
     h.Q.findings = ok({ findings: [] });
   });
   it("one list: the bank, the week, and the two review queues worded distinctly", () => {
@@ -708,7 +741,7 @@ describe("lazy panels match their skeletons", () => {
     h.Q.cash = ok({ status: "no_data", events: [], daily: [], account: cashAcct });
     h.Q.pos = ok({ spentWeekDiscretionary: "0", weekCap: null, remainingWeek: null, paceAllowedToday: null, weekStart: "2026-10-04", weekEnd: "2026-10-10" });
     h.Q.budget = ok({ summary: { expenses: { budget: "0", actual: "0" } } });
-    h.Q.bills = ok({ bills: [], debtMins: [], income: [], monthly: {} });
+    h.Q.cash = h.Q.cash ?? ok({ account: cashAcct, events: [] });
     h.Q.findings = ok({ findings: [] });
     h.Q.queue = ok({ total: 0 }); h.Q.dups = ok({ duplicateCount: 0 });
     h.Q.txns = ok([]); h.Q.items = ok([]); h.Q.cats = ok([]); h.Q.recurring = ok([]); h.Q.debts = ok([]);

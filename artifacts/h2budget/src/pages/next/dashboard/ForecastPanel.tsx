@@ -111,6 +111,7 @@ export default function ForecastPanel() {
                       onJumpToPlan={() => navigate("/forecast")}
                       onMarkMissed={noop}
                       lowLabel="short"
+                      monthTicks
                     />
                   </Suspense>
                 </div>
