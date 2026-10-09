@@ -90,7 +90,14 @@ describe("categorizer eval with the model stage (fake provider)", () => {
     const expectedCalls = Math.ceil(ids.size / MODEL_BATCH_SIZE);
     expect(fakeCalls).toHaveLength(expectedCalls);
     expect(filed).toBe(correct);
-    expect(filed).toBeGreaterThanOrEqual(ids.size - 2); // a row a heuristic already queued is not asked again
+    // (WP5c) The refund rows arrive here with no earlier purchase to link (B6)
+    // and no REFUND word: plain credits on checking. Code rejects the oracle's
+    // expense category for them (money in under an expense category), so they
+    // stay questions for a person. Every other answer is filed.
+    const rejected = [...ids.entries()].filter(([, k]) => k.kind === "refund");
+    expect(rejected).toHaveLength(3);
+    expect(filed).toBe(ids.size - rejected.length);
+    for (const [id] of rejected) expect(out.ambiguous).toContain(id);
     expect(out.decisions.filter((d) => d.source === "model").length).toBe(filed);
 
     // Cost per batch: a FULL 20-row call with 8 priors per row (the upper bound), sized from the real prompt (≈ 4 chars per token).
