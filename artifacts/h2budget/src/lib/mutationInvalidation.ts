@@ -19,9 +19,17 @@ import {
  * marked stale for its next reader. `mutationInvalidation.test.ts` pins every
  * key, so dropping one fails a test.
  */
+export const MONEY_POSITION_KEY = ["/api/money/position"] as const;
+export const WAYS_BACK_KEY = ["/api/money/ways-back"] as const;
+
 export function invalidateAfterWrite(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: getGetSpineQueryKey() });
   void queryClient.invalidateQueries({ queryKey: getGetForecastBankBalanceExplainQueryKey() });
+  // (F7) The money position and the ways back move with any spend, and a
+  // carry-over moves both. Literal keys, not the `features` module's key
+  // functions: this file is on the entry path and must not import that module.
+  void queryClient.invalidateQueries({ queryKey: MONEY_POSITION_KEY });
+  void queryClient.invalidateQueries({ queryKey: WAYS_BACK_KEY });
   void queryClient.invalidateQueries({
     predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/reports/"),
   });

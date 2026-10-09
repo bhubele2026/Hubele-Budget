@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
 import { Panel } from "@/components/next";
+import { WaysBackLauncher } from "@/components/ways-back/WaysBackLauncher";
 import { attentionItems, billsDueSoon } from "@/lib/attention";
 import { householdToday } from "@/lib/householdDay";
 import { useSpine } from "@/hooks/useSpine";
@@ -60,7 +61,9 @@ export default function BriefingPanel() {
                 <div className="text-micro uppercase tracking-wide text-neutral-500">Next</div>
                 <div className="text-label font-semibold text-brand-navy">{next.title}</div>
                 {next.detail ? <div className="text-micro text-neutral-600">{next.detail}</div> : null}
-                {next.action ? (
+                {next.wayBack ? (
+                  <WaysBackLauncher className="mt-2" />
+                ) : next.action ? (
                   <Link href={next.action.href} className="mt-1 inline-block text-label font-semibold text-brand-navy underline" data-testid="dash-action-link">
                     {next.action.label}
                   </Link>

@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Split } from "lucide-react";
 import { PageGrid } from "@/components/next";
 import { AffordLauncher } from "@/components/afford/AffordLauncher";
+import { WaysBackLauncher } from "@/components/ways-back/WaysBackLauncher";
+import { useSpine } from "@/hooks/useSpine";
+import { carryOverLine } from "@/lib/waysBack";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import {
   useListTransactions,
@@ -443,6 +446,7 @@ function BucketCard({
   onPrevPeriod,
   onNextPeriod,
   canNextPeriod,
+  extra,
 }: {
   name: string;
   help: string;
@@ -457,6 +461,8 @@ function BucketCard({
   onPrevPeriod?: () => void;
   onNextPeriod?: () => void;
   canNextPeriod?: boolean;
+  /** Under the variance line: the over-limit offer and the carry-over note (weekly). */
+  extra?: React.ReactNode;
 }) {
   const variance = actual - planned;
   const over = variance > 0;
@@ -634,6 +640,7 @@ function BucketCard({
               ? `${formatCurrency(variance)} over`
               : `${formatCurrency(Math.abs(variance))} under`}
         </div>
+        {extra}
       </div>
     </div>
   );
@@ -664,6 +671,14 @@ export default function AllowancesPage() {
   const monthScopeEnd = fmtISO(lastOfMonth(monthScopeStartDate));
 
   const weekIsCurrent = fmtISO(weekStart) === fmtISO(currentWeekStart);
+  // (F7) The household's own carry-over lives on the server's weekly position;
+  // this page keeps its client-side week figures and only READS the note.
+  const { data: spineData } = useSpine();
+  const carryLine = carryOverLine(
+    spineData?.position?.weekAdjustment,
+    fmtISO(weekStart),
+    fmtISO(currentWeekStart),
+  );
   const monthIsCurrent = fmtISO(monthStart) === fmtISO(currentMonthStart);
   const weekAtCurrent = weekStart >= currentWeekStart;
   const monthAtCurrent = monthStart >= currentMonthStart;
@@ -1128,6 +1143,20 @@ export default function AllowancesPage() {
             onNextPeriod={b.key === "weekly" ? weekNext : monthNext}
             canNextPeriod={
               b.key === "weekly" ? !weekAtCurrent : !monthAtCurrent
+            }
+            extra={
+              b.key === "weekly" ? (
+                <div className="mt-3 flex flex-col items-start gap-2">
+                  {weekIsCurrent && planned.weekly > 0 && actual.weekly > planned.weekly ? (
+                    <WaysBackLauncher />
+                  ) : null}
+                  {carryLine ? (
+                    <p className="text-micro text-neutral-600" data-testid="allowance-carry-over">
+                      {carryLine}
+                    </p>
+                  ) : null}
+                </div>
+              ) : undefined
             }
           />
         ))}

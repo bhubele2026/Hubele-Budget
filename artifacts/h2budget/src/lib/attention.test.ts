@@ -53,3 +53,12 @@ describe("bill helpers", () => {
     expect(upcomingBills(undefined, "2026-10-08")).toEqual([]);
   });
 });
+
+describe("attention — way back (F7)", () => {
+  it("the over item offers a way back; no other item does", () => {
+    const over = attentionItems({ ...base, withinPlan: "over", overBy: 40 })[0]!;
+    expect(over.wayBack).toBe(true);
+    expect(over.detail).toBe("Pick a way back. No lecture.");
+    expect(attentionItems({ ...base, reviewCount: 2 })[0]!.wayBack).toBeUndefined();
+  });
+});

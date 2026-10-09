@@ -20,6 +20,8 @@ export interface Attention {
   title: string;
   detail?: string;
   action?: { label: string; href: string };
+  /** (F7) The card offers "Pick a way back" (a sheet) instead of only a link. */
+  wayBack?: boolean;
 }
 
 export interface DueBill {
@@ -91,8 +93,9 @@ export function attentionItems(i: {
     out.push({
       kind: "over",
       title: `Over this week's limit${by}`,
-      detail: "See where the week went.",
+      detail: "Pick a way back. No lecture.",
       action: { label: "See allowances", href: "/allowances" },
+      wayBack: true,
     });
   }
   if (i.dueSoon.length > 0) {

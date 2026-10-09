@@ -98,3 +98,22 @@ describe("(PR14 review M3) writes that invalidate what they move themselves", ()
     }
   });
 });
+
+describe("invalidateAfterWrite — the money position and the ways back (F7)", () => {
+  it("marks both stale, so a filed charge or a carry-over never leaves them old", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["/api/money/position"], { seeded: true });
+    qc.setQueryData(["/api/money/ways-back"], { seeded: true });
+    qc.setQueryData(UNRELATED, { seeded: true });
+    invalidateAfterWrite(qc);
+    expect(invalidated(qc, ["/api/money/position"])).toBe(true);
+    expect(invalidated(qc, ["/api/money/ways-back"])).toBe(true);
+    expect(invalidated(qc, UNRELATED)).toBe(false);
+  });
+  it("the literal keys are the generated client's", async () => {
+    const f = await import("@workspace/api-client-react/features");
+    const { MONEY_POSITION_KEY, WAYS_BACK_KEY } = await import("./mutationInvalidation");
+    expect([...MONEY_POSITION_KEY]).toEqual(f.getGetMoneyPositionQueryKey());
+    expect([...WAYS_BACK_KEY]).toEqual(f.getGetWaysBackQueryKey());
+  });
+});
