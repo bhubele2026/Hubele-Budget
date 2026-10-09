@@ -136,12 +136,32 @@ describe("Handled by H2 — the trail, Why? and Undo", () => {
   });
 });
 
+// (Dashboard refinement) The findings are one block of the dashboard's single
+// Needs attention list, which stands on the spine; the other sources it reads
+// answer here too (an unanswered one only shows its own "did not load" row).
+const SPINE = {
+  asOf: "2026-10-07T15:00:00Z",
+  bank: { balance: "1000.00", asOfDate: "2026-10-07T12:00:00Z", source: "plaid", lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null },
+  spentMonth: 0, spentWeek: 0, nextBill: null, billsDueCount: 0,
+  forecast: { lowPoint: "900.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "ready" },
+  debt: { payoffPct: null, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0 },
+  reviewCount: 0,
+  position: { safeToSpendNow: null, remainingWeek: null, availableUntilPayday: null, paydayDate: null, horizonKind: "week_end", withinPlan: null, confidence: "firm", degraded: false, weekAdjustment: null },
+};
+const dashSources: Handler[] = [
+  on("GET", "/api/spine", SPINE),
+  on("GET", "/api/bills/summary", { bills: [], debtMins: [], income: [], monthly: {} }),
+  on("GET", "/api/plaid/items", []),
+  on("GET", "/api/categories", []),
+  on("GET", "/api/transactions", []),
+];
+
 describe("Needs attention — the dashboard's findings panel", () => {
   it("asks for the 10 open findings; Resolve and Dismiss post to their own endpoints and refetch", async () => {
     const api = apiWith(
       [],
       [finding("f1", "duplicate_charge"), finding("f2", "shortfall_before_income", { severity: "high", confidence: "confirmed", payload: { shortfall: 212 } })],
-      [on("POST", /agent\/findings\/f1\/dismiss$/, finding("f1", "duplicate_charge")), on("POST", /agent\/findings\/f2\/resolve$/, finding("f2", "shortfall_before_income"))],
+      [on("POST", /agent\/findings\/f1\/dismiss$/, finding("f1", "duplicate_charge")), on("POST", /agent\/findings\/f2\/resolve$/, finding("f2", "shortfall_before_income")), ...dashSources],
     );
     mount(<AttentionPanel />);
     const found = await screen.findAllByTestId("finding");
@@ -159,24 +179,26 @@ describe("Needs attention — the dashboard's findings panel", () => {
   });
 
   it("Why? shows the finding's figures", async () => {
-    apiWith([], [finding("f2", "shortfall_before_income", { payload: { shortfall: 212 } })]);
+    apiWith([], [finding("f2", "shortfall_before_income", { payload: { shortfall: 212 } })], dashSources);
     mount(<AttentionPanel />);
     fireEvent.click(await screen.findByRole("button", { name: "Why?" }));
     expect((await screen.findByTestId("why-figures")).textContent).toContain("Shortfall$212");
   });
 
   it("a refused dismiss says so and keeps the finding", async () => {
-    apiWith([], [finding("f1", "bank_stale")], [on("POST", /dismiss$/, { error: "no" }, 500)]);
+    apiWith([], [finding("f1", "bank_stale")], [on("POST", /dismiss$/, { error: "no" }, 500), ...dashSources]);
     mount(<AttentionPanel />);
     fireEvent.click(await screen.findByTestId("finding-dismiss"));
     expect(await screen.findByText("Couldn't dismiss that. It's still here.")).toBeTruthy();
     expect(screen.getAllByTestId("finding")).toHaveLength(1);
   });
 
-  it("nothing open, or no answer yet, draws no panel at all", async () => {
-    const api = apiWith([], []);
+  it("nothing open, or no answer yet, draws no findings block (a finding that is not there is not a zero)", async () => {
+    const api = apiWith([], [], dashSources);
     mount(<AttentionPanel />);
     await waitFor(() => expect(api.find("GET", /agent\/findings$/)).toHaveLength(1));
-    expect(screen.queryByTestId("dash-attention")).toBeNull();
+    expect(await screen.findByTestId("dash-attention")).toBeTruthy();
+    expect(screen.queryByTestId("dash-findings")).toBeNull();
+    expect(screen.queryByTestId("finding")).toBeNull();
   });
 });
