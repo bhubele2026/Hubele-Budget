@@ -14,6 +14,7 @@ import {
   type ReviewResolution,
 } from "@workspace/api-client-react/features";
 import { PageGrid, Panel } from "@/components/next";
+import { HandledByH2 } from "@/components/agent/HandledByH2";
 import { CategoryPickerDialog } from "@/components/review/CategoryPickerDialog";
 import { toastWithActions } from "@/components/ui/action-toast";
 import { useCategorizationQueue } from "@/hooks/useCategorizationQueue";
@@ -293,6 +294,7 @@ export default function ReviewCategoriesPage() {
             </>
           )}
         </Panel>
+        <HandledByH2 />
       </PageGrid>
       <CategoryPickerDialog
         open={changing != null}

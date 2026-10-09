@@ -12,3 +12,7 @@ export const BELOW_FOLD = {
 } as const;
 
 export type BelowFoldKey = keyof typeof BELOW_FOLD;
+
+/** (F3) The findings panel is outside BELOW_FOLD on purpose: it has no skeleton
+ *  and draws nothing when nothing is open, so it can sit last without a jump. */
+export const ATTENTION = { span: 12, rise: 8 } as const;
