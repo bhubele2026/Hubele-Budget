@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { db, agentFindingsTable } from "@workspace/db";
+import { db, agentFindingsTable, recurringItemsTable } from "@workspace/db";
 import { makeMembers, dropMembers, type TestMember } from "./_helpers/smsFixtures";
 import { FOR_DATE, NOW, seedRecapHousehold, seedStaleBank, wipeRecapHousehold } from "./_helpers/recapFixtures";
 import { recapFacts, registerCategorizationReviewCount } from "../recap/facts";
+import { renderRecapTemplate } from "../recap/template";
+import { buildBillsSummary } from "../lib/billsSummary";
 import { localDateInZone } from "@workspace/avalanche-core";
 
 // (AI-4a) recapFacts: every figure the morning text may use, worked by hand
@@ -84,6 +86,38 @@ describe("the rest of the facts", () => {
       { name: "Electric", date: "2026-10-08", weekday: "Thu", amount: 90, dueTomorrow: true },
       { name: "Water", date: "2026-10-10", weekday: "Sat", amount: 40, dueTomorrow: false },
     ]);
+  });
+
+  it("(dash-accuracy) a weekly bill due soon is ONE payment, in the facts and in the template text", async () => {
+    const [weekly] = await db
+      .insert(recurringItemsTable)
+      .values({
+        userId: A.userId,
+        householdId: A.householdId,
+        name: "Weekly Spend",
+        kind: "bill",
+        amount: "450",
+        frequency: "weekly",
+        anchorDate: "2026-10-09",
+        active: "true",
+      })
+      .returning();
+    try {
+      const f = await recapFacts(A.householdId, A.userId, A.userId, FOR_DATE);
+      expect(f.billsNext3Days).toEqual([
+        { name: "Electric", date: "2026-10-08", weekday: "Thu", amount: 90, dueTomorrow: true },
+        { name: "Weekly Spend", date: "2026-10-09", weekday: "Fri", amount: 450, dueTomorrow: false },
+        { name: "Water", date: "2026-10-10", weekday: "Sat", amount: 40, dueTomorrow: false },
+      ]);
+      // The Bills row keeps its month total: five Fridays in October 2026.
+      const summary = await buildBillsSummary(A.householdId, A.userId);
+      expect(summary.bills.find((b) => b.item.id === weekly!.id)!.monthlyAmount).toBe("2250.00");
+      const text = renderRecapTemplate(f, { maxLen: 2000 });
+      expect(text).toContain("Due soon: Electric $90 tomorrow, Weekly Spend $450 Fri and more.");
+      expect(text).not.toContain("2,250");
+    } finally {
+      await db.delete(recurringItemsTable).where(eq(recurringItemsTable.id, weekly!.id));
+    }
   });
 
   it("debt: a posted payment tagged to a debt yesterday, and a percentage (never a balance)", async () => {

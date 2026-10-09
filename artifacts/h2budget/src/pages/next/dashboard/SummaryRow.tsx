@@ -7,8 +7,9 @@ import { identityOf } from "@/lib/accountIdentity";
 import { remainingDebtScope } from "@/lib/debtBalance";
 import { lowPointView } from "@/lib/lowPoint";
 import { useSpine } from "@/hooks/useSpine";
+import { householdDayOfAt, householdToday } from "@/lib/householdDay";
 import { cn } from "@/lib/utils";
-import { useCashSignalQ, useDebtsQ, useMoneyPositionQ } from "./queries";
+import { useBankExplainQ, useCashSignalQ, useDebtsQ, useMoneyPositionQ } from "./queries";
 import { dayLabel, Kpi, money, PanelError, rise, weekdayLabel } from "./shared";
 
 /** "A", "A and B", "A, B and C". */
@@ -47,6 +48,14 @@ function CheckingCell({ s }: { s: Spine }) {
     : null;
   const noBank = !s.bank.source && !s.bank.asOfDate;
   const bal = Number(s.bank.balance);
+  // The figure is the snapshot rolled forward through the ledger (bank rows AND
+  // manual entries on the account, by design — PR #22). When the snapshot is
+  // from an earlier day, say how many rows it adds, from the diagnostic
+  // "Why this number?" reads (asked only then).
+  const snapDay = s.bank.asOfDate ? householdDayOfAt(s.bank.asOfDate) : null;
+  const rolled = !!snapDay && snapDay < householdToday(new Date());
+  const explain = useBankExplainQ(rolled);
+  const since = rolled ? explain.data?.ledger.sinceAnchor ?? null : null;
   return (
     <Kpi
       testid="dash-kpi-checking"
@@ -58,6 +67,11 @@ function CheckingCell({ s }: { s: Spine }) {
         identity ? <AccountChip identity={identity} size="sm" wrap /> : <span>Checking</span>,
         <span className="inline-flex flex-wrap items-center gap-x-2 text-micro text-neutral-500" data-testid="dash-freshness">
           <FreshnessLine bank={s.bank} />
+          {since && since.rowCount > 0 ? (
+            <span data-testid="dash-since-snapshot">
+              · includes {since.rowCount} {since.rowCount === 1 ? "entry" : "entries"} since the {dayLabel(snapDay)} snapshot
+            </span>
+          ) : null}
           <BankBalanceWhy />
         </span>,
       ]}
@@ -91,6 +105,9 @@ function LowCell({ s }: { s: Spine }) {
   const f = s.forecast;
   const v = lowPointView(f, { buffer: f.cashBuffer, stale: s.bank.stale });
   const when = v.date ? `${weekdayLabel(v.date) ?? dayLabel(v.date)} · next 90 days` : "next 90 days";
+  // How far under the buffer, as the cash panel said it (dash-accuracy).
+  const buf = Number(f.cashBuffer);
+  const short = v.value != null && Number.isFinite(buf) && v.value < buf ? buf - v.value : null;
   return (
     <Kpi
       testid="dash-kpi-low"
@@ -100,8 +117,9 @@ function LowCell({ s }: { s: Spine }) {
       missing={v.kind === "none" ? v.words : undefined}
       lines={v.kind === "none" ? [] : [
         <span data-testid="dash-low-when">{when}</span>,
-        <span data-testid="dash-low-words" className={cn(v.kind === "below" && "font-semibold text-bad")}>
-          {v.words}
+        <span className={cn(v.kind === "below" && "font-semibold text-bad")}>
+          <span data-testid="dash-low-words">{v.words}</span>
+          {short != null ? <span data-testid="dash-under-buffer"> · short by {money(short)}</span> : null}
           {f.runwayDays != null ? <span data-testid="dash-runway"> · below zero in {f.runwayDays} days</span> : null}
         </span>,
       ]}

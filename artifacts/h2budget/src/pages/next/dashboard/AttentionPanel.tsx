@@ -5,10 +5,11 @@ import { Panel } from "@/components/next";
 import { FindingsList } from "@/components/agent/FindingsList";
 import { useOpenFindings } from "@/components/agent/agentHooks";
 import { attentionItems, billsDueSoon } from "@/lib/attention";
-import { householdToday } from "@/lib/householdDay";
+import { addDaysISO, householdToday } from "@/lib/householdDay";
+import { categoriesByIdOf, isInflowFiledAsExpense } from "@/lib/categoryDirection";
 import { useSpine } from "@/hooks/useSpine";
 import { useBillsSummaryQ } from "./queries";
-import { useDuplicateCountQ, useReviewQueueQ } from "./queriesLazy";
+import { RECENT_LIMIT, RECENT_WINDOW_DAYS, useCategoriesQ, useDuplicateCountQ, useRecentTxnsQ, useReviewQueueQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { Empty, Gate, LABEL, rise } from "./shared";
 
@@ -80,6 +81,8 @@ export default function AttentionPanel() {
   const dups = useDuplicateCountQ();
   const findingsQ = useOpenFindings();
   const today = householdToday(new Date());
+  const recent = useRecentTxnsQ(today, addDaysISO(today, -RECENT_WINDOW_DAYS));
+  const cats = useCategoriesQ();
   const s = spine.data;
   const q = { data: s, isError: spine.state === "failed", refetch: spine.refetch };
 
@@ -96,6 +99,16 @@ export default function AttentionPanel() {
     }).filter((a) => a.kind !== "nothing");
   }, [s, bills.data, today]);
 
+  // (dash-accuracy) "Income filed under an expense category", by the shared
+  // pure rule, over the recent window Recent activity reads (one request).
+  const misfiled = useMemo(() => {
+    if (recent.data === undefined || cats.data === undefined) return null;
+    const byId = categoriesByIdOf(cats.data);
+    return recent.data.filter((t) => isInflowFiledAsExpense(t, byId)).map((t) => ({
+      id: t.id, description: t.description, category: byId.get(t.categoryId ?? "")?.name ?? null,
+    }));
+  }, [recent.data, cats.data]);
+  const misfiledCapped = (recent.data?.length ?? 0) >= RECENT_LIMIT;
   const findings = findingsQ.data?.findings ?? [];
   const review = s?.reviewCount ?? 0;
   const cat = queue.data?.total ?? 0;
@@ -103,7 +116,8 @@ export default function AttentionPanel() {
   // (D20) A queue that is still loading or failed is not "nothing waiting".
   const catKnown = queue.data !== undefined;
   const dupKnown = dups.data !== undefined;
-  const decisions = review + cat + dup;
+  const income = misfiled?.length ?? 0;
+  const decisions = review + cat + dup + income;
   const allClear = now.length === 0 && decisions === 0 && catKnown && dupKnown && findings.length === 0;
 
   return (
@@ -135,6 +149,15 @@ export default function AttentionPanel() {
                     <PendingRow failed={!!dups.isError} label="Possible duplicates" testid="dash-review-dups-pending" onRetry={dups.refetch ? () => void dups.refetch() : undefined} />
                   ) : dup > 0 ? (
                     <Row href="/transactions" count={dup} label="Possible duplicates" testid="dash-review-dups" />
+                  ) : null}
+                  {income > 0 ? (
+                    <Row
+                      href={`/transactions?tx=${encodeURIComponent(misfiled![0]!.id)}${misfiled![0]!.category ? `&category=${encodeURIComponent(misfiled![0]!.category)}` : ""}`}
+                      count={income}
+                      label="Income filed under an expense category"
+                      detail={`${misfiled![0]!.description}${misfiled![0]!.category ? ` · ${misfiled![0]!.category}` : ""}${income > 1 ? ` and ${income - 1} more` : ""} · last ${RECENT_WINDOW_DAYS} days${misfiledCapped ? `, newest ${RECENT_LIMIT} rows` : ""}`}
+                      testid="dash-review-income"
+                    />
                   ) : null}
                 </Group>
               ) : null}

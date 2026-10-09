@@ -16,6 +16,8 @@ export interface TxnRow {
   pending: boolean;
   category?: string | null;
   href?: string;
+  /** A review flag said in words ("Income in an expense category"), shown as a chip. */
+  flag?: string | null;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -64,6 +66,7 @@ export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRo
                 <span>{r.category || "Uncategorized"}</span>
                 <span aria-hidden>·</span>
                 <span>{r.pending ? "Pending" : "Posted"}</span>
+                {r.flag ? <span className="chip warn" data-testid="txn-flag">{r.flag}</span> : null}
               </div>
             </li>
           );
@@ -104,7 +107,10 @@ export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRo
                 <td className={cn(td, "whitespace-nowrap py-1 font-mono tabular-nums text-neutral-600")}>{shortDate(r.date)}</td>
                 <td className={cn(td, "max-w-[22rem] truncate py-1")}>{r.description}</td>
                 <td className={cn(td, "py-1")}><AccountChip identity={r.identity} size="sm" /></td>
-                <td className={cn(td, "py-1 text-neutral-600")}>{r.category || "Uncategorized"}</td>
+                <td className={cn(td, "py-1 text-neutral-600")}>
+                  {r.category || "Uncategorized"}
+                  {r.flag ? <span className="chip warn ml-2" data-testid="txn-flag">{r.flag}</span> : null}
+                </td>
                 <td className={cn(td, "py-1 text-neutral-600")}>{r.pending ? "Pending" : "Posted"}</td>
                 <td className={cn(tdNum, "py-1", r.amount < 0 ? "text-brand-ink" : "text-brand-navy")}>
                   {formatDisplayAmount(r.amount)}

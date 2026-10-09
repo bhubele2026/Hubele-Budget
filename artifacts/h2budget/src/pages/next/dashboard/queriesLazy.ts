@@ -42,3 +42,10 @@ export const useTxnsQ = (params: ListTransactionsParams) =>
   useListTransactions(params, {
     query: { queryKey: getListTransactionsQueryKey(params), staleTime: MIN, gcTime: GC },
   });
+
+/** The recent window both Recent activity (its newest 6) and the
+ *  income-in-expense check read: ONE bounded request, shared by key. */
+export const RECENT_WINDOW_DAYS = 30;
+export const RECENT_LIMIT = 100;
+export const useRecentTxnsQ = (today: string, from: string) =>
+  useTxnsQ({ from, to: today, limit: RECENT_LIMIT });

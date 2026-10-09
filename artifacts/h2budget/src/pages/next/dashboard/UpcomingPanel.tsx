@@ -122,7 +122,7 @@ export default function UpcomingPanel() {
                         {[r.frequency, KIND_WORD[r.kind]].filter(Boolean).join(" · ")}
                         {r.hook ? (
                           <span data-testid="dash-up-hook">
-                            {r.frequency || KIND_WORD[r.kind] ? " · " : ""}card payoff, plan {money(r.hook.storedAmount)}
+                            {r.frequency || KIND_WORD[r.kind] ? " · " : ""}card payoff · plan {money(r.hook.storedAmount)}
                           </span>
                         ) : null}
                       </span>

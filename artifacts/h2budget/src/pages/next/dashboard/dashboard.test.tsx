@@ -20,6 +20,8 @@ vi.mock("./queries", () => ({
   useAmexQ: () => get("amex"),
   useMoneyPositionQ: () => get("pos"),
   useBillsSummaryQ: () => get("bills"),
+  useLiabilityAccountsQ: () => get("liab"),
+  useBankExplainQ: () => get("explain"),
 }));
 vi.mock("./queriesLazy", () => ({
   useCategoriesQ: () => get("cats"),
@@ -28,6 +30,9 @@ vi.mock("./queriesLazy", () => ({
   useBudgetMonthQ: () => get("budget"),
   useRecurringQ: () => get("recurring"),
   useTxnsQ: () => get("txns"),
+  useRecentTxnsQ: () => get("txns"),
+  RECENT_WINDOW_DAYS: 30,
+  RECENT_LIMIT: 100,
 }));
 vi.mock("./RecapPreview", () => ({ default: () => <div data-testid="recap-stub">morning text</div> }));
 vi.mock("@/hooks/useSpine", () => ({ useSpine: () => h.spine }));
@@ -126,6 +131,14 @@ describe("header", () => {
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("afford");
     expect(screen.getByTestId("afford-open").textContent).toBe("Can we afford something?");
   });
+  it("no bank linked: the one action is the app's link path, and the facts say why the page is empty", () => {
+    h.Q.items = ok([]);
+    h.spine.data = spine({ nextBill: null, reviewCount: 0, position: { ...spine().position, safeToSpendNow: null } });
+    wrap(<DashboardHeader />);
+    expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("link");
+    expect(screen.getByTestId("dash-link-bank").getAttribute("href")).toBe("/settings");
+    expect(screen.getByTestId("dash-facts").textContent).toContain("No bank is linked yet");
+  });
   it("the morning text is behind a disclosure and only loads when opened", async () => {
     wrap(<DashboardHeader />);
     expect(screen.queryByTestId("recap-stub")).toBeNull();
@@ -203,6 +216,20 @@ describe("summary row: four figures, status-aware", () => {
     expect(screen.getByTestId("dash-low-when").textContent).toBe("Tue Oct 20 · next 90 days");
     expect(screen.getByTestId("dash-low-words").textContent).toContain("below your $500 buffer");
   });
+  it("(dash-accuracy) under the buffer says how far short; tight and ready say where it sits", () => {
+    const a = wrap(<SummaryRow />);
+    expect(screen.getByTestId("dash-under-buffer").textContent).toContain("short by $150.00");
+    a.unmount();
+    h.spine.data = spine({ forecast: { lowPoint: "620.00", lowPointDate: "2026-10-21", runwayDays: null, cashBuffer: "500.00", status: "tight" } });
+    const b = wrap(<SummaryRow />);
+    expect(screen.getByTestId("dash-kpi-low-value").textContent).toBe("$620.00");
+    expect(screen.getByTestId("dash-low-words").textContent).toContain("just above your $500 buffer");
+    expect(screen.queryByTestId("dash-under-buffer")).toBeNull();
+    b.unmount();
+    h.spine.data = spine({ forecast: { lowPoint: "1500.00", lowPointDate: "2026-10-22", runwayDays: null, cashBuffer: "500.00", status: "ready" } });
+    wrap(<SummaryRow />);
+    expect(screen.getByTestId("dash-low-words").textContent).toBe("above your $500 buffer");
+  });
   it("negative: the low point carries the alarm tone and says when it goes below zero", () => {
     h.spine.data = spine({ forecast: { lowPoint: "-120.00", lowPointDate: "2026-10-20", runwayDays: 12, cashBuffer: "500.00", status: "not_yet" }, bank: { ...spine().bank, balance: "-40.00" } });
     wrap(<SummaryRow />);
@@ -234,6 +261,17 @@ describe("summary row: four figures, status-aware", () => {
     wrap(<SummaryRow />);
     expect(screen.getByTestId("dash-kpi-checking-value").textContent).toBe("$4,200.50");
     expect(screen.getByTestId("dash-low-words").textContent).toContain("from an out-of-date bank balance");
+  });
+  it("a snapshot from an earlier day says how many rows the balance rolls forward (manual entries included, by design)", () => {
+    h.spine.data = spine({ bank: { ...spine().bank, asOfDate: "2026-10-05T15:00:00Z", stale: true, staleReason: "old" } });
+    h.Q.explain = ok({ ledger: { anchorDay: "2026-10-05", sinceAnchor: { rowCount: 2, net: "-24.00" }, recentRows: [] } });
+    const a = wrap(<SummaryRow />);
+    expect(screen.getByTestId("dash-since-snapshot").textContent).toContain("includes 2 entries since the Oct 5 snapshot");
+    a.unmount();
+    // Same-day snapshot: nothing rolled on top, nothing said.
+    h.spine.data = spine({ bank: { ...spine().bank, asOfDate: "2026-10-08T15:00:00Z" } });
+    wrap(<SummaryRow />);
+    expect(screen.queryByTestId("dash-since-snapshot")).toBeNull();
   });
   it("over the week's plan: room is the real $0 the position computes, said in words", () => {
     h.spine.data = spine({ position: { ...spine().position, safeToSpendNow: "0.00", remainingWeek: "-25.00", withinPlan: "over" } });
@@ -287,20 +325,41 @@ describe("accounts list", () => {
     expect(screen.getAllByTestId("dash-account")).toHaveLength(5);
     expect(panel.className).not.toContain("panel-link"); // no hover lift on a panel that is not a destination
   });
-  it("cash held for checking, owed + statement + minimum + due for a card, and only fields that exist", () => {
+  it("cash held for checking, owed + minimum + due for a card on the debt list, and only fields that exist", () => {
+    h.Q.liab = ok([]);
     wrap(<AccountsPanel />);
     const rows = screen.getAllByTestId("dash-account");
     expect(within(rows[0]!).getByTestId("dash-account-balance").textContent).toBe("$4,200.50");
     expect(rows[0]!.textContent).toContain("Cash held");
     expect(within(rows[1]!).getByTestId("dash-account-nobalance").textContent).toContain("Savings balance is not tracked");
     expect(within(rows[2]!).getByTestId("dash-account-balance").textContent).toBe("$1,500.00");
-    expect(within(rows[2]!).getByTestId("dash-account-statement").textContent).toContain("$1,200.00");
     expect(within(rows[2]!).getByTestId("dash-account-min").textContent).toContain("$35.00");
     expect(within(rows[2]!).getByTestId("dash-account-due").textContent).toContain("the 22nd");
-    // A card with no debt row says so in words: no dashes standing in for zeros.
+    // A card with nothing reported anywhere says so in words: no dashes or zeros standing in.
     expect(within(rows[3]!).queryByTestId("dash-account-balance")).toBeNull();
     expect(within(rows[3]!).getByTestId("dash-account-nodebt")).toBeTruthy();
     expect(rows[3]!.textContent).not.toContain("$0");
+  });
+  it("a card that is not on the debt list reads Plaid's stored liability figures; a missing one is words, never $0", () => {
+    h.Q.debts = ok([]);
+    h.Q.liab = ok([
+      { id: "x1", accountId: "p-x1", balance: "684.12", minPayment: "40.00", suggestedDebt: { name: "Platinum", type: "credit_card", dueDay: 14 } },
+      { id: "k1", accountId: "p-k1", balance: null, minPayment: null, suggestedDebt: { name: "Quicksilver", type: "credit_card", dueDay: 22 } },
+    ]);
+    wrap(<AccountsPanel />);
+    const rows = screen.getAllByTestId("dash-account");
+    expect(within(rows[2]!).getByTestId("dash-account-balance").textContent).toBe("$684.12");
+    expect(within(rows[2]!).getByTestId("dash-account-min").textContent).toContain("$40.00");
+    expect(within(rows[2]!).getByTestId("dash-account-due").textContent).toContain("the 14th");
+    expect(within(rows[3]!).getByTestId("dash-account-noowed").textContent).toBe("not reported");
+    expect(within(rows[3]!).queryByTestId("dash-account-min")).toBeNull();
+    expect(rows[3]!.textContent).not.toContain("$0");
+  });
+  it("no bank linked: an honest empty state with the existing link path", () => {
+    h.Q.items = ok([]);
+    wrap(<AccountsPanel />);
+    expect(screen.getByTestId("dash-accounts-empty").textContent).toContain("No bank accounts are linked yet");
+    expect(screen.getByTestId("dash-accounts-link-bank").getAttribute("href")).toBe("/settings");
   });
   it("full names and ••last4, never truncated", () => {
     wrap(<AccountsPanel />);
@@ -383,7 +442,7 @@ describe("coming up", () => {
     wrap(<UpcomingPanel />);
     const hook = screen.getAllByTestId("dash-up-row")[1]!;
     expect(hook.textContent).toContain("Weekly Spend");
-    expect(within(hook).getByTestId("dash-up-hook").textContent).toContain("card payoff, plan $450.00");
+    expect(within(hook).getByTestId("dash-up-hook").textContent).toContain("card payoff · plan $450.00");
   });
   it("⭐ the next-bill amount and the upcoming list agree (the header quotes the spine's next bill)", () => {
     // A regular bill: the row IS the next bill, at the same single-payment amount.
@@ -526,6 +585,23 @@ describe("needs attention", () => {
     expect(screen.getByTestId("dash-review-cats").getAttribute("href")).toBe("/review/categories");
     expect(screen.getByTestId("dash-review-dups").getAttribute("href")).toBe("/transactions");
   });
+  it("(dash-accuracy) flags income filed under an expense category, by the shared rule, linking to the row", () => {
+    h.spine.data = spine({ reviewCount: 0 });
+    h.Q.queue = ok({ total: 0 });
+    h.Q.dups = ok({ duplicateCount: 0 });
+    h.Q.cats = ok([{ id: "dining", name: "Dining & Coffee", kind: "expense" }]);
+    const row = (o: Record<string, unknown>) => ({
+      id: "t1", occurredOn: "2026-10-08", description: "ACME PAYROLL DIRECT DEP", amount: "2100.00", source: "plaid:chase", categoryId: "dining",
+      isTransfer: false, debtId: null, isExternalCardPayment: false, reimbursable: false, pfcDetailed: "INCOME_WAGES", ...o,
+    });
+    h.Q.txns = ok([row({}), row({ id: "t2", reimbursable: true, description: "VENMO FROM J" }), row({ id: "t3", amount: "-8.00" })]);
+    wrap(<AttentionPanel />);
+    const r = screen.getByTestId("dash-review-income");
+    expect(r.textContent).toContain("Income filed under an expense category");
+    expect(r.textContent).toContain("ACME PAYROLL DIRECT DEP · Dining & Coffee");
+    expect(r.textContent).not.toContain("more"); // the reimbursable credit is not flagged
+    expect(r.getAttribute("href")).toBe("/transactions?tx=t1&category=Dining%20%26%20Coffee");
+  });
   it("keeps the monitor's findings (Why / Resolve / Dismiss live in FindingsList)", () => {
     h.Q.queue = ok({ total: 0 });
     h.Q.dups = ok({ duplicateCount: 0 });
@@ -559,9 +635,11 @@ describe("recent activity", () => {
   it("six rows as a list with identity, status and category; All activity opens the ledger", () => {
     h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "4821" })])]);
     h.Q.cats = ok([{ id: "cat1", name: "Groceries" }]);
+    // ⚠️ (dash-accuracy) A transaction carries Plaid's EXTERNAL account_id
+    // (`acct()` gives each account `accountId: "p-<id>"`), never the internal row id.
     h.Q.txns = ok([
-      { id: "t1", occurredOn: "2026-10-07", description: "Aldi", amount: "-32.10", plaidAccountId: "c1", pending: false, categoryId: "cat1" },
-      { id: "t2", occurredOn: "2026-10-07", description: "Cash deposit", amount: "50.00", plaidAccountId: null, account: "Manual", pending: true, categoryId: null },
+      { id: "t1", occurredOn: "2026-10-07", description: "Aldi", amount: "-32.10", plaidAccountId: "p-c1", source: "plaid:chase", pending: false, categoryId: "cat1" },
+      { id: "t2", occurredOn: "2026-10-07", description: "Cash deposit", amount: "50.00", plaidAccountId: null, source: "manual", account: "Manual", pending: true, categoryId: null },
     ]);
     wrap(<ActivityPanel />);
     expect(screen.getByTestId("txn-list")).toBeTruthy();
@@ -569,12 +647,42 @@ describe("recent activity", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]!.textContent).toContain("Aldi");
     expect(rows[0]!.textContent).toContain("Groceries");
+    expect(rows[0]!.querySelector('[title="Chase Total Checking"]')).toBeTruthy();
+    expect(rows[1]!.querySelector('[title="Manual entry"]')).toBeTruthy();
     expect(rows[0]!.textContent).toContain("••4821");
     expect(rows[0]!.textContent).toContain("Posted");
     expect(rows[0]!.textContent).toContain("-$32.10");
     expect(rows[1]!.textContent).toContain("Pending");
     expect(rows[1]!.textContent).toContain("Uncategorized");
     expect(screen.getByTestId("dash-all-activity").getAttribute("href")).toBe("/transactions");
+  });
+  it("(dash-accuracy) never prints a bare 'Account': every source is named honestly", () => {
+    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "4821" })])]);
+    h.Q.cats = ok([]);
+    h.Q.txns = ok([
+      { id: "t1", occurredOn: "2026-10-07", description: "Workbook row", amount: "18.00", plaidAccountId: null, source: "amex", pending: false, categoryId: null },
+      { id: "t2", occurredOn: "2026-10-07", description: "Old card", amount: "-9.00", plaidAccountId: "p-gone", source: "plaid:chase", pending: false, categoryId: null },
+      { id: "t3", occurredOn: "2026-10-06", description: "Mystery", amount: "-1.00", plaidAccountId: null, source: "xlsx", pending: false, categoryId: null },
+      // The internal row id is not a transaction's account id: it must not resolve.
+      { id: "t4", occurredOn: "2026-10-06", description: "Wrong key", amount: "-2.00", plaidAccountId: "c1", source: "plaid:chase", pending: false, categoryId: null },
+    ]);
+    wrap(<ActivityPanel />);
+    const rows = screen.getAllByTestId("txn-row");
+    const titles = rows.map((r) => r.querySelector("[title]")?.getAttribute("title"));
+    expect(titles).toEqual(["Amex (imported)", "Chase (no longer linked)", "Unknown account", "Chase (no longer linked)"]);
+    for (const r of rows) expect(r.querySelector('[title="Account"]')).toBeNull();
+    // An Amex WORKBOOK row is stored charge-positive: it still reads as money out.
+    expect(rows[0]!.textContent).toContain("-$18.00");
+  });
+  it("chips a recent credit filed under an expense category", () => {
+    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "4821" })])]);
+    h.Q.cats = ok([{ id: "dining", name: "Dining & Coffee", kind: "expense" }]);
+    h.Q.txns = ok([
+      { id: "t1", occurredOn: "2026-10-08", description: "ACME PAYROLL DIRECT DEP", amount: "2100.00", plaidAccountId: "p-c1", source: "plaid:chase", categoryId: "dining",
+        isTransfer: false, debtId: null, isExternalCardPayment: false, reimbursable: false, pfcDetailed: "INCOME_WAGES", pending: false },
+    ]);
+    wrap(<ActivityPanel />);
+    expect(screen.getByTestId("txn-flag").textContent).toBe("Income in an expense category");
   });
 });
 

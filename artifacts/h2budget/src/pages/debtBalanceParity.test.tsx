@@ -140,6 +140,8 @@ vi.mock("@workspace/api-client-react", () => {
     getGetForecastCashSignalQueryKey: () => ["cash-signal"],
     useGetMoneyPosition: () => ({ data: undefined, isLoading: true }),
     getGetMoneyPositionQueryKey: () => ["money-position"],
+    useGetForecastBankBalanceExplain: () => ({ data: undefined, isLoading: false }),
+    getGetForecastBankBalanceExplainQueryKey: () => ["bank-explain"],
   };
 });
 

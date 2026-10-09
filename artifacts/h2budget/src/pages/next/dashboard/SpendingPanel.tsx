@@ -4,7 +4,8 @@ import { CssFillMeter } from "@/lib/cssBars";
 import { useSpine } from "@/hooks/useSpine";
 import { householdToday, monthBounds } from "@/lib/householdDay";
 import { cn, formatCurrency } from "@/lib/utils";
-import { useMoneyPositionQ } from "./queries";
+import { useMoneyPositionQ, usePlaidItemsQ } from "./queries";
+import { hasLinkedBank } from "./bankState";
 import { useBudgetMonthQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { Gate, LABEL, LINK, money, rise, weekdayLabel } from "./shared";
@@ -57,6 +58,8 @@ export default function SpendingPanel() {
   const spine = useSpine().data;
   const pos = useMoneyPositionQ();
   const budget = useBudgetMonthQ(mb.start);
+  const items = usePlaidItemsQ();
+  const noBank = items.data !== undefined && !hasLinkedBank(items.data);
 
   const p = pos.data;
   const bud = budget.data?.summary.expenses;
@@ -68,7 +71,18 @@ export default function SpendingPanel() {
     <Panel title="Spending pace" span={6} variant="static"
       className={cn(rise(BELOW_FOLD.spending.rise), BELOW_FOLD.spending.minH)} data-testid="dash-spending">
       <Gate q={pos} what="Spending" rows={5}>
-        {() => {
+        {() => noBank ? (
+          <div className="space-y-3" data-testid="dash-spending-empty">
+            <p className="text-body text-neutral-600">
+              Spending is measured from your bank and card rows, and no bank is linked yet.
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-label">
+              <Link href="/settings" className={LINK}>Link a bank</Link>
+              <Link href="/allowances" className={LINK}>Set a weekly plan</Link>
+              <Link href="/budget" className={LINK}>Budget</Link>
+            </div>
+          </div>
+        ) : (() => {
           const spent = Number(p!.spentWeekDiscretionary);
           const cap = p!.weekCap == null ? null : Number(p!.weekCap);
           const rem = p!.remainingWeek == null ? null : Number(p!.remainingWeek);
@@ -119,7 +133,7 @@ export default function SpendingPanel() {
               </div>
             </div>
           );
-        }}
+        })()}
       </Gate>
     </Panel>
   );
