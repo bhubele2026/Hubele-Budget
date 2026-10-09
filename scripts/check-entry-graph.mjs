@@ -5,7 +5,7 @@
  * After `pnpm run build`, this script inspects what the browser actually
  * downloads to open an app: the <script type="module"> entry plus every
  * <link rel="modulepreload"> chunk in its dist's index.html (by default the
- * classic app, artifacts/h2budget/dist/public), expanded through each chunk's
+ * app, artifacts/h2budget/dist/public), expanded through each chunk's
  * STATIC imports (a statically
  * imported chunk loads on open even if index.html forgot to preload it;
  * dynamic `import(...)` chunks are lazy and excluded on purpose).
@@ -24,11 +24,12 @@
  * On success it prints every landing chunk with its size so the numbers are
  * visible in CI logs. Plain node builtins only — no dependencies.
  *
- * Usage (both run in CI after the build):
+ * Usage (CI runs it after the build):
  *   node scripts/check-entry-graph.mjs
- *       the classic app at artifacts/h2budget/dist/public, 622,000 bytes
- *   node scripts/check-entry-graph.mjs --dist artifacts/h2/dist/public --max 400000
- *       H2 (S0, 2026-10-07): the new app's open path is capped at 400 KB
+ *       the app at artifacts/h2budget/dist/public, 622,000 bytes
+ *   node scripts/check-entry-graph.mjs --dist <dir> --max <bytes>
+ *       another build or budget. (The interim H2 app, capped at 400 KB with
+ *       these flags, was deleted at the switch on 2026-10-09.)
  * `--dist` resolves from the repo root (an absolute path is used as is).
  */
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";

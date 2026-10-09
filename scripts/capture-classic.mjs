@@ -4,14 +4,16 @@
  *
  * Signs in through Clerk exactly as the classic e2e suite does
  * (artifacts/h2budget/e2e/helpers/clerk.ts: testing token, then a backend-
- * minted sign-in ticket — no password, no MFA), opens every classic route
- * under /classic, and saves a full-page PNG at a phone and a desktop size.
+ * minted sign-in ticket — no password, no MFA), opens every route of the app
+ * (served at `/` since the switch on 2026-10-09; it was `/classic` when these
+ * baselines were first taken), and saves a full-page PNG at a phone and a
+ * desktop size.
  * Each later stage's review note compares its screens against these.
  *
  * Output: screenshots/classic-baseline/<390x844|1280x800>/<route>.png
  * (gitignored: screens of a signed-in household are never committed).
  *
- * Needs a running server with both builds (`pnpm run build`, then
+ * Needs a running server with the build (`pnpm run build`, then
  * `node artifacts/api-server/dist/index.mjs`) and a Clerk DEVELOPMENT
  * instance's keys. Not run in CI.
  *
@@ -119,7 +121,7 @@ async function main() {
       const page = await context.newPage();
 
       // The signed-out front door first.
-      await page.goto(`${BASE_URL}/classic/sign-in`);
+      await page.goto(`${BASE_URL}/sign-in`);
       await page.waitForFunction(() => window.Clerk?.loaded === true, null, { timeout: 30_000 });
       await page.screenshot({ path: path.join(dir, "sign-in.png"), fullPage: true });
       saved.push(`${vp.name}/sign-in.png`);
@@ -129,7 +131,7 @@ async function main() {
       await page.waitForFunction(() => Boolean(window.Clerk?.session), null, { timeout: 30_000 });
 
       for (const route of ROUTES) {
-        await page.goto(`${BASE_URL}/classic${route}`);
+        await page.goto(`${BASE_URL}${route}`);
         await page.waitForLoadState("networkidle").catch(() => {});
         // Charts draw in JS; give a lazy route's chunk and its first paint a beat.
         await page.waitForTimeout(800);
