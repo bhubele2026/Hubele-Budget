@@ -59,7 +59,7 @@ export function AddToAvalanche({
         type="button"
         onClick={() => setOpen(true)}
         data-testid="amex-add-to-avalanche"
-        className="rounded-md border border-primary/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary transition-colors hover:bg-primary/10"
+        className="rounded-md border border-brand-navy/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-navy transition-colors hover:bg-brand-tint"
       >
         + Add to Avalanche
       </button>
@@ -104,12 +104,12 @@ export function AddToAvalanche({
   };
 
   return (
-    <div className="space-y-2 rounded-md border border-card-border p-2">
-      <div className="text-[10px] text-muted-foreground">
+    <div className="space-y-2 rounded-md border border-brand-line p-2">
+      <div className="text-[10px] text-neutral-500">
         Balance <MoneyText amount={card.statementBalance} /> · auto-syncs from Plaid
       </div>
       <div className="flex gap-1.5">
-        <label className="flex-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <label className="flex-1 text-[10px] uppercase tracking-wide text-neutral-500">
           APR %
           <input
             value={aprPct}
@@ -117,10 +117,10 @@ export function AddToAvalanche({
             inputMode="decimal"
             placeholder="24.99"
             aria-label="APR percent"
-            className="mt-0.5 w-full rounded border border-card-border bg-background px-1.5 py-1 text-xs text-foreground"
+            className="mt-0.5 w-full rounded border border-brand-line bg-white px-1.5 py-1 text-xs text-brand-navy"
           />
         </label>
-        <label className="flex-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <label className="flex-1 text-[10px] uppercase tracking-wide text-neutral-500">
           Min payment $
           <input
             value={minPayment}
@@ -128,18 +128,18 @@ export function AddToAvalanche({
             inputMode="decimal"
             placeholder="40.00"
             aria-label="Minimum payment"
-            className="mt-0.5 w-full rounded border border-card-border bg-background px-1.5 py-1 text-xs text-foreground"
+            className="mt-0.5 w-full rounded border border-brand-line bg-white px-1.5 py-1 text-xs text-brand-navy"
           />
         </label>
       </div>
-      {err && <div className="text-[10px] text-destructive">{err}</div>}
+      {err && <div className="text-[10px] text-bad">{err}</div>}
       <div className="flex gap-1.5">
         <button
           type="button"
           disabled={busy}
           onClick={() => void submit()}
           data-testid="amex-add-to-avalanche-confirm"
-          className="rounded-md bg-primary px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground disabled:opacity-50"
+          className="rounded-md bg-brand-navy px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white disabled:opacity-50"
         >
           {busy ? "Adding…" : "Add"}
         </button>
@@ -147,7 +147,7 @@ export function AddToAvalanche({
           type="button"
           disabled={busy}
           onClick={() => setOpen(false)}
-          className="rounded-md border border-card-border px-2 py-1 text-[10px] text-muted-foreground"
+          className="rounded-md border border-brand-line px-2 py-1 text-[10px] text-neutral-500"
         >
           Cancel
         </button>

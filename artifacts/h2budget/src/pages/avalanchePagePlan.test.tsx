@@ -210,3 +210,13 @@ describe("Avalanche page — seeded plan with mixed solvable + underwater debts"
     expect(amountInput!.value).toBe("50.00");
   });
 });
+
+describe("Avalanche page — C6 grid placement", () => {
+  it("lays the hero at span-8, the this-month panel and the next-3 column at span-6 inside the grid", () => {
+    renderPage();
+    expect(screen.getByTestId("avalanche-hero").className).toContain("span-8");
+    expect(screen.getByTestId("avalanche-hero").parentElement?.className).toContain("grid-12");
+    expect(screen.getByTestId("panel-this-month").className).toMatch(/span-(6|12)/);
+    expect(screen.getByText("Your next 3 moves").closest(".space-y-3")?.className).toContain("span-6");
+  });
+});

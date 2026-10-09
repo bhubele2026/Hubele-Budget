@@ -55,13 +55,10 @@ import {
   DebtReauthBanner,
 } from "@/components/debt-plaid-link";
 import {
-  Page,
   Stat,
   Help,
   Foot,
   Field,
-  card,
-  cardHead,
   btn,
   btnSecondary,
   btnLink,
@@ -73,6 +70,7 @@ import {
   tdNum,
   emptyNote,
 } from "@/ui";
+import { PageGrid, StatBlock } from "@/components/next";
 import { LineTrend, CHART, type SeriesDef } from "@/lib/charts";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
 import { cn } from "@/lib/utils";
@@ -646,11 +644,13 @@ export default function AvalanchePage() {
   });
 
   return (
-    <Page title="Debt">
+    <div className="space-y-4">
+      <h1 className="text-display font-semibold text-brand-navy">Debt</h1>
       <DebtReauthBanner debts={debts} />
 
+      <PageGrid>
       {killedBanner && (
-        <div className={cn(card, "mb-4 flex items-center gap-3 px-4 py-3")}>
+        <div className="panel tile-in span-12 flex items-center gap-3 px-4 py-3">
           <span className="chip ok">Paid off</span>
           <span className="text-body text-neutral-600">
             <span className="font-medium text-brand-navy">{killedBanner.name}</span> is
@@ -672,7 +672,7 @@ export default function AvalanchePage() {
           with how much of it is gone — a percentage, never an amount owed. The
           balance is real detail and lives further down, in the table that can
           disclose what it is counting. */}
-      <section className={cn(card, "mb-5")} data-testid="avalanche-hero">
+      <section className="panel tile-in span-8" data-testid="avalanche-hero">
         <div className="flex flex-col gap-4 px-5 pb-5 pt-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className={fieldLabel}>Debt paid off</div>
@@ -749,9 +749,8 @@ export default function AvalanchePage() {
 
       {/* Headline detail. `Months to freedom` carries the underwater caveat as
           its hint — a drill has to disclose what it is leaving out. */}
-      <div className="mb-5 flex flex-wrap gap-3">
-        <Stat
-          index={0}
+      <div className="panel tile-in span-4 grid grid-cols-2 content-start gap-4 p-4">
+        <StatBlock
           label="Months to freedom"
           value={sim.ranOutOfTime ? "∞" : String(sim.monthsToFreedom)}
           hint={
@@ -764,19 +763,16 @@ export default function AvalanchePage() {
                 : `${(sim.monthsToFreedom / 12).toFixed(1)} yrs`
           }
         />
-        <Stat
-          index={1}
+        <StatBlock
           label="Debt-free date"
           value={sim.debtFreeDate ? fmtMonth(sim.debtFreeDate) : "—"}
         />
-        <Stat
-          index={2}
+        <StatBlock
           label="Total interest"
           value={sim.ranOutOfTime ? "∞" : fmtMoneyCompact(sim.totalInterestPaid)}
           hint="remaining, at this plan"
         />
-        <Stat
-          index={3}
+        <StatBlock
           label="Total debt"
           value={fmtMoneyCompact(totalBalance)}
           hint={`${activeDebts.length} active`}
@@ -787,8 +783,8 @@ export default function AvalanchePage() {
           whenever the extra changes, and a recharts list would restart its draw
           on every keystroke of the slider. */}
       {payoffRows.length > 0 && (
-        <div className={cn(card, "mb-5")}>
-          <div className={cardHead}>
+        <div className={cn("panel tile-in", planTargets.length > 0 ? "span-6" : "span-12")}>
+          <div className="panel-head">
             <span className="text-title font-semibold text-brand-navy">Payoff order</span>
             <span className="text-micro uppercase tracking-wide text-neutral-400">
               Balance left
@@ -822,8 +818,11 @@ export default function AvalanchePage() {
         const primary = planTargets[0]!;
         const primaryDebt = (debts ?? []).find((x) => x.id === primary.id);
         return (
-          <div className={cn(card, "mb-5")} data-testid="panel-this-month">
-            <div className={cardHead}>
+          <div
+            className={cn("panel tile-in", payoffRows.length > 0 ? "span-6" : "span-12")}
+            data-testid="panel-this-month"
+          >
+            <div className="panel-head">
               <span className="text-title font-semibold text-brand-navy">This month</span>
               <span className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy">
                 {fmtMoney(planTotal)}
@@ -949,10 +948,9 @@ export default function AvalanchePage() {
       })()}
 
       {/* Two cards: Extra per month + Strategy */}
-      <div className="mb-5 grid gap-4 md:grid-cols-2">
         {/* Extra per month */}
-        <div className={card}>
-          <div className={cardHead}>
+        <div className="panel tile-in span-6">
+          <div className="panel-head">
             <span className="text-title font-semibold text-brand-navy">Extra per month</span>
             <span className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy">
               {fmtMoney(resolvedExtraAmount)}
@@ -1128,8 +1126,8 @@ export default function AvalanchePage() {
         </div>
 
         {/* Strategy */}
-        <div className={card}>
-          <div className={cardHead}>
+        <div className="panel tile-in span-6">
+          <div className="panel-head">
             <span className="text-title font-semibold text-brand-navy">Strategy</span>
             <Help className="ml-auto">
               Avalanche pays the highest APR first and costs the least interest.
@@ -1163,27 +1161,26 @@ export default function AvalanchePage() {
             />
           </div>
         </div>
-      </div>
 
       {/* Your next 3 moves / Kill order.
           ⚠️ `space-y-3` + a `.grid` of card divs is asserted by
           avalanchePagePlan.test.tsx — keep both when restyling. */}
-      <div className="space-y-3">
+      <div className="span-6 space-y-3">
         <div className="flex items-baseline gap-2">
           <h2 className="text-title font-semibold text-brand-navy">Your next 3 moves</h2>
           <span className="text-micro uppercase tracking-wide text-neutral-400">Kill order</span>
         </div>
         {next3.length === 0 ? (
-          <div className={cn(card, emptyNote)}>Add a debt to see which one dies first.</div>
+          <div className={cn("panel", emptyNote)}>Add a debt to see which one dies first.</div>
         ) : (
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid gap-3">
             {next3.map((d, i) => {
               const k = killById.get(d.id);
               const killEntry = sim.killedOrder.find((x) => x.id === d.id);
               const cascadeFreed = killEntry?.minFreed ?? 0;
               const nextDebt = next3[i + 1];
               return (
-                <div key={d.id} className={cn(card, "tile-in p-4")} style={{ animationDelay: `calc(${i} * var(--stagger))` }}>
+                <div key={d.id} className="panel tile-in p-4" style={{ animationDelay: `calc(${i} * var(--stagger))` }}>
                   <div className="flex items-center gap-2">
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-navy font-mono text-[10px] font-bold tabular-nums text-white">
                       {i + 1}
@@ -1226,17 +1223,17 @@ export default function AvalanchePage() {
       </div>
 
       {/* Dated avalanche extra-payment schedule (server-computed). */}
-      <div className="mt-5">
+      <div className="span-6">
         <AvalancheScheduleCard />
       </div>
 
       {/* Amex cards → payoff: tier/name config + add-to-avalanche. */}
-      <div className="mt-5">
+      <div className="span-12">
         <AvalancheCardConfig />
       </div>
 
       {/* Tabs: debts table + projection */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-5">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="span-12">
         <TabsList>
           <TabsTrigger value="debts">Debts ({activeDebts.length})</TabsTrigger>
           <TabsTrigger value="projection">Projection</TabsTrigger>
@@ -1247,8 +1244,8 @@ export default function AvalanchePage() {
         </TabsList>
 
         <TabsContent value="debts" className="mt-4">
-          <div className={card}>
-            <div className={cardHead}>
+          <div className="panel tile-in">
+            <div className="panel-head">
               <span className="text-title font-semibold text-brand-navy">Debts</span>
               <span className="text-micro uppercase tracking-wide text-neutral-400">
                 Highest APR first
@@ -1375,8 +1372,8 @@ export default function AvalanchePage() {
         </TabsContent>
 
         <TabsContent value="projection" className="mt-4 space-y-4">
-          <div className={card}>
-            <div className={cardHead}>
+          <div className="panel tile-in">
+            <div className="panel-head">
               <span className="text-title font-semibold text-brand-navy">What-if extra</span>
               <span className="ml-auto font-mono text-label font-semibold tabular-nums text-brand-navy">
                 +{fmtMoney(whatIf)}
@@ -1407,8 +1404,8 @@ export default function AvalanchePage() {
             </div>
           </div>
 
-          <div className={card}>
-            <div className={cardHead}>
+          <div className="panel tile-in">
+            <div className="panel-head">
               <span className="text-title font-semibold text-brand-navy">Schedule</span>
               <span className="text-micro uppercase tracking-wide text-neutral-400">
                 Month by month
@@ -1484,8 +1481,8 @@ export default function AvalanchePage() {
         </TabsContent>
 
         <TabsContent value="chart" className="mt-4">
-          <div className={card}>
-            <div className={cardHead}>
+          <div className="panel tile-in">
+            <div className="panel-head">
               <span className="text-title font-semibold text-brand-navy">Payoff projection</span>
               <Help className="ml-auto">
                 Balance left is what you still owe at the end of each month;
@@ -1509,8 +1506,8 @@ export default function AvalanchePage() {
 
         {archivedDebts.length > 0 && (
           <TabsContent value="archived" className="mt-4">
-            <div className={card}>
-              <div className={cardHead}>
+            <div className="panel tile-in">
+              <div className="panel-head">
                 <span className="text-title font-semibold text-brand-navy">Archived</span>
               </div>
               <table className="w-full">
@@ -1540,6 +1537,7 @@ export default function AvalanchePage() {
           </TabsContent>
         )}
       </Tabs>
+      </PageGrid>
 
       {/* Add dialog */}
       <DebtDialog
@@ -1691,7 +1689,7 @@ export default function AvalanchePage() {
           )}
         </DialogContent>
       </Dialog>
-    </Page>
+    </div>
   );
 }
 
