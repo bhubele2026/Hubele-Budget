@@ -1,7 +1,9 @@
 import { Link } from "wouter";
+import { cn } from "@/lib/utils";
 import { Panel } from "@/components/next";
 import { useSpine } from "@/hooks/useSpine";
-import { useDuplicateCountQ, useReviewQueueQ } from "./queries";
+import { useDuplicateCountQ, useReviewQueueQ } from "./queriesLazy";
+import { BELOW_FOLD } from "./belowFoldSizes";
 import { Empty, Gate, rise } from "./shared";
 
 const ROW_CLASS =
@@ -61,7 +63,7 @@ export default function ReviewPanel() {
   const catKnown = queue.data !== undefined;
   const dupKnown = dups.data !== undefined;
   return (
-    <Panel title="Needs review" span={4} className={rise(7)} data-testid="dash-review">
+    <Panel title="Needs review" span={4} className={cn(rise(BELOW_FOLD.review.rise), BELOW_FOLD.review.minH)} data-testid="dash-review">
       <Gate q={q} what="Review" rows={3}>
         {() =>
           review + cat + dup === 0 && catKnown && dupKnown ? (

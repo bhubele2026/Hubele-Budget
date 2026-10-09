@@ -149,6 +149,31 @@ describe("the entry path and the generated client's sub-modules", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("(C11b) the below-the-fold dashboard panels, their queries and the chart are not on the entry path", () => {
+    const files = new Set(Array.from(graph.keys(), rel));
+    for (const lazyFile of [
+      "pages/next/dashboard/BelowFold.tsx",
+      "pages/next/dashboard/ForecastPanel.tsx",
+      "pages/next/dashboard/DebtPanel.tsx",
+      "pages/next/dashboard/ActivityPanel.tsx",
+      "pages/next/dashboard/ReviewPanel.tsx",
+      "pages/next/dashboard/queriesLazy.ts",
+      "pages/forecast/ProjectedBalanceChart.tsx",
+    ]) {
+      expect(files.has(lazyFile), `${lazyFile} must stay off the open path`).toBe(false);
+    }
+    // …while the first screen is on it.
+    for (const eager of ["BriefingPanel", "AccountsRow", "CashPanel", "SpendingPanel", "UpcomingPanel"]) {
+      expect(files.has(`pages/next/dashboard/${eager}.tsx`), `${eager} is the first screen`).toBe(true);
+    }
+    // No chart library is imported by anything on the open path.
+    const chartImporters: string[] = [];
+    for (const [file, edges] of graph) {
+      for (const e of edges) if (e.spec === "recharts") chartImporters.push(rel(file));
+    }
+    expect(chartImporters).toEqual([]);
+  });
+
   it("the edge parser ignores dynamic imports and type-only imports", () => {
     const edges = staticEdges(`
       import type { A } from "${FEATURES}";

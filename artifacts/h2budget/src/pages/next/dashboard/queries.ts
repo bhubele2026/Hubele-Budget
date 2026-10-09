@@ -10,10 +10,7 @@ import {
   useGetBillsSummary, getGetBillsSummaryQueryKey,
   useListRecurringItems, getListRecurringItemsQueryKey,
   useListTransactions, getListTransactionsQueryKey,
-  useListCategories, getListCategoriesQueryKey,
-  useListCategorizationReview, getListCategorizationReviewQueryKey,
-  useGetDuplicateTransactionCount, getGetDuplicateTransactionCountQueryKey,
-  type ListTransactionsParams,
+        type ListTransactionsParams,
 } from "@workspace/api-client-react";
 // (C0) Fold-in operations come from the features module, which only lazy
 // pages import — from the main module they would sit in the landing chunk.
@@ -67,22 +64,6 @@ export const useRecurringQ = () =>
 export const useTxnsQ = (params: ListTransactionsParams) =>
   useListTransactions(params, {
     query: { queryKey: getListTransactionsQueryKey(params), staleTime: MIN, gcTime: GC },
-  });
-
-export const useCategoriesQ = () =>
-  useListCategories({ query: { queryKey: getListCategoriesQueryKey(), staleTime: 10 * MIN, gcTime: GC } });
-
-/** Only the queue total is used, so the page asks for one row. */
-export const useReviewQueueQ = () => {
-  const params = { limit: 1 };
-  return useListCategorizationReview(params, {
-    query: { queryKey: getListCategorizationReviewQueryKey(params), staleTime: MIN, gcTime: GC },
-  });
-};
-
-export const useDuplicateCountQ = () =>
-  useGetDuplicateTransactionCount({
-    query: { queryKey: getGetDuplicateTransactionCountQueryKey(), staleTime: 5 * MIN, gcTime: GC },
   });
 
 /**
