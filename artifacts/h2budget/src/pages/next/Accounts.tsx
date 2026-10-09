@@ -3,6 +3,7 @@ import { useRoute } from "wouter";
 import {
   useGetAmexWeeklyPayoff, useGetForecast, useListCategories, useListDebts,
   useListPlaidItems, useListTransactions,
+  type AmexWeeklyPayoffCard,
 } from "@workspace/api-client-react";
 import { Page, emptyNote } from "@/ui";
 import { PageGrid, Panel, TxnTable, type TxnRow } from "@/components/next";
@@ -52,6 +53,24 @@ function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries
     <Panel title="Recent activity" sub="Last 30 days, every account. Pick an account to review and edit." span={12} data-testid="combined-activity">
       {rows.length ? <TxnTable rows={rows} /> : <p className={emptyNote}>No activity in the last 30 days.</p>}
     </Panel>
+  );
+}
+
+/**
+ * The weekly-payoff card for an account. The payoff card carries the
+ * EXTERNAL Plaid account_id as `accountId` and the INTERNAL plaid_accounts
+ * row id as `plaidAccountId` (api-server `lib/amexAnchor.ts`); the items
+ * response gives the entry both (`plaidAccountId` = external, `rowId` =
+ * internal). Match on either, as the route itself accepts either.
+ */
+export function payoffCardFor(
+  cards: readonly AmexWeeklyPayoffCard[] | undefined,
+  entry: { plaidAccountId: string; rowId: string },
+): AmexWeeklyPayoffCard | null {
+  return (
+    (cards ?? []).find(
+      (c) => c.accountId === entry.plaidAccountId || (!!c.plaidAccountId && c.plaidAccountId === entry.rowId),
+    ) ?? null
   );
 }
 
@@ -118,29 +137,36 @@ export default function NextAccountsPage() {
                 />
               </Suspense>
             </div>
+          ) : selected && selected.identity.isCard ? (
+            // (C10) A card opens the Amex page's own layout the same way: full
+            // width, the card's Summary first in its card row, the ledger in
+            // its own sticky-safe panel.
+            <div className="span-12 min-w-0" data-testid="account-activity">
+              <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
+                <AmexLedger
+                  embedded
+                  accountId={selected.plaidAccountId}
+                  lead={
+                    <AccountSummary
+                      entry={selected}
+                      debt={debtFor(selected.rowId)}
+                      payoffCard={payoffCardFor(payoff?.cards, selected)}
+                      snapshot={null}
+                    />
+                  }
+                />
+              </Suspense>
+            </div>
           ) : selected ? (
             <>
               <AccountSummary
                 entry={selected}
                 debt={debtFor(selected.rowId)}
-                payoffCard={(payoff?.cards ?? []).find((c) => c.plaidAccountId === selected.plaidAccountId) ?? null}
-                snapshot={selected.identity.isCard ? null : snapshotFor(selected.rowId)}
+                payoffCard={null}
+                snapshot={snapshotFor(selected.rowId)}
               />
-              {/* (C0) Sticky-safe so the ledger's sticky pane and bulk bar
-                  stick to <main> (an `overflow: hidden` panel held them in
-                  place); flush, with the padding moved inside, so the pane
-                  can bleed back over it (`-mx-4 px-4` in the embedded pane)
-                  and span the panel when it sticks. */}
-              <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" variant={["sticky-safe", "flush"]} data-testid="account-activity">
-                <div className="p-4">
-                  <Suspense fallback={<AccountPageSkeleton tiles={3} />}>
-                    {selected.identity.isCard ? (
-                      <AmexLedger embedded accountId={selected.plaidAccountId} />
-                    ) : (
-                      <p className={emptyNote}>This account type has no activity view yet.</p>
-                    )}
-                  </Suspense>
-                </div>
+              <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" variant="static" data-testid="account-activity">
+                <p className={emptyNote}>This account type has no activity view yet.</p>
               </Panel>
             </>
           ) : (

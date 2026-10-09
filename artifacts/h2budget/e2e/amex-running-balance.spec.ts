@@ -25,14 +25,16 @@ import {
  *      comparator orders them deterministically (no id-tiebreaker
  *      reliance). Mix charges (positive amounts) and a payment
  *      (negative amount) to exercise both walk directions.
- *   3. Open /amex, wait for the ending balance chip to populate to the
- *      anchor value, then read the running-balance text from each row in
+ *   3. Open /amex, wait for the newest row's running balance to read the
+ *      anchor value (the ending-balance tile is never rendered — AX-33),
+ *      then read the running-balance text from each row in
  *      both the desktop (`text-running-balance-${id}`) and mobile
  *      (`text-running-balance-mobile-${id}`) layouts. Both render
  *      simultaneously in the DOM (Tailwind `md:hidden` / `hidden md:block`),
  *      so the same data flows through both code paths.
  *   4. Assert per layout:
- *        - Newest row's "bal" exactly equals the ending balance chip.
+ *        - Newest row's "bal" exactly equals the anchor (the month's
+ *          ending balance).
  *        - Walking newest → oldest, each next row's balance equals
  *          `prev_bal − prev_row_amount` (the canonical recurrence used
  *          by `computeRunningBalances`).
@@ -122,7 +124,7 @@ type Seeded = {
 };
 
 test.describe("Amex page — per-row running balance (#341)", () => {
-  test("running balances are monotonic newest→oldest and reconcile to the ending balance chip in both layouts", async ({
+  test("running balances are monotonic newest→oldest and reconcile to the month's ending balance in both layouts", async ({
     page,
   }) => {
     const { email, password } = await createTestUser(
@@ -207,11 +209,16 @@ test.describe("Amex page — per-row running balance (#341)", () => {
       page.getByRole("heading", { name: /american express/i }),
     ).toBeVisible({ timeout: 15_000 });
 
-    // Ending balance chip populates to the anchor value.
-    const tile = page.getByTestId("stat-ending-balance");
+    // (C10 repair) The Ending Balance tile (`stat-ending-balance`) is never
+    // rendered (parity AX-33). The per-row running balance is seeded from the
+    // SAME month ending balance (`runningBalanceMap` ← `endingBalance.value`),
+    // so the newest row's "bal" reading the saved anchor is the proof the
+    // tile used to give. (Its "From saved anchor" source footer is not on
+    // screen anywhere.)
     const expectedAnchorText = fmtCurrency(anchorBalance);
-    await expect(tile).toContainText(expectedAnchorText, { timeout: 15_000 });
-    await expect(tile).toContainText("From saved anchor");
+    await expect(
+      page.getByTestId(`text-running-balance-${seeded[0]!.id}`),
+    ).toContainText(expectedAnchorText, { timeout: 15_000 });
 
     // Determine newest→oldest order via the seeds' occurredAt: spec is
     // already in descending-time order, so seeded[] is exactly the order

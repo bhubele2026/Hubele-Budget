@@ -252,9 +252,9 @@ test.describe("/amex stays scrollable after a mid-session recovery import (#755)
     await scrollToBottomUntilVisible(page, listOldestHeader, 60);
     await expect(listOldestHeader).toBeVisible({ timeout: 10_000 });
 
-    // The row-cap banner must NOT be the explanation here — 85 rows is
-    // well below the 1000-row month cap.
-    await expect(page.getByTestId("text-month-cap-hit")).toHaveCount(0);
+    // (C10) The row-cap banner (`text-month-cap-hit`) is never rendered
+    // (parity AX-36, dead), so asserting its absence proved nothing; the
+    // rows-and-groups checks around it carry this spec.
 
     await context.close();
   });

@@ -23,9 +23,9 @@ describe("the shell publishes its scroller and padding", () => {
 });
 
 describe("the page sticky heads read the shell's geometry", () => {
-  // (C9) Chase no longer has a page-wide sticky head: its pinned pane is the
-  // ledger panel's (below).
-  for (const page of ["pages/forecast.tsx", "pages/amex.tsx"]) {
+  // (C9, C10) Chase and Amex no longer have a page-wide sticky head: their
+  // pinned pane is the ledger panel's (below).
+  for (const page of ["pages/forecast.tsx"]) {
     const src = read(page);
     it(`${page}: the head is .page-sticky-head, with no hard-coded bleed left`, () => {
       expect(src).toMatch(/"page-sticky-head sticky top-0 z-30 /);
@@ -45,8 +45,11 @@ describe("the page sticky heads read the shell's geometry", () => {
     expect(src).not.toMatch(/-mx-4 md:-mx-8/);
   });
 
-  it("Chase (C9): the pinned pane is the ledger panel's, sticky at the top of <main>, its height published as --page-sticky-top", () => {
-    const page = read("pages/transactions.tsx");
+  it.each([
+    ["pages/transactions.tsx", "C9"],
+    ["pages/amex.tsx", "C10"],
+  ])("%s (%s): the pinned pane is the ledger panel's, sticky at the top of <main>, its height published as --page-sticky-top", (file) => {
+    const page = read(file);
     const panel = read("components/account-page/ledger-panel.tsx");
     // The page measures the ledger pane and publishes it; nothing hard-codes the shell's bleed.
     expect(page).toContain('["--page-sticky-top" as string]');
@@ -54,7 +57,7 @@ describe("the page sticky heads read the shell's geometry", () => {
     expect(page).toMatch(/<LedgerPanel[\s\S]*paneRef=\{paneRef\}/);
     expect(page).not.toContain("page-sticky-head");
     for (const literal of ["md:-mx-8", "md:-mt-8", "-mt-4", "md:px-8", "-mx-4"]) {
-      expect(page, `transactions.tsx still has ${literal}`).not.toContain(literal);
+      expect(page, `${file} still has ${literal}`).not.toContain(literal);
     }
     // The pane sticks at the top of the scroller, inside a panel that is not a scroll container.
     expect(panel).toMatch(/className="sticky top-0 z-30 /);

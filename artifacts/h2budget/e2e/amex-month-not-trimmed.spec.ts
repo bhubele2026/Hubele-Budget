@@ -146,9 +146,9 @@ test.describe("/amex shows the full selected month (#744)", () => {
     // no matter how far the user scrolled.
     await expect(oldestHeader).toBeVisible({ timeout: 10_000 });
 
-    // The row-cap banner must NOT be the explanation here — only 25
-    // rows were seeded, well below the 1000-row month cap.
-    await expect(page.getByTestId("text-month-cap-hit")).toHaveCount(0);
+    // (C10) The row-cap banner (`text-month-cap-hit`) is never rendered
+    // (parity AX-36, dead), so asserting its absence proved nothing; the
+    // rows-and-groups checks around it carry this spec.
 
     await context.close();
   });
