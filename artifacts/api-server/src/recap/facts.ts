@@ -15,7 +15,7 @@ import {
   weekBounds,
   type MovementCoverage,
 } from "@workspace/avalanche-core";
-import { buildBillsSummary } from "../lib/billsSummary";
+import { buildBillsSummary, occurrenceAmountOn } from "../lib/billsSummary";
 import { computeCashSignalDetailed } from "../lib/cashSignal";
 import { computeBankFreshness } from "../lib/bankFreshness";
 import { withPendingPayments } from "../lib/debtPending";
@@ -258,7 +258,8 @@ export async function recapFacts(
     withinPlan: position.withinPlan,
   };
 
-  // Bills in the next three days (today through forDate + 3).
+  // Bills in the next three days (today through forDate + 3). Each is ONE
+  // payment on its date (`occurrenceAmountOn`), never the bill's month total.
   const summary = await buildBillsSummary(householdId, ownerUserId);
   const lastBillDay = addDaysISO(forDate, BILL_DAYS);
   const tomorrow = addDaysISO(forDate, 1);
@@ -270,7 +271,7 @@ export async function recapFacts(
       name: safeName(b.item.name, "Bill"),
       date: b.nextOccurrence,
       weekday: weekdayOf(b.nextOccurrence),
-      amount: Math.abs(numOrNull(b.monthlyAmount) ?? 0),
+      amount: Math.abs(numOrNull(occurrenceAmountOn(b.item, b.nextOccurrence)) ?? 0),
       dueTomorrow: b.nextOccurrence === tomorrow,
     });
   }
