@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { identityOf } from "@/lib/accountIdentity";
 import { AccountChip, ChartPanel, PageGrid, Panel, StatBlock, TablePanel, TxnTable, shortDate } from "./index";
 
@@ -112,5 +112,44 @@ describe("Panel variants (C0)", () => {
     render(<TablePanel title="Rows"><div /></TablePanel>);
     expect(screen.queryByTestId("table-panel-head")).toBeNull();
     expect(screen.getByTestId("table-panel-rows").className).toBe("");
+  });
+});
+
+describe("StatBlock countUp", () => {
+  const origMM = window.matchMedia;
+  const origRaf = window.requestAnimationFrame;
+  const origCaf = window.cancelAnimationFrame;
+  afterEach(() => {
+    window.matchMedia = origMM;
+    window.requestAnimationFrame = origRaf;
+    window.cancelAnimationFrame = origCaf;
+  });
+  const mm = (reduce: boolean) =>
+    ((q: string) => ({ matches: reduce && q.includes("reduce"), media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+
+  it("counts up from 0 to the figure, then rests on it", () => {
+    let frames: FrameRequestCallback[] = [];
+    window.matchMedia = mm(false);
+    window.requestAnimationFrame = ((cb: FrameRequestCallback) => (frames.push(cb), frames.length)) as never;
+    window.cancelAnimationFrame = (() => {}) as never;
+    render(<StatBlock label="Spent" value={1000} countUp data-testid="s" />);
+    expect(screen.getByTestId("s").textContent).toContain("$0.00");
+    act(() => { const f = frames; frames = []; f.forEach((cb) => cb(0)); });
+    act(() => { const f = frames; frames = []; f.forEach((cb) => cb(10_000)); });
+    expect(screen.getByTestId("s").textContent).toContain("$1,000.00");
+  });
+
+  it("under reduced motion shows the final figure at once", () => {
+    window.matchMedia = mm(true);
+    window.requestAnimationFrame = (() => 1) as never;
+    render(<StatBlock label="Spent" value={1000} countUp data-testid="s" />);
+    expect(screen.getByTestId("s").textContent).toContain("$1,000.00");
+  });
+
+  it("without the prop the figure is exact from the first paint", () => {
+    window.matchMedia = mm(false);
+    window.requestAnimationFrame = (() => 1) as never;
+    render(<StatBlock label="Spent" value={1000} data-testid="s" />);
+    expect(screen.getByTestId("s").textContent).toContain("$1,000.00");
   });
 });

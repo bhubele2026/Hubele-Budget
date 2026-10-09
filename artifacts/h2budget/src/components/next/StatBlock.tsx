@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { useCountUp } from "@/hooks/useCountUp";
 
 /** A label over a mono figure. A number `value` is formatted as money; pass a
  *  string/node for counts or anything pre-formatted. `delta` is a signed
@@ -12,9 +13,17 @@ export function StatBlock(props: {
   delta?: number | null;
   hint?: ReactNode;
   tone?: "neutral" | "ok" | "bad";
+  /** A number `value` rises from its last figure to the new one (useCountUp:
+   *  jumps straight there under reduced motion and where there is no
+   *  matchMedia/rAF). Ignored for a string or node value. */
+  countUp?: boolean;
   "data-testid"?: string;
 }) {
-  const shown = typeof props.value === "number" ? formatCurrency(props.value) : props.value;
+  const animated = useCountUp(props.countUp && typeof props.value === "number" ? props.value : null);
+  const shown =
+    typeof props.value === "number"
+      ? formatCurrency(props.countUp ? animated : props.value)
+      : props.value;
   const d = props.delta;
   return (
     <div data-testid={props["data-testid"]} className="min-w-0">
