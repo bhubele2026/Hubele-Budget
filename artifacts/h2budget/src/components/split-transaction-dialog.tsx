@@ -15,8 +15,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { btnLink, btnSecondarySm, btnSm, input as inputControl } from "@/ui";
 import {
   Select,
   SelectContent,
@@ -159,14 +158,14 @@ export function SplitTransactionDialog({
         <div className="space-y-2">
           {parts.map((p, i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className="text-muted-foreground text-sm">$</span>
-              <Input
+              <span className="text-body text-neutral-500">$</span>
+              <input
                 type="number"
                 inputMode="decimal"
                 step="0.01"
                 value={p.amount}
                 onChange={(e) => setPart(i, { amount: e.target.value })}
-                className="h-8 w-28 tabular-nums"
+                className={`${inputControl} w-28 font-mono tabular-nums`}
                 data-testid={`split-amount-${i}`}
               />
               <Select
@@ -185,33 +184,25 @@ export function SplitTransactionDialog({
                 </SelectContent>
               </Select>
               {parts.length > 2 && (
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
+                  className="press grid h-8 w-8 shrink-0 place-items-center rounded-control text-neutral-400 hover:bg-neutral-100 hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-navy/40"
                   onClick={() => removePart(i)}
                   aria-label="Remove part"
                 >
-                  <Trash2 className="w-4 h-4 text-muted-foreground" />
-                </Button>
+                  <Trash2 className="h-4 w-4" />
+                </button>
               )}
             </div>
           ))}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={addPart}
-          >
-            <Plus className="w-3.5 h-3.5 mr-1" /> Add part
-          </Button>
+          <button type="button" className={btnLink} onClick={addPart}>
+            <Plus className="mr-1 h-3.5 w-3.5" /> Add part
+          </button>
         </div>
 
         <div
-          className={`text-sm tabular-nums ${
-            Math.abs(remaining) < 0.01 ? "text-muted-foreground" : "text-destructive"
+          className={`font-mono text-label tabular-nums ${
+            Math.abs(remaining) < 0.01 ? "text-neutral-500" : "text-bad"
           }`}
         >
           {Math.abs(remaining) < 0.01
@@ -220,12 +211,12 @@ export function SplitTransactionDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <button type="button" className={btnSecondarySm} onClick={() => onOpenChange(false)}>
             Cancel
-          </Button>
-          <Button onClick={apply} disabled={!valid || saving}>
+          </button>
+          <button type="button" className={btnSm} onClick={apply} disabled={!valid || saving}>
             {saving ? "Splitting…" : "Split it"}
-          </Button>
+          </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

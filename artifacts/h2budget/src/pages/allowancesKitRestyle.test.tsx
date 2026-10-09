@@ -411,3 +411,15 @@ describe("Allowances — streaks and variance bars walk household weeks (PR2)", 
     expect(labels[7]).toBe("Sep 6");
   });
 });
+
+describe("Allowances — C3 grid placement", () => {
+  it("lays the three bucket panels at span-4, bars and breakdown at span-6, summary at span-12", () => {
+    renderPage();
+    for (const slug of ["weekly", "monthly", "unplanned"]) {
+      expect(screen.getByTestId(`allowance-card-${slug}`).closest(".panel")?.className).toContain("span-4");
+    }
+    expect(screen.getByTestId("allowance-bucket-weekly").closest(".panel")?.className).toContain("span-6");
+    expect(screen.getByTestId("allowance-summary-weekly").closest(".panel")?.className).toContain("span-12");
+    expect(document.querySelector(".grid-12")).not.toBeNull();
+  });
+});

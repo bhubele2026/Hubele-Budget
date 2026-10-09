@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Split } from "lucide-react";
+import { PageGrid } from "@/components/next";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import {
   useListTransactions,
@@ -38,8 +39,6 @@ import {
   weekBounds,
 } from "@/lib/householdDay";
 import {
-  card,
-  cardHead,
   btnSm,
   btnSecondarySm,
   btnLink,
@@ -473,8 +472,8 @@ function BucketCard({
     }
   };
   return (
-    <div className={cn(card, expanded && "ring-brand-navy/30")}>
-      <div className={cardHead}>
+    <div className={cn("panel tile-in span-4", expanded && "border-brand-navy/40")}>
+      <div className="panel-head">
         <span className={cn(fieldLabel, "flex-1 truncate")}>{name}</span>
         <span className={`chip ${state.chip}`} data-testid={`allowance-state-${slug}`}>
           {state.label}
@@ -1075,8 +1074,8 @@ export default function AllowancesPage() {
         : "Spend flagged unplanned in the selected calendar month, against the full unplanned allowance.";
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <PageGrid className="stagger">
+      <div className="span-12 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-display font-semibold text-brand-navy">Allowances</h1>
         {/* Streak state, in words. The chip is the whole message — the prose
             banners it replaces said this same fact in a paragraph. */}
@@ -1103,7 +1102,6 @@ export default function AllowancesPage() {
       {/* One card per bucket. There is deliberately no combined total: weekly
           is scoped to a week and monthly/unplanned to a calendar month, so a
           sum of the three would mix time windows. */}
-      <div className="stagger grid grid-cols-1 gap-4 md:grid-cols-3">
         {BUCKETS.map((b) => (
           <BucketCard
             key={b.key}
@@ -1131,13 +1129,12 @@ export default function AllowancesPage() {
             }
           />
         ))}
-      </div>
 
       {/* Weekly history — CSS bars diverging from a centre zero line, so a
           week that came in under and a week that ran over read as opposite
           directions and not merely as two colours. */}
-      <div className={card}>
-        <div className={cardHead}>
+      <div className="panel tile-in span-6">
+        <div className="panel-head">
           <span className={cn(fieldLabel, "flex-1")}>
             Weekly money left · last {varianceRows.length} weeks
           </span>
@@ -1166,8 +1163,8 @@ export default function AllowancesPage() {
 
       {/* Drill-down breakdown — one collapsible group per bucket, driven by
           the card's expanded state. */}
-      <div className={card}>
-        <div className={cardHead}>
+      <div className="panel tile-in span-6">
+        <div className="panel-head">
           <span className={cn(fieldLabel, "flex-1")}>Transaction breakdown</span>
         </div>
         {BUCKETS.map((b) => {
@@ -1236,8 +1233,8 @@ export default function AllowancesPage() {
 
       {/* Over/under summary — the three sentences this used to print, as the
           table they were describing. */}
-      <div className={card}>
-        <div className={cardHead}>
+      <div className="panel tile-in span-12">
+        <div className="panel-head">
           <span className={cn(fieldLabel, "flex-1")}>Over / under summary</span>
         </div>
         <div className="overflow-x-auto">
@@ -1299,6 +1296,6 @@ export default function AllowancesPage() {
           if (!o) setSplitTx(null);
         }}
       />
-    </div>
+    </PageGrid>
   );
 }
