@@ -248,8 +248,8 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 | Version label | Unchanged |
 
 ## Bundle
-- **Open path:** **621.5 KB of 622 KB** (`node scripts/check-entry-graph.mjs`, no recharts on open). Main measured 620.4 KB and A's branch 622.0 KB. The cap is unchanged.
-  - ⚠️ Only 0.5 KB of headroom is left: the polish round put the one-next-obligation reader (`obligations.ts`), the runs-short choice and the liability-accounts hook on the first screen (619.8 → 621.5 KB). The next first-screen addition will need something moved lazy first.
+- **Open path:** **621.8 KB of 622 KB** (`node scripts/check-entry-graph.mjs`, no recharts on open). Main measured 620.4 KB and A's branch 622.0 KB. The cap is unchanged.
+  - ⚠️ Only 0.2 KB of headroom is left. The polish round put the one-next-obligation reader (`obligations.ts`), the runs-short choice and the liability-accounts hook on the first screen (619.8 → 621.5 KB). The review round added the pre-Clerk skeleton's slots and the netted Owed (621.8 KB). The next first-screen addition needs something moved lazy first.
 - **Eager:** header, summary row, accounts.
 - **Lazy, one chunk:** forecast, coming up, spending pace, debt progress, needs attention, recent activity, the morning text and their queries (`queriesLazy.ts`).
 - **The `features` allowance** on the entry path is now only `useGetMoneyPosition` and its key. `previewRecap` left it, and `featuresImportGraph.test.ts` is updated.
@@ -257,7 +257,7 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 ## Tests
 - **New or rewritten:**
   - `DashboardPage.test.tsx`: order (header, summary, forecast row, accounts, lower rows), lazy slots and skeletons, no `Page` wrapper, refresh banner, skeleton with no numbers, compact skeletons with no bank.
-  - `dashboard.test.tsx`, 55 tests:
+  - `dashboard.test.tsx`, 62 tests:
     - header facts and freshness;
     - **header action choice** (link > reconnect, incl. a card bank > runs short > way back > afford);
     - the recap loading only when opened;
@@ -279,9 +279,9 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
   - `agent.test.tsx`: findings inside the merged list.
 - **Gates (final, on the branch head):**
   - root `pnpm run typecheck`: clean;
-  - web `vitest`: UTC 1,861 passed / 3 skipped, America/Chicago 1,862 passed / 2 skipped;
-  - API suite on `h2budget_test_dashref`: 2,575 passed / 1 skipped / 2 todo (re-run after the recap template and prompt change);
-  - `pnpm run build` + entry graph: OK at **621.5 KB** of 622 KB;
+  - web `vitest`: UTC 1,871 passed / 3 skipped, America/Chicago 1,872 passed / 2 skipped;
+  - API suite on `h2budget_test_dashref`: 2,575 passed / 1 skipped / 2 todo (re-run after the review round);
+  - `pnpm run build` + entry graph: OK at **621.8 KB** of 622 KB;
   - `pnpm audit --prod`: 1 high, already ignored.
 - **Screens:** fixture AFTER shots for all six scenarios at both sizes are in `dash-shots/after/`, with zero console errors and zero failed `/api` calls.
 
