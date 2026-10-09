@@ -93,7 +93,18 @@ vi.mock("@/components/split-transaction-dialog", () => ({
   SplitTransactionDialog: () => null,
 }));
 
+const spineState = vi.hoisted(() => ({ weekAdjustment: null as null | { amount: string; weekStart: string; reason: null } }));
 vi.mock("@workspace/api-client-react", () => ({
+  useGetSpine: () => ({
+    data: { position: { weekAdjustment: spineState.weekAdjustment } },
+    isLoading: false,
+    isFetching: false,
+    isError: false,
+    error: null,
+    dataUpdatedAt: 0,
+    refetch: vi.fn(),
+  }),
+  getGetSpineQueryKey: () => ["/api/spine"],
   useListTransactions: () => ({ data: txns, isLoading: false }),
   useGetSettings: () => ({ data: settings }),
   useListCategories: () => ({ data: [{ id: "c1", name: "Groceries" }] }),
@@ -421,5 +432,24 @@ describe("Allowances — C3 grid placement", () => {
     expect(screen.getByTestId("allowance-bucket-weekly").closest(".panel")?.className).toContain("span-6");
     expect(screen.getByTestId("allowance-summary-weekly").closest(".panel")?.className).toContain("span-12");
     expect(document.querySelector(".grid-12")).not.toBeNull();
+  });
+});
+
+
+describe("Allowances — carry-over and the way back (F7)", () => {
+  it("reads the server's carry-over and says it under the weekly bucket", () => {
+    const now = new Date();
+    const sunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    spineState.weekAdjustment = { amount: "-40.00", weekStart: iso(sunday), reason: null };
+    renderPage();
+    expect(screen.getByTestId("allowance-carry-over").textContent).toBe("This week starts $40.00 lower (you chose this)");
+    spineState.weekAdjustment = null;
+  });
+
+  it("no carry-over: no line", () => {
+    spineState.weekAdjustment = null;
+    renderPage();
+    expect(screen.queryByTestId("allowance-carry-over")).toBeNull();
   });
 });

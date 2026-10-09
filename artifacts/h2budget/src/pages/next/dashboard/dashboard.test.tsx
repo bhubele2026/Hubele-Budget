@@ -390,6 +390,8 @@ describe("briefing", () => {
     h.spine.data = spine({ reviewCount: 0, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00" } });
     const b = wrap(<BriefingPanel />);
     expect(screen.getByTestId("dash-action").textContent).toContain("Over this week's limit by $25.00");
+    expect(screen.getByTestId("ways-back-open").textContent).toBe("Pick a way back");
+    expect(screen.queryByTestId("dash-action-link")).toBeNull();
     b.unmount();
     h.spine.data = spine({ reviewCount: 0 });
     const c = wrap(<BriefingPanel />);
