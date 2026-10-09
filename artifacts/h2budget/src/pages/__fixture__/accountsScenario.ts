@@ -18,7 +18,7 @@
  *   stale           Capital One Quicksilver ••7788  debt, active, 642.18; its bank last synced 3 days ago
  *   savings         Chase Savings ••8801            snapshot 3,100.00 read Oct 6
  *   savings (none)  Chase Goal Savings ••8802       no reading
- *   checking        Chase Total Checking ••5526     the account the bank balance rolls forward on
+ *   checking        Chase Total Checking ••5526     the spine's account: 3,458.98 read Oct 2, +20 entries → 2,156.55
  *   (no account)    HELOC                           debt, active, 18,500.00
  *
  * The EXPECTED strings below are written out by hand, not computed with the
@@ -103,18 +103,19 @@ export const PAYOFF = {
   combinedWeekCharges: 120,
 };
 
-/** The forecast the accounts page reads for checking (until WP1's spine view). */
-export const FORECAST = {
-  bankSnapshot: { balance: "3458.98", at: "2026-10-02T15:00:00.000Z", source: "plaid", accountId: "row-chk", name: "Total Checking", mask: "5526" },
-  accountSnapshots: {},
-  plaidCheckingAccounts: [{ id: "row-chk", mask: "5526", institutionName: "Chase" }],
-};
-
-export const CASH_SIGNAL = { account: { name: "Total Checking", mask: "5526", subtype: "checking", via: "pointer" } };
-
+/**
+ * The spine (WP1): checking's balance today is the Oct 2 snapshot rolled
+ * forward through 20 entries — 3,458.98 − 1,302.43 = 2,156.55 — on account
+ * row-chk, named BY ID.
+ */
 export const SPINE = {
   asOf: NOW,
-  bank: { balance: "2156.55", asOfDate: "2026-10-02T15:00:00.000Z", source: "plaid", lastContactAt: "2026-10-09T13:00:00.000Z", lastFailureAt: null, stale: false, staleReason: null },
+  bank: {
+    balance: "2156.55", asOfDate: "2026-10-02T15:00:00.000Z", source: "plaid", lastContactAt: "2026-10-09T13:00:00.000Z", lastFailureAt: null, stale: false, staleReason: null,
+    snapshot: { balance: "3458.98", at: "2026-10-02T15:00:00.000Z", source: "plaid" },
+    sinceSnapshot: { net: "-1302.43", count: 20, through: "2026-10-09" },
+    account: { rowId: "row-chk", externalId: "ext-chk", name: "Total Checking", mask: "5526", subtype: "checking", via: "pointer" },
+  },
   spentMonth: 900, spentWeek: 120,
   nextBill: null, billsDueCount: 0,
   forecast: { lowPoint: "1200.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "ready" },
@@ -125,6 +126,7 @@ export const SPINE = {
 
 /** Every string a surface must print, per concept, written out by hand. */
 export const EXPECT = {
+  checking: { ext: "ext-chk", balance: "$2,156.55", snapshotLine: "Snapshot $3,458.98 · Oct 2 · +20 entries", snapshot: "$3,458.98", caption: "Oct 2 · +20 entries", since: "Includes 20 entries since the Oct 2 snapshot" },
   live: { ext: "ext-plat", debtId: "d-plat", owed: "$1,227.27", creditor: "$3,842.98", pending: "$2,615.71" },
   twin: { ext: "ext-plat2", debtId: "d-plat2", owed: "$250.00" },
   zero: { ext: "ext-blue", debtId: "d-blue", owed: "$0.00" },

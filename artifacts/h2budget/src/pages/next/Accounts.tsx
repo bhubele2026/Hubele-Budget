@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo } from "react";
 import { useRoute } from "wouter";
 import {
-  useGetAmexWeeklyPayoff, useGetForecast, useListCategories, useListDebts,
+  useGetAmexWeeklyPayoff, useListCategories, useListDebts,
   useListPlaidItems, useListPlaidLiabilityAccounts, useListTransactions,
   getListPlaidLiabilityAccountsQueryKey,
   type AmexWeeklyPayoffCard,
@@ -12,8 +12,9 @@ import { AccountPageSkeleton } from "@/components/account-page/account-page-skel
 import { displayAmount } from "@/lib/amountDisplay";
 import { resolveTxnAccount } from "@/lib/accountIdentity";
 import { householdToday } from "@/lib/householdDay";
-import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import { formatCurrency } from "@/lib/utils";
+import { isSpineAccount, snapshotWords } from "@/lib/bankBalance";
+import { useBankBalanceView } from "@/hooks/useBankBalanceView";
 import { CARD_WORDS, cardOwedView, creditorLabel, debtForAccount } from "@/lib/cardBalance";
 import { NOT_TRACKED, snapshotCaption } from "@/lib/snapshotWords";
 import { AccountSelector, type BalanceByRow } from "./accounts/AccountSelector";
@@ -86,7 +87,10 @@ export default function NextAccountsPage() {
   const { data: items, isLoading } = useListPlaidItems();
   const { data: debts } = useListDebts();
   const { data: payoff } = useGetAmexWeeklyPayoff();
-  const { data: forecast } = useGetForecast({ days: 90 });
+  // (WP3) The checking balance comes from the spine's bank view (WP1) — the
+  // figure the dashboard shows, with the snapshot under it — so this page no
+  // longer asks for the whole forecast to find one number.
+  const { view: bank } = useBankBalanceView();
   const entries = useMemo(() => buildEntries(items), [items]);
   // The id may be the Plaid account_id or the items response's row id.
   const selected = entries.find((e) => e.plaidAccountId === selectedId || e.rowId === selectedId) ?? null;
@@ -103,13 +107,12 @@ export default function NextAccountsPage() {
     query: { queryKey: getListPlaidLiabilityAccountsQueryKey(), staleTime: 30 * 60_000, enabled: needLiabilities },
   });
   const liabilityFor = (rowId: string) => (debtFor(rowId) ? null : (liabs ?? []).find((l) => l.id === rowId) ?? null);
-  const snapshotFor = (rowId: string) =>
-    deriveEffectiveSnapshot({
-      bankSnapshot: forecast?.bankSnapshot ?? null,
-      accountSnapshots: forecast?.accountSnapshots ?? {},
-      selectedAccountInternalId: rowId,
-      plaidCheckingAccounts: forecast?.plaidCheckingAccounts ?? [],
-    });
+  // The account the bank balance rolls forward on — BY ID (`isSpineAccount`),
+  // never by mask.
+  const allKeys = entries.map((e) => ({ id: e.rowId, accountId: e.plaidAccountId, mask: e.identity.mask4 || null }));
+  const isSpine = (e: (typeof entries)[number]) =>
+    !owes(e) && isSpineAccount({ id: e.rowId, accountId: e.plaidAccountId, mask: e.identity.mask4 || null }, bank?.account, allKeys);
+  const bankFor = (e: (typeof entries)[number]) => (isSpine(e) ? bank : null);
   const balances: BalanceByRow = {};
   for (const e of entries) {
     if (owes(e)) {
@@ -123,12 +126,19 @@ export default function NextAccountsPage() {
             plan: v.status,
             balanceAt: v.creditorCurrent?.asOf,
           };
-    } else if (e.identity.kind === "checking") {
-      const snap = snapshotFor(e.rowId);
-      balances[e.rowId] = { label: "Balance", figure: snap ? formatCurrency(snap.balance) : null, balanceAt: snap?.at };
+    } else if (isSpine(e) && bank) {
+      // ⭐ The checking balance: the dashboard's figure ("Balance" = the
+      // snapshot rolled forward), with the bank's own snapshot under it, dated,
+      // and how many entries rolled on top (WP1's `snapshotWords`).
+      balances[e.rowId] = {
+        label: "Balance",
+        figure: bank.balance != null ? formatCurrency(bank.balance) : null,
+        sub: snapshotWords(bank),
+        balanceAt: bank.snapshot?.at,
+      };
     } else {
-      // Savings and other depository accounts: the last reading, never rolled
-      // forward, or words (`lib/snapshotWords.ts`).
+      // Every other depository account (savings, a second checking account):
+      // its last reading, never rolled forward, or words (`lib/snapshotWords.ts`).
       const r = e.snapshot;
       balances[e.rowId] = r
         ? { label: "Snapshot", figure: formatCurrency(r.balance), words: snapshotCaption(r), balanceAt: r.at }
@@ -169,7 +179,7 @@ export default function NextAccountsPage() {
                       entry={selected}
                       debt={debtFor(selected.rowId)}
                       payoffCard={null}
-                      snapshot={snapshotFor(selected.rowId)}
+                      bank={bankFor(selected)}
                     />
                   }
                 />
@@ -190,7 +200,6 @@ export default function NextAccountsPage() {
                       debt={debtFor(selected.rowId)}
                       liability={liabilityFor(selected.rowId)}
                       payoffCard={payoffCardFor(payoff?.cards, selected)}
-                      snapshot={null}
                     />
                   }
                 />
@@ -203,7 +212,7 @@ export default function NextAccountsPage() {
                 debt={debtFor(selected.rowId)}
                 liability={liabilityFor(selected.rowId)}
                 payoffCard={null}
-                snapshot={snapshotFor(selected.rowId)}
+                bank={bankFor(selected)}
               />
               <Panel title="Activity" accent={selected.identity.accent} span={8} className="min-w-0" variant="static" data-testid="account-activity">
                 <p className={emptyNote}>This account type has no activity view yet.</p>

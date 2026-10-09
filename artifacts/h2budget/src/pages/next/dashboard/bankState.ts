@@ -1,13 +1,20 @@
 import type { PlaidItemDetail } from "@workspace/api-client-react";
 import { isPlaidReauthCode, isSyntheticPlaidItem } from "@/components/plaid-reconnect-button";
 import { agoShort } from "@/lib/accountFreshness";
+import { PLAID_FEED_QUIET_MS } from "@workspace/avalanche-core/freshness";
 
 // (WP3) `agoShort` moved to `lib/accountFreshness.ts` with the account
 // freshness stamps; re-exported so existing callers keep their import.
 export { agoShort };
 
-/** A bank's feed is "out of date" after 36 hours without a successful sync. */
-export const STALE_MS = 36 * 60 * 60 * 1000;
+/**
+ * A bank's feed is "out of date" after 48 hours without a successful sync —
+ * the server's own threshold (`computeBankFreshness`), one constant for both
+ * (`@workspace/avalanche-core/freshness`). (WP3) It was 36 hours here, so for
+ * twelve hours a day this line said "out of date" while the balance beside it
+ * was served as fresh.
+ */
+export const STALE_MS = PLAID_FEED_QUIET_MS;
 
 export type AccountState = "ok" | "stale" | "reauth" | "failed" | "never";
 

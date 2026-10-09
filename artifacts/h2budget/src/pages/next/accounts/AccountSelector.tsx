@@ -11,14 +11,19 @@ import { STATE_WORD, type AccountEntry } from "./entries";
  * words for the same concept (WP3):
  *   - a card on the plan: "Owed" + the netted figure;
  *   - a card off the plan: its own current balance, and `plan` says so;
- *   - savings: "Snapshot" + the reading + "as of <day> · not rolled forward",
- *     or only words when nothing has been read.
+ *   - checking (the account the balance rolls forward on): "Balance" + the
+ *     dashboard's figure, and `sub` = the bank snapshot under it ("Snapshot
+ *     $3,458.98 · Oct 2 · +20 entries", WP1's `snapshotWords`);
+ *   - savings and any other depository account: "Snapshot" + the reading +
+ *     "as of <day> · not rolled forward", or only words when nothing has been read.
  * `null` figure and words = not known: an em dash, never $0.
  */
 export interface ChipBalance {
   label: string | null;
   figure: string | null;
   words?: string | null;
+  /** A second line under the figure (the checking account's bank snapshot). */
+  sub?: string | null;
   plan?: string | null;
   /** When the balance on the chip was read (the "balance read" stamp). */
   balanceAt?: string | null;
@@ -75,6 +80,7 @@ export function AccountSelector({
               </span>
               {b?.plan ? <span className="font-medium" data-testid="chip-plan">{b.plan}</span> : null}
             </span>
+            {b?.sub ? <span className="text-micro text-neutral-500" data-testid="chip-snapshot">{b.sub}</span> : null}
             <span className="flex flex-wrap gap-x-1 text-micro text-neutral-500">
               {e.state !== "synced" ? (
                 <span data-testid="chip-state" className={cn(e.state === "reconnect" || e.state === "problem" ? "text-status-bad font-medium" : "")}>

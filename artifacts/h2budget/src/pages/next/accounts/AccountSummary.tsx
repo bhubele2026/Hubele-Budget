@@ -8,6 +8,7 @@ import {
   type CardDebtInput, type CardLiabilityInput,
 } from "@/lib/cardBalance";
 import { NOT_TRACKED, snapshotCaption } from "@/lib/snapshotWords";
+import { entriesWord, sinceSnapshotWords, type BankBalanceView } from "@/lib/bankBalance";
 import { ForecastLegend } from "./ForecastLegend";
 import { STATE_WORD, type AccountEntry } from "./entries";
 
@@ -29,17 +30,24 @@ export const money = (v: string | number | null | undefined): string | number =>
   return Number.isFinite(n) ? n : BLANK;
 };
 
-export interface SnapshotLite { balance: string; at: string; source: "manual" | "plaid" }
+/** "Oct 2 · +20 entries": when the bank snapshot was read, and what rolled on top. */
+function snapshotCaptionOf(v: BankBalanceView): string | null {
+  const s = v.snapshot;
+  if (!s) return null;
+  const n = v.since?.count ?? 0;
+  return `${dayOf(s.day) ?? s.day}${n > 0 ? ` · +${entriesWord(n)}` : ""}`;
+}
 
 export function AccountSummary({
-  entry, debt, liability = null, payoffCard, snapshot, now = Date.now(),
+  entry, debt, liability = null, payoffCard, bank = null, now = Date.now(),
 }: {
   entry: AccountEntry;
   debt: CardDebtInput | null;
   /** Plaid's stored liability figures, for a card or loan with no debt row. */
   liability?: CardLiabilityInput | null;
   payoffCard: AmexWeeklyPayoffCard | null;
-  snapshot: SnapshotLite | null;
+  /** The spine's bank view (WP1) — only when this IS the account the balance rolls forward on. */
+  bank?: BankBalanceView | null;
   now?: number;
 }) {
   const id = entry.identity;
@@ -47,9 +55,10 @@ export function AccountSummary({
   // ⭐ The ONE card model (WP3): the same concepts, under the same words, as
   // the dashboard row and the account chip.
   const view = owes ? cardOwedView({ debt, liability }) : null;
-  // Savings and any other non-checking depository account: the snapshot rule.
-  const reading = !owes && id.kind !== "checking" ? entry.snapshot ?? null : null;
-  const balanceAt = view ? view.creditorCurrent?.asOf : id.kind === "checking" ? snapshot?.at : reading?.at;
+  // Every other depository account (savings, a second checking account): the
+  // snapshot rule — its last reading, never rolled forward.
+  const reading = !owes && !bank ? entry.snapshot ?? null : null;
+  const balanceAt = view ? view.creditorCurrent?.asOf : bank ? bank.snapshot?.at : reading?.at;
   const stamps = freshnessStamps({ syncedAt: entry.lastSyncedAt, balanceAt, dataThrough: entry.dataThrough }, now);
   return (
     <Panel title="Summary" sub={`${id.label}${id.mask4 ? ` ••${id.mask4}` : ""}`} accent={id.accent} span={4} data-testid="account-summary">
@@ -90,13 +99,21 @@ export function AccountSummary({
             </>
           ) : null}
         </div>
-      ) : id.kind === "checking" ? (
+      ) : bank ? (
+        // (WP3, on WP1's spine view) The balance today is the dashboard's
+        // figure — the bank snapshot rolled forward through the ledger — and
+        // the snapshot itself sits under it, dated, with what rolled on top.
+        // It was the raw snapshot, undated, under "Balance today".
         <div className="space-y-4">
-          <StatBlock label="Balance today" value={snapshot ? money(snapshot.balance) : BLANK} />
-          {snapshot ? (
-            <div className="text-micro text-neutral-500"><BankSnapshotFreshness source={snapshot.source} at={snapshot.at} /></div>
+          <StatBlock label="Balance today" value={money(bank.balance)} data-testid="summary-balance"
+            hint={sinceSnapshotWords(bank) ?? undefined} />
+          {bank.snapshot ? (
+            <div data-testid="summary-bank-snapshot">
+              <StatBlock label="Bank snapshot" value={money(bank.snapshot.balance)} hint={snapshotCaptionOf(bank) ?? undefined} />
+              <div className="mt-1 text-micro text-neutral-500"><BankSnapshotFreshness source={bank.snapshot.source} at={bank.snapshot.at} /></div>
+            </div>
           ) : (
-            <p className="text-micro text-neutral-500">No balance reading for this account yet.</p>
+            <p className="text-micro text-neutral-500" data-testid="summary-no-snapshot">No balance reading for this account yet.</p>
           )}
         </div>
       ) : reading ? (

@@ -26,7 +26,7 @@ import * as F from "./__fixture__/accountsScenario";
  *   - a card with no debt row as "Not on the payoff plan";
  *   - savings as its last reading, "not rolled forward";
  *   - the amount left = the Avalanche total, without the archived or off-plan cards.
- * The checking chip and Summary join it when the spine's bank view lands (WP1).
+ *   - checking as the spine's balance today, with its snapshot dated under it (WP1).
  */
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
@@ -60,8 +60,7 @@ vi.mock("@workspace/api-client-react", async (orig) => {
     useListDebts: () => ok(fx.DEBTS),
     useListPlaidLiabilityAccounts: (_p: unknown, o?: { query?: { enabled?: boolean } }) => ok(o?.query?.enabled === false ? undefined : fx.LIABILITIES),
     useGetAmexWeeklyPayoff: () => ok(fx.PAYOFF),
-    useGetForecast: () => ok(fx.FORECAST),
-    useGetForecastCashSignal: () => ok(fx.CASH_SIGNAL),
+    useGetForecastCashSignal: () => ok(undefined),
     useGetForecastBankBalanceExplain: () => ok(undefined),
     useGetMoneyPosition: () => ok({ reservesHeld: "0.00" }),
     useListTransactions: () => ok([]),
@@ -322,4 +321,29 @@ describe("freshness: three stamps, and 'data through' is a data date", () => {
   });
 });
 
-it.todo("checking: the chip and the Summary read the spine's bank view (\"Balance $2,156.55\" + \"Snapshot $3,458.98 · Oct 2 · +N entries\") — after WP1");
+describe("checking: the spine's account, by id — the balance today and the snapshot under it (WP1 + WP3)", () => {
+  const E = F.EXPECT.checking;
+  it("the summary row, the dashboard row, the chip and the Summary print the same balance and the same snapshot words", async () => {
+    renderIn(<><SummaryRow /><AccountsPanel /></>);
+    expect(screen.getByTestId("dash-kpi-checking-value").textContent).toBe(E.balance);
+    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe(E.since);
+    expect(within(dashRow(E.ext)).getByTestId("dash-account-balance").textContent).toBe(E.balance);
+    cleanup();
+    renderIn(<NextAccountsPage />, "/next/accounts");
+    expect(within(chip(E.ext)).getByTestId("chip-balance").textContent).toBe(`Balance ${E.balance}`);
+    expect(within(chip(E.ext)).getByTestId("chip-snapshot").textContent).toBe(E.snapshotLine);
+    const s = await summaryOf(E.ext);
+    const today = within(s).getByTestId("summary-balance");
+    expect(within(today).getByText(E.balance)).toBeTruthy();
+    expect(today.textContent).toContain(E.since);
+    const snap = within(s).getByTestId("summary-bank-snapshot");
+    expect(within(snap).getByText(E.snapshot)).toBeTruthy();
+    expect(snap.textContent).toContain(E.caption);
+  });
+  it("the raw snapshot is never shown as the balance", async () => {
+    renderIn(<NextAccountsPage />, "/next/accounts");
+    expect(within(chip(E.ext)).getByTestId("chip-balance").textContent).not.toContain(E.snapshot);
+    const s = await summaryOf(E.ext);
+    expect(within(s).getByTestId("summary-balance").textContent).not.toContain(E.snapshot);
+  });
+});

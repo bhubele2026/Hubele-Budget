@@ -6,13 +6,14 @@ import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
 import { CARD_WORDS, cardHasFigures, cardOwedView, creditorLabel, debtForAccount } from "@/lib/cardBalance";
 import { freshnessStamps } from "@/lib/accountFreshness";
 import { NOT_TRACKED, snapshotLine } from "@/lib/snapshotWords";
+import { bankBalanceView, isSpineAccount } from "@/lib/bankBalance";
 import { useSpine } from "@/hooks/useSpine";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { FreshnessLine } from "@/components/data-state";
 import { isSyntheticPlaidItem, plaidReauthReason } from "@/components/plaid-reconnect-button";
 import { btnSecondarySm } from "@/ui";
 import { cn } from "@/lib/utils";
-import { useCashSignalQ, useDebtsQ, useLiabilityAccountsQ, usePlaidItemsQ } from "./queries";
+import { useDebtsQ, useLiabilityAccountsQ, usePlaidItemsQ } from "./queries";
 import { connectionState, STATE_WORD } from "./bankState";
 import { Gate, LABEL, LINK, money, ordinal, rise } from "./shared";
 
@@ -67,9 +68,13 @@ function Fact({ label, value, testid }: { label: string; value: ReactNode; testi
  */
 export default function AccountsPanel() {
   const items = usePlaidItemsQ();
-  const cash = useCashSignalQ(90);
   const debts = useDebtsQ();
   const { data: spine } = useSpine();
+  // (WP3) The account the bank balance rolls forward on, BY ID, from the spine
+  // itself (WP1's `bank.account`): matching the cash signal's mask made every
+  // account without a mask "the checking account" (`"" === ""`), and two
+  // accounts can share four digits.
+  const spineAcct = spine ? bankBalanceView(spine.bank).account : null;
   const now = Date.now();
 
   const rows = useMemo(() => {
@@ -86,6 +91,7 @@ export default function AccountsPanel() {
     return list.map((r) => ({ ...r, identity: identityOf(asInput(r), { cardOrder }) }));
   }, [items.data]);
 
+  const allAccts = rows.map((r) => r.acct);
   // (WP3) The debt row by the account's internal id only, any status: an
   // archived row is still this card's row, and the card model says what it is.
   const debtFor = (acct: PlaidAccount) => debtForAccount(debts.data, acct);
@@ -115,11 +121,8 @@ export default function AccountsPanel() {
             <ul className="list-none divide-y divide-brand-line p-0">
               {rows.map(({ item, acct, identity, firstOfItem }) => {
                 const st = connectionState(item, now);
-                const csAcct = cash.data?.account;
-                const isCash =
-                  identity.kind === "checking" && !!csAcct && csAcct.via !== "unresolved" &&
-                  (csAcct.mask ?? "") === (acct.mask ?? "");
                 const liability = identity.isCard || identity.kind === "loan";
+                const isCash = !liability && isSpineAccount(acct, spineAcct, allAccts);
                 const debt = liability ? debtFor(acct) : null;
                 const la = liability && !debt ? (liab.data ?? []).find((l) => l.id === acct.id) : undefined;
                 // ⭐ ONE card model (WP3): the same view the account chips, the

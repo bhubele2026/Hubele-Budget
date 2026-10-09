@@ -5,8 +5,9 @@ import { memoryLocation } from "wouter/memory-location";
 import type { ReactNode } from "react";
 
 const h = vi.hoisted(() => ({
-  items: [] as unknown[], debts: [] as unknown[], payoff: null as unknown, forecast: null as unknown,
+  items: [] as unknown[], debts: [] as unknown[], payoff: null as unknown,
   liabs: [] as unknown[], liabEnabled: [] as boolean[],
+  bank: null as unknown,
   amexProps: vi.fn(), chaseProps: vi.fn(),
   extraTxns: [] as unknown[],
 }));
@@ -16,7 +17,6 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
   useListPlaidItems: () => ({ data: h.items, isLoading: false }),
   useListDebts: () => ({ data: h.debts }),
   useGetAmexWeeklyPayoff: () => ({ data: h.payoff }),
-  useGetForecast: () => ({ data: h.forecast }),
   // (WP3) A card with no debt row reads Plaid's stored liability figures; the
   // page asks only when such a card exists.
   useListPlaidLiabilityAccounts: (_p: unknown, o: { query: { enabled: boolean } }) => {
@@ -30,6 +30,8 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
   ], isLoading: false }),
   useListCategories: () => ({ data: [{ id: "c1", name: "Dining" }] }),
 }));
+// (WP3) The checking balance is the spine's bank view (WP1), no request of its own.
+vi.mock("@/hooks/useBankBalanceView", () => ({ useBankBalanceView: () => ({ view: h.bank, state: "loaded", refetch: () => {} }) }));
 // (C10) The Amex page renders the host's `lead` (the Summary panel) itself.
 vi.mock("@/pages/amex", () => ({ default: (p: { lead?: ReactNode }) => { h.amexProps(p); return <div data-testid="amex-ledger">{p.lead}</div>; } }));
 // (C9) The Chase page renders the host's `lead` (the Summary panel) itself.
@@ -54,7 +56,13 @@ const seed = () => {
   h.debts = [{ id: "d1", plaidAccountId: "r-amex", balance: "1234.50", minPayment: "35", dueDay: 14, status: "active" }];
   // The API's shape: `accountId` is the external Plaid account_id, `plaidAccountId` the internal row id.
   h.payoff = { cards: [{ accountId: "ext-amex", plaidAccountId: "r-amex", weekCharges: 120, chargeCount: 3, pctOfStatementThisWeek: 10, statementBalance: 1100 }] };
-  h.forecast = { bankSnapshot: { balance: "2500.00", at: "2026-10-08T09:00:00Z", source: "plaid", accountId: "r-chk" }, accountSnapshots: {}, plaidCheckingAccounts: [{ id: "r-chk", mask: "4821", institutionName: "Chase" }] };
+  // The spine's bank view: $3,458.98 read Oct 2, 20 entries since, $2,156.55 today — on account r-chk BY ID.
+  h.bank = {
+    balance: "2156.55",
+    snapshot: { balance: "3458.98", at: "2026-10-02T15:00:00Z", day: "2026-10-02", source: "plaid" },
+    since: { net: "-1302.43", count: 20, through: "2026-10-09" },
+    account: { rowId: "r-chk", externalId: "ext-chk", name: "Total Checking", mask: "4821", subtype: "checking", via: "pointer" },
+  };
 };
 const renderAt = (path: string) => {
   const { hook } = memoryLocation({ path });
@@ -68,7 +76,10 @@ describe("accounts selector", () => {
     expect(chk.getAttribute("data-accent")).toBe("checking");
     expect(chk.textContent).toContain("Chase Total Checking");
     expect(chk.textContent).toContain("4821");
-    expect(within(chk).getByTestId("chip-balance").textContent).toContain("$2,500.00");
+    // (WP3) The dashboard's figure (the snapshot rolled forward), with the bank's
+    // own snapshot under it, dated — it was the raw snapshot, undated.
+    expect(within(chk).getByTestId("chip-balance").textContent).toBe("Balance $2,156.55");
+    expect(within(chk).getByTestId("chip-snapshot").textContent).toBe("Snapshot $3,458.98 · Oct 2 · +20 entries");
     // (WP3) Three stamps, each named: synced · balance read · data through
     // (the newest bank row, never the sync day).
     expect(within(chk).getByTestId("chip-stamps").textContent).toMatch(/^synced .+ · balance read .+ · data through Oct 7$/);
@@ -82,6 +93,35 @@ describe("accounts selector", () => {
     seed(); renderAt("/next/accounts/ext-amex");
     expect(screen.getByTestId("account-chip-ext-amex").getAttribute("aria-current")).toBe("page");
     expect(screen.getByTestId("account-chip-all").getAttribute("aria-current")).toBeNull();
+  });
+});
+
+describe("the checking account is picked BY ID (WP3, on WP1's ids)", () => {
+  it("a second checking account with the same mask is not the spine's: it shows its own reading, not rolled forward", () => {
+    seed();
+    h.items = [
+      item("i1", "Chase", "chase", [
+        { id: "r-chk", accountId: "ext-chk", name: "Total Checking", mask: "4821", type: "depository", subtype: "checking" },
+        { id: "r-twin", accountId: "ext-twin", name: "Total Checking", mask: "4821", type: "depository", subtype: "checking",
+          snapshot: { balance: "812.40", at: "2026-10-05T14:00:00Z", source: "plaid" } },
+      ]),
+    ];
+    renderAt("/next/accounts");
+    expect(within(screen.getByTestId("account-chip-ext-chk")).getByTestId("chip-balance").textContent).toBe("Balance $2,156.55");
+    const twin = screen.getByTestId("account-chip-ext-twin");
+    expect(within(twin).getByTestId("chip-balance").textContent).toBe("Snapshot $812.40 · as of Oct 5 · not rolled forward");
+    expect(within(twin).queryByTestId("chip-snapshot")).toBeNull();
+  });
+  it("accounts without a mask are never 'the checking account' because \"\" equals \"\"", () => {
+    seed();
+    h.items = [item("i1", "Chase", "chase", [
+      { id: "r-chk", accountId: "ext-chk", name: "Total Checking", mask: null, type: "depository", subtype: "checking" },
+      { id: "r-other", accountId: "ext-other", name: "Everyday", mask: null, type: "depository", subtype: "checking" },
+    ])];
+    h.bank = { ...(h.bank as object), account: { rowId: "r-chk", externalId: "ext-chk", name: "Total Checking", mask: null, subtype: "checking", via: "pointer" } };
+    renderAt("/next/accounts");
+    expect(within(screen.getByTestId("account-chip-ext-chk")).getByTestId("chip-balance").textContent).toBe("Balance $2,156.55");
+    expect(within(screen.getByTestId("account-chip-ext-other")).getByTestId("chip-balance").textContent).toBe("Balance is not tracked for this account.");
   });
 });
 
@@ -184,7 +224,12 @@ describe("checking variant", () => {
     await waitFor(() => expect(screen.getByTestId("chase-ledger")).toBeTruthy());
     expect(h.chaseProps).toHaveBeenCalledWith(expect.objectContaining({ embedded: true, accountKey: "r-chk" }));
     expect(screen.queryByTestId("amex-ledger")).toBeNull();
-    expect(screen.getByTestId("account-summary").textContent).toContain("$2,500.00");
+    // (WP3) "Balance today" is the rolled-forward figure; the bank snapshot sits under it.
+    expect(within(screen.getByTestId("summary-balance")).getByText("$2,156.55")).toBeTruthy();
+    expect(screen.getByTestId("summary-balance").textContent).toContain("Includes 20 entries since the Oct 2 snapshot");
+    const snap = screen.getByTestId("summary-bank-snapshot");
+    expect(within(snap).getByText("$3,458.98")).toBeTruthy();
+    expect(snap.textContent).toContain("Oct 2 · +20 entries");
     expect(screen.queryByTestId("forecast-legend")).toBeNull();
   });
 });
@@ -199,7 +244,7 @@ describe("an account = its page's own layout (C9 checking, C10 card)", () => {
    * be a scroll container either.
    */
   it.each([
-    ["/next/accounts/ext-chk", "chase-ledger", { accountKey: "r-chk" }, "$2,500.00"],
+    ["/next/accounts/ext-chk", "chase-ledger", { accountKey: "r-chk" }, "$2,156.55"],
     ["/next/accounts/ext-amex", "amex-ledger", { accountId: "ext-amex" }, "$1,234.50"],
   ])("%s spans the grid, passes the Summary as the lead, and adds no scroll container", async (path, ledger, props, figure) => {
     seed(); renderAt(path);
@@ -224,14 +269,14 @@ describe("blanks never become zero, and a real zero is never a blank (WP3)", () 
   const entry = { plaidAccountId: "x", rowId: "r", itemId: "i", identity: amexId, state: "synced" as const, lastSyncedAt: null, dataThrough: null };
   it("shows an em-dash for every figure the API does not carry", () => {
     // No debt row and no liability figures: nothing is known.
-    render(<AccountSummary entry={entry} debt={null} payoffCard={null} snapshot={null} />);
+    render(<AccountSummary entry={entry} debt={null} payoffCard={null} />);
     const s = screen.getByTestId("account-summary").textContent!;
     expect(s).not.toContain("$0");
     expect((s.match(/—/g) ?? []).length).toBeGreaterThanOrEqual(5);
     expect(screen.getByTestId("summary-plan").textContent).toBe("Not on the payoff plan");
   });
   it("a real zero balance is $0.00, while an unknown \"0\" minimum stays a dash", () => {
-    render(<AccountSummary entry={entry} debt={{ balance: "0.00", minPayment: "0", status: "active" }} payoffCard={null} snapshot={null} />);
+    render(<AccountSummary entry={entry} debt={{ balance: "0.00", minPayment: "0", status: "active" }} payoffCard={null} />);
     expect(within(screen.getByTestId("summary-owed")).getByText("$0.00")).toBeTruthy();
     expect(within(screen.getByTestId("summary-creditor")).getByText("$0.00")).toBeTruthy();
     expect(within(screen.getByTestId("summary-min")).getByText("—")).toBeTruthy();
