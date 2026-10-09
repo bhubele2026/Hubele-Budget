@@ -4083,7 +4083,7 @@ components:
         asOf: { type: string, description: ISO timestamp the snapshot was read }
         bank:
           type: object
-          required: [balance, asOfDate, source, lastContactAt, lastFailureAt, stale, staleReason]
+          required: [balance, asOfDate, source, lastContactAt, lastFailureAt, stale, staleReason, snapshot, sinceSnapshot, account]
           properties:
             balance: { type: string, description: computeCashSignal().bankToday — snapshot rolled forward through the ledger }
             asOfDate: { type: ["string", "null"], description: computeCashSignal().snapshotAt — when the bank snapshot was taken }
@@ -4092,6 +4092,29 @@ components:
             lastFailureAt: { type: ["string", "null"], description: computeBankFreshness().lastFailureAt }
             stale: { type: boolean, description: computeBankFreshness().stale }
             staleReason: { type: ["string", "null"], enum: [refresh_failed, old, manual_old, null], description: computeBankFreshness().staleReason }
+            snapshot:
+              description: >-
+                (WP1) bankBalanceParts(ledger).snapshot — the bank snapshot `balance` rolls forward
+                from, as read (never rolled forward). Equals /forecast/bank-balance-explain
+                .snapshot's balance, at and source. Null when there is no snapshot.
+              oneOf:
+                - $ref: "#/components/schemas/SpineBankSnapshot"
+                - type: "null"
+            sinceSnapshot:
+              description: >-
+                (WP1) bankBalanceParts(ledger).sinceSnapshot — what the roll-forward adds on top of
+                the snapshot, through `through` (the household's today), by the ledger's own rule
+                (PR4e). Equals /forecast/bank-balance-explain .ledger.sinceAnchor (net, rowCount).
+                snapshot.balance + net = balance to the cent: one ledger computes all three. Null
+                when the snapshot has no read time (no roll-forward).
+              oneOf:
+                - $ref: "#/components/schemas/SpineSinceSnapshot"
+                - type: "null"
+            account:
+              $ref: "#/components/schemas/CashSignalAccount"
+              description: >-
+                (WP1) computeCashSignal().account — the account `balance` rolls forward on, with its
+                ids. A screen finds this account in a list by `rowId` / `externalId`, never by mask.
         spentMonth: { type: number, description: buildSpendingFacts(monthStart..today).householdSpend.total }
         spentWeek: { type: number, description: buildSpendingFacts(weekStart..weekEnd).householdSpend.total }
         nextBill:
@@ -4156,6 +4179,30 @@ components:
                 /debt-plan .newChargesMtd.
         reviewCount: { type: integer, description: computeReviewCount() — unmatched forecast-flagged bank txns this month }
         position: { $ref: "#/components/schemas/SpinePosition" }
+
+    SpineBankSnapshot:
+      type: object
+      description: >-
+        (WP1) The bank snapshot as it was read: the balance the bank (or the household, for a
+        typed-in one) reported at `at`. Not the balance today — the spine's `bank.balance` is
+        this rolled forward. A different figure from `balance` whenever rows landed since.
+      required: [balance, at, source]
+      properties:
+        balance: { type: string, description: "The snapshot balance, two decimals" }
+        at: { type: string, description: When it was read (ISO instant); its household day is the snapshot day }
+        source: { type: string, enum: [plaid, manual], description: "Same as bank.source: anything not from Plaid was typed in" }
+
+    SpineSinceSnapshot:
+      type: object
+      description: >-
+        (WP1) What the roll-forward adds on top of the snapshot. `count` is the rows that count,
+        dated through `through`, including a posted row that adds 0.00 because its pending half was
+        already in the balance; held, other-account and replaced pending rows are not counted.
+      required: [net, count, through]
+      properties:
+        net: { type: string, description: Signed two-decimal dollars (negative = money out since the snapshot) }
+        count: { type: integer }
+        through: { type: string, description: "The household day (YYYY-MM-DD) the roll runs through: today" }
 
     SpinePosition:
       type: object
@@ -6836,8 +6883,13 @@ components:
         this, so its label and its numbers come from one response. `name`,
         `mask` and `subtype` are the resolved Plaid account's own; all null when
         `via` is `unresolved`, where the balance stays at the raw snapshot.
-      required: [name, mask, subtype, via]
+        (WP1) `rowId` and `externalId` say WHICH account: a screen that finds this
+        account in a list matches on them, never on the mask (two accounts can
+        share a mask, and a missing mask matched every other missing one).
+      required: [rowId, externalId, name, mask, subtype, via]
       properties:
+        rowId: { type: ["string", "null"], description: "(WP1) The resolved account's plaid_accounts.id; null when unresolved." }
+        externalId: { type: ["string", "null"], description: "(WP1) The resolved account's Plaid account_id (what transactions carry as plaidAccountId); null when unresolved." }
         name: { type: ["string", "null"] }
         mask: { type: ["string", "null"] }
         subtype: { type: ["string", "null"], description: "Plaid subtype, e.g. checking or savings." }

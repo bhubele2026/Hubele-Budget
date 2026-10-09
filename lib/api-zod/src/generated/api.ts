@@ -3934,6 +3934,18 @@ export const GetForecastResponse = zod.object({
         snapshotSource: zod.string().nullish(),
         account: zod
           .object({
+            rowId: zod
+              .string()
+              .nullable()
+              .describe(
+                "(WP1) The resolved account's plaid_accounts.id; null when unresolved.",
+              ),
+            externalId: zod
+              .string()
+              .nullable()
+              .describe(
+                "(WP1) The resolved account's Plaid account_id (what transactions carry as plaidAccountId); null when unresolved.",
+              ),
             name: zod.string().nullable(),
             mask: zod.string().nullable(),
             subtype: zod
@@ -3949,7 +3961,7 @@ export const GetForecastResponse = zod.object({
             ]),
           })
           .describe(
-            "(Decision 16, PR-K round 2) The bank account this signal's figures roll\nforward on, as `resolveSnapshotAccount` resolved it: the stored pointer,\nelse the snapshot's mask, else the household's sole checking account,\nelse its sole depository account. A screen that names the account reads\nthis, so its label and its numbers come from one response. `name`,\n`mask` and `subtype` are the resolved Plaid account's own; all null when\n`via` is `unresolved`, where the balance stays at the raw snapshot.\n",
+            "(Decision 16, PR-K round 2) The bank account this signal's figures roll\nforward on, as `resolveSnapshotAccount` resolved it: the stored pointer,\nelse the snapshot's mask, else the household's sole checking account,\nelse its sole depository account. A screen that names the account reads\nthis, so its label and its numbers come from one response. `name`,\n`mask` and `subtype` are the resolved Plaid account's own; all null when\n`via` is `unresolved`, where the balance stays at the raw snapshot.\n(WP1) `rowId` and `externalId` say WHICH account: a screen that finds this\naccount in a list matches on them, never on the mask (two accounts can\nshare a mask, and a missing mask matched every other missing one).\n",
           ),
         horizonDays: zod.number().optional(),
         fromDate: zod.string().optional(),
@@ -4310,6 +4322,18 @@ export const GetForecastCashSignalResponse = zod.object({
   snapshotSource: zod.string().nullish(),
   account: zod
     .object({
+      rowId: zod
+        .string()
+        .nullable()
+        .describe(
+          "(WP1) The resolved account's plaid_accounts.id; null when unresolved.",
+        ),
+      externalId: zod
+        .string()
+        .nullable()
+        .describe(
+          "(WP1) The resolved account's Plaid account_id (what transactions carry as plaidAccountId); null when unresolved.",
+        ),
       name: zod.string().nullable(),
       mask: zod.string().nullable(),
       subtype: zod
@@ -4325,7 +4349,7 @@ export const GetForecastCashSignalResponse = zod.object({
       ]),
     })
     .describe(
-      "(Decision 16, PR-K round 2) The bank account this signal's figures roll\nforward on, as `resolveSnapshotAccount` resolved it: the stored pointer,\nelse the snapshot's mask, else the household's sole checking account,\nelse its sole depository account. A screen that names the account reads\nthis, so its label and its numbers come from one response. `name`,\n`mask` and `subtype` are the resolved Plaid account's own; all null when\n`via` is `unresolved`, where the balance stays at the raw snapshot.\n",
+      "(Decision 16, PR-K round 2) The bank account this signal's figures roll\nforward on, as `resolveSnapshotAccount` resolved it: the stored pointer,\nelse the snapshot's mask, else the household's sole checking account,\nelse its sole depository account. A screen that names the account reads\nthis, so its label and its numbers come from one response. `name`,\n`mask` and `subtype` are the resolved Plaid account's own; all null when\n`via` is `unresolved`, where the balance stays at the raw snapshot.\n(WP1) `rowId` and `externalId` say WHICH account: a screen that finds this\naccount in a list matches on them, never on the mask (two accounts can\nshare a mask, and a missing mask matched every other missing one).\n",
     ),
   horizonDays: zod.number().optional(),
   fromDate: zod.string().optional(),
@@ -6444,6 +6468,87 @@ export const GetSpineResponse = zod.object({
       ])
       .nullable()
       .describe("computeBankFreshness().staleReason"),
+    snapshot: zod
+      .union([
+        zod
+          .object({
+            balance: zod
+              .string()
+              .describe("The snapshot balance, two decimals"),
+            at: zod
+              .string()
+              .describe(
+                "When it was read (ISO instant); its household day is the snapshot day",
+              ),
+            source: zod
+              .enum(["plaid", "manual"])
+              .describe(
+                "Same as bank.source: anything not from Plaid was typed in",
+              ),
+          })
+          .describe(
+            "(WP1) The bank snapshot as it was read: the balance the bank (or the household, for a typed-in one) reported at `at`. Not the balance today — the spine's `bank.balance` is this rolled forward. A different figure from `balance` whenever rows landed since.",
+          ),
+        zod.null(),
+      ])
+      .describe(
+        "(WP1) bankBalanceParts(ledger).snapshot — the bank snapshot `balance` rolls forward from, as read (never rolled forward). Equals \/forecast\/bank-balance-explain .snapshot's balance, at and source. Null when there is no snapshot.",
+      ),
+    sinceSnapshot: zod
+      .union([
+        zod
+          .object({
+            net: zod
+              .string()
+              .describe(
+                "Signed two-decimal dollars (negative = money out since the snapshot)",
+              ),
+            count: zod.number(),
+            through: zod
+              .string()
+              .describe(
+                "The household day (YYYY-MM-DD) the roll runs through: today",
+              ),
+          })
+          .describe(
+            "(WP1) What the roll-forward adds on top of the snapshot. `count` is the rows that count, dated through `through`, including a posted row that adds 0.00 because its pending half was already in the balance; held, other-account and replaced pending rows are not counted.",
+          ),
+        zod.null(),
+      ])
+      .describe(
+        "(WP1) bankBalanceParts(ledger).sinceSnapshot — what the roll-forward adds on top of the snapshot, through `through` (the household's today), by the ledger's own rule (PR4e). Equals \/forecast\/bank-balance-explain .ledger.sinceAnchor (net, rowCount). snapshot.balance + net = balance to the cent: one ledger computes all three. Null when the snapshot has no read time (no roll-forward).",
+      ),
+    account: zod
+      .object({
+        rowId: zod
+          .string()
+          .nullable()
+          .describe(
+            "(WP1) The resolved account's plaid_accounts.id; null when unresolved.",
+          ),
+        externalId: zod
+          .string()
+          .nullable()
+          .describe(
+            "(WP1) The resolved account's Plaid account_id (what transactions carry as plaidAccountId); null when unresolved.",
+          ),
+        name: zod.string().nullable(),
+        mask: zod.string().nullable(),
+        subtype: zod
+          .string()
+          .nullable()
+          .describe("Plaid subtype, e.g. checking or savings."),
+        via: zod.enum([
+          "pointer",
+          "snapshot mask",
+          "sole checking",
+          "sole depository",
+          "unresolved",
+        ]),
+      })
+      .describe(
+        "(WP1) computeCashSignal().account — the account `balance` rolls forward on, with its ids. A screen finds this account in a list by `rowId` \/ `externalId`, never by mask.",
+      ),
   }),
   spentMonth: zod
     .number()

@@ -4,8 +4,10 @@ exports[`PR-B2 golden — the everyday hooks > a Weekly Spend hook: every occurr
 {
   "acceptedImpact": "0.00",
   "account": {
+    "externalId": "golden-chase-1",
     "mask": "1111",
     "name": "Chase Checking",
+    "rowId": "<uuid>",
     "subtype": "checking",
     "via": "pointer",
   },
@@ -252,8 +254,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot ti
   "balanceOnly": {
     "acceptedImpact": "0.00",
     "account": {
+      "externalId": null,
       "mask": null,
       "name": null,
+      "rowId": null,
       "subtype": null,
       "via": "unresolved",
     },
@@ -369,8 +373,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot ti
   "timeOnly": {
     "acceptedImpact": "0.00",
     "account": {
+      "externalId": null,
       "mask": null,
       "name": null,
+      "rowId": null,
       "subtype": null,
       "via": "unresolved",
     },
@@ -490,8 +496,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 {
   "acceptedImpact": "-15.00",
   "account": {
+    "externalId": "golden-chase-1",
     "mask": "1111",
     "name": "Chase Checking",
+    "rowId": "<uuid>",
     "subtype": "checking",
     "via": "pointer",
   },
@@ -815,8 +823,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 {
   "acceptedImpact": "0.00",
   "account": {
+    "externalId": "golden-chase-1",
     "mask": "1111",
     "name": "Chase Checking",
+    "rowId": "<uuid>",
     "subtype": "checking",
     "via": "pointer",
   },
@@ -989,8 +999,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 {
   "acceptedImpact": "0.00",
   "account": {
+    "externalId": "golden-chase-1",
     "mask": "1111",
     "name": "Chase Checking",
+    "rowId": "<uuid>",
     "subtype": "checking",
     "via": "pointer",
   },
@@ -1244,8 +1256,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 {
   "acceptedImpact": "0.00",
   "account": {
+    "externalId": "golden-chase-1",
     "mask": "1111",
     "name": "Chase Checking",
+    "rowId": "<uuid>",
     "subtype": "checking",
     "via": "pointer",
   },
@@ -1689,8 +1703,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > full househol
 {
   "acceptedImpact": "0.00",
   "account": {
+    "externalId": "golden-chase-1",
     "mask": "1111",
     "name": "Chase Checking",
+    "rowId": "<uuid>",
     "subtype": "checking",
     "via": "pointer",
   },
@@ -2134,8 +2150,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot, 
 {
   "acceptedImpact": "0.00",
   "account": {
+    "externalId": null,
     "mask": null,
     "name": null,
+    "rowId": null,
     "subtype": null,
     "via": "unresolved",
   },
@@ -2274,8 +2292,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot: 
 {
   "acceptedImpact": "0.00",
   "account": {
+    "externalId": null,
     "mask": null,
     "name": null,
+    "rowId": null,
     "subtype": null,
     "via": "unresolved",
   },
@@ -2514,8 +2534,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > snapshot with
 {
   "acceptedImpact": "0.00",
   "account": {
+    "externalId": null,
     "mask": null,
     "name": null,
+    "rowId": null,
     "subtype": null,
     "via": "unresolved",
   },
@@ -2654,8 +2676,10 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > ties and edge
 {
   "acceptedImpact": "0.00",
   "account": {
+    "externalId": "golden-chase-1",
     "mask": "1111",
     "name": "Chase Checking",
+    "rowId": "<uuid>",
     "subtype": "checking",
     "via": "pointer",
   },
@@ -2921,8 +2945,10 @@ exports[`PR4b golden — the snapshot rule > counts rows shown to happen after t
 {
   "acceptedImpact": "0.00",
   "account": {
+    "externalId": "golden-chase-1",
     "mask": "1111",
     "name": "Chase Checking",
+    "rowId": "<uuid>",
     "subtype": "checking",
     "via": "pointer",
   },

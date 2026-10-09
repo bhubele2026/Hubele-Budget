@@ -7332,6 +7332,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
         snapshotAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         snapshotSource: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         account: zod.ZodObject<{
+            rowId: zod.ZodNullable<zod.ZodString>;
+            externalId: zod.ZodNullable<zod.ZodString>;
             name: zod.ZodNullable<zod.ZodString>;
             mask: zod.ZodNullable<zod.ZodString>;
             subtype: zod.ZodNullable<zod.ZodString>;
@@ -7341,11 +7343,15 @@ export declare const GetForecastResponse: zod.ZodObject<{
             via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
             mask: string | null;
             subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
         }, {
             name: string | null;
             via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
             mask: string | null;
             subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
         }>;
         horizonDays: zod.ZodOptional<zod.ZodNumber>;
         fromDate: zod.ZodOptional<zod.ZodString>;
@@ -7544,6 +7550,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
             via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
             mask: string | null;
             subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
         };
         cashBuffer: string;
         bankToday: string;
@@ -7633,6 +7641,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
             via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
             mask: string | null;
             subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
         };
         cashBuffer: string;
         bankToday: string;
@@ -7879,6 +7889,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
             via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
             mask: string | null;
             subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
         };
         cashBuffer: string;
         bankToday: string;
@@ -8072,6 +8084,8 @@ export declare const GetForecastResponse: zod.ZodObject<{
             via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
             mask: string | null;
             subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
         };
         cashBuffer: string;
         bankToday: string;
@@ -8387,6 +8401,8 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     snapshotAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     snapshotSource: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     account: zod.ZodObject<{
+        rowId: zod.ZodNullable<zod.ZodString>;
+        externalId: zod.ZodNullable<zod.ZodString>;
         name: zod.ZodNullable<zod.ZodString>;
         mask: zod.ZodNullable<zod.ZodString>;
         subtype: zod.ZodNullable<zod.ZodString>;
@@ -8396,11 +8412,15 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         mask: string | null;
         subtype: string | null;
+        rowId: string | null;
+        externalId: string | null;
     }, {
         name: string | null;
         via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         mask: string | null;
         subtype: string | null;
+        rowId: string | null;
+        externalId: string | null;
     }>;
     horizonDays: zod.ZodOptional<zod.ZodNumber>;
     fromDate: zod.ZodOptional<zod.ZodString>;
@@ -8599,6 +8619,8 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         mask: string | null;
         subtype: string | null;
+        rowId: string | null;
+        externalId: string | null;
     };
     cashBuffer: string;
     bankToday: string;
@@ -8688,6 +8710,8 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
         mask: string | null;
         subtype: string | null;
+        rowId: string | null;
+        externalId: string | null;
     };
     cashBuffer: string;
     bankToday: string;
@@ -14480,22 +14504,106 @@ export declare const GetSpineResponse: zod.ZodObject<{
         lastFailureAt: zod.ZodNullable<zod.ZodString>;
         stale: zod.ZodBoolean;
         staleReason: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"refresh_failed">, zod.ZodLiteral<"old">, zod.ZodLiteral<"manual_old">, zod.ZodLiteral<null>]>>;
+        snapshot: zod.ZodUnion<[zod.ZodObject<{
+            balance: zod.ZodString;
+            at: zod.ZodString;
+            source: zod.ZodEnum<["plaid", "manual"]>;
+        }, "strip", zod.ZodTypeAny, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }, {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        }>, zod.ZodNull]>;
+        sinceSnapshot: zod.ZodUnion<[zod.ZodObject<{
+            net: zod.ZodString;
+            count: zod.ZodNumber;
+            through: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            net: string;
+            through: string;
+        }, {
+            count: number;
+            net: string;
+            through: string;
+        }>, zod.ZodNull]>;
+        account: zod.ZodObject<{
+            rowId: zod.ZodNullable<zod.ZodString>;
+            externalId: zod.ZodNullable<zod.ZodString>;
+            name: zod.ZodNullable<zod.ZodString>;
+            mask: zod.ZodNullable<zod.ZodString>;
+            subtype: zod.ZodNullable<zod.ZodString>;
+            via: zod.ZodEnum<["pointer", "snapshot mask", "sole checking", "sole depository", "unresolved"]>;
+        }, "strip", zod.ZodTypeAny, {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
+        }, {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
+        }>;
     }, "strip", zod.ZodTypeAny, {
         source: "plaid" | "manual" | null;
+        account: {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
+        };
         balance: string;
         lastContactAt: string | null;
         lastFailureAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
+        snapshot: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null;
         asOfDate: string | null;
+        sinceSnapshot: {
+            count: number;
+            net: string;
+            through: string;
+        } | null;
     }, {
         source: "plaid" | "manual" | null;
+        account: {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
+        };
         balance: string;
         lastContactAt: string | null;
         lastFailureAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
+        snapshot: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null;
         asOfDate: string | null;
+        sinceSnapshot: {
+            count: number;
+            net: string;
+            through: string;
+        } | null;
     }>;
     spentMonth: zod.ZodNumber;
     spentWeek: zod.ZodNumber;
@@ -14632,12 +14740,30 @@ export declare const GetSpineResponse: zod.ZodObject<{
     };
     bank: {
         source: "plaid" | "manual" | null;
+        account: {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
+        };
         balance: string;
         lastContactAt: string | null;
         lastFailureAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
+        snapshot: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null;
         asOfDate: string | null;
+        sinceSnapshot: {
+            count: number;
+            net: string;
+            through: string;
+        } | null;
     };
     spentMonth: number;
     spentWeek: number;
@@ -14684,12 +14810,30 @@ export declare const GetSpineResponse: zod.ZodObject<{
     };
     bank: {
         source: "plaid" | "manual" | null;
+        account: {
+            name: string | null;
+            via: "pointer" | "snapshot mask" | "sole checking" | "sole depository" | "unresolved";
+            mask: string | null;
+            subtype: string | null;
+            rowId: string | null;
+            externalId: string | null;
+        };
         balance: string;
         lastContactAt: string | null;
         lastFailureAt: string | null;
         stale: boolean;
         staleReason: "refresh_failed" | "old" | "manual_old" | null;
+        snapshot: {
+            at: string;
+            source: "plaid" | "manual";
+            balance: string;
+        } | null;
         asOfDate: string | null;
+        sinceSnapshot: {
+            count: number;
+            net: string;
+            through: string;
+        } | null;
     };
     spentMonth: number;
     spentWeek: number;
