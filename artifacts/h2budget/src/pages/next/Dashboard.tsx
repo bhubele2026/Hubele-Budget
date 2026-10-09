@@ -8,6 +8,9 @@ import DashboardHeader from "./dashboard/DashboardHeader";
 import SummaryRow from "./dashboard/SummaryRow";
 import AccountsPanel from "./dashboard/AccountsPanel";
 import { BelowFoldSkeleton } from "./dashboard/BelowFoldSkeleton";
+import { CompactFold } from "./dashboard/foldDensity";
+import { usePlaidItemsQ } from "./dashboard/queries";
+import { hasLinkedBank } from "./dashboard/bankState";
 
 // (C11b, refinement) Everything after the first screen is ONE lazy chunk with
 // two slots: the forecast row (forecast + coming up) above the account list,
@@ -73,8 +76,11 @@ export default function DashboardPage() {
   // open has paid for itself. Never on the critical path.
   useLandingWarmup();
   const below = useBelowFoldReady();
+  const items = usePlaidItemsQ();
+  const compact = items.data !== undefined && !hasLinkedBank(items.data);
   return (
-    <div data-testid="page-next-dashboard" className="lg:pb-14">
+    <div data-testid="page-next-dashboard" data-compact={compact ? "true" : undefined} className="lg:pb-14">
+      <CompactFold.Provider value={compact}>
       <PageGrid>
         <DashboardHeader />
         <DashboardRefreshBanner />
@@ -98,6 +104,7 @@ export default function DashboardPage() {
           Version {APP_VERSION}
         </div>
       </PageGrid>
+      </CompactFold.Provider>
     </div>
   );
 }

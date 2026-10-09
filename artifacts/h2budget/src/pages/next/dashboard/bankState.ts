@@ -39,11 +39,17 @@ export interface BankLine {
   words: string;
 }
 
-/** One line per linked bank (not per account), in the API's order. Pure. */
+/** One line per linked bank (not per account), in the API's order. Two items
+ *  at the same institution are told apart by their first account's name. Pure. */
 export function bankLines(items: readonly PlaidItemDetail[] | undefined, now: number): BankLine[] {
   const out: BankLine[] = [];
-  for (const it of items ?? []) {
-    if (isSyntheticPlaidItem(it)) continue;
+  const real = (items ?? []).filter((it) => !isSyntheticPlaidItem(it));
+  const seen = new Map<string, number>();
+  for (const it of real) {
+    const k = (it.institutionName ?? "").trim().toLowerCase();
+    seen.set(k, (seen.get(k) ?? 0) + 1);
+  }
+  for (const it of real) {
     const state = connectionState(it, now);
     const ago = agoShort(it.lastSyncedAt, now);
     const words =
@@ -52,7 +58,11 @@ export function bankLines(items: readonly PlaidItemDetail[] | undefined, now: nu
           : state === "never" ? "not synced yet"
             : state === "stale" ? `out of date · synced ${ago}`
               : `synced ${ago}`;
-    out.push({ itemId: it.id, institution: (it.institutionName ?? "").trim() || "Bank", state, words });
+    const inst = (it.institutionName ?? "").trim() || "Bank";
+    const first = it.accounts?.[0];
+    const shared = (seen.get((it.institutionName ?? "").trim().toLowerCase()) ?? 0) > 1;
+    const which = shared && first ? [first.name?.trim(), first.mask ? `••${first.mask.slice(-4)}` : null].filter(Boolean).join(" ") : "";
+    out.push({ itemId: it.id, institution: which ? `${inst} ${which}` : inst, state, words });
   }
   return out;
 }

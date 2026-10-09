@@ -83,3 +83,16 @@ describe("headerActionOf (the dashboard header's ONE action)", () => {
     expect(headerActionOf(attentionItems({ ...base, bank: bank({ stale: true, staleReason: "old" }) }))).toEqual({ kind: "afford" });
   });
 });
+
+describe("attentionItems — a card's bank needing a new login (dashboard refinement)", () => {
+  it("is a reconnect item, and takes the header's one action", () => {
+    const items = attentionItems({ ...base, reauthBanks: ["American Express"] });
+    expect(items[0]).toMatchObject({ kind: "reconnect", title: "Reconnect American Express", action: { href: "/settings" } });
+    expect(headerActionOf(items)).toEqual({ kind: "reconnect", label: "Reconnect", href: "/settings" });
+  });
+  it("folds into the checking feed's own reconnect when both happen (one item)", () => {
+    const items = attentionItems({ ...base, bank: bank({ stale: true, staleReason: "refresh_failed" }), reauthBanks: ["American Express", "American Express"] });
+    expect(items.filter((a) => a.kind === "reconnect")).toHaveLength(1);
+    expect(items[0]!.detail).toContain("American Express.");
+  });
+});

@@ -120,7 +120,13 @@ describe("header", () => {
     // Afford stays one tap away, as a quiet second control.
     expect(screen.getByTestId("afford-open")).toBeTruthy();
     a.unmount();
+    // A CARD's bank needing a new login is a reconnect too (Amex here)…
     h.spine.data = spine({ position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00" } });
+    const a2 = wrap(<DashboardHeader />);
+    expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("reconnect");
+    a2.unmount();
+    // …so with every bank connected, a week over plan offers the way back.
+    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);
     const b = wrap(<DashboardHeader />);
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("wayBack");
     expect(screen.getByTestId("ways-back-open").textContent).toBe("Pick a way back");
@@ -255,6 +261,7 @@ describe("summary row: four figures, status-aware", () => {
     expect(screen.getByTestId("dash-kpi-checking-missing").textContent).toContain("No bank balance yet");
     expect(screen.getByTestId("dash-kpi-room-missing").textContent).toContain("Needs a bank balance");
     expect(screen.getByTestId("dash-kpi-low-missing").textContent).toContain("No bank balance yet");
+    expect(screen.getByTestId("dash-kpi-debt-missing").textContent).toBe("No debts on the payoff plan yet.");
   });
   it("stale: the figures stay, and the low point says its balance is out of date", () => {
     h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "old" }, forecast: { ...spine().forecast, status: "ready" } });
@@ -548,6 +555,7 @@ describe("spending pace", () => {
 // ── Debt progress ─────────────────────────────────────────────────────────
 describe("debt progress", () => {
   it("% paid meter, paid down, new charges, milestone, with the plan and report links", () => {
+    h.Q.debts = ok([debt("d1", "Visa", "500.00")]);
     wrap(<DebtPanel />);
     expect(screen.getByTestId("dash-debt-paid").textContent).toContain("42%");
     expect(screen.getByTestId("dash-debt-paid-down").textContent).toBe("$300.00");
@@ -558,7 +566,15 @@ describe("debt progress", () => {
     // The amount owed is the summary tile's job; this panel carries no balance.
     expect(screen.getByTestId("dash-debt").textContent).not.toMatch(/left across|Total balance/);
   });
+  it("no debts at all: words and the way to add one, never a row of $0.00", () => {
+    h.Q.debts = ok([]);
+    h.spine.data = spine({ debt: { payoffPct: null, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0 } });
+    wrap(<DebtPanel />);
+    expect(screen.getByTestId("dash-debt-empty").textContent).toContain("No debts are on the payoff plan yet");
+    expect(screen.getByTestId("dash-debt").textContent).not.toContain("$0.00");
+  });
   it("blanks % paid and says there is no milestone when the spine has none", () => {
+    h.Q.debts = ok([debt("d1", "Visa", "500.00")]);
     h.spine.data = spine({ debt: { payoffPct: null, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0 } });
     wrap(<DebtPanel />);
     expect(screen.getByTestId("dash-debt-paid").textContent).toContain("—");

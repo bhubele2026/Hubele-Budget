@@ -8,9 +8,11 @@ import { attentionItems, billsDueSoon } from "@/lib/attention";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { categoriesByIdOf, isInflowFiledAsExpense } from "@/lib/categoryDirection";
 import { useSpine } from "@/hooks/useSpine";
-import { useBillsSummaryQ } from "./queries";
+import { useBillsSummaryQ, usePlaidItemsQ } from "./queries";
+import { bankLines } from "./bankState";
 import { RECENT_LIMIT, RECENT_WINDOW_DAYS, useCategoriesQ, useDuplicateCountQ, useRecentTxnsQ, useReviewQueueQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
+import { useFoldMinH } from "./foldDensity";
 import { Empty, Gate, LABEL, rise } from "./shared";
 
 /** (F1) The categorization queue's own screen, Review › Categories. */
@@ -75,11 +77,13 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
  * loading or failed says so, never "nothing waiting".
  */
 export default function AttentionPanel() {
+  const minH = useFoldMinH("attention");
   const spine = useSpine();
   const bills = useBillsSummaryQ();
   const queue = useReviewQueueQ();
   const dups = useDuplicateCountQ();
   const findingsQ = useOpenFindings();
+  const items = usePlaidItemsQ();
   const today = householdToday(new Date());
   const recent = useRecentTxnsQ(today, addDaysISO(today, -RECENT_WINDOW_DAYS));
   const cats = useCategoriesQ();
@@ -96,8 +100,9 @@ export default function AttentionPanel() {
       dueSoon: billsDueSoon(bills.data, today),
       today,
       reviewCount: 0, // the review queue has its own rows below
+      reauthBanks: bankLines(items.data, Date.now()).filter((b) => b.state === "reauth").map((b) => b.institution),
     }).filter((a) => a.kind !== "nothing");
-  }, [s, bills.data, today]);
+  }, [s, bills.data, today, items.data]);
 
   // (dash-accuracy) "Income filed under an expense category", by the shared
   // pure rule, over the recent window Recent activity reads (one request).
@@ -122,7 +127,7 @@ export default function AttentionPanel() {
 
   return (
     <Panel title="Needs attention" span={7} variant="static"
-      className={cn(rise(BELOW_FOLD.attention.rise), BELOW_FOLD.attention.minH)} data-testid="dash-attention">
+      className={cn(rise(BELOW_FOLD.attention.rise), minH)} data-testid="dash-attention">
       <Gate q={q} what="Needs attention" rows={4}>
         {() =>
           allClear ? (

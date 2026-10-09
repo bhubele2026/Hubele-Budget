@@ -10,6 +10,7 @@ import { usePlaidItemsQ } from "./queries";
 import { categoriesByIdOf, isInflowFiledAsExpense } from "@/lib/categoryDirection";
 import { RECENT_WINDOW_DAYS, useCategoriesQ, useRecentTxnsQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
+import { useFoldMinH } from "./foldDensity";
 import { Gate, LINK, rise } from "./shared";
 
 export const ACTIVITY_ROWS = 6;
@@ -17,6 +18,7 @@ export const ACTIVITY_ROWS = 6;
 /** The newest rows across every account, each with its account, status and
  *  category; the whole ledger is one click away. */
 export default function ActivityPanel() {
+  const minH = useFoldMinH("activity");
   const today = householdToday(new Date());
   // The shared recent window (one request with Needs attention); the newest 6 show here.
   const txns = useRecentTxnsQ(today, addDaysISO(today, -RECENT_WINDOW_DAYS));
@@ -48,7 +50,7 @@ export default function ActivityPanel() {
   return (
     <Panel title="Recent activity" sub={`Newest ${ACTIVITY_ROWS} across accounts`} span={5}
       variant={["flush", "static"]}
-      className={cn(rise(BELOW_FOLD.activity.rise), BELOW_FOLD.activity.minH)} data-testid="dash-activity"
+      className={cn(rise(BELOW_FOLD.activity.rise), minH)} data-testid="dash-activity"
       actions={<Link href="/transactions" className={cn(LINK, "text-label")} data-testid="dash-all-activity">All activity</Link>}>
       <Gate q={txns} what="Recent activity" rows={6}>{() => <TxnTable rows={rows} layout="list" />}</Gate>
     </Panel>

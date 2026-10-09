@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useCashSignalQ, useDebtsQ } from "./queries";
 import { useRecurringQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
+import { useFoldMinH } from "./foldDensity";
 import { Empty, Gate, LINK, money, rise, weekdayLabel } from "./shared";
 
 export const UPCOMING_COUNT = 5;
@@ -72,6 +73,7 @@ export function upcomingRows(i: {
 const KIND_WORD: Record<UpcomingRow["kind"], string | null> = { bill: null, card: "card payment", debt: "debt payment" };
 
 export default function UpcomingPanel() {
+  const minH = useFoldMinH("upcoming");
   const cash = useCashSignalQ(90);
   const debts = useDebtsQ();
   const recurring = useRecurringQ();
@@ -98,7 +100,7 @@ export default function UpcomingPanel() {
       sub={`Next ${UPCOMING_COUNT} payments the forecast expects`}
       span={4}
       variant="static"
-      className={cn(rise(BELOW_FOLD.upcoming.rise), BELOW_FOLD.upcoming.minH)}
+      className={cn(rise(BELOW_FOLD.upcoming.rise), minH)}
       data-testid="dash-upcoming"
       bodyClassName="flex flex-col"
     >

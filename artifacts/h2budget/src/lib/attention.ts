@@ -71,13 +71,25 @@ export function attentionItems(i: {
   dueSoon: DueBill[];
   today: string;
   reviewCount: number;
+  /** Banks whose saved login expired (Plaid re-auth), by name. The checking
+   *  feed's own failure is `bank.staleReason`; a CARD's bank needing a new
+   *  login is just as much a reconnect — new charges stop coming in. */
+  reauthBanks?: readonly string[];
 }): Attention[] {
   const out: Attention[] = [];
+  const reauth = [...new Set(i.reauthBanks ?? [])];
   if (i.bank?.staleReason === "refresh_failed") {
     out.push({
       kind: "reconnect",
       title: "Reconnect your bank",
-      detail: "The last sync did not go through.",
+      detail: reauth.length ? `The last sync did not go through. Also needs a new login: ${reauth.join(", ")}.` : "The last sync did not go through.",
+      action: { label: "Reconnect", href: "/settings" },
+    });
+  } else if (reauth.length) {
+    out.push({
+      kind: "reconnect",
+      title: `Reconnect ${reauth.join(" and ")}`,
+      detail: "The saved login expired, so new transactions are not coming in.",
       action: { label: "Reconnect", href: "/settings" },
     });
   }

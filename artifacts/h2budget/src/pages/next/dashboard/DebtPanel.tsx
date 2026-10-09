@@ -4,6 +4,8 @@ import { CssFillMeter } from "@/lib/cssBars";
 import { useSpine } from "@/hooks/useSpine";
 import { cn } from "@/lib/utils";
 import { BELOW_FOLD } from "./belowFoldSizes";
+import { useFoldMinH } from "./foldDensity";
+import { useDebtsQ } from "./queries";
 import { Gate, LABEL, LINK, money, rise } from "./shared";
 
 export function monthName(ym: string): string {
@@ -21,14 +23,25 @@ export function monthName(ym: string): string {
  * the summary row's debt tile (same shared total as the Avalanche page).
  */
 export default function DebtPanel() {
+  const minH = useFoldMinH("debt");
   const spine = useSpine();
+  const debts = useDebtsQ();
   const d = spine.data?.debt;
+  const noDebts = debts.data !== undefined && !debts.data.some((x) => x.status === "active");
   const q = { data: spine.data, isError: spine.state === "failed", refetch: spine.refetch };
   return (
     <Panel title="Debt progress" span={6} variant="static"
-      className={cn(rise(BELOW_FOLD.debt.rise), BELOW_FOLD.debt.minH)} data-testid="dash-debt">
+      className={cn(rise(BELOW_FOLD.debt.rise), minH)} data-testid="dash-debt">
       <Gate q={q} what="Debt progress" rows={5}>
-        {() => (
+        {() => noDebts ? (
+          <div className="space-y-3" data-testid="dash-debt-empty">
+            <p className="text-body text-neutral-600">No debts are on the payoff plan yet, so there is no progress to show.</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-label">
+              <Link href="/debts" className={LINK}>Add a debt</Link>
+              <Link href="/avalanche" className={LINK}>Payoff plan</Link>
+            </div>
+          </div>
+        ) : (
           <div className="space-y-4">
             <div data-testid="dash-debt-paid">
               <div className="flex items-baseline justify-between gap-3">

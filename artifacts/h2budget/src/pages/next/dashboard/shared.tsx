@@ -119,10 +119,10 @@ export function Kpi({
         {missing ? "—" : value}
       </div>
       {missing ? (
-        <div className="mt-1 text-label text-neutral-600" data-testid={testid ? `${testid}-missing` : undefined}>{missing}</div>
+        <div className="mt-1 text-micro leading-snug text-neutral-600 sm:text-label" data-testid={testid ? `${testid}-missing` : undefined}>{missing}</div>
       ) : null}
       {shown.map((l, i) => (
-        <div key={i} className="mt-1 text-label leading-snug text-neutral-600">{l}</div>
+        <div key={i} className="mt-1 text-micro leading-snug text-neutral-600 sm:text-label">{l}</div>
       ))}
     </div>
   );

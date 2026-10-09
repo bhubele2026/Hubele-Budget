@@ -41,8 +41,9 @@ export default function DashboardHeader() {
       dueSoon: billsDueSoon(bills.data, today),
       today,
       reviewCount: s.reviewCount,
+      reauthBanks: bankLines(items.data, Date.now()).filter((b) => b.state === "reauth").map((b) => b.institution),
     });
-  }, [s, bills.data, today]);
+  }, [s, bills.data, today, items.data]);
   const noBank = items.data !== undefined && !hasLinkedBank(items.data);
   const action = headerActionOf(attention ?? [], { noBank });
   const banks = bankLines(items.data, now);

@@ -8,6 +8,7 @@ import { useMoneyPositionQ, usePlaidItemsQ } from "./queries";
 import { hasLinkedBank } from "./bankState";
 import { useBudgetMonthQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
+import { useFoldMinH } from "./foldDensity";
 import { Gate, LABEL, LINK, money, rise, weekdayLabel } from "./shared";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -53,6 +54,7 @@ function MeterRow({
  * one click away.
  */
 export default function SpendingPanel() {
+  const minH = useFoldMinH("spending");
   const today = householdToday(new Date());
   const mb = monthBounds(today);
   const spine = useSpine().data;
@@ -69,7 +71,7 @@ export default function SpendingPanel() {
 
   return (
     <Panel title="Spending pace" span={6} variant="static"
-      className={cn(rise(BELOW_FOLD.spending.rise), BELOW_FOLD.spending.minH)} data-testid="dash-spending">
+      className={cn(rise(BELOW_FOLD.spending.rise), minH)} data-testid="dash-spending">
       <Gate q={pos} what="Spending" rows={5}>
         {() => noBank ? (
           <div className="space-y-3" data-testid="dash-spending-empty">

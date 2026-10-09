@@ -103,7 +103,9 @@ function RoomCell({ s }: { s: Spine }) {
       missing={missing}
       lines={[
         <span data-testid="dash-room-week" className={cn(p.withinPlan === "over" && "font-semibold text-bad")}>{week}</span>,
-        cover ? <span data-testid="dash-room-cover">{cover}</span> : null,
+        cover ? (
+          <span data-testid="dash-room-cover" className={cn(Number(p.availableUntilPayday) <= 0 && "font-semibold text-bad")}>{cover}</span>
+        ) : null,
       ]}
     />
   );
@@ -149,13 +151,14 @@ function DebtCell({ s }: { s: Spine }) {
       ? <span data-testid="dash-debt-left">No balance left on any active debt.</span>
       : <span data-testid="dash-debt-left"><span className="font-mono tabular-nums text-brand-ink">{money(scope.total)}</span> left across {joinNames(scope.names)}</span>;
   }
+  const noDebts = debts.data !== undefined && !debts.data.some((d) => d.status === "active");
   return (
     <Kpi
       testid="dash-kpi-debt"
       label="Debt paid off"
       value={pct == null ? "—" : `${Math.round(pct)}%`}
-      missing={pct == null ? "No debt has a starting balance yet." : undefined}
-      lines={[left]}
+      missing={noDebts ? "No debts on the payoff plan yet." : pct == null ? "No debt has a starting balance yet." : undefined}
+      lines={noDebts ? [] : [left]}
     />
   );
 }

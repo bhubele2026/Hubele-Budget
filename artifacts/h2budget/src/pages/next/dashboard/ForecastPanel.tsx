@@ -6,6 +6,7 @@ import { buildEventsByDate } from "@/lib/forecastPastDue";
 import { cn } from "@/lib/utils";
 import { useCashSignalQ } from "./queries";
 import { BELOW_FOLD } from "./belowFoldSizes";
+import { useFoldMinH } from "./foldDensity";
 import { Gate, LINK, money, rise, weekdayLabel } from "./shared";
 
 /** The chart (and recharts with it) loads only when this panel mounts. */
@@ -23,6 +24,7 @@ const noop = () => {};
  * a horizon switch crossfades. Every link goes to the full forecast.
  */
 export default function ForecastPanel() {
+  const minH = useFoldMinH("forecast");
   const [days, setDays] = useState<number>(90);
   const [, navigate] = useLocation();
   const q = useCashSignalQ(days);
@@ -51,7 +53,7 @@ export default function ForecastPanel() {
       sub="Projected checking balance"
       span={8}
       variant="static"
-      className={cn(rise(BELOW_FOLD.forecast.rise), BELOW_FOLD.forecast.minH)}
+      className={cn(rise(BELOW_FOLD.forecast.rise), minH)}
       data-testid="dash-forecast"
       actions={
         <div className="flex gap-1" role="group" aria-label="Forecast horizon">
@@ -62,7 +64,9 @@ export default function ForecastPanel() {
                 "press rounded-control px-2 py-0.5 text-micro font-semibold ring-1 ring-brand-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40",
                 days === h ? "bg-brand-navy text-white" : "bg-white text-neutral-600 hover:bg-platinum-3",
               )}>
-              {h} days
+              <span className="sm:hidden" aria-hidden>{h}d</span>
+              <span className="hidden sm:inline">{h} days</span>
+              <span className="sr-only sm:hidden">{h} days</span>
             </button>
           ))}
         </div>
