@@ -3,5 +3,6 @@ export { Panel, ChartPanel, TablePanel } from "./Panel";
 export type { PanelSpan, PanelVariant, PanelProps } from "./Panel";
 export { StatBlock, StatTile } from "./StatBlock";
 export { AccountChip } from "./AccountChip";
-export { TxnTable, shortDate } from "./TxnTable";
+export { TxnTable } from "./TxnTable";
+export { shortDate } from "./shortDate";
 export type { TxnRow } from "./TxnTable";

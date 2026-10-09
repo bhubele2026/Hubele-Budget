@@ -59,6 +59,25 @@ describe("next primitives", () => {
     expect(window.location.pathname).toBe("/next/accounts/1");
     window.history.replaceState(null, "", "/");
   });
+  it.each(["table", "list"] as const)("TxnTable (%s): (WP7) a row with no href says why in its note; a row that opens never shows one", (layout) => {
+    window.history.replaceState(null, "", "/");
+    render(<TxnTable layout={layout} rows={[
+      { id: "gone", date: "2026-10-08", description: "OLD CARD", amount: -9, identity: chase, pending: false, note: "No ledger: Chase (no longer linked)" },
+      { id: "open", date: "2026-10-07", description: "Costco", amount: -82.1, identity: chase, pending: false, href: "/next/accounts/1", note: "never shown" },
+      { id: "plain", date: "2026-10-06", description: "Paycheck", amount: 2000, identity: amex, pending: false },
+    ]} />);
+    const rows = screen.getAllByTestId("txn-row");
+    const notes = screen.getAllByTestId("txn-note");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.textContent).toBe("No ledger: Chase (no longer linked)");
+    expect(rows[0]!.contains(notes[0]!)).toBe(true);
+    expect(rows[1]!.textContent).not.toContain("never shown");
+    // The row with no ledger is not a link and does not open on a click.
+    expect(screen.queryByRole("link", { name: "OLD CARD" })).toBeNull();
+    fireEvent.click(rows[0]!);
+    expect(window.location.pathname).toBe("/");
+    expect(rows[0]!.className).not.toContain("cursor-pointer");
+  });
   it("TxnTable empty state and shortDate are timezone-proof", () => {
     render(<TxnTable rows={[]} />);
     expect(screen.getByText("No transactions to show.")).toBeTruthy();

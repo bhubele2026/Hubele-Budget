@@ -5,6 +5,7 @@ import type { AccountIdentity } from "@/lib/accountIdentity";
 import { AccountChip } from "./AccountChip";
 import { formatDisplayAmount } from "@/lib/amountDisplay";
 import { th, td, tdNum, emptyNote } from "@/ui";
+import { shortDate } from "./shortDate";
 
 export interface TxnRow {
   id: string;
@@ -17,16 +18,13 @@ export interface TxnRow {
   pending: boolean;
   category?: string | null;
   href?: string;
+  /**
+   * (WP7) Why a row with no `href` opens nowhere, in words ("No ledger: Chase
+   * (no longer linked)", from `txnRoute`). Shown only when there is no href.
+   */
+  note?: string | null;
   /** A review flag said in words ("Income in an expense category"), shown as a chip. */
   flag?: string | null;
-}
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-/** "2026-10-08" -> "Oct 8", with no Date object so no timezone can shift it. */
-export function shortDate(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso;
-  return `${MONTHS[Number(m[2]) - 1] ?? m[2]} ${Number(m[3])}`;
 }
 
 /** The description of a row that opens somewhere: a REAL link, so a keyboard
@@ -62,7 +60,7 @@ function rowClick(href: string | undefined, navigate: (to: string) => void) {
 /** Compact ledger: 36 px rows (40 px when not `dense`), an account chip on
  *  every row, pending/posted as a word, category in its own column. A row with
  *  an `href` carries its description as a link (Enter / Space) and opens on a
- *  click anywhere.
+ *  click anywhere; a row without one says why in its `note` (WP7).
  *  `layout="list"` draws the SAME rows as two-line list items (description and
  *  amount, then date, account chip, category and status) for a narrow panel,
  *  where six columns would scroll sideways. Nothing is dropped. */
@@ -98,6 +96,7 @@ export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRo
                 <span>{r.category || "Uncategorized"}</span>
                 <span aria-hidden>·</span>
                 <span>{r.pending ? "Pending" : "Posted"}</span>
+                {!r.href && r.note ? <span className="text-neutral-600" data-testid="txn-note">{r.note}</span> : null}
                 {r.flag ? <span className="chip warn" data-testid="txn-flag">{r.flag}</span> : null}
               </div>
             </li>
@@ -137,6 +136,7 @@ export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRo
                 <td className={cn(td, "whitespace-nowrap py-1 font-mono tabular-nums text-neutral-600")}>{shortDate(r.date)}</td>
                 <td className={cn(td, "max-w-[22rem] truncate py-1")}>
                   {r.href ? <RowLink href={r.href}>{r.description}</RowLink> : r.description}
+                  {!r.href && r.note ? <span className="block text-micro text-neutral-600" data-testid="txn-note">{r.note}</span> : null}
                 </td>
                 <td className={cn(td, "py-1")}><AccountChip identity={r.identity} size="sm" /></td>
                 <td className={cn(td, "py-1 text-neutral-600")}>
