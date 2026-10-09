@@ -101,6 +101,47 @@ describe("combined view", () => {
   });
 });
 
+describe("(WP7) combined view: where each row opens", () => {
+  it("a linked row opens its account's page on its month; a workbook row All cards; a manual row the checking ledger; a gone account says why", () => {
+    seed();
+    h.extraTxns = [
+      { id: "t3", occurredOn: "2026-09-05", description: "WORKBOOK", amount: "12.00", plaidAccountId: null, source: "amex", pending: false, categoryId: null },
+      { id: "t4", occurredOn: "2026-10-05", description: "CASH", amount: "-5.00", plaidAccountId: null, source: "manual", pending: false, categoryId: null },
+      { id: "t5", occurredOn: "2026-10-04", description: "OLD CARD", amount: "-9.00", plaidAccountId: "ext-gone", source: "plaid:chase", pending: false, categoryId: null },
+    ];
+    renderAt("/next/accounts");
+    const panel = screen.getByTestId("combined-activity");
+    const hrefOf = (name: string) => within(panel).queryByRole("link", { name })?.getAttribute("href") ?? null;
+    expect(hrefOf("COFFEE")).toBe("/next/accounts/ext-amex?tx=t1&month=2026-10-01");
+    expect(hrefOf("PAYROLL")).toBe("/next/accounts/ext-chk?tx=t2&month=2026-10-01");
+    expect(hrefOf("WORKBOOK")).toBe("/amex?tx=t3&month=2026-09-01");
+    expect(hrefOf("CASH")).toBe("/transactions?tx=t4&month=2026-10-01");
+    expect(hrefOf("OLD CARD")).toBeNull();
+    const notes = within(panel).getAllByTestId("txn-note");
+    expect(notes.map((n) => n.textContent)).toEqual(["No ledger: Chase (no longer linked)"]);
+  });
+  it("a full window says it shows the newest 100 rows of the last 30 days; a short one says nothing", () => {
+    seed();
+    h.extraTxns = Array.from({ length: 98 }, (_, i) => ({
+      id: `f${i}`, occurredOn: "2026-09-20", description: `ROW ${i}`, amount: "-1.00", plaidAccountId: "ext-chk", source: "plaid:chase", pending: false, categoryId: null,
+    }));
+    const full = renderAt("/next/accounts");
+    expect(screen.getByTestId("combined-activity-cap").textContent).toBe("Showing the newest 100 rows of the last 30 days.");
+    full.unmount();
+    h.extraTxns = Array.from({ length: 97 }, (_, i) => ({
+      id: `f${i}`, occurredOn: "2026-09-20", description: `ROW ${i}`, amount: "-1.00", plaidAccountId: "ext-chk", source: "plaid:chase", pending: false, categoryId: null,
+    }));
+    renderAt("/next/accounts");
+    expect(screen.queryByTestId("combined-activity-cap")).toBeNull();
+  });
+  it("the account chips link by the external account id", () => {
+    seed(); renderAt("/next/accounts");
+    expect(screen.getByTestId("account-chip-ext-chk").getAttribute("href")).toBe("/next/accounts/ext-chk");
+    expect(screen.getByTestId("account-chip-ext-amex").getAttribute("href")).toBe("/next/accounts/ext-amex");
+    expect(screen.getByTestId("account-chip-all").getAttribute("href")).toBe("/next/accounts");
+  });
+});
+
 describe("route id", () => {
   it("accepts the items response row id as well as the Plaid account_id", async () => {
     seed(); renderAt("/next/accounts/r-amex");
