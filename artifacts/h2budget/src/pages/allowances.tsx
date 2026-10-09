@@ -5,6 +5,7 @@ import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { WaysBackLauncher } from "@/components/ways-back/WaysBackLauncher";
 import { useSpine } from "@/hooks/useSpine";
 import { carryOverLine } from "@/lib/waysBack";
+import { WeekPlanPanel } from "@/components/plan/WeekPlanPanel";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import {
   useListTransactions,
@@ -1318,6 +1319,10 @@ export default function AllowancesPage() {
           scoped to the selected Sun–Sat week; monthly and unplanned to the
           selected calendar month.
         </Foot>
+      </div>
+
+      <div className="span-12">
+        <WeekPlanPanel />
       </div>
 
       <SplitTransactionDialog

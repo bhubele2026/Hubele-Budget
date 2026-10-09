@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+vi.mock("@/components/plan/DebtRangePanel", () => ({ DebtRangePanel: () => null }));
 import { render, screen, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Debt } from "@workspace/api-client-react";

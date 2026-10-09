@@ -47,6 +47,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSpine } from "@/hooks/useSpine";
 import { AvalancheCardConfig } from "@/components/avalanche-card-config";
+import { DebtRangePanel } from "@/components/plan/DebtRangePanel";
 import { AvalancheScheduleCard } from "@/components/avalanche-schedule-card";
 import {
   DebtPlaidActions,
@@ -1225,6 +1226,11 @@ export default function AvalanchePage() {
       {/* Dated avalanche extra-payment schedule (server-computed). */}
       <div className="span-6">
         <AvalancheScheduleCard />
+      </div>
+
+      {/* The server's debt plan as a range (F11). */}
+      <div className="span-12">
+        <DebtRangePanel />
       </div>
 
       {/* Amex cards → payoff: tier/name config + add-to-avalanche. */}
