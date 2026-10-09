@@ -745,6 +745,45 @@ describe("GET /spine — parity with the endpoints that own each number", () => 
     expect(spine.billsDueCount).toBe(dueThisMonth.length);
   });
 
+  it("(dash-accuracy) a weekly bill's next amount is ONE payment, while its month total is unchanged", async () => {
+    // Named to sort first among the seeded bills and dated today, so it is the
+    // spine's next bill on every calendar day (ties keep the summary's order).
+    const [weekly] = await db
+      .insert(recurringItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        name: "Allowance weekly spend",
+        kind: "bill",
+        amount: "450.00",
+        frequency: "weekly",
+        anchorDate: TODAY_ISO,
+        active: "true",
+      })
+      .returning();
+    try {
+      const spine = await get<Spine>("/spine");
+      const summary = await get<BillsSummary>("/bills/summary");
+
+      // The Bills row keeps the month total: every same weekday in this month.
+      const monthEnd = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0);
+      let n = 0;
+      for (let d = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1); d <= monthEnd; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+        if (d.getDay() === TODAY.getDay()) n += 1;
+      }
+      expect(n).toBeGreaterThanOrEqual(4);
+      const row = summary.bills.find((r) => r.item.id === weekly!.id)!;
+      expect(row.monthlyAmount).toBe((450 * n).toFixed(2));
+
+      // "What is due next" is one payment, never the month's total.
+      expect(spine.nextBill).toEqual({ name: "Allowance weekly spend", amount: "450.00", dueDate: TODAY_ISO });
+      expect(spine.nextBill).toEqual(pickNextBill(summary, TODAY).nextBill);
+      expect(spine.nextBill!.amount).not.toBe(row.monthlyAmount);
+    } finally {
+      await db.delete(recurringItemsTable).where(eq(recurringItemsTable.id, weekly!.id));
+    }
+  });
+
   it("debt.payoffPct matches the derivation over /debts' own rows", async () => {
     const spine = await get<Spine>("/spine");
     // ⚠️ `pendingPaymentTotal` IS PART OF THIS SHAPE. It used to be annotated

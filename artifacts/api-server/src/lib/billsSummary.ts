@@ -7,7 +7,7 @@ import {
   transactionsTable,
   avalancheSettingsTable,
 } from "@workspace/db";
-import { expandItem, fmtISO, isPastOneTime } from "./cashSignal";
+import { expandItem, fmtISO, isPastOneTime, parseISO } from "./cashSignal";
 import { householdTodayDate } from "./householdClock";
 import {
   buildDebtMinSchedule,
@@ -194,6 +194,24 @@ function fixed2(n: number): string {
   return (Math.round(n * 100) / 100).toFixed(2);
 }
 
+/**
+ * ⭐ The amount of ONE occurrence of `item` on `dateISO` — the same expansion
+ * the month total sums (`expandItem`), read for that single day. "What is due
+ * next" is one payment: a $450 weekly bill is $450 on Saturday, not the
+ * month's five Saturdays ($2,250, which is `monthlyAmount`). The Bills row
+ * keeps the month total ("$450 weekly · ~$2,250/mo", web `billsRowAmount.ts`).
+ * An item with no occurrence that day (never the case for its own
+ * `nextOccurrence`) falls back to its stored per-occurrence amount.
+ */
+export function occurrenceAmountOn(item: RecurringRow, dateISO: string): string {
+  const day = parseISO(dateISO);
+  const events = expandItem(item, day, day);
+  const amount = events.length > 0
+    ? events.reduce((s, e) => s + Math.abs(e.amount), 0)
+    : Math.abs(Number(item.amount) || 0);
+  return fixed2(amount);
+}
+
 export async function buildBillsSummary(
   householdId: string,
   ownerUserId: string,
@@ -372,9 +390,11 @@ export async function buildBillsSummary(
  * database, so they can never describe a different set of bills than the Bills
  * page does.
  *
- * These are selections over already-computed rows, not new money math: no
- * amount is added, scaled, or re-derived here — `nextBill.amount` is the exact
- * `monthlyAmount`/`amount` string the summary produced.
+ * These are selections over already-computed rows, not new money math:
+ * `nextBill.amount` is ONE payment — `occurrenceAmountOn` (the same expansion
+ * the summary's month total sums, for that one date) for a bill, the debt
+ * minimum's own `amount` for a debt row. (dash-accuracy, 2026-10-09: it used to
+ * be the bill's `monthlyAmount`, so a $450 weekly bill read "$2,250 next".)
  *
  * - `nextBill` = the earliest upcoming occurrence across real bills AND debt
  *   minimums, on or after today. Income rows are excluded — a paycheck is not
@@ -397,7 +417,7 @@ export function pickNextBill(summary: BillsSummary, today: Date): {
     if (!r.nextOccurrence || r.nextOccurrence < todayISO) continue;
     upcoming.push({
       name: r.item.name,
-      amount: r.monthlyAmount,
+      amount: occurrenceAmountOn(r.item, r.nextOccurrence),
       dueDate: r.nextOccurrence,
     });
   }

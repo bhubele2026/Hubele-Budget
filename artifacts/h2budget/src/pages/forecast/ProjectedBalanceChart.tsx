@@ -107,6 +107,8 @@ export function ProjectedBalanceChart({
   hoverSelects = false,
   horizonKey,
   incomeByDate,
+  lowLabel = "full",
+  monthTicks = false,
 }: {
   data: DailyPoint[];
   cashBuffer: number;
@@ -139,6 +141,12 @@ export function ProjectedBalanceChart({
   horizonKey?: string | number;
   /** Money-in rows per day, listed in the tooltip. */
   incomeByDate?: Map<string, Array<{ label: string; amount: number }>>;
+  /** "full" (default): "Lowest $X · <date>". "short": "Low $X", for a narrow
+   *  chart whose legend already names the date (the dashboard panel on a
+   *  phone clipped the full label at the plot's edge). */
+  lowLabel?: "full" | "short";
+  /** Axis ticks as "Oct 9" instead of "10-09" (the expanded chart always does). */
+  monthTicks?: boolean;
 }) {
   const expanded = variant === "expanded";
   // Content fingerprint — see the draw-restart note above.
@@ -246,7 +254,7 @@ export function ProjectedBalanceChart({
           <XAxis
             dataKey="rawDate"
             tick={AXIS_TICK}
-            tickFormatter={(v: string) => (expanded ? longTick(v) : shortDate(v))}
+            tickFormatter={(v: string) => (expanded || monthTicks ? longTick(v) : shortDate(v))}
             ticks={xtk}
             interval="preserveStartEnd"
             minTickGap={28}
@@ -471,7 +479,7 @@ export function ProjectedBalanceChart({
               <RechartsLabel
                 value={`Cash buffer ${formatCurrency(cashBuffer)}`}
                 position="insideTopLeft"
-                fill={CHART.orangeDeep}
+                fill={CHART.badInk}
                 fontSize={10}
               />
             </ReferenceLine>
@@ -553,16 +561,21 @@ export function ProjectedBalanceChart({
                       ?.viewBox ?? {};
                   const cx = vb.cx ?? vb.x ?? 0;
                   const cy = vb.cy ?? vb.y ?? 0;
+                  // "short" sits BELOW the dot: it is the lowest point, so
+                  // the curve is above it everywhere and the words never lie
+                  // on the line (above, they crossed the dip's own walls).
                   return (
                     <text
                       x={cx}
-                      y={cy - 12}
+                      y={lowLabel === "short" ? cy + 18 : cy - 12}
                       textAnchor={lowAnchor}
-                      fill={CHART.orangeDeep}
+                      fill={CHART.badInk}
                       fontSize={11}
                       fontWeight={600}
                     >
-                      {`Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
+                      {lowLabel === "short"
+                        ? `Low ${formatCurrency(lowestPoint.y)}`
+                        : `Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
                     </text>
                   );
                 }}

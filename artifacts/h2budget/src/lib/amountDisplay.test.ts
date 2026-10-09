@@ -14,4 +14,11 @@ describe("amountDisplay", () => {
     expect(formatDisplayAmount(displayAmount("500", amex))).toBe("+$500.00");
   });
   it("junk is zero", () => { expect(displayAmount("x", amex)).toBe(0); });
+  it("(dashboard refinement) an Amex WORKBOOK row (source amex) is stored charge-positive: a charge still reads as money out", () => {
+    expect(formatDisplayAmount(displayAmount("45.00", amex, "amex"))).toBe("-$45.00");
+    expect(formatDisplayAmount(displayAmount("-12.50", amex, "amex"))).toBe("+$12.50");
+    expect(formatDisplayAmount(displayAmount("0", amex, "amex"))).toBe("$0.00");
+    // A Plaid Amex row keeps the ledger's own sign.
+    expect(formatDisplayAmount(displayAmount("-45.00", amex, "plaid:amex"))).toBe("-$45.00");
+  });
 });

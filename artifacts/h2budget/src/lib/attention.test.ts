@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { BillsSummary, Spine } from "@workspace/api-client-react";
-import { attentionItems, billsDueSoon, upcomingBills } from "./attention";
+import { attentionItems, billsDueSoon, headerActionOf, upcomingBills } from "./attention";
 
 const bank = (o: Partial<Spine["bank"]> = {}): Spine["bank"] => ({
   balance: "100", asOfDate: "2026-10-07", source: "plaid", lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null, ...o,
@@ -60,5 +60,69 @@ describe("attention — way back (F7)", () => {
     expect(over.wayBack).toBe(true);
     expect(over.detail).toBe("Pick a way back. No lecture.");
     expect(attentionItems({ ...base, reviewCount: 2 })[0]!.wayBack).toBeUndefined();
+  });
+});
+
+describe("headerActionOf (the dashboard header's ONE action)", () => {
+  const due = [{ name: "Rent", amount: 1200, dueOn: "2026-10-08" }];
+  it("Reconnect when the bank's feed failed, even over plan and with a bill due", () => {
+    const items = attentionItems({ ...base, bank: bank({ stale: true, staleReason: "refresh_failed" }), withinPlan: "over", overBy: 25, dueSoon: due });
+    expect(headerActionOf(items)).toEqual({ kind: "reconnect", label: "Reconnect", href: "/settings" });
+  });
+  it("Pick a way back when the week is over its plan", () => {
+    expect(headerActionOf(attentionItems({ ...base, withinPlan: "over", overBy: 25, dueSoon: due }))).toEqual({ kind: "wayBack" });
+  });
+  it("an old balance does not take the slot from Pick a way back (it has its own row and the per-bank Sync)", () => {
+    const items = attentionItems({ ...base, bank: bank({ stale: true, staleReason: "old" }), withinPlan: "over", overBy: 25 });
+    expect(items[0]!.kind).toBe("stale");
+    expect(headerActionOf(items)).toEqual({ kind: "wayBack" });
+  });
+  it("otherwise the everyday question: Can we afford something?", () => {
+    expect(headerActionOf(attentionItems(base))).toEqual({ kind: "afford" });
+    expect(headerActionOf(attentionItems({ ...base, dueSoon: due, reviewCount: 3 }))).toEqual({ kind: "afford" });
+    expect(headerActionOf(attentionItems({ ...base, bank: bank({ stale: true, staleReason: "old" }) }))).toEqual({ kind: "afford" });
+  });
+});
+
+describe("attentionItems — a card's bank needing a new login (dashboard refinement)", () => {
+  it("is a reconnect item, and takes the header's one action", () => {
+    const items = attentionItems({ ...base, reauthBanks: ["American Express"] });
+    expect(items[0]).toMatchObject({ kind: "reconnect", title: "Reconnect American Express", action: { href: "/settings" } });
+    expect(headerActionOf(items)).toEqual({ kind: "reconnect", label: "Reconnect", href: "/settings" });
+  });
+  it("folds into the checking feed's own reconnect when both happen (one item)", () => {
+    const items = attentionItems({ ...base, bank: bank({ stale: true, staleReason: "refresh_failed" }), reauthBanks: ["American Express", "American Express"] });
+    expect(items.filter((a) => a.kind === "reconnect")).toHaveLength(1);
+    expect(items[0]!.detail).toContain("American Express.");
+  });
+});
+
+describe("headerActionOf — the forecast running short (lead, 2026-10-09)", () => {
+  const over = { ...base, withinPlan: "over" as const, overBy: 25 };
+  it("order: Link a bank → Reconnect → runs short → Pick a way back → Afford", () => {
+    expect(headerActionOf(attentionItems(over), { noBank: true, runsShort: true }).kind).toBe("link");
+    expect(headerActionOf(attentionItems({ ...over, reauthBanks: ["Amex"] }), { runsShort: true }).kind).toBe("reconnect");
+    expect(headerActionOf(attentionItems(over), { runsShort: true })).toEqual({ kind: "short", label: "See where it runs short", href: "/forecast" });
+    expect(headerActionOf(attentionItems(over), { runsShort: false })).toEqual({ kind: "wayBack" });
+    expect(headerActionOf(attentionItems(base), {})).toEqual({ kind: "afford" });
+  });
+});
+
+describe("a due-soon payment with words built by the caller", () => {
+  it("reads the label whole, and says when in the detail", () => {
+    const items = attentionItems({ ...base, dueSoon: [{ name: "Weekly Spend", amount: 477.57, dueOn: "2026-10-09", label: "Weekly Spend · card payoff $477.57 (plan $450)" }] });
+    expect(items[0]).toMatchObject({ kind: "bill", title: "Weekly Spend · card payoff $477.57 (plan $450)", detail: "Due tomorrow" });
+  });
+});
+
+describe("a caller-worded title is never clipped (it must match its other surfaces)", () => {
+  it("keeps a long hook label whole, while ordinary titles still clip at 60", () => {
+    const label = "Amex Platinum weekly payoff · card payoff $1,477.57 (plan $1,450)";
+    expect(label.length).toBeGreaterThan(60);
+    const items = attentionItems({ ...base, dueSoon: [{ name: "Amex Platinum weekly payoff", amount: 1477.57, dueOn: "2026-10-08", label }] });
+    expect(items[0]!.title).toBe(label);
+    expect(Object.getOwnPropertySymbols(items[0]!)).toEqual([]); // the internal marker never leaks
+    const plain = attentionItems({ ...base, dueSoon: [{ name: "A very long bill name that goes on and on and on", amount: 10, dueOn: "2026-10-08" }] });
+    expect(plain[0]!.title.length).toBeLessThanOrEqual(60);
   });
 });

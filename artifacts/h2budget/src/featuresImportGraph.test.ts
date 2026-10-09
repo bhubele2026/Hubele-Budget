@@ -94,14 +94,16 @@ function featureValueNames(): Set<string> {
 /**
  * (F3b) The ONLY `features` operations an entry-path file may take from the
  * MAIN module. The dashboard is the landing and its first screen reads the
- * money position and the recap preview. The main module is in the entry chunk
- * whole anyway and carries both, so this costs about 1 KB; importing them from
- * `/features` would drag that whole sub-module into the entry chunk (~20 KB).
- * Everything else a page needs from `features` stays a lazy `/features` import.
+ * money position (the summary row's "Room to spend" sublines). The main module
+ * is in the entry chunk whole anyway and carries it, so this costs about 1 KB;
+ * importing it from `/features` would drag that whole sub-module into the entry
+ * chunk (~20 KB). Everything else a page needs from `features` stays a lazy
+ * `/features` import — (dashboard refinement) including the recap preview,
+ * which now loads only when "Preview tomorrow's morning text" is opened.
  */
 const ENTRY_MAIN_FEATURES = {
   file: "pages/next/dashboard/queries.ts",
-  names: new Set(["useGetMoneyPosition", "getGetMoneyPositionQueryKey", "previewRecap"]),
+  names: new Set(["useGetMoneyPosition", "getGetMoneyPositionQueryKey"]),
 };
 
 const graph = entryGraph();
@@ -169,30 +171,33 @@ describe("the entry path and the generated client's sub-modules", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("(F3b) the allowlist is exactly the dashboard's money position and recap preview, on the entry path", () => {
+  it("(F3b) the allowlist is exactly the dashboard's money position, on the entry path", () => {
     expect(graph.has(join(SRC, ENTRY_MAIN_FEATURES.file))).toBe(true);
-    expect([...ENTRY_MAIN_FEATURES.names].sort()).toEqual(["getGetMoneyPositionQueryKey", "previewRecap", "useGetMoneyPosition"]);
+    expect([...ENTRY_MAIN_FEATURES.names].sort()).toEqual(["getGetMoneyPositionQueryKey", "useGetMoneyPosition"]);
     // It is used: the file really imports each name from the main module.
     const edges = staticEdges(readFileSync(join(SRC, ENTRY_MAIN_FEATURES.file), "utf8")).filter((e) => e.spec === MAIN);
     const imported = new Set(edges.flatMap((e) => e.names));
     for (const n of ENTRY_MAIN_FEATURES.names) expect(imported.has(n), n).toBe(true);
   });
 
-  it("(C11b) the below-the-fold dashboard panels, their queries and the chart are not on the entry path", () => {
+  it("(C11b, refinement) the dashboard's lazy panels, their queries, the recap preview and the chart are not on the entry path", () => {
     const files = new Set(Array.from(graph.keys(), rel));
     for (const lazyFile of [
       "pages/next/dashboard/BelowFold.tsx",
       "pages/next/dashboard/ForecastPanel.tsx",
+      "pages/next/dashboard/UpcomingPanel.tsx",
+      "pages/next/dashboard/SpendingPanel.tsx",
       "pages/next/dashboard/DebtPanel.tsx",
+      "pages/next/dashboard/AttentionPanel.tsx",
       "pages/next/dashboard/ActivityPanel.tsx",
-      "pages/next/dashboard/ReviewPanel.tsx",
+      "pages/next/dashboard/RecapPreview.tsx",
       "pages/next/dashboard/queriesLazy.ts",
       "pages/forecast/ProjectedBalanceChart.tsx",
     ]) {
       expect(files.has(lazyFile), `${lazyFile} must stay off the open path`).toBe(false);
     }
-    // …while the first screen is on it.
-    for (const eager of ["BriefingPanel", "AccountsRow", "CashPanel", "SpendingPanel", "UpcomingPanel"]) {
+    // …while the first screen (header, summary row, accounts) is on it.
+    for (const eager of ["DashboardHeader", "SummaryRow", "AccountsPanel"]) {
       expect(files.has(`pages/next/dashboard/${eager}.tsx`), `${eager} is the first screen`).toBe(true);
     }
     // No chart library is imported by anything on the open path.

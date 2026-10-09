@@ -785,31 +785,12 @@ export function sortDebts<T extends SimDebt>(debts: T[], strat: Strategy): T[] {
  * un-enriched row is safe, merely un-netted. Server callers that want the
  * netting must enrich first (`lib/debtPending.ts`).
  */
-export type PendingAwareDebt = {
-  balance: number | string;
-  pendingPaymentTotal?: number | string | null;
-};
-
-/**
- * The portion of a debt's reported balance the user has already paid but the
- * creditor has not reported yet.
- */
-export function pendingPaymentTotalOf(d: PendingAwareDebt): number {
-  return d.pendingPaymentTotal != null ? Number(d.pendingPaymentTotal) || 0 : 0;
-}
-
-/**
- * (#421) Tagged checking-account payments to a debt show up immediately even
- * before the creditor reports the new balance via Plaid. We subtract any
- * pendingPaymentTotal from the reported balance so the avalanche math, the
- * totals, and the projected payoff dates reflect what the user has already
- * paid — clamped at zero so a tagging mistake can't push the balance below 0.
- */
-export function effectiveDebtBalance(d: PendingAwareDebt): number {
-  const reported = Number(d.balance) || 0;
-  const pending = pendingPaymentTotalOf(d);
-  return Math.max(0, reported - pending);
-}
+// (Dashboard refinement) The two functions and their type live in
+// `./pendingDebt` (a sub-path export, like `./householdTime`), so the web app's
+// landing can net a debt balance without pulling this whole module — the
+// payoff simulator with it — into its entry chunk. Re-exported here, unchanged.
+import { effectiveDebtBalance, type PendingAwareDebt } from "./pendingDebt";
+export { effectiveDebtBalance, pendingPaymentTotalOf, type PendingAwareDebt } from "./pendingDebt";
 
 // ── Payoff progress ─────────────────────────────────────────────────────────
 

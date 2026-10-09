@@ -9,10 +9,20 @@ import type { AccountIdentity } from "@/lib/accountIdentity";
  * never as a credit. `identity` is taken so callers cannot skip the rule and so
  * an account kind that ever differs has one place to change.
  */
-export function displayAmount(raw: string | number | null | undefined, identity?: Pick<AccountIdentity, "kind"> | null): number {
+export function displayAmount(
+  raw: string | number | null | undefined,
+  identity?: Pick<AccountIdentity, "kind"> | null,
+  source?: string | null,
+): number {
   void identity;
   const n = typeof raw === "number" ? raw : parseFloat(raw ?? "");
-  return Number.isFinite(n) ? n : 0;
+  if (!Number.isFinite(n)) return 0;
+  // ⚠️ The one exception: an Amex WORKBOOK row (`source` "amex", imported from
+  // the spreadsheet) is stored the other way round, a charge POSITIVE and a
+  // credit negative (the shared rule's `spendAmount` / `creditAmount`). Flip it
+  // for display only, so a workbook charge reads "-$45.00" like every other
+  // charge. The stored value is never touched.
+  return source === "amex" && n !== 0 ? -n : n;
 }
 
 /** "-$180.00" for money out, "+$20.00" for credits, "$0.00" for zero. */

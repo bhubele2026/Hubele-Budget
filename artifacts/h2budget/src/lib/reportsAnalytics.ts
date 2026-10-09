@@ -8,7 +8,7 @@ import type {
   DebtBalanceHistoryEntry,
 } from "@workspace/api-client-react";
 import { simulate, type SimResult, type Strategy, type SimDebt } from "./avalanche";
-import { effectiveDebtBalance } from "./debtBalance";
+import { effectiveDebtBalance, remainingDebtTotal } from "./debtBalance";
 
 /**
  * ⛔ THIS MODULE OWNS NO COLOURS.
@@ -939,16 +939,17 @@ export function debtFreeCountdown(sim: SimResult, today: Date): {
 }
 
 export function totalsForDebts(debts: Debt[]) {
-  let totalBalance = 0;
+  // (C10) Netted — this is the Reports Debt page's "Total debt" hero, which
+  // sat next to the Avalanche page's netted "Total debt" Stat and disagreed
+  // with it by exactly the pending amount. It is now the one shared total
+  // (`remainingDebtTotal`), the same call the Avalanche page and the
+  // dashboard's debt tile make.
+  const totalBalance = remainingDebtTotal(debts);
   let totalMin = 0;
   for (const d of debts) {
     if (d.status !== "active") continue;
-    // (C10) Netted — this is the Reports Debt page's "Total debt" hero, which
-    // sat next to the Avalanche page's netted "Total debt" Stat and disagreed
-    // with it by exactly the pending amount.
     // ⚠️ `totalMin` is deliberately NOT netted: a pending payment does not
     // reduce next month's minimum. Minimums are an obligation, not a balance.
-    totalBalance += effectiveDebtBalance(d);
     totalMin += Number(d.minPayment);
   }
   return { totalBalance, totalMin };

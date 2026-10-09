@@ -50,6 +50,10 @@ export const CHART = {
   steel: "#4d5d73", // neutral series, plan lines
   orange: "#f68d2e", // the single bright accent
   orangeDeep: "#e16d3e", // negatives / the thing that is going wrong
+  // SMALL alarm TEXT on a chart (the low-point and buffer labels): mirrors
+  // --color-bad-ink in index.css (a test pins them equal). Lines, areas and
+  // dots keep orangeDeep.
+  badInk: "#c2410c",
   grid: "#e1e8f0", // gridlines, hairlines
 } as const;
 

@@ -1,52 +1,81 @@
 import { Link } from "wouter";
-import { Panel, StatBlock } from "@/components/next";
+import { Panel } from "@/components/next";
 import { CssFillMeter } from "@/lib/cssBars";
 import { useSpine } from "@/hooks/useSpine";
-import { cn, formatCurrency } from "@/lib/utils";
-import { useDebtsQ } from "./queries";
+import { cn } from "@/lib/utils";
 import { BELOW_FOLD } from "./belowFoldSizes";
-import { Gate, LinkRow, money, rise } from "./shared";
+import { useFoldMinH } from "./foldDensity";
+import { useDebtsQ } from "./queries";
+import { Gate, LABEL, LINK, money, rise } from "./shared";
 
-function monthName(ym: string): string {
+export function monthName(ym: string): string {
   const m = /^(\d{4})-(\d{2})/.exec(ym);
   if (!m) return ym;
   const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${names[Number(m[2]) - 1] ?? m[2]} ${m[1]}`;
 }
 
+/**
+ * "Are we making progress on debt?" Every figure is the spine's own
+ * (`computeDebtHeadline`): % paid as a meter that sweeps once, what the bank
+ * confirms was paid down this month, new charges on the debts' own accounts
+ * this month, and the next milestone the plan passes. The amount left is in
+ * the summary row's debt tile (same shared total as the Avalanche page).
+ */
 export default function DebtPanel() {
-  const debts = useDebtsQ();
+  const minH = useFoldMinH("debt");
   const spine = useSpine();
+  const debts = useDebtsQ();
   const d = spine.data?.debt;
-  const active = (debts.data ?? []).filter((x) => x.status !== "archived");
-  const total = active.reduce((n, x) => n + (Number(x.balance) || 0), 0);
+  const noDebts = debts.data !== undefined && !debts.data.some((x) => x.status === "active");
+  const q = { data: spine.data, isError: spine.state === "failed", refetch: spine.refetch };
   return (
-    <Panel title="Debt" span={4} className={cn(rise(BELOW_FOLD.debt.rise), BELOW_FOLD.debt.minH)} data-testid="dash-debt">
-      <Gate q={debts} what="Debt" rows={5}>
-        {() => (
+    <Panel title="Debt progress" span={6} variant="static"
+      className={cn(rise(BELOW_FOLD.debt.rise), minH)} data-testid="dash-debt">
+      <Gate q={q} what="Debt progress" rows={5}>
+        {() => noDebts ? (
+          <div className="space-y-3" data-testid="dash-debt-empty">
+            <p className="text-body text-neutral-600">No debts are on the payoff plan yet, so there is no progress to show.</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-label">
+              <Link href="/debts" className={LINK}>Add a debt</Link>
+              <Link href="/avalanche" className={LINK}>Payoff plan</Link>
+            </div>
+          </div>
+        ) : (
           <div className="space-y-4">
-            <StatBlock label="Total balance" value={active.length ? formatCurrency(total) : "—"} data-testid="dash-debt-total"
-              hint={`${active.length} ${active.length === 1 ? "account" : "accounts"}`} />
             <div data-testid="dash-debt-paid">
-              <div className="flex items-baseline justify-between">
-                <span className="text-label font-medium">Paid off</span>
-                <span className="font-mono text-label tabular-nums">{d?.payoffPct == null ? "—" : `${Math.round(d.payoffPct)}%`}</span>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-label font-semibold text-brand-ink">Paid off so far</span>
+                <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+                  {d?.payoffPct == null ? "—" : `${Math.round(d.payoffPct)}%`}
+                </span>
               </div>
-              <CssFillMeter value={d?.payoffPct ?? 0} ceiling={100} className="mt-1" />
+              <CssFillMeter value={d?.payoffPct ?? 0} ceiling={100} className="mt-1.5" />
             </div>
             {d ? (
-              <div className="space-y-1 text-label" data-testid="dash-debt-month">
-                <p>Paid down {formatCurrency(d.paidDownMtd)} this month, confirmed by the bank.</p>
-                <p className="text-neutral-600">New charges this month: <span className="font-mono tabular-nums">{money(d.newChargesMtd)}</span></p>
-                <p className="text-neutral-600" data-testid="dash-debt-milestone">
-                  Next milestone: {d.nextMilestone ? `${d.nextMilestone.label} · ${monthName(d.nextMilestone.estimatedMonth)}` : "—"}
-                </p>
-              </div>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3" data-testid="dash-debt-month">
+                <div>
+                  <dt className={LABEL}>Paid down this month</dt>
+                  <dd className="font-mono text-body tabular-nums text-brand-ink" data-testid="dash-debt-paid-down">{money(d.paidDownMtd)}</dd>
+                  <dd className="text-micro text-neutral-500">confirmed by the bank</dd>
+                </div>
+                <div>
+                  <dt className={LABEL}>New charges this month</dt>
+                  <dd className="font-mono text-body tabular-nums text-brand-ink" data-testid="dash-debt-new">{money(d.newChargesMtd)}</dd>
+                  <dd className="text-micro text-neutral-500">on the debts' own accounts</dd>
+                </div>
+                <div className="col-span-2" data-testid="dash-debt-milestone">
+                  <dt className={LABEL}>Next milestone</dt>
+                  <dd className="text-body text-brand-ink">
+                    {d.nextMilestone ? `${d.nextMilestone.label} · ${monthName(d.nextMilestone.estimatedMonth)}` : "None on the plan yet"}
+                  </dd>
+                </div>
+              </dl>
             ) : null}
-            <LinkRow>
-              <Link href="/avalanche" className="text-brand-navy underline">Payoff plan</Link>
-              <Link href="/reports/debt" className="text-brand-navy underline">Debt report</Link>
-            </LinkRow>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-label">
+              <Link href="/avalanche" className={LINK}>Payoff plan</Link>
+              <Link href="/reports/debt" className={LINK}>Debt report</Link>
+            </div>
           </div>
         )}
       </Gate>

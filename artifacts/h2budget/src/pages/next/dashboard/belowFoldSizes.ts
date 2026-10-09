@@ -1,18 +1,27 @@
 /**
- * (C11b) The below-the-fold panels load after first paint. Each has a fixed
- * minimum height, applied to BOTH the real panel and its skeleton, so the
- * page does not jump when a panel arrives. One constant per panel keeps the
- * two in step by construction (a test pins it).
+ * (C11b, dashboard refinement) The panels that load after first paint, in two
+ * slots of ONE lazy chunk: the forecast row (forecast + coming up), which sits
+ * above the eager account list, and the lower rows (spending pace, debt
+ * progress, needs attention, recent activity). Each panel has a fixed minimum
+ * height applied to BOTH the real panel and its skeleton, so nothing below it
+ * jumps when it arrives. One constant per panel keeps the two in step by
+ * construction (a test pins it).
  */
 export const BELOW_FOLD = {
-  forecast: { span: 8, minH: "min-h-[26rem]", rise: 4 },
-  debt: { span: 4, minH: "min-h-[26rem]", rise: 5 },
-  activity: { span: 8, minH: "min-h-[24rem]", rise: 6 },
-  review: { span: 4, minH: "min-h-[24rem]", rise: 7 },
+  forecast: { span: 8, minH: "min-h-[29rem]", rise: 3, slot: "forecast" },
+  upcoming: { span: 4, minH: "min-h-[29rem]", rise: 4, slot: "forecast" },
+  spending: { span: 6, minH: "min-h-[19rem]", rise: 5, slot: "lower" },
+  debt: { span: 6, minH: "min-h-[19rem]", rise: 6, slot: "lower" },
+  // The last row sizes to its own content (lead, 2026-10-09): nothing below it
+  // but the version line, and both panels arrive in the same slot together.
+  attention: { span: 7, minH: "", rise: 7, slot: "lower" },
+  activity: { span: 5, minH: "", rise: 8, slot: "lower" },
 } as const;
 
 export type BelowFoldKey = keyof typeof BELOW_FOLD;
+export type BelowFoldSlot = (typeof BELOW_FOLD)[BelowFoldKey]["slot"];
 
-/** (F3) The findings panel is outside BELOW_FOLD on purpose: it has no skeleton
- *  and draws nothing when nothing is open, so it can sit last without a jump. */
-export const ATTENTION = { span: 12, rise: 8 } as const;
+/** The keys of one slot, in page order. */
+export function slotKeys(slot: BelowFoldSlot): BelowFoldKey[] {
+  return (Object.keys(BELOW_FOLD) as BelowFoldKey[]).filter((k) => BELOW_FOLD[k].slot === slot);
+}

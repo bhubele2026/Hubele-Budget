@@ -116,9 +116,9 @@ describe("the template carries the action", () => {
     const action = pickAction(with_({ needsLookCount: 2, reviewCount: 2, billsNext3Days: [electric] }))!;
     const f = { ...BASE, needsLookCount: 2, reviewCount: 2, billsNext3Days: [electric], action } as RecapFacts;
     const t = renderRecapTemplate(f);
-    expect(t).toBe("Yesterday: $40 spent. Room in the plan: $1,234 until Fri. On track this week. 2 charges need a look. Due soon: Electric $90 tomorrow.");
+    expect(t).toBe("Yesterday: $40 spent. Checking covers $1,234 until Fri. On track this week. 2 charges need a look. Due soon: Electric $90 tomorrow.");
     expect(t.split("need a look").length).toBe(2);
     const quiet = renderRecapTemplate({ ...BASE, action: pickAction(BASE) } as RecapFacts);
-    expect(quiet).toBe("Yesterday: $40 spent. Room in the plan: $1,234 until Fri. On track this week. On plan. Nothing to do today.");
+    expect(quiet).toBe("Yesterday: $40 spent. Checking covers $1,234 until Fri. On track this week. On plan. Nothing to do today.");
   });
 });

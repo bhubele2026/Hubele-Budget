@@ -91,7 +91,7 @@ import {
   type SimDebt,
   type Strategy,
 } from "@/lib/avalanche";
-import { debtToSim, effectiveDebtBalance } from "@/lib/debtBalance";
+import { debtToSim, effectiveDebtBalance, remainingDebtTotal } from "@/lib/debtBalance";
 import { DebtPendingHint } from "@/components/debt-pending-hint";
 import { Trash2, Plus, RefreshCw, X, ClipboardPaste } from "lucide-react";
 
@@ -451,7 +451,9 @@ export default function AvalanchePage() {
 
   const activeDebts = simDebts.filter((d) => (d.status ?? "active") === "active");
   const archivedDebts = (debts ?? []).filter((d) => d.status === "archived");
-  const totalBalance = activeDebts.reduce((s, d) => s + d.balance, 0);
+  // The one "what is left" total (lib/debtBalance): the same sum, shared with
+  // the dashboard's debt tile and the Reports Debt page, so they cannot drift.
+  const totalBalance = remainingDebtTotal(debts);
   const totalMin = activeDebts.reduce((s, d) => s + d.minPayment, 0);
   const sortedActive = useMemo(
     () => sortDebts(activeDebts, strategy),

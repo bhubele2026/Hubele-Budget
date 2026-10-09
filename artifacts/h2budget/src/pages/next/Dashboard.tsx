@@ -1,23 +1,31 @@
 import { Suspense, lazy, useEffect, useState } from "react";
-import { Page } from "@/ui";
 import { PageGrid } from "@/components/next";
-import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { RefreshBanner } from "@/components/data-state";
 import { useSpine } from "@/hooks/useSpine";
 import { useLandingWarmup } from "@/hooks/useLandingWarmup";
 import { APP_VERSION } from "@/lib/version";
-import BriefingPanel from "./dashboard/BriefingPanel";
-import AccountsRow from "./dashboard/AccountsRow";
-import CashPanel from "./dashboard/CashPanel";
-import SpendingPanel from "./dashboard/SpendingPanel";
-import UpcomingPanel from "./dashboard/UpcomingPanel";
+import DashboardHeader from "./dashboard/DashboardHeader";
+import SummaryRow from "./dashboard/SummaryRow";
+import AccountsPanel from "./dashboard/AccountsPanel";
 import { BelowFoldSkeleton } from "./dashboard/BelowFoldSkeleton";
+import { CompactFold } from "./dashboard/foldDensity";
+import { usePlaidItemsQ } from "./dashboard/queries";
+import { hasLinkedBank } from "./dashboard/bankState";
 
-// (C11b) Below the first screen: Cash-flow forecast, Debt, Recent activity and
-// Needs review load as one lazy chunk after first paint, behind same-size
-// skeletons. The chart library is a further lazy chunk inside the forecast panel.
-const loadBelowFold = () => import("./dashboard/BelowFold");
-const BelowFold = lazy(loadBelowFold);
+// (C11b, refinement) Everything after the first screen is ONE lazy chunk with
+// two slots: the forecast row (forecast + coming up) above the account list,
+// and the lower rows (spending pace, debt progress, needs attention, recent
+// activity) below it. Each slot stands behind same-size skeletons. The chart
+// library is a further lazy chunk inside the forecast panel.
+// One promise for both slots and the idle warm-up: the chunk is asked for once.
+let belowFold: Promise<typeof import("./dashboard/BelowFold")> | null = null;
+const loadBelowFold = () =>
+  (belowFold ??= import("./dashboard/BelowFold").catch((e: unknown) => {
+    belowFold = null; // a failed fetch may be retried by the next ask
+    throw e;
+  }));
+const ForecastRow = lazy(() => loadBelowFold().then((m) => ({ default: m.ForecastRow })));
+const LowerRows = lazy(() => loadBelowFold().then((m) => ({ default: m.LowerRows })));
 
 /** Start the chunk when the browser is idle after first paint, then show it. */
 export function useBelowFoldReady(): boolean {
@@ -54,39 +62,49 @@ function DashboardRefreshBanner() {
   );
 }
 
-/** The landing: one screen for the household's whole position (the front door
- *  retired in C11). Panel order is importance order, so a phone reads it top to
- *  bottom. */
+/**
+ * The landing: the household's whole position on one screen, in the order the
+ * owner asks it — what cash do we have; what can we spend before payday; will
+ * we run short, and when; are we making progress on debt; what needs us today.
+ * The header and the summary row answer the first four at a glance; every
+ * panel below is the detail one look further down. On a phone it reads top to
+ * bottom in the same order. No `Page` wrapper: the shell already pads the
+ * page, and the header is this page's title.
+ */
 export default function DashboardPage() {
   // Warm the area pages' chunks (and the forecast data) on idle, after the
   // open has paid for itself. Never on the critical path.
   useLandingWarmup();
   const below = useBelowFoldReady();
+  const items = usePlaidItemsQ();
+  const compact = items.data !== undefined && !hasLinkedBank(items.data);
   return (
-    <div data-testid="page-next-dashboard" className="lg:pb-14">
-      <Page title="Dashboard">
-        <PageGrid>
-          <div className="span-12 flex justify-end">
-            <AffordLauncher />
-          </div>
-          <DashboardRefreshBanner />
-          <BriefingPanel />
-          <AccountsRow />
-          <CashPanel />
-          <SpendingPanel />
-          <UpcomingPanel />
-          {below ? (
-            <Suspense fallback={<BelowFoldSkeleton />}>
-              <BelowFold />
-            </Suspense>
-          ) : (
-            <BelowFoldSkeleton />
-          )}
-          <div data-testid="dash-version" className="span-12 font-mono text-micro tabular-nums text-neutral-400">
-            Version {APP_VERSION}
-          </div>
-        </PageGrid>
-      </Page>
+    <div data-testid="page-next-dashboard" data-compact={compact ? "true" : undefined} className="lg:pb-14">
+      <CompactFold.Provider value={compact}>
+      <PageGrid>
+        <DashboardHeader />
+        <DashboardRefreshBanner />
+        <SummaryRow />
+        {below ? (
+          <Suspense fallback={<BelowFoldSkeleton slot="forecast" />}>
+            <ForecastRow />
+          </Suspense>
+        ) : (
+          <BelowFoldSkeleton slot="forecast" />
+        )}
+        <AccountsPanel />
+        {below ? (
+          <Suspense fallback={<BelowFoldSkeleton slot="lower" />}>
+            <LowerRows />
+          </Suspense>
+        ) : (
+          <BelowFoldSkeleton slot="lower" />
+        )}
+        <div data-testid="dash-version" className="span-12 font-mono text-micro tabular-nums text-neutral-500">
+          Version {APP_VERSION}
+        </div>
+      </PageGrid>
+      </CompactFold.Provider>
     </div>
   );
 }

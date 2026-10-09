@@ -3,20 +3,28 @@ import { Link, useLocation } from "wouter";
 import { Panel, shortDate } from "@/components/next";
 import { ACCOUNT_ACCENT } from "@/lib/chartTokens";
 import { buildEventsByDate } from "@/lib/forecastPastDue";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { useCashSignalQ } from "./queries";
 import { BELOW_FOLD } from "./belowFoldSizes";
-import { dayLabel, Gate, rise } from "./shared";
+import { useFoldMinH } from "./foldDensity";
+import { Gate, LINK, money, rise, weekdayLabel } from "./shared";
 
 /** The chart (and recharts with it) loads only when this panel mounts. */
 const Chart = lazy(() =>
   import("@/pages/forecast/ProjectedBalanceChart").then((m) => ({ default: m.ProjectedBalanceChart })),
 );
 
-const HORIZONS = [30, 90, 180] as const;
+export const HORIZONS = [30, 90, 180] as const;
 const noop = () => {};
 
+/**
+ * "Will we run short, and when?" The projected checking balance over 30, 90 or
+ * 180 days: the buffer line, days under it shaded, the low point marked, a
+ * tooltip per day. The chart draws once per answer (its own fingerprint memo);
+ * a horizon switch crossfades. Every link goes to the full forecast.
+ */
 export default function ForecastPanel() {
+  const minH = useFoldMinH("forecast");
   const [days, setDays] = useState<number>(90);
   const [, navigate] = useLocation();
   const q = useCashSignalQ(days);
@@ -42,17 +50,23 @@ export default function ForecastPanel() {
   return (
     <Panel
       title="Cash-flow forecast"
-      sub="Projected cash (checking)"
+      sub="Projected checking balance"
       span={8}
-      className={cn(rise(BELOW_FOLD.forecast.rise), BELOW_FOLD.forecast.minH)}
+      variant="static"
+      className={cn(rise(BELOW_FOLD.forecast.rise), minH)}
       data-testid="dash-forecast"
       actions={
         <div className="flex gap-1" role="group" aria-label="Forecast horizon">
           {HORIZONS.map((h) => (
             <button key={h} type="button" onClick={() => setDays(h)} aria-pressed={days === h}
               data-testid={`dash-horizon-${h}`}
-              className={`rounded-control px-2 py-0.5 text-micro font-semibold ring-1 ring-brand-line ${days === h ? "bg-brand-navy text-white" : "text-neutral-600 hover:bg-neutral-50"}`}>
-              {h}d
+              className={cn(
+                "press rounded-control px-2 py-0.5 text-micro font-semibold ring-1 ring-brand-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40",
+                days === h ? "bg-brand-navy text-white" : "bg-white text-neutral-600 hover:bg-platinum-3",
+              )}>
+              <span className="sm:hidden" aria-hidden>{h}d</span>
+              <span className="hidden sm:inline">{h} days</span>
+              <span className="sr-only sm:hidden">{h} days</span>
             </button>
           ))}
         </div>
@@ -69,17 +83,24 @@ export default function ForecastPanel() {
               <>
                 <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-micro text-neutral-600" data-testid="dash-forecast-legend">
                   <span className="inline-flex items-center gap-1.5">
-                    <span aria-hidden className="size-2 rounded-full" style={{ background: ACCOUNT_ACCENT.checking }} />
-                    Projected cash (checking)
+                    <span aria-hidden className="h-0.5 w-3 rounded-full" style={{ background: ACCOUNT_ACCENT.checking }} />
+                    Checking
                   </span>
-                  <span>Buffer {formatCurrency(view!.buffer)}</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span aria-hidden className="h-0 w-3 border-t border-dashed border-neutral-400" />
+                    Buffer {money(view!.buffer)}
+                  </span>
                   {view!.lowestPoint ? (
                     <span data-testid="dash-forecast-low">
-                      Low point {formatCurrency(view!.lowestPoint.y)} · {dayLabel(view!.lowestPoint.rawDate)}
+                      Low point in these {days} days:{" "}
+                      <span className={cn("font-mono font-semibold tabular-nums", view!.lowestPoint.y < view!.buffer ? "text-bad-ink" : "text-brand-ink")}>
+                        {money(view!.lowestPoint.y)}
+                      </span>{" "}
+                      on {weekdayLabel(view!.lowestPoint.rawDate)}
                     </span>
                   ) : null}
                 </div>
-                <div className="h-64 w-full" data-testid="dash-forecast-chart">
+                <div className="h-80 w-full" data-testid="dash-forecast-chart">
                   <Suspense fallback={<div className="skeleton h-full w-full rounded-control" />}>
                     <Chart
                       data={view!.series}
@@ -89,13 +110,15 @@ export default function ForecastPanel() {
                       eventsByDate={view!.byDate}
                       onJumpToPlan={() => navigate("/forecast")}
                       onMarkMissed={noop}
+                      lowLabel="short"
+                      monthTicks
                     />
                   </Suspense>
                 </div>
               </>
             )}
             <div className="mt-3 flex gap-4 text-label">
-              <Link href="/next/forecast" className="text-brand-navy underline">Open the full forecast</Link>
+              <Link href="/forecast" className={LINK} data-testid="dash-forecast-link">Open the forecast</Link>
             </div>
           </div>
         )}

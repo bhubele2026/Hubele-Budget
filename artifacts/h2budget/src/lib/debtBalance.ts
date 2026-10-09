@@ -1,9 +1,12 @@
 import type { Debt } from "@workspace/api-client-react";
 import type { SimDebt } from "@workspace/avalanche-core";
+// (Dashboard refinement) From the `pendingDebt` sub-path, not the package
+// index: the landing's debt tile imports this module, and the index would bring
+// the whole payoff simulator into the entry chunk with it.
 import {
   effectiveDebtBalance as effectiveDebtBalanceCore,
   pendingPaymentTotalOf as pendingPaymentTotalOfCore,
-} from "@workspace/avalanche-core";
+} from "@workspace/avalanche-core/pendingDebt";
 
 /**
  * ⭐ THE ONE DEBT-BALANCE BASIS FOR THE WHOLE APP.
@@ -78,4 +81,42 @@ export function debtToSim(d: Debt): SimDebt {
     minPayment: Number(d.minPayment),
     status: d.status,
   };
+}
+
+/** Within half a cent counts as cleared, the Debts page's own threshold. */
+const CLEARED_EPSILON = 0.005;
+
+/**
+ * ⭐ THE ONE "WHAT IS LEFT" TOTAL: every ACTIVE debt, netted of its pending
+ * payments ({@link effectiveDebtBalance}). The Avalanche page's "Total debt"
+ * Stat and Totals row, the Reports Debt page's hero (`totalsForDebts`) and the
+ * dashboard's debt tile all call this, so the three cannot disagree. It was an
+ * inline `reduce` on the Avalanche page; the body is that reduce, unchanged.
+ */
+export function remainingDebtTotal(debts: readonly Debt[] | null | undefined): number {
+  let total = 0;
+  for (const d of debts ?? []) {
+    if (d.status !== "active") continue;
+    total += effectiveDebtBalance(d);
+  }
+  return total;
+}
+
+/**
+ * The total above plus the names it covers, so a surface that quotes the
+ * amount can always say what it is the total OF. Names are the active debts
+ * still carrying a balance (a cleared one adds nothing, so naming it would
+ * overstate the scope), in the payload's order.
+ */
+export function remainingDebtScope(debts: readonly Debt[] | null | undefined): {
+  total: number;
+  names: string[];
+} {
+  const names: string[] = [];
+  for (const d of debts ?? []) {
+    if (d.status !== "active") continue;
+    if (Math.abs(effectiveDebtBalance(d)) < CLEARED_EPSILON) continue;
+    names.push(d.name.trim() || "Unnamed debt");
+  }
+  return { total: remainingDebtTotal(debts), names };
 }

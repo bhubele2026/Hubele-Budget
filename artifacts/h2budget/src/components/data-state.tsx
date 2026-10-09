@@ -73,7 +73,7 @@ export function FreshnessLine({
     case "refresh_failed":
       return (
         <span data-testid="text-bank-freshness-stale" data-reason="refresh_failed">
-          <span className="font-semibold text-bad">Refresh failed</span> · last updated{" "}
+          <span className="font-semibold text-bad-ink">Refresh failed</span> · last updated{" "}
           {lastHeard}
         </span>
       );

@@ -17,6 +17,8 @@ export type AttentionKind = "reconnect" | "stale" | "over" | "bill" | "review" |
 
 export interface Attention {
   kind: AttentionKind;
+  /** Clipped to ATTENTION_TITLE_MAX, except a title the caller worded itself
+   *  (`DueBill.label`), which stays whole so it matches its other surfaces. */
   title: string;
   detail?: string;
   action?: { label: string; href: string };
@@ -28,9 +30,16 @@ export interface DueBill {
   name: string;
   amount: number | null;
   dueOn: string;
+  /** Words already built by the caller (the dashboard's hook-aware
+   *  "Weekly Spend · card payoff $477.57 (plan $450)"). When present the item
+   *  reads it as its title, whole, and says when in the detail. */
+  label?: string;
 }
 
 export const ATTENTION_TITLE_MAX = 60;
+
+/** Internal: marks a title the caller already worded (never clipped). */
+const WHOLE = Symbol("whole");
 
 function toAmount(v: string | number | null | undefined): number | null {
   if (v == null || v === "") return null;
@@ -71,13 +80,25 @@ export function attentionItems(i: {
   dueSoon: DueBill[];
   today: string;
   reviewCount: number;
+  /** Banks whose saved login expired (Plaid re-auth), by name. The checking
+   *  feed's own failure is `bank.staleReason`; a CARD's bank needing a new
+   *  login is just as much a reconnect — new charges stop coming in. */
+  reauthBanks?: readonly string[];
 }): Attention[] {
-  const out: Attention[] = [];
+  const out: Array<Attention & { [WHOLE]?: boolean }> = [];
+  const reauth = [...new Set(i.reauthBanks ?? [])];
   if (i.bank?.staleReason === "refresh_failed") {
     out.push({
       kind: "reconnect",
       title: "Reconnect your bank",
-      detail: "The last sync did not go through.",
+      detail: reauth.length ? `The last sync did not go through. Also needs a new login: ${reauth.join(", ")}.` : "The last sync did not go through.",
+      action: { label: "Reconnect", href: "/settings" },
+    });
+  } else if (reauth.length) {
+    out.push({
+      kind: "reconnect",
+      title: `Reconnect ${reauth.join(" and ")}`,
+      detail: "The saved login expired, so new transactions are not coming in.",
       action: { label: "Reconnect", href: "/settings" },
     });
   }
@@ -101,11 +122,16 @@ export function attentionItems(i: {
   if (i.dueSoon.length > 0) {
     const first = i.dueSoon[0]!;
     const when = first.dueOn === i.today ? "today" : "tomorrow";
-    const title =
-      i.dueSoon.length === 1
-        ? `${clip(first.name, 24)}${first.amount != null ? ` ${formatCurrency(first.amount)}` : ""} is due ${when}`
-        : `${i.dueSoon.length} bills are due today or tomorrow`;
-    out.push({ kind: "bill", title, action: { label: "See bills", href: "/bills" } });
+    if (i.dueSoon.length === 1 && first.label) {
+      out.push({ kind: "bill", title: first.label, detail: `Due ${when}`, action: { label: "See bills", href: "/bills" }, [WHOLE]: true });
+    } else {
+      const title =
+        i.dueSoon.length === 1
+          ? `${clip(first.name, 24)}${first.amount != null ? ` ${formatCurrency(first.amount)}` : ""} is due ${when}`
+          : `${i.dueSoon.length} bills are due today or tomorrow`;
+      const detail = i.dueSoon.length > 1 && first.label ? `First: ${first.label}, ${first.dueOn === i.today ? "today" : "tomorrow"}` : undefined;
+      out.push({ kind: "bill", title, detail, action: { label: "See bills", href: "/bills" } });
+    }
   }
   if (i.reviewCount > 0) {
     out.push({
@@ -115,5 +141,40 @@ export function attentionItems(i: {
     });
   }
   if (out.length === 0) out.push({ kind: "nothing", title: "Nothing needs you today" });
-  return out.map((a) => ({ ...a, title: clip(a.title, ATTENTION_TITLE_MAX) }));
+  return out.map(({ [WHOLE]: whole, ...a }) => ({ ...a, title: whole ? a.title : clip(a.title, ATTENTION_TITLE_MAX) }));
+}
+
+/**
+ * The dashboard header's ONE action. A failed or expired bank connection asks
+ * for Reconnect; a forecast that runs short points at where; a week over its
+ * plan offers "Pick a way back". Anything else (an old balance, a bill due,
+ * charges to match) has its own row in Needs attention and the account list's
+ * per-bank Sync, so the header keeps the everyday question: "Can we afford
+ * something?". Pure.
+ */
+export type HeaderAction =
+  | { kind: "link"; label: string; href: string }
+  | { kind: "reconnect"; label: string; href: string }
+  | { kind: "short"; label: string; href: string }
+  | { kind: "wayBack" }
+  | { kind: "afford" };
+
+/**
+ * Order (lead, 2026-10-09): Link a bank → Reconnect → the forecast runs short
+ * → Pick a way back → Afford. With no bank linked the action is the app's
+ * existing link path (Settings › Banks); the dashboard keeps Afford beside it
+ * as the quiet second control, whose sheet says what it needs.
+ * `runsShort` is the caller's reading of the low point (`lowPointView`: under
+ * the buffer, or below zero, inside the horizon).
+ */
+export function headerActionOf(
+  items: readonly Attention[],
+  opts: { noBank?: boolean; runsShort?: boolean } = {},
+): HeaderAction {
+  if (opts.noBank) return { kind: "link", label: "Link a bank", href: "/settings" };
+  const reconnect = items.find((a) => a.kind === "reconnect");
+  if (reconnect) return { kind: "reconnect", label: reconnect.action?.label ?? "Reconnect", href: reconnect.action?.href ?? "/settings" };
+  if (opts.runsShort) return { kind: "short", label: "See where it runs short", href: "/forecast" };
+  if (items.some((a) => a.kind === "over" && a.wayBack)) return { kind: "wayBack" };
+  return { kind: "afford" };
 }

@@ -3,52 +3,56 @@ import { useMemo } from "react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { Panel, TxnTable, type TxnRow } from "@/components/next";
-import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
+import { resolveTxnAccount } from "@/lib/accountIdentity";
+import { buildEntries } from "@/pages/next/accounts/entries";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
-import { usePlaidItemsQ, useTxnsQ } from "./queries";
-import { useCategoriesQ } from "./queriesLazy";
+import { usePlaidItemsQ } from "./queries";
+import { categoriesByIdOf, isInflowFiledAsExpense } from "@/lib/categoryDirection";
+import { RECENT_WINDOW_DAYS, useCategoriesQ, useRecentTxnsQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
-import { Gate, rise } from "./shared";
+import { useFoldMinH } from "./foldDensity";
+import { Gate, LINK, rise } from "./shared";
 
-export const ACTIVITY_ROWS = 12;
+export const ACTIVITY_ROWS = 6;
 
+/** The newest rows across every account, each with its account, status and
+ *  category; the whole ledger is one click away. */
 export default function ActivityPanel() {
+  const minH = useFoldMinH("activity");
   const today = householdToday(new Date());
-  const txns = useTxnsQ({ from: addDaysISO(today, -30), to: today, limit: ACTIVITY_ROWS });
+  // The shared recent window (one request with Needs attention); the newest 6 show here.
+  const txns = useRecentTxnsQ(today, addDaysISO(today, -RECENT_WINDOW_DAYS));
   const items = usePlaidItemsQ();
   const cats = useCategoriesQ();
 
   const rows = useMemo<TxnRow[]>(() => {
-    const accounts = (items.data ?? []).flatMap((it) =>
-      it.accounts.map((a) => ({
-        id: a.id, name: a.name, mask: a.mask, type: a.type, subtype: a.subtype,
-        institutionName: it.institutionName, institutionSlug: it.institutionSlug,
-      })),
-    );
-    const order = cardOrderOf(accounts);
-    const byId = new Map(accounts.map((a) => [a.id, identityOf(a, { cardOrder: order })]));
+    // Keyed by Plaid's EXTERNAL account_id — what `transaction.plaidAccountId`
+    // holds. (Keying by the internal row id matched nothing: every row read "Account".)
+    const byExt = new Map(buildEntries(items.data).map((e) => [e.plaidAccountId, e]));
     const catName = new Map((cats.data ?? []).map((c) => [c.id, c.name]));
+    const catsById = categoriesByIdOf(cats.data);
     return (txns.data ?? []).slice(0, ACTIVITY_ROWS).map((t) => {
-      const identity =
-        (t.plaidAccountId ? byId.get(t.plaidAccountId) : undefined) ??
-        identityOf({ id: t.plaidAccountId ?? `manual-${t.id}`, name: t.account });
+      const identity = resolveTxnAccount(t, byExt);
       return {
         id: t.id,
         date: t.occurredOn.slice(0, 10),
         description: t.description,
-        amount: displayAmount(t.amount, identity),
+        amount: displayAmount(t.amount, identity, t.source),
         identity,
         pending: t.pending,
         category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
-        href: t.plaidAccountId ? `/next/accounts/${t.plaidAccountId}` : "/transactions",
+        flag: isInflowFiledAsExpense(t, catsById) ? "Income in an expense category" : null,
+        href: identity.known && t.plaidAccountId ? `/next/accounts/${encodeURIComponent(t.plaidAccountId)}` : "/transactions",
       };
     });
   }, [txns.data, items.data, cats.data]);
 
   return (
-    <Panel title="Recent activity" sub={`Newest ${ACTIVITY_ROWS} across accounts`} span={8} className={cn(rise(BELOW_FOLD.activity.rise), BELOW_FOLD.activity.minH)} data-testid="dash-activity"
-      actions={<Link href="/next/accounts" className="text-label font-semibold text-brand-navy underline">All accounts</Link>}>
-      <Gate q={txns} what="Recent activity" rows={6}>{() => <TxnTable rows={rows} />}</Gate>
+    <Panel title="Recent activity" sub={`Newest ${ACTIVITY_ROWS} across accounts`} span={5}
+      variant={["flush", "static"]}
+      className={cn(rise(BELOW_FOLD.activity.rise), minH, "self-start")} data-testid="dash-activity"
+      actions={<Link href="/transactions" className={cn(LINK, "text-label")} data-testid="dash-all-activity">All activity</Link>}>
+      <Gate q={txns} what="Recent activity" rows={6}>{() => <TxnTable rows={rows} layout="list" />}</Gate>
     </Panel>
   );
 }

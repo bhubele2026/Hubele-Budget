@@ -105,7 +105,7 @@ export function InboxCardView({
       className={`surface flex flex-wrap items-center gap-3 rounded-card p-3 outline-none ring-1 transition-all hover:ring-brand-navy/30 focus-visible:ring-2 focus-visible:ring-brand-navy/40 ${
         canOneClick ? "ring-brand-navy/25" : "ring-brand-line"
       } ${isDragging ? "opacity-30" : ""} ${
-        isOverlay ? "cursor-grabbing shadow-lift ring-2 ring-brand-navy/40" : ""
+        isOverlay ? "surface-raised cursor-grabbing ring-2 ring-brand-navy/40" : ""
       }`}
     >
       <button

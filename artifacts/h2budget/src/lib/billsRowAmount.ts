@@ -15,6 +15,12 @@ export type BillRowAmountDisplay = {
   monthlyHint: string | null;
 };
 
+/** The one word a schedule is called by ("weekly", "semi-monthly", "one-time"). */
+export function frequencyWord(frequency: string | null | undefined): string | null {
+  if (!frequency) return null;
+  return FREQ_SUFFIX[frequency] ?? frequency;
+}
+
 const FREQ_SUFFIX: Record<string, string> = {
   weekly: "weekly",
   biweekly: "biweekly",

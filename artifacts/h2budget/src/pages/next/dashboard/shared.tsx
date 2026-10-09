@@ -74,3 +74,57 @@ export function Empty({ children }: { children: ReactNode }) {
 export function LinkRow({ children }: { children: ReactNode }) {
   return <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-label">{children}</div>;
 }
+
+/** The quiet link style every dashboard link uses. */
+export const LINK = "font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 rounded-control";
+
+/** The label voice: 11 px, uppercase, tracked, muted. */
+export const LABEL = "text-micro font-semibold uppercase tracking-wide text-neutral-500";
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** "Fri Oct 9" from a household ISO day, with no timezone in the way. */
+export function weekdayLabel(iso: string | null | undefined): string | null {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return null;
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  return `${WEEKDAYS[d.getUTCDay()]} ${shortDate(iso.slice(0, 10))}`;
+}
+
+/**
+ * ONE figure on a multi-figure surface: an 11 px label, the figure at
+ * `--text-kpi` in mono tabular numerals, and at most two short sublines.
+ * `missing` is the words that replace the figure when the data is not there
+ * (never $0): the figure becomes an em dash and the words say why.
+ */
+export function Kpi({
+  label, value, tone = "neutral", lines = [], missing, testid,
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: "neutral" | "bad" | "muted";
+  lines?: ReactNode[];
+  missing?: ReactNode;
+  testid?: string;
+}) {
+  const shown = lines.filter((l) => l != null && l !== false && l !== "").slice(0, 2);
+  return (
+    <div data-testid={testid} data-missing={missing ? "true" : undefined} className="min-w-0">
+      <div className={LABEL}>{label}</div>
+      <div
+        data-testid={testid ? `${testid}-value` : undefined}
+        className={cn(
+          "mt-1 whitespace-nowrap font-mono text-kpi font-semibold tabular-nums",
+          // neutral-500, not 400: the dash is still information (2.6:1 at 400).
+          missing || tone === "muted" ? "text-neutral-500" : tone === "bad" ? "text-bad" : "text-brand-navy",
+        )}
+      >
+        {missing ? "—" : value}
+      </div>
+      {missing ? (
+        <div className="mt-1 text-micro leading-snug text-neutral-600 sm:text-label" data-testid={testid ? `${testid}-missing` : undefined}>{missing}</div>
+      ) : null}
+      {shown.map((l, i) => (
+        <div key={i} className="mt-1 text-micro leading-snug text-neutral-600 sm:text-label">{l}</div>
+      ))}
+    </div>
+  );
+}

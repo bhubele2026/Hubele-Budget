@@ -34,9 +34,9 @@ describe("next primitives", () => {
     expect(screen.getByText("••1005")).toBeTruthy();
     expect(container.querySelector('[data-accent="amex"]')).toBeTruthy();
   });
-  it("TxnTable: chip + pending word + category per row, Enter opens the row", () => {
+  it.each(["table", "list"] as const)("TxnTable (%s): chip + pending word + category per row; the description is a real link (Space too); the row still clicks", (layout) => {
     window.history.replaceState(null, "", "/");
-    render(<TxnTable rows={[
+    render(<TxnTable layout={layout} rows={[
       { id: "a", date: "2026-10-08", description: "Costco", amount: -82.1, identity: chase, pending: true, category: "Groceries", href: "/next/accounts/1" },
       { id: "b", date: "2026-10-07", description: "Paycheck", amount: 2000, identity: amex, pending: false },
     ]} />);
@@ -47,9 +47,15 @@ describe("next primitives", () => {
     expect(rows[0]!.textContent).toContain("Groceries");
     expect(rows[1]!.textContent).toContain("Posted");
     expect(rows[1]!.textContent).toContain("Uncategorized");
-    expect(rows[0]!.getAttribute("tabindex")).toBe("0");
-    expect(rows[1]!.getAttribute("tabindex")).toBeNull();
-    fireEvent.keyDown(rows[0]!, { key: "Enter" });
+    // One native, named focus stop per row that opens somewhere; none for a row that does not.
+    const link = screen.getByRole("link", { name: "Costco" });
+    expect(link.getAttribute("href")).toBe("/next/accounts/1");
+    expect(rows[0]!.getAttribute("tabindex")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Paycheck" })).toBeNull();
+    fireEvent.keyDown(link, { key: " " });
+    expect(window.location.pathname).toBe("/next/accounts/1");
+    window.history.replaceState(null, "", "/");
+    fireEvent.click(rows[0]!.querySelector("[data-accent]")!); // anywhere else on the row
     expect(window.location.pathname).toBe("/next/accounts/1");
     window.history.replaceState(null, "", "/");
   });

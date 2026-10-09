@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 const h = vi.hoisted(() => ({
   items: [] as unknown[], debts: [] as unknown[], payoff: null as unknown, forecast: null as unknown,
   amexProps: vi.fn(), chaseProps: vi.fn(),
+  extraTxns: [] as unknown[],
 }));
 
 vi.mock("@workspace/api-client-react", async (orig) => ({
@@ -18,6 +19,7 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
   useListTransactions: () => ({ data: [
     { id: "t1", occurredOn: "2026-10-07", description: "COFFEE", amount: "-4.50", plaidAccountId: "ext-amex", pending: true, categoryId: "c1" },
     { id: "t2", occurredOn: "2026-10-06", description: "PAYROLL", amount: "900", plaidAccountId: "ext-chk", pending: false, categoryId: null },
+    ...h.extraTxns,
   ], isLoading: false }),
   useListCategories: () => ({ data: [{ id: "c1", name: "Dining" }] }),
 }));
@@ -32,7 +34,7 @@ import { AccountSummary } from "./accounts/AccountSummary";
 import { ForecastLegend } from "./accounts/ForecastLegend";
 import { identityOf } from "@/lib/accountIdentity";
 
-afterEach(() => { cleanup(); h.amexProps.mockClear(); h.chaseProps.mockClear(); });
+afterEach(() => { cleanup(); h.amexProps.mockClear(); h.chaseProps.mockClear(); h.extraTxns = []; });
 
 const item = (id: string, inst: string, slug: string, accounts: object[], extra: object = {}) =>
   ({ id, itemId: id, institutionName: inst, institutionSlug: slug, accounts, lastSyncedAt: "2026-10-08T10:00:00Z", lastBankTxOn: "2026-10-07", ...extra });
@@ -83,6 +85,19 @@ describe("combined view", () => {
     expect(panel.textContent).toContain("Dining");
     expect(panel.querySelector('[title="Chase Total Checking"]')).toBeTruthy();
     expect(panel.textContent).toContain("Posted");
+  });
+  it("(dash-accuracy) a row with no linked account says where it came from, not 'Manual entry' for all", () => {
+    seed();
+    h.extraTxns = [
+      { id: "t3", occurredOn: "2026-10-05", description: "WORKBOOK", amount: "12.00", plaidAccountId: null, source: "amex", pending: false, categoryId: null },
+      { id: "t4", occurredOn: "2026-10-05", description: "CASH", amount: "-5.00", plaidAccountId: null, source: "manual", pending: false, categoryId: null },
+      { id: "t5", occurredOn: "2026-10-04", description: "OLD CARD", amount: "-9.00", plaidAccountId: "ext-gone", source: "plaid:chase", pending: false, categoryId: null },
+    ];
+    renderAt("/next/accounts");
+    const panel = screen.getByTestId("combined-activity");
+    expect(panel.querySelector('[title="Amex (imported)"]')).toBeTruthy();
+    expect(panel.querySelector('[title="Manual entry"]')).toBeTruthy();
+    expect(panel.querySelector('[title="Chase (no longer linked)"]')).toBeTruthy();
   });
 });
 
