@@ -64,8 +64,6 @@ import {
   btnLink,
   btnLinkDanger,
   btnSecondary,
-  card,
-  cardHead,
   emptyNote,
   Field,
   fieldLabel,
@@ -77,6 +75,7 @@ import {
   tdNum,
   th,
 } from "@/ui";
+import { PageGrid, StatTile } from "@/components/next";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import { invalidateForecastFamily } from "@/lib/invalidateForecast";
@@ -697,9 +696,9 @@ export default function BillsPage() {
     dueMode === "wk" ? "this week" : dueMode === "mo" ? "this month" : "this year";
 
   return (
-    <div className="space-y-5">
+    <PageGrid>
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="span-12 flex flex-wrap items-center justify-between gap-3">
         {/* ⚠️ EXACTLY "Bills". Five e2e specs gate on
             getByRole("heading", { name: /^bills$/i }), and four more on the
             loose /bills/i — which is also why no other heading on this page may
@@ -749,33 +748,33 @@ export default function BillsPage() {
       </div>
 
       {/* ── Headline ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3">
-        <Stat
+        <StatTile
+          span={4}
           index={0}
           label={`Due ${windowWord}`}
           value={formatCurrency(dueTotal)}
           hint={`${dueRows.length} item${dueRows.length === 1 ? "" : "s"} · ${dueRange.label}`}
         />
-        <Stat
+        <StatTile
+          span={4}
           index={1}
           label={net >= 0 ? "Net this month" : "Net · short"}
           value={formatCurrency(net)}
-          tone={net >= 0 ? "ok" : "bad"}
+          tone={net >= 0 ? "neutral" : "bad"}
           hint={`${committedPct}% of income committed`}
         />
-        <Stat
+        <StatTile
+          span={4}
           index={2}
           label="Active items"
-          value={activeCount}
+          value={String(activeCount)}
           hint="income + bills"
         />
-      </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+        <div className="span-8 space-y-4">
           {/* ── Due window ───────────────────────────────────────────────── */}
-          <div className={card} data-testid="bills-due-lead">
-            <div className={cardHead}>
+          <div className="panel tile-in" data-testid="bills-due-lead">
+            <div className="panel-head">
               <div className="text-label font-semibold text-brand-navy">
                 Due {windowWord}
               </div>
@@ -869,8 +868,8 @@ export default function BillsPage() {
             />
           ) : null}
           {archivedDebtsList.length > 0 && (
-            <div className={card} data-testid="card-archived-debts">
-              <div className={cardHead}>
+            <div className="panel tile-in" data-testid="card-archived-debts">
+              <div className="panel-head">
                 <Lock className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
                 <div className="text-label font-semibold text-neutral-500">
                   Archived debts
@@ -909,9 +908,9 @@ export default function BillsPage() {
         </div>
 
         {/* ── Side column ────────────────────────────────────────────────── */}
-        <div className="space-y-4">
-          <div className={card}>
-            <div className={cardHead}>
+        <div className="span-4 space-y-4">
+          <div className="panel tile-in">
+            <div className="panel-head">
               <div className="text-label font-semibold text-brand-navy">Per month</div>
               <Help>
                 Recurring items at their monthly rate. The smaller figure beside
@@ -957,8 +956,8 @@ export default function BillsPage() {
             </table></div>
           </div>
 
-          <div className={card} data-testid="card-actual-this-month">
-            <div className={cardHead}>
+          <div className="panel tile-in" data-testid="card-actual-this-month">
+            <div className="panel-head">
               <div className="text-label font-semibold text-brand-navy">Actual</div>
               <Help>
                 Every real transaction in the month, not just the ones matched to
@@ -1007,7 +1006,7 @@ export default function BillsPage() {
             <Foot>Real transactions, transfers excluded.</Foot>
           </div>
 
-          <Link href="/forecast" className={`${card} block`}>
+          <Link href="/forecast" className="panel panel-link tile-in block">
             <div className="flex items-center justify-between px-4 py-3">
               <div>
                 <div className={fieldLabel}>Next</div>
@@ -1019,7 +1018,6 @@ export default function BillsPage() {
             </div>
           </Link>
         </div>
-      </div>
 
       <Dialog
         open={dialogOpen}
@@ -1319,7 +1317,7 @@ export default function BillsPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageGrid>
   );
 }
 
@@ -1410,11 +1408,11 @@ function BillGroupCard({
   const sign = tone === "income" ? "+" : "−";
 
   return (
-    <div className={card}>
+    <div className="panel tile-in">
       {/* ⚠️ The title is a <div>, not a heading: four e2e specs match
           getByRole("heading", { name: /bills/i }) and a second heading
           containing "Bills" would be a strict-mode violation. */}
-      <div className={cardHead}>
+      <div className="panel-head">
         <div className="text-label font-semibold text-brand-navy">{title}</div>
         <span className="text-micro text-neutral-400">
           {rows.length} item{rows.length === 1 ? "" : "s"}
@@ -1647,8 +1645,8 @@ function DebtMinimumsCard({
   onOpen: (debtId: string) => void;
 }) {
   return (
-    <div className={card} data-testid="card-debt-minimums">
-      <div className={cardHead}>
+    <div className="panel tile-in" data-testid="card-debt-minimums">
+      <div className="panel-head">
         <Lock className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
         <div className="text-label font-semibold text-brand-navy">Debt minimums</div>
         <Help>

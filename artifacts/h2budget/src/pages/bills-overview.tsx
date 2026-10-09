@@ -8,7 +8,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { RefreshBanner } from "@/components/data-state";
 import { CssBars, type CssBarRow } from "@/lib/cssBars";
 import { dataState } from "@/lib/queryState";
-import { card, cardHead, emptyNote, Foot, Help, Stat, td, tdNum } from "@/ui";
+import { emptyNote, Foot, Help, td, tdNum } from "@/ui";
+import { PageGrid, StatTile } from "@/components/next";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 const num = (v: string | number | null | undefined): number => {
@@ -73,15 +74,14 @@ export default function BillsOverviewPage() {
   const short = net < 0;
 
   return (
-    <div className="space-y-5" data-testid="bills-overview">
+    <PageGrid data-testid="bills-overview">
       {/* The ribbon above already says "Bills · Overview" — a second copy of it
           as an <h1> is a word the page does not need. Screen readers still get
           one. */}
       <h1 className="sr-only">Bills overview</h1>
 
       {/* ── Headline: the spine's two numbers ──────────────────────────────── */}
-      <div className="flex flex-wrap gap-3">
-        <Stat
+        <StatTile
           index={0}
           data-testid="stat-next-bill"
           label="Next bill"
@@ -95,17 +95,18 @@ export default function BillsOverviewPage() {
                 : undefined
           }
         />
-        <Stat
+        <StatTile
           index={1}
           data-testid="stat-bills-due"
           label="Bills due"
-          value={billsDueCount ?? "—"}
+          value={billsDueCount != null ? String(billsDueCount) : "—"}
           hint="rest of this month"
         />
-      </div>
 
       {/* Under the headline, not above it: that row is the spine's and has
           likely loaded. This banner speaks for the month below. */}
+      {(summaryState === "refresh-failed" || summaryState === "failed") && (
+      <div className="span-12">
       <RefreshBanner
         state={summaryState}
         updatedAt={
@@ -117,11 +118,12 @@ export default function BillsOverviewPage() {
         refreshing={summaryQuery.isFetching ?? false}
         data-testid="bills-refresh-banner"
       />
+      </div>
+      )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
         {/* ── This month ──────────────────────────────────────────────────── */}
-        <div className={card} data-testid="bills-month-card">
-          <div className={cardHead}>
+        <div className="panel tile-in span-4" data-testid="bills-month-card">
+          <div className="panel-head">
             <h2 className="text-label font-semibold text-brand-navy">This month</h2>
             <Help>
               Recurring income and bills at their monthly rate plus debt
@@ -213,8 +215,8 @@ export default function BillsOverviewPage() {
         </div>
 
         {/* ── Biggest recurring bills ─────────────────────────────────────── */}
-        <div className={`${card} lg:col-span-2`} data-testid="bills-biggest-card">
-          <div className={cardHead}>
+        <div className="panel tile-in span-8" data-testid="bills-biggest-card">
+          <div className="panel-head">
             <h2 className="text-label font-semibold text-brand-navy">
               Biggest recurring bills
             </h2>
@@ -248,7 +250,6 @@ export default function BillsOverviewPage() {
             </p>
           )}
         </div>
-      </div>
-    </div>
+    </PageGrid>
   );
 }

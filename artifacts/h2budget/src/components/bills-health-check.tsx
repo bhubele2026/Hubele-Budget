@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { BillsSummary } from "@workspace/api-client-react";
-import { card, cardHead, Help, Stat, td } from "@/ui";
+import { Help, Stat, td } from "@/ui";
 
 // Sentinel debtId for the synthetic "Avalanche extra payment" row — it's not a
 // real obligation to dedup against, so we exclude it from the checks.
@@ -128,8 +128,8 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
           is the same as no check at all — the card only exists when there is
           something to read. */}
       {!clean && (
-        <div className={card}>
-          <div className={cardHead}>
+        <div className="panel tile-in">
+          <div className="panel-head">
             <h3 className="text-label font-semibold text-brand-navy">Findings</h3>
             <span className="ml-auto text-micro text-neutral-400">
               {issues.length} flagged
