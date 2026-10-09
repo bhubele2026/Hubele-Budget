@@ -861,20 +861,23 @@ export default function BudgetPage() {
               <StatBlock
                 data-testid="tile-spent"
                 label="Spent so far"
-                value={formatCurrency(actualTotal)}
+                countUp
+                value={actualTotal}
                 hint={`of ${formatCurrency(plannedTotal)} planned`}
               />
               <StatBlock
                 data-testid="tile-left-to-earn"
                 label="Left over"
-                value={formatCurrency(Number(plan.net))}
+                countUp
+                value={Number(plan.net)}
                 tone={Number(plan.net) < 0 ? "bad" : "neutral"}
                 hint="income less the plan"
               />
               <StatBlock
                 data-testid="tile-income"
                 label="Income"
-                value={formatCurrency(plannedIncome)}
+                countUp
+                value={plannedIncome}
                 hint={`${formatCurrency(plan.income.actual)} in so far`}
               />
             </div>
