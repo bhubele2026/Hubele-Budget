@@ -46,7 +46,13 @@ Unchanged: every Owed on the plan, the debt tile ("$19,727.27 left across HELOC 
 - Updated: `dashboard.test.tsx`, `Accounts.test.tsx` (split zero test; same-mask and no-mask checking), `bankBalanceWhy.test.tsx` (awaits the lazy body), `categorizationVerified`, `automationWords`, `AutomationTab`.
 
 ## Gates
-GATES
+On the branch after the WP7b merge (710196ab; this note is the only later change):
+- `pnpm run build` (root typecheck + every package): clean. CI-style codegen re-run: `git status` clean.
+- web vitest: UTC 1,967 passed / 3 skipped; America/Chicago 1,968 passed / 2 skipped (210 files).
+- API suite on `h2budget_test_fin_2`: 241 files (+1 skipped: the untracked fixture harness), 2,623 passed, 2 todo.
+- entry graph: **620,249 B** of 622,000 (integration 618.4 KB; +1.8 KB for the card model, stamps and spine view on the landing, after the −2,481 B lazy "Why" body).
+- `pnpm audit --prod`: 1 high, the already-ignored one.
+- Shots (`l2-shots/wp3-{before,after}/<scenario>/`, /home, /next/accounts, /next/accounts/{platinum}, /next/accounts/{chk} at 1280 and 390; scenarios normal+platinum-pending, offplan, archived, zero, stale, dupmask, nomask): 56 + 56, 0 console errors, 0 failed `/api` calls. After set taken on df1ecd12 + WP1, before the WP7b merge (WP7b changes links, not figures).
 
 ## Unverified
 - Live Platinum: active-with-pending or archived — `GET /api/debts` decides which row it shows; both are built and tested.
