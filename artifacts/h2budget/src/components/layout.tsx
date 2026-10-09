@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useLocation } from "wouter";
-import { UserButton } from "@clerk/react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
 import { Menu, MessageCircleQuestion } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -37,7 +36,11 @@ import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { useCategorizationQueueTotal } from "@/hooks/useCategorizationQueue";
 import { badgeCount } from "@/lib/reviewQueue";
 import { H2Wordmark } from "@/components/h2-wordmark";
-import { TabRibbon, type RibbonTab } from "@/components/tab-ribbon";
+import { TabRibbon, TabUnderline, type RibbonTab } from "@/components/tab-ribbon";
+import { AccountMenu, VERSION_LABEL } from "@/components/account-menu";
+// (C12) The tab LIST only — never `settingsTabs.ts`, whose lazy importers
+// would ride the landing chunk with it.
+import { SETTINGS_TABS, tabHref, tabOf, type SettingsTab } from "@/pages/settings/settingsTabList";
 
 /**
  * ⚠️ LABELS ONLY. A `NavItem` used to carry a lucide icon, which repeated the
@@ -45,7 +48,12 @@ import { TabRibbon, type RibbonTab } from "@/components/tab-ribbon";
  * below is otherwise UNCHANGED — this pass is chrome, not information
  * architecture.
  */
-type NavItem = { name: string; href: string };
+type NavItem = {
+  name: string;
+  href: string;
+  /** Test-id suffix when the href cannot be one (a query string). */
+  testId?: string;
+};
 
 /**
  * A route an area owns: the path itself AND its own child routes (`/bills`
@@ -90,14 +98,17 @@ const DESTINATIONS: Destination[] = [
       { name: "Overview", href: "/banking" },
       { name: "Chase", href: "/transactions" },
       { name: "Amex", href: "/amex" },
+      // (C12) The all-accounts preview sits BESIDE Chase and Amex — it
+      // replaces neither until the owner says so.
+      { name: "Accounts", href: "/next/accounts" },
       { name: "Budget", href: "/budget" },
       { name: "Allowance", href: "/allowances" },
     ],
-    // ⚠️ Only /banking itself is the Home AREA. Chase, Amex, Budget and
-    // Allowance are one click away from Home's ribbon, but visiting those
-    // routes directly shows the ribbon of the area that owns them (Review,
-    // Spending).
-    owns: [{ path: "/banking" }],
+    // ⚠️ Only /banking (and the Accounts preview) are the Home AREA. Chase,
+    // Amex, Budget and Allowance are one click away from Home's ribbon, but
+    // visiting those routes directly shows the ribbon of the area that owns
+    // them (Review, Spending).
+    owns: [{ path: "/banking" }, { path: "/next/accounts" }],
   },
   {
     // The primary link lands on the section's Overview tab (Bills precedent).
@@ -144,6 +155,8 @@ const DESTINATIONS: Destination[] = [
     tabs: [
       { name: "Review", href: "/review" },
       { name: "Categories", href: "/review/categories" },
+      // (C12) What Ask suggested and has not changed (F8).
+      { name: "Suggestions", href: "/review/suggestions" },
       { name: "Chase", href: "/transactions" },
       { name: "Amex", href: "/amex" },
     ],
@@ -173,6 +186,17 @@ const MORE_NAV: NavItem[] = [
 ];
 
 const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
+
+/**
+ * (C12) Settings' sub-pages, listed beneath Settings in the drawer and in More.
+ * They are the page's own tabs (`settingsTabs.ts`, the one list), minus Banks:
+ * Banks is plain `/settings`, which the Settings row itself already opens.
+ */
+const SETTINGS_PAGES: (NavItem & { tab: SettingsTab })[] = SETTINGS_TABS.filter((t) => t.key !== "banks").map(
+  (t) => ({ name: t.label, href: tabHref(t.key), testId: `settings-${t.key}`, tab: t.key }),
+);
+
+
 
 /**
  * Whole path segments only: `/bills` covers `/bills` and its own child routes
@@ -208,6 +232,13 @@ function destinationFor(location: string): Destination | null {
   );
 }
 
+/** The Settings sub-page open at this URL, or null (not Settings, or Banks). */
+function openSettingsSub(location: string, search: string): SettingsTab | null {
+  if (location !== "/settings") return null;
+  const tab = tabOf(search);
+  return tab === "banks" ? null : tab;
+}
+
 /**
  * The pages the phone drawer lists beneath a destination: its ribbon tabs,
  * minus the tab that IS the destination (the destination's own row already
@@ -238,7 +269,7 @@ function HomeMark({ onNavigate }: { onNavigate?: () => void }) {
       aria-label="H2 Budget — go to home"
       data-testid="brand-home"
       onClick={onNavigate}
-      className="press flex flex-none items-center rounded-control px-2 py-1.5 hover:bg-white/10"
+      className="press flex flex-none items-center rounded-control px-2 py-1.5 hover:bg-chrome-press"
     >
       <H2Wordmark tone="white" size={24} data-testid="h2-wordmark" />
     </Link>
@@ -271,15 +302,15 @@ function DrawerLink({
       onMouseEnter={() => onPrefetch(item.href)}
       onFocus={() => onPrefetch(item.href)}
       aria-current={active ? "page" : undefined}
-      data-testid={`mobilenav-${item.href.slice(1)}`}
+      data-testid={`mobilenav-${item.testId ?? item.href.slice(1)}`}
       className={cn(
         "press relative flex items-center gap-3 rounded-control",
         nested ? "py-1.5 pl-7 pr-3 text-label" : "px-3 py-2 text-body",
         active
-          ? "bg-white/10 font-semibold text-white"
+          ? "bg-chrome-press font-semibold text-chrome-ink"
           : inArea
-            ? "font-semibold text-white hover:bg-white/5"
-            : "text-white/60 hover:bg-white/5 hover:text-white",
+            ? "font-semibold text-chrome-ink hover:bg-chrome-hover"
+            : "text-chrome-ink-3 hover:bg-chrome-hover hover:text-chrome-ink",
       )}
     >
       {/* The vertical analogue of the ribbon's underline — same accent, same
@@ -302,16 +333,22 @@ function DrawerLink({
 
 function MobileNav({
   location,
+  search,
   onNavigate,
   railBadge,
   onPrefetch,
 }: {
   location: string;
+  /** The query string: on `/settings` it says which Settings sub-page is open. */
+  search: string;
   onNavigate: () => void;
   railBadge: (href: string) => number | null;
   onPrefetch: (href: string) => void;
 }) {
   const area = destinationFor(location);
+  // On a Settings sub-page that sub-page is the lit row, and Settings reads as
+  // the place you are inside (like a destination over its pages).
+  const settingsSub = openSettingsSub(location, search);
   // ⚠️ THE DRAWER LIGHTS WHAT THE RIBBON LIGHTS. Only rows inside the area you
   // are in can be lit (More's rows, when you are in no area), and of those only
   // the longest whole-segment match. So /bills/all lights Bills, /billsx lights
@@ -324,14 +361,23 @@ function MobileNav({
       : MORE_NAV.map((m) => m.href),
   );
   const row = { onNavigate, onPrefetch };
+  // (C12) Open with the lit row in view: the drawer is taller than a phone
+  // now (Settings' sub-pages sit at the bottom), and a lit row you have to
+  // scroll to find says nothing.
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    navRef.current
+      ?.querySelector<HTMLElement>('[aria-current="page"]')
+      ?.scrollIntoView?.({ block: "nearest" });
+  }, []);
   const groupLabel =
-    "px-2 pb-1.5 text-micro font-semibold uppercase tracking-wide text-white/40";
+    "px-2 pb-1.5 text-micro font-semibold uppercase tracking-wide text-chrome-ink-4";
   return (
-    <div className="flex h-full flex-col bg-brand-navy text-white">
-      <div className="flex h-14 items-center border-b border-white/10 px-3">
+    <div className="flex h-full flex-col bg-brand-navy text-chrome-ink">
+      <div className="flex h-14 items-center border-b border-chrome-rule px-3">
         <HomeMark onNavigate={onNavigate} />
       </div>
-      <nav aria-label="Sections" className="flex-1 space-y-5 overflow-y-auto p-3">
+      <nav ref={navRef} aria-label="Sections" className="flex-1 space-y-5 overflow-y-auto p-3">
         {/* The five destinations, each with its ribbon pages beneath it —
             every page a desktop ribbon reaches is reachable here too. */}
         <div>
@@ -375,18 +421,46 @@ function MobileNav({
               <li key={m.href}>
                 <DrawerLink
                   item={m}
-                  active={activeHref === m.href}
+                  active={activeHref === m.href && settingsSub == null}
+                  inArea={m.href === "/settings" && settingsSub != null}
                   badge={railBadge(m.href)}
                   {...row}
                 />
+                {/* (C12) Settings' sub-pages beneath it, as a destination's
+                    pages sit beneath it above. */}
+                {m.href === "/settings" && (
+                  <ul className="mt-0.5 space-y-0.5" data-testid="mobilenav-settings-pages">
+                    {SETTINGS_PAGES.map((p) => (
+                      <li key={p.href}>
+                        <DrawerLink
+                          item={p}
+                          nested
+                          active={settingsSub === p.tab}
+                          badge={null}
+                          onNavigate={onNavigate}
+                          // A sub-page warms the Settings chunk; its own lazy
+                          // tab chunk warms from the page's tab bar (warming it
+                          // here would put the tab importers on the landing).
+                          onPrefetch={() => onPrefetch("/settings")}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
         </div>
       </nav>
-      <div className="flex items-center justify-between border-t border-white/10 p-4">
-        <span className="text-label font-medium text-white/70">Account</span>
-        <UserButton />
+      <div className="flex items-center justify-between gap-3 border-t border-chrome-rule p-4">
+        <div className="flex min-w-0 flex-col">
+          <span className="text-label font-medium text-chrome-ink-2">Account</span>
+          {/* (C12) LND-09: the build, also the last item of the account menu. */}
+          <span data-testid="drawer-version" className="truncate font-mono text-micro tabular-nums text-chrome-ink-4">
+            {VERSION_LABEL}
+          </span>
+        </div>
+        <AccountMenu />
       </div>
     </div>
   );
@@ -394,6 +468,7 @@ function MobileNav({
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const search = useSearch();
   // Which of the five areas this route is inside — its ribbon shows across the
   // top. Outside every area (Settings, Mapping rules, the unmapped reports) the
   // ribbon is the five destinations themselves.
@@ -535,13 +610,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     count: railBadge(item.href),
   }));
 
-  // Is any secondary (More) destination the current page, and do any of them
-  // carry a pending badge — so the collapsed More trigger can signal both.
+  // Is any secondary (More) destination the current page — so the collapsed
+  // More trigger carries the underline. (C12: the orange "pending" dot is
+  // gone. Nothing in More ever had a count, so it could never light.)
   const moreActive = moreNav.some((n) => isAtOrUnder(location, n.href));
-  const moreBadgeTotal = moreNav.reduce(
-    (sum, n) => sum + (railBadge(n.href) ?? 0),
-    0,
-  );
+  const settingsSub = openSettingsSub(location, search);
 
   const currentTitle =
     activeTabLabel ??
@@ -588,7 +661,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           dashboard now, not a door with its own hero. ───────────────────── */}
       <header
           data-testid="app-header"
-          className="sticky top-0 z-30 shrink-0 bg-brand-navy text-white shadow-[inset_0_-1px_0_rgb(255_255_255/0.12)]"
+          className="sticky top-0 z-30 shrink-0 bg-brand-navy text-chrome-ink inset-shadow-chrome-edge"
         >
           <div className="flex h-12 items-center gap-1 pl-1 pr-2 md:pl-3 md:pr-4">
             {/* Mobile: the drawer trigger sits before the mark. */}
@@ -598,7 +671,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="text-white hover:bg-white/10 hover:text-white"
+                    className="text-chrome-ink hover:bg-chrome-press hover:text-chrome-ink"
                     aria-label="Open navigation menu"
                     data-testid="button-mobile-menu"
                   >
@@ -615,6 +688,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <SheetTitle className="sr-only">Navigation</SheetTitle>
                   <MobileNav
                     location={location}
+                    search={search}
                     onNavigate={() => setMobileOpen(false)}
                     railBadge={railBadge}
                     onPrefetch={prefetch}
@@ -627,7 +701,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* A hairline between the mark and the ribbon: the mark is a
                 control, not the first tab. */}
-            <span aria-hidden className="mx-1 hidden h-5 w-px bg-white/15 md:block" />
+            <span aria-hidden className="mx-1 hidden h-5 w-px bg-chrome-rule md:block" />
 
             <div className="hidden min-w-0 flex-1 md:flex">
               <TabRibbon
@@ -644,44 +718,59 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           className={cn(
                             "press relative flex items-center whitespace-nowrap px-3.5 text-label font-semibold outline-none",
                             moreActive
-                              ? "text-white"
-                              : "text-white/60 hover:text-white/90",
+                              ? "text-chrome-ink"
+                              : "text-chrome-ink-3 hover:text-chrome-ink-hover",
                           )}
                           data-testid="topnav-more"
                           aria-label="More destinations"
                         >
                           More
-                          {moreBadgeTotal > 0 && (
-                            <span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-brand-orange" />
-                          )}
-                          {moreActive && (
-                            <span
-                              aria-hidden
-                              className="tab-underline pointer-events-none absolute inset-x-2.5 bottom-0 h-[3px] rounded-t-full bg-brand-orange shadow-[0_0_10px_rgba(246,141,46,0.55)]"
-                            />
-                          )}
+                          {moreActive && <TabUnderline />}
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
                         {moreNav.map((item) => {
                           const badge = railBadge(item.href);
+                          // The page you are on reads as current here too; on
+                          // a Settings sub-page that is the sub-page.
+                          const current =
+                            isAtOrUnder(location, item.href) && !(item.href === "/settings" && settingsSub != null);
                           return (
-                            <DropdownMenuItem key={item.href} asChild>
-                              <Link
-                                href={item.href}
-                                onMouseEnter={() => prefetch(item.href)}
-                                onFocus={() => prefetch(item.href)}
-                                className="flex cursor-pointer items-center gap-2.5"
-                                data-testid={`morenav-${item.href.slice(1)}`}
-                              >
-                                <span className="flex-1">{item.name}</span>
-                                {badge !== null && (
-                                  <span className="rounded-full bg-brand-orange/15 px-1.5 py-0.5 font-mono text-micro leading-none tabular-nums text-brand-orange">
-                                    {badge}
-                                  </span>
-                                )}
-                              </Link>
-                            </DropdownMenuItem>
+                            <Fragment key={item.href}>
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={item.href}
+                                  onMouseEnter={() => prefetch(item.href)}
+                                  onFocus={() => prefetch(item.href)}
+                                  aria-current={current ? "page" : undefined}
+                                  className="flex cursor-pointer items-center gap-2.5 aria-[current=page]:font-semibold aria-[current=page]:text-brand-navy"
+                                  data-testid={`morenav-${item.href.slice(1)}`}
+                                >
+                                  <span className="flex-1">{item.name}</span>
+                                  {badge !== null && (
+                                    <span className="rounded-full bg-brand-orange/15 px-1.5 py-0.5 font-mono text-micro leading-none tabular-nums text-brand-orange">
+                                      {badge}
+                                    </span>
+                                  )}
+                                </Link>
+                              </DropdownMenuItem>
+                              {/* (C12) Settings' sub-pages, indented beneath it. */}
+                              {item.href === "/settings" &&
+                                SETTINGS_PAGES.map((p) => (
+                                  <DropdownMenuItem key={p.href} asChild>
+                                    <Link
+                                      href={p.href}
+                                      onMouseEnter={() => prefetch("/settings")}
+                                      onFocus={() => prefetch("/settings")}
+                                      aria-current={settingsSub === p.tab ? "page" : undefined}
+                                      className="cursor-pointer pl-6 text-label text-muted-foreground aria-[current=page]:font-semibold aria-[current=page]:text-brand-navy"
+                                      data-testid={`morenav-${p.testId}`}
+                                    >
+                                      {p.name}
+                                    </Link>
+                                  </DropdownMenuItem>
+                                ))}
+                            </Fragment>
                           );
                         })}
                       </DropdownMenuContent>
@@ -708,7 +797,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   aria-label={`${reviewCount} items to review`}
                   data-testid="topnav-review-badge"
                   className={cn(
-                    "press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-white/70 hover:bg-white/10 hover:text-white",
+                    "press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink",
                     reviewPillPhoneOnly && "md:hidden",
                   )}
                 >
@@ -728,12 +817,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 aria-current={location === "/ask" ? "page" : undefined}
                 onMouseEnter={() => prefetch("/ask")}
                 onFocus={() => prefetch("/ask")}
-                className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-white/70 hover:bg-white/10 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+                className="press flex items-center gap-1.5 rounded-control px-2 py-1 text-micro font-semibold text-chrome-ink-2 hover:bg-chrome-press hover:text-chrome-ink aria-[current=page]:bg-chrome-press aria-[current=page]:text-chrome-ink"
               >
                 <MessageCircleQuestion className="h-4 w-4" aria-hidden />
                 <span className="hidden sm:inline">Ask</span>
               </Link>
-              <UserButton />
+              <AccountMenu />
             </div>
           </div>
       </header>

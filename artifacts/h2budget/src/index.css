@@ -94,6 +94,29 @@
   --color-acct-other: #5d6674;
   --color-acct-other-bg: #eef0f3;
 
+  /* ── CHROME: THE NAVY HEADER, RIBBON AND DRAWER ──────────────────────────
+     (C12) Every colour on the navy chrome is one of these, so the header, the
+     ribbon, the More trigger and the phone drawer cannot drift apart again
+     (they had grown 22 hand-picked `white/NN` strengths and two copies of the
+     underline glow). They are white at fixed strengths and are ONLY for the
+     brand-navy ground: on platinum they would vanish.
+     Ink, strongest first: the lit tab · a tab under the pointer · the quiet
+     controls (Ask, the review pill, "Account") · a resting tab or row · group
+     labels and the overflow chevrons. */
+  --color-chrome-ink: #ffffff;
+  --color-chrome-ink-hover: rgb(255 255 255 / 0.9);
+  --color-chrome-ink-2: rgb(255 255 255 / 0.7);
+  --color-chrome-ink-3: rgb(255 255 255 / 0.6);
+  --color-chrome-ink-4: rgb(255 255 255 / 0.45);
+  /* Grounds: a drawer row under the pointer · the current row and any control
+     under the pointer. One hairline for every rule on the chrome. */
+  --color-chrome-hover: rgb(255 255 255 / 0.05);
+  --color-chrome-press: rgb(255 255 255 / 0.1);
+  --color-chrome-rule: rgb(255 255 255 / 0.12);
+  /* The rule under the header, and the brand-orange glow under the lit tab. */
+  --inset-shadow-chrome-edge: inset 0 -1px 0 var(--color-chrome-rule);
+  --shadow-tab-glow: 0 0 10px color-mix(in srgb, var(--color-brand-orange) 55%, transparent);
+
   /* The gap between panels on the 12-column grid. */
   --grid-gap: 1rem;
 

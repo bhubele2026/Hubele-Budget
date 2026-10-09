@@ -30,7 +30,11 @@ vi.mock("@clerk/react", () => ({
     when === "signed-in" ? <>{children}</> : null,
   useAuth: () => ({ isLoaded: true, isSignedIn: true }),
   useClerk: () => ({ addListener: () => () => {} }),
-  UserButton: () => <div data-testid="user-button" />,
+  // (C12) The account menu adds one item through UserButton's compound parts.
+  UserButton: Object.assign(() => <div data-testid="user-button" />, {
+    MenuItems: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    Action: () => null,
+  }),
 }));
 vi.mock("@clerk/react/internal", () => ({
   publishableKeyFromHost: () => "pk_test_routes",
@@ -134,10 +138,10 @@ type Area = "Home" | "Forecast" | "Spending" | "Review" | "Debt" | "no area" | "
 
 // The ribbon each area shows, typed out — not imported from layout.tsx.
 const RIBBON: Record<Exclude<Area, "no header">, string[]> = {
-  Home: ["/banking", "/transactions", "/amex", "/budget", "/allowances"],
+  Home: ["/banking", "/transactions", "/amex", "/next/accounts", "/budget", "/allowances"],
   Forecast: ["/forecast/overview", "/forecast", "/bills"],
   Spending: ["/reports/spending", "/budget", "/allowances", "/wishlist", "/reports"],
-  Review: ["/review", "/review/categories", "/transactions", "/amex"],
+  Review: ["/review", "/review/categories", "/review/suggestions", "/transactions", "/amex"],
   Debt: ["/avalanche", "/debts", "/reports/debt"],
   // Outside every area the ribbon is the five destinations themselves.
   "no area": ["/banking", "/forecast/overview", "/reports/spending", "/review", "/avalanche"],
@@ -186,13 +190,14 @@ const OLD_ROUTES: Row[] = [
   // (F8) Ask sits outside the five areas; Suggestions is Review's own page.
   { from: "/ask", lands: "/ask", page: "ask", area: "no area" },
   { from: "/review/suggestions", lands: "/review/suggestions", page: "review-suggestions", area: "Review" },
-  // The /next preview pages: reachable by URL, outside every area (the ribbon
-  // is the five destinations) until the owner approves them.
-  // /next/dashboard became the landing: it redirects to /home.
+  // The /next preview pages: reachable by URL. /next/dashboard became the
+  // landing (it redirects to /home); /next/forecast stays outside every area
+  // until the owner approves it; (C12) /next/accounts is Home's "Accounts"
+  // tab, beside Chase and Amex.
   { from: "/next/dashboard", lands: "/home", page: "next-dashboard", area: "no area" },
   { from: "/next/forecast", lands: "/next/forecast", page: "next-forecast", area: "no area" },
-  { from: "/next/accounts", lands: "/next/accounts", page: "next-accounts", area: "no area" },
-  { from: "/next/accounts/:plaidAccountId", lands: "/next/accounts/:plaidAccountId", page: "next-accounts", area: "no area" },
+  { from: "/next/accounts", lands: "/next/accounts", page: "next-accounts", area: "Home" },
+  { from: "/next/accounts/:plaidAccountId", lands: "/next/accounts/:plaidAccountId", page: "next-accounts", area: "Home" },
   { from: "/plaid-oauth", lands: "/plaid-oauth", page: "plaid-oauth", area: "no area" },
 ];
 

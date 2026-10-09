@@ -37,9 +37,22 @@ let spineMissing = false;
 /** (F1) The categorization queue's total; null = the queue has not answered. */
 let queueTotal: number | null = null;
 
-vi.mock("@clerk/react", () => ({
-  UserButton: () => <div data-testid="user-button" />,
-}));
+// (C12) The account menu is Clerk's UserButton with our own item (the build
+// version). The stand-in renders its children, so the item can be asserted.
+vi.mock("@clerk/react", () => {
+  const UserButton = Object.assign(
+    ({ children }: { children?: React.ReactNode }) => <div data-testid="user-button">{children}</div>,
+    {
+      MenuItems: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+      Action: ({ label, onClick }: { label: string; onClick?: () => void }) => (
+        <button type="button" data-testid="account-menu-item" onClick={onClick}>
+          {label}
+        </button>
+      ),
+    },
+  );
+  return { UserButton };
+});
 
 vi.mock("@workspace/api-client-react", () => ({
   // The Review badge reads the shared spine now, not its own endpoint, so the
@@ -98,6 +111,9 @@ vi.mock("@/components/ui/dropdown-menu", () => {
 });
 
 import { AppLayout } from "./layout";
+import { VERSION_LABEL } from "./account-menu";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 function mount(path: string) {
   const qc = new QueryClient({
@@ -291,7 +307,7 @@ describe("the five destinations", () => {
 describe("the area model", () => {
   it("shows Home's ribbon — the existing Banking tabs, unchanged — on /banking", () => {
     mount("/banking");
-    expect(tabLabels()).toEqual(["Overview", "Chase", "Amex", "Budget", "Allowance"]);
+    expect(tabLabels()).toEqual(["Overview", "Chase", "Amex", "Accounts", "Budget", "Allowance"]);
     expect(activeTabHref()).toBe("/banking");
   });
 
@@ -315,13 +331,13 @@ describe("the area model", () => {
 
   it("shows Review·Chase on /transactions", () => {
     mount("/transactions");
-    expect(tabLabels()).toEqual(["Review", "Categories", "Chase", "Amex"]);
+    expect(tabLabels()).toEqual(["Review", "Categories", "Suggestions", "Chase", "Amex"]);
     expect(activeTabHref()).toBe("/transactions");
   });
 
   it("shows Review's ribbon on /review", () => {
     mount("/review");
-    expect(tabLabels()).toEqual(["Review", "Categories", "Chase", "Amex"]);
+    expect(tabLabels()).toEqual(["Review", "Categories", "Suggestions", "Chase", "Amex"]);
     expect(activeTabHref()).toBe("/review");
   });
 
@@ -374,6 +390,7 @@ describe("the phone drawer reaches every page a ribbon reaches", () => {
     "/banking",
     "/transactions",
     "/amex",
+    "/next/accounts",
     "/budget",
     "/allowances",
     "/wishlist",
@@ -384,6 +401,7 @@ describe("the phone drawer reaches every page a ribbon reaches", () => {
     "/reports",
     "/review",
     "/review/categories",
+    "/review/suggestions",
     "/avalanche",
     "/debts",
     "/reports/debt",
@@ -433,7 +451,7 @@ describe("the phone drawer reaches every page a ribbon reaches", () => {
     // ribbon shortcuts (Chase, Amex, Budget, Allowance) sit under Review and
     // Spending — the areas whose ribbon shows when you open them.
     expect(tree).toEqual([
-      ["Home /banking"],
+      ["Home /banking", "Accounts /next/accounts"],
       ["Forecast /forecast/overview", "Forecast /forecast", "Bills /bills"],
       [
         "Spending /reports/spending",
@@ -442,17 +460,35 @@ describe("the phone drawer reaches every page a ribbon reaches", () => {
         "Wish list /wishlist",
         "Reports /reports",
       ],
-      ["Review /review", "Categories /review/categories", "Chase /transactions", "Amex /amex"],
+      [
+        "Review /review",
+        "Categories /review/categories",
+        "Suggestions /review/suggestions",
+        "Chase /transactions",
+        "Amex /amex",
+      ],
       ["Debt /avalanche", "Debts /debts", "Debt report /reports/debt"],
     ]);
   });
 
-  it("keeps Mapping rules and Settings under More, and lists no page twice", () => {
+  it("keeps Mapping rules and Settings under More, Settings' sub-pages beneath it, and lists no page twice", () => {
     mount("/settings");
     const drawer = openDrawer();
     const nav = drawer.querySelector("nav")!;
     const links = linksIn(nav);
-    expect(links.slice(-2)).toEqual(["Mapping rules /mapping-rules", "Settings /settings"]);
+    // (C12) Settings carries its own tabs beneath it, as a destination
+    // carries its pages. Banks is the Settings row itself (plain /settings).
+    expect(links.slice(-9)).toEqual([
+      "Mapping rules /mapping-rules",
+      "Settings /settings",
+      "Household /settings?tab=household",
+      "Data /settings?tab=data",
+      "Automation /settings?tab=automation",
+      "Morning text /settings?tab=morning-text",
+      "AI cost /settings?tab=ai",
+      "Memory /settings?tab=memory",
+      "Privacy /settings?tab=privacy",
+    ]);
     const hrefs = links.map((l) => l.split(" ").pop());
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
@@ -641,5 +677,118 @@ describe("prefetch machinery survives the rewrite", () => {
     const drawer = openDrawer();
     fireEvent.mouseEnter(drawer.querySelector('[data-testid="mobilenav-budget"]')!);
     expect(prefetchRoute).toHaveBeenCalledWith("/budget");
+  });
+});
+
+describe("(C12) the fold-in sub-items, the account menu and the chrome tokens", () => {
+  it("the Accounts preview sits in Home BESIDE Chase and Amex, and lights there", () => {
+    mount("/next/accounts");
+    expect(tabLabels()).toEqual(["Overview", "Chase", "Amex", "Accounts", "Budget", "Allowance"]);
+    expect(activeTabHref()).toBe("/next/accounts");
+    expect(screen.getByTestId("mobile-page-title").textContent).toBe("Accounts");
+    cleanup();
+    // One account's page is still the Accounts tab.
+    mount("/next/accounts/acc-1");
+    expect(activeTabHref()).toBe("/next/accounts");
+  });
+
+  it("Review carries Suggestions beside Categories, lit on its own page", () => {
+    mount("/review/suggestions");
+    expect(tabLabels()).toEqual(["Review", "Categories", "Suggestions", "Chase", "Amex"]);
+    expect(activeTabHref()).toBe("/review/suggestions");
+    expect(screen.getByTestId("topnav-review/suggestions").getAttribute("href")).toBe("/review/suggestions");
+  });
+
+  it("More lists Settings' sub-pages beneath Settings, and hovering one warms Settings", () => {
+    mount("/mapping-rules");
+    expect(screen.getByTestId("morenav-settings-household").getAttribute("href")).toBe("/settings?tab=household");
+    expect(screen.getByTestId("morenav-settings-memory").textContent).toBe("Memory");
+    expect(screen.queryByTestId("morenav-settings-banks")).toBeNull();
+    fireEvent.mouseEnter(screen.getByTestId("morenav-settings-ai"));
+    expect(prefetchRoute).toHaveBeenCalledWith("/settings");
+  });
+
+  it("More marks the page you are on: the Settings sub-page when one is open", () => {
+    mount("/settings?tab=memory");
+    expect(screen.getByTestId("morenav-settings-memory").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("morenav-settings").getAttribute("aria-current")).toBeNull();
+    cleanup();
+    mount("/mapping-rules");
+    expect(screen.getByTestId("morenav-mapping-rules").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("morenav-settings-memory").getAttribute("aria-current")).toBeNull();
+  });
+
+  it("the drawer lights the open Settings sub-page, with Settings as the place you are in", () => {
+    mount("/settings?tab=memory");
+    const drawer = openDrawer();
+    const lit = Array.from(drawer.querySelectorAll('[aria-current="page"]')).map((a) => a.getAttribute("href"));
+    expect(lit).toEqual(["/settings?tab=memory"]);
+    cleanup();
+    // Banks is plain /settings: the Settings row itself.
+    mount("/settings?tab=banks");
+    const lit2 = Array.from(openDrawer().querySelectorAll('[aria-current="page"]')).map((a) => a.getAttribute("href"));
+    expect(lit2).toEqual(["/settings"]);
+  });
+
+  it("More has no dot: nothing in it carries a count", () => {
+    mount("/settings");
+    const more = screen.getByTestId("topnav-more");
+    // The text and, on /settings, the underline — nothing else.
+    expect(more.textContent).toBe("More");
+    expect(more.querySelectorAll("span").length).toBe(1);
+    expect(more.querySelector(".tab-underline")).toBeTruthy();
+  });
+
+  it("the account menu carries the build version, in the header and in the drawer", () => {
+    mount("/banking");
+    const items = screen.getAllByTestId("account-menu-item").map((b) => b.textContent);
+    expect(items).toEqual([VERSION_LABEL]);
+    expect(VERSION_LABEL).toMatch(/^Version \S+$/);
+    const drawer = openDrawer();
+    expect(within(drawer).getByTestId("drawer-version").textContent).toBe(VERSION_LABEL);
+    expect(within(drawer).getAllByTestId("account-menu-item").map((b) => b.textContent)).toEqual([VERSION_LABEL]);
+  });
+
+  it("tapping the version copies the build id", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    try {
+      mount("/banking");
+      fireEvent.click(screen.getAllByTestId("account-menu-item")[0]!);
+      expect(writeText).toHaveBeenCalledWith(VERSION_LABEL.replace(/^Version /, ""));
+    } finally {
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    }
+  });
+
+  it("(SH-01) the top line stays on every page, the landing included, until the switch", () => {
+    for (const path of ["/home", "/banking", "/settings"]) {
+      mount(path);
+      const line = screen.getByTestId("classic-retiring-banner");
+      expect(linksIn(line)).toEqual(["Forecast /next/forecast", "Accounts /next/accounts", "Current app → /"]);
+      cleanup();
+    }
+  });
+
+  it("(SH-04) ←/→ on the ribbon move to the next tab, wrapping at the ends", () => {
+    const { history } = mountRecording("/review");
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    fireEvent.keyDown(nav, { key: "ArrowRight" });
+    expect(history[history.length - 1]).toBe("/review/categories");
+    cleanup();
+    const second = mountRecording("/review");
+    fireEvent.keyDown(screen.getByRole("navigation", { name: "Sections" }), { key: "ArrowLeft" });
+    expect(second.history[second.history.length - 1]).toBe("/amex");
+  });
+
+  it("the chrome is drawn on tokens: no white/NN, rgba() or hex literal in the header, ribbon or drawer", () => {
+    for (const file of ["layout.tsx", "tab-ribbon.tsx", "account-menu.tsx"]) {
+      const code = readFileSync(join(import.meta.dirname, file), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:])\/\/.*$/gm, "$1");
+      expect(code.match(/\bwhite\/\d+/g), `${file}: white/NN`).toBeNull();
+      expect(code.match(/rgba?\(/g), `${file}: rgb()/rgba()`).toBeNull();
+      expect(code.match(/#[0-9a-fA-F]{3,8}\b/g), `${file}: hex`).toBeNull();
+    }
   });
 });
