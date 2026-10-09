@@ -54,6 +54,7 @@ import {
   importDebts,
   importAvalanche,
   importAmex,
+  importReviewCategories,
   importTransactions,
   importBills,
   importBillsOverview,
@@ -82,6 +83,7 @@ const ReportsBudgetPage = lazy(importReportsBudget);
 const ReportsBehaviorPage = lazy(importReportsBehavior);
 const DebtsPage = lazy(importDebts);
 const AvalanchePage = lazy(importAvalanche);
+const ReviewCategoriesPage = lazy(importReviewCategories);
 const AmexPage = lazy(importAmex);
 const TransactionsPage = lazy(importTransactions);
 const BillsPage = lazy(importBills);
@@ -468,6 +470,7 @@ function ProtectedShell() {
             <Route path="/review">
               <ForecastPage mode="review" />
             </Route>
+            <Route path="/review/categories" component={ReviewCategoriesPage} />
             <Route path="/reports" component={ReportsPage} />
             <Route path="/reports/debt" component={ReportsDebtPage} />
             <Route path="/reports/cashflow" component={ReportsCashFlowPage} />

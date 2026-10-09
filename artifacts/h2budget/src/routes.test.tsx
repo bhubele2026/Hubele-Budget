@@ -38,6 +38,8 @@ vi.mock("@clerk/react/internal", () => ({
 vi.mock("@clerk/themes", () => ({ shadcn: {} }));
 
 vi.mock("@workspace/api-client-react", () => ({
+  useListCategorizationReview: () => ({ data: undefined, isLoading: true }),
+  getListCategorizationReviewQueryKey: () => ["/api/categorization/review"],
   getSpine: vi.fn(() => new Promise(() => {})),
   getGetSpineQueryKey: () => ["/api/spine"],
   getDashboard: vi.fn(),
@@ -83,6 +85,7 @@ vi.mock("./lib/routePrefetch", () => {
     importDebts: page("debts"),
     importAvalanche: page("avalanche"),
     importAmex: page("amex"),
+    importReviewCategories: page("review-categories"),
     importTransactions: page("transactions"),
     importBills: page("bills"),
     importBillsOverview: page("bills-overview"),
@@ -132,7 +135,7 @@ const RIBBON: Record<Exclude<Area, "no header">, string[]> = {
   Home: ["/banking", "/transactions", "/amex", "/budget", "/allowances"],
   Forecast: ["/forecast/overview", "/forecast", "/bills"],
   Spending: ["/reports/spending", "/budget", "/allowances", "/wishlist", "/reports"],
-  Review: ["/review", "/transactions", "/amex"],
+  Review: ["/review", "/review/categories", "/transactions", "/amex"],
   Debt: ["/avalanche", "/debts", "/reports/debt"],
   // Outside every area the ribbon is the five destinations themselves.
   "no area": ["/banking", "/forecast/overview", "/reports/spending", "/review", "/avalanche"],
@@ -167,6 +170,7 @@ const OLD_ROUTES: Row[] = [
   { from: "/wishlist", lands: "/wishlist", page: "wishlist", area: "Spending" },
   { from: "/reports", lands: "/reports", page: "reports", area: "Spending" },
   { from: "/review", lands: "/review", page: "forecast:review", area: "Review" },
+  { from: "/review/categories", lands: "/review/categories", page: "review-categories", area: "Review" },
   { from: "/transactions", lands: "/transactions", page: "transactions", area: "Review" },
   { from: "/amex", lands: "/amex", page: "amex", area: "Review" },
   { from: "/avalanche", lands: "/avalanche", page: "avalanche", area: "Debt" },
