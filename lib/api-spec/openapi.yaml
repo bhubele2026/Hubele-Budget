@@ -2404,7 +2404,7 @@ paths:
   /debt-plan:
     get:
       operationId: getDebtPlan
-      tags: [debt-plan]
+      tags: [debt-plan, features]
       summary: The debt plan — strategies, debt-free range, milestones, planned vs confirmed
       responses:
         "200":
@@ -2572,7 +2572,7 @@ paths:
   /allowance-plans/{id}:
     put:
       operationId: updateAllowancePlan
-      tags: [money]
+      tags: [money, features]
       summary: Set a plan's amount (household owner only; writes source "owner")
       parameters:
         - in: path

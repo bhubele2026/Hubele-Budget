@@ -31,6 +31,8 @@ import type {
   AiConversationDetail,
   AiConversationList,
   AiUsageSummary,
+  AllowancePlan,
+  AllowancePlanUpdate,
   AllowancePlans,
   ApplyLearnedRuleRetroactivelyParams,
   ApplyRetroactivelyResult,
@@ -41,6 +43,7 @@ import type {
   CorrectDecisionInput,
   CreateWeekAdjustmentBody,
   CreateWishlistItemBody,
+  DebtPlan,
   EvaluateAffordBody,
   HealthStatus,
   LearnedRule,
@@ -1224,6 +1227,79 @@ export function useListRecapHistory<
 }
 
 /**
+ * @summary The debt plan — strategies, debt-free range, milestones, planned vs confirmed
+ */
+export const getGetDebtPlanUrl = () => {
+  return `/api/debt-plan`;
+};
+
+export const getDebtPlan = async (options?: RequestInit): Promise<DebtPlan> => {
+  return customFetch<DebtPlan>(getGetDebtPlanUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDebtPlanQueryKey = () => {
+  return [`/api/debt-plan`] as const;
+};
+
+export const getGetDebtPlanQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDebtPlan>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDebtPlan>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDebtPlanQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDebtPlan>>> = ({
+    signal,
+  }) => getDebtPlan({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDebtPlan>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDebtPlanQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDebtPlan>>
+>;
+export type GetDebtPlanQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The debt plan — strategies, debt-free range, milestones, planned vs confirmed
+ */
+
+export function useGetDebtPlan<
+  TData = Awaited<ReturnType<typeof getDebtPlan>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDebtPlan>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDebtPlanQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * computePosition (avalanche-core) over one read of the household: the forecast curve computeCashSignal builds (the spine's own horizon of 90 days), the current Sunday–Saturday week classified by classifyMovement, the weekly cap from allowance_plans and the bank's freshness. The spine's `position` is the same call; an integration test asserts they agree to the cent. Never carries credit, a limit, a debt balance or an amount owed.
  * @summary How much is safe to spend now, until payday and this week (the money position)
  */
@@ -1460,6 +1536,93 @@ export function useListAllowancePlans<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Set a plan's amount (household owner only; writes source "owner")
+ */
+export const getUpdateAllowancePlanUrl = (id: string) => {
+  return `/api/allowance-plans/${id}`;
+};
+
+export const updateAllowancePlan = async (
+  id: string,
+  allowancePlanUpdate: AllowancePlanUpdate,
+  options?: RequestInit,
+): Promise<AllowancePlan> => {
+  return customFetch<AllowancePlan>(getUpdateAllowancePlanUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(allowancePlanUpdate),
+  });
+};
+
+export const getUpdateAllowancePlanMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAllowancePlan>>,
+    TError,
+    { id: string; data: BodyType<AllowancePlanUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAllowancePlan>>,
+  TError,
+  { id: string; data: BodyType<AllowancePlanUpdate> },
+  TContext
+> => {
+  const mutationKey = ["updateAllowancePlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAllowancePlan>>,
+    { id: string; data: BodyType<AllowancePlanUpdate> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateAllowancePlan(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAllowancePlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAllowancePlan>>
+>;
+export type UpdateAllowancePlanMutationBody = BodyType<AllowancePlanUpdate>;
+export type UpdateAllowancePlanMutationError = ErrorType<void>;
+
+/**
+ * @summary Set a plan's amount (household owner only; writes source "owner")
+ */
+export const useUpdateAllowancePlan = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAllowancePlan>>,
+    TError,
+    { id: string; data: BodyType<AllowancePlanUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAllowancePlan>>,
+  TError,
+  { id: string; data: BodyType<AllowancePlanUpdate> },
+  TContext
+> => {
+  return useMutation(getUpdateAllowancePlanMutationOptions(options));
+};
 
 /**
  * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement. Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.

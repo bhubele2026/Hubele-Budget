@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateWeekAdjustmentBody, CreateWishlistItemBody, EvaluateAffordBody, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
+import type { AffordResult, AgentAction, AgentActionList, AgentFinding, AgentFindingList, AgentMonitorRunResult, AgentProposal, AgentProposalList, AgentRunList, AiBudget, AiConversation, AiConversationDetail, AiConversationList, AiUsageSummary, AllowancePlan, AllowancePlanUpdate, AllowancePlans, ApplyLearnedRuleRetroactivelyParams, ApplyRetroactivelyResult, CategorizationRunResult, CategorizationSettings, CategorizationSettingsInput, CategoryDecision, CorrectDecisionInput, CreateWeekAdjustmentBody, CreateWishlistItemBody, DebtPlan, EvaluateAffordBody, HealthStatus, LearnedRule, ListAgentActionsParams, ListAgentFindingsParams, ListAgentProposalsParams, ListAgentRunsParams, ListAiConversationsParams, ListCategoryDecisionsParams, ListRecapDeliveriesParams, ListRecapHistoryParams, MemoryItem, MemoryList, MoneyPosition, OpsJobRetryResult, OpsJobsReport, PutMemoryBody, RecapDeliveryItem, RecapError, RecapHistoryItem, RecapPauseInput, RecapPreview, RecapPreviewInput, RecapSettings, RecapSettingsInput, RecapTestSendResult, RecapVerifyConfirmInput, RecapVerifyStartInput, RecapVerifyStartResult, ReplaceTransactionSplitsInput, ReviewResolution, RunCategorizationInput, TransactionSplits, UndoDecisionResult, UpdateAiBudgetBody, UpdateLearnedRuleInput, UpdateWishlistItemBody, WaysBack, WeekAdjustment, WishlistEvaluationResult, WishlistItem, WishlistList } from "./api.schemas";
 import { customFetch } from "../../custom-fetch";
 import type { ErrorType, BodyType } from "../../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -347,6 +347,29 @@ export declare function useListRecapHistory<TData = Awaited<ReturnType<typeof li
     queryKey: QueryKey;
 };
 /**
+ * @summary The debt plan — strategies, debt-free range, milestones, planned vs confirmed
+ */
+export declare const getGetDebtPlanUrl: () => string;
+export declare const getDebtPlan: (options?: RequestInit) => Promise<DebtPlan>;
+export declare const getGetDebtPlanQueryKey: () => readonly ["/api/debt-plan"];
+export declare const getGetDebtPlanQueryOptions: <TData = Awaited<ReturnType<typeof getDebtPlan>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDebtPlan>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getDebtPlan>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetDebtPlanQueryResult = NonNullable<Awaited<ReturnType<typeof getDebtPlan>>>;
+export type GetDebtPlanQueryError = ErrorType<unknown>;
+/**
+ * @summary The debt plan — strategies, debt-free range, milestones, planned vs confirmed
+ */
+export declare function useGetDebtPlan<TData = Awaited<ReturnType<typeof getDebtPlan>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDebtPlan>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
  * computePosition (avalanche-core) over one read of the household: the forecast curve computeCashSignal builds (the spine's own horizon of 90 days), the current Sunday–Saturday week classified by classifyMovement, the weekly cap from allowance_plans and the bank's freshness. The spine's `position` is the same call; an integration test asserts they agree to the cent. Never carries credit, a limit, a debt balance or an amount owed.
  * @summary How much is safe to spend now, until payday and this week (the money position)
  */
@@ -421,6 +444,37 @@ export declare function useListAllowancePlans<TData = Awaited<ReturnType<typeof 
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * @summary Set a plan's amount (household owner only; writes source "owner")
+ */
+export declare const getUpdateAllowancePlanUrl: (id: string) => string;
+export declare const updateAllowancePlan: (id: string, allowancePlanUpdate: AllowancePlanUpdate, options?: RequestInit) => Promise<AllowancePlan>;
+export declare const getUpdateAllowancePlanMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateAllowancePlan>>, TError, {
+        id: string;
+        data: BodyType<AllowancePlanUpdate>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof updateAllowancePlan>>, TError, {
+    id: string;
+    data: BodyType<AllowancePlanUpdate>;
+}, TContext>;
+export type UpdateAllowancePlanMutationResult = NonNullable<Awaited<ReturnType<typeof updateAllowancePlan>>>;
+export type UpdateAllowancePlanMutationBody = BodyType<AllowancePlanUpdate>;
+export type UpdateAllowancePlanMutationError = ErrorType<void>;
+/**
+ * @summary Set a plan's amount (household owner only; writes source "owner")
+ */
+export declare const useUpdateAllowancePlan: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateAllowancePlan>>, TError, {
+        id: string;
+        data: BodyType<AllowancePlanUpdate>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof updateAllowancePlan>>, TError, {
+    id: string;
+    data: BodyType<AllowancePlanUpdate>;
+}, TContext>;
 /**
  * computeWaysBack (avalanche-core) over the money position (the same read GET /money/position makes) and the rows of this week and the 8 before it, classified by classifyMovement. Code only; every amount is WHOLE CENTS (integers). Read-only: nothing is written.
  * @summary A way back when the week is over — how far over, what is left per day, what to trim, next week carried
