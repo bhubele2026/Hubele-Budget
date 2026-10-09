@@ -17,6 +17,8 @@ export type AttentionKind = "reconnect" | "stale" | "over" | "bill" | "review" |
 
 export interface Attention {
   kind: AttentionKind;
+  /** Clipped to ATTENTION_TITLE_MAX, except a title the caller worded itself
+   *  (`DueBill.label`), which stays whole so it matches its other surfaces. */
   title: string;
   detail?: string;
   action?: { label: string; href: string };
@@ -35,6 +37,9 @@ export interface DueBill {
 }
 
 export const ATTENTION_TITLE_MAX = 60;
+
+/** Internal: marks a title the caller already worded (never clipped). */
+const WHOLE = Symbol("whole");
 
 function toAmount(v: string | number | null | undefined): number | null {
   if (v == null || v === "") return null;
@@ -80,7 +85,7 @@ export function attentionItems(i: {
    *  login is just as much a reconnect — new charges stop coming in. */
   reauthBanks?: readonly string[];
 }): Attention[] {
-  const out: Attention[] = [];
+  const out: Array<Attention & { [WHOLE]?: boolean }> = [];
   const reauth = [...new Set(i.reauthBanks ?? [])];
   if (i.bank?.staleReason === "refresh_failed") {
     out.push({
@@ -118,7 +123,7 @@ export function attentionItems(i: {
     const first = i.dueSoon[0]!;
     const when = first.dueOn === i.today ? "today" : "tomorrow";
     if (i.dueSoon.length === 1 && first.label) {
-      out.push({ kind: "bill", title: first.label, detail: `Due ${when}`, action: { label: "See bills", href: "/bills" } });
+      out.push({ kind: "bill", title: first.label, detail: `Due ${when}`, action: { label: "See bills", href: "/bills" }, [WHOLE]: true });
     } else {
       const title =
         i.dueSoon.length === 1
@@ -136,7 +141,7 @@ export function attentionItems(i: {
     });
   }
   if (out.length === 0) out.push({ kind: "nothing", title: "Nothing needs you today" });
-  return out.map((a) => ({ ...a, title: clip(a.title, ATTENTION_TITLE_MAX) }));
+  return out.map(({ [WHOLE]: whole, ...a }) => ({ ...a, title: whole ? a.title : clip(a.title, ATTENTION_TITLE_MAX) }));
 }
 
 /**
@@ -156,8 +161,9 @@ export type HeaderAction =
 
 /**
  * Order (lead, 2026-10-09): Link a bank → Reconnect → the forecast runs short
- * → Pick a way back → Afford. With no bank linked there is nothing to afford
- * against: the action is the app's existing link path (Settings › Banks).
+ * → Pick a way back → Afford. With no bank linked the action is the app's
+ * existing link path (Settings › Banks); the dashboard keeps Afford beside it
+ * as the quiet second control, whose sheet says what it needs.
  * `runsShort` is the caller's reading of the low point (`lowPointView`: under
  * the buffer, or below zero, inside the horizon).
  */

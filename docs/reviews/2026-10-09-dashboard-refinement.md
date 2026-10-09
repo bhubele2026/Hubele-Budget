@@ -50,7 +50,7 @@ Desktop uses 12 columns. On a phone it is one column, in this order:
   4. Pick a way back (the week is over its plan)
   5. "Can we afford something?"
 
-  When anything but Afford takes the slot, Afford stays beside it as a quiet text control.
+  When anything but Afford takes the slot (no bank linked included), Afford stays beside it as a quiet text control, as on the old dashboard; with no bank its sheet says what it needs.
 - **Phone title (not changed):** on a phone the shell names the page between the logo and the account button. `/home` belongs to no nav area, so C12's shell-wide fallback (`components/layout.tsx:619-622`, `currentTitle`) prints "H2 Budget" beside the "Budget" wordmark. A one-line special case (`location === "/home" ? "Home"`) would fix it. It is shell behaviour shared by every unowned route, so I left it as a proposal.
 - **The morning text** is behind a disclosure, and the request is sent only when it is opened (`RecapPreview.tsx`, lazy, using `previewRecap` from `/features`). Before, the landing posted `/recap/preview` on every open. The chip reads "Written from your numbers · AI is off" (or "Model draft…" / "Demo draft" when a model wrote it), never "TEMPLATE".
 
@@ -195,10 +195,26 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 | 6. Phone title "H2 Budget" | Not changed. It is C12's shell-wide fallback for a route with no nav area (see Header); the one-line `/home` → "Home" case is a proposal |
 | 7. Ribbon | Done (harness only): bottom-left, in the kit and in this worktree's copy. The kit also gains `checks.sh` + `e2e/zz-fixture/checks.spec.ts` (the Phase 3 checks below) |
 
+## Independent review round (12 confirmed, 0 blockers; lead's decisions)
+| # | Finding | Outcome |
+|---|---|---|
+| 1 | Accounts "Owed" was the raw creditor balance; the tile nets pending payments | Owed is `effectiveDebtBalance(debt)` for an account on the debt list ($1,500 reported − $300 paid → $1,200), and "Paid, not posted" still says what was netted. Test: the Accounts rows add up to `remainingDebtTotal` and to the tile's "$X left" on one screen |
+| 2 | Income-in-expense: a capped pull, cap disclosed only on a match | No server endpoint yet (follow-up, the lead's call). A full window (100 rows) now always says "None in the newest 100 rows; older rows of the last 30 days were not checked" (or "newest 100 rows only" beside a match), and the all-clear can never show while the window is capped |
+| 3 | The pre-Clerk skeleton was ~10rem shorter than the page's | `DashboardSkeleton` now draws the page's own `BelowFoldSkeleton` slots (same `BELOW_FOLD` spans and min-heights) plus the accounts panel's loading shape. Test: every slot's span and min-height, in page order, equal to the page before its chunk lands |
+| 4 | "Nothing needs you today" while findings / the recent window / the cash signal loaded or failed | Each is its own source with a row: "loading…" or "did not load · Try again". The all-clear waits for all of them |
+| 5 | A spine failure hid the findings (and their Why / Resolve / Dismiss) | Only the spine's rows wait on it ("Your bank balance and this week's plan", "Charges to match"). The queues, the income check and What H2 noticed render from their own queries |
+| 6 | A debt minimum scheduled from the debt itself had no kind word | `debt:<id>` events resolve to the debt ("card payment" / "debt payment"); `avalanche:extra` reads "debt payment". Fixture event `debt:d1` in the test |
+| 7 | No Afford with no bank linked | Afford stays as the quiet second control beside "Link a bank" (the note now matches) |
+| 8 | The `.surface` ring fix killed `shadow-lift` on the drag ghosts | New raised step `.surface-raised` (and `.surface.shadow-lift`) after `.surface` in the utilities layer: the ring plus `--shadow-milled-lift`. Mapping rules' overlay and dragged row and the Forecast inbox overlay use it. CSS test: it composes the ring with the lift, sits after `.surface`, and the three sites use it |
+| 9 | Activity rows were focusable `<li>`s with a click handler | In both `TxnTable` layouts the description is a real `<Link>`: a named, native target, Enter, and Space too. It is one focus stop per row, and a click anywhere else on the row still opens it (no double history entry) |
+| 10 | Needs attention clipped the obligation's words at 60 characters | A title the caller worded (`DueBill.label`) is never clipped; other titles still clip at 60. Long-label test |
+| 11 | The 3 / 7 / 2 counts were no longer asserted | Restored, each count beside its own queue |
+| 12 | The accuracy note contradicted this branch | One-line "superseded by the refinement note's Header section" at its lines 34, 58 and 141 |
+
 ## Relocation map (every action on the old dashboard)
 | Old action / figure (panel) | New location |
 |---|---|
-| "Can we afford something?" (top) | Header action; a quiet second control when Reconnect / Pick a way back hold the slot. Also on /budget and /allowances |
+| "Can we afford something?" (top) | Header action; a quiet second control whenever another action holds the slot (Link a bank, Reconnect, See where it runs short, Pick a way back). Also on /budget and /allowances |
 | Briefing next action: Reconnect → /settings | Header **Reconnect** (now also for a card bank's expired login); Needs attention "Now" row |
 | Briefing: Sync (stale) → /settings | Needs attention "The bank balance is out of date" → /settings; per-bank Sync in Accounts |
 | Briefing: Pick a way back (sheet) | Header action when over plan |

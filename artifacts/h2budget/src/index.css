@@ -732,6 +732,19 @@
       var(--tw-ring-shadow, 0 0 #0000),
       var(--shadow-milled-lift);
   }
+  /* THE RAISED STEP: a surface that is picked up (a drag overlay, a row being
+     dragged) sits at the lift elevation, ring kept. It has to live here, after
+     `.surface`: a plain `shadow-lift` utility on a `.surface` is generated
+     EARLIER in this layer and loses to `.surface` at equal specificity, which
+     silently took the "picked up" cue away from Mapping rules and the
+     Forecast inbox. `.surface.shadow-lift` keeps any old call site lifting. */
+  .surface-raised,
+  .surface.shadow-lift {
+    box-shadow:
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      var(--shadow-milled-lift);
+  }
 
   /* ── The shell scroll contract (see the variables on `:root`) ─────────────
      Utilities, not components, on purpose: a parent's `space-y-*` writes

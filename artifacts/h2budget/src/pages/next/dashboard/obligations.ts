@@ -46,7 +46,12 @@ export function upcomingRows(i: {
     const amount = Number(e.amount);
     if (!Number.isFinite(amount) || amount >= 0 || e.date < i.today) return;
     const item = e.itemId ? byItem.get(e.itemId) : undefined;
-    const debt = item?.debtId ? debtById.get(item.debtId) : undefined;
+    // A debt minimum scheduled from the debt itself (no recurring item) rides
+    // on the curve as `debt:<debtId>` (api-server lib/debtMinSchedule.ts), and
+    // the Avalanche extra as `avalanche:extra`: both are debt payments.
+    const scheduledDebt = e.itemId?.startsWith("debt:") ? debtById.get(e.itemId.slice("debt:".length)) : undefined;
+    const debt = (item?.debtId ? debtById.get(item.debtId) : undefined) ?? scheduledDebt;
+    const isExtra = e.itemId === "avalanche:extra";
     const hook = e.itemId ? hooks.get(e.itemId) : undefined;
     rows.push({
       key: e.occurrenceKey ?? `${e.itemId ?? "x"}-${e.date}-${idx}`,
@@ -54,7 +59,7 @@ export function upcomingRows(i: {
       label: e.label,
       amount,
       frequency: frequencyWord(hook?.cadence ?? item?.frequency),
-      kind: debt ? ((debt.type ?? "").toLowerCase().includes("credit") ? "card" : "debt") : "bill",
+      kind: debt ? ((debt.type ?? "").toLowerCase().includes("credit") ? "card" : "debt") : isExtra ? "debt" : "bill",
       hook: hook ? { storedAmount: Math.abs(Number(hook.storedAmount)), cadence: hook.cadence } : null,
     });
   });

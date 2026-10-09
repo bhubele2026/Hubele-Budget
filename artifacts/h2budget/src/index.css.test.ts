@@ -324,3 +324,26 @@ describe("index.css — the small-alarm-TEXT rust stays readable and stays rust,
     expect(CHART.orangeDeep).toBe("#e16d3e");
   });
 });
+
+describe("index.css — a picked-up surface still lifts (review #8)", () => {
+  const shadowOf = (sel: string) => valuesOf("box-shadow").filter((d) => d.stack[d.stack.length - 1] === sel);
+  it("the raised step (and `.surface.shadow-lift`) compose the ring with the lift shadow, AFTER `.surface` in the same layer", () => {
+    const base = shadowOf(".surface")[0]!;
+    const raised = shadowOf(".surface-raised,\n  .surface.shadow-lift")[0] ?? shadowOf(".surface-raised, .surface.shadow-lift")[0];
+    expect(raised, "the raised rule exists").toBeTruthy();
+    expect(raised!.stack[0]).toBe("@layer utilities");
+    expect(raised!.stack[0]).toBe(base.stack[0]);
+    expect(raised!.at).toBeGreaterThan(base.at);
+    const v = raised!.value.replace(/\s+/g, " ");
+    expect(v).toBe("var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--shadow-milled-lift)");
+  });
+  it("the three drag sites use it", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const root = CSS_PATH!.replace(/index\.css$/, "");
+    for (const f of ["pages/mapping-rules.tsx", "pages/forecast/InboxCardView.tsx", "pages/mapping-rules/SortableRuleRow.tsx"]) {
+      const src = readFileSync(resolve(root, f), "utf8");
+      expect(src, f).toContain("surface-raised");
+    }
+  });
+});

@@ -1,4 +1,5 @@
-import { useLocation } from "wouter";
+import type { KeyboardEvent, MouseEvent } from "react";
+import { Link, useLocation } from "wouter";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { AccountIdentity } from "@/lib/accountIdentity";
 import { AccountChip } from "./AccountChip";
@@ -28,9 +29,40 @@ export function shortDate(iso: string): string {
   return `${MONTHS[Number(m[2]) - 1] ?? m[2]} ${Number(m[3])}`;
 }
 
+/** The description of a row that opens somewhere: a REAL link, so a keyboard
+ *  or screen-reader user gets a named, native navigation target (Enter, and
+ *  Space as well), one focus stop per row. The rest of the row stays clickable
+ *  with the mouse. */
+function RowLink({ href, children, className }: { href: string; children: string; className?: string }) {
+  const [, navigate] = useLocation();
+  return (
+    <Link
+      href={href}
+      onKeyDown={(e: KeyboardEvent<HTMLAnchorElement>) => {
+        if (e.key === " ") { e.preventDefault(); navigate(href); }
+      }}
+      className={cn("rounded-control hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40", className)}
+      data-testid="txn-row-link"
+    >
+      {children}
+    </Link>
+  );
+}
+
+/** A click anywhere on a row opens it, except on the link itself (which
+ *  navigates on its own: one history entry, not two). */
+function rowClick(href: string | undefined, navigate: (to: string) => void) {
+  if (!href) return undefined;
+  return (e: MouseEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest("a")) return;
+    navigate(href);
+  };
+}
+
 /** Compact ledger: 36 px rows (40 px when not `dense`), an account chip on
- *  every row, pending/posted as a word, category in its own column. Rows with
- *  an `href` are focusable and open on Enter or click.
+ *  every row, pending/posted as a word, category in its own column. A row with
+ *  an `href` carries its description as a link (Enter / Space) and opens on a
+ *  click anywhere.
  *  `layout="list"` draws the SAME rows as two-line list items (description and
  *  amount, then date, account chip, category and status) for a narrow panel,
  *  where six columns would scroll sideways. Nothing is dropped. */
@@ -41,21 +73,21 @@ export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRo
     return (
       <ul className="list-none divide-y divide-brand-line p-0" data-testid="txn-list">
         {rows.map((r) => {
-          const go = r.href ? () => navigate(r.href!) : undefined;
+          const go = rowClick(r.href, navigate);
           return (
             <li
               key={r.id}
               data-testid="txn-row"
-              tabIndex={go ? 0 : undefined}
               onClick={go}
-              onKeyDown={go ? (e) => { if (e.key === "Enter") go(); } : undefined}
               className={cn(
                 "px-4 py-2",
-                go && "cursor-pointer transition-colors duration-[calc(96ms*var(--anim-speed))] hover:bg-platinum-3 focus-visible:bg-platinum-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-navy/40",
+                go && "cursor-pointer transition-colors duration-[calc(96ms*var(--anim-speed))] hover:bg-platinum-3 focus-within:bg-platinum-3",
               )}
             >
               <div className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0 text-body text-brand-ink [overflow-wrap:anywhere]">{r.description}</span>
+                <span className="min-w-0 text-body text-brand-ink [overflow-wrap:anywhere]">
+                  {r.href ? <RowLink href={r.href}>{r.description}</RowLink> : r.description}
+                </span>
                 <span className={cn("shrink-0 font-mono text-label tabular-nums", r.amount < 0 ? "text-brand-ink" : "text-brand-navy")}>
                   {formatDisplayAmount(r.amount)}
                 </span>
@@ -90,22 +122,22 @@ export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRo
         </thead>
         <tbody>
           {rows.map((r) => {
-            const go = r.href ? () => navigate(r.href!) : undefined;
+            const go = rowClick(r.href, navigate);
             return (
               <tr
                 key={r.id}
                 data-testid="txn-row"
-                tabIndex={go ? 0 : undefined}
                 onClick={go}
-                onKeyDown={go ? (e) => { if (e.key === "Enter") go(); } : undefined}
                 className={cn(
                   h,
                   "transition-colors duration-[calc(96ms*var(--anim-speed))]",
-                  go && "cursor-pointer hover:bg-platinum-3 focus-visible:bg-platinum-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-navy/40",
+                  go && "cursor-pointer hover:bg-platinum-3 focus-within:bg-platinum-3",
                 )}
               >
                 <td className={cn(td, "whitespace-nowrap py-1 font-mono tabular-nums text-neutral-600")}>{shortDate(r.date)}</td>
-                <td className={cn(td, "max-w-[22rem] truncate py-1")}>{r.description}</td>
+                <td className={cn(td, "max-w-[22rem] truncate py-1")}>
+                  {r.href ? <RowLink href={r.href}>{r.description}</RowLink> : r.description}
+                </td>
                 <td className={cn(td, "py-1")}><AccountChip identity={r.identity} size="sm" /></td>
                 <td className={cn(td, "py-1 text-neutral-600")}>
                   {r.category || "Uncategorized"}

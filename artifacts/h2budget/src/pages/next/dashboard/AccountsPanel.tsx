@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import type { PlaidItemDetail, PlaidAccount } from "@workspace/api-client-react";
 import { Panel } from "@/components/next";
 import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
-import { pendingPaymentTotalOf } from "@/lib/debtBalance";
+import { effectiveDebtBalance, pendingPaymentTotalOf } from "@/lib/debtBalance";
 import { useSpine } from "@/hooks/useSpine";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { FreshnessLine } from "@/components/data-state";
@@ -121,7 +121,11 @@ export default function AccountsPanel() {
                 // One basis per row: the debt row when the account is on the
                 // debt list, else Plaid's stored liability figures. A field
                 // neither source has is left out, never drawn as $0.
-                const owed = debt ? debt.balance : la?.balance ?? null;
+                // ⭐ A debt's Owed is NETTED of its pending payments
+                // (`effectiveDebtBalance`, the app's one balance basis), so the
+                // rows add up to the summary tile's "$X left" on the same
+                // screen; "Paid, not posted" says what was netted.
+                const owed = debt ? effectiveDebtBalance(debt) : la?.balance ?? null;
                 const minPay = debt ? (Number(debt.minPayment) > 0 ? debt.minPayment : null) : la?.minPayment && Number(la.minPayment) > 0 ? la.minPayment : null;
                 const dueDay = debt ? debt.dueDay ?? null : la?.suggestedDebt?.dueDay ?? null;
                 const noBank = isCash && !spine?.bank.source && !spine?.bank.asOfDate;

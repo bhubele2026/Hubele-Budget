@@ -112,7 +112,11 @@ export default function DashboardHeader() {
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="dash-header-action" data-kind={action.kind}>
           {action.kind === "link" ? (
-            <Link href={action.href} className={btn} data-testid="dash-link-bank">{action.label}</Link>
+            <>
+              <Link href={action.href} className={btn} data-testid="dash-link-bank">{action.label}</Link>
+              {/* Parity with the old dashboard: Afford stays reachable; its sheet says what it needs. */}
+              <AffordLauncher className={QUIET} />
+            </>
           ) : action.kind === "short" ? (
             <>
               <Link href={action.href} className={btn} data-testid="dash-runs-short">{action.label}</Link>

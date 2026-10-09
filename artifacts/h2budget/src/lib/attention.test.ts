@@ -114,3 +114,15 @@ describe("a due-soon payment with words built by the caller", () => {
     expect(items[0]).toMatchObject({ kind: "bill", title: "Weekly Spend · card payoff $477.57 (plan $450)", detail: "Due tomorrow" });
   });
 });
+
+describe("a caller-worded title is never clipped (it must match its other surfaces)", () => {
+  it("keeps a long hook label whole, while ordinary titles still clip at 60", () => {
+    const label = "Amex Platinum weekly payoff · card payoff $1,477.57 (plan $1,450)";
+    expect(label.length).toBeGreaterThan(60);
+    const items = attentionItems({ ...base, dueSoon: [{ name: "Amex Platinum weekly payoff", amount: 1477.57, dueOn: "2026-10-08", label }] });
+    expect(items[0]!.title).toBe(label);
+    expect(Object.getOwnPropertySymbols(items[0]!)).toEqual([]); // the internal marker never leaks
+    const plain = attentionItems({ ...base, dueSoon: [{ name: "A very long bill name that goes on and on and on", amount: 10, dueOn: "2026-10-08" }] });
+    expect(plain[0]!.title.length).toBeLessThanOrEqual(60);
+  });
+});

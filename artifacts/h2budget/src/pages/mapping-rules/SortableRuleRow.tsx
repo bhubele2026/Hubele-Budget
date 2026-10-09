@@ -104,7 +104,7 @@ export function SortableRuleRow({
       // inline style, and a class-level transform transition would smear
       // every drag frame behind the pointer.
       className={`flex items-center gap-2 px-3 py-2 transition-colors hover:bg-platinum-2 ${stateBg} ${
-        isDragging ? "surface shadow-lift ring-2 ring-brand-navy/40" : ""
+        isDragging ? "surface surface-raised ring-2 ring-brand-navy/40" : ""
       }`}
       data-testid={`rule-row-${rule.id}`}
       data-focused={isFocused ? "true" : undefined}

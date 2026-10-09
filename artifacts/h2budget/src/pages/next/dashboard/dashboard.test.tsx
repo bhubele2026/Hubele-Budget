@@ -61,6 +61,7 @@ import AttentionPanel from "./AttentionPanel";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { bankLines } from "./bankState";
 import { cleanRecap, recapSourceWords } from "./recapWords";
+import { remainingDebtTotal } from "@/lib/debtBalance";
 
 const spine = (o: Record<string, unknown> = {}) => ({
   asOf: "2026-10-08T15:00:00Z",
@@ -146,6 +147,8 @@ describe("header", () => {
     expect(screen.getByTestId("dash-header-action").getAttribute("data-kind")).toBe("link");
     expect(screen.getByTestId("dash-link-bank").getAttribute("href")).toBe("/settings");
     expect(screen.getByTestId("dash-facts").textContent).toContain("No bank is linked yet");
+    // Afford stays reachable as the quiet second control (parity with the old dashboard).
+    expect(screen.getByTestId("afford-open").textContent).toBe("Can we afford something?");
   });
   it("the forecast running short takes the one action (after Reconnect, before Pick a way back)", () => {
     h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);
@@ -418,10 +421,28 @@ describe("accounts list", () => {
     for (const b of ["a", "b", "c", "d"]) expect(screen.getAllByTestId(`dash-sync-${b}`)).toHaveLength(1);
     expect(screen.getByTestId("dash-all-accounts").getAttribute("href")).toBe("/next/accounts");
   });
-  it("discloses a payment the card has not posted yet", () => {
+  it("nets a payment the card has not posted yet, and says so", () => {
     h.Q.debts = ok([debt("d1", "Amex Platinum", "1500.00", { plaidAccountId: "x1", pendingPaymentTotal: "300.00", pendingPaymentCount: 1 })]);
     wrap(<AccountsPanel />);
-    expect(screen.getByTestId("dash-account-pending").textContent).toContain("$300.00");
+    const row = screen.getAllByTestId("dash-account")[2]!;
+    expect(within(row).getByTestId("dash-account-balance").textContent).toBe("$1,200.00"); // $1,500 reported − $300 paid
+    expect(within(row).getByTestId("dash-account-pending").textContent).toContain("$300.00");
+  });
+  it("⭐ parity: the Accounts rows' Owed add up to the summary tile's remainingDebtTotal, on one screen", () => {
+    const debts = [
+      debt("d1", "Amex Platinum", "1500.00", { plaidAccountId: "x1", pendingPaymentTotal: "300.00", pendingPaymentCount: 1 }),
+      debt("d2", "Quicksilver", "642.18", { plaidAccountId: "p-k1" }),
+    ];
+    h.Q.debts = ok(debts);
+    h.Q.pos = ok({ reservesHeld: "0.00" });
+    wrap(<><SummaryRow /><AccountsPanel /></>);
+    const owed = screen.getAllByTestId("dash-account-balance")
+      .filter((el) => el.closest("[data-testid='dash-account']")?.querySelector("[data-testid='dash-account-facts'] dt")?.textContent === "Owed")
+      .map((el) => Number(el.textContent!.replace(/[$,]/g, "")));
+    const sum = Math.round(owed.reduce((a, b) => a + b, 0) * 100) / 100;
+    expect(sum).toBe(Math.round(remainingDebtTotal(debts as never) * 100) / 100); // 1,200.00 + 642.18
+    expect(sum).toBe(1842.18);
+    expect(screen.getByTestId("dash-debt-left").textContent).toContain("$1,842.18 left across");
   });
   it("shows a skeleton while loading and an error when it failed", () => {
     h.Q.items = loading;
@@ -447,6 +468,7 @@ describe("coming up", () => {
       { date: "2026-10-14", label: "Car loan", amount: "-300.00", itemId: "r4" },
       { date: "2026-10-20", label: "Phone", amount: "-80.00", itemId: "r5" },
       { date: "2026-10-30", label: "Sixth", amount: "-10.00", itemId: "r7" },
+      { date: "2026-10-31", label: "Visa minimum", amount: "-35.00", itemId: "debt:d1" },
       { date: "2026-10-01", label: "Already past", amount: "-10.00", itemId: "r8" },
     ],
   };
@@ -471,6 +493,14 @@ describe("coming up", () => {
     expect(screen.getByTestId("dash-up-payday").textContent).toContain("Paycheck"); // …it is the footnote
     expect(screen.getByTestId("dash-up-from").textContent).toContain("Total Checking");
     expect(screen.getByTestId("dash-all-bills").getAttribute("href")).toBe("/bills");
+  });
+  it("a debt minimum scheduled from the debt itself (itemId debt:<id>) is a card or debt payment too", () => {
+    const rows = upcomingRows({ signal: signal as never, recurring: [], debts: [{ id: "d1", type: "credit_card" }, { id: "d2", type: "auto" }], today: "2026-10-08", count: 20 });
+    const visa = rows.find((r) => r.label === "Visa minimum")!;
+    expect(visa.kind).toBe("card");
+    expect(Math.abs(visa.amount)).toBe(35);
+    const extra = upcomingRows({ signal: { events: [{ date: "2026-10-09", label: "Avalanche extra", amount: "-200.00", itemId: "avalanche:extra" }] } as never, today: "2026-10-08" })[0]!;
+    expect(extra.kind).toBe("debt");
   });
   it("labels a Weekly Spend hook as the card payoff, with the item's own plan amount", () => {
     wrap(<UpcomingPanel />);
@@ -624,6 +654,9 @@ describe("needs attention", () => {
   beforeEach(() => {
     h.Q.cash = h.Q.cash ?? ok({ account: cashAcct, events: [] });
     h.Q.findings = ok({ findings: [] });
+    h.Q.txns = ok([]);
+    h.Q.cats = ok([]);
+    h.Q.items = ok([]);
   });
   it("one list: the bank, the week, and the two review queues worded distinctly", () => {
     h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "refresh_failed" }, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00" } });
@@ -637,6 +670,12 @@ describe("needs attention", () => {
     expect(screen.getByTestId("dash-review-cats").textContent).toContain("Categories to confirm");
     expect(screen.getByTestId("dash-review-cats").getAttribute("href")).toBe("/review/categories");
     expect(screen.getByTestId("dash-review-dups").getAttribute("href")).toBe("/transactions");
+    // Each count beside its own queue (spine.reviewCount 3 · categories 7 · duplicates 2).
+    expect(screen.getByTestId("dash-review-forecast").textContent).toContain("3");
+    expect(screen.getByTestId("dash-review-cats").textContent).toContain("7");
+    expect(screen.getByTestId("dash-review-dups").textContent).toContain("2");
+    expect(screen.getByTestId("dash-review-forecast").textContent).not.toContain("7");
+    expect(screen.getByTestId("dash-review-cats").textContent).not.toContain("3");
   });
   it("(dash-accuracy) flags income filed under an expense category, by the shared rule, linking to the row", () => {
     h.spine.data = spine({ reviewCount: 0 });
@@ -680,6 +719,50 @@ describe("needs attention", () => {
     h.Q.dups = ok({ duplicateCount: 0 });
     wrap(<AttentionPanel />);
     expect(screen.getByText("Nothing needs you today.")).toBeTruthy();
+  });
+  it("findings, the recent window and the cash signal hold the all-clear while they load, and say so when they fail", () => {
+    h.spine.data = spine({ reviewCount: 0 });
+    h.Q.queue = ok({ total: 0 });
+    h.Q.dups = ok({ duplicateCount: 0 });
+    for (const [key, testid] of [["findings", "dash-findings-pending"], ["txns", "dash-review-income-pending"], ["cash", "dash-att-due-pending"]] as const) {
+      const keep = h.Q[key];
+      h.Q[key] = loading;
+      const a = wrap(<AttentionPanel />);
+      expect(screen.queryByText("Nothing needs you today."), key).toBeNull();
+      expect(screen.getByTestId(testid).textContent, key).toContain("loading");
+      a.unmount();
+      h.Q[key] = failed;
+      const b = wrap(<AttentionPanel />);
+      expect(screen.getByTestId(testid).textContent, key).toContain("did not load");
+      expect(within(screen.getByTestId(testid)).getByRole("button", { name: "Try again" })).toBeTruthy();
+      b.unmount();
+      h.Q[key] = keep;
+    }
+  });
+  it("a spine failure hides only the spine's rows: the queues and the findings (with their actions) still show", () => {
+    h.spine = { data: undefined, state: "failed", refetch: () => {} };
+    h.Q.queue = ok({ total: 7 });
+    h.Q.dups = ok({ duplicateCount: 0 });
+    h.Q.findings = ok({ findings: [{ id: "f1" }] });
+    wrap(<AttentionPanel />);
+    expect(screen.getByTestId("dash-att-spine-pending").textContent).toContain("did not load");
+    expect(screen.getByTestId("dash-review-forecast-pending").textContent).toContain("did not load");
+    expect(screen.getByTestId("dash-review-cats").textContent).toContain("7");
+    expect(screen.getByTestId("findings-stub").textContent).toBe("1 findings");
+    expect(screen.queryByTestId("panel-error")).toBeNull();
+  });
+  it("a full recent window says the income check stopped at the newest 100 rows, and is never 'nothing'", () => {
+    h.spine.data = spine({ reviewCount: 0 });
+    h.Q.queue = ok({ total: 0 });
+    h.Q.dups = ok({ duplicateCount: 0 });
+    h.Q.cats = ok([{ id: "food", name: "Groceries", kind: "expense" }]);
+    h.Q.txns = ok(Array.from({ length: 100 }, (_, i) => ({
+      id: `t${i}`, occurredOn: "2026-10-08", description: `Shop ${i}`, amount: "-5.00", source: "plaid:chase", categoryId: "food",
+      isTransfer: false, debtId: null, isExternalCardPayment: false, reimbursable: false, pfcDetailed: null,
+    })));
+    wrap(<AttentionPanel />);
+    expect(screen.queryByText("Nothing needs you today.")).toBeNull();
+    expect(screen.getByTestId("dash-review-income-capped").textContent).toContain("older rows of the last 30 days were not checked");
   });
 });
 

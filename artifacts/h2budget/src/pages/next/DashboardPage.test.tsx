@@ -86,6 +86,31 @@ describe("Dashboard page (the landing)", () => {
     expect(sk.querySelector(".kpi-grid")).toBeTruthy();
     expect(sk.textContent).toBe("");
   });
+
+  it("(review #3) the pre-Clerk skeleton is the page's own skeleton: same slots, spans and minimum heights, in page order", async () => {
+    const { BELOW_FOLD } = await import("./dashboard/belowFoldSizes");
+    render(<DashboardSkeleton />);
+    const sk = screen.getByTestId("dashboard-skeleton");
+    for (const [k, v] of Object.entries(BELOW_FOLD)) {
+      const slot = sk.querySelector<HTMLElement>(`[data-testid='below-fold-skeleton-${k}']`);
+      expect(slot, k).toBeTruthy();
+      expect(slot!.className, k).toContain(`span-${v.span}`);
+      if (v.minH) expect(slot!.className, k).toContain(v.minH);
+    }
+    const order = Array.from(sk.querySelectorAll("[data-testid^='below-fold-skeleton-'], [data-testid='dashboard-skeleton-accounts']"), (e) => e.getAttribute("data-testid"));
+    expect(order).toEqual([
+      "below-fold-skeleton-forecast", "below-fold-skeleton-upcoming", "dashboard-skeleton-accounts",
+      "below-fold-skeleton-spending", "below-fold-skeleton-debt", "below-fold-skeleton-attention", "below-fold-skeleton-activity",
+    ]);
+    // …and the page, before its lazy chunk lands, draws exactly the same slot skeletons.
+    cleanup();
+    render(<DashboardPage />);
+    for (const [k, v] of Object.entries(BELOW_FOLD)) {
+      const pageSlot = screen.getByTestId(`below-fold-skeleton-${k}`);
+      expect(pageSlot.className, k).toContain(`span-${v.span}`);
+      if (v.minH) expect(pageSlot.className, k).toContain(v.minH);
+    }
+  });
 });
 
 describe("no bank linked: the lazy panels drop their fixed heights together", () => {

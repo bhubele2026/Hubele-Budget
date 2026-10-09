@@ -2481,7 +2481,7 @@ export default function MappingRulesPage() {
               <DragOverlay>
                 {activeDragRule ? (
                   <div
-                    className="surface flex items-center gap-2 rounded-control px-3 py-2 shadow-lift ring-2 ring-brand-navy/40"
+                    className="surface surface-raised flex items-center gap-2 rounded-control px-3 py-2 ring-2 ring-brand-navy/40"
                     data-testid="rule-drag-overlay"
                   >
                     <GripVertical className="h-4 w-4 text-neutral-400" />

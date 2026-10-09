@@ -14,7 +14,7 @@ import { bankLines } from "./bankState";
 import { RECENT_LIMIT, RECENT_WINDOW_DAYS, useCategoriesQ, useDuplicateCountQ, useRecentTxnsQ, useReviewQueueQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
 import { useFoldMinH } from "./foldDensity";
-import { Empty, Gate, LABEL, rise } from "./shared";
+import { Empty, LABEL, rise } from "./shared";
 
 /** (F1) The categorization queue's own screen, Review › Categories. */
 export const CATEGORIZATION_QUEUE_HREF = "/review/categories";
@@ -68,14 +68,18 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 
 /**
  * ⭐ NEEDS ATTENTION: ONE list for everything that waits on the household.
- *   - the bank (reconnect, out of date), the week over its plan, a bill due
- *     today or tomorrow (`lib/attention.ts`, the header's own priority);
- *   - decisions: charges to MATCH to the forecast (`/review`), categories to
- *     CONFIRM (`/review/categories`), possible duplicates (`/transactions`) —
- *     the first two are different queues and are worded so;
- *   - what the proactive monitor noticed, with Why / Resolve / Dismiss.
- * The header shows only the top item; this is the whole list. A source still
- * loading or failed says so, never "nothing waiting".
+ *   - Now: a bank to reconnect (any bank), an out-of-date balance, the week
+ *     over its plan, a payment leaving checking today or tomorrow;
+ *   - Decisions waiting: charges to MATCH to the forecast (`/review`),
+ *     categories to CONFIRM (`/review/categories`), possible duplicates
+ *     (`/transactions`), income filed under an expense category — the first
+ *     two are different queues and are worded so;
+ *   - What H2 noticed: the monitor's findings, with Why / Resolve / Dismiss.
+ * EVERY SOURCE STANDS ON ITS OWN. A source still loading or failed says so in
+ * its own row ("loading…" / "did not load · Try again"), never "nothing
+ * waiting", and the all-clear waits for every one of them. A spine failure
+ * hides only what the spine carries (the bank, the week, the match count):
+ * the queues and the findings, with their actions, still show.
  */
 export default function AttentionPanel() {
   const minH = useFoldMinH("attention");
@@ -89,16 +93,16 @@ export default function AttentionPanel() {
   const recent = useRecentTxnsQ(today, addDaysISO(today, -RECENT_WINDOW_DAYS));
   const cats = useCategoriesQ();
   const s = spine.data;
-  const q = { data: s, isError: spine.state === "failed", refetch: spine.refetch };
 
+  // "Now" stands without the spine: a reconnect comes from the bank items and
+  // a payment due from the cash signal; the spine adds the balance and the week.
   const now = useMemo(() => {
-    if (!s) return [];
-    const rem = s.position.remainingWeek == null ? null : Number(s.position.remainingWeek);
+    const rem = s?.position.remainingWeek == null ? null : Number(s.position.remainingWeek);
     return attentionItems({
-      bank: s.bank,
-      withinPlan: s.position.withinPlan,
+      bank: s?.bank,
+      withinPlan: s?.position.withinPlan ?? null,
       overBy: rem != null && rem < 0 ? -rem : null,
-      dueSoon: dueSoonOf(upcomingRows({ signal: cash.data, today, count: 50 }), today, addDaysISO(today, 1)),
+      dueSoon: cash.data ? dueSoonOf(upcomingRows({ signal: cash.data, today, count: 50 }), today, addDaysISO(today, 1)) : [],
       today,
       reviewCount: 0, // the review queue has its own rows below
       reauthBanks: bankLines(items.data, Date.now()).filter((b) => b.state === "reauth").map((b) => b.institution),
@@ -114,71 +118,106 @@ export default function AttentionPanel() {
       id: t.id, description: t.description, category: byId.get(t.categoryId ?? "")?.name ?? null,
     }));
   }, [recent.data, cats.data]);
+  // The window is the newest RECENT_LIMIT rows: when it is full, older rows of
+  // the 30 days were not checked, and the panel says so whatever it found.
   const misfiledCapped = (recent.data?.length ?? 0) >= RECENT_LIMIT;
   const findings = findingsQ.data?.findings ?? [];
+
+  const spineKnown = s !== undefined;
+  const cashKnown = cash.data !== undefined;
+  const catKnown = queue.data !== undefined;
+  const dupKnown = dups.data !== undefined;
+  const incomeKnown = misfiled !== null;
+  const findingsKnown = findingsQ.data !== undefined;
+
   const review = s?.reviewCount ?? 0;
   const cat = queue.data?.total ?? 0;
   const dup = dups.data?.duplicateCount ?? 0;
-  // (D20) A queue that is still loading or failed is not "nothing waiting".
-  const catKnown = queue.data !== undefined;
-  const dupKnown = dups.data !== undefined;
   const income = misfiled?.length ?? 0;
   const decisions = review + cat + dup + income;
-  const allClear = now.length === 0 && decisions === 0 && catKnown && dupKnown && findings.length === 0;
+  const allKnown = spineKnown && cashKnown && catKnown && dupKnown && incomeKnown && findingsKnown;
+  // Never "nothing" while a source is out, or while the income check was cut short.
+  const allClear = allKnown && !misfiledCapped && now.length === 0 && decisions === 0 && findings.length === 0;
+  const retry = (q: { refetch?: () => unknown }) => (q.refetch ? () => void q.refetch!() : undefined);
+  const spineFailed = spine.state === "failed";
 
   return (
     <Panel title="Needs attention" span={7} variant="static"
       className={cn(rise(BELOW_FOLD.attention.rise), minH, "self-start")} data-testid="dash-attention">
-      <Gate q={q} what="Needs attention" rows={4}>
-        {() =>
-          allClear ? (
-            <Empty>Nothing needs you today.</Empty>
-          ) : (
-            <div className="space-y-4">
-              {now.length ? (
-                <Group title="Now">
-                  {now.map((a) => (
-                    <Row key={a.kind} href={a.action?.href ?? "/settings"} label={a.title} detail={a.detail}
-                      testid={`dash-att-${a.kind}`} tone={a.kind === "reconnect" || a.kind === "over" ? "bad" : undefined} />
-                  ))}
-                </Group>
+      {allClear ? (
+        <Empty>Nothing needs you today.</Empty>
+      ) : (
+        <div className="space-y-4">
+          {now.length || !spineKnown || !cashKnown ? (
+            <Group title="Now">
+              {now.map((a) => (
+                <Row key={a.kind} href={a.action?.href ?? "/settings"} label={a.title} detail={a.detail}
+                  testid={`dash-att-${a.kind}`} tone={a.kind === "reconnect" || a.kind === "over" ? "bad" : undefined} />
+              ))}
+              {!spineKnown ? (
+                <PendingRow failed={spineFailed} label="Your bank balance and this week's plan" testid="dash-att-spine-pending" onRetry={spine.refetch} />
               ) : null}
-              {decisions > 0 || !catKnown || !dupKnown ? (
-                <Group title="Decisions waiting">
-                  {review > 0 ? <Row href="/review" count={review} label="Charges to match to the forecast" testid="dash-review-forecast" /> : null}
-                  {!catKnown ? (
-                    <PendingRow failed={!!queue.isError} label="Categories to confirm" testid="dash-review-cats-pending" onRetry={queue.refetch ? () => void queue.refetch() : undefined} />
-                  ) : cat > 0 ? (
-                    <Row href={CATEGORIZATION_QUEUE_HREF} count={cat} label="Categories to confirm" testid="dash-review-cats" />
-                  ) : null}
-                  {!dupKnown ? (
-                    <PendingRow failed={!!dups.isError} label="Possible duplicates" testid="dash-review-dups-pending" onRetry={dups.refetch ? () => void dups.refetch() : undefined} />
-                  ) : dup > 0 ? (
-                    <Row href="/transactions" count={dup} label="Possible duplicates" testid="dash-review-dups" />
-                  ) : null}
-                  {income > 0 ? (
-                    <Row
-                      href={`/transactions?tx=${encodeURIComponent(misfiled![0]!.id)}${misfiled![0]!.category ? `&category=${encodeURIComponent(misfiled![0]!.category)}` : ""}`}
-                      count={income}
-                      label="Income filed under an expense category"
-                      detail={`${misfiled![0]!.description}${misfiled![0]!.category ? ` · ${misfiled![0]!.category}` : ""}${income > 1 ? ` and ${income - 1} more` : ""} · last ${RECENT_WINDOW_DAYS} days${misfiledCapped ? `, newest ${RECENT_LIMIT} rows` : ""}`}
-                      testid="dash-review-income"
-                    />
-                  ) : null}
-                </Group>
+              {!cashKnown ? (
+                <PendingRow failed={!!cash.isError} label="Payments due today or tomorrow" testid="dash-att-due-pending" onRetry={retry(cash)} />
               ) : null}
-              {findings.length ? (
-                <div data-testid="dash-findings">
-                  <h3 className={cn(LABEL, "px-2")}>What H2 noticed</h3>
-                  <div className="mt-1 px-2">
-                    <FindingsList findings={findings} />
-                  </div>
-                </div>
+            </Group>
+          ) : null}
+          {decisions > 0 || misfiledCapped || !spineKnown || !catKnown || !dupKnown || !incomeKnown ? (
+            <Group title="Decisions waiting">
+              {!spineKnown ? (
+                <PendingRow failed={spineFailed} label="Charges to match to the forecast" testid="dash-review-forecast-pending" onRetry={spine.refetch} />
+              ) : review > 0 ? (
+                <Row href="/review" count={review} label="Charges to match to the forecast" testid="dash-review-forecast" />
               ) : null}
+              {!catKnown ? (
+                <PendingRow failed={!!queue.isError} label="Categories to confirm" testid="dash-review-cats-pending" onRetry={retry(queue)} />
+              ) : cat > 0 ? (
+                <Row href={CATEGORIZATION_QUEUE_HREF} count={cat} label="Categories to confirm" testid="dash-review-cats" />
+              ) : null}
+              {!dupKnown ? (
+                <PendingRow failed={!!dups.isError} label="Possible duplicates" testid="dash-review-dups-pending" onRetry={retry(dups)} />
+              ) : dup > 0 ? (
+                <Row href="/transactions" count={dup} label="Possible duplicates" testid="dash-review-dups" />
+              ) : null}
+              {!incomeKnown ? (
+                <PendingRow
+                  failed={!!recent.isError || !!cats.isError}
+                  label="Income filed under an expense category"
+                  testid="dash-review-income-pending"
+                  onRetry={() => { void recent.refetch(); void cats.refetch(); }}
+                />
+              ) : income > 0 ? (
+                <Row
+                  href={`/transactions?tx=${encodeURIComponent(misfiled![0]!.id)}${misfiled![0]!.category ? `&category=${encodeURIComponent(misfiled![0]!.category)}` : ""}`}
+                  count={income}
+                  label="Income filed under an expense category"
+                  detail={`${misfiled![0]!.description}${misfiled![0]!.category ? ` · ${misfiled![0]!.category}` : ""}${income > 1 ? ` and ${income - 1} more` : ""} · last ${RECENT_WINDOW_DAYS} days${misfiledCapped ? `, newest ${RECENT_LIMIT} rows only` : ""}`}
+                  testid="dash-review-income"
+                />
+              ) : misfiledCapped ? (
+                <li data-testid="dash-review-income-capped" className="px-2 py-2 text-label text-neutral-600">
+                  <span className="block font-medium text-brand-ink">Income filed under an expense category</span>
+                  <span className="block text-micro text-neutral-600">
+                    None in the newest {RECENT_LIMIT} rows; older rows of the last {RECENT_WINDOW_DAYS} days were not checked.
+                  </span>
+                </li>
+              ) : null}
+            </Group>
+          ) : null}
+          {!findingsKnown ? (
+            <Group title="What H2 noticed">
+              <PendingRow failed={!!findingsQ.isError} label="The monitor's findings" testid="dash-findings-pending" onRetry={retry(findingsQ)} />
+            </Group>
+          ) : findings.length ? (
+            <div data-testid="dash-findings">
+              <h3 className={cn(LABEL, "px-2")}>What H2 noticed</h3>
+              <div className="mt-1 px-2">
+                <FindingsList findings={findings} />
+              </div>
             </div>
-          )
-        }
-      </Gate>
+          ) : null}
+        </div>
+      )}
     </Panel>
   );
 }

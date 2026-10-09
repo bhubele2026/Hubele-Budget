@@ -32,6 +32,7 @@ What builder B can call, all pure and tested:
 
 ### Figures that change (sample)
 - Dashboard "Next bill" (`UpcomingPanel.tsx:48`): Weekly Spend · Sat Oct 10 **$2,250.00 → $450.00**.
+  - ⚠️ Superseded by the refinement note's Header section (`2026-10-09-dashboard-refinement.md`): the dashboard's "Next bill" box is gone, and the header quotes the cash-signal event (a hook reads "card payoff $477.57 (plan $450)").
 - Bills overview headline (`pages/bills-overview.tsx:43,88`): same change.
 - Command center "Next bill" tile (`pages/command-center.tsx:386,437`): same change.
 - Morning recap: "Due soon: … Weekly Spend **$2,250 → $450** Sat".
@@ -56,6 +57,7 @@ What builder B can call, all pure and tested:
 - On a day when Weekly Spend is next: `GET /api/spine` → `nextBill.amount` = `"450.00"`.
 - `GET /api/bills/summary` → that row's `monthlyAmount` = `"2250.00"`.
 - The dashboard, Bills overview and recap preview all say $450.
+  - ⚠️ Superseded for the dashboard by the refinement note's Header section (`2026-10-09-dashboard-refinement.md`): it quotes the hook-aware cash-signal event ("Weekly Spend · card payoff $477.57 (plan $450)"); the Bills overview and the recap still say $450.
 
 ---
 
@@ -139,6 +141,7 @@ What builder B can call, all pure and tested:
 
 ### Figures that change (sample)
 - Low point, when below the buffer: **"—" → "$350.00 · Oct 20 · below your $500 buffer · short by $150.00 · stays positive, next 90 days"**.
+  - ⚠️ Superseded on the dashboard by the refinement note's Header section (`2026-10-09-dashboard-refinement.md`): the summary's low point reads "… · short by $X · below zero in N days" and no longer says "stays positive".
 - Tight and ready gain their words. The runway line now shows for `not_yet` too.
 - Spine values are unchanged.
 
