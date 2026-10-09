@@ -278,3 +278,49 @@ describe("index.css — the milled surface keeps its depth under a ring (dashboa
     expect(valuesOf("--text-hero")[0]!.value).toBe("3.25rem");
   });
 });
+
+describe("index.css — the small-alarm-TEXT rust stays readable and stays rust, never brown (owner, 2026-10-09)", () => {
+  const hexOf = (prop: string) => {
+    const v = valuesOf(prop).find((d) => d.stack[0] === "@theme")?.value ?? "";
+    expect(v, `${prop} is a plain hex token`).toMatch(/^#[0-9a-f]{6}$/i);
+    return v;
+  };
+  const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const lum = (h: string) => { const [r, g, b] = rgb(h).map(lin); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
+  const contrast = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x! + 0.05) / (y! + 0.05); };
+  /** OKLCH lightness, chroma, hue (Björn Ottosson's matrices). */
+  const oklch = (h: string) => {
+    const [r, g, b] = rgb(h).map(lin) as [number, number, number];
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+    const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+    const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+    return { L, C: Math.hypot(A, B), H: ((Math.atan2(B, A) * 180) / Math.PI + 360) % 360 };
+  };
+
+  it("clears AA (4.5:1) on the panel top and foot and on the platinum ground, top and foot", () => {
+    const ink = hexOf("--color-bad-ink");
+    for (const ground of ["#ffffff", "#fbfcfe", "#f7f9fc", "#eef3fa"]) {
+      expect(contrast(ink, ground), `${ink} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("is the alarm family at MORE chroma, not a darkened (desaturated) orange: not brown", () => {
+    const ink = oklch(hexOf("--color-bad-ink"));
+    const bad = oklch(hexOf("--color-bad"));
+    expect(ink.C, "chroma at least the alarm orange's").toBeGreaterThanOrEqual(bad.C);
+    expect(Math.abs(ink.H - bad.H), "same hue family (within 8°)").toBeLessThanOrEqual(8);
+    expect(ink.H, "never drifting toward brown/amber (hue ≤ 45°)").toBeLessThanOrEqual(45);
+    expect(ink.L, "not a dark brown (OKLCH L ≥ 0.5)").toBeGreaterThanOrEqual(0.5);
+  });
+
+  it("the alarm fill colour is unchanged, and the chart mirror equals the CSS token", async () => {
+    expect(hexOf("--color-bad").toLowerCase()).toBe("#e16d3e");
+    const { CHART } = await import("./lib/chartTokens");
+    expect(CHART.badInk.toLowerCase()).toBe(hexOf("--color-bad-ink").toLowerCase());
+    expect(CHART.orangeDeep).toBe("#e16d3e");
+  });
+});

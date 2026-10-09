@@ -29,7 +29,7 @@ function Row({ href, label, detail, count, testid, tone }: {
     <li>
       <Link href={href} data-testid={testid} className={ROW_CLASS}>
         <span className="min-w-0">
-          <span className={cn("block font-medium", tone === "bad" ? "text-bad" : "text-brand-ink")}>{label}</span>
+          <span className={cn("block font-medium", tone === "bad" ? "text-bad-ink" : "text-brand-ink")}>{label}</span>
           {detail ? <span className="block text-micro text-neutral-500">{detail}</span> : null}
         </span>
         {count != null ? <span className="shrink-0 font-mono font-semibold tabular-nums text-brand-navy">{count}</span> : <span aria-hidden className="shrink-0 text-neutral-400">›</span>}

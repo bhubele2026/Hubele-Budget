@@ -479,7 +479,7 @@ export function ProjectedBalanceChart({
               <RechartsLabel
                 value={`Cash buffer ${formatCurrency(cashBuffer)}`}
                 position="insideTopLeft"
-                fill={CHART.orangeDeep}
+                fill={CHART.badInk}
                 fontSize={10}
               />
             </ReferenceLine>
@@ -569,7 +569,7 @@ export function ProjectedBalanceChart({
                       x={cx}
                       y={lowLabel === "short" ? cy + 18 : cy - 12}
                       textAnchor={lowAnchor}
-                      fill={CHART.orangeDeep}
+                      fill={CHART.badInk}
                       fontSize={11}
                       fontWeight={600}
                     >

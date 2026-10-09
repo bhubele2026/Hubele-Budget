@@ -38,7 +38,7 @@ function MeterRow({
       </div>
       <div className="text-micro text-neutral-500" data-testid={`${testid}-scope`}>{scope}</div>
       <CssFillMeter value={spent ?? 0} ceiling={hasCap ? cap! : 0} marker={marker} className="mt-1.5" />
-      <div className={cn("mt-1 text-micro", over ? "font-semibold text-bad" : "text-neutral-600")} data-testid={`${testid}-status`}>
+      <div className={cn("mt-1 text-micro", over ? "font-semibold text-bad-ink" : "text-neutral-600")} data-testid={`${testid}-status`}>
         {status}
       </div>
     </div>

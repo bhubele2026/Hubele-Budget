@@ -75,6 +75,18 @@
      drifts the moment one of the two copies is edited. */
   --color-bad-hover: #c2562a;
   --color-bad-bg: #fbeee7;
+  /* SMALL ALARM TEXT ONLY (owner-approved 2026-10-09). #e16d3e is 3.0–3.3:1
+     on the panels and the ground: fine for a 22–30 px figure (large text
+     needs 3:1) and for fills, bars, dots and chips, but it fails AA for the
+     11–13 px words beside it ("below your $500 buffer · short by …",
+     "Needs reconnecting"). A darkened #e16d3e is brown (the owner's rule), so
+     this is a HIGH-CHROMA rust of the same family instead — more chroma than
+     #e16d3e, a touch redder, never desaturated. Measured (WCAG 2.x):
+       panel top #ffffff 5.18:1 · panel foot #fbfcfe 5.04:1 ·
+       ground top #f7f9fc 4.91:1 · ground foot #eef3fa 4.64:1.
+     `index.css.test.ts` keeps it in that class (contrast floor, chroma and
+     hue checks). Mirrored for SVG text as CHART.badInk (chartTokens.ts). */
+  --color-bad-ink: #c2410c;
   --color-info: #19315b;
   --color-info-bg: #eef3fa;
 

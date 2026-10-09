@@ -93,7 +93,7 @@ export default function ForecastPanel() {
                   {view!.lowestPoint ? (
                     <span data-testid="dash-forecast-low">
                       Low point in these {days} days:{" "}
-                      <span className={cn("font-mono font-semibold tabular-nums", view!.lowestPoint.y < view!.buffer ? "text-bad" : "text-brand-ink")}>
+                      <span className={cn("font-mono font-semibold tabular-nums", view!.lowestPoint.y < view!.buffer ? "text-bad-ink" : "text-brand-ink")}>
                         {money(view!.lowestPoint.y)}
                       </span>{" "}
                       on {weekdayLabel(view!.lowestPoint.rawDate)}

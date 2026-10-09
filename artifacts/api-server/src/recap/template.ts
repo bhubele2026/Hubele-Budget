@@ -46,11 +46,18 @@ function planLine(f: RecapFacts): string | null {
   }
 }
 
+/**
+ * `availableUntilPayday` in the dashboard's own words (refinement, owner-approved
+ * 2026-10-09): "Checking covers $X until <weekday>." It used to read "Room in
+ * the plan", which the dashboard's cash panel used for a DIFFERENT figure
+ * (`safeToSpendNow`, now "Room to spend"). Two characters shorter than before,
+ * so the 240-character budget is unchanged.
+ */
 function roomLine(f: RecapFacts): string | null {
   const free = f.position.availableUntilPayday;
   if (free === null) return null;
   const until = f.position.horizonKind === "payday" && f.position.paydayWeekday ? f.position.paydayWeekday : "Saturday";
-  return `Room in the plan: ${usd(free)} until ${until}.`;
+  return `Checking covers ${usd(free)} until ${until}.`;
 }
 
 function billsLine(f: RecapFacts): string | null {

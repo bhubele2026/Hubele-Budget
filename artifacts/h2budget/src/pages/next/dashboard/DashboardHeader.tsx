@@ -103,9 +103,8 @@ export default function DashboardHeader() {
                     className={cn("mr-1.5 inline-block size-1.5 rounded-full align-middle", b.state === "ok" ? "bg-acct-checking" : b.state === "stale" || b.state === "never" ? "bg-neutral-400" : "bg-bad")}
                   />
                   <span className="font-semibold text-neutral-700">{b.institution}</span>{" "}
-                  {/* The alarm orange is 3:1 on the ground at 11 px (axe: color-contrast), so the
-                      dot carries the colour and the words carry the weight. */}
-                  <span className={cn(b.state === "reauth" || b.state === "failed" ? "font-semibold text-neutral-800" : undefined)}>· {b.words}</span>
+                  {/* Small alarm words take the rust (--color-bad-ink, 4.6–5.2:1); the dot keeps #e16d3e. */}
+                  <span className={cn(b.state === "reauth" || b.state === "failed" ? "font-semibold text-bad-ink" : undefined)}>· {b.words}</span>
                 </li>
               ))}
             </ul>

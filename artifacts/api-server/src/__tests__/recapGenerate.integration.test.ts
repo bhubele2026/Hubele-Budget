@@ -60,7 +60,7 @@ describe("a stored recap", () => {
     expect(out.recap).toMatchObject({
       source: "model",
       status: "drafted",
-      promptVersion: "recap.v2",
+      promptVersion: "recap.v3",
       forDate: FOR_DATE,
       userId: A.userId,
       householdId: A.householdId,
@@ -76,7 +76,7 @@ describe("a stored recap", () => {
     expect(runs[0]!.summary).toBe("model draft, 1 call");
     const usage = await usageRows(A);
     expect(usage).toHaveLength(1);
-    expect(usage[0]).toMatchObject({ task: "recap", status: "ok", promptVersion: "recap.v2", runId: runs[0]!.id });
+    expect(usage[0]).toMatchObject({ task: "recap", status: "ok", promptVersion: "recap.v3", runId: runs[0]!.id });
   });
 
   it("sends the model the facts as data, with no row ids and no merchant strings", async () => {

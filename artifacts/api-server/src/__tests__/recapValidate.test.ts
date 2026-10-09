@@ -216,12 +216,12 @@ describe("template branches", () => {
       nextStep: "review",
     };
     expect(renderRecapTemplate(f)).toBe(
-      "Yesterday: $92 spent (Groceries $50, Dining $12). Room in the plan: $1,234 until Fri. On track this week. 1 charge needs a look. Due soon: Electric $90 tomorrow.",
+      "Yesterday: $92 spent (Groceries $50, Dining $12). Checking covers $1,234 until Fri. On track this week. 1 charge needs a look. Due soon: Electric $90 tomorrow.",
     );
   });
 
   it("no spending: says nothing was spent only when the bank is fresh", () => {
-    expect(renderRecapTemplate(quiet)).toBe("Yesterday: nothing spent. Room in the plan: $1,234 until Fri. On track this week.");
+    expect(renderRecapTemplate(quiet)).toBe("Yesterday: nothing spent. Checking covers $1,234 until Fri. On track this week.");
   });
 
   it("stale: says how old the bank data is and never claims nothing was spent", () => {
@@ -261,7 +261,7 @@ describe("template branches", () => {
       position: { ...quiet.position, horizonKind: "week_end", paydayDate: null, paydayWeekday: null },
       weekToDate: { spent: 0, cap: null, remainingWeek: null, withinPlan: null },
     });
-    expect(t).toBe("Yesterday: nothing spent. Room in the plan: $1,234 until Saturday.");
+    expect(t).toBe("Yesterday: nothing spent. Checking covers $1,234 until Saturday.");
   });
 
   it("at most one next step and at most one finding; an already-surfaced or stale-bank finding is not repeated", () => {

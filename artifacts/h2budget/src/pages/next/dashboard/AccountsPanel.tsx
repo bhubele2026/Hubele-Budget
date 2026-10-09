@@ -143,7 +143,7 @@ export default function AccountsPanel() {
                         </Link>
                         <div className="mt-0.5 text-micro text-neutral-500" data-testid="dash-account-fresh">
                           {st === "reauth" ? (
-                            <span className="font-semibold text-bad" data-testid="dash-account-state">
+                            <span className="font-semibold text-bad-ink" data-testid="dash-account-state">
                               Needs reconnecting
                               {item.lastSyncErrorCode ? (
                                 <span className="font-normal text-neutral-600" data-testid="dash-account-reason">
@@ -157,7 +157,7 @@ export default function AccountsPanel() {
                             <span data-testid="dash-account-state"><FreshnessLine bank={spine.bank} /></span>
                           ) : (
                             <>
-                              <span className={cn("font-semibold", st === "ok" ? "text-neutral-600" : "text-bad")} data-testid="dash-account-state">
+                              <span className={cn("font-semibold", st === "ok" ? "text-neutral-600" : "text-bad-ink")} data-testid="dash-account-state">
                                 {STATE_WORD[st]}
                               </span>
                               {through ? <span> · data through {through}</span> : null}

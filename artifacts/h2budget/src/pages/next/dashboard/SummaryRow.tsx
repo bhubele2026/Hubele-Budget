@@ -24,9 +24,11 @@ export function joinNames(names: readonly string[]): string {
 }
 
 /**
- * The words for each money-position figure, ONE phrase per figure everywhere on
- * the dashboard (the old "Room in the plan" named `safeToSpendNow` on the cash
- * panel and `availableUntilPayday` in the morning text):
+ * The words for each money-position figure, ONE phrase per figure everywhere the
+ * household reads it (the old "Room in the plan" named `safeToSpendNow` on the
+ * cash panel and `availableUntilPayday` in the morning text; the morning text
+ * now says "Checking covers $X until <weekday>" too — recap/template.ts,
+ * prompt recap.v3):
  *   - `safeToSpendNow`       → "Room to spend"
  *   - `remainingWeek`        → "This week's plan … left / over"
  *   - `availableUntilPayday` → "Checking covers … until <payday> after the buffer"
@@ -102,9 +104,9 @@ function RoomCell({ s }: { s: Spine }) {
       tone={p.withinPlan === "over" ? "bad" : "neutral"}
       missing={missing}
       lines={[
-        <span data-testid="dash-room-week" className={cn(p.withinPlan === "over" && "font-semibold text-bad")}>{week}</span>,
+        <span data-testid="dash-room-week" className={cn(p.withinPlan === "over" && "font-semibold text-bad-ink")}>{week}</span>,
         cover ? (
-          <span data-testid="dash-room-cover" className={cn(Number(p.availableUntilPayday) <= 0 && "font-semibold text-bad")}>{cover}</span>
+          <span data-testid="dash-room-cover" className={cn(Number(p.availableUntilPayday) <= 0 && "font-semibold text-bad-ink")}>{cover}</span>
         ) : null,
       ]}
     />
@@ -127,7 +129,7 @@ function LowCell({ s }: { s: Spine }) {
       missing={v.kind === "none" ? v.words : undefined}
       lines={v.kind === "none" ? [] : [
         <span data-testid="dash-low-when">{when}</span>,
-        <span className={cn(v.kind === "below" && "font-semibold text-bad")}>
+        <span className={cn(v.kind === "below" && "font-semibold text-bad-ink")}>
           <span data-testid="dash-low-words">{v.words}</span>
           {short != null ? <span data-testid="dash-under-buffer"> · short by {money(short)}</span> : null}
           {f.runwayDays != null ? <span data-testid="dash-runway"> · below zero in {f.runwayDays} days</span> : null}

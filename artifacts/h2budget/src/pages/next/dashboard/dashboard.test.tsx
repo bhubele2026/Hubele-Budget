@@ -239,6 +239,7 @@ describe("summary row: four figures, status-aware", () => {
     expect(screen.getByTestId("dash-kpi-low-value").textContent).toBe("$350.00");
     expect(screen.getByTestId("dash-low-when").textContent).toBe("Tue Oct 20 · next 90 days");
     expect(screen.getByTestId("dash-low-words").textContent).toContain("below your $500 buffer");
+    expect(screen.getByTestId("dash-low-words").parentElement!.className).toContain("text-bad-ink");
   });
   it("(dash-accuracy) under the buffer says how far short; tight and ready say where it sits", () => {
     const a = wrap(<SummaryRow />);
@@ -303,6 +304,9 @@ describe("summary row: four figures, status-aware", () => {
     wrap(<SummaryRow />);
     expect(screen.getByTestId("dash-kpi-room-value").textContent).toBe("$0.00");
     expect(screen.getByTestId("dash-room-week").textContent).toBe("This week's plan $25.00 over");
+    // Small alarm words take the AA rust; the big figure keeps the alarm orange (large text).
+    expect(screen.getByTestId("dash-room-week").className).toContain("text-bad-ink");
+    expect(screen.getByTestId("dash-kpi-room-value").className).toMatch(/\btext-bad\b/);
   });
   it("one debt is 'left on' it; several are 'left across' an and-list", () => {
     h.Q.debts = ok([debt("h1", "HELOC", "18500.00")]);

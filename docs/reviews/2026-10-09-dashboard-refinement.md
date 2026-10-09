@@ -141,8 +141,9 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 | `remainingWeek` | **This week's plan $Y left / over** (summary subline; Spending pace "…in the plan") |
 | `availableUntilPayday` | **Checking covers $Z until <payday>, after the $B buffer** |
 
-- ⚠️ **Not changed, proposed:** the morning text itself is server copy. `api-server/src/recap/template.ts:53` writes "Room in the plan: $X until <day>" from `availableUntilPayday`, and the AI prompt `recap.v2.ts:14` asks for the same. Inside the disclosure it is a quote of the SMS, so I left it alone.
-  - Proposal for the owner's OK: "Checking covers $X until <day>." in both places, plus their tests.
+- **The morning text now matches (owner-approved, final round).** `api-server/src/recap/template.ts` writes "Checking covers $X until <weekday>." (it was "Room in the plan: $X until <day>."), two characters shorter, so the 240-character budget (`MAX_TEXT_CHARS`, parts dropped from the tail until the text fits) is unchanged.
+  - The AI prompt moved to **`recap.v3`** (`ai/prompts/recap.v3.ts`): recap.v2 with only the cash sentence swapped, asking for "Checking covers $1,234 until Fri" / "…until Saturday". It refuses to load if v2's sentence ever changes under it (no silent no-op). v3 is the newest, so it runs; `AI_PROMPT_RECAP=v2` still pins the old one. AI stays off.
+  - Tests: the template expectations in `recapAction.test.ts` and `recapValidate.test.ts`, `recapGenerate.integration.test.ts` (prompt version `recap.v3`), and the new `recapPromptV3.test.ts` (the wording, nothing else changed, v3 runs, v2 can be pinned).
 
 ## Debt tile: the one total
 - `lib/debtBalance.ts` gains `remainingDebtTotal(debts)` and `remainingDebtScope(debts)`.
@@ -177,7 +178,7 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 | Names truncated; "Paid from" chip overflowed in `longnames` | Fixed: rows wrap the full name + ••last4; `AccountChip wrap` keeps the mask after the name and the dot on the first line |
 | Card owed / minimum / due "—" when data exists; `missing` Platinum $0.00 | Fixed: debt row, else Plaid stored liabilities, else words. The "Statement" fact is dropped: the Amex weekly payoff's `statementBalance` is the card's CURRENT balance under another name (liability → debt → **0 fallback**, which was the false $0.00) |
 | `empty`: $0.00 everywhere, no link-a-bank | Fixed: em dashes with words, "Link a bank" as the header action, link-a-bank in Accounts and Spending, compact panels |
-| "Room in the plan" two figures | Fixed on the dashboard (words table above). The SMS template is a proposal |
+| "Room in the plan" two figures | Fixed on the dashboard (words table above) and, in the final round, in the morning text ("Checking covers $X until <weekday>", template + prompt recap.v3) |
 | Phone activity lost amount and account; chart low label clipped | Fixed: list layout; "Low $X" on the dot |
 | Debt never names the HELOC | Fixed: "$18,500.00 left across HELOC" |
 | `stale`: manual row rolled into checking ($4,788.37) | Intended. PR #22's roll-forward counts bank rows and manual entries on the account after the snapshot day (`/forecast/bank-balance-explain` says "manual rows on the account count"). Labelled: "Includes 1 entry since the Oct 6 snapshot". The helper gives the row count, not a manual-only count, so the label says "entries" |
@@ -280,9 +281,19 @@ Run with the kit's new `checks.sh` (`e2e/zz-fixture/checks.spec.ts`, harness onl
 | **No sideways scroll at 390** | `document` and the shell scroller both 0 px over, every scenario |
 | **Names never truncated** | 0 truncated nodes among account names, account links (••last4 present) and every account chip, at both sizes, every scenario (incl. `longnames`) |
 
-- ⚠️ **What axe cannot see.** axe puts contrast over a background IMAGE in `incomplete`, not `violations`: inside the milled panels and on the tinted ground that is 67 nodes on the negative scenario's desktop, 28 on the phone. Measured by hand:
-  - the alarm orange `#e16d3e` is **3.0–3.3:1** on white / platinum, which passes for the 30 px figures (3:1 is the large-text bar) but **fails AA for the small alarm words** ("below your $500 buffer · short by…", "Checking covers $0.00…", "$40.00 over the plan", account "Needs reconnecting"). That is the app-wide palette (C12: "#e16d3e means something is wrong"), not new here. Options for the owner: ink words with an alarm dot (what the header line does now), or a deeper alarm step for text. The existing `--color-bad-hover` `#c2562a` is 4.51:1 on white but 4.27:1 on the ground; a step that clears 4.5 everywhere is around `#ba4f24`, which needs the owner's eye first ("never brown").
-  - neutral-500 labels are 4.6–4.7:1 (pass). The missing-figure dash and the version line moved from neutral-400 (2.6:1) to neutral-500 this round.
+- ⚠️ **What axe cannot see.** axe puts contrast over a background IMAGE in `incomplete`, not `violations`: inside the milled panels and on the tinted ground that is 67 nodes on the negative scenario's desktop, 28 on the phone. Measured by hand (WCAG 2.x relative luminance):
+
+  | Colour | panel top `#ffffff` | panel foot `#fbfcfe` | ground top `#f7f9fc` | ground foot `#eef3fa` |
+  |---|---|---|---|---|
+  | alarm orange `#e16d3e` (fills, bars, dots, chips, the 22–30 px figures) | 3.25 | 3.17 | 3.08 | 2.92 |
+  | **`--color-bad-ink` `#c2410c`** (small alarm text, final round) | **5.18** | **5.04** | **4.91** | **4.64** |
+
+  - **Final round (owner-approved):** small alarm TEXT now uses the new token `--color-bad-ink` `#c2410c`, a high-chroma rust of the alarm family. It is not a darkened `#e16d3e`, which would be brown: in OKLCH it has MORE chroma (0.174 vs 0.157), a hue 3° redder (38° vs 42°) and L 0.55. It clears 4.5:1 on every ground above.
+  - **Where:** the summary sublines (week over plan, "Checking covers $0.00…", the low point's "below your $X buffer · short by … · below zero in N days"); the account rows' "Needs reconnecting" and "Out of date"; the header's "needs reconnecting"; Needs attention's alarm rows; the Spending pace "over" words; the forecast legend's low value; the shared `FreshnessLine` "Refresh failed"; and on the chart (`CHART.badInk`, the mirror) the "Low $X" and "Cash buffer $500.00" labels, which also changes them on `/forecast`.
+  - **Unchanged:** fills, bars, dots, chips, the buffer line, the risk shading and the 22–30 px figures keep `#e16d3e`. Large text needs only 3:1, and the figures are 3.17–3.25 on the panels.
+  - **Guard:** `index.css.test.ts` computes the ratios and fails if any ground drops under 4.5. It also fails if the token's OKLCH chroma falls under the alarm orange's (the brown direction), if its hue drifts more than 8° or past 45° (toward amber/brown), if L drops under 0.5, or if the chart mirror stops equalling the CSS token.
+  - Not changed: `StatBlock`'s bad tone (18 px figures on other pages) and other pages' own small `text-bad` words. They are outside the dashboard and would now take the same token on request.
+  - neutral-500 labels are 4.6–4.7:1 (pass). The missing-figure dash and the version line moved from neutral-400 (2.6:1) to neutral-500.
 
 ## Unverified
 - **E2E:** `perf-open.spec.ts` and `a11y-smoke` need Clerk keys and a real DB. Their assumptions still hold by construction (at most two bounded `/transactions` reads, no chart chunk on open), but they did not run.
