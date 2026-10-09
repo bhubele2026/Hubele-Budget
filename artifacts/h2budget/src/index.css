@@ -121,7 +121,7 @@
   --grid-gap: 1rem;
 
   /* ── TYPE SCALE ──────────────────────────────────────────────────────────
-     Six steps and no more. Ad-hoc font sizes are the single loudest
+     Seven steps and no more (the seventh, --text-kpi, says why below). Ad-hoc font sizes are the single loudest
      "nobody designed this" signal on a screen, because nothing lines up and
      every card invents its own hierarchy.
 

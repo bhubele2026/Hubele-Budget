@@ -26,8 +26,14 @@ to get the household out of debt; correctness and trust beat everything.
 - After any change that could affect displayed numbers, **confirm no financial
   totals changed.**
 - **The north star is being out of debt.** Judge features by payoff impact.
-  Landing-facing surfaces show **% paid, never the amount owed** — the spine is
-  tested to refuse to carry a balance at all (see §3, spine law).
+  On landing-facing surfaces **% paid leads**; the amount left may follow as a
+  **smaller, secondary line**, and its **scope is always named** ("$X left
+  across <the debts it covers>"). The amount comes from the debts endpoint
+  through the one shared total (`remainingDebtTotal` / `remainingDebtScope`
+  in `lib/debtBalance.ts`, the same call the Avalanche and Reports Debt pages
+  make, parity-tested), never from the spine: the spine is still tested to
+  refuse to carry a balance at all (see §3, spine law). (Owner's decision,
+  2026-10-09; it replaces "% paid, never the amount owed".)
 
 ## 2. Data fetching & performance (hard rules)
 
@@ -117,8 +123,11 @@ to get the household out of debt; correctness and trust beat everything.
   selected across refetches (key by date, never by index). `CssBars` for small
   inline bars. The chart animation must not restart on unrelated renders
   (`lib/chartAnim.ts` + the fingerprint memo in `ProjectedBalanceChart.tsx`).
-- **Type:** Inter Variable, the 6-step scale, a larger numeric step for hero
-  figures; mono tabular numerals for money and counts.
+- **Type:** Inter Variable, the scale in `index.css` (`--text-hero` for the one
+  number a screen exists for, at most one per screen; `--text-kpi` for a tile's
+  headline figure where a screen has several, e.g. the dashboard's summary row);
+  mono tabular numerals for money and counts. A new step must also be taught to
+  `cn()` (`lib/utils.ts`), or tailwind-merge drops it beside a text colour.
 - **Motion:** purposeful and fast — horizon crossfades, stable chart updates,
   tooltip and selection markers, expand/collapse, hover/focus/press feedback,
   progress meters that count up only after data settles. Dials live in
@@ -152,8 +161,9 @@ by **the same function the owning page's endpoint calls** — never reimplemente
 - **The parity contract is tested, not hoped for.**
   `api-server/src/__tests__/spineParity.integration.test.ts` asserts each spine
   field equals its owning endpoint **to the cent**, and asserts the spine never
-  carries a debt balance or amount owed (the landing shows % paid; account
-  panels show balances from the account endpoints). If you add a spine field,
+  carries a debt balance or amount owed (the landing leads with % paid, and its
+  secondary "$X left across …" line reads the debts endpoint through the shared
+  total; account panels show balances from the account endpoints). If you add a spine field,
   add its parity assertion in the same PR.
 - Mutations invalidate the spine centrally through the `mutationCache` in
   `App.tsx` (`lib/mutationInvalidation.ts`) — not with hand-written

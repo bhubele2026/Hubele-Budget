@@ -120,8 +120,8 @@ export default function AccountsPanel() {
                 const noBank = isCash && !spine?.bank.source && !spine?.bank.asOfDate;
                 return (
                   <li key={acct.id} data-testid="dash-account" data-state={st} data-accent={identity.accent}
-                    className="grid grid-cols-1 gap-x-6 gap-y-2 px-4 py-3 md:grid-cols-[minmax(14rem,1.2fr)_minmax(0,2fr)_auto] md:items-center">
-                    <div className="flex min-w-0 items-start gap-2">
+                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 px-4 py-3 md:grid-cols-[minmax(14rem,1.2fr)_minmax(0,2fr)_auto] md:items-center md:gap-x-6">
+                    <div className="col-start-1 row-start-1 flex min-w-0 items-start gap-2">
                       <span aria-hidden className={cn("mt-2 h-6 w-1 shrink-0 rounded-full", DOT[identity.accent])} />
                       <div className="min-w-0 flex-1">
                         <Link href={`/next/accounts/${acct.id}`}
@@ -159,7 +159,7 @@ export default function AccountsPanel() {
                         </div>
                       </div>
                     </div>
-                    <dl className="flex min-w-0 flex-wrap gap-x-6 gap-y-2 pl-3 md:pl-0" data-testid="dash-account-facts">
+                    <dl className="col-span-2 row-start-2 flex min-w-0 flex-wrap gap-x-6 gap-y-2 pl-3 md:col-span-1 md:col-start-2 md:row-start-1 md:pl-0" data-testid="dash-account-facts">
                       {liability ? (
                         owed != null || minPay != null || dueDay != null ? (
                           <>
@@ -191,7 +191,7 @@ export default function AccountsPanel() {
                         </p>
                       )}
                     </dl>
-                    <div className="flex justify-end pl-3 md:pl-0">
+                    <div className="col-start-2 row-start-1 flex justify-end md:col-start-3">
                       {firstOfItem ? <SyncOne itemId={item.id} /> : null}
                     </div>
                   </li>
