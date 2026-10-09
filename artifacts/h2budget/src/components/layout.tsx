@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Menu, MessageCircleQuestion } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -38,7 +38,9 @@ import { badgeCount } from "@/lib/reviewQueue";
 import { H2Wordmark } from "@/components/h2-wordmark";
 import { TabRibbon, TabUnderline, type RibbonTab } from "@/components/tab-ribbon";
 import { AccountMenu, VERSION_LABEL } from "@/components/account-menu";
-import { SETTINGS_TABS, TAB_PREFETCH, tabHref, tabOf, type SettingsTab } from "@/pages/settings/settingsTabs";
+// (C12) The tab LIST only — never `settingsTabs.ts`, whose lazy importers
+// would ride the landing chunk with it.
+import { SETTINGS_TABS, tabHref, tabOf, type SettingsTab } from "@/pages/settings/settingsTabList";
 
 /**
  * ⚠️ LABELS ONLY. A `NavItem` used to carry a lucide icon, which repeated the
@@ -194,11 +196,7 @@ const SETTINGS_PAGES: (NavItem & { tab: SettingsTab })[] = SETTINGS_TABS.filter(
   (t) => ({ name: t.label, href: tabHref(t.key), testId: `settings-${t.key}`, tab: t.key }),
 );
 
-/** Warm Settings' chunk and, for a lazy tab, that tab's own chunk. */
-function prefetchSettingsTab(prefetch: (href: string) => void, tab: SettingsTab) {
-  prefetch("/settings");
-  void TAB_PREFETCH[tab]?.().catch(() => {});
-}
+
 
 /**
  * Whole path segments only: `/bills` covers `/bills` and its own child routes
@@ -232,6 +230,13 @@ function destinationFor(location: string): Destination | null {
       d.owns.some((r) => (r.exact ? location === r.path : isAtOrUnder(location, r.path))),
     ) ?? null
   );
+}
+
+/** The Settings sub-page open at this URL, or null (not Settings, or Banks). */
+function openSettingsSub(location: string, search: string): SettingsTab | null {
+  if (location !== "/settings") return null;
+  const tab = tabOf(search);
+  return tab === "banks" ? null : tab;
 }
 
 /**
@@ -343,8 +348,7 @@ function MobileNav({
   const area = destinationFor(location);
   // On a Settings sub-page that sub-page is the lit row, and Settings reads as
   // the place you are inside (like a destination over its pages).
-  const settingsTab = location === "/settings" ? tabOf(search) : null;
-  const settingsSub = settingsTab != null && settingsTab !== "banks" ? settingsTab : null;
+  const settingsSub = openSettingsSub(location, search);
   // ⚠️ THE DRAWER LIGHTS WHAT THE RIBBON LIGHTS. Only rows inside the area you
   // are in can be lit (More's rows, when you are in no area), and of those only
   // the longest whole-segment match. So /bills/all lights Bills, /billsx lights
@@ -357,6 +361,15 @@ function MobileNav({
       : MORE_NAV.map((m) => m.href),
   );
   const row = { onNavigate, onPrefetch };
+  // (C12) Open with the lit row in view: the drawer is taller than a phone
+  // now (Settings' sub-pages sit at the bottom), and a lit row you have to
+  // scroll to find says nothing.
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    navRef.current
+      ?.querySelector<HTMLElement>('[aria-current="page"]')
+      ?.scrollIntoView?.({ block: "nearest" });
+  }, []);
   const groupLabel =
     "px-2 pb-1.5 text-micro font-semibold uppercase tracking-wide text-chrome-ink-4";
   return (
@@ -364,7 +377,7 @@ function MobileNav({
       <div className="flex h-14 items-center border-b border-chrome-rule px-3">
         <HomeMark onNavigate={onNavigate} />
       </div>
-      <nav aria-label="Sections" className="flex-1 space-y-5 overflow-y-auto p-3">
+      <nav ref={navRef} aria-label="Sections" className="flex-1 space-y-5 overflow-y-auto p-3">
         {/* The five destinations, each with its ribbon pages beneath it —
             every page a desktop ribbon reaches is reachable here too. */}
         <div>
@@ -425,7 +438,10 @@ function MobileNav({
                           active={settingsSub === p.tab}
                           badge={null}
                           onNavigate={onNavigate}
-                          onPrefetch={() => prefetchSettingsTab(onPrefetch, p.tab)}
+                          // A sub-page warms the Settings chunk; its own lazy
+                          // tab chunk warms from the page's tab bar (warming it
+                          // here would put the tab importers on the landing).
+                          onPrefetch={() => onPrefetch("/settings")}
                         />
                       </li>
                     ))}
@@ -598,6 +614,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // More trigger carries the underline. (C12: the orange "pending" dot is
   // gone. Nothing in More ever had a count, so it could never light.)
   const moreActive = moreNav.some((n) => isAtOrUnder(location, n.href));
+  const settingsSub = openSettingsSub(location, search);
 
   const currentTitle =
     activeTabLabel ??
@@ -714,6 +731,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <DropdownMenuContent align="end" className="w-48">
                         {moreNav.map((item) => {
                           const badge = railBadge(item.href);
+                          // The page you are on reads as current here too; on
+                          // a Settings sub-page that is the sub-page.
+                          const current =
+                            isAtOrUnder(location, item.href) && !(item.href === "/settings" && settingsSub != null);
                           return (
                             <Fragment key={item.href}>
                               <DropdownMenuItem asChild>
@@ -721,7 +742,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                   href={item.href}
                                   onMouseEnter={() => prefetch(item.href)}
                                   onFocus={() => prefetch(item.href)}
-                                  className="flex cursor-pointer items-center gap-2.5"
+                                  aria-current={current ? "page" : undefined}
+                                  className="flex cursor-pointer items-center gap-2.5 aria-[current=page]:font-semibold aria-[current=page]:text-brand-navy"
                                   data-testid={`morenav-${item.href.slice(1)}`}
                                 >
                                   <span className="flex-1">{item.name}</span>
@@ -738,9 +760,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                   <DropdownMenuItem key={p.href} asChild>
                                     <Link
                                       href={p.href}
-                                      onMouseEnter={() => prefetchSettingsTab(prefetch, p.tab)}
-                                      onFocus={() => prefetchSettingsTab(prefetch, p.tab)}
-                                      className="cursor-pointer pl-6 text-label text-muted-foreground"
+                                      onMouseEnter={() => prefetch("/settings")}
+                                      onFocus={() => prefetch("/settings")}
+                                      aria-current={settingsSub === p.tab ? "page" : undefined}
+                                      className="cursor-pointer pl-6 text-label text-muted-foreground aria-[current=page]:font-semibold aria-[current=page]:text-brand-navy"
                                       data-testid={`morenav-${p.testId}`}
                                     >
                                       {p.name}

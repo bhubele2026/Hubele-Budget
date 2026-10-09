@@ -708,6 +708,16 @@ describe("(C12) the fold-in sub-items, the account menu and the chrome tokens", 
     expect(prefetchRoute).toHaveBeenCalledWith("/settings");
   });
 
+  it("More marks the page you are on: the Settings sub-page when one is open", () => {
+    mount("/settings?tab=memory");
+    expect(screen.getByTestId("morenav-settings-memory").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("morenav-settings").getAttribute("aria-current")).toBeNull();
+    cleanup();
+    mount("/mapping-rules");
+    expect(screen.getByTestId("morenav-mapping-rules").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("morenav-settings-memory").getAttribute("aria-current")).toBeNull();
+  });
+
   it("the drawer lights the open Settings sub-page, with Settings as the place you are in", () => {
     mount("/settings?tab=memory");
     const drawer = openDrawer();
