@@ -113,7 +113,8 @@ export function Kpi({
         data-testid={testid ? `${testid}-value` : undefined}
         className={cn(
           "mt-1 whitespace-nowrap font-mono text-kpi font-semibold tabular-nums",
-          missing || tone === "muted" ? "text-neutral-400" : tone === "bad" ? "text-bad" : "text-brand-navy",
+          // neutral-500, not 400: the dash is still information (2.6:1 at 400).
+          missing || tone === "muted" ? "text-neutral-500" : tone === "bad" ? "text-bad" : "text-brand-navy",
         )}
       >
         {missing ? "—" : value}

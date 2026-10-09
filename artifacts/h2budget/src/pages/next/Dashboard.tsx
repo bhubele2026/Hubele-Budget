@@ -100,7 +100,7 @@ export default function DashboardPage() {
         ) : (
           <BelowFoldSkeleton slot="lower" />
         )}
-        <div data-testid="dash-version" className="span-12 font-mono text-micro tabular-nums text-neutral-400">
+        <div data-testid="dash-version" className="span-12 font-mono text-micro tabular-nums text-neutral-500">
           Version {APP_VERSION}
         </div>
       </PageGrid>
