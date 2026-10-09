@@ -54,6 +54,8 @@ const state = vi.hoisted(() => ({
   monthTxns: undefined as Array<Record<string, unknown>> | undefined,
   items: undefined as unknown[] | undefined,
   payoff: undefined as unknown,
+  /** (WP7c) Every list read's params, in order. */
+  listParams: [] as Array<Record<string, unknown>>,
 }));
 
 const today = new Date();
@@ -121,6 +123,7 @@ vi.mock("@workspace/api-client-react", () => {
     useGetAmexWeeklyPayoff: () => ({ data: state.payoff, isLoading: false }),
     getGetAmexWeeklyPayoffQueryKey: () => ["/api/amex/weekly-payoff"],
     useListTransactions: (params: { limit?: number } = {}) => {
+      state.listParams.push(params as Record<string, unknown>);
       if ((params.limit ?? 0) >= 5000) return { data: undefined, isLoading: true };
       return { data: state.monthTxns, isLoading: state.monthTxns === undefined };
     },
@@ -178,6 +181,7 @@ beforeEach(() => {
   state.monthTxns = ROWS();
   state.items = ITEMS;
   state.payoff = PAYOFF;
+  state.listParams = [];
 });
 afterEach(() => cleanup());
 
@@ -273,6 +277,26 @@ describe("Amex page embedded (/next/accounts/:id) — the same layout", () => {
     expect(all.className).toContain("span-4");
     expect(tile("ext-gold").className).toContain("span-4");
     expect(screen.getByTestId("amex-ledger").className).toContain("panel-sticky-safe");
+  });
+});
+
+describe("(WP7c) the embedded card asks for its own rows", () => {
+  it("embedded: every list read carries the card's plaidAccountId and no source", async () => {
+    render(tree({ embedded: true, accountId: "ext-plat" }));
+    await ready();
+    expect(state.listParams.length).toBeGreaterThan(0);
+    for (const p of state.listParams) {
+      expect(p.plaidAccountId).toBe("ext-plat");
+      expect("source" in p).toBe(false);
+    }
+  });
+  it("standalone: the Amex source list, and no plaidAccountId", async () => {
+    render(tree());
+    await ready();
+    for (const p of state.listParams) {
+      expect(p.source).toBe("amex,plaid:amex,plaid:apple-card,apple-card");
+      expect("plaidAccountId" in p).toBe(false);
+    }
   });
 });
 

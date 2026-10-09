@@ -29,7 +29,7 @@ vi.mock("@/pages/amex", () => ({ default: (p: { lead?: ReactNode }) => { h.amexP
 vi.mock("@/pages/transactions", () => ({ default: (p: { lead?: ReactNode }) => { h.chaseProps(p); return <div data-testid="chase-ledger">{p.lead}</div>; } }));
 
 import NextAccountsPage from "./Accounts";
-import { buildEntries } from "./accounts/entries";
+import { accountViewOf, buildEntries } from "./accounts/entries";
 import { AccountSummary } from "./accounts/AccountSummary";
 import { ForecastLegend } from "./accounts/ForecastLegend";
 import { identityOf } from "@/lib/accountIdentity";
@@ -139,6 +139,59 @@ describe("(WP7) combined view: where each row opens", () => {
     expect(screen.getByTestId("account-chip-ext-chk").getAttribute("href")).toBe("/next/accounts/ext-chk");
     expect(screen.getByTestId("account-chip-ext-amex").getAttribute("href")).toBe("/next/accounts/ext-amex");
     expect(screen.getByTestId("account-chip-all").getAttribute("href")).toBe("/next/accounts");
+  });
+});
+
+describe("(WP7c) each kind of account opens its own view", () => {
+  const seedKinds = () => {
+    seed();
+    h.items = [
+      ...h.items,
+      item("i3", "Chase", "chase", [
+        { id: "r-sav", accountId: "ext-sav", name: "Savings", mask: "8801", type: "depository", subtype: "savings" },
+        { id: "r-free", accountId: "ext-freedom", name: "Freedom", mask: "4417", type: "credit", subtype: "credit card" },
+      ]),
+      item("i4", "Summit Credit Union", "summit", [{ id: "r-cu", accountId: "ext-cu", name: "Share Checking", mask: "7007", type: "depository", subtype: "checking" }]),
+      item("i5", "PayPal", "paypal", [{ id: "r-pp", accountId: "ext-pp", name: "PayPal Balance", mask: null, type: "depository", subtype: "paypal" }]),
+      item("i6", "Upstart", "upstart", [{ id: "r-loan", accountId: "ext-loan", name: "Personal Loan", mask: "9009", type: "loan", subtype: "loan" }]),
+      item("i7", "Fidelity", "fidelity", [{ id: "r-inv", accountId: "ext-inv", name: "Brokerage", mask: "3131", type: "investment", subtype: "brokerage" }]),
+    ];
+  };
+  it.each([
+    ["a credit union's checking account", "/next/accounts/ext-cu", "r-cu"],
+    ["a savings account", "/next/accounts/ext-sav", "r-sav"],
+    ["a PayPal balance (another depository account the server lists)", "/next/accounts/ext-pp", "r-pp"],
+  ])("%s opens the bank ledger embedded for THAT account", async (_name, path, rowId) => {
+    seedKinds(); renderAt(path);
+    await waitFor(() => expect(screen.getByTestId("chase-ledger")).toBeTruthy());
+    expect(h.chaseProps).toHaveBeenCalledWith(expect.objectContaining({ embedded: true, accountKey: rowId }));
+    expect(screen.queryByTestId("amex-ledger")).toBeNull();
+    expect(screen.queryByTestId("account-no-ledger")).toBeNull();
+  });
+  it("a non-Amex card opens the card ledger embedded for that card", async () => {
+    seedKinds(); renderAt("/next/accounts/ext-freedom");
+    await waitFor(() => expect(screen.getByTestId("amex-ledger")).toBeTruthy());
+    expect(h.amexProps).toHaveBeenCalledWith(expect.objectContaining({ embedded: true, accountId: "ext-freedom" }));
+    expect(screen.queryByTestId("chase-ledger")).toBeNull();
+  });
+  it("a loan and an investment account say plainly that H2 has no ledger for them yet", () => {
+    seedKinds();
+    const loan = renderAt("/next/accounts/ext-loan");
+    expect(screen.getByTestId("account-no-ledger").textContent).toBe("H2 has no ledger for loans yet.");
+    expect(screen.queryByTestId("chase-ledger")).toBeNull();
+    expect(screen.queryByTestId("amex-ledger")).toBeNull();
+    expect(screen.getByTestId("account-summary")).toBeTruthy();
+    loan.unmount();
+    renderAt("/next/accounts/ext-inv");
+    expect(screen.getByTestId("account-no-ledger").textContent).toBe("H2 has no ledger for this kind of account yet.");
+  });
+  it("accountViewOf follows the server's depository rule", () => {
+    seedKinds();
+    const views = Object.fromEntries(buildEntries(h.items as never).map((e) => [e.plaidAccountId, accountViewOf(e)]));
+    expect(views).toEqual({
+      "ext-chk": "bank", "ext-amex": "card", "ext-sav": "bank", "ext-freedom": "card",
+      "ext-cu": "bank", "ext-pp": "bank", "ext-loan": "loan", "ext-inv": "other",
+    });
   });
 });
 
