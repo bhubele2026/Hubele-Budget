@@ -257,7 +257,7 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 ## Tests
 - **New or rewritten:**
   - `DashboardPage.test.tsx`: order (header, summary, forecast row, accounts, lower rows), lazy slots and skeletons, no `Page` wrapper, refresh banner, skeleton with no numbers, compact skeletons with no bank.
-  - `dashboard.test.tsx`, 62 tests:
+  - `dashboard.test.tsx`, 60 tests:
     - header facts and freshness;
     - **header action choice** (link > reconnect, incl. a card bank > runs short > way back > afford);
     - the recap loading only when opened;
