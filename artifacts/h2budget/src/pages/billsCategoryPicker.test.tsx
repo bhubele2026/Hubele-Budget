@@ -264,3 +264,14 @@ describe("Bills page — Category chip + picker (#690, #691)", () => {
     ).toBe("Power bill");
   });
 });
+
+describe("Bills page — C4 grid placement", () => {
+  it("lays out the due window and group cards in a span-8 column, the month tables in a span-4 column", () => {
+    renderPage();
+    const main = screen.getByTestId("bills-due-lead").parentElement;
+    expect(main?.className).toContain("span-8");
+    expect(screen.getByTestId("card-actual-this-month").parentElement?.className).toContain("span-4");
+    expect(main?.parentElement?.className).toContain("grid-12");
+    expect(screen.getByRole("heading", { name: /^bills$/i })).toBeTruthy();
+  });
+});

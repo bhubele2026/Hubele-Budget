@@ -243,3 +243,14 @@ describe("bills overview — no month drawn from a summary it does not have", ()
     expect(text("stat-next-bill")).toContain("nothing scheduled");
   });
 });
+
+describe("bills overview — C4 grid placement", () => {
+  it("puts two headline tiles at span-3, the month card at span-4 and biggest bills at span-8", () => {
+    render(<BillsOverviewPage />);
+    expect(screen.getByTestId("bills-overview").className).toContain("grid-12");
+    expect(screen.getByTestId("stat-next-bill").closest(".panel")?.className).toContain("span-3");
+    expect(screen.getByTestId("stat-bills-due").closest(".panel")?.className).toContain("span-3");
+    expect(screen.getByTestId("bills-month-card").className).toContain("span-4");
+    expect(screen.getByTestId("bills-biggest-card").className).toContain("span-8");
+  });
+});
