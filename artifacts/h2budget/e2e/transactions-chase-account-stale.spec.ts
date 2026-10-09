@@ -30,8 +30,9 @@ import {
  *   1. Deleted account (the old spec's path): pick B, then delete B's rows and
  *      its `plaid_accounts` row. On reload the server refuses `account=B`
  *      (400 `account_not_ledger`) and the page falls back to A.
- *   2. An account that is not a Chase ledger account at all: an Ally savings
- *      account in the same household, and a random uuid. The server's 400
+ *   2. An account that is not a ledger account at all: an Ally credit card in
+ *      the same household (WP7: a savings or checking account at ANY bank is a
+ *      ledger account now, so it is a card), and a random uuid. The server's 400
  *      alone resets the pick: `/api/forecast` is held back until the reset is
  *      observed, so the older self-heal effect (which needs the forecast
  *      bundle's account list) cannot be what clears it.
@@ -243,7 +244,8 @@ test.describe("Chase per-account picker — stale selection self-heal (#316, PR1
         subtype: "checking",
       })
       .returning();
-    // Not a Chase account: a savings account at another institution.
+    // Not a ledger account: a card. (WP7) A savings account at another
+    // institution opens its own ledger now, so it can no longer stand in here.
     const [allyItem] = await db
       .insert(plaidItemsTable)
       .values({
@@ -255,17 +257,17 @@ test.describe("Chase per-account picker — stale selection self-heal (#316, PR1
         institutionSlug: "ally",
       })
       .returning();
-    const [allySavings] = await db
+    const [allyCard] = await db
       .insert(plaidAccountsTable)
       .values({
         userId,
         householdId,
         itemId: allyItem!.id,
         accountId: `e2e-ally-acct-${suffix}`,
-        name: "Online Savings",
+        name: "Ally Platinum Mastercard",
         mask: "4444",
-        type: "depository",
-        subtype: "savings",
+        type: "credit",
+        subtype: "credit card",
       })
       .returning();
 
@@ -391,10 +393,10 @@ test.describe("Chase per-account picker — stale selection self-heal (#316, PR1
       hold = null;
     }
 
-    // --- 2. Picks that were never a Chase ledger account, under the same hold.
+    // --- 2. Picks that were never a ledger account, under the same hold.
 
     for (const [label, badId] of [
-      ["an Ally savings account", allySavings!.id],
+      ["an Ally credit card", allyCard!.id],
       ["a random uuid", randomUUID()],
     ] as const) {
       let release: () => void = () => {};

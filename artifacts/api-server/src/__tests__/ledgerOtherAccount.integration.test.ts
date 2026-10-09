@@ -1,17 +1,23 @@
-// ⭐ PR14 review H1 — the ledger for a Chase account other than the snapshot's.
+// ⭐ PR14 review H1 — the ledger for a bank account other than the snapshot's.
 //
 // The Chase page offers an account picker when a household has two or more
-// Chase checking accounts. Picking the second one sends `account=<its id>`;
-// PR13 answered 400. The contract now: any Chase depository account of the
-// household is accepted with its mask twins. Its rows, totals and review counts
-// come back with every balance null (`balanceUnavailableReason`
-// "not_snapshot_account"); no balance is computed for it and no manual row is on
-// it. The snapshot's account is unchanged to the cent.
+// checking accounts. Picking the second one sends `account=<its id>`; PR13
+// answered 400. PR14 accepted any Chase depository account of the household
+// with its mask twins. (WP7, owner's OK 2026-10-09) Any depository account at
+// ANY institution is accepted now: a credit union's checking account opens its
+// own ledger instead of a refusal the page used to paper over with the main
+// Chase ledger under the other account's title. Its rows, totals and review
+// counts come back with every balance null (`balanceUnavailableReason`
+// "not_snapshot_account"); no balance is computed for it and no manual row is
+// on it. Cards and loans are still refused. The snapshot's account is unchanged
+// to the byte.
 //
 // Household H: Chase checking A (mask 1111, the snapshot's: $2,000.00 read
 // 2026-05-15 at 10:00 in Chicago) and its twin; Chase checking B (mask 2222) and
 // its twin; manual rows; Amex rows (on the card's Plaid account, and imported);
 // an Amex card; a PayPal depository account; a Chase credit card with mask 2222.
+// (WP7) The last block adds, then removes, a credit union's checking account and
+// its twin, an Ally savings account, the credit union's card and a loan.
 // Household H2 has its own Chase checking account. A household with no snapshot
 // has a Chase checking and a Chase savings account. A fourth household covers
 // the ledger's `uncategorized` filter (PR7's rule).
@@ -84,7 +90,7 @@ routes.use((req, _res, next) => {
   next();
 });
 routes.use(apiRouter);
-const { request } = createTestApp(routes);
+const { request, baseUrl } = createTestApp(routes);
 
 const PINNED_NOW = new Date("2026-05-20T17:00:00Z"); // noon in Chicago
 const TODAY = "2026-05-20";
@@ -139,7 +145,8 @@ const H_ROWS: Spec[] = [
   // Amex, on the card's Plaid account and imported: on no ledger.
   { key: "x1", account: "AMX", source: "plaid:amex", day: "2026-05-11", amount: "-70.00", description: "AMEX ETA" },
   { key: "x2", account: null, source: "amex", day: "2026-05-13", amount: "-80.00", description: "AMEX IMPORT THETA" },
-  // PayPal and the Chase card: on no ledger.
+  // PayPal: on its own ledger only (WP7: a depository account at any
+  // institution). The Chase card: on no ledger.
   { key: "p1", account: "PAYPAL", source: "plaid", day: "2026-05-14", amount: "-33.00", description: "PAYPAL IOTA" },
   { key: "cc1", account: "CC", source: "plaid", day: "2026-05-16", amount: "-44.00", description: "CHASE CARD KAPPA" },
   // B.
@@ -600,12 +607,11 @@ describe("the snapshot's account (A) is unchanged", () => {
   });
 });
 
-describe("accounts that are not a Chase depository account of the household", () => {
-  it("the Amex card, PayPal, the Chase card with B's mask and another household's Chase account are 400 account_not_ledger everywhere; a non-uuid is invalid_account; nothing is written", async () => {
+describe("accounts that are not a depository account of the household", () => {
+  it("the Amex card, the Chase card with B's mask and another household's Chase account are 400 account_not_ledger everywhere; a non-uuid is invalid_account; nothing is written", async () => {
     const before = await reviewedByKey();
     const cases: Array<[string, string, string]> = [
       ["Amex card", accountRow.get("AMX")!.rowId, "account_not_ledger"],
-      ["PayPal", accountRow.get("PAYPAL")!.rowId, "account_not_ledger"],
       ["Chase card, mask 2222", accountRow.get("CC")!.rowId, "account_not_ledger"],
       ["H2's Chase checking", accountRow.get("H2")!.rowId, "account_not_ledger"],
       ["abc", "abc", "invalid_account"],
@@ -624,6 +630,22 @@ describe("accounts that are not a Chase depository account of the household", ()
     expect(await reviewedByKey()).toEqual(before);
     const [h2Row] = await db.select({ reviewed: transactionsTable.reviewed }).from(transactionsTable).where(eq(transactionsTable.userId, H2_USER));
     expect(h2Row!.reviewed).toBe(false);
+  });
+});
+
+describe("(WP7) PayPal, a depository account at a non-bank", () => {
+  it("is accepted like any depository account: its one row, no manual row, every balance null, nothing computed", async () => {
+    const signal = vi.mocked(computeCashSignal);
+    signal.mockClear();
+    const page = await ledger(`account=${accountRow.get("PAYPAL")!.rowId}&limit=100`);
+    expect((page.rows as unknown as Row[]).map((r) => [r.id, r.balanceAmount, r.runningBalance])).toEqual([
+      [rowOf.get("p1")!.id, null, null],
+    ]);
+    expect(page.totals).toEqual({ count: 1, moneyIn: "0.00", moneyOut: "33.00", net: "-33.00" });
+    expect(page.balanceUnavailableReason).toBe("not_snapshot_account");
+    expect(page.anchor).toEqual(NO_BALANCE_ANCHOR);
+    expect(page.account.plaidAccountIds).toEqual([accountRow.get("PAYPAL")!.externalId]);
+    expect(signal).not.toHaveBeenCalled();
   });
 });
 
@@ -762,5 +784,167 @@ describe("uncategorized rule (PR7)", () => {
     } finally {
       actingUser = H_USER;
     }
+  });
+});
+
+// ── (WP7) A bank account at any institution ─────────────────────────────────
+
+/** The raw body of a GET, byte for byte: nothing is parsed or re-serialized. */
+async function rawGet(path: string): Promise<{ status: number; text: string }> {
+  const res = await fetch(`${baseUrl()}${path}`);
+  return { status: res.status, text: await res.text() };
+}
+
+describe("(WP7) a credit union's checking account, savings at another bank, and the cards and loans that stay refused", () => {
+  it("each depository account lists only its own rows with no balance; the card and the loan are refused; the snapshot's account answers byte for byte as before, through every step", async () => {
+    const A_PAGE = "/transactions/ledger?limit=100";
+    const A_BALANCES = `/transactions/balances?dates=2026-05-09,2026-05-12,2026-05-15,2026-05-18,2026-05-19,${TODAY},2026-05-21`;
+    const aPageBefore = await rawGet(A_PAGE);
+    const aBalancesBefore = await rawGet(A_BALANCES);
+    expect(aPageBefore.status).toBe(200);
+    expect(aBalancesBefore.status).toBe(200);
+    const bankBefore = await spineBalance();
+    const expectSnapshotAccountUnchanged = async (step: string) => {
+      expect((await rawGet(A_PAGE)).text, `A's page after ${step}`).toBe(aPageBefore.text);
+      expect((await rawGet(A_BALANCES)).text, `A's balances after ${step}`).toBe(aBalancesBefore.text);
+      expect(await spineBalance(), `the spine's bank balance after ${step}`).toBe(bankBefore);
+    };
+
+    const added: Array<{ rowId: string; externalId: string }> = [];
+    try {
+      const cu = await addAccount(H_USER, { institutionName: "Summit Credit Union", mask: "7007", type: "depository", subtype: "checking" });
+      // The same physical account on a second row (#462), the institution's name in another case.
+      const cuTwin = await addAccount(H_USER, { institutionName: "SUMMIT CREDIT UNION", mask: "7007", type: "depository", subtype: "checking" });
+      const ally = await addAccount(H_USER, { institutionName: "Ally Bank", mask: "8008", type: "depository", subtype: "savings" });
+      // Same institution and mask as the checking account, but a card: never its twin, never a ledger.
+      const cuCard = await addAccount(H_USER, { institutionName: "Summit Credit Union", mask: "7007", type: "credit", subtype: "credit card" });
+      const loan = await addAccount(H_USER, { institutionName: "Upstart", mask: "9009", type: "loan", subtype: "loan" });
+      added.push(cu, cuTwin, ally, cuCard, loan);
+      const ids = await insertRows(H_USER, [
+        { key: "cu1", day: "2026-05-03", amount: "1200.00", plaidAccountId: cu.externalId, source: "plaid" },
+        { key: "cu2", day: "2026-05-16", amount: "-64.10", plaidAccountId: cu.externalId, source: "plaid" },
+        { key: "cu3", day: "2026-05-19", amount: "-18.00", plaidAccountId: cu.externalId, source: "plaid", pending: true },
+        { key: "cut1", day: "2026-05-17", amount: "-5.00", plaidAccountId: cuTwin.externalId, source: "plaid" },
+        { key: "al1", day: "2026-05-01", amount: "0.42", plaidAccountId: ally.externalId, source: "plaid" },
+        { key: "cc2", day: "2026-05-18", amount: "-99.00", plaidAccountId: cuCard.externalId, source: "plaid" },
+        { key: "ln1", day: "2026-05-05", amount: "-250.00", plaidAccountId: loan.externalId, source: "plaid" },
+      ]);
+      const id = (key: string) => ids.get(key)!;
+
+      // Another bank's accounts and rows in the household move nothing on A's ledger.
+      await expectSnapshotAccountUnchanged("adding the accounts");
+
+      const signal = vi.mocked(computeCashSignal);
+      signal.mockClear();
+
+      // The credit union's checking account: its rows and its twin's, newest first.
+      const cuPage = await ledger(`account=${cu.rowId}&limit=100`);
+      const cuRows = cuPage.rows as unknown as Row[];
+      expect(cuRows.map((r) => r.id)).toEqual([id("cu3"), id("cut1"), id("cu2"), id("cu1")]);
+      // Absence: no manual row, nothing of A's or B's, not the card's row on the same mask, not the savings or the loan.
+      const listed = new Set(cuRows.map((r) => r.id));
+      for (const key of ["a1", "a2", "a3", "at1", "m1", "m2", "b1", "b5", "p1", "cc1", "x1", "x2"]) {
+        expect(listed.has(rowOf.get(key)!.id), key).toBe(false);
+      }
+      for (const key of ["al1", "cc2", "ln1"]) expect(listed.has(id(key)), key).toBe(false);
+      for (const r of cuRows) {
+        expect(r.balanceAmount).toBeNull();
+        expect(r.runningBalance).toBeNull();
+        expect(r.heldAhead).toBe(false);
+      }
+      expect(cuRows.find((r) => r.id === id("cut1"))).toMatchObject({ countsInBalance: false, balanceReason: "not_bank" });
+      expect(cuRows.find((r) => r.id === id("cu3"))).toMatchObject({ countsInBalance: true, balanceReason: "counted", stalePending: false });
+      // By hand: in 1,200.00; out 64.10 + 18.00 (the twin's 5.00 counts 0).
+      expect(cuPage.totals).toEqual({ count: 4, moneyIn: "1200.00", moneyOut: "82.10", net: "1117.90" });
+      expect(cuPage.matchingCount).toBe(4);
+      expect(cuPage.review).toEqual({ reviewed: 0, unreviewed: 4 });
+      expect(cuPage.balanceStart).toBeNull();
+      expect(cuPage.balanceEnd).toBeNull();
+      expect(cuPage.balanceToday).toBeNull();
+      expect(cuPage.balanceUnavailableReason).toBe("not_snapshot_account");
+      expect(cuPage.anchor).toEqual(NO_BALANCE_ANCHOR);
+      expect([...cuPage.account.plaidAccountIds].sort()).toEqual([cu.externalId, cuTwin.externalId].sort());
+
+      // Picked through its twin: the same rows.
+      const viaTwin = await ledger(`account=${cuTwin.rowId}&limit=100`);
+      expect((viaTwin.rows as unknown as Row[]).map((r) => r.id)).toEqual(cuRows.map((r) => r.id));
+      expect(viaTwin.balanceUnavailableReason).toBe("not_snapshot_account");
+
+      const cuBalances = await get(`/transactions/balances?account=${cu.rowId}&dates=2026-05-16,${TODAY}`);
+      expect(cuBalances.status, JSON.stringify(cuBalances.json)).toBe(200);
+      expect(GetTransactionsBalancesResponse.parse(cuBalances.json)).toMatchObject({
+        balances: [
+          { date: "2026-05-16", balance: null },
+          { date: TODAY, balance: null },
+        ],
+        balanceUnavailableReason: "not_snapshot_account",
+      });
+
+      // Savings at another bank: its one row.
+      const allyPage = await ledger(`account=${ally.rowId}&limit=100`);
+      expect((allyPage.rows as unknown as Row[]).map((r) => [r.id, r.balanceAmount, r.runningBalance])).toEqual([[id("al1"), null, null]]);
+      expect(allyPage.totals).toEqual({ count: 1, moneyIn: "0.42", moneyOut: "0.00", net: "0.42" });
+      expect(allyPage.balanceUnavailableReason).toBe("not_snapshot_account");
+
+      // No balance was computed for any of them.
+      expect(signal).not.toHaveBeenCalled();
+
+      // The credit union's card and the loan stay refused, everywhere, and nothing is written.
+      const reviewedOf = async () =>
+        new Map(
+          (
+            await db
+              .select({ id: transactionsTable.id, reviewed: transactionsTable.reviewed })
+              .from(transactionsTable)
+              .where(inArray(transactionsTable.id, [...ids.values()]))
+          ).map((r) => [r.id, r.reviewed]),
+        );
+      const reviewedBefore = await reviewedOf();
+      for (const [name, account] of [
+        ["the credit union's card", cuCard.rowId],
+        ["the loan", loan.rowId],
+      ] as const) {
+        const page = await get(`/transactions/ledger?account=${account}`);
+        expect(page.status, `${name} ledger`).toBe(400);
+        expect(page.json, `${name} ledger`).toMatchObject({ code: "account_not_ledger" });
+        const balances = await get(`/transactions/balances?account=${account}&dates=${TODAY}`);
+        expect(balances.status, `${name} balances`).toBe(400);
+        expect(balances.json, `${name} balances`).toMatchObject({ code: "account_not_ledger" });
+        const bulk = await request("POST", "/transactions/bulk-review-matching", { filter: { account }, reviewed: true, expectedCount: 0 });
+        expect(bulk.status, `${name} bulk`).toBe(400);
+        expect(bulk.json, `${name} bulk`).toMatchObject({ code: "account_not_ledger" });
+      }
+      expect(await reviewedOf()).toEqual(reviewedBefore);
+
+      await expectSnapshotAccountUnchanged("reading the other accounts");
+
+      // Bulk review on the credit union's account: its posted rows and its twin's, never the pending one.
+      const ok = await request("POST", "/transactions/bulk-review-matching", {
+        filter: { account: cu.rowId, reviewed: false, pending: false },
+        reviewed: true,
+        expectedCount: 3,
+      });
+      expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+      const result = BulkReviewMatchingTransactionsResponse.parse(ok.json);
+      expect(new Set(result.updatedIds)).toEqual(new Set([id("cu1"), id("cu2"), id("cut1")]));
+      const reviewedAfter = await reviewedOf();
+      for (const key of ["cu1", "cu2", "cut1"]) expect(reviewedAfter.get(id(key)), key).toBe(true);
+      for (const key of ["cu3", "al1", "cc2", "ln1"]) expect(reviewedAfter.get(id(key)), key).toBe(false);
+
+      await expectSnapshotAccountUnchanged("reviewing the credit union's rows");
+    } finally {
+      const externalIds = added.map((a) => a.externalId);
+      if (externalIds.length) {
+        await db.delete(transactionsTable).where(inArray(transactionsTable.plaidAccountId, externalIds));
+        const accounts = await db
+          .delete(plaidAccountsTable)
+          .where(inArray(plaidAccountsTable.id, added.map((a) => a.rowId)))
+          .returning({ itemId: plaidAccountsTable.itemId });
+        const itemIds = accounts.map((a) => a.itemId).filter((x): x is string => !!x);
+        if (itemIds.length) await db.delete(plaidItemsTable).where(inArray(plaidItemsTable.id, itemIds));
+      }
+    }
+    // Back to the household the earlier blocks saw.
+    await expectSnapshotAccountUnchanged("removing the accounts");
   });
 });
