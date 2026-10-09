@@ -231,7 +231,8 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 | Version label | Unchanged |
 
 ## Bundle
-- **Open path:** **619.8 KB of 622 KB** (`node scripts/check-entry-graph.mjs`, no recharts on open). Main measured 620.4 KB and A's branch 622.0 KB. The cap is unchanged.
+- **Open path:** **621.5 KB of 622 KB** (`node scripts/check-entry-graph.mjs`, no recharts on open). Main measured 620.4 KB and A's branch 622.0 KB. The cap is unchanged.
+  - ⚠️ Only 0.5 KB of headroom is left: the polish round put the one-next-obligation reader (`obligations.ts`), the runs-short choice and the liability-accounts hook on the first screen (619.8 → 621.5 KB). The next first-screen addition will need something moved lazy first.
 - **Eager:** header, summary row, accounts.
 - **Lazy, one chunk:** forecast, coming up, spending pace, debt progress, needs attention, recent activity, the morning text and their queries (`queriesLazy.ts`).
 - **The `features` allowance** on the entry path is now only `useGetMoneyPosition` and its key. `previewRecap` left it, and `featuresImportGraph.test.ts` is updated.
@@ -239,20 +240,20 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 ## Tests
 - **New or rewritten:**
   - `DashboardPage.test.tsx`: order (header, summary, forecast row, accounts, lower rows), lazy slots and skeletons, no `Page` wrapper, refresh banner, skeleton with no numbers, compact skeletons with no bank.
-  - `dashboard.test.tsx`, 53 tests:
+  - `dashboard.test.tsx`, 55 tests:
     - header facts and freshness;
-    - **header action choice** (link > reconnect, incl. a card bank > way back > afford);
+    - **header action choice** (link > reconnect, incl. a card bank > runs short > way back > afford);
     - the recap loading only when opened;
     - summary **status-aware cases: missing, stale, not_yet, negative, tight/ready, over-plan $0, loading/failed**;
     - accounts (one surface, liabilities fallback, words not $0, Sync per bank, empty link);
-    - **next bill = upcoming row** (regular and hook);
+    - **one next obligation, one amount**: header "Next:", Needs attention "due tomorrow" and the first Coming up row show the same hook-aware words and amount on one screen;
     - **KPI low point = chart legend at 90 days**;
     - spending scopes and pace ticks;
-    - debt (incl. no debts);
+    - debt ("left on" one, "left across" several, no debts);
     - attention (reauth, distinct queue words, income flag, D20);
     - activity (A's identity cases, Amex sign, flag chip);
     - every lazy panel wears its skeleton's span and min-height.
-  - `lib/attention.test.ts`: `headerActionOf` and `reauthBanks`.
+  - `lib/attention.test.ts`: `headerActionOf` (incl. runs short, in order), `reauthBanks`, a caller-worded due-soon item.
   - `debtBalanceParity.test.tsx`: the debt total parity.
   - `categoryDirection.test.ts`: the reimbursable exclusion.
   - `amountDisplay.test.ts`: the Amex workbook sign.
@@ -261,16 +262,32 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
   - `agent.test.tsx`: findings inside the merged list.
 - **Gates (final, on the branch head):**
   - root `pnpm run typecheck`: clean;
-  - web `vitest`: UTC 1,854 passed / 3 skipped, America/Chicago 1,855 passed / 2 skipped;
-  - API suite on `h2budget_test_dashref`: 2,572 passed / 1 skipped / 2 todo (avalanche-core changed);
-  - `pnpm run build` + entry graph: OK at 619.8 KB;
+  - web `vitest`: UTC 1,858 passed / 3 skipped, America/Chicago 1,859 passed / 2 skipped;
+  - API suite on `h2budget_test_dashref`: 2,572 passed / 1 skipped / 2 todo (run after the avalanche-core change; nothing under `artifacts/api-server` or `lib/` changed since);
+  - `pnpm run build` + entry graph: OK at **621.5 KB** of 622 KB;
   - `pnpm audit --prod`: 1 high, already ignored.
 - **Screens:** fixture AFTER shots for all six scenarios at both sizes are in `dash-shots/after/`, with zero console errors and zero failed `/api` calls.
+
+## Phase 3 checks (headless, fixture, all six scenarios)
+Run with the kit's new `checks.sh` (`e2e/zz-fixture/checks.spec.ts`, harness only); results per scenario in `dash-shots/after/checks/<scenario>.json`. All 30 checks pass (5 per scenario × 6).
+
+| Check | Result |
+|---|---|
+| **Reachability** (every `main a[href]` on `/home` opened in a fresh page: no 404, no error boundary, not blank, no page error; plus the dashboard's own controls) | normal / stale / negative / missing / longnames: 15 of 15 links each; empty: 9 of 9. Controls: Afford opens its sheet and Escape closes it; the morning text opens; horizons 30/180/90 switch; "Why this number?" opens. Header action per scenario: afford, **reconnect** (stale), **short** (negative), afford, afford, **link** (empty). Skipped on purpose: Sync (Plaid), Resolve / Dismiss (writes), nothing turns AI on |
+| **Keyboard only** (Tab from the page title through `<main>`) | 31–33 stops (16 in empty), in visual order: header action, the morning-text toggle, "Why this number?", the three horizons, forecast link, Coming up links, All accounts, each account name, each bank's Sync, the Spending / Debt links, every Needs attention row, All activity, each activity row. **0 stops without a visible focus mark.** Horizons answer Enter and Space; the disclosure answers Enter (`aria-expanded`); the popover opens on Enter, closes on Escape and gives focus back to its trigger |
+| **axe** at 1280 and 390 | **0 critical / serious** in every scenario, after two fixes this round: the bank-freshness words and the chip's ••last4 moved to neutral-600/700 (they were 3.9–4.3:1), and an account's facts box is a `<dl>` only when it holds facts (`definition-list`). The stale scenario's "needs reconnecting" is now ink with an alarm dot (the orange is 3:1 at 11 px) |
+| **Reduced motion** (`reducedMotion: reduce` vs `no-preference`) | reduce: 0 animations running at first paint and 0 after settle (longest 0 ms). no-preference: 59–61 animations at first paint (entrances, chart draw, meter sweep); at the settle point 4 are still running, the longest 1.98 s (the chart's one draw) |
+| **No sideways scroll at 390** | `document` and the shell scroller both 0 px over, every scenario |
+| **Names never truncated** | 0 truncated nodes among account names, account links (••last4 present) and every account chip, at both sizes, every scenario (incl. `longnames`) |
+
+- ⚠️ **What axe cannot see.** axe puts contrast over a background IMAGE in `incomplete`, not `violations`: inside the milled panels and on the tinted ground that is 67 nodes on the negative scenario's desktop, 28 on the phone. Measured by hand:
+  - the alarm orange `#e16d3e` is **3.0–3.3:1** on white / platinum, which passes for the 30 px figures (3:1 is the large-text bar) but **fails AA for the small alarm words** ("below your $500 buffer · short by…", "Checking covers $0.00…", "$40.00 over the plan", account "Needs reconnecting"). That is the app-wide palette (C12: "#e16d3e means something is wrong"), not new here. Options for the owner: ink words with an alarm dot (what the header line does now), or a deeper alarm step for text. The existing `--color-bad-hover` `#c2562a` is 4.51:1 on white but 4.27:1 on the ground; a step that clears 4.5 everywhere is around `#ba4f24`, which needs the owner's eye first ("never brown").
+  - neutral-500 labels are 4.6–4.7:1 (pass). The missing-figure dash and the version line moved from neutral-400 (2.6:1) to neutral-500 this round.
 
 ## Unverified
 - **E2E:** `perf-open.spec.ts` and `a11y-smoke` need Clerk keys and a real DB. Their assumptions still hold by construction (at most two bounded `/transactions` reads, no chart chunk on open), but they did not run.
 - **Live Plaid:** sync, reconnect and Link are mocked in the fixture.
   - `GET /plaid/liability-accounts` makes one opportunistic liabilities fetch when a household has NEVER had liability data. The dashboard only asks when a card or loan is missing from the debt list.
 - **The recap with AI on:** the fixture always shows the template.
-- **Phase 3 checks** (the lead's): the keyboard-only pass, axe and a reduced-motion emulation pass, beyond what the existing CSS switches guarantee.
+- **Screen readers:** the keyboard and axe passes are not a screen-reader pass.
 - **App-wide visuals:** the milled `.panel`, the tinted ground, the `.surface` ring fix and the Accounts page losing its doubled padding change other pages subtly. I only looked at `/home`.
