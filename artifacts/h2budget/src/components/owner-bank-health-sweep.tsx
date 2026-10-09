@@ -4,16 +4,10 @@ import {
   useRunPlaidMalformedTokenSweep,
   type PlaidMalformedTokenSweepResult,
 } from "@workspace/api-client-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Panel } from "@/components/next";
 import { useToast } from "@/hooks/use-toast";
-import { ShieldCheck, RefreshCw } from "lucide-react";
+import { btnSecondary, fieldLabel, Help } from "@/ui";
+import { RefreshCw } from "lucide-react";
 
 const SAMPLE_LIMIT = 5;
 
@@ -68,101 +62,77 @@ export function OwnerBankHealthSweepSection() {
   const sample = result?.flaggedItems.slice(0, SAMPLE_LIMIT) ?? [];
   const overflow = result ? Math.max(0, result.flaggedItems.length - SAMPLE_LIMIT) : 0;
 
+  // (C8) A Settings › Banks panel on the h2budget kit; test ids unchanged.
   return (
-    <Card data-testid="card-owner-bank-health-sweep">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5" />
-          Bank-login health check
-        </CardTitle>
-        <CardDescription>
+    <Panel
+      title="Bank-login health check"
+      sub="Owner only"
+      span={12}
+      variant="static"
+      data-testid="card-owner-bank-health-sweep"
+      actions={
+        <Help>
           Re-runs the same daily malformed-access-token sweep that runs
-          unattended at 03:02 UTC. Use this after investigating a spike
-          alert to confirm the fix immediately instead of waiting for
-          tomorrow morning.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <Button
-            type="button"
-            onClick={() => runSweep.mutate()}
-            disabled={runSweep.isPending}
-            data-testid="button-run-bank-health-sweep"
-          >
-            <RefreshCw
-              className={`w-4 h-4 mr-2 ${runSweep.isPending ? "animate-spin" : ""}`}
-            />
-            {runSweep.isPending ? "Running…" : "Run health check now"}
-          </Button>
-        </div>
+          unattended at 03:02 UTC. Use it after investigating a spike alert to
+          confirm the fix now instead of waiting for tomorrow morning.
+        </Help>
+      }
+    >
+      <div className="space-y-4">
+        <button
+          type="button"
+          className={btnSecondary}
+          onClick={() => runSweep.mutate()}
+          disabled={runSweep.isPending}
+          data-testid="button-run-bank-health-sweep"
+        >
+          <RefreshCw
+            className={`mr-1.5 inline h-4 w-4 align-[-3px] ${runSweep.isPending ? "animate-spin" : ""}`}
+          />
+          {runSweep.isPending ? "Running…" : "Run health check now"}
+        </button>
 
         {result && (
           <div
-            className="rounded-md border border-border p-3 space-y-3 text-sm"
+            className="section-enter space-y-3 rounded-control bg-platinum-2 p-3 text-body ring-1 ring-brand-line"
             data-testid="bank-health-sweep-result"
           >
             <div className="flex flex-wrap gap-x-6 gap-y-1">
               <div>
-                <span className="text-muted-foreground">Scanned: </span>
-                <span
-                  className="font-semibold"
-                  data-testid="text-sweep-scanned"
-                >
+                <span className="text-neutral-500">Scanned: </span>
+                <span className="font-mono font-semibold tabular-nums text-brand-navy" data-testid="text-sweep-scanned">
                   {result.scanned}
                 </span>
               </div>
               <div>
-                <span className="text-muted-foreground">Flagged: </span>
-                <span
-                  className="font-semibold"
-                  data-testid="text-sweep-flagged"
-                >
+                <span className="text-neutral-500">Flagged: </span>
+                <span className="font-mono font-semibold tabular-nums text-brand-navy" data-testid="text-sweep-flagged">
                   {result.flagged}
                 </span>
               </div>
               {ranAt && (
-                <div className="text-muted-foreground">
-                  Ran {new Date(ranAt).toLocaleTimeString()}
-                </div>
+                <div className="text-neutral-500">Ran {new Date(ranAt).toLocaleTimeString()}</div>
               )}
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                Flagged institutions
-              </h4>
+              <h4 className={`mb-1 ${fieldLabel}`}>Flagged institutions</h4>
               {result.flaggedItems.length === 0 ? (
-                <p
-                  className="text-sm text-muted-foreground"
-                  data-testid="text-sweep-no-flagged"
-                >
+                <p className="text-neutral-500" data-testid="text-sweep-no-flagged">
                   None — all access tokens look well-formed.
                 </p>
               ) : (
-                <ul
-                  className="list-disc pl-5 space-y-0.5"
-                  data-testid="list-sweep-flagged-items"
-                >
+                <ul className="list-disc space-y-0.5 pl-5" data-testid="list-sweep-flagged-items">
                   {sample.map((item) => (
-                    <li
-                      key={item.itemRowId}
-                      data-testid={`row-sweep-flagged-${item.itemRowId}`}
-                    >
-                      <span className="font-medium">
+                    <li key={item.itemRowId} data-testid={`row-sweep-flagged-${item.itemRowId}`}>
+                      <span className="font-medium text-brand-navy">
                         {item.institutionName ?? "Unknown bank"}
                       </span>
-                      <span className="text-muted-foreground">
-                        {" "}
-                        — item {item.itemId}
-                      </span>
+                      <span className="text-neutral-500"> — item {item.itemId}</span>
                     </li>
                   ))}
                   {overflow > 0 && (
-                    <li
-                      className="text-muted-foreground"
-                      data-testid="text-sweep-overflow"
-                    >
+                    <li className="text-neutral-500" data-testid="text-sweep-overflow">
                       …and {overflow} more
                     </li>
                   )}
@@ -171,19 +141,14 @@ export function OwnerBankHealthSweepSection() {
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                Spike alert
-              </h4>
-              <p
-                className="text-sm text-muted-foreground"
-                data-testid="text-sweep-alert"
-              >
+              <h4 className={`mb-1 ${fieldLabel}`}>Spike alert</h4>
+              <p className="text-neutral-500" data-testid="text-sweep-alert">
                 {describeAlert(result.alert)}
               </p>
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   );
 }
