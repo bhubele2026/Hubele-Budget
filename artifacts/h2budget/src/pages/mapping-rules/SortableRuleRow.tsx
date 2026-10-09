@@ -210,25 +210,29 @@ export function SortableRuleRow({
             {category?.name ?? "Uncategorized"}
           </span>
         </span>
-      </span>
-      {/* (WP5b) The last direct edit (pattern, match, category or priority);
-          a reorder is in the history but is not an edit. Absent = not edited
-          since rule history began. */}
-      {rule.updatedAt ? (
-        <span
-          className="shrink-0 whitespace-nowrap text-micro text-neutral-500"
-          title="The last time this rule's pattern, match, category or priority was changed"
-          data-testid={`rule-edited-${rule.id}`}
-        >
-          edited {shortDateOfInstant(rule.updatedAt)}
+        {/* (WP5b) The last direct edit (pattern, match, category or
+            priority; a reorder is in the history but is not an edit) and the
+            rule's History. Inside this column on purpose: on a phone they take
+            a third line instead of squeezing the pattern and category, and
+            from `sm` up they sit inline after the category. */}
+        <span className="flex shrink-0 items-center gap-2">
+          {rule.updatedAt ? (
+            <span
+              className="whitespace-nowrap text-micro text-neutral-500"
+              title="The last time this rule's pattern, match, category or priority was changed"
+              data-testid={`rule-edited-${rule.id}`}
+            >
+              edited {shortDateOfInstant(rule.updatedAt)}
+            </span>
+          ) : null}
+          <RuleHistoryPopover ruleId={rule.id} pattern={rule.pattern} categoryName={categoryName} />
         </span>
-      ) : null}
+      </span>
       {isWinner ? (
         <span className="chip ok">Winner</span>
       ) : isMatched ? (
         <span className="chip gray">Match</span>
       ) : null}
-      <RuleHistoryPopover ruleId={rule.id} pattern={rule.pattern} categoryName={categoryName} />
       <button
         type="button"
         className={btnLink}

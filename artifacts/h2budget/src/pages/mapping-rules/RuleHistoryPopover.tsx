@@ -51,10 +51,13 @@ export function RuleHistoryPopover({
           data-testid={`rule-history-btn-${ruleId}`}
         >
           <History className="h-3 w-3" />
+          {/* On a phone the control has a line of its own, so it says what it is. */}
+          <span className="sm:hidden">History</span>
         </button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
+        collisionPadding={12}
         className="w-80 p-3"
         data-testid={`rule-history-${ruleId}`}
       >
