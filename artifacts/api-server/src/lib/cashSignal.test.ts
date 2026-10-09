@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
+  bankBalanceParts,
   expandItem,
   parseISO,
   fmtISO,
   addDays,
   nextBusinessDay,
 } from "./cashSignal";
+import type { ForecastLedger } from "./forecastLedger";
 
 // Minimal stand-in for the recurring_items row shape — we only feed
 // `expandItem` the fields it actually reads.
@@ -310,4 +312,62 @@ describe("forecast schedule stability", () => {
     expect(narrow).toEqual(wide.filter(e => e.date >= "2026-06-01" && e.date <= "2026-12-31"));
   });
 
+});
+
+// ⭐ (WP1) The two halves of the bank balance: the snapshot as read, and what the
+// ledger adds on top of it. Only formatting — every figure is the ledger's.
+describe("bankBalanceParts (WP1)", () => {
+  type Parts = Pick<
+    ForecastLedger,
+    "snapshotBalance" | "snapshotAt" | "snapshotSource" | "snapshotISO" | "todayISO" | "cashThroughToday" | "bankToday"
+  >;
+  const ledger = (o: Partial<Parts> = {}): ForecastLedger =>
+    ({
+      snapshotBalance: 3458.98,
+      snapshotAt: new Date("2026-10-02T14:00:00Z"),
+      snapshotSource: "plaid",
+      snapshotISO: "2026-10-02",
+      todayISO: "2026-10-09",
+      cashThroughToday: { rowCount: 20, net: -1302.43 },
+      bankToday: 2156.55,
+      ...o,
+    }) as unknown as ForecastLedger;
+
+  it("a rolled snapshot: the balance as read, when, from where; the rows added through today", () => {
+    expect(bankBalanceParts(ledger())).toEqual({
+      snapshot: { balance: "3458.98", at: "2026-10-02T14:00:00.000Z", source: "plaid" },
+      sinceSnapshot: { net: "-1302.43", count: 20, through: "2026-10-09" },
+    });
+  });
+
+  it("the halves add up to bankToday to the cent (float noise is rounded like bankToday)", () => {
+    const l = ledger({ snapshotBalance: 0.1, cashThroughToday: { rowCount: 2, net: 0.2 }, bankToday: 0.1 + 0.2 });
+    const { snapshot, sinceSnapshot } = bankBalanceParts(l);
+    expect(sinceSnapshot!.net).toBe("0.20");
+    expect(Math.round(Number(snapshot!.balance) * 100) + Math.round(Number(sinceSnapshot!.net) * 100)).toBe(
+      Math.round(l.bankToday * 100),
+    );
+  });
+
+  it("a real zero stays a zero: nothing rolled since a same-day snapshot", () => {
+    const parts = bankBalanceParts(ledger({ snapshotISO: "2026-10-09", cashThroughToday: { rowCount: 0, net: 0 } }));
+    expect(parts.sinceSnapshot).toEqual({ net: "0.00", count: 0, through: "2026-10-09" });
+    // A tiny negative float is still "0.00", never "-0.00".
+    expect(bankBalanceParts(ledger({ cashThroughToday: { rowCount: 1, net: -0.001 } })).sinceSnapshot!.net).toBe("0.00");
+  });
+
+  it("anything not from Plaid was typed in (the freshness rule)", () => {
+    expect(bankBalanceParts(ledger({ snapshotSource: "manual" })).snapshot!.source).toBe("manual");
+    expect(bankBalanceParts(ledger({ snapshotSource: null })).snapshot!.source).toBe("manual");
+  });
+
+  it("no snapshot: both halves are null — never a $0 snapshot", () => {
+    expect(
+      bankBalanceParts(ledger({ snapshotBalance: null, snapshotAt: null, snapshotISO: null, cashThroughToday: { rowCount: 0, net: 0 } })),
+    ).toEqual({ snapshot: null, sinceSnapshot: null });
+  });
+
+  it("a balance with no read time has no snapshot to show (as presentSnapshot), and nothing rolls", () => {
+    expect(bankBalanceParts(ledger({ snapshotAt: null, snapshotISO: null }))).toEqual({ snapshot: null, sinceSnapshot: null });
+  });
 });

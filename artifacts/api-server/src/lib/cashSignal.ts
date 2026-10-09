@@ -211,8 +211,10 @@ export type CashSignal = {
    * `resolveSnapshotAccount`'s answer, with that account's own name, mask and
    * subtype. Everything but `via` is null when it is `unresolved`. A screen
    * that names the account reads this, never a second source.
+   * (WP1) With its ids — `rowId` (`plaid_accounts.id`) and `externalId` (Plaid's
+   * `account_id`) — so a screen finds it in a list by id, never by mask.
    */
-  account: Pick<SnapshotAccountResolution, "name" | "mask" | "subtype" | "via">;
+  account: Pick<SnapshotAccountResolution, "rowId" | "externalId" | "name" | "mask" | "subtype" | "via">;
   horizonDays?: number;
   fromDate?: string;
   toDate?: string;
@@ -451,6 +453,8 @@ export async function computeCashSignalDetailed(
     snapshotAt: ledger.snapshotAt ? ledger.snapshotAt.toISOString() : null,
     snapshotSource: ledger.snapshotSource,
     account: {
+      rowId: ledger.snapshotAccount.rowId,
+      externalId: ledger.snapshotAccount.externalId,
       name: ledger.snapshotAccount.name,
       mask: ledger.snapshotAccount.mask,
       subtype: ledger.snapshotAccount.subtype,
@@ -515,6 +519,50 @@ export async function computeCashSignalDetailed(
     ...(ledger.hookAmountIgnored.length > 0 ? { hookAmountIgnored: ledger.hookAmountIgnored.map((h) => ({ ...h })) } : {}),
   };
   return { signal, ledger };
+}
+
+/** (WP1) The bank snapshot `bankToday` rolls forward from, as it was read. */
+export type BankSnapshotPart = { balance: string; at: string; source: "plaid" | "manual" };
+/** (WP1) What the roll-forward adds on top of it, through `through` (the household's today). */
+export type SinceSnapshotPart = { net: string; count: number; through: string };
+
+/**
+ * ⭐ (WP1) THE TWO HALVES OF `bankToday`, from the ledger that computed it.
+ *
+ * Every screen shows the balance rolled forward (`bankToday`). The account
+ * pages used to show the raw snapshot beside it with no date, so one account
+ * read two balances and nothing said why. These are those two halves, from
+ * ONE ledger, formatted exactly as `bankToday` is (`r2`): no new figure.
+ *   - `snapshot`: the balance as read, when, and from where — null without a
+ *     snapshot (or without its read time). `source` is normalised like
+ *     `computeBankFreshness().source`: anything not from Plaid was typed in.
+ *   - `sinceSnapshot`: `ledger.cashThroughToday` — the rows that count, dated
+ *     through today, and what they add. Null when the snapshot has no read
+ *     time, because then nothing rolls.
+ * `snapshot.balance + sinceSnapshot.net = bankToday` to the cent (both halves
+ * are whole cents), and `sinceSnapshot` equals "Why this number?"'s
+ * `ledger.sinceAnchor` — `spineParity.integration.test.ts` holds both.
+ */
+export function bankBalanceParts(ledger: ForecastLedger): {
+  snapshot: BankSnapshotPart | null;
+  sinceSnapshot: SinceSnapshotPart | null;
+} {
+  const snapshot: BankSnapshotPart | null =
+    ledger.snapshotBalance != null && ledger.snapshotAt
+      ? {
+          balance: r2(ledger.snapshotBalance),
+          at: ledger.snapshotAt.toISOString(),
+          source: ledger.snapshotSource === "plaid" ? "plaid" : "manual",
+        }
+      : null;
+  const sinceSnapshot: SinceSnapshotPart | null = ledger.snapshotISO
+    ? {
+        net: r2(ledger.cashThroughToday.net),
+        count: ledger.cashThroughToday.rowCount,
+        through: ledger.todayISO,
+      }
+    : null;
+  return { snapshot, sinceSnapshot };
 }
 
 function listedPlan(p: import("./forecastLedger").LedgerListedPlan): CashSignalListedPlan {

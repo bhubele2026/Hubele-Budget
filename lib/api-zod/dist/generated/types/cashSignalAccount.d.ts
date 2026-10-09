@@ -14,9 +14,22 @@ else its sole depository account. A screen that names the account reads
 this, so its label and its numbers come from one response. `name`,
 `mask` and `subtype` are the resolved Plaid account's own; all null when
 `via` is `unresolved`, where the balance stays at the raw snapshot.
+(WP1) `rowId` and `externalId` say WHICH account: a screen that finds this
+account in a list matches on them, never on the mask (two accounts can
+share a mask, and a missing mask matched every other missing one).
 
  */
 export interface CashSignalAccount {
+    /**
+     * (WP1) The resolved account's plaid_accounts.id; null when unresolved.
+     * @nullable
+     */
+    rowId: string | null;
+    /**
+     * (WP1) The resolved account's Plaid account_id (what transactions carry as plaidAccountId); null when unresolved.
+     * @nullable
+     */
+    externalId: string | null;
     /** @nullable */
     name: string | null;
     /** @nullable */

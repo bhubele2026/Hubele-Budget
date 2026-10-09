@@ -20,7 +20,6 @@ vi.mock("./queries", () => ({
   useAmexQ: () => get("amex"),
   useMoneyPositionQ: () => get("pos"),
   useLiabilityAccountsQ: () => get("liab"),
-  useBankExplainQ: () => get("explain"),
 }));
 vi.mock("./queriesLazy", () => ({
   useCategoriesQ: () => get("cats"),
@@ -63,9 +62,17 @@ import { bankLines } from "./bankState";
 import { cleanRecap, recapSourceWords } from "./recapWords";
 import { remainingDebtTotal } from "@/lib/debtBalance";
 
+// (WP1) The spine's bank carries the snapshot under the balance, what rolled
+// since (4,180.50 + 20.00 = 4,200.50) and the account with its ids (row c1).
+const spineBank = {
+  balance: "4200.50", asOfDate: "2026-10-07T20:00:00Z", source: "plaid", lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null,
+  snapshot: { balance: "4180.50", at: "2026-10-07T20:00:00Z", source: "plaid" },
+  sinceSnapshot: { net: "20.00", count: 0, through: "2026-10-08" },
+  account: { rowId: "c1", externalId: "p-c1", name: "Total Checking", mask: "5526", subtype: "checking", via: "sole checking" },
+};
 const spine = (o: Record<string, unknown> = {}) => ({
   asOf: "2026-10-08T15:00:00Z",
-  bank: { balance: "4200.50", asOfDate: "2026-10-07T20:00:00Z", source: "plaid", lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null },
+  bank: spineBank,
   spentMonth: 900, spentWeek: 120,
   nextBill: { name: "Rent", amount: "1200.00", dueDate: "2026-10-10" },
   billsDueCount: 2,
@@ -291,16 +298,41 @@ describe("summary row: four figures, status-aware", () => {
     expect(screen.getByTestId("dash-kpi-checking-value").textContent).toBe("$4,200.50");
     expect(screen.getByTestId("dash-low-words").textContent).toContain("from an out-of-date bank balance");
   });
-  it("a snapshot from an earlier day says how many rows the balance rolls forward (manual entries included, by design)", () => {
-    h.spine.data = spine({ bank: { ...spine().bank, asOfDate: "2026-10-05T15:00:00Z", stale: true, staleReason: "old" } });
-    h.Q.explain = ok({ ledger: { anchorDay: "2026-10-05", sinceAnchor: { rowCount: 2, net: "-24.00" }, recentRows: [] } });
+  it("says how many entries the balance rolls forward on top of the snapshot (manual entries included, by design) — from the spine", () => {
+    const at = "2026-10-05T15:00:00Z";
+    h.spine.data = spine({ bank: { ...spineBank, asOfDate: at, stale: true, staleReason: "old",
+      snapshot: { balance: "4224.50", at, source: "plaid" }, sinceSnapshot: { net: "-24.00", count: 2, through: "2026-10-08" } } });
     const a = wrap(<SummaryRow />);
-    expect(screen.getByTestId("dash-since-snapshot").textContent).toContain("Includes 2 entries since the Oct 5 snapshot");
+    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe("Includes 2 entries since the Oct 5 snapshot");
     a.unmount();
-    // Same-day snapshot: nothing rolled on top, nothing said.
-    h.spine.data = spine({ bank: { ...spine().bank, asOfDate: "2026-10-08T15:00:00Z" } });
+    // Nothing rolled on top: nothing said.
+    h.spine.data = spine({ bank: { ...spineBank, sinceSnapshot: { net: "0.00", count: 0, through: "2026-10-08" } } });
+    const b = wrap(<SummaryRow />);
+    expect(screen.queryByTestId("dash-since-snapshot")).toBeNull();
+    b.unmount();
+    // ⭐ (WP1) A same-day snapshot with an entry after the read says so too: the
+    // count is free on the spine now, and the balance is not the bank's figure.
+    h.spine.data = spine({ bank: { ...spineBank, asOfDate: "2026-10-08T14:00:00Z",
+      snapshot: { balance: "4212.50", at: "2026-10-08T14:00:00Z", source: "plaid" }, sinceSnapshot: { net: "-12.00", count: 1, through: "2026-10-08" } } });
+    const c = wrap(<SummaryRow />);
+    expect(screen.getByTestId("dash-since-snapshot").textContent).toBe("Includes 1 entry since the Oct 8 snapshot");
+    c.unmount();
+    // No snapshot at all: nothing to say it rolled from.
+    h.spine.data = spine({ bank: { ...spineBank, snapshot: null, sinceSnapshot: null } });
     wrap(<SummaryRow />);
     expect(screen.queryByTestId("dash-since-snapshot")).toBeNull();
+  });
+  it("(WP1) names the account from the spine itself — no cash-signal read, and an unresolved account says only 'Checking'", () => {
+    h.Q.cash = loading;
+    const a = wrap(<SummaryRow />);
+    expect(screen.getByTestId("dash-kpi-checking").textContent).toContain("Total Checking");
+    expect(screen.getByTestId("dash-kpi-checking").textContent).toContain("••5526");
+    expect(h.horizons).toEqual([]); // the summary row never asked for the cash signal
+    a.unmount();
+    h.spine.data = spine({ bank: { ...spineBank, account: { rowId: null, externalId: null, name: null, mask: null, subtype: null, via: "unresolved" } } });
+    wrap(<SummaryRow />);
+    expect(screen.getByTestId("dash-kpi-checking").textContent).toContain("Checking");
+    expect(screen.getByTestId("dash-kpi-checking").textContent).not.toContain("Total Checking");
   });
   it("over the week's plan: room is the real $0 the position computes, said in words", () => {
     h.spine.data = spine({ position: { ...spine().position, safeToSpendNow: "0.00", remainingWeek: "-25.00", withinPlan: "over" } });

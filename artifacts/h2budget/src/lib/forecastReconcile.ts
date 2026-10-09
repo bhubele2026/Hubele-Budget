@@ -65,6 +65,13 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  *    decomposed into named contributors (matched-amount drift +
  *    starting-balance drift) and reported as Σ |delta| so signed
  *    over/undershoots can't cancel.
+ *
+ * ⚠️ (WP1) THIS READS THE RAW SNAPSHOT ON PURPOSE. Every other surface shows
+ * the checking balance TODAY — the snapshot rolled forward (`spine.bank.balance`,
+ * through `lib/bankBalance`). This is a different question: does the forecast
+ * agree with what the bank said AT THE MOMENT IT SAID IT? Comparing the plan
+ * to a rolled-forward figure would fold the rows since the snapshot into the
+ * "gap" twice. Keep `bankSnapshot` here; do not swap in the balance today.
  */
 export function computeBankReconcile(input: ReconcileInput): ReconcileResult {
   const {

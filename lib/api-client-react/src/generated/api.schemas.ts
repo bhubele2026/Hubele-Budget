@@ -865,6 +865,87 @@ export const SpineBankStaleReason = {
   manual_old: "manual_old",
 } as const;
 
+/**
+ * Same as bank.source: anything not from Plaid was typed in
+ */
+export type SpineBankSnapshotSource =
+  (typeof SpineBankSnapshotSource)[keyof typeof SpineBankSnapshotSource];
+
+export const SpineBankSnapshotSource = {
+  plaid: "plaid",
+  manual: "manual",
+} as const;
+
+/**
+ * (WP1) The bank snapshot as it was read: the balance the bank (or the household, for a typed-in one) reported at `at`. Not the balance today — the spine's `bank.balance` is this rolled forward. A different figure from `balance` whenever rows landed since.
+ */
+export interface SpineBankSnapshot {
+  /** The snapshot balance, two decimals */
+  balance: string;
+  /** When it was read (ISO instant); its household day is the snapshot day */
+  at: string;
+  /** Same as bank.source: anything not from Plaid was typed in */
+  source: SpineBankSnapshotSource;
+}
+
+/**
+ * (WP1) What the roll-forward adds on top of the snapshot. `count` is the rows that count, dated through `through`, including a posted row that adds 0.00 because its pending half was already in the balance; held, other-account and replaced pending rows are not counted.
+ */
+export interface SpineSinceSnapshot {
+  /** Signed two-decimal dollars (negative = money out since the snapshot) */
+  net: string;
+  count: number;
+  /** The household day (YYYY-MM-DD) the roll runs through: today */
+  through: string;
+}
+
+export type CashSignalAccountVia =
+  (typeof CashSignalAccountVia)[keyof typeof CashSignalAccountVia];
+
+export const CashSignalAccountVia = {
+  pointer: "pointer",
+  snapshot_mask: "snapshot mask",
+  sole_checking: "sole checking",
+  sole_depository: "sole depository",
+  unresolved: "unresolved",
+} as const;
+
+/**
+ * (Decision 16, PR-K round 2) The bank account this signal's figures roll
+forward on, as `resolveSnapshotAccount` resolved it: the stored pointer,
+else the snapshot's mask, else the household's sole checking account,
+else its sole depository account. A screen that names the account reads
+this, so its label and its numbers come from one response. `name`,
+`mask` and `subtype` are the resolved Plaid account's own; all null when
+`via` is `unresolved`, where the balance stays at the raw snapshot.
+(WP1) `rowId` and `externalId` say WHICH account: a screen that finds this
+account in a list matches on them, never on the mask (two accounts can
+share a mask, and a missing mask matched every other missing one).
+
+ */
+export interface CashSignalAccount {
+  /**
+   * (WP1) The resolved account's plaid_accounts.id; null when unresolved.
+   * @nullable
+   */
+  rowId: string | null;
+  /**
+   * (WP1) The resolved account's Plaid account_id (what transactions carry as plaidAccountId); null when unresolved.
+   * @nullable
+   */
+  externalId: string | null;
+  /** @nullable */
+  name: string | null;
+  /** @nullable */
+  mask: string | null;
+  /**
+   * Plaid subtype, e.g. checking or savings.
+   * @nullable
+   */
+  subtype: string | null;
+  via: CashSignalAccountVia;
+}
+
 export type SpineBank = {
   /** computeCashSignal().bankToday — snapshot rolled forward through the ledger */
   balance: string;
@@ -895,6 +976,12 @@ export type SpineBank = {
    * @nullable
    */
   staleReason: SpineBankStaleReason;
+  /** (WP1) bankBalanceParts(ledger).snapshot — the bank snapshot `balance` rolls forward from, as read (never rolled forward). Equals /forecast/bank-balance-explain .snapshot's balance, at and source. Null when there is no snapshot. */
+  snapshot: SpineBankSnapshot | null;
+  /** (WP1) bankBalanceParts(ledger).sinceSnapshot — what the roll-forward adds on top of the snapshot, through `through` (the household's today), by the ledger's own rule (PR4e). Equals /forecast/bank-balance-explain .ledger.sinceAnchor (net, rowCount). snapshot.balance + net = balance to the cent: one ledger computes all three. Null when the snapshot has no read time (no roll-forward). */
+  sinceSnapshot: SpineSinceSnapshot | null;
+  /** (WP1) computeCashSignal().account — the account `balance` rolls forward on, with its ids. A screen finds this account in a list by `rowId` / `externalId`, never by mask. */
+  account: CashSignalAccount;
 };
 
 /**
@@ -4127,40 +4214,6 @@ stays on the curve.
  */
   remainderAmount?: string;
 };
-
-export type CashSignalAccountVia =
-  (typeof CashSignalAccountVia)[keyof typeof CashSignalAccountVia];
-
-export const CashSignalAccountVia = {
-  pointer: "pointer",
-  snapshot_mask: "snapshot mask",
-  sole_checking: "sole checking",
-  sole_depository: "sole depository",
-  unresolved: "unresolved",
-} as const;
-
-/**
- * (Decision 16, PR-K round 2) The bank account this signal's figures roll
-forward on, as `resolveSnapshotAccount` resolved it: the stored pointer,
-else the snapshot's mask, else the household's sole checking account,
-else its sole depository account. A screen that names the account reads
-this, so its label and its numbers come from one response. `name`,
-`mask` and `subtype` are the resolved Plaid account's own; all null when
-`via` is `unresolved`, where the balance stays at the raw snapshot.
-
- */
-export interface CashSignalAccount {
-  /** @nullable */
-  name: string | null;
-  /** @nullable */
-  mask: string | null;
-  /**
-   * Plaid subtype, e.g. checking or savings.
-   * @nullable
-   */
-  subtype: string | null;
-  via: CashSignalAccountVia;
-}
 
 /**
  * (PR6) An unresolved plan occurrence kept off the forecast curve.

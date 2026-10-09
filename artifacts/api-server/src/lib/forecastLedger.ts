@@ -187,6 +187,16 @@ export type ForecastLedger = {
    */
   bankToday: number;
   /**
+   * (WP1) What `bankToday` adds on top of the anchor: `classifyCashRows`'
+   * `throughToday` over the ledger's own rows — the rows that count, dated
+   * through today, how many and what they add. `startBalanceAtAnchor + net` is
+   * `bankToday`. `{ rowCount: 0, net: 0 }` without a snapshot, when nothing
+   * rolls. The same figure "Why this number?" reports as `sinceAnchor`
+   * (`classifyLedgerRowsThroughToday`, the same rule over the same rows).
+   * ⚠️ Unrounded: callers format it to cents.
+   */
+  cashThroughToday: { rowCount: number; net: number };
+  /**
    * Every plan and actual row, sorted by date (stable: plans before actuals on a day, each in build order).
    * ⚠️ Plans can fall OUTSIDE `[fromISO, toISO]` (a drag target past `toISO`, a plan dated before `fromISO`);
    * actuals are capped at `toISO`. Consumers window the items themselves.
@@ -1401,6 +1411,9 @@ export async function buildForecastLedger(
     snapshotAccount,
     startBalanceAtAnchor,
     bankToday,
+    // The rows summed into `bankToday` above are exactly these: the ones that
+    // count, dated on or before today — and only with a snapshot.
+    cashThroughToday: snapshotISO ? { ...cash.throughToday } : { rowCount: 0, net: 0 },
     items,
     matches,
     remainderByPlanKey,
