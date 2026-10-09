@@ -24,8 +24,12 @@ import { dayOf } from "./accountFreshness";
  *                       one) — never the current balance under another name
  *
  * An archived debt is "Paid off · not on the payoff plan": never "Owed", never
- * in a total. A card with no debt row reads Plaid's stored liability figures
- * and is "Not on the payoff plan". A field no source has is null, never 0.
+ * in a total. Its card's own current balance is Plaid's stored liability figure
+ * when there is one, else the row's only while Plaid keeps the row current
+ * (`balanceSource: "plaid"`): a manual archived row holds the $0.00 it was
+ * archived at, not what the card owes now that it is in use again. A card with
+ * no debt row reads Plaid's stored liability figures and is "Not on the payoff
+ * plan". A field no source has is null, never 0.
  */
 
 /** The debt fields this model reads. `liabilityAsOf` and `statement` arrive with
@@ -122,11 +126,15 @@ export function cardOwedView({
   debt?: CardDebtInput | null;
   liability?: CardLiabilityInput | null;
 }): CardOwedView {
-  if (debt) {
+  // Archived with Plaid's own figure: the card's current balance (and minimum)
+  // are the card's, read from the liability; the row only says it was paid off.
+  const fromLiability = !!debt && debt.status !== "active" && num(liability?.balance) != null;
+  if (debt && !fromLiability) {
     const onPlan = debt.status === "active";
     const plaid = debt.balanceSource === "plaid";
     const total = pendingPaymentTotalOf(debt);
-    const bal = num(debt.balance);
+    // An archived row's own balance is the card's only while Plaid keeps it current.
+    const bal = onPlan || plaid ? num(debt.balance) : null;
     const st = debt.statement;
     return {
       state: onPlan ? "on_plan" : "archived",
@@ -155,18 +163,24 @@ export function cardOwedView({
   }
   const bal = num(liability?.balance);
   return {
-    state: "off_plan",
+    state: debt ? "archived" : "off_plan",
     onPlan: false,
-    archived: false,
+    archived: !!debt,
     owed: null,
     pending: null,
     creditorCurrent: bal == null ? null : { balance: bal, asOf: liability?.lastFetchedAt ?? null, source: "plaid" },
     statement: null,
     minPayment: positive(liability?.minPayment),
-    dueDay: liability?.suggestedDebt?.dueDay ?? null,
-    status: CARD_WORDS.offPlan,
+    dueDay: liability?.suggestedDebt?.dueDay ?? debt?.dueDay ?? null,
+    status: debt ? CARD_WORDS.archived : CARD_WORDS.offPlan,
   };
 }
+
+/**
+ * Whether a card needs Plaid's stored liability figures: no debt row at all, or
+ * an archived one (whose own balance may be the $0.00 it was archived at).
+ */
+export const needsLiability = (debt: { status: string } | null | undefined): boolean => !debt || debt.status !== "active";
 
 /** Whether the view has any figure to draw (otherwise the row says so in words). */
 export const cardHasFigures = (v: CardOwedView): boolean =>

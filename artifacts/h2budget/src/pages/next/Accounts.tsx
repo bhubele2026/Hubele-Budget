@@ -15,7 +15,7 @@ import { householdToday } from "@/lib/householdDay";
 import { formatCurrency } from "@/lib/utils";
 import { isSpineAccount, snapshotWords } from "@/lib/bankBalance";
 import { useBankBalanceView } from "@/hooks/useBankBalanceView";
-import { CARD_WORDS, cardOwedView, creditorLabel, debtForAccount } from "@/lib/cardBalance";
+import { CARD_WORDS, cardOwedView, creditorLabel, debtForAccount, needsLiability } from "@/lib/cardBalance";
 import { NOT_TRACKED, snapshotCaption } from "@/lib/snapshotWords";
 import { AccountSelector, type BalanceByRow } from "./accounts/AccountSelector";
 import { AccountSummary } from "./accounts/AccountSummary";
@@ -99,14 +99,15 @@ export default function NextAccountsPage() {
   // the card model says what an archived row is. The dashboard's own rule.
   const debtFor = (rowId: string) => debtForAccount(debts, { id: rowId });
   const owes = (e: (typeof entries)[number]) => e.identity.isCard || e.identity.kind === "loan";
-  // A card or loan with no debt row reads Plaid's STORED liability figures, as
-  // the dashboard does (same key; asked only when such an account exists and
-  // never with `refresh`).
-  const needLiabilities = debts !== undefined && entries.some((e) => owes(e) && !debtFor(e.rowId));
+  // A card or loan with no debt row — or an archived one — reads Plaid's STORED
+  // liability figures, as the dashboard does (same key; asked only when such an
+  // account exists and never with `refresh`).
+  const needLiabilities = debts !== undefined && entries.some((e) => owes(e) && needsLiability(debtFor(e.rowId)));
   const { data: liabs } = useListPlaidLiabilityAccounts(undefined, {
     query: { queryKey: getListPlaidLiabilityAccountsQueryKey(), staleTime: 30 * 60_000, enabled: needLiabilities },
   });
-  const liabilityFor = (rowId: string) => (debtFor(rowId) ? null : (liabs ?? []).find((l) => l.id === rowId) ?? null);
+  const liabilityFor = (rowId: string) =>
+    needsLiability(debtFor(rowId)) ? (liabs ?? []).find((l) => l.id === rowId) ?? null : null;
   // The account the bank balance rolls forward on — BY ID (`isSpineAccount`),
   // never by mask.
   const allKeys = entries.map((e) => ({ id: e.rowId, accountId: e.plaidAccountId, mask: e.identity.mask4 || null }));

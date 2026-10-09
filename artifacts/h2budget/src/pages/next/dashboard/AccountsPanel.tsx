@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import type { PlaidItemDetail, PlaidAccount } from "@workspace/api-client-react";
 import { Panel } from "@/components/next";
 import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
-import { CARD_WORDS, cardHasFigures, cardOwedView, creditorLabel, debtForAccount } from "@/lib/cardBalance";
+import { CARD_WORDS, cardHasFigures, cardOwedView, creditorLabel, debtForAccount, needsLiability } from "@/lib/cardBalance";
 import { freshnessStamps } from "@/lib/accountFreshness";
 import { NOT_TRACKED, snapshotLine } from "@/lib/snapshotWords";
 import { bankBalanceView, isSpineAccount } from "@/lib/bankBalance";
@@ -95,11 +95,12 @@ export default function AccountsPanel() {
   // (WP3) The debt row by the account's internal id only, any status: an
   // archived row is still this card's row, and the card model says what it is.
   const debtFor = (acct: PlaidAccount) => debtForAccount(debts.data, acct);
-  // A card or loan with no debt row reads Plaid's stored liability figures
-  // instead (asked only when such an account exists).
+  // A card or loan with no debt row — or an archived one — reads Plaid's stored
+  // liability figures (asked only when such an account exists).
   const needLiabilities =
-    debts.data !== undefined && rows.some((r) => (r.identity.isCard || r.identity.kind === "loan") && !debtFor(r.acct));
+    debts.data !== undefined && rows.some((r) => (r.identity.isCard || r.identity.kind === "loan") && needsLiability(debtFor(r.acct)));
   const liab = useLiabilityAccountsQ(needLiabilities);
+  const liabPending = needLiabilities && liab.data === undefined && !liab.isError;
 
   return (
     <Panel
@@ -124,7 +125,10 @@ export default function AccountsPanel() {
                 const liability = identity.isCard || identity.kind === "loan";
                 const isCash = !liability && isSpineAccount(acct, spineAcct, allAccts);
                 const debt = liability ? debtFor(acct) : null;
-                const la = liability && !debt ? (liab.data ?? []).find((l) => l.id === acct.id) : undefined;
+                const la = liability && needsLiability(debt) ? (liab.data ?? []).find((l) => l.id === acct.id) : undefined;
+                // Off the plan, the card's figures wait for Plaid's stored ones:
+                // never a flash of an archived row's old $0.00.
+                const waiting = liability && (debts.data === undefined || (needsLiability(debt) && liabPending));
                 // ⭐ ONE card model (WP3): the same view the account chips, the
                 // account's Summary and the Amex register read. Owed is NETTED
                 // (`effectiveDebtBalance`) and only for a debt on the payoff
@@ -184,9 +188,11 @@ export default function AccountsPanel() {
                       </div>
                     </div>
                     {/* A <dl> only when it holds facts: a sentence in its place is a plain <div> (axe: definition-list). */}
-                    <FactsBox asList={view ? cardHasFigures(view) : isCash && !noBank}>
+                    <FactsBox asList={view ? !waiting && cardHasFigures(view) : isCash && !noBank}>
                       {view ? (
-                        cardHasFigures(view) ? (
+                        waiting ? (
+                          <span className="skeleton block h-8 w-48 rounded" aria-busy="true" />
+                        ) : cardHasFigures(view) ? (
                           <>
                             {view.owed != null ? (
                               <Fact label={CARD_WORDS.owed} value={<span className="font-semibold text-brand-navy" data-testid="dash-account-balance">{money(view.owed)}</span>} />
@@ -202,8 +208,6 @@ export default function AccountsPanel() {
                             {view.dueDay ? <Fact label={CARD_WORDS.due} value={`the ${ordinal(view.dueDay)}`} testid="dash-account-due" /> : null}
                             {view.pending ? <Fact label={CARD_WORDS.pending} value={money(view.pending.total)} testid="dash-account-pending" /> : null}
                           </>
-                        ) : debts.data === undefined || (needLiabilities && liab.data === undefined && !liab.isError) ? (
-                          <span className="skeleton block h-8 w-48 rounded" aria-busy="true" />
                         ) : (
                           <p className="text-label text-neutral-500" data-testid="dash-account-nodebt">{CARD_WORDS.nothing}</p>
                         )

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { remainingDebtTotal } from "./debtBalance";
 import {
-  CARD_WORDS, asOfWords, cardHasFigures, cardOwedView, creditorLabel, debtForAccount, pendingWords,
+  CARD_WORDS, asOfWords, cardHasFigures, cardOwedView, creditorLabel, debtForAccount, needsLiability, pendingWords,
 } from "./cardBalance";
 
 /**
@@ -88,6 +88,25 @@ describe("cardOwedView", () => {
     expect(v.creditorCurrent?.balance).toBe(3842.98);
     // …and it never reaches the one total.
     expect(remainingDebtTotal([{ ...live, status: "archived", id: "p", name: "Platinum" } as never])).toBe(0);
+  });
+  it("archived and manual: the row's old balance never poses as the card's — Plaid's stored figure does, when there is one", () => {
+    // Archived at $0.00 by hand the day it was paid off; the card is in use again.
+    const row = { balance: "0.00", status: "archived", balanceSource: "manual", dueDay: 22, lastBalanceUpdate: "2026-09-19T12:00:00Z" };
+    const none = cardOwedView({ debt: row });
+    expect(none.state).toBe("archived");
+    expect(none.creditorCurrent).toBeNull(); // not $0.00: that is when it was archived, not now
+    const v = cardOwedView({ debt: row, liability: { balance: "1940.00", minPayment: "40.00", lastFetchedAt: "2026-10-09T13:00:00Z", suggestedDebt: null } });
+    expect(v.state).toBe("archived");
+    expect(v.status).toBe("Paid off · not on the payoff plan");
+    expect(v.owed).toBeNull();
+    expect(v.creditorCurrent).toEqual({ balance: 1940, asOf: "2026-10-09T13:00:00Z", source: "plaid" });
+    expect(v.minPayment).toBe(40);
+    expect(v.dueDay).toBe(22); // the liability list sends no due day for a linked card; the row's stands
+  });
+  it("needsLiability: no debt row, or an archived one", () => {
+    expect(needsLiability(null)).toBe(true);
+    expect(needsLiability({ status: "archived" })).toBe(true);
+    expect(needsLiability({ status: "active" })).toBe(false);
   });
   it("off the plan (no debt row): Plaid's stored liability figures as the card's own, 'Not on the payoff plan'", () => {
     const v = cardOwedView({

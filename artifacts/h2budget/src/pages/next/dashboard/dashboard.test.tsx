@@ -430,7 +430,7 @@ describe("accounts list", () => {
     expect(rows[3]!.textContent).not.toContain("$0");
   });
   it("(WP3) an archived debt is 'Paid off · not on the payoff plan': never Owed, its own balance named", () => {
-    h.Q.debts = ok([debt("d1", "Amex Platinum", "3842.98", { plaidAccountId: "x1", status: "archived", lastBalanceUpdate: "2026-10-08T11:00:00Z" })]);
+    h.Q.debts = ok([debt("d1", "Amex Platinum", "3842.98", { plaidAccountId: "x1", status: "archived", balanceSource: "plaid", lastBalanceUpdate: "2026-10-08T11:00:00Z" })]);
     h.Q.liab = ok([]);
     wrap(<AccountsPanel />);
     const row = screen.getAllByTestId("dash-account")[2]!;
@@ -439,6 +439,21 @@ describe("accounts list", () => {
     expect(within(row).queryByTestId("dash-account-balance")).toBeNull();
     expect(row.textContent).not.toContain("Owed");
     expect(within(row).getByTestId("dash-account-creditor").textContent).toBe("Card's current balance$3,842.98");
+  });
+  it("(WP3) an archived row typed at $0.00 never poses as the card's balance: Plaid's stored figure does, and it waits for it", () => {
+    h.Q.debts = ok([debt("d1", "Amex Platinum", "0.00", { plaidAccountId: "x1", status: "archived", balanceSource: "manual", dueDay: 22 })]);
+    h.Q.liab = loading;
+    const { unmount } = wrap(<AccountsPanel />);
+    let row = screen.getAllByTestId("dash-account")[2]!;
+    expect(row.textContent).not.toContain("$0.00"); // a skeleton while Plaid's figures load
+    expect(within(row).getByTestId("dash-account-plan").textContent).toBe("Paid off · not on the payoff plan");
+    unmount();
+    h.Q.liab = ok([{ id: "x1", accountId: "p-x1", balance: "1940.00", minPayment: "40.00", lastFetchedAt: "2026-10-08T15:00:00Z", suggestedDebt: null }]);
+    wrap(<AccountsPanel />);
+    row = screen.getAllByTestId("dash-account")[2]!;
+    expect(within(row).getByTestId("dash-account-creditor").textContent).toBe("Card's current balance$1,940.00");
+    expect(within(row).getByTestId("dash-account-due").textContent).toContain("the 22nd");
+    expect(row.textContent).not.toContain("$0.00");
   });
   it("(WP3) the live case: Owed is netted, and the card's own balance sits beside it, each named", () => {
     h.Q.debts = ok([debt("d1", "Amex Platinum", "3842.98", { plaidAccountId: "x1", pendingPaymentTotal: "2615.71", pendingPaymentCount: 2 })]);
