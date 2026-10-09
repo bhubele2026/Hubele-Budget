@@ -9,6 +9,7 @@ import type { DebtAprSource } from "./debtAprSource";
 import type { DebtBalanceSource } from "./debtBalanceSource";
 import type { DebtMinPaymentSource } from "./debtMinPaymentSource";
 import type { DebtPlaidAccount } from "./debtPlaidAccount";
+import type { DebtStatement } from "./debtStatement";
 export interface Debt {
     id: string;
     name: string;
@@ -84,27 +85,44 @@ export interface Debt {
     aprSource: DebtAprSource;
     minPaymentSource: DebtMinPaymentSource;
     /**
-     * (#421) Sum (as a money string, e.g. "200.00") of payment-direction
-  transactions tagged to this debt that the creditor has not yet
-  reflected in the reported `balance`. A transaction counts as
-  pending when it's tagged to the debt (auto or manual), has a
-  positive (payment-direction) amount, and is dated strictly after
-  the debt's last creditor-reported balance timestamp
-  (`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`
-  for manual). The Avalanche / Debts UI subtracts this from
-  `balance` to render an "effective" balance and show a small
-  "−$X pending" hint. Null when the debt has no pending payments.
+     * (#421) Sum (as a money string, e.g. "200.00") of payments tagged
+  to this debt that the creditor has not yet reflected in the
+  reported `balance`. (WP2) A tagged row counts when it pays the
+  debt down (a positive amount — and, for a row from a bank or card
+  feed, one `classifyLiabilityRow` calls a payment, so a refund or a
+  statement credit never counts), it is not the bank row that
+  confirmed a payment claim, and it is dated AFTER the household
+  day of `liabilityAsOf` (a payment dated on or before that day is
+  taken to be in the balance). The Avalanche / Debts UI subtracts
+  this from `balance` to render an "effective" balance and show a
+  small "−$X pending" hint. Null when the debt has no pending
+  payments.
   
      * @nullable
      */
     pendingPaymentTotal?: string | null;
     /**
-     * (#421) Number of tagged payment-direction transactions counted
-  in `pendingPaymentTotal`. Null / 0 when there are none.
+     * (#421) Number of tagged payments counted in
+  `pendingPaymentTotal`. Null / 0 when there are none.
   
      * @nullable
      */
     pendingPaymentCount?: number | null;
+    /**
+     * (WP2) When the balance on this row was read (ISO instant): for a
+  Plaid-sourced linked debt, the later of its account's liability
+  fetch and `plaidLastSyncedAt`; otherwise `lastBalanceUpdate`.
+  Payments dated after this instant's household day are pending
+  (`pendingPaymentTotal`). Null when the balance was never read.
+  
+     * @nullable
+     */
+    liabilityAsOf?: string | null;
+    /** (WP2) The creditor's latest statement on file (`debt_statements`,
+  the newest statement date), or null when none was ever reported.
+  This is the real statement — not the card's current balance.
+   */
+    statement?: DebtStatement | null;
     plaidAccount?: DebtPlaidAccount | null;
 }
 //# sourceMappingURL=debt.d.ts.map

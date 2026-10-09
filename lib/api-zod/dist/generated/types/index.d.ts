@@ -261,6 +261,7 @@ export * from "./debtPlanSnapshotResult";
 export * from "./debtPlanStrategy";
 export * from "./debtPlanStrategySummary";
 export * from "./debtPlanStrategySummaryFirstKill";
+export * from "./debtStatement";
 export * from "./dedupeTransactionsReport";
 export * from "./deleteAmexAnchor200";
 export * from "./deleteDashboardBudgetParams";

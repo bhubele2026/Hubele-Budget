@@ -20,9 +20,11 @@ import {
 import { fetchLiabilitiesForItem } from "../lib/plaidLiabilities";
 import { householdTodayISO } from "../lib/householdClock";
 import {
+  balanceAsOfForDebt,
   loadPendingPayments,
   type PendingEntry,
 } from "../lib/debtPending";
+import { loadLatestStatements, type DebtStatementFact } from "../lib/debtLedger";
 import { confirmDebtPaymentClaims } from "../lib/debtPaymentConfirm";
 import { syncDebtBudgetAfterWrite } from "../lib/budgetDebtSync";
 
@@ -153,14 +155,21 @@ function shapeDebt(
   accountById: Map<string, AccountRow>,
   itemById: Map<string, ItemRow>,
   pendingByDebt: Map<string, PendingEntry> = new Map(),
+  statementByDebt: Map<string, DebtStatementFact> = new Map(),
 ) {
   const acct = d.plaidAccountId ? accountById.get(d.plaidAccountId) : null;
   const item = acct ? itemById.get(acct.itemId) : null;
   const pending = pendingByDebt.get(d.id) ?? null;
+  // (WP2) The instant the pending rule cuts at: payments dated after its
+  // household day are "paid, not posted" (`lib/debtPending.ts`).
+  const asOf = balanceAsOfForDebt(d, acct?.liabilityLastFetchedAt ?? null);
   return {
     ...d,
     pendingPaymentTotal: pending && pending.total > 0 ? pending.total.toFixed(2) : null,
     pendingPaymentCount: pending && pending.count > 0 ? pending.count : null,
+    liabilityAsOf: asOf ? asOf.toISOString() : null,
+    // (WP2) The creditor's real last statement (`debt_statements`), or null.
+    statement: statementByDebt.get(d.id) ?? null,
     lastBalanceUpdate: d.lastBalanceUpdate
       ? d.lastBalanceUpdate.toISOString()
       : null,
@@ -217,6 +226,22 @@ function shapeDebt(
         }
       : null,
   };
+}
+
+/**
+ * (WP2) Every `Debt` this router returns, shaped from ONE set of reads: the
+ * linked accounts and their items, the pending payments, and the latest
+ * statements. Each route used to assemble its own subset, so the same debt
+ * could come back with or without its account context depending on the call.
+ */
+async function shapeDebts(householdId: string, rows: DebtRow[]) {
+  const accountIds = rows.map((r) => r.plaidAccountId).filter((v): v is string => !!v);
+  const [{ accountById, itemById }, pendingByDebt, statementByDebt] = await Promise.all([
+    loadAccountContext(householdId, accountIds),
+    loadPendingPayments(householdId, rows),
+    loadLatestStatements(householdId, rows.map((r) => r.id)),
+  ]);
+  return rows.map((r) => shapeDebt(r, accountById, itemById, pendingByDebt, statementByDebt));
 }
 
 /**
@@ -449,14 +474,7 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  const accountIds = rows
-    .map((r) => r.plaidAccountId)
-    .filter((v): v is string => !!v);
-  const { accountById, itemById } = await loadAccountContext(householdId, accountIds);
-  const pendingByDebt = await loadPendingPayments(householdId, rows);
-  res.json(
-    rows.map((r) => shapeDebt(r, accountById, itemById, pendingByDebt)),
-  );
+  res.json(await shapeDebts(householdId, rows));
 });
 
 router.post("/debts", requireAuth, async (req, res): Promise<void> => {
@@ -490,9 +508,9 @@ router.post("/debts", requireAuth, async (req, res): Promise<void> => {
     .values(values as typeof debtsTable.$inferInsert)
     .returning();
   await recordBalanceSnapshot(req.userId!, req.householdId!, row.id, row.balance);
-  const pendingByDebt = await loadPendingPayments(req.householdId!, [row]);
+  const [shaped] = await shapeDebts(req.householdId!, [row]);
   await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
-  res.status(201).json(shapeDebt(row, new Map(), new Map(), pendingByDebt));
+  res.status(201).json(shaped);
 });
 
 router.post("/debts/sync-minimums", requireAuth, async (req, res): Promise<void> => {
@@ -638,11 +656,9 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     // balance latest point and the recorded history agree going forward).
     await recordBalanceSnapshot(req.userId!, req.householdId!, row.id, row.balance);
   }
-  const accountIds = row.plaidAccountId ? [row.plaidAccountId] : [];
-  const { accountById, itemById } = await loadAccountContext(req.householdId!, accountIds);
-  const pendingByDebt = await loadPendingPayments(req.householdId!, [row]);
+  const [shaped] = await shapeDebts(req.householdId!, [row]);
   await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
-  res.json(shapeDebt(row, accountById, itemById, pendingByDebt));
+  res.json(shaped);
 });
 
 router.post(
@@ -745,10 +761,9 @@ router.post(
       }
       throw e;
     }
-    const { accountById, itemById } = await loadAccountContext(householdId, [plaidAccountId]);
-    const pendingByDebt = await loadPendingPayments(householdId, [refreshed]);
+    const [shaped] = await shapeDebts(householdId, [refreshed]);
     await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
-    res.json(shapeDebt(refreshed, accountById, itemById, pendingByDebt));
+    res.json(shaped);
   },
 );
 
@@ -774,9 +789,9 @@ router.post(
       res.status(404).json({ error: "Not found" });
       return;
     }
-    const pendingByDebt = await loadPendingPayments(householdId, [row]);
+    const [shaped] = await shapeDebts(householdId, [row]);
     await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
-    res.json(shapeDebt(row, new Map(), new Map(), pendingByDebt));
+    res.json(shaped);
   },
 );
 
@@ -816,12 +831,9 @@ router.post(
       });
       return;
     }
-    const { accountById, itemById } = await loadAccountContext(householdId, [
-      result.debt.plaidAccountId!,
-    ]);
-    const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
+    const [shaped] = await shapeDebts(householdId, [result.debt]);
     await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
-    res.json(shapeDebt(result.debt, accountById, itemById, pendingByDebt));
+    res.json(shaped);
   },
 );
 
@@ -917,12 +929,10 @@ router.post(
     } catch (err) {
       req.log?.warn?.({ err }, "[debt-plan] claim confirmation after payment failed");
     }
-    const accountIds = result.debt.plaidAccountId ? [result.debt.plaidAccountId] : [];
-    const { accountById, itemById } = await loadAccountContext(householdId, accountIds);
-    const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
+    const [shaped] = await shapeDebts(householdId, [result.debt]);
     await syncDebtBudgetAfterWrite(req.householdId!, req.userId!);
     res.status(201).json({
-      debt: shapeDebt(result.debt, accountById, itemById, pendingByDebt),
+      debt: shaped,
       transaction,
       killed: result.killed,
     });

@@ -3491,6 +3491,23 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    liabilityAsOf: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    statement: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        date: zod.ZodString;
+        balance: zod.ZodNullable<zod.ZodString>;
+        minPayment: zod.ZodNullable<zod.ZodString>;
+        dueDate: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }>, zod.ZodNull]>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
         id: zod.ZodString;
         itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -3548,6 +3565,13 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -3585,6 +3609,13 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -3623,6 +3654,23 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    liabilityAsOf: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    statement: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        date: zod.ZodString;
+        balance: zod.ZodNullable<zod.ZodString>;
+        minPayment: zod.ZodNullable<zod.ZodString>;
+        dueDate: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }>, zod.ZodNull]>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
         id: zod.ZodString;
         itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -3680,6 +3728,13 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -3717,6 +3772,13 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -3809,6 +3871,23 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    liabilityAsOf: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    statement: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        date: zod.ZodString;
+        balance: zod.ZodNullable<zod.ZodString>;
+        minPayment: zod.ZodNullable<zod.ZodString>;
+        dueDate: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }>, zod.ZodNull]>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
         id: zod.ZodString;
         itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -3866,6 +3945,13 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -3903,6 +3989,13 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -3948,6 +4041,23 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    liabilityAsOf: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    statement: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        date: zod.ZodString;
+        balance: zod.ZodNullable<zod.ZodString>;
+        minPayment: zod.ZodNullable<zod.ZodString>;
+        dueDate: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }>, zod.ZodNull]>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
         id: zod.ZodString;
         itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -4005,6 +4115,13 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -4042,6 +4159,13 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -4087,6 +4211,23 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    liabilityAsOf: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    statement: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        date: zod.ZodString;
+        balance: zod.ZodNullable<zod.ZodString>;
+        minPayment: zod.ZodNullable<zod.ZodString>;
+        dueDate: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }>, zod.ZodNull]>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
         id: zod.ZodString;
         itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -4144,6 +4285,13 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -4181,6 +4329,13 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -4748,6 +4903,23 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
     pendingPaymentTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     pendingPaymentCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    liabilityAsOf: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    statement: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        date: zod.ZodString;
+        balance: zod.ZodNullable<zod.ZodString>;
+        minPayment: zod.ZodNullable<zod.ZodString>;
+        dueDate: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }, {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    }>, zod.ZodNull]>>;
     plaidAccount: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
         id: zod.ZodString;
         itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -4805,6 +4977,13 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -4842,6 +5021,13 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
     plaidConsentExpirationLastRefreshError?: string | null | undefined;
     pendingPaymentTotal?: string | null | undefined;
     pendingPaymentCount?: number | null | undefined;
+    liabilityAsOf?: string | null | undefined;
+    statement?: {
+        date: string;
+        balance: string | null;
+        minPayment: string | null;
+        dueDate: string | null;
+    } | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -7427,19 +7613,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
             daysOverdue: zod.ZodNumber;
         }, "strip", zod.ZodTypeAny, {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }, {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }>, "many">>;
         incomeNotArrived: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
@@ -7452,19 +7638,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
             daysOverdue: zod.ZodNumber;
         }, "strip", zod.ZodTypeAny, {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }, {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }>, "many">>;
         overdueAssumedPaid: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
@@ -7480,24 +7666,24 @@ export declare const GetForecastResponse: zod.ZodObject<{
             confidence: zod.ZodString;
             unpaidRemainder: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             txnAmount: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
             planAmount: string;
             txnId: string;
             confidence: string;
             unpaidRemainder: string;
         }, {
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             txnAmount: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
             planAmount: string;
             txnId: string;
@@ -7609,29 +7795,29 @@ export declare const GetForecastResponse: zod.ZodObject<{
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }[] | undefined;
         incomeNotArrived?: {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }[] | undefined;
         overdueAssumedPaid?: {
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             txnAmount: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
             planAmount: string;
             txnId: string;
@@ -7700,29 +7886,29 @@ export declare const GetForecastResponse: zod.ZodObject<{
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }[] | undefined;
         incomeNotArrived?: {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }[] | undefined;
         overdueAssumedPaid?: {
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             txnAmount: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
             planAmount: string;
             txnId: string;
@@ -7948,29 +8134,29 @@ export declare const GetForecastResponse: zod.ZodObject<{
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }[] | undefined;
         incomeNotArrived?: {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }[] | undefined;
         overdueAssumedPaid?: {
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             txnAmount: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
             planAmount: string;
             txnId: string;
@@ -8143,29 +8329,29 @@ export declare const GetForecastResponse: zod.ZodObject<{
         }[] | undefined;
         overdueOutsideForecast?: {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }[] | undefined;
         incomeNotArrived?: {
             amount: string;
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
         }[] | undefined;
         overdueAssumedPaid?: {
+            dueDate: string;
             itemId: string;
             label: string;
             occurrenceDate: string;
             txnAmount: string;
             planKey: string;
-            dueDate: string;
             daysOverdue: number;
             planAmount: string;
             txnId: string;
@@ -8496,19 +8682,19 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         daysOverdue: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         amount: string;
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
     }, {
         amount: string;
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
     }>, "many">>;
     incomeNotArrived: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
@@ -8521,19 +8707,19 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         daysOverdue: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         amount: string;
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
     }, {
         amount: string;
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
     }>, "many">>;
     overdueAssumedPaid: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
@@ -8549,24 +8735,24 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         confidence: zod.ZodString;
         unpaidRemainder: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         txnAmount: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
         planAmount: string;
         txnId: string;
         confidence: string;
         unpaidRemainder: string;
     }, {
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         txnAmount: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
         planAmount: string;
         txnId: string;
@@ -8678,29 +8864,29 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     }[] | undefined;
     overdueOutsideForecast?: {
         amount: string;
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
     }[] | undefined;
     incomeNotArrived?: {
         amount: string;
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
     }[] | undefined;
     overdueAssumedPaid?: {
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         txnAmount: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
         planAmount: string;
         txnId: string;
@@ -8769,29 +8955,29 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     }[] | undefined;
     overdueOutsideForecast?: {
         amount: string;
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
     }[] | undefined;
     incomeNotArrived?: {
         amount: string;
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
     }[] | undefined;
     overdueAssumedPaid?: {
+        dueDate: string;
         itemId: string;
         label: string;
         occurrenceDate: string;
         txnAmount: string;
         planKey: string;
-        dueDate: string;
         daysOverdue: number;
         planAmount: string;
         txnId: string;
