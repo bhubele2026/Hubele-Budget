@@ -3,6 +3,7 @@ import { useRoute } from "wouter";
 import {
   useGetAmexWeeklyPayoff, useGetForecast, useListCategories, useListDebts,
   useListPlaidItems, useListTransactions,
+  type AmexWeeklyPayoffCard,
 } from "@workspace/api-client-react";
 import { Page, emptyNote } from "@/ui";
 import { PageGrid, Panel, TxnTable, type TxnRow } from "@/components/next";
@@ -52,6 +53,24 @@ function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries
     <Panel title="Recent activity" sub="Last 30 days, every account. Pick an account to review and edit." span={12} data-testid="combined-activity">
       {rows.length ? <TxnTable rows={rows} /> : <p className={emptyNote}>No activity in the last 30 days.</p>}
     </Panel>
+  );
+}
+
+/**
+ * The weekly-payoff card for an account. The payoff card carries the
+ * EXTERNAL Plaid account_id as `accountId` and the INTERNAL plaid_accounts
+ * row id as `plaidAccountId` (api-server `lib/amexAnchor.ts`); the items
+ * response gives the entry both (`plaidAccountId` = external, `rowId` =
+ * internal). Match on either, as the route itself accepts either.
+ */
+export function payoffCardFor(
+  cards: readonly AmexWeeklyPayoffCard[] | undefined,
+  entry: { plaidAccountId: string; rowId: string },
+): AmexWeeklyPayoffCard | null {
+  return (
+    (cards ?? []).find(
+      (c) => c.accountId === entry.plaidAccountId || (!!c.plaidAccountId && c.plaidAccountId === entry.rowId),
+    ) ?? null
   );
 }
 
@@ -131,7 +150,7 @@ export default function NextAccountsPage() {
                     <AccountSummary
                       entry={selected}
                       debt={debtFor(selected.rowId)}
-                      payoffCard={(payoff?.cards ?? []).find((c) => c.plaidAccountId === selected.plaidAccountId) ?? null}
+                      payoffCard={payoffCardFor(payoff?.cards, selected)}
                       snapshot={null}
                     />
                   }

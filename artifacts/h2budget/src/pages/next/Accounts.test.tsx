@@ -42,7 +42,8 @@ const seed = () => {
     item("i2", "American Express", "amex", [{ id: "r-amex", accountId: "ext-amex", name: "Platinum", mask: "1005", type: "credit", subtype: "credit card" }], { lastSyncError: "x", lastSyncErrorCode: "ITEM_LOGIN_REQUIRED" }),
   ];
   h.debts = [{ id: "d1", plaidAccountId: "r-amex", balance: "1234.50", minPayment: "35", dueDay: 14 }];
-  h.payoff = { cards: [{ plaidAccountId: "ext-amex", weekCharges: 120, chargeCount: 3, pctOfStatementThisWeek: 10, statementBalance: 1100 }] };
+  // The API's shape: `accountId` is the external Plaid account_id, `plaidAccountId` the internal row id.
+  h.payoff = { cards: [{ accountId: "ext-amex", plaidAccountId: "r-amex", weekCharges: 120, chargeCount: 3, pctOfStatementThisWeek: 10, statementBalance: 1100 }] };
   h.forecast = { bankSnapshot: { balance: "2500.00", at: "2026-10-08T09:00:00Z", source: "plaid", accountId: "r-chk" }, accountSnapshots: {}, plaidCheckingAccounts: [{ id: "r-chk", mask: "4821", institutionName: "Chase" }] };
 };
 const renderAt = (path: string) => {
@@ -113,6 +114,37 @@ describe("card variant", () => {
     expect(screen.getByTestId("legend-charged").textContent).toContain("Charged to this card");
     expect(screen.getByTestId("legend-paid").getAttribute("data-accent")).toBe("checking");
     expect(screen.getByTestId("legend-payment").textContent).toContain("Payment to this card");
+  });
+});
+
+describe("card Summary reads the weekly-payoff card on the ids the API sends", () => {
+  /**
+   * The payoff card's `plaidAccountId` is the INTERNAL row id and its
+   * `accountId` the external one; the old match compared the internal id with
+   * the external route id, so the Summary's statement balance and this week's
+   * charges were always dashes. Either id now matches.
+   */
+  it.each([
+    ["the external id (accountId)", { accountId: "ext-amex", plaidAccountId: null }],
+    ["the internal row id (plaidAccountId)", { accountId: "other-ext", plaidAccountId: "r-amex" }],
+  ])("matches on %s: statement balance and this week's charges show", async (_label, ids) => {
+    seed();
+    h.payoff = { cards: [{ ...ids, weekCharges: 120, chargeCount: 3, pctOfStatementThisWeek: 10, statementBalance: 1100 }] };
+    renderAt("/next/accounts/ext-amex");
+    await waitFor(() => expect(screen.getByTestId("amex-ledger")).toBeTruthy());
+    const s = screen.getByTestId("account-summary").textContent!;
+    expect(s).toContain("$1,100.00");
+    expect(s).toContain("$120.00");
+    expect(s).toContain("3 charges");
+  });
+  it("another card's payoff entry never lends its figures", async () => {
+    seed();
+    h.payoff = { cards: [{ accountId: "ext-other", plaidAccountId: "r-other", weekCharges: 120, chargeCount: 3, pctOfStatementThisWeek: 10, statementBalance: 1100 }] };
+    renderAt("/next/accounts/ext-amex");
+    await waitFor(() => expect(screen.getByTestId("amex-ledger")).toBeTruthy());
+    const s = screen.getByTestId("account-summary").textContent!;
+    expect(s).not.toContain("$1,100.00");
+    expect(s).not.toContain("$120.00");
   });
 });
 
