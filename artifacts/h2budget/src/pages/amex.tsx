@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useTxDeepLink } from "@/hooks/useTxDeepLink";
 import { Link } from "wouter";
 import {
   useListTransactions,
@@ -1820,6 +1821,15 @@ export default function AmexPage({
       scrolledRef.current = true;
     }
   }, [isLoading, groups.length]);
+
+  // (F8) `?tx=<id>` — an Ask answer's charge link — scrolls to that row once
+  // the month is on screen, as the Chase page does (CH-09).
+  useTxDeepLink({
+    ready: !isLoading,
+    rowTestIds: (id) => [`row-amex-${id}`, `row-amex-mobile-${id}`],
+    scrolledRef,
+    deps: [groups.length],
+  });
 
   // (C10) Measure the ledger's pinned pane so the day-group heads and the
   // bulk bar stick directly beneath it, via `--page-sticky-top` on the page

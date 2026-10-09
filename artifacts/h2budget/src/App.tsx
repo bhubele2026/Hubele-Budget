@@ -62,6 +62,8 @@ import {
   importWishlist,
   importMappingRules,
   importSettings,
+  importAsk,
+  importSuggestions,
   importNextDashboard,
   importNextForecast,
   importNextAccounts,
@@ -92,6 +94,8 @@ const AllowancesPage = lazy(importAllowances);
 const WishlistPage = lazy(importWishlist);
 const MappingRulesPage = lazy(importMappingRules);
 const SettingsPage = lazy(importSettings);
+const AskPage = lazy(importAsk);
+const SuggestionsPage = lazy(importSuggestions);
 const NextDashboardPage = lazy(importNextDashboard);
 const NextForecastPage = lazy(importNextForecast);
 const NextAccountsPage = lazy(importNextAccounts);
@@ -467,6 +471,7 @@ function ProtectedShell() {
             <Route path="/forecast">
               <ForecastPage mode="overall" />
             </Route>
+            <Route path="/review/suggestions" component={SuggestionsPage} />
             <Route path="/review">
               <ForecastPage mode="review" />
             </Route>
@@ -490,6 +495,7 @@ function ProtectedShell() {
             <Route path="/wishlist" component={WishlistPage} />
             <Route path="/mapping-rules" component={MappingRulesPage} />
             <Route path="/settings" component={SettingsPage} />
+            <Route path="/ask" component={AskPage} />
             <Route path="/next/dashboard" component={NextDashboardPage} />
             <Route path="/next/forecast" component={NextForecastPage} />
             <Route path="/next/accounts" component={NextAccountsPage} />

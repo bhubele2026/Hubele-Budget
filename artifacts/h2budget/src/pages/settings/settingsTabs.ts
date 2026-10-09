@@ -15,6 +15,7 @@ export type SettingsTab =
   | "automation"
   | "morning-text"
   | "ai"
+  | "memory"
   | "privacy";
 
 export const SETTINGS_TABS: ReadonlyArray<{ key: SettingsTab; label: string }> = [
@@ -24,6 +25,7 @@ export const SETTINGS_TABS: ReadonlyArray<{ key: SettingsTab; label: string }> =
   { key: "automation", label: "Automation" },
   { key: "morning-text", label: "Morning text" },
   { key: "ai", label: "AI cost" },
+  { key: "memory", label: "Memory" },
   { key: "privacy", label: "Privacy" },
 ];
 
@@ -40,13 +42,16 @@ export function tabHref(tab: SettingsTab): string {
   return tab === "banks" ? "/settings" : `/settings?tab=${tab}`;
 }
 
-/** The three fold-in tabs are their own lazy chunks; hovering a tab warms it. */
+/** The fold-in tabs are their own lazy chunks; hovering a tab warms it. */
 export const importAutomationTab = () => import("./AutomationTab");
 export const importMorningTextTab = () => import("./MorningTextTab");
 export const importAiCostTab = () => import("./AiCostTab");
+/** (F8) What H2 remembers — the Ask memory, edited here. */
+export const importMemoryTab = () => import("./MemoryTab");
 
 export const TAB_PREFETCH: Partial<Record<SettingsTab, () => Promise<unknown>>> = {
   automation: importAutomationTab,
   "morning-text": importMorningTextTab,
   ai: importAiCostTab,
+  memory: importMemoryTab,
 };
