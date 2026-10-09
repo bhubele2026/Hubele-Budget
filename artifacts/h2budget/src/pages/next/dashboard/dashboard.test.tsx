@@ -377,20 +377,76 @@ describe("accounts list", () => {
     expect(within(rows[3]!).getByTestId("dash-account-nodebt")).toBeTruthy();
     expect(rows[3]!.textContent).not.toContain("$0");
   });
-  it("a card that is not on the debt list reads Plaid's stored liability figures; a missing one is words, never $0", () => {
+  it("a card that is not on the debt list reads Plaid's stored liability figures as ITS balance, never 'Owed'; a missing one is words, never $0", () => {
     h.Q.debts = ok([]);
     h.Q.liab = ok([
-      { id: "x1", accountId: "p-x1", balance: "684.12", minPayment: "40.00", suggestedDebt: { name: "Platinum", type: "credit_card", dueDay: 14 } },
+      { id: "x1", accountId: "p-x1", balance: "684.12", minPayment: "40.00", lastFetchedAt: "2026-10-08T11:00:00Z", suggestedDebt: { name: "Platinum", type: "credit_card", dueDay: 14 } },
       { id: "k1", accountId: "p-k1", balance: null, minPayment: null, suggestedDebt: { name: "Quicksilver", type: "credit_card", dueDay: 22 } },
     ]);
     wrap(<AccountsPanel />);
     const rows = screen.getAllByTestId("dash-account");
-    expect(within(rows[2]!).getByTestId("dash-account-balance").textContent).toBe("$684.12");
+    // (WP3) Off the payoff plan: the card's own current balance, named, and the plan words.
+    expect(within(rows[2]!).queryByTestId("dash-account-balance")).toBeNull();
+    expect(within(rows[2]!).getByTestId("dash-account-creditor").textContent).toBe("Card's current balance$684.12");
+    expect(within(rows[2]!).getByTestId("dash-account-plan").textContent).toBe("Not on the payoff plan");
+    expect(rows[2]!.getAttribute("data-plan")).toBe("off_plan");
     expect(within(rows[2]!).getByTestId("dash-account-min").textContent).toContain("$40.00");
     expect(within(rows[2]!).getByTestId("dash-account-due").textContent).toContain("the 14th");
+    expect(rows[2]!.textContent).not.toContain("Owed");
     expect(within(rows[3]!).getByTestId("dash-account-noowed").textContent).toBe("not reported");
     expect(within(rows[3]!).queryByTestId("dash-account-min")).toBeNull();
     expect(rows[3]!.textContent).not.toContain("$0");
+  });
+  it("(WP3) an archived debt is 'Paid off · not on the payoff plan': never Owed, its own balance named", () => {
+    h.Q.debts = ok([debt("d1", "Amex Platinum", "3842.98", { plaidAccountId: "x1", status: "archived", lastBalanceUpdate: "2026-10-08T11:00:00Z" })]);
+    h.Q.liab = ok([]);
+    wrap(<AccountsPanel />);
+    const row = screen.getAllByTestId("dash-account")[2]!;
+    expect(row.getAttribute("data-plan")).toBe("archived");
+    expect(within(row).getByTestId("dash-account-plan").textContent).toBe("Paid off · not on the payoff plan");
+    expect(within(row).queryByTestId("dash-account-balance")).toBeNull();
+    expect(row.textContent).not.toContain("Owed");
+    expect(within(row).getByTestId("dash-account-creditor").textContent).toBe("Card's current balance$3,842.98");
+  });
+  it("(WP3) the live case: Owed is netted, and the card's own balance sits beside it, each named", () => {
+    h.Q.debts = ok([debt("d1", "Amex Platinum", "3842.98", { plaidAccountId: "x1", pendingPaymentTotal: "2615.71", pendingPaymentCount: 2 })]);
+    wrap(<AccountsPanel />);
+    const row = screen.getAllByTestId("dash-account")[2]!;
+    expect(within(row).getByTestId("dash-account-balance").textContent).toBe("$1,227.27");
+    expect(within(row).getByTestId("dash-account-creditor").textContent).toBe("Card's current balance$3,842.98");
+    expect(within(row).getByTestId("dash-account-pending").textContent).toBe("Paid, not posted$2,615.71");
+    expect(within(row).queryByTestId("dash-account-plan")).toBeNull(); // on the plan: nothing to say
+  });
+  it("(WP3) a card with no pending payment shows Owed once (its own balance is the same figure)", () => {
+    wrap(<AccountsPanel />);
+    const row = screen.getAllByTestId("dash-account")[2]!;
+    expect(within(row).getByTestId("dash-account-balance").textContent).toBe("$1,500.00");
+    expect(within(row).queryByTestId("dash-account-creditor")).toBeNull();
+  });
+  it("(WP3) freshness is three named stamps; 'data through' is the newest bank row, never the sync day", () => {
+    h.Q.items = ok([
+      item("b", "American Express", "amex", [acct("x1", { name: "Platinum Card", mask: "1005", type: "credit", subtype: "credit card" })],
+        { lastSyncedAt: "2026-10-08T15:00:00Z", lastBankTxOn: "2026-10-06" }),
+    ]);
+    h.Q.debts = ok([debt("d1", "Amex Platinum", "1500.00", { plaidAccountId: "x1", lastBalanceUpdate: "2026-10-08T12:00:00Z" })]);
+    wrap(<AccountsPanel />);
+    const fresh = screen.getByTestId("dash-account-fresh").textContent!;
+    expect(fresh).toBe("Up to date · synced 2 h ago · balance read 5 h ago · data through Oct 6");
+    expect(fresh).not.toContain("Oct 8");
+  });
+  it("(WP3) savings shows its last reading, not rolled forward, or says it is not tracked", () => {
+    h.Q.items = ok([
+      item("a", "Chase", "chase", [
+        acct("s1", { name: "Premier Savings", mask: "7001", subtype: "savings", snapshot: { balance: "0.00", at: "2026-10-06T14:00:00Z", source: "plaid" } }),
+        acct("s2", { name: "Goal Savings", mask: "7002", subtype: "savings", snapshot: null }),
+      ]),
+    ]);
+    wrap(<AccountsPanel />);
+    const rows = screen.getAllByTestId("dash-account");
+    // A real zero reading is $0.00, never dropped; the words say it is a reading.
+    expect(within(rows[0]!).getByTestId("dash-account-snapshot").textContent).toBe("Snapshot $0.00 · as of Oct 6 · not rolled forward");
+    expect(within(rows[0]!).getByTestId("dash-account-fresh").textContent).toContain("balance read 2 d ago");
+    expect(within(rows[1]!).getByTestId("dash-account-nobalance").textContent).toBe("Savings balance is not tracked yet.");
   });
   it("no bank linked: an honest empty state with the existing link path", () => {
     h.Q.items = ok([]);
@@ -428,10 +484,12 @@ describe("accounts list", () => {
     expect(within(row).getByTestId("dash-account-balance").textContent).toBe("$1,200.00"); // $1,500 reported − $300 paid
     expect(within(row).getByTestId("dash-account-pending").textContent).toContain("$300.00");
   });
-  it("⭐ parity: the Accounts rows' Owed add up to the summary tile's remainingDebtTotal, on one screen", () => {
+  it("⭐ parity: each on-plan card's Owed is the netted figure the summary tile sums (every active debt here is a linked card)", () => {
+    // (WP3) Debts link by the account's INTERNAL row id (`debts.plaid_account_id`
+    // is a uuid FK to `plaid_accounts.id`); Plaid's external id never matches.
     const debts = [
       debt("d1", "Amex Platinum", "1500.00", { plaidAccountId: "x1", pendingPaymentTotal: "300.00", pendingPaymentCount: 1 }),
-      debt("d2", "Quicksilver", "642.18", { plaidAccountId: "p-k1" }),
+      debt("d2", "Quicksilver", "642.18", { plaidAccountId: "k1" }),
     ];
     h.Q.debts = ok(debts);
     h.Q.pos = ok({ reservesHeld: "0.00" });

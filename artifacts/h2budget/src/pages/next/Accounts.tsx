@@ -2,7 +2,8 @@ import { lazy, Suspense, useMemo } from "react";
 import { useRoute } from "wouter";
 import {
   useGetAmexWeeklyPayoff, useGetForecast, useListCategories, useListDebts,
-  useListPlaidItems, useListTransactions,
+  useListPlaidItems, useListPlaidLiabilityAccounts, useListTransactions,
+  getListPlaidLiabilityAccountsQueryKey,
   type AmexWeeklyPayoffCard,
 } from "@workspace/api-client-react";
 import { Page, emptyNote } from "@/ui";
@@ -12,6 +13,9 @@ import { displayAmount } from "@/lib/amountDisplay";
 import { resolveTxnAccount } from "@/lib/accountIdentity";
 import { householdToday } from "@/lib/householdDay";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
+import { formatCurrency } from "@/lib/utils";
+import { CARD_WORDS, cardOwedView, creditorLabel, debtForAccount } from "@/lib/cardBalance";
+import { NOT_TRACKED, snapshotCaption } from "@/lib/snapshotWords";
 import { AccountSelector, type BalanceByRow } from "./accounts/AccountSelector";
 import { AccountSummary } from "./accounts/AccountSummary";
 import { buildEntries } from "./accounts/entries";
@@ -87,7 +91,18 @@ export default function NextAccountsPage() {
   // The id may be the Plaid account_id or the items response's row id.
   const selected = entries.find((e) => e.plaidAccountId === selectedId || e.rowId === selectedId) ?? null;
 
-  const debtFor = (rowId: string) => (debts ?? []).find((d) => d.plaidAccountId === rowId) ?? null;
+  // (WP3) The debt row by the account's INTERNAL row id only, any status —
+  // the card model says what an archived row is. The dashboard's own rule.
+  const debtFor = (rowId: string) => debtForAccount(debts, { id: rowId });
+  const owes = (e: (typeof entries)[number]) => e.identity.isCard || e.identity.kind === "loan";
+  // A card or loan with no debt row reads Plaid's STORED liability figures, as
+  // the dashboard does (same key; asked only when such an account exists and
+  // never with `refresh`).
+  const needLiabilities = debts !== undefined && entries.some((e) => owes(e) && !debtFor(e.rowId));
+  const { data: liabs } = useListPlaidLiabilityAccounts(undefined, {
+    query: { queryKey: getListPlaidLiabilityAccountsQueryKey(), staleTime: 30 * 60_000, enabled: needLiabilities },
+  });
+  const liabilityFor = (rowId: string) => (debtFor(rowId) ? null : (liabs ?? []).find((l) => l.id === rowId) ?? null);
   const snapshotFor = (rowId: string) =>
     deriveEffectiveSnapshot({
       bankSnapshot: forecast?.bankSnapshot ?? null,
@@ -97,7 +112,28 @@ export default function NextAccountsPage() {
     });
   const balances: BalanceByRow = {};
   for (const e of entries) {
-    balances[e.rowId] = e.identity.isCard ? debtFor(e.rowId)?.balance : e.identity.kind === "checking" ? snapshotFor(e.rowId)?.balance : undefined;
+    if (owes(e)) {
+      // ⭐ The ONE card model: the chip prints what the dashboard row prints.
+      const v = cardOwedView({ debt: debtFor(e.rowId), liability: liabilityFor(e.rowId) });
+      balances[e.rowId] = v.owed != null
+        ? { label: CARD_WORDS.owed, figure: formatCurrency(v.owed), balanceAt: v.creditorCurrent?.asOf }
+        : {
+            label: v.creditorCurrent ? creditorLabel(e.identity.kind === "loan") : null,
+            figure: v.creditorCurrent ? formatCurrency(v.creditorCurrent.balance) : null,
+            plan: v.status,
+            balanceAt: v.creditorCurrent?.asOf,
+          };
+    } else if (e.identity.kind === "checking") {
+      const snap = snapshotFor(e.rowId);
+      balances[e.rowId] = { label: "Balance", figure: snap ? formatCurrency(snap.balance) : null, balanceAt: snap?.at };
+    } else {
+      // Savings and other depository accounts: the last reading, never rolled
+      // forward, or words (`lib/snapshotWords.ts`).
+      const r = e.snapshot;
+      balances[e.rowId] = r
+        ? { label: "Snapshot", figure: formatCurrency(r.balance), words: snapshotCaption(r), balanceAt: r.at }
+        : { label: null, figure: null, words: e.identity.kind === "savings" ? NOT_TRACKED.savings : NOT_TRACKED.other };
+    }
   }
 
   return (
@@ -152,6 +188,7 @@ export default function NextAccountsPage() {
                     <AccountSummary
                       entry={selected}
                       debt={debtFor(selected.rowId)}
+                      liability={liabilityFor(selected.rowId)}
                       payoffCard={payoffCardFor(payoff?.cards, selected)}
                       snapshot={null}
                     />
@@ -164,6 +201,7 @@ export default function NextAccountsPage() {
               <AccountSummary
                 entry={selected}
                 debt={debtFor(selected.rowId)}
+                liability={liabilityFor(selected.rowId)}
                 payoffCard={null}
                 snapshot={snapshotFor(selected.rowId)}
               />

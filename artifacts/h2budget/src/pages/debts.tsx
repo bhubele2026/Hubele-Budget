@@ -28,6 +28,7 @@ import {
 } from "@/lib/avalanche";
 import { debtToSim, effectiveDebtBalance } from "@/lib/debtBalance";
 import { DebtPendingHint } from "@/components/debt-pending-hint";
+import { CARD_WORDS } from "@/lib/cardBalance";
 
 const MANUAL_EXTRA_CAP = 5000;
 
@@ -190,8 +191,12 @@ export default function DebtsPage() {
   const sortedDebts = [...(debts || [])].sort((a, b) => parseFloat(b.apr) - parseFloat(a.apr));
   // Netted, so a debt whose tagged payments already clear it counts as
   // cleared here exactly as it does in the /avalanche active-debt filter.
+  // (WP3) An archived debt is off the payoff plan whatever it still reports:
+  // never "Active", never a target (the simulator already skips it), the same
+  // rule as the card model (`lib/cardBalance.ts`: "Paid off · not on the
+  // payoff plan").
   const paidOffCount = sortedDebts.filter((d) =>
-    isPaidOff(effectiveDebtBalance(d)),
+    d.status !== "active" || isPaidOff(effectiveDebtBalance(d)),
   ).length;
   const activeCount = sortedDebts.length - paidOffCount;
 
@@ -253,7 +258,10 @@ export default function DebtsPage() {
             <tbody>
               {sortedDebts.map((debt) => {
                 const balanceNum = effectiveDebtBalance(debt);
-                const paidOff = isPaidOff(balanceNum);
+                // An archived row still carrying a balance is off the plan, not
+                // owed on it: no plan balance, and the payoff cell says so.
+                const offPlan = debt.status !== "active" && !isPaidOff(balanceNum);
+                const paidOff = offPlan || isPaidOff(balanceNum);
                 const originalNum = Number(debt.originalBalance ?? 0);
                 const paidRatio =
                   originalNum > 0
@@ -285,14 +293,14 @@ export default function DebtsPage() {
                         </span>
                       </td>
                       <td className={`${tdNum} text-neutral-400`}>{fmtPct(Number(debt.apr))}</td>
-                      <td className={`${tdNum} text-neutral-400`}>{formatCurrency(0)}</td>
+                      <td className={`${tdNum} text-neutral-400`}>{offPlan ? "—" : formatCurrency(0)}</td>
                       <td className={`${tdNum} text-neutral-400`}>—</td>
                       <td
                         className={`${td} whitespace-nowrap text-right text-label text-neutral-500`}
                         data-testid="debt-card-paid-off-month"
                         data-debt-id={debt.id}
                       >
-                        {killLabel ? `Paid off ${killLabel}` : "Paid off"}
+                        {offPlan ? CARD_WORDS.offPlan : killLabel ? `Paid off ${killLabel}` : "Paid off"}
                       </td>
                       <td className={td} />
                       <td className={td} />
