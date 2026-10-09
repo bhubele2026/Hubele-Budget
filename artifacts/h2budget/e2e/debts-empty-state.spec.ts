@@ -22,7 +22,7 @@ test.afterAll(async () => {
 });
 
 test.describe("Debts page — empty-state contract", () => {
-  test("renders the page heading and the 'No debts recorded. You're debt free!' empty state for a fresh user", async ({
+  test("renders the page heading and the 'No debts recorded.' empty state for a fresh user", async ({
     page,
   }) => {
     const { email, password } = await createTestUser(
@@ -33,12 +33,12 @@ test.describe("Debts page — empty-state contract", () => {
     await signInAndOpen(page, email, password, "/debts");
 
     await expect(
-      page.getByRole("heading", { name: /debt avalanche/i }),
+      page.getByRole("heading", { name: /^debts$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
     const empty = page.getByTestId("text-debts-empty-state");
     await expect(empty).toBeVisible();
-    await expect(empty).toHaveText("No debts recorded. You're debt free!");
+    await expect(empty).toHaveText("No debts recorded.");
 
     expect(new URL(page.url()).pathname).toBe("/debts");
   });

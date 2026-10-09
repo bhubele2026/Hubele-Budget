@@ -203,3 +203,14 @@ describe("Debts page — reserved-slot row stability (#639)", () => {
     }
   });
 });
+
+describe("Debts page — C5 composition", () => {
+  it("has an h1 'Debts' (the e2e specs wait for it), three span-4 stats and a span-12 creditors panel", () => {
+    extraAmount = "0";
+    const { container } = renderPage();
+    expect(screen.getByRole("heading", { level: 1, name: "Debts" })).toBeTruthy();
+    expect(container.querySelector(".grid-12")).not.toBeNull();
+    expect(container.querySelectorAll(".panel.span-4").length).toBe(3);
+    expect(container.querySelector(".panel.span-12")?.textContent).toContain("Creditors");
+  });
+});
