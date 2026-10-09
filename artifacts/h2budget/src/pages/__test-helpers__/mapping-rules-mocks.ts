@@ -56,14 +56,51 @@ export function defaultMappingRulesApiClientMock(
     usePreviewMappingRuleRecategorizeByPattern: noopMutationWithData,
     useRecategorizeTransactionsByPattern: noopMutation,
     useUncategorizeTransactionsByIds: noopMutation,
+    // (F2) The learned-rules panel names the account a "This account only"
+    // rule is narrowed to, and marks the review queue stale after filing.
+    useListPlaidItems: noopQuery<unknown[]>([]),
     // Query-key helpers
     getListMappingRulesQueryKey: () => ["/api/mapping-rules"],
     getListTransactionsQueryKey: () => ["/api/transactions"],
     getGetBudgetMonthQueryKey: (m: string) => ["/api/budget-month", m],
+    getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
+    getListCategorizationReviewQueryKey: () => ["/api/categorization/review"],
     // Direct (non-hook) endpoint helpers
     createMappingRule: vi.fn(),
     updateMappingRule: vi.fn(),
     deleteMappingRule: vi.fn(),
+  };
+  return { ...defaults, ...overrides };
+}
+
+// (C7 / F2) The learned-rules panel on the same page reads the `features`
+// sub-module (C0), a separate module specifier from the main client, so every
+// mapping-rules test mocks it too:
+//
+//   vi.mock("@workspace/api-client-react/features", async () => {
+//     const { defaultMappingRulesFeaturesMock } = await import(
+//       "./__test-helpers__/mapping-rules-mocks"
+//     );
+//     return defaultMappingRulesFeaturesMock();
+//   });
+//
+// The default is an empty, loaded list — the panel renders its empty note and
+// issues no request.
+export function defaultMappingRulesFeaturesMock(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const defaults: Record<string, unknown> = {
+    useListLearnedRules: () => ({
+      data: [],
+      isFetching: false,
+      isLoadingError: false,
+      isRefetchError: false,
+      refetch: vi.fn(),
+    }),
+    getListLearnedRulesQueryKey: () => ["/api/learned-rules"],
+    useUpdateLearnedRule: noopMutation,
+    useDeleteLearnedRule: noopMutation,
+    useApplyLearnedRuleRetroactively: noopMutation,
   };
   return { ...defaults, ...overrides };
 }

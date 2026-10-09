@@ -56,8 +56,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import {
-  card,
-  cardHead,
   btn,
   btnSm,
   btnLink,
@@ -68,9 +66,7 @@ import {
   Help,
   emptyNote,
 } from "@/ui";
-
-/** Card heading — the same string budget.tsx and bills.tsx inline. */
-const cardTitle = "text-title font-semibold text-brand-navy";
+import { PageGrid, Panel } from "@/components/next";
 /**
  * The "this is what will happen" panel above Add / below an edit row. Quiet
  * platinum, NOT the alarm orange it used to wear: a preview of an action the
@@ -105,6 +101,7 @@ import {
   CATEGORY_DROP_PREFIX,
 } from "./mapping-rules/CategoryDropTarget";
 import { SortableRuleRow } from "./mapping-rules/SortableRuleRow";
+import { LearnedRulesPanel } from "./mapping-rules/LearnedRulesPanel";
 
 // Task #244 — persist "I've already reviewed this batch" across reloads
 // and repeat clicks of the post-sync / post-import toast's "View" link.
@@ -1729,8 +1726,37 @@ export default function MappingRulesPage() {
     !!searchQuery || focusFilterActive || reorderRules.isPending;
   const sortableIds = sorted.map((r) => r.id);
 
+  // Every card the filter leaves — collapsed or not — for the Collapse all /
+  // Expand all button. Hidden-by-filter cards keep their own setting.
+  const allCardsCollapsed = cardGroups.every((g) =>
+    collapsedCategories.has(g.key),
+  );
+
+  // ⭐ C7 — THE COMPOSITION ("H2 evolved"). Two panels on top (Add a rule
+  // span-8, Test a description span-4), the focus pill and search across the
+  // page, then ONE span-12 panel that holds the page's SINGLE DndContext: the
+  // bulk bar and the category drop strip on top, every category card below in
+  // an inner grid (two columns from xl). Learned rules (F2) are a second panel
+  // under it.
+  //
+  // ⚠️ Load-bearing for drag-and-drop (parity review §8 C7):
+  //   - The drop strip and every card stay inside that one DndContext; a card
+  //     dropped in its own context could never reach a strip chip.
+  //   - The strip is NOT sticky and the cards are NOT moved into a panel-sized
+  //     scroller: dnd-kit reaches the strip by auto-scrolling `<main>`, the
+  //     nearest scroller, and a sticky strip or a new scroller strands it.
+  //   - NO entrance animation on the rules panel or anything around it
+  //     (`tile-in`, `rise-in`, …): they animate a transform, and any ancestor
+  //     with a transform, filter or `contain` becomes the containing block of
+  //     the fixed-position DragOverlay, which then draws away from the
+  //     pointer. (The Add preview and the test result may rise in: they are
+  //     not ancestors of the overlay.) The rules panel is
+  //     `sticky-safe` (`overflow: clip`, not a scroll container) and `static`
+  //     (no hover lift); its inner grid is viewport-responsive, not a container
+  //     query, because `container-type` applies layout containment too.
+  //   - Rows keep dnd-kit's inline transform and never take `press`.
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="page-mapping-rules">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-display font-semibold text-brand-navy">
           Mapping rules
@@ -1742,11 +1768,13 @@ export default function MappingRulesPage() {
         </Help>
       </div>
 
-      <section className={card}>
-        <div className={cardHead}>
-          <h2 className={cardTitle}>Add a rule</h2>
-        </div>
-        <div className="p-4">
+      <PageGrid>
+        <Panel
+          title="Add a rule"
+          span={8}
+          variant="static"
+          data-testid="panel-add-rule"
+        >
           <div className="grid gap-x-3 md:grid-cols-[1fr_2fr_1fr_auto] md:items-start">
             <Field label="If description">
               <Select value={matchType} onValueChange={setMatchType}>
@@ -1815,7 +1843,7 @@ export default function MappingRulesPage() {
             addPreview.matchType === matchType &&
             addPreview.candidateCount > 0 && (
               <div
-                className={`mt-1 ${previewPanel}`}
+                className={`section-enter mt-1 ${previewPanel}`}
                 data-testid="rule-add-preview"
               >
                 {categoryId ? (
@@ -1874,21 +1902,23 @@ export default function MappingRulesPage() {
                 </button>
               </div>
             )}
-        </div>
-      </section>
+        </Panel>
 
-      <section className={card}>
-        <div className={cardHead}>
-          <h2 className={cardTitle}>Test a description</h2>
-          <Help>
-            Runs the rules against a description without saving anything, so
-            you can see which one would win.
-          </Help>
-        </div>
-        <div className="p-4">
-          <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center">
+        <Panel
+          title="Test a description"
+          span={4}
+          variant="static"
+          data-testid="panel-test-description"
+          actions={
+            <Help>
+              Runs the rules against a description without saving anything, so
+              you can see which one would win.
+            </Help>
+          }
+        >
+          <div className="flex items-center gap-2">
             <input
-              className={`${input} font-mono`}
+              className={`${input} min-w-0 flex-1 font-mono`}
               placeholder="AMAZON FRESH 4732 SEATTLE WA"
               value={testInput}
               onChange={(e) => setTestInput(e.target.value)}
@@ -1898,34 +1928,32 @@ export default function MappingRulesPage() {
               data-testid="input-test-description"
               aria-label="Test a description"
             />
-            <div className="flex gap-2">
+            <button
+              type="button"
+              className={`${btn} shrink-0`}
+              onClick={handleRunTest}
+              disabled={!testInput.trim() || testRules.isPending}
+              data-testid="btn-run-test"
+            >
+              Test
+            </button>
+            {testRules.data && (
               <button
                 type="button"
-                className={btn}
-                onClick={handleRunTest}
-                disabled={!testInput.trim() || testRules.isPending}
-                data-testid="btn-run-test"
+                className={`${btnLink} shrink-0`}
+                onClick={() => {
+                  testRules.reset();
+                  setTestInput("");
+                }}
+                data-testid="btn-clear-test"
               >
-                Test
+                Clear
               </button>
-              {testRules.data && (
-                <button
-                  type="button"
-                  className={btnLink}
-                  onClick={() => {
-                    testRules.reset();
-                    setTestInput("");
-                  }}
-                  data-testid="btn-clear-test"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
+            )}
           </div>
           {testRules.data && (
             <div
-              className="mt-3 text-body text-neutral-600"
+              className="section-enter mt-3 text-body text-neutral-600"
               data-testid="test-result"
             >
               {testRules.data.matches.length === 0 ? (
@@ -1954,126 +1982,128 @@ export default function MappingRulesPage() {
               )}
             </div>
           )}
-        </div>
-      </section>
+        </Panel>
 
-      {showFocusPill && (
-        <div className={previewPanel} data-testid="focus-pill">
-          <span className="flex-1">
-            <span
-              className="font-mono font-semibold text-brand-navy"
-              data-testid="focus-pill-count"
-            >
-              {matchedFocusIds.length}
-            </span>{" "}
-            rule{matchedFocusIds.length === 1 ? "" : "s"} matched your last sync
-          </span>
-          <button
-            type="button"
-            className={btnLink}
-            onClick={() => setShowOnlyFocused((v) => !v)}
-            data-testid="focus-pill-toggle"
-          >
-            {focusFilterActive ? "Show all rules" : "Show only these"}
-          </button>
-          <button
-            type="button"
-            aria-label="Dismiss matched-rules pill"
-            title="Dismiss"
-            className={btnLink}
-            onClick={dismissFocusPill}
-            data-testid="focus-pill-dismiss"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
-      )}
-
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-        <input
-          className={`${input} pl-9`}
-          placeholder="Search by pattern, category, or match type"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          data-testid="input-search-rules"
-          aria-label="Search rules by pattern, category, or match type"
-        />
-        {searchQuery && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-micro tabular-nums text-neutral-400">
-            {filtered.length} result{filtered.length === 1 ? "" : "s"}
-          </span>
-        )}
-      </div>
-
-      {sorted.length === 0 ? (
-        <section className={card}>
-          <p className={emptyNote}>
-            No rules yet. Categorizing a transaction creates one.
-          </p>
-        </section>
-      ) : (
-        // Task #282 — the previously single "Rules in priority order"
-        // card is now split into a controls card (summary + bulk bar +
-        // category drop strip) followed by one Card per category that
-        // has at least one rule. A single DndContext + SortableContext
-        // wraps everything so drag-to-reorder (within a card) and
-        // drag-to-reassign (onto the strip's category chip) keep
-        // working unchanged.
-        <DndContext
-          sensors={sensors}
-          collisionDetection={ruleCollisionDetection}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
-        >
-          <section className={card}>
-            <div className={cardHead}>
-              <h2 className={cardTitle}>Grouped by category</h2>
-              <span className="ml-auto flex items-center gap-2">
-                  {cardGroups.length > 0 && (
-                    <button
-                      type="button"
-                      className={btnLink}
-                      onClick={() => {
-                        // If every visible group is collapsed, treat
-                        // the button as Expand all; otherwise Collapse
-                        // all visible groups. We never touch state for
-                        // groups that aren't currently in cardGroups so
-                        // hidden-by-filter cards keep their setting.
-                        const allCollapsed = cardGroups.every((g) =>
-                          collapsedCategories.has(g.key),
-                        );
-                        setCollapsedCategories((prev) => {
-                          const next = new Set(prev);
-                          if (allCollapsed) {
-                            for (const g of cardGroups) next.delete(g.key);
-                          } else {
-                            for (const g of cardGroups) next.add(g.key);
-                          }
-                          return next;
-                        });
-                      }}
-                      data-testid="rule-collapse-all"
-                    >
-                      {cardGroups.every((g) =>
-                        collapsedCategories.has(g.key),
-                      )
-                        ? "Expand all"
-                        : "Collapse all"}
-                    </button>
-                  )}
-                  <span className="font-mono text-micro tabular-nums text-neutral-400">
-                    {sorted.length} total{" "}
-                    {searchQuery || focusFilterActive
-                      ? `· ${filtered.length} shown`
-                      : ""}
-                  </span>
+        <div className="span-12 space-y-3" data-testid="rules-filter-row">
+          {showFocusPill && (
+            <div className={previewPanel} data-testid="focus-pill">
+              <span className="flex-1">
+                <span
+                  className="font-mono font-semibold text-brand-navy"
+                  data-testid="focus-pill-count"
+                >
+                  {matchedFocusIds.length}
+                </span>{" "}
+                rule{matchedFocusIds.length === 1 ? "" : "s"} matched your last sync
               </span>
+              <button
+                type="button"
+                className={btnLink}
+                onClick={() => setShowOnlyFocused((v) => !v)}
+                data-testid="focus-pill-toggle"
+              >
+                {focusFilterActive ? "Show all rules" : "Show only these"}
+              </button>
+              <button
+                type="button"
+                aria-label="Dismiss matched-rules pill"
+                title="Dismiss"
+                className={btnLink}
+                onClick={dismissFocusPill}
+                data-testid="focus-pill-dismiss"
+              >
+                <X className="h-3 w-3" />
+              </button>
             </div>
-            <div>
+          )}
+
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <input
+              className={`${input} pl-9`}
+              placeholder="Search by pattern, category, or match type"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              data-testid="input-search-rules"
+              aria-label="Search rules by pattern, category, or match type"
+            />
+            {searchQuery && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-micro tabular-nums text-neutral-400">
+                {filtered.length} result{filtered.length === 1 ? "" : "s"}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {sorted.length === 0 ? (
+          <Panel
+            title="Rules by category"
+            span={12}
+            variant={["static", "flush"]}
+            data-testid="panel-rules"
+          >
+            <p className={emptyNote}>
+              No rules yet. Categorizing a transaction creates one.
+            </p>
+          </Panel>
+        ) : (
+          <Panel
+            title="Rules by category"
+            span={12}
+            variant={["sticky-safe", "static", "flush"]}
+            data-testid="panel-rules"
+            actions={
+              <>
+                {cardGroups.length > 0 && (
+                  <button
+                    type="button"
+                    className={btnLink}
+                    onClick={() => {
+                      // If every visible group is collapsed, treat
+                      // the button as Expand all; otherwise Collapse
+                      // all visible groups. We never touch state for
+                      // groups that aren't currently in cardGroups so
+                      // hidden-by-filter cards keep their setting.
+                      setCollapsedCategories((prev) => {
+                        const next = new Set(prev);
+                        if (allCardsCollapsed) {
+                          for (const g of cardGroups) next.delete(g.key);
+                        } else {
+                          for (const g of cardGroups) next.add(g.key);
+                        }
+                        return next;
+                      });
+                    }}
+                    data-testid="rule-collapse-all"
+                  >
+                    {allCardsCollapsed ? "Expand all" : "Collapse all"}
+                  </button>
+                )}
+                <span
+                  className="font-mono text-micro tabular-nums text-neutral-400"
+                  data-testid="rule-count"
+                >
+                  {sorted.length} total{" "}
+                  {searchQuery || focusFilterActive
+                    ? `· ${filtered.length} shown`
+                    : ""}
+                </span>
+              </>
+            }
+          >
+            {/* Task #282 — one DndContext + one SortableContext wrap the
+                bulk bar, the drop strip and every category card, so
+                drag-to-reorder (within a card) and drag-to-reassign (onto
+                a strip chip) both work. */}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={ruleCollisionDetection}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
               <div
-                className="flex items-center gap-2.5 border-b border-brand-line bg-platinum-2 px-4 py-2"
+                className="flex flex-wrap items-center gap-2.5 border-b border-brand-line bg-platinum-2 px-4 py-2"
                 data-testid="rule-bulk-bar"
               >
                 <Checkbox
@@ -2146,7 +2176,7 @@ export default function MappingRulesPage() {
               </div>
               {(categories?.length ?? 0) > 0 && (
                 <div
-                  className={`px-4 py-3 transition-colors ${
+                  className={`border-b border-brand-line px-4 py-3 transition-colors ${
                     activeDragId ? "bg-platinum-3" : ""
                   }`}
                   data-testid="category-drop-strip"
@@ -2170,297 +2200,310 @@ export default function MappingRulesPage() {
                   </div>
                 </div>
               )}
-            </div>
-          </section>
 
-          <SortableContext
-            items={sortableIds}
-            strategy={verticalListSortingStrategy}
-          >
-            {filtered.length === 0 ? (
-              <section className={card}>
-                <p className={emptyNote}>No rules match your search.</p>
-              </section>
-            ) : (
-              <div className="space-y-4" data-testid="rule-category-cards">
-                {cardGroups.map((group) => {
-                  // Search and the focus-pill "Show only these" toggle
-                  // already prune the rule list; if a card survives that
-                  // filter the user wants to see its rules, so we ignore
-                  // the persisted collapsed state while a filter is
-                  // active. We also force-expand the card containing the
-                  // current ?focus deep-link target so the auto-scroll
-                  // lands on a visible row.
-                  const groupHasFocusTarget =
-                    !!focusId && group.rules.some((r) => r.id === focusId);
-                  const filterActive =
-                    !!searchQuery || focusFilterActive;
-                  const isCollapsed =
-                    collapsedCategories.has(group.key) &&
-                    !filterActive &&
-                    !groupHasFocusTarget;
-                  return (
-                  <section
-                    key={group.key}
-                    className={card}
-                    data-testid={`rule-category-card-${group.key}`}
-                    data-collapsed={isCollapsed ? "true" : undefined}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleCategoryCollapsed(group.key)}
-                      className={`${cardHead} press w-full text-left hover:bg-platinum-2`}
-                      aria-expanded={!isCollapsed}
-                      aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${group.name}`}
-                      data-testid={`rule-category-card-toggle-${group.key}`}
-                    >
-                      {isCollapsed ? (
-                        <ChevronRight className="h-4 w-4 shrink-0 text-neutral-400" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 shrink-0 text-neutral-400" />
-                      )}
-                      <span
-                        className={cardTitle}
-                        data-testid={`rule-category-card-name-${group.key}`}
-                      >
-                        {group.name}
-                      </span>
-                      <span
-                        className="chip gray ml-auto"
-                        data-testid={`rule-category-card-count-${group.key}`}
-                      >
-                        {group.rules.length} rule
-                        {group.rules.length === 1 ? "" : "s"}
-                      </span>
-                    </button>
-                    {!isCollapsed && (
-                    <div>
-                      {/* Fixed-height scroll box per spec — keeps very
-                        * large categories from dominating the page while
-                        * still allowing the user to scan + edit any rule. */}
-                      <div
-                        className="max-h-80 divide-y divide-brand-line/70 overflow-y-auto"
-                        data-testid={`rule-category-card-list-${group.key}`}
-                      >
-                        {group.rules.map((rule, idxInGroup) => {
-                          const isFirst = idxInGroup === 0;
-                          const isLast = idxInGroup === group.rules.length - 1;
-                          const cat = rule.categoryId
-                            ? catById.get(rule.categoryId) ?? null
-                            : null;
-                          const isMatched = matchedIds.has(rule.id);
-                          const isWinner = winningId === rule.id;
-                          const reorderDisabled =
-                            reorderRules.isPending || !!searchQuery;
-                          if (editingId === rule.id) {
-                            return (
-                              <div
-                                key={rule.id}
-                                className="flex flex-col gap-2 bg-platinum-2 px-4 py-3"
-                                data-testid={`rule-edit-${rule.id}`}
-                              >
-                                <input
-                                  value={editPattern}
-                                  onChange={(e) =>
-                                    setEditPattern(e.target.value)
-                                  }
-                                  className={`${input} py-1 font-mono`}
-                                  autoFocus
-                                  aria-label="Rule pattern"
-                                />
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Select
-                                    value={editMatchType}
-                                    onValueChange={setEditMatchType}
-                                  >
-                                    <SelectTrigger
-                                      className={`${input} h-8 min-w-[120px] flex-1 py-0 text-micro`}
-                                      aria-label="Rule match type"
-                                    >
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="contains">
-                                        Contains
-                                      </SelectItem>
-                                      <SelectItem value="exact">
-                                        Exact
-                                      </SelectItem>
-                                      <SelectItem value="starts_with">
-                                        Starts with
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                  <Select
-                                    value={editCategoryId}
-                                    onValueChange={handleEditCategoryChange}
-                                  >
-                                    <SelectTrigger
-                                      className={`${input} h-8 min-w-[160px] flex-[2] py-0 text-micro`}
-                                      data-testid={`rule-edit-category-${rule.id}`}
-                                      aria-label="Rule category"
-                                    >
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="max-h-[280px]">
-                                      {categories?.map((cat) => (
-                                        <SelectItem
-                                          key={cat.id}
-                                          value={cat.id}
-                                        >
-                                          {cat.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <div className="flex items-center gap-1.5">
-                                    <label className={fieldLabel}>
-                                      Priority
-                                    </label>
-                                    <input
-                                      type="number"
-                                      value={editPriority}
-                                      onChange={(e) =>
-                                        setEditPriority(e.target.value)
-                                      }
-                                      className={`${input} h-8 w-20 py-0 font-mono text-micro tabular-nums`}
-                                      data-testid={`rule-edit-priority-${rule.id}`}
-                                      aria-label="Rule priority"
-                                    />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    className={btnSm}
-                                    onClick={() => saveEdit(rule.id)}
-                                    disabled={
-                                      !editPattern ||
-                                      !editCategoryId ||
-                                      updateRule.isPending
-                                    }
-                                    data-testid={`rule-save-${rule.id}`}
-                                    aria-label="Save rule"
-                                  >
-                                    <Check className="mr-1 inline h-3 w-3 align-[-1px]" />
-                                    Save
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={btnLink}
-                                    onClick={cancelEdit}
-                                    aria-label="Cancel editing rule"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                                {editPreview &&
-                                  editPreview.toCategoryId ===
-                                    editCategoryId &&
-                                  editPreview.candidateCount > 0 && (
-                                    <div
-                                      className={previewPanel}
-                                      data-testid={`rule-edit-preview-${rule.id}`}
-                                    >
-                                      <span>
-                                        <span
-                                          className="font-mono font-semibold text-brand-navy"
-                                          data-testid={`rule-edit-preview-count-${rule.id}`}
-                                        >
-                                          {editPreview.candidateCount}
-                                        </span>{" "}
-                                        past transaction
-                                        {editPreview.candidateCount === 1
-                                          ? ""
-                                          : "s"}{" "}
-                                        will move into{" "}
-                                        <span className="font-medium text-brand-navy">
-                                          {catById.get(
-                                            editPreview.toCategoryId,
-                                          )?.name ?? "the new category"}
-                                        </span>{" "}
-                                        when you save.
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className={`${btnLink} shrink-0`}
-                                        data-testid={`link-show-rule-matches-edit-${rule.id}`}
-                                        onClick={() =>
-                                          setMatchesDialog({
-                                            pattern: editPreview.pattern,
-                                            candidateCount:
-                                              editPreview.candidateCount,
-                                            sampleTransactions:
-                                              editPreview.sampleTransactions,
-                                            toCategoryName:
-                                              catById.get(
-                                                editPreview.toCategoryId,
-                                              )?.name ?? "the new category",
-                                          })
-                                        }
-                                      >
-                                        Show matches
-                                      </button>
-                                    </div>
-                                  )}
-                              </div>
-                            );
-                          }
-                          const isFocused = focusIdSet.has(rule.id);
-                          const isScrollTarget = rule.id === focusId;
-                          return (
-                            <SortableRuleRow
-                              key={rule.id}
-                              rule={rule}
-                              category={cat}
-                              isFirst={isFirst}
-                              isLast={isLast}
-                              isMatched={isMatched}
-                              isWinner={isWinner}
-                              reorderDisabled={reorderDisabled}
-                              dragDisabled={dragDisabled}
-                              isFocused={isFocused}
-                              isHighlighted={highlightedIds.has(rule.id)}
-                              setFocusRef={
-                                isScrollTarget
-                                  ? (el) => {
-                                      focusRowRef.current = el;
-                                    }
-                                  : null
-                              }
-                              isSelected={selected.has(rule.id)}
-                              onToggleSelected={toggleSelected}
-                              onMove={moveRule}
-                              onStartEdit={startEdit}
-                              onDelete={handleDeleteRule}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                    )}
-                  </section>
-                  );
-                })}
-              </div>
-            )}
-          </SortableContext>
-          <DragOverlay>
-            {activeDragRule ? (
-              <div
-                className="surface flex items-center gap-2 rounded-control px-3 py-2 shadow-lift ring-2 ring-brand-navy/40"
-                data-testid="rule-drag-overlay"
+              <SortableContext
+                items={sortableIds}
+                strategy={verticalListSortingStrategy}
               >
-                <GripVertical className="h-4 w-4 text-neutral-400" />
-                <span className="rounded bg-platinum-3 px-2 py-0.5 font-mono text-micro text-brand-navy">
-                  {activeDragRule.pattern}
-                </span>
-                <span className={fieldLabel}>
-                  {activeDragRule.matchType.replace("_", " ")}
-                </span>
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      )}
+                {filtered.length === 0 ? (
+                  <p className={emptyNote}>No rules match your search.</p>
+                ) : (
+                  // A viewport breakpoint, not a container query (see the
+                  // composition note above): this panel is always the full
+                  // content width, so from xl two cards of 600–760 px. Not
+                  // three: inside the 1,600 px column a third card is ~500 px
+                  // and a rule row then cuts its category to a few letters
+                  // (measured headless at 1,920 px).
+                  <div
+                    className="grid items-start gap-2 bg-platinum-1 p-2 sm:gap-3 sm:p-3 xl:grid-cols-2"
+                    data-testid="rule-category-cards"
+                  >
+                    {cardGroups.map((group) => {
+                      // Search and the focus-pill "Show only these" toggle
+                      // already prune the rule list; if a card survives that
+                      // filter the user wants to see its rules, so we ignore
+                      // the persisted collapsed state while a filter is
+                      // active. We also force-expand the card containing the
+                      // current ?focus deep-link target so the auto-scroll
+                      // lands on a visible row.
+                      const groupHasFocusTarget =
+                        !!focusId && group.rules.some((r) => r.id === focusId);
+                      const filterActive =
+                        !!searchQuery || focusFilterActive;
+                      const isCollapsed =
+                        collapsedCategories.has(group.key) &&
+                        !filterActive &&
+                        !groupHasFocusTarget;
+                      return (
+                        <section
+                          key={group.key}
+                          className="overflow-hidden rounded-card bg-white ring-1 ring-brand-line"
+                          data-testid={`rule-category-card-${group.key}`}
+                          data-collapsed={isCollapsed ? "true" : undefined}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleCategoryCollapsed(group.key)}
+                            className={`press flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-platinum-2 ${
+                              isCollapsed ? "" : "border-b border-brand-line"
+                            }`}
+                            aria-expanded={!isCollapsed}
+                            aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${group.name}`}
+                            data-testid={`rule-category-card-toggle-${group.key}`}
+                          >
+                            {isCollapsed ? (
+                              <ChevronRight className="h-4 w-4 shrink-0 text-neutral-400" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 shrink-0 text-neutral-400" />
+                            )}
+                            <span
+                              className="min-w-0 truncate text-body font-semibold text-brand-navy"
+                              data-testid={`rule-category-card-name-${group.key}`}
+                            >
+                              {group.name}
+                            </span>
+                            <span
+                              className="chip gray ml-auto shrink-0"
+                              data-testid={`rule-category-card-count-${group.key}`}
+                            >
+                              {group.rules.length} rule
+                              {group.rules.length === 1 ? "" : "s"}
+                            </span>
+                          </button>
+                          {!isCollapsed && (
+                            // Fixed-height scroll box per spec — keeps very
+                            // large categories from dominating the page while
+                            // still allowing the user to scan + edit any rule.
+                            <div
+                              className="max-h-80 divide-y divide-brand-line/70 overflow-y-auto"
+                              data-testid={`rule-category-card-list-${group.key}`}
+                            >
+                              {group.rules.map((rule, idxInGroup) => {
+                                const isFirst = idxInGroup === 0;
+                                const isLast = idxInGroup === group.rules.length - 1;
+                                const cat = rule.categoryId
+                                  ? catById.get(rule.categoryId) ?? null
+                                  : null;
+                                const isMatched = matchedIds.has(rule.id);
+                                const isWinner = winningId === rule.id;
+                                const reorderDisabled =
+                                  reorderRules.isPending || !!searchQuery;
+                                if (editingId === rule.id) {
+                                  return (
+                                    <div
+                                      key={rule.id}
+                                      className="flex flex-col gap-2 bg-platinum-2 px-3 py-3"
+                                      data-testid={`rule-edit-${rule.id}`}
+                                    >
+                                      <input
+                                        value={editPattern}
+                                        onChange={(e) =>
+                                          setEditPattern(e.target.value)
+                                        }
+                                        className={`${input} py-1 font-mono`}
+                                        autoFocus
+                                        aria-label="Rule pattern"
+                                      />
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Select
+                                          value={editMatchType}
+                                          onValueChange={setEditMatchType}
+                                        >
+                                          <SelectTrigger
+                                            className={`${input} h-8 min-w-[120px] flex-1 py-0 text-micro`}
+                                            aria-label="Rule match type"
+                                          >
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="contains">
+                                              Contains
+                                            </SelectItem>
+                                            <SelectItem value="exact">
+                                              Exact
+                                            </SelectItem>
+                                            <SelectItem value="starts_with">
+                                              Starts with
+                                            </SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        <Select
+                                          value={editCategoryId}
+                                          onValueChange={handleEditCategoryChange}
+                                        >
+                                          <SelectTrigger
+                                            className={`${input} h-8 min-w-[160px] flex-[2] py-0 text-micro`}
+                                            data-testid={`rule-edit-category-${rule.id}`}
+                                            aria-label="Rule category"
+                                          >
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent className="max-h-[280px]">
+                                            {categories?.map((cat) => (
+                                              <SelectItem
+                                                key={cat.id}
+                                                value={cat.id}
+                                              >
+                                                {cat.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        <div className="flex items-center gap-1.5">
+                                          <label className={fieldLabel}>
+                                            Priority
+                                          </label>
+                                          <input
+                                            type="number"
+                                            value={editPriority}
+                                            onChange={(e) =>
+                                              setEditPriority(e.target.value)
+                                            }
+                                            className={`${input} h-8 w-20 py-0 font-mono text-micro tabular-nums`}
+                                            data-testid={`rule-edit-priority-${rule.id}`}
+                                            aria-label="Rule priority"
+                                          />
+                                        </div>
+                                        <button
+                                          type="button"
+                                          className={btnSm}
+                                          onClick={() => saveEdit(rule.id)}
+                                          disabled={
+                                            !editPattern ||
+                                            !editCategoryId ||
+                                            updateRule.isPending
+                                          }
+                                          data-testid={`rule-save-${rule.id}`}
+                                          aria-label="Save rule"
+                                        >
+                                          <Check className="mr-1 inline h-3 w-3 align-[-1px]" />
+                                          Save
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={btnLink}
+                                          onClick={cancelEdit}
+                                          aria-label="Cancel editing rule"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                      {editPreview &&
+                                        editPreview.toCategoryId ===
+                                          editCategoryId &&
+                                        editPreview.candidateCount > 0 && (
+                                          <div
+                                            className={previewPanel}
+                                            data-testid={`rule-edit-preview-${rule.id}`}
+                                          >
+                                            <span>
+                                              <span
+                                                className="font-mono font-semibold text-brand-navy"
+                                                data-testid={`rule-edit-preview-count-${rule.id}`}
+                                              >
+                                                {editPreview.candidateCount}
+                                              </span>{" "}
+                                              past transaction
+                                              {editPreview.candidateCount === 1
+                                                ? ""
+                                                : "s"}{" "}
+                                              will move into{" "}
+                                              <span className="font-medium text-brand-navy">
+                                                {catById.get(
+                                                  editPreview.toCategoryId,
+                                                )?.name ?? "the new category"}
+                                              </span>{" "}
+                                              when you save.
+                                            </span>
+                                            <button
+                                              type="button"
+                                              className={`${btnLink} shrink-0`}
+                                              data-testid={`link-show-rule-matches-edit-${rule.id}`}
+                                              onClick={() =>
+                                                setMatchesDialog({
+                                                  pattern: editPreview.pattern,
+                                                  candidateCount:
+                                                    editPreview.candidateCount,
+                                                  sampleTransactions:
+                                                    editPreview.sampleTransactions,
+                                                  toCategoryName:
+                                                    catById.get(
+                                                      editPreview.toCategoryId,
+                                                    )?.name ?? "the new category",
+                                                })
+                                              }
+                                            >
+                                              Show matches
+                                            </button>
+                                          </div>
+                                        )}
+                                    </div>
+                                  );
+                                }
+                                const isFocused = focusIdSet.has(rule.id);
+                                const isScrollTarget = rule.id === focusId;
+                                return (
+                                  <SortableRuleRow
+                                    key={rule.id}
+                                    rule={rule}
+                                    category={cat}
+                                    isFirst={isFirst}
+                                    isLast={isLast}
+                                    isMatched={isMatched}
+                                    isWinner={isWinner}
+                                    reorderDisabled={reorderDisabled}
+                                    dragDisabled={dragDisabled}
+                                    isFocused={isFocused}
+                                    isHighlighted={highlightedIds.has(rule.id)}
+                                    setFocusRef={
+                                      isScrollTarget
+                                        ? (el) => {
+                                            focusRowRef.current = el;
+                                          }
+                                        : null
+                                    }
+                                    isSelected={selected.has(rule.id)}
+                                    onToggleSelected={toggleSelected}
+                                    onMove={moveRule}
+                                    onStartEdit={startEdit}
+                                    onDelete={handleDeleteRule}
+                                  />
+                                );
+                              })}
+                            </div>
+                          )}
+                        </section>
+                      );
+                    })}
+                  </div>
+                )}
+              </SortableContext>
+              <DragOverlay>
+                {activeDragRule ? (
+                  <div
+                    className="surface flex items-center gap-2 rounded-control px-3 py-2 shadow-lift ring-2 ring-brand-navy/40"
+                    data-testid="rule-drag-overlay"
+                  >
+                    <GripVertical className="h-4 w-4 text-neutral-400" />
+                    <span className="rounded bg-platinum-3 px-2 py-0.5 font-mono text-micro text-brand-navy">
+                      {activeDragRule.pattern}
+                    </span>
+                    <span className={fieldLabel}>
+                      {activeDragRule.matchType.replace("_", " ")}
+                    </span>
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+          </Panel>
+        )}
+
+        {/* F2 — what H2 learned from hand filing, beside the pattern rules. */}
+        <LearnedRulesPanel
+          categories={categories}
+          allCategories={allCategories ?? []}
+        />
+      </PageGrid>
       {previewDialog}
 
       <RuleMatchesPreviewDialog
@@ -2477,7 +2520,6 @@ export default function MappingRulesPage() {
           setMatchesDialog(null);
         }}
       />
-
     </div>
   );
 }
