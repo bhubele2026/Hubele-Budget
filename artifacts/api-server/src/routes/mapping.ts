@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { and, eq, desc } from "drizzle-orm";
-import { db, budgetCategoriesTable, mappingRulesTable } from "@workspace/db";
+import { and, eq, desc, sql } from "drizzle-orm";
+import { db, mappingRulesTable } from "@workspace/db";
 import {
   EXCLUDED_CATEGORY_RULE_ERROR,
   isExcludedCategory,
@@ -16,8 +16,17 @@ import {
   PreviewMappingRuleRecategorizeBody,
   PreviewMappingRuleRecategorizeParams,
   PreviewMappingRuleRecategorizeByPatternBody,
+  GetMappingRuleHistoryParams,
 } from "@workspace/api-zod";
 import { findMatchingRules, type RuleRow } from "../lib/autoCategorize";
+import {
+  listRuleHistory,
+  recordRuleChange,
+  recordRuleChanges,
+  ruleSnapshot,
+  sameRule,
+  type RuleChange,
+} from "../lib/mappingRuleAudit";
 import {
   countPatternCandidates,
   selectPatternCandidates,
@@ -66,13 +75,27 @@ router.post("/mapping-rules", requireAuth, async (req, res): Promise<void> => {
   }
   const userId = req.userId!;
   const householdId = req.householdId!;
-  if (await rejectIfExcludedCategory(householdId, parsed.data.categoryId, res)) {
+  const { note, ...fields } = parsed.data;
+  if (await rejectIfExcludedCategory(householdId, fields.categoryId, res)) {
     return;
   }
-  const [row] = await db
-    .insert(mappingRulesTable)
-    .values({ ...parsed.data, userId, householdId })
-    .returning();
+  // (WP5b) The rule and its "created" history row land together or not at all.
+  const row = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(mappingRulesTable)
+      .values({ ...fields, userId, householdId })
+      .returning();
+    await recordRuleChange(tx, {
+      householdId,
+      ruleId: created!.id,
+      action: "created",
+      actor: userId,
+      previous: null,
+      next: ruleSnapshot(created!),
+      note,
+    });
+    return created!;
+  });
   // Mirror the auto-learn flow's `ruleAction` shape so the Mapping Rules
   // page can reuse the existing `useBulkRecategorizePrompt` helper. We
   // count older *uncategorized* transactions matching the new rule's
@@ -149,45 +172,44 @@ router.put(
     const { orderedIds } = parsed.data;
 
     const householdId = req.householdId!;
-    const owned = await db
-      .select({
-        id: mappingRulesTable.id,
-        priority: mappingRulesTable.priority,
-      })
-      .from(mappingRulesTable)
-      .where(eq(mappingRulesTable.householdId, householdId));
-    const ownedIds = new Set(owned.map((r) => r.id));
+    const userId = req.userId!;
 
-    const filtered: string[] = [];
-    const seen = new Set<string>();
-    for (const id of orderedIds) {
-      if (!ownedIds.has(id) || seen.has(id)) continue;
-      seen.add(id);
-      filtered.push(id);
-    }
-
-    if (filtered.length === 0) {
-      const rows = await db
+    // (WP5b) Read, rewrite and record inside ONE transaction, with the
+    // household's rules locked: the history's "previous" priority is the one
+    // this write replaced, not one read a moment earlier. Only rules whose
+    // priority actually moves are written and recorded ("reordered"); a
+    // reorder does not stamp `updated_at` (it is not an edit of the rule).
+    await db.transaction(async (tx) => {
+      const owned = await tx
         .select()
         .from(mappingRulesTable)
         .where(eq(mappingRulesTable.householdId, householdId))
-        .orderBy(desc(mappingRulesTable.priority));
-      res.json(rows);
-      return;
-    }
+        .for("update");
+      const ownedById = new Map(owned.map((r) => [r.id, r]));
 
-    const STEP = 10;
-    const orderedSet = new Set(filtered);
-    const omittedMaxPriority = owned.reduce((max, r) => {
-      if (orderedSet.has(r.id)) return max;
-      return Math.max(max, r.priority);
-    }, 0);
-    const base = omittedMaxPriority + STEP * (filtered.length + 1);
+      const filtered: string[] = [];
+      const seen = new Set<string>();
+      for (const id of orderedIds) {
+        if (!ownedById.has(id) || seen.has(id)) continue;
+        seen.add(id);
+        filtered.push(id);
+      }
+      if (filtered.length === 0) return;
 
-    await db.transaction(async (tx) => {
+      const STEP = 10;
+      const orderedSet = new Set(filtered);
+      const omittedMaxPriority = owned.reduce((max, r) => {
+        if (orderedSet.has(r.id)) return max;
+        return Math.max(max, r.priority);
+      }, 0);
+      const base = omittedMaxPriority + STEP * (filtered.length + 1);
+
+      const changes: RuleChange[] = [];
       for (let i = 0; i < filtered.length; i++) {
         const id = filtered[i]!;
+        const before = ownedById.get(id)!;
         const newPriority = base - i * STEP;
+        if (before.priority === newPriority) continue;
         await tx
           .update(mappingRulesTable)
           .set({ priority: newPriority })
@@ -197,7 +219,17 @@ router.put(
               eq(mappingRulesTable.id, id),
             ),
           );
+        const previous = ruleSnapshot(before);
+        changes.push({
+          householdId,
+          ruleId: id,
+          action: "reordered",
+          actor: userId,
+          previous,
+          next: { ...previous, priority: newPriority },
+        });
       }
+      await recordRuleChanges(tx, changes);
     });
 
     const rows = await db
@@ -420,21 +452,52 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    if (
-      await rejectIfExcludedCategory(req.householdId!, parsed.data.categoryId, res)
-    ) {
+    const householdId = req.householdId!;
+    const { note, ...fields } = parsed.data;
+    if (await rejectIfExcludedCategory(householdId, fields.categoryId, res)) {
       return;
     }
-    const [row] = await db
-      .update(mappingRulesTable)
-      .set(parsed.data)
-      .where(
-        and(
-          eq(mappingRulesTable.id, params.data.id),
-          eq(mappingRulesTable.householdId, req.householdId!),
-        ),
-      )
-      .returning();
+    // (WP5b) The edit, its `updated_at` stamp and its history row are one
+    // transaction, the rule locked while it is compared. An omitted field
+    // keeps its value and an explicit null clears it (`set` semantics); a
+    // PATCH that changes nothing writes nothing and records nothing.
+    const row = await db.transaction(async (tx) => {
+      const [before] = await tx
+        .select()
+        .from(mappingRulesTable)
+        .where(
+          and(
+            eq(mappingRulesTable.id, params.data.id),
+            eq(mappingRulesTable.householdId, householdId),
+          ),
+        )
+        .for("update");
+      if (!before) return null;
+      const previous = ruleSnapshot(before);
+      const wanted = ruleSnapshot({
+        pattern: fields.pattern,
+        matchType: fields.matchType ?? before.matchType,
+        categoryId:
+          fields.categoryId === undefined ? before.categoryId : fields.categoryId,
+        priority: fields.priority ?? before.priority,
+      });
+      if (sameRule(previous, wanted)) return before;
+      const [updated] = await tx
+        .update(mappingRulesTable)
+        .set({ ...fields, updatedAt: sql`now()` })
+        .where(eq(mappingRulesTable.id, before.id))
+        .returning();
+      await recordRuleChange(tx, {
+        householdId,
+        ruleId: before.id,
+        action: "updated",
+        actor: req.userId!,
+        previous,
+        next: ruleSnapshot(updated!),
+        note,
+      });
+      return updated!;
+    });
     if (!row) {
       res.status(404).json({ error: "Not found" });
       return;
@@ -452,15 +515,50 @@ router.delete(
       res.status(400).json({ error: params.error.message });
       return;
     }
-    await db
-      .delete(mappingRulesTable)
-      .where(
-        and(
-          eq(mappingRulesTable.id, params.data.id),
-          eq(mappingRulesTable.householdId, req.householdId!),
-        ),
-      );
+    const householdId = req.householdId!;
+    // (WP5b) The delete and its "deleted" history row (the rule as it was)
+    // are one transaction. The history outlives the rule.
+    await db.transaction(async (tx) => {
+      const [gone] = await tx
+        .delete(mappingRulesTable)
+        .where(
+          and(
+            eq(mappingRulesTable.id, params.data.id),
+            eq(mappingRulesTable.householdId, householdId),
+          ),
+        )
+        .returning();
+      if (!gone) return;
+      await recordRuleChange(tx, {
+        householdId,
+        ruleId: gone.id,
+        action: "deleted",
+        actor: req.userId!,
+        previous: ruleSnapshot(gone),
+        next: null,
+      });
+    });
     res.sendStatus(204);
+  },
+);
+
+/**
+ * (WP5b) Every recorded change to one rule, newest first (at most
+ * RULE_HISTORY_LIMIT, `truncated` when there were more). Read-only. A deleted
+ * rule keeps its history; another household's id has none here.
+ */
+router.get(
+  "/mapping-rules/:id/history",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const params = GetMappingRuleHistoryParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    res.json(
+      await listRuleHistory(req.householdId!, params.data.id, req.userId!),
+    );
   },
 );
 

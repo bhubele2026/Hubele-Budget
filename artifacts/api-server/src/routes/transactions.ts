@@ -21,6 +21,7 @@ import { expandSplits, loadSplitsForTxns } from "../lib/categorizer/splits";
 import { recordHandFiling, recordUserDecisions } from "../lib/categorizer/userDecisions";
 import type { RetroactiveCandidates } from "../lib/categorizer/memory";
 import { forecastTodayISO } from "../lib/forecastInclusion";
+import { recordRuleChange, ruleSnapshot } from "../lib/mappingRuleAudit";
 import { cleanMerchant, merchantSignature } from "../lib/merchantNameExtract";
 import {
   EXCLUDED_CATEGORY_RULE_ERROR,
@@ -616,16 +617,39 @@ router.post(
     // filter on the UPDATE makes a stale or foreign `ruleId` a silent
     // no-op rather than an error, so callers can pass it
     // unconditionally.
+    //
+    // (WP5b) The re-point is a direct edit of the rule: it stamps
+    // `updated_at` and records an "updated" history row in the same
+    // transaction. A rule already on `toCategoryId` is left alone (nothing
+    // to record), as is a stale or foreign id.
     if (ruleId) {
-      await db
-        .update(mappingRulesTable)
-        .set({ categoryId: toCategoryId })
-        .where(
-          and(
-            eq(mappingRulesTable.id, ruleId),
-            eq(mappingRulesTable.householdId, req.householdId!),
-          ),
-        );
+      await db.transaction(async (tx) => {
+        const [before] = await tx
+          .select()
+          .from(mappingRulesTable)
+          .where(
+            and(
+              eq(mappingRulesTable.id, ruleId),
+              eq(mappingRulesTable.householdId, req.householdId!),
+            ),
+          )
+          .for("update");
+        if (!before || before.categoryId === toCategoryId) return;
+        const [after] = await tx
+          .update(mappingRulesTable)
+          .set({ categoryId: toCategoryId, updatedAt: sql`now()` })
+          .where(eq(mappingRulesTable.id, before.id))
+          .returning();
+        await recordRuleChange(tx, {
+          householdId: req.householdId!,
+          ruleId: before.id,
+          action: "updated",
+          actor: userId,
+          previous: ruleSnapshot(before),
+          next: ruleSnapshot(after!),
+          note: "Re-pointed together with a bulk move of past charges.",
+        });
+      });
     }
     let candidates = await selectPatternCandidates(
       req.householdId!,

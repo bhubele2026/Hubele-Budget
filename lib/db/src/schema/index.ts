@@ -684,6 +684,12 @@ export const mappingRulesTable = pgTable(
     categoryId: uuid("category_id"),
     priority: integer("priority").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // (WP5b, lib/db/migrations/0170_mapping_rule_history.sql) The last DIRECT
+    // edit of the rule — its pattern, match type, category or priority. NULL =
+    // not edited since rule history began. A reorder is recorded in
+    // `mapping_rule_history` but is not an edit. Every change, including a
+    // reorder or a delete, is in `mappingRuleHistoryTable`.
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
   },
   (t) => ({
     userIdx: index("mapping_rules_user_idx").on(t.userId),

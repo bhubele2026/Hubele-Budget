@@ -1,0 +1,1 @@
+{"version":3,"file":"mappingRuleSnapshot.d.ts","sourceRoot":"","sources":["../../../src/generated/types/mappingRuleSnapshot.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH;;;;GAIG;AACH,MAAM,WAAW,mBAAmB;IAClC,OAAO,EAAE,MAAM,CAAC;IAChB,SAAS,EAAE,MAAM,CAAC;IAClB,gBAAgB;IAChB,UAAU,EAAE,MAAM,GAAG,IAAI,CAAC;IAC1B,QAAQ,EAAE,MAAM,CAAC;CAClB"}

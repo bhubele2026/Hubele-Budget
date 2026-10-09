@@ -822,4 +822,196 @@ export declare const transactionSplitsTable: import("drizzle-orm/pg-core").PgTab
     dialect: "pg";
 }>;
 export type TransactionSplit = typeof transactionSplitsTable.$inferSelect;
+/**
+ * (WP5b) A mapping rule's state as the history records it: the four fields
+ * that decide which charges it files, and where.
+ */
+export type MappingRuleSnapshot = {
+    pattern: string;
+    matchType: string;
+    categoryId: string | null;
+    priority: number;
+};
+/** (WP5b) Every kind of change the rule history records. */
+export declare const MAPPING_RULE_HISTORY_ACTIONS: readonly ["created", "updated", "deleted", "reordered", "seeded"];
+export type MappingRuleHistoryAction = (typeof MAPPING_RULE_HISTORY_ACTIONS)[number];
+/**
+ * (WP5b) One row per change to a mapping rule: what it was (`previous`), what
+ * it became (`next`), who changed it and why. Created by
+ * lib/db/migrations/0170_mapping_rule_history.sql — keep the two equal.
+ *
+ * - `actor`: the user id for a person's change; 'seed' for the starter rules;
+ *   'script:<name>' for a maintenance script; 'system' for H2's own tidy-ups.
+ * - `previous` is null for created/seeded; `next` is null for deleted.
+ * - `rule_id` has no foreign key on purpose: a deleted rule keeps its history.
+ *
+ * Written only through `recordRuleChange` (api-server lib/mappingRuleAudit.ts).
+ */
+export declare const mappingRuleHistoryTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "mapping_rule_history";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "mapping_rule_history";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        householdId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "household_id";
+            tableName: "mapping_rule_history";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        ruleId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "rule_id";
+            tableName: "mapping_rule_history";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        action: import("drizzle-orm/pg-core").PgColumn<{
+            name: "action";
+            tableName: "mapping_rule_history";
+            dataType: "string";
+            columnType: "PgText";
+            data: "created" | "updated" | "deleted" | "reordered" | "seeded";
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: "created" | "updated" | "deleted" | "reordered" | "seeded";
+        }>;
+        actor: import("drizzle-orm/pg-core").PgColumn<{
+            name: "actor";
+            tableName: "mapping_rule_history";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        previous: import("drizzle-orm/pg-core").PgColumn<{
+            name: "previous";
+            tableName: "mapping_rule_history";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: MappingRuleSnapshot | null;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: MappingRuleSnapshot | null;
+        }>;
+        next: import("drizzle-orm/pg-core").PgColumn<{
+            name: "next";
+            tableName: "mapping_rule_history";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: MappingRuleSnapshot | null;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: MappingRuleSnapshot | null;
+        }>;
+        note: import("drizzle-orm/pg-core").PgColumn<{
+            name: "note";
+            tableName: "mapping_rule_history";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        createdAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "created_at";
+            tableName: "mapping_rule_history";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+    };
+    dialect: "pg";
+}>;
+export type MappingRuleHistoryRow = typeof mappingRuleHistoryTable.$inferSelect;
 //# sourceMappingURL=categorization.d.ts.map

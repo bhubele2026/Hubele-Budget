@@ -12,5 +12,16 @@ export interface MappingRule {
     /** @nullable */
     categoryId?: string | null;
     priority: number;
+    /**
+     * (WP5b) When this rule was last edited directly: its pattern, match
+  type, category or priority (PATCH /mapping-rules/{id}, or the rule
+  re-point that rides on POST /transactions/recategorize-by-pattern).
+  Null when it has not been edited since rule history began. A
+  reorder is recorded in the rule's history but is not an edit, so it
+  leaves this alone. Every change is in GET /mapping-rules/{id}/history.
+  
+     * @nullable
+     */
+    updatedAt?: Date | null;
 }
 //# sourceMappingURL=mappingRule.d.ts.map
