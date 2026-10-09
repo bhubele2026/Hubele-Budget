@@ -13,20 +13,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Panel } from "@/components/next";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, RotateCw, X } from "lucide-react";
+import { btn, btnLink, btnLinkDanger, fieldLabel, input, td, th } from "@/ui";
 
 const inviteSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -43,18 +33,15 @@ function formatDate(epoch: number | null | undefined): string {
   }
 }
 
-function statusBadgeClasses(status: string): string {
+/** (C8) The invitation state as a `.chip` word; the tint only helps. */
+function statusChip(status: string): string {
   switch (status) {
     case "accepted":
-      return "border-positive/40 text-positive";
+      return "chip ok";
     case "pending":
-      return "border-warning/40 text-warning";
-    case "revoked":
-      return "border-muted-foreground/30 text-muted-foreground";
-    case "expired":
-      return "border-muted-foreground/30 text-muted-foreground";
+      return "chip warn";
     default:
-      return "border-border text-muted-foreground";
+      return "chip gray";
   }
 }
 
@@ -181,121 +168,102 @@ export function OwnerInvitationsSection() {
     );
   };
 
-  return (
-    <Card data-testid="card-owner-invitations">
-      <CardHeader>
-        <CardTitle>Members &amp; Invitations</CardTitle>
-        <CardDescription>
-          This app is invite-only. Invite trusted family members by email.
-          Everyone in the household shares the same budget, transactions,
-          debts and connected accounts — so anything you change here, they
-          see, and vice versa.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="flex flex-col md:flex-row md:items-end gap-3"
-            data-testid="form-invite"
-          >
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem className="flex-1">
-                  <FormLabel>Email address</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="family@example.com"
-                      autoComplete="off"
-                      data-testid="input-invite-email"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button
-              type="submit"
-              disabled={createInvitation.isPending}
-              data-testid="button-send-invite"
-            >
-              <Mail className="w-4 h-4 mr-2" />
-              {createInvitation.isPending ? "Sending..." : "Send invite"}
-            </Button>
-          </form>
-        </Form>
+  const emailError = form.formState.errors.email?.message;
 
-        <div>
-          <h3 className="text-sm font-semibold text-foreground mb-2">
-            Invitations
-          </h3>
+  // (C8) A Settings › Household panel on the h2budget kit; test ids unchanged.
+  return (
+    <Panel
+      title="Members & invitations"
+      sub="Invite-only. Everyone in the household shares the same budget, transactions, debts and connected accounts."
+      span={12}
+      variant={["static", "flush"]}
+      data-testid="card-owner-invitations"
+    >
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="flex flex-col gap-3 border-b border-brand-line p-4 md:flex-row md:items-end"
+        data-testid="form-invite"
+        noValidate
+      >
+        <label className="flex flex-1 flex-col gap-1">
+          <span className={fieldLabel}>Email address</span>
+          <input
+            type="email"
+            placeholder="family@example.com"
+            autoComplete="off"
+            className={input}
+            aria-invalid={emailError ? true : undefined}
+            data-testid="input-invite-email"
+            {...form.register("email")}
+          />
+          {emailError ? (
+            <span className="text-micro text-bad" role="alert">
+              {emailError}
+            </span>
+          ) : null}
+        </label>
+        <button
+          type="submit"
+          className={btn}
+          disabled={createInvitation.isPending}
+          data-testid="button-send-invite"
+        >
+          <Mail className="mr-1.5 inline h-4 w-4 align-[-3px]" />
+          {createInvitation.isPending ? "Sending…" : "Send invite"}
+        </button>
+      </form>
+
+      <div className="grid gap-0 lg:grid-cols-2 lg:divide-x lg:divide-brand-line">
+        <div className="min-w-0">
+          <h3 className={`px-4 pt-3 ${fieldLabel}`}>Invitations</h3>
           {invitesLoading ? (
-            <Skeleton className="h-16 w-full" />
+            <div className="skeleton m-4 h-12 rounded-control" />
           ) : (invitations ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No invitations yet.
-            </p>
+            <p className="px-4 py-3 text-body text-neutral-400">No invitations yet.</p>
           ) : (
-            <div
-              className="rounded-md border border-border overflow-hidden"
-              data-testid="table-invitations"
-            >
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-muted-foreground">
+            <div className="overflow-x-auto" data-testid="table-invitations">
+              <table className="w-full">
+                <thead>
                   <tr>
-                    <th className="text-left px-3 py-2 font-medium">Email</th>
-                    <th className="text-left px-3 py-2 font-medium">Status</th>
-                    <th className="text-left px-3 py-2 font-medium">Sent</th>
-                    <th className="px-3 py-2"></th>
+                    <th className={th}>Email</th>
+                    <th className={th}>Status</th>
+                    <th className={th}>Sent</th>
+                    <th className={th}>
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {(invitations ?? []).map((inv) => (
-                    <tr
-                      key={inv.id}
-                      className="border-t border-border"
-                      data-testid={`row-invitation-${inv.id}`}
-                    >
-                      <td className="px-3 py-2">{inv.emailAddress}</td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${statusBadgeClasses(inv.status)}`}
-                        >
-                          {inv.status}
-                        </span>
+                    <tr key={inv.id} data-testid={`row-invitation-${inv.id}`}>
+                      <td className={td}>{inv.emailAddress}</td>
+                      <td className={td}>
+                        <span className={statusChip(inv.status)}>{inv.status}</span>
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground">
+                      <td className={`${td} font-mono tabular-nums text-neutral-500`}>
                         {formatDate(inv.createdAt)}
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className={`${td} text-right`}>
                         {inv.status === "pending" && (
                           <div className="flex justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                handleResend(inv.id, inv.emailAddress)
-                              }
+                            <button
+                              type="button"
+                              className={btnLink}
+                              onClick={() => handleResend(inv.id, inv.emailAddress)}
                               disabled={resendInvitation.isPending}
                               data-testid={`button-resend-${inv.id}`}
                             >
-                              <RotateCw className="w-3.5 h-3.5 mr-1" /> Resend
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                handleRevoke(inv.id, inv.emailAddress)
-                              }
+                              <RotateCw className="h-3 w-3" /> Resend
+                            </button>
+                            <button
+                              type="button"
+                              className={btnLinkDanger}
+                              onClick={() => handleRevoke(inv.id, inv.emailAddress)}
                               disabled={revokeInvitation.isPending}
                               data-testid={`button-revoke-${inv.id}`}
                             >
-                              <X className="w-3.5 h-3.5 mr-1" /> Revoke
-                            </Button>
+                              <X className="h-3 w-3" /> Revoke
+                            </button>
                           </div>
                         )}
                       </td>
@@ -307,73 +275,56 @@ export function OwnerInvitationsSection() {
           )}
         </div>
 
-        <div>
-          <h3 className="text-sm font-semibold text-foreground mb-2">
-            Members
-          </h3>
+        <div className="min-w-0">
+          <h3 className={`px-4 pt-3 ${fieldLabel}`}>Members</h3>
           {membersLoading ? (
-            <Skeleton className="h-16 w-full" />
+            <div className="skeleton m-4 h-12 rounded-control" />
           ) : (members ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No members yet.</p>
+            <p className="px-4 py-3 text-body text-neutral-400">No members yet.</p>
           ) : (
-            <div
-              className="rounded-md border border-border overflow-hidden"
-              data-testid="table-members"
-            >
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-muted-foreground">
+            <div className="overflow-x-auto" data-testid="table-members">
+              <table className="w-full">
+                <thead>
                   <tr>
-                    <th className="text-left px-3 py-2 font-medium">Email</th>
-                    <th className="text-left px-3 py-2 font-medium">Name</th>
-                    <th className="text-left px-3 py-2 font-medium">Role</th>
-                    <th className="text-left px-3 py-2 font-medium">Joined</th>
-                    <th className="px-3 py-2"></th>
+                    <th className={th}>Email</th>
+                    <th className={th}>Name</th>
+                    <th className={th}>Role</th>
+                    <th className={th}>Joined</th>
+                    <th className={th}>
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {(members ?? []).map((m) => (
-                    <tr
-                      key={m.id}
-                      className="border-t border-border"
-                      data-testid={`row-member-${m.id}`}
-                    >
-                      <td className="px-3 py-2">{m.email ?? "—"}</td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {m.displayName ?? "—"}
-                      </td>
-                      <td className="px-3 py-2">
+                    <tr key={m.id} data-testid={`row-member-${m.id}`}>
+                      <td className={td}>{m.email ?? "—"}</td>
+                      <td className={`${td} text-neutral-500`}>{m.displayName ?? "—"}</td>
+                      <td className={td}>
                         {m.isOwner ? (
-                          <span
-                            className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-primary/40 text-primary"
-                            data-testid={`badge-owner-${m.id}`}
-                          >
+                          <span className="chip info" data-testid={`badge-owner-${m.id}`}>
                             Owner
                           </span>
                         ) : (
-                          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-muted-foreground">
-                            Member
-                          </span>
+                          <span className="chip gray">Member</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground">
+                      <td className={`${td} font-mono tabular-nums text-neutral-500`}>
                         {formatDate(m.createdAt)}
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className={`${td} text-right`}>
                         {!m.isOwner && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                          <button
+                            type="button"
+                            className={btnLinkDanger}
                             onClick={() =>
-                              handleRemoveMember(
-                                m.id,
-                                m.email ?? m.displayName ?? "this member",
-                              )
+                              handleRemoveMember(m.id, m.email ?? m.displayName ?? "this member")
                             }
                             disabled={removeMember.isPending}
                             data-testid={`button-remove-member-${m.id}`}
                           >
-                            <X className="w-3.5 h-3.5 mr-1" /> Remove
-                          </Button>
+                            <X className="h-3 w-3" /> Remove
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -383,7 +334,7 @@ export function OwnerInvitationsSection() {
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   );
 }
