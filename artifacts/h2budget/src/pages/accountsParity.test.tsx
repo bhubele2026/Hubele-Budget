@@ -98,10 +98,11 @@ function renderIn(node: ReactNode, path = "/") {
   );
 }
 
-/** The dashboard row of an account, by its link (`/next/accounts/<internal id>`). */
+/** The dashboard row of an account, by its link (`/next/accounts/<external or internal id>`). */
 function dashRow(ext: string): HTMLElement {
   const rowId = ext.replace(/^ext-/, "row-");
-  const link = screen.getAllByTestId("dash-account-link").find((a) => a.getAttribute("href") === `/next/accounts/${rowId}`);
+  const hrefs = [`/next/accounts/${ext}`, `/next/accounts/${rowId}`];
+  const link = screen.getAllByTestId("dash-account-link").find((a) => hrefs.includes(a.getAttribute("href") ?? ""));
   expect(link, `no dashboard row for ${ext}`).toBeTruthy();
   return link!.closest("[data-testid='dash-account']") as HTMLElement;
 }
