@@ -59,6 +59,7 @@ import {
   importBillsOverview,
   importBudget,
   importAllowances,
+  importWishlist,
   importMappingRules,
   importSettings,
   importNextDashboard,
@@ -88,6 +89,7 @@ const BillsPage = lazy(importBills);
 const BillsOverviewPage = lazy(importBillsOverview);
 const BudgetPage = lazy(importBudget);
 const AllowancesPage = lazy(importAllowances);
+const WishlistPage = lazy(importWishlist);
 const MappingRulesPage = lazy(importMappingRules);
 const SettingsPage = lazy(importSettings);
 const NextDashboardPage = lazy(importNextDashboard);
@@ -485,6 +487,7 @@ function ProtectedShell() {
             </Route>
             <Route path="/budget" component={BudgetPage} />
             <Route path="/allowances" component={AllowancesPage} />
+            <Route path="/wishlist" component={WishlistPage} />
             <Route path="/mapping-rules" component={MappingRulesPage} />
             <Route path="/settings" component={SettingsPage} />
             <Route path="/next/dashboard" component={NextDashboardPage} />

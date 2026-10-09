@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Split } from "lucide-react";
 import { PageGrid } from "@/components/next";
+import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import {
   useListTransactions,
@@ -1077,6 +1078,7 @@ export default function AllowancesPage() {
     <PageGrid className="stagger">
       <div className="span-12 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-display font-semibold text-brand-navy">Allowances</h1>
+        <AffordLauncher />
         {/* Streak state, in words. The chip is the whole message — the prose
             banners it replaces said this same fact in a paragraph. */}
         {(overStreak >= STREAK_MIN || underStreak >= STREAK_MIN) && (

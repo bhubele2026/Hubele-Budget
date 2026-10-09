@@ -88,6 +88,7 @@ vi.mock("./lib/routePrefetch", () => {
     importBillsOverview: page("bills-overview"),
     importBudget: page("budget"),
     importAllowances: page("allowances"),
+    importWishlist: page("wishlist"),
     importMappingRules: page("mapping-rules"),
     importSettings: page("settings"),
     importNextDashboard: page("next-dashboard"),
@@ -128,7 +129,7 @@ type Area = "Home" | "Forecast" | "Spending" | "Review" | "Debt" | "no area" | "
 const RIBBON: Record<Exclude<Area, "no header">, string[]> = {
   Home: ["/banking", "/transactions", "/amex", "/budget", "/allowances"],
   Forecast: ["/forecast/overview", "/forecast", "/bills"],
-  Spending: ["/reports/spending", "/budget", "/allowances", "/reports"],
+  Spending: ["/reports/spending", "/budget", "/allowances", "/wishlist", "/reports"],
   Review: ["/review", "/transactions", "/amex"],
   Debt: ["/avalanche", "/debts", "/reports/debt"],
   // Outside every area the ribbon is the five destinations themselves.
@@ -161,6 +162,7 @@ const OLD_ROUTES: Row[] = [
   { from: "/reports/spending", lands: "/reports/spending", page: "reports-spending", area: "Spending" },
   { from: "/budget", lands: "/budget", page: "budget", area: "Spending" },
   { from: "/allowances", lands: "/allowances", page: "allowances", area: "Spending" },
+  { from: "/wishlist", lands: "/wishlist", page: "wishlist", area: "Spending" },
   { from: "/reports", lands: "/reports", page: "reports", area: "Spending" },
   { from: "/review", lands: "/review", page: "forecast:review", area: "Review" },
   { from: "/transactions", lands: "/transactions", page: "transactions", area: "Review" },

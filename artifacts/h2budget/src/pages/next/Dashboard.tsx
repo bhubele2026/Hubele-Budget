@@ -1,5 +1,6 @@
 import { Page } from "@/ui";
 import { PageGrid } from "@/components/next";
+import { AffordLauncher } from "@/components/afford/AffordLauncher";
 import BriefingPanel from "./dashboard/BriefingPanel";
 import AccountsRow from "./dashboard/AccountsRow";
 import CashPanel from "./dashboard/CashPanel";
@@ -17,6 +18,9 @@ export default function NextDashboardPage() {
     <div data-testid="page-next-dashboard" className="lg:pb-14">
       <Page title="Dashboard" sub="Preview">
         <PageGrid>
+          <div className="span-12 flex justify-end">
+            <AffordLauncher />
+          </div>
           <BriefingPanel />
           <AccountsRow />
           <CashPanel />

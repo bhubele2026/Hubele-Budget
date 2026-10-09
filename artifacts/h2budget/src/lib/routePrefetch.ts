@@ -36,6 +36,7 @@ export const importBillsOverview = () => import("../pages/bills-overview");
 export const importBudget = () => import("../pages/budget");
 export const importAllowances = () => import("../pages/allowances");
 export const importMappingRules = () => import("../pages/mapping-rules");
+export const importWishlist = () => import("../pages/wishlist");
 export const importSettings = () => import("../pages/settings");
 // The /next preview pages (lazy; outside the ribbon until the owner approves).
 export const importNextDashboard = () => import("../pages/next/Dashboard");
@@ -58,6 +59,7 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/transactions": importTransactions,
   "/budget": importBudget,
   "/allowances": importAllowances,
+  "/wishlist": importWishlist,
   "/debts": importDebts,
   "/reports": importReports,
   "/reports/debt": importReportsDebt,
