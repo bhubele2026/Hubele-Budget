@@ -761,6 +761,26 @@ describe("(C12) the fold-in sub-items, the account menu and the chrome tokens", 
     }
   });
 
+  it("(SH-01) the top line stays on every page, the landing included, until the switch", () => {
+    for (const path of ["/home", "/banking", "/settings"]) {
+      mount(path);
+      const line = screen.getByTestId("classic-retiring-banner");
+      expect(linksIn(line)).toEqual(["Forecast /next/forecast", "Accounts /next/accounts", "Current app → /"]);
+      cleanup();
+    }
+  });
+
+  it("(SH-04) ←/→ on the ribbon move to the next tab, wrapping at the ends", () => {
+    const { history } = mountRecording("/review");
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    fireEvent.keyDown(nav, { key: "ArrowRight" });
+    expect(history[history.length - 1]).toBe("/review/categories");
+    cleanup();
+    const second = mountRecording("/review");
+    fireEvent.keyDown(screen.getByRole("navigation", { name: "Sections" }), { key: "ArrowLeft" });
+    expect(second.history[second.history.length - 1]).toBe("/amex");
+  });
+
   it("the chrome is drawn on tokens: no white/NN, rgba() or hex literal in the header, ribbon or drawer", () => {
     for (const file of ["layout.tsx", "tab-ribbon.tsx", "account-menu.tsx"]) {
       const code = readFileSync(join(import.meta.dirname, file), "utf8")
