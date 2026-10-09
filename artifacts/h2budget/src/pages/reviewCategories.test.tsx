@@ -95,7 +95,7 @@ const mount = () => {
   );
 };
 
-const press = (key: string, target: EventTarget = document) => {
+const press = (key: string, target: Element | Document | Window = document) => {
   act(() => {
     fireEvent.keyDown(target, { key });
   });
