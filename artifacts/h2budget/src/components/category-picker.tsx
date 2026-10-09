@@ -30,12 +30,15 @@ export function CategoryPicker({
   description,
   onChange,
   testId,
+  triggerClassName,
 }: {
   value: string | null;
   categories: { id: string; name: string }[];
   description?: string;
   onChange: (id: string | null, rememberPattern?: string | null) => void;
   testId?: string;
+  /** Width/size override for the trigger (default `w-52`). */
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [remember, setRemember] = useState(true);
@@ -81,7 +84,7 @@ export function CategoryPicker({
         <Button
           variant="outline"
           role="combobox"
-          className="h-8 text-xs w-52 justify-between font-normal"
+          className={cn("h-8 text-xs w-52 justify-between font-normal", triggerClassName)}
           data-testid={testId ?? "button-category-picker"}
         >
           <span className="truncate">{current}</span>

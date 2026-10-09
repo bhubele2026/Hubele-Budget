@@ -23,8 +23,12 @@ import {
  * and the page's `amexDebt` aggregation would otherwise sum all four
  * debts and inflate the Ending Balance tile by ~2x. The fix from
  * #449 collapses matched debts by (institutionName, mask) — derived
- * from the `/api/plaid/items` payload — before summing, so the tile
- * still equals the sum of the three real debts.
+ * from the `/api/plaid/items` payload — before summing, so the month's
+ * ending balance still equals the sum of the three real debts.
+ *
+ * (C10 repair) The Ending Balance tile this spec read is never rendered
+ * (parity AX-33); the newest row's running balance — seeded from the same
+ * ending balance — carries the figure now.
  *
  * Seeding strategy: same mock-the-payload approach as
  * `amex-relink-duplicate-no-double-balance.spec.ts`. The shape
@@ -322,23 +326,29 @@ test.describe("Amex page — re-link duplicate window with transactions doesn't 
 
     const expectedTotal = DEBT_BALANCES.reduce((s, n) => s + n, 0); // 2500
     const inflatedTotal = expectedTotal + DUP_DEBT_BALANCE; // 3000
-    const tile = page.getByTestId("stat-ending-balance");
+    // (C10 repair) The Ending Balance tile (`stat-ending-balance`) is never
+    // rendered (parity AX-33). The per-row running balance is seeded from the
+    // SAME month ending balance, so the NEWEST row's "bal" carries the
+    // aggregate this spec guards: the duplicate's purchase (12:30) while it
+    // exists, card 3003's (11:00) after dedupe. (The tile's "From debt row"
+    // source footer is not on screen anywhere.)
+    const newestBal = (id: string) => page.getByTestId(`text-running-balance-${id}`);
 
     // --- Phase 1: duplicate window WITH a transaction referencing
     //     the duplicate row id. Without #449's (institution, mask)
-    //     collapse, the tile would read $3,000. With the collapse,
-    //     the duplicate debt is folded into card 1001's group and
-    //     the tile shows $2,500.
-    await expect(tile).toContainText(fmtCurrency(expectedTotal), {
+    //     collapse, the ending balance would read $3,000. With the
+    //     collapse, the duplicate debt is folded into card 1001's group
+    //     and it reads $2,500.
+    const phase1 = newestBal(DUP_TXN_ROW_ID);
+    await expect(phase1).toContainText(fmtCurrency(expectedTotal), {
       timeout: 15_000,
     });
-    await expect(tile).toContainText("From debt row");
-    await expect(tile).not.toContainText(fmtCurrency(inflatedTotal));
+    await expect(phase1).not.toContainText(fmtCurrency(inflatedTotal));
 
     // --- Phase 2: dedupe lands. /api/debts, /api/transactions, and
     //     /api/plaid/items all return the three-real-only shape. We
-    //     reload to force a fresh fetch and assert the tile remains
-    //     at $2,500 — the duplicate never contributed in phase 1
+    //     reload to force a fresh fetch and assert the ending balance
+    //     remains at $2,500 — the duplicate never contributed in phase 1
     //     either, so removing it is a no-op for the user.
     duplicatePhase = false;
     const requestsBeforeReload = debtsRequestCount;
@@ -350,10 +360,10 @@ test.describe("Amex page — re-link duplicate window with transactions doesn't 
       .poll(() => debtsRequestCount, { timeout: 15_000 })
       .toBeGreaterThan(requestsBeforeReload);
 
-    await expect(tile).toContainText(fmtCurrency(expectedTotal), {
+    const phase2 = newestBal(TXN_ROW_IDS[2]);
+    await expect(phase2).toContainText(fmtCurrency(expectedTotal), {
       timeout: 15_000,
     });
-    await expect(tile).toContainText("From debt row");
-    await expect(tile).not.toContainText(fmtCurrency(inflatedTotal));
+    await expect(phase2).not.toContainText(fmtCurrency(inflatedTotal));
   });
 });

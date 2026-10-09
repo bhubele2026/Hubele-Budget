@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import {
   useListTransactions,
@@ -88,6 +88,8 @@ import {
   AccountPageHeader,
   AccountFilterBar,
   LedgerColumns,
+  LedgerPanel,
+  usePaneHeight,
   BalanceTrendChart,
   DayGroup,
   MonthNavigator,
@@ -103,10 +105,19 @@ import {
 } from "@/components/account-page";
 import { AmexLogo } from "@/components/brand-logos";
 import { AmexCardBand } from "@/components/amex-card-band";
-import { SectionHeader } from "@/components/stat";
+import { PageGrid } from "@/components/next/PageGrid";
+import { cardOrderOf, identityOf, type AccountAccentName } from "@/lib/accountIdentity";
 import { TimeRangeToggle } from "@/components/time-range-toggle";
 import { currentWeekRange, type RangeMode } from "@/lib/timeRange";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
+
+/** The identity accent's dot (the same tokens as `AccountChip`). */
+const ACCENT_DOT: Record<AccountAccentName, string> = {
+  checking: "bg-acct-checking",
+  amex: "bg-acct-amex",
+  card2: "bg-acct-card2",
+  other: "bg-acct-other",
+};
 
 // The "American Express" page is really the credit-cards view. Apple Card
 // rows are folded in here so they show alongside the Amex cards without
@@ -209,10 +220,18 @@ function ExternalCardChip({
  * page drops its own title (the account page owns it) and opens on one card
  * (external Plaid account_id). Without props it behaves exactly as before.
  */
+/**
+ * `embedded` + `accountId` are used by `/next/accounts/:plaidAccountId`: the
+ * page drops its own title and opens on one card (its external Plaid
+ * account_id). (C10) `lead` is a panel the host puts first in the card row
+ * (the account page's Summary), so the embedded card reads as one account
+ * page. Without props it behaves exactly as before.
+ */
 export default function AmexPage({
   embedded = false,
   accountId,
-}: { embedded?: boolean; accountId?: string; params?: unknown } = {}) {
+  lead,
+}: { embedded?: boolean; accountId?: string; lead?: ReactNode; params?: unknown } = {}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
@@ -736,6 +755,29 @@ export default function AmexPage({
     }
     return m;
   }, [plaidItemsForScope]);
+  // (C10) External Plaid account_id → the account's identity accent (Amex
+  // teal; another card — an Apple Card on this page — its own token), for the
+  // dot beside each row's card label. Colour only: the label names the card.
+  const accentByPlaidAccountId = useMemo(() => {
+    const flat = (plaidItemsForScope ?? []).flatMap((it) =>
+      (it.accounts ?? []).map((a) => ({
+        accountId: a.accountId,
+        input: {
+          id: a.id,
+          name: a.name,
+          mask: a.mask,
+          type: a.type,
+          subtype: a.subtype,
+          institutionName: it.institutionName,
+          institutionSlug: it.institutionSlug,
+        },
+      })),
+    );
+    const cardOrder = cardOrderOf(flat.map((f) => f.input));
+    const m = new Map<string, AccountAccentName>();
+    for (const f of flat) m.set(f.accountId, identityOf(f.input, { cardOrder }).accent);
+    return m;
+  }, [plaidItemsForScope]);
   // Card filter options — every Plaid Amex card currently feeding the
   // page, derived from the same `cardLabelByPlaidAccountId` map the
   // per-row card labels use, scoped to the cards that actually appear
@@ -756,12 +798,18 @@ export default function AmexPage({
 
   // If the selected card disappears (e.g. user changes source filter to
   // CSV-only), fall back to "All cards" so the page doesn't render empty.
+  // (D3) Only once the options CAN be known — the month's rows and the linked
+  // items have both answered. On a cold load the options are empty for a
+  // moment, and resetting then dropped a `?accountId=` deep link to "All
+  // cards" for good. Embedded, the route chose the card: never reset it.
   useEffect(() => {
     if (cardFilter === "all") return;
+    if (embedded) return;
+    if (monthTxns === undefined || plaidItemsForScope === undefined) return;
     if (!cardFilterOptions.some((o) => o.value === cardFilter)) {
       setCardFilter("all");
     }
-  }, [cardFilter, cardFilterOptions]);
+  }, [cardFilter, cardFilterOptions, embedded, monthTxns, plaidItemsForScope]);
 
   const { runSync, isPending: isAmexSyncing } = usePlaidSync();
   const handleRefreshAmex = () => {
@@ -1773,19 +1821,11 @@ export default function AmexPage({
     }
   }, [isLoading, groups.length]);
 
-  // Measure the pinned top pane so day-group headers (and the bulk bar)
-  // can stick directly beneath it via a CSS variable.
+  // (C10) Measure the ledger's pinned pane so the day-group heads and the
+  // bulk bar stick directly beneath it, via `--page-sticky-top` on the page
+  // root. The pane mounts after the cold skeleton, hence the re-attach.
   const paneRef = useRef<HTMLDivElement | null>(null);
-  const [paneH, setPaneH] = useState(0);
-  useEffect(() => {
-    const el = paneRef.current;
-    if (!el) return;
-    const measure = () => setPaneH(el.offsetHeight);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [isLoading]);
+  const paneH = usePaneHeight(paneRef, [isLoading, !!monthTxns]);
 
   // Stale-while-revalidate: only show the account skeleton on a genuine cold
   // load (no cached rows yet). Once any month's rows exist, keepPreviousData
@@ -1797,9 +1837,53 @@ export default function AmexPage({
 
   const todayKey = ymd(new Date());
 
+  // (C10) The card on screen, as its identity (accent, name, ••mask): the
+  // chip under the title when one card is selected. "All cards" otherwise.
+  const selectedCardIdentity = (() => {
+    if (cardFilter === "all") return null;
+    for (const it of plaidItemsForScope ?? []) {
+      for (const a of it.accounts ?? []) {
+        if (a.accountId !== cardFilter) continue;
+        return identityOf({
+          id: a.id,
+          name: a.name,
+          mask: a.mask,
+          type: a.type ?? "credit",
+          subtype: a.subtype,
+          institutionName: it.institutionName,
+          institutionSlug: it.institutionSlug,
+        });
+      }
+    }
+    return null;
+  })();
+  // External Plaid account_id → last four, for the band's card panels.
+  const cardMasks = (() => {
+    const m = new Map<string, string>();
+    for (const it of plaidItemsForScope ?? []) {
+      for (const a of it.accounts ?? []) {
+        const mask = (a.mask ?? "").trim();
+        if (a.accountId && mask) m.set(a.accountId, mask);
+      }
+    }
+    return m;
+  })();
+
+  const pageActions = (
+    <>
+      <SyncButton relevantItemIds={relevantPlaidItemIds} />
+      <PlaidLinkButton
+        label="Connect a card"
+        viewTransactionsPath="/amex"
+        inlineProgress={false}
+      />
+    </>
+  );
+
   return (
     <div
-      className="space-y-6"
+      className="space-y-4"
+      data-testid="amex-page"
       style={{ ["--page-sticky-top" as string]: `${paneH}px` } as React.CSSProperties}
     >
       {/* (#373) Suppress the global Plaid re-auth banner on the Amex
@@ -1816,282 +1900,283 @@ export default function AmexPage({
           progresses visibly through "waiting on bank → syncing →
           done — N imported" (or failed + Retry). */}
       <PostLinkProgressBanner viewTransactionsPath="/amex" />
-      {/* Embedded, the pane bleeds over the p-4 that /next/accounts puts
-          around this ledger inside its flush, sticky-safe panel, so it spans
-          the panel's width when it sticks to <main>. Full page, it is the
-          page's sticky head (`.page-sticky-head`, index.css). */}
-      <div
-        ref={paneRef}
-        className={embedded ? "sticky top-0 z-30 -mx-4 space-y-3 border-b border-brand-line bg-platinum-1 px-4 pb-3" : "page-sticky-head sticky top-0 z-30 space-y-3 border-b border-brand-line bg-platinum-1 pt-3 pb-3 md:pt-4"}
-      >
-        {embedded ? (
-          <div className="flex flex-wrap items-start justify-end gap-2">
-            <>
-              <SyncButton relevantItemIds={relevantPlaidItemIds} />
-              <PlaidLinkButton
-                label="Connect a card"
-                viewTransactionsPath="/amex"
-                inlineProgress={false}
-              />
-            </>
-          </div>
-        ) : (
-          <AccountPageHeader
-          title="American Express"
-          icon={<AmexLogo className="h-6 w-7" />}
-          actions={
-            <>
-              <SyncButton relevantItemIds={relevantPlaidItemIds} />
-              <PlaidLinkButton
-                label="Connect a card"
-                viewTransactionsPath="/amex"
-                inlineProgress={false}
-              />
-            </>
-          }
-        />
-        )}
 
-      {/* (#748 → drill) The card switcher is no longer a tablist — the
-          per-card brand tiles (AmexCardBand, below) ARE the selector now;
-          tapping a tile filters the ledger to that card. */}
+      {/* (C10) The account page on the 12-column grid, as Chase: head,
+          controls, the card panels, the forward balance chart, then the
+          ledger panel. The same layout standalone and embedded
+          (`/next/accounts/:id`), where the account page supplies the title
+          and its Summary comes first in the card row (`lead`). */}
+      <PageGrid>
+        <div className="span-12">
+          {embedded ? (
+            <div className="flex flex-wrap items-start justify-end gap-2" data-testid="amex-embedded-actions">
+              {pageActions}
+            </div>
+          ) : (
+            <AccountPageHeader
+              title="American Express"
+              icon={<AmexLogo className="h-6 w-7" />}
+              identity={selectedCardIdentity}
+              meta={
+                selectedCardIdentity ? null : (
+                  <span className="chip gray" data-testid="amex-head-all-cards">
+                    All cards
+                  </span>
+                )
+              }
+              actions={pageActions}
+            />
+          )}
+        </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="span-12 flex flex-wrap items-center justify-between gap-2" data-testid="amex-controls">
           <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
           <TimeRangeToggle value={rangeMode} onChange={setRangeMode} />
         </div>
-      </div>
 
-      </div>
+        {lead}
 
-      {/* Per-card weekly cards are the PRIMARY view — tap a tile to filter
-          the ledger to that card (drill). */}
-      <div className="space-y-2">
-        <SectionHeader eyebrow="Cards" title="Per-card · this week" />
-        <AmexCardBand selected={cardFilter} onSelect={setCardFilter} />
-      </div>
+        {/* (#748 → drill) The card switcher is not a tablist — the per-card
+            panels ARE the selector: tapping one filters the ledger to that
+            card (drill); "All cards" clears it. */}
+        <AmexCardBand
+          selected={cardFilter}
+          onSelect={setCardFilter}
+          masks={cardMasks}
+          leadCount={lead ? 1 : 0}
+        />
 
-      <BalanceTrendChart
-        caption="Ending balance — forward 12 months"
-        window={balanceWindow ?? undefined}
-        color="hsl(var(--chart-1))"
-        valueLabel="Ending balance"
-      />
+        <BalanceTrendChart
+          caption="Ending balance — forward 12 months"
+          window={balanceWindow ?? undefined}
+          color="hsl(var(--chart-1))"
+          valueLabel="Ending balance"
+          accent="amex"
+        />
 
-      <SectionHeader eyebrow="Ledger" title="Activity" />
-
-      {/* (D2) Visible control for the persisted hide-reviewed filter. Rows are
-          never hidden from a stored value without this on screen. */}
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant={hideReviewed ? "default" : "outline"}
-          className="h-7 text-xs"
-          aria-pressed={hideReviewed}
-          data-testid="button-hide-reviewed"
-          onClick={() => setHideReviewed((v) => !v)}
+        <LedgerPanel
+          title="Activity"
+          accent="amex"
+          paneRef={paneRef}
+          data-testid="amex-ledger"
+          pane={
+            /* (D2) Visible control for the persisted hide-reviewed filter.
+               Rows are never hidden from a stored value without this on
+               screen. */
+            <div className="flex min-h-8 flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant={hideReviewed ? "default" : "outline"}
+                className="h-7 text-xs"
+                aria-pressed={hideReviewed}
+                data-testid="button-hide-reviewed"
+                onClick={() => setHideReviewed((v) => !v)}
+              >
+                {hideReviewed ? "Showing pending only" : "Hide reviewed"}
+              </Button>
+              {hideReviewed && (
+                <span className="text-micro text-neutral-500" data-testid="text-hide-reviewed-note">
+                  Reviewed rows are hidden.
+                </span>
+              )}
+            </div>
+          }
         >
-          {hideReviewed ? "Showing pending only" : "Hide reviewed"}
-        </Button>
-        {hideReviewed && (
-          <span className="text-micro text-neutral-500" data-testid="text-hide-reviewed-note">
-            Reviewed rows are hidden.
-          </span>
-        )}
-      </div>
-
-      {/* Bulk action bar */}
-      {selected.size > 0 && (
-        <div
-          className="surface sticky z-20 flex items-center gap-3 rounded-control px-4 py-2 ring-1 ring-brand-navy/25"
-          style={{ top: "var(--page-sticky-top, 0px)" }}
-        >
-          <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
-            {selected.size} selected
-          </span>
-          <BulkCategoryPicker
-            categories={categories ?? []}
-            onPick={bulkSetCategory}
-          />
-          <div className="flex items-center gap-1">
-            <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Bucket:</span>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("")}>
-              —
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("weekly")}>
-              Weekly
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("monthly")}>
-              Monthly
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("unplanned")}>
-              Unplanned
-            </Button>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Reimb:</span>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetReimbursable(true)}>
-              Mark
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetReimbursable(false)}>
-              Unmark
-            </Button>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Reviewed:</span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              data-testid="button-bulk-mark-reviewed"
-              onClick={() => bulkSetReviewed(true)}
+          {/* Bulk action bar */}
+          {selected.size > 0 && (
+            <div
+              className="sticky z-20 flex flex-wrap items-center gap-3 border-b border-brand-navy/25 bg-ok-bg px-4 py-2"
+              style={{ top: "var(--page-sticky-top, 0px)" }}
+              data-testid="amex-bulk-bar"
             >
-              Mark
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              data-testid="button-bulk-unmark-reviewed"
-              onClick={() => bulkSetReviewed(false)}
-            >
-              Unmark
-            </Button>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Owed by:</span>
-            <Input
-              placeholder="Owed by…"
-              list={owedByListId}
-              aria-label="Bulk set owed by for selected transactions"
-              data-testid="input-bulk-owed-by"
-              className="h-7 w-32 text-xs"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const value = e.currentTarget.value;
-                  void bulkSetOwedBy(value);
-                  e.currentTarget.value = "";
-                  (e.currentTarget as HTMLInputElement).blur();
-                } else if (e.key === "Escape") {
-                  e.currentTarget.value = "";
-                  (e.currentTarget as HTMLInputElement).blur();
-                }
-              }}
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              data-testid="button-bulk-clear-owed-by"
-              onClick={() => bulkSetOwedBy("")}
-            >
-              Clear
-            </Button>
-          </div>
-          {bulkProgress.total > 0 && (
-            <span
-              className="text-xs text-foreground font-mono tabular-nums"
-              data-testid="text-bulk-progress"
-            >
-              Updating {bulkProgress.done}/{bulkProgress.total}…
-            </span>
-          )}
-          <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
-            Clear
-          </Button>
-        </div>
-      )}
-      {/* (#508) Failed-rows panel — shows after a partial-failure
-          bulk action so users can see which transactions failed
-          and retry just those, instead of guessing from a toast. */}
-      {bulkFailures && (
-        <div
-          className="space-y-2 rounded-card bg-bad-bg p-3 ring-1 ring-bad/25"
-          data-testid="panel-bulk-failures"
-          role="alert"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-label font-semibold text-bad">
-              {bulkFailures.label}
-            </span>
-            <div className="ml-auto flex items-center gap-1">
-              {bulkFailures.retry && (
+              <span className="font-mono text-label font-semibold tabular-nums text-brand-navy">
+                {selected.size} selected
+              </span>
+              <BulkCategoryPicker
+                categories={categories ?? []}
+                onPick={bulkSetCategory}
+              />
+              <div className="flex items-center gap-1">
+                <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Bucket:</span>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("")}>
+                  —
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("weekly")}>
+                  Weekly
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("monthly")}>
+                  Monthly
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("unplanned")}>
+                  Unplanned
+                </Button>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Reimb:</span>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetReimbursable(true)}>
+                  Mark
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetReimbursable(false)}>
+                  Unmark
+                </Button>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Reviewed:</span>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs border-destructive/40 text-destructive bg-background hover:bg-destructive/10"
-                  onClick={() => void runBulkRetry()}
-                  disabled={bulkFailures.retrying}
-                  data-testid="button-bulk-retry-failed"
+                  className="h-7 text-xs"
+                  data-testid="button-bulk-mark-reviewed"
+                  onClick={() => bulkSetReviewed(true)}
                 >
-                  {bulkFailures.retrying
-                    ? "Retrying…"
-                    : `Retry ${bulkFailures.failures.length} failed`}
+                  Mark
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  data-testid="button-bulk-unmark-reviewed"
+                  onClick={() => bulkSetReviewed(false)}
+                >
+                  Unmark
+                </Button>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="mr-1 text-micro font-semibold uppercase tracking-wide text-neutral-500">Owed by:</span>
+                <Input
+                  placeholder="Owed by…"
+                  list={owedByListId}
+                  aria-label="Bulk set owed by for selected transactions"
+                  data-testid="input-bulk-owed-by"
+                  className="h-7 w-32 text-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const value = e.currentTarget.value;
+                      void bulkSetOwedBy(value);
+                      e.currentTarget.value = "";
+                      (e.currentTarget as HTMLInputElement).blur();
+                    } else if (e.key === "Escape") {
+                      e.currentTarget.value = "";
+                      (e.currentTarget as HTMLInputElement).blur();
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  data-testid="button-bulk-clear-owed-by"
+                  onClick={() => bulkSetOwedBy("")}
+                >
+                  Clear
+                </Button>
+              </div>
+              {bulkProgress.total > 0 && (
+                <span
+                  className="text-xs text-foreground font-mono tabular-nums"
+                  data-testid="text-bulk-progress"
+                >
+                  Updating {bulkProgress.done}/{bulkProgress.total}…
+                </span>
               )}
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 text-xs text-destructive hover:bg-destructive/10"
-                onClick={dismissBulkFailures}
-                data-testid="button-bulk-dismiss-failures"
-              >
-                Dismiss
+              <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
+                Clear
               </Button>
             </div>
-          </div>
-          <ul
-            className="max-h-40 space-y-1 overflow-auto text-micro text-bad"
-            data-testid="list-bulk-failures"
-          >
-            {bulkFailures.failures.map((f) => (
-              <li
-                key={f.id}
-                className="flex items-baseline gap-2 border-t border-bad/20 pt-1 first:border-t-0 first:pt-0"
-                data-testid={`row-bulk-failure-${f.id}`}
+          )}
+          {/* (#508) Failed-rows panel — shows after a partial-failure
+              bulk action so users can see which transactions failed
+              and retry just those, instead of guessing from a toast. */}
+          {bulkFailures && (
+            <div className="px-4 py-3">
+              <div
+                className="space-y-2 rounded-card bg-bad-bg p-3 ring-1 ring-bad/25"
+                data-testid="panel-bulk-failures"
+                role="alert"
               >
-                <span className="max-w-[40%] truncate font-medium" title={f.description}>
-                  {f.description}
-                </span>
-                <span className="truncate text-neutral-600" title={f.error}>
-                  {f.error}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {/* Day groups */}
-      {groups.length === 0 && (
-        <div className={card}>
-          <div className={emptyNote}>No transactions match these filters.</div>
-        </div>
-      )}
-      <DayGroupsList
-        groups={groups}
-        renderGroup={([dayKey, items], groupIndex) => {
-        const dayTotal = items.reduce((s, t) => s + parseAbs(t.amount), 0);
-        const ids = items.map((t) => t.id);
-        const allSelected = ids.every((id) => selected.has(id));
-        const someSelected = !allSelected && ids.some((id) => selected.has(id));
-        const isToday = dayKey === todayKey;
-        return (
-          <DayGroup
-            key={dayKey}
-            dayKey={dayKey}
-            count={items.length}
-            isToday={isToday}
-            todayAccent="blue"
-            containerRef={(el) => {
-              if (isToday) todayRef.current = el;
-            }}
-            selectionState={allSelected ? true : someSelected ? "indeterminate" : false}
-            onToggleAll={(on) => toggleDay(ids, on)}
-            totalNode={formatCurrency(dayTotal)}
-            // Once per ledger, on the first day only.
-            columnHeader={groupIndex === 0 ? <LedgerColumns /> : undefined}
-          >
+                <div className="flex items-center gap-2">
+                  <span className="text-label font-semibold text-bad">
+                    {bulkFailures.label}
+                  </span>
+                  <div className="ml-auto flex items-center gap-1">
+                    {bulkFailures.retry && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-destructive/40 text-destructive bg-background hover:bg-destructive/10"
+                        onClick={() => void runBulkRetry()}
+                        disabled={bulkFailures.retrying}
+                        data-testid="button-bulk-retry-failed"
+                      >
+                        {bulkFailures.retrying
+                          ? "Retrying…"
+                          : `Retry ${bulkFailures.failures.length} failed`}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                      onClick={dismissBulkFailures}
+                      data-testid="button-bulk-dismiss-failures"
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+                <ul
+                  className="max-h-40 space-y-1 overflow-auto text-micro text-bad"
+                  data-testid="list-bulk-failures"
+                >
+                  {bulkFailures.failures.map((f) => (
+                    <li
+                      key={f.id}
+                      className="flex items-baseline gap-2 border-t border-bad/20 pt-1 first:border-t-0 first:pt-0"
+                      data-testid={`row-bulk-failure-${f.id}`}
+                    >
+                      <span className="max-w-[40%] truncate font-medium" title={f.description}>
+                        {f.description}
+                      </span>
+                      <span className="truncate text-neutral-600" title={f.error}>
+                        {f.error}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+          {/* Day groups */}
+          {groups.length === 0 && (
+            <div className={emptyNote} data-testid="amex-empty">
+              No transactions match these filters.
+            </div>
+          )}
+          <DayGroupsList
+            groups={groups}
+            renderGroup={([dayKey, items], groupIndex) => {
+            const dayTotal = items.reduce((s, t) => s + parseAbs(t.amount), 0);
+            const ids = items.map((t) => t.id);
+            const allSelected = ids.every((id) => selected.has(id));
+            const someSelected = !allSelected && ids.some((id) => selected.has(id));
+            const isToday = dayKey === todayKey;
+            return (
+              <DayGroup
+                key={dayKey}
+                dayKey={dayKey}
+                count={items.length}
+                isToday={isToday}
+                todayAccent="blue"
+                variant="flush"
+                containerRef={(el) => {
+                  if (isToday) todayRef.current = el;
+                }}
+                selectionState={allSelected ? true : someSelected ? "indeterminate" : false}
+                onToggleAll={(on) => toggleDay(ids, on)}
+                totalNode={formatCurrency(dayTotal)}
+                // Once per ledger, on the first day only.
+                columnHeader={groupIndex === 0 ? <LedgerColumns /> : undefined}
+              >
               {/* Mobile: stacked card layout (below md) */}
               <div className="divide-y divide-brand-line/70 md:hidden">
                 {items.map((t) => {
@@ -2104,7 +2189,7 @@ export default function AmexPage({
                   <div
                     key={t.id}
                     className={cn(
-                      "flex flex-col gap-2 p-4 text-body transition-colors hover:bg-brand-tint",
+                      "flex flex-col gap-2 px-4 py-3 text-body transition-colors hover:bg-brand-tint",
                       (t.reviewed || isIgnored) && "opacity-50",
                     )}
                     data-reviewed={t.reviewed ? "true" : "false"}
@@ -2133,13 +2218,23 @@ export default function AmexPage({
                             {t.notes}
                           </div>
                         )}
-                        <div
-                          className="mt-0.5 text-micro text-neutral-500"
-                          data-testid={`text-card-mobile-${t.id}`}
-                        >
-                          {(t.plaidAccountId &&
-                            cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
-                            "—"}
+                        <div className="mt-0.5 flex items-center gap-1.5 text-micro text-neutral-500">
+                          {t.plaidAccountId &&
+                          cardLabelByPlaidAccountId.has(t.plaidAccountId) &&
+                          accentByPlaidAccountId.has(t.plaidAccountId) ? (
+                            <span
+                              aria-hidden
+                              className={cn(
+                                "size-2 shrink-0 rounded-full",
+                                ACCENT_DOT[accentByPlaidAccountId.get(t.plaidAccountId)!],
+                              )}
+                            />
+                          ) : null}
+                          <span data-testid={`text-card-mobile-${t.id}`}>
+                            {(t.plaidAccountId &&
+                              cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
+                              "—"}
+                          </span>
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
@@ -2310,6 +2405,11 @@ export default function AmexPage({
                             cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
                           null
                         }
+                        cardAccent={
+                          t.plaidAccountId
+                            ? (accentByPlaidAccountId.get(t.plaidAccountId) ?? null)
+                            : null
+                        }
                         metaNode={
                           t.notes ? (
                             <div
@@ -2384,6 +2484,8 @@ export default function AmexPage({
         );
         }}
       />
+        </LedgerPanel>
+      </PageGrid>
       <datalist id={owedByListId}>
         {knownPayers.map((p) => (
           <option key={p} value={p} />
@@ -2401,8 +2503,8 @@ export default function AmexPage({
 // perf headroom was never the bottleneck — every round of patches
 // produced a new "bottom of the month is clipped" bug because the
 // measured group heights kept diverging from the estimate. Render
-// them directly via `groups.map(...)` with a Tailwind `space-y-6`
-// gap and call it a day.
+// them directly via `groups.map(...)` and call it a day. (C10) The groups
+// are flush sections of the ledger panel, so they sit edge to edge.
 function DayGroupsList<G>({
   groups,
   renderGroup,
@@ -2412,7 +2514,7 @@ function DayGroupsList<G>({
   renderGroup: (entry: [string, G[]], index: number) => React.ReactNode;
 }) {
   return (
-    <div className="space-y-6">
+    <div>
       {groups.map((entry, index) => (
         <div key={entry[0]} data-day-group-key={entry[0]}>
           {renderGroup(entry, index)}

@@ -21,7 +21,8 @@ vi.mock("@workspace/api-client-react", async (orig) => ({
   ], isLoading: false }),
   useListCategories: () => ({ data: [{ id: "c1", name: "Dining" }] }),
 }));
-vi.mock("@/pages/amex", () => ({ default: (p: object) => { h.amexProps(p); return <div data-testid="amex-ledger" />; } }));
+// (C10) The Amex page renders the host's `lead` (the Summary panel) itself.
+vi.mock("@/pages/amex", () => ({ default: (p: { lead?: ReactNode }) => { h.amexProps(p); return <div data-testid="amex-ledger">{p.lead}</div>; } }));
 // (C9) The Chase page renders the host's `lead` (the Summary panel) itself.
 vi.mock("@/pages/transactions", () => ({ default: (p: { lead?: ReactNode }) => { h.chaseProps(p); return <div data-testid="chase-ledger">{p.lead}</div>; } }));
 
@@ -41,7 +42,8 @@ const seed = () => {
     item("i2", "American Express", "amex", [{ id: "r-amex", accountId: "ext-amex", name: "Platinum", mask: "1005", type: "credit", subtype: "credit card" }], { lastSyncError: "x", lastSyncErrorCode: "ITEM_LOGIN_REQUIRED" }),
   ];
   h.debts = [{ id: "d1", plaidAccountId: "r-amex", balance: "1234.50", minPayment: "35", dueDay: 14 }];
-  h.payoff = { cards: [{ plaidAccountId: "ext-amex", weekCharges: 120, chargeCount: 3, pctOfStatementThisWeek: 10, statementBalance: 1100 }] };
+  // The API's shape: `accountId` is the external Plaid account_id, `plaidAccountId` the internal row id.
+  h.payoff = { cards: [{ accountId: "ext-amex", plaidAccountId: "r-amex", weekCharges: 120, chargeCount: 3, pctOfStatementThisWeek: 10, statementBalance: 1100 }] };
   h.forecast = { bankSnapshot: { balance: "2500.00", at: "2026-10-08T09:00:00Z", source: "plaid", accountId: "r-chk" }, accountSnapshots: {}, plaidCheckingAccounts: [{ id: "r-chk", mask: "4821", institutionName: "Chase" }] };
 };
 const renderAt = (path: string) => {
@@ -115,6 +117,37 @@ describe("card variant", () => {
   });
 });
 
+describe("card Summary reads the weekly-payoff card on the ids the API sends", () => {
+  /**
+   * The payoff card's `plaidAccountId` is the INTERNAL row id and its
+   * `accountId` the external one; the old match compared the internal id with
+   * the external route id, so the Summary's statement balance and this week's
+   * charges were always dashes. Either id now matches.
+   */
+  it.each([
+    ["the external id (accountId)", { accountId: "ext-amex", plaidAccountId: null }],
+    ["the internal row id (plaidAccountId)", { accountId: "other-ext", plaidAccountId: "r-amex" }],
+  ])("matches on %s: statement balance and this week's charges show", async (_label, ids) => {
+    seed();
+    h.payoff = { cards: [{ ...ids, weekCharges: 120, chargeCount: 3, pctOfStatementThisWeek: 10, statementBalance: 1100 }] };
+    renderAt("/next/accounts/ext-amex");
+    await waitFor(() => expect(screen.getByTestId("amex-ledger")).toBeTruthy());
+    const s = screen.getByTestId("account-summary").textContent!;
+    expect(s).toContain("$1,100.00");
+    expect(s).toContain("$120.00");
+    expect(s).toContain("3 charges");
+  });
+  it("another card's payoff entry never lends its figures", async () => {
+    seed();
+    h.payoff = { cards: [{ accountId: "ext-other", plaidAccountId: "r-other", weekCharges: 120, chargeCount: 3, pctOfStatementThisWeek: 10, statementBalance: 1100 }] };
+    renderAt("/next/accounts/ext-amex");
+    await waitFor(() => expect(screen.getByTestId("amex-ledger")).toBeTruthy());
+    const s = screen.getByTestId("account-summary").textContent!;
+    expect(s).not.toContain("$1,100.00");
+    expect(s).not.toContain("$120.00");
+  });
+});
+
 describe("checking variant", () => {
   it("renders the existing Chase ledger for that account, with a balance and no card legend", async () => {
     seed(); renderAt("/next/accounts/ext-chk");
@@ -126,53 +159,29 @@ describe("checking variant", () => {
   });
 });
 
-describe("embedded ledgers stick (C0)", () => {
+describe("an account = its page's own layout (C9 checking, C10 card)", () => {
   /**
-   * An `overflow: hidden` panel is a scroll container, so the ledger's sticky
-   * pane and bulk bar stuck to the panel — which never moves — instead of to
-   * <main>. The Activity panel is sticky-safe (`overflow: clip`, pinned in
-   * index.css.test) and flush, with the padding moved inside so the pane can
-   * bleed back over it.
+   * One account experience: `/next/accounts/:id` renders the same layout as
+   * `/transactions` (checking) or `/amex` (card), embedded (no title), full
+   * width, with the account Summary as the first panel of its figures row.
+   * The ledger's own panel is sticky-safe (pinned in `chaseLayout.test.tsx`
+   * and `amexLayout.test.tsx`), so nothing between this cell and the page may
+   * be a scroll container either.
    */
-  it.each([["/next/accounts/ext-amex", "amex-ledger"]])(
-    "%s: the Activity panel is sticky-safe and flush, the ledger padded inside it",
-    async (path, ledger) => {
-      seed(); renderAt(path);
-      await waitFor(() => expect(screen.getByTestId(ledger)).toBeTruthy());
-      const panel = screen.getByTestId("account-activity");
-      expect(panel.className).toContain("panel-sticky-safe");
-      expect(panel.className).toContain("panel-flush");
-      // No `overflow-hidden` utility sneaks back in on top of the clip.
-      expect(panel.className).not.toMatch(/\boverflow-(hidden|auto|scroll)\b/);
-      // Nothing between the panel and the ledger is a scroll container either.
-      let el = screen.getByTestId(ledger).parentElement;
-      while (el && el !== panel) {
-        expect(el.className).not.toMatch(/\boverflow-(hidden|auto|scroll)\b/);
-        el = el.parentElement;
-      }
-      expect(screen.getByTestId(ledger).closest(".p-4")).toBeTruthy();
-    },
-  );
-});
-
-describe("checking account = the Chase page's own layout (C9)", () => {
-  /**
-   * One account experience: `/next/accounts/:id` for a checking account renders
-   * the same layout as `/transactions` (embedded: no title), full width, with
-   * the account Summary as the first panel of its figures row. The ledger's own
-   * panel is sticky-safe (pinned in `chaseLayout.test.tsx`), so nothing between
-   * this cell and the page may be a scroll container either.
-   */
-  it("spans the grid, passes the Summary as the lead, and adds no scroll container", async () => {
-    seed(); renderAt("/next/accounts/ext-chk");
-    await waitFor(() => expect(screen.getByTestId("chase-ledger")).toBeTruthy());
+  it.each([
+    ["/next/accounts/ext-chk", "chase-ledger", { accountKey: "r-chk" }, "$2,500.00"],
+    ["/next/accounts/ext-amex", "amex-ledger", { accountId: "ext-amex" }, "$1,234.50"],
+  ])("%s spans the grid, passes the Summary as the lead, and adds no scroll container", async (path, ledger, props, figure) => {
+    seed(); renderAt(path);
+    await waitFor(() => expect(screen.getByTestId(ledger)).toBeTruthy());
     const cell = screen.getByTestId("account-activity");
     expect(cell.className).toContain("span-12");
     expect(cell.className).not.toContain("panel");
-    expect(h.chaseProps).toHaveBeenCalledWith(expect.objectContaining({ embedded: true, accountKey: "r-chk", lead: expect.anything() }));
-    // The Summary is inside the Chase layout (its lead), not beside it.
-    expect(within(screen.getByTestId("chase-ledger")).getByTestId("account-summary").textContent).toContain("$2,500.00");
-    let el: HTMLElement | null = screen.getByTestId("chase-ledger");
+    const spy = ledger === "chase-ledger" ? h.chaseProps : h.amexProps;
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ embedded: true, ...props, lead: expect.anything() }));
+    // The Summary is inside the account's layout (its lead), not beside it.
+    expect(within(screen.getByTestId(ledger)).getByTestId("account-summary").textContent).toContain(figure);
+    let el: HTMLElement | null = screen.getByTestId(ledger);
     while (el && el !== document.body) {
       expect(el.className ?? "").not.toMatch(/\boverflow-(hidden|auto|scroll)\b|panel-link|\bpanel\b/);
       el = el.parentElement;
