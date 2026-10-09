@@ -219,6 +219,10 @@ describe("Amex page — the panel grid (C10)", () => {
     expect(plat.textContent).toContain("••1005");
     expect(plat.textContent).toContain("$2,000.00");
     expect(plat.textContent).toContain("cleared");
+    // Add to Avalanche rides on every card panel (AX-27), not on "All cards".
+    expect(within(plat).getByText("add")).toBeTruthy();
+    expect(within(tile("ext-gold")).getByText("add")).toBeTruthy();
+    expect(within(all).queryByText("add")).toBeNull();
     expect(all.getAttribute("aria-pressed")).toBe("true");
   });
 
