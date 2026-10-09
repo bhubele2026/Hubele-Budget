@@ -357,21 +357,23 @@
      D18). That overshoot is NOT invisible: `sticky` pushes the head back down
      to the scroller's top, so the content beneath it sits 4/12 px higher than
      it would without it, and past a 1,600 px column the head is 24 px wider
-     than the content. `.page-sticky-head` = shell pad + overshoot reproduces
-     today's geometry exactly; the restyle that owns those pages sets the
-     overshoot to 0px (and takes the 4/12 px on purpose). */
+     than the content. `.page-sticky-head` = shell pad + overshoot reproduced
+     that geometry exactly until the restyle that owned those pages set the
+     overshoot to 0px and took the 4/12 px on purpose: Chase and Amex dropped
+     their heads (C9, C10), and the forecast screen's head (C13) now bleeds
+     exactly the shell pad — 0 at both sizes, no hidden 4 px overflow on a
+     phone, never wider than the column. */
   --shell-pad-x: 0.75rem;
   --shell-pad-y: 0.75rem;
-  --page-head-overshoot: 4px;
+  --page-head-overshoot: 0px;
   --page-sticky-top: 0px;
 }
 
-/* Tailwind's `md` (48rem): the shell's md:p-5, and the heads' md:-mx-8/-mt-8. */
+/* Tailwind's `md` (48rem): the shell's md:p-5. */
 @media (width >= 48rem) {
   :root {
     --shell-pad-x: 1.25rem;
     --shell-pad-y: 1.25rem;
-    --page-head-overshoot: 12px;
   }
 }
 

@@ -7,13 +7,12 @@ import { join, relative } from "node:path";
  * "do not reach for recharts directly"). reportsShared and the account balance
  * trend did; they now import the raw primitives from the kit.
  *
- * One file is still allowed through on purpose: the forecast's
- * `ProjectedBalanceChart.tsx`, which 17 forecast tests stub with their own
- * `vi.mock("recharts")` lists — it moves with the forecast cut-over (C13),
- * not in groundwork. Do not add a second exception.
+ * (C13) The forecast's `ProjectedBalanceChart.tsx`, the last exception,
+ * moved with the forecast cut-over: no module but the kit imports recharts.
+ * Do not add an exception.
  */
 const SRC = join(import.meta.dirname, "..");
-const ALLOWED = new Set(["lib/charts.tsx", "pages/forecast/ProjectedBalanceChart.tsx"]);
+const ALLOWED = new Set(["lib/charts.tsx"]);
 
 function files(dir: string, acc: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -35,8 +34,12 @@ describe("recharts comes through @/lib/charts", () => {
     expect(direct.filter((f) => !ALLOWED.has(f))).toEqual([]);
   });
 
-  it("the two former direct importers now use the kit", () => {
-    for (const f of ["pages/reports/reportsShared.tsx", "components/account-page/balance-trend-chart.tsx"]) {
+  it("the three former direct importers now use the kit", () => {
+    for (const f of [
+      "pages/reports/reportsShared.tsx",
+      "components/account-page/balance-trend-chart.tsx",
+      "pages/forecast/ProjectedBalanceChart.tsx",
+    ]) {
       const src = code(f);
       expect(src, f).not.toMatch(FROM_RECHARTS);
       expect(src, f).toMatch(/from "@\/lib\/charts";/);

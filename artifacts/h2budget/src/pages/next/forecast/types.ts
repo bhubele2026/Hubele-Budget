@@ -38,4 +38,8 @@ export type ForecastNextCtx = {
   fromDate: string;
   lookbackOpen: boolean;
   highlightedPlanKey: string | null;
+  /** (C13) The inbox was just reconciled to the bank — the hero's badge. */
+  reconciledNow: boolean;
+  /** (C13) The page's own "balance on a chosen date" card (FC-23). */
+  dateBalance: ReactNode;
 };

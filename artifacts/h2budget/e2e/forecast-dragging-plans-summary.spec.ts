@@ -17,7 +17,7 @@ import {
  * This spec locks in:
  *   - The card (`card-dragging-plans-summary`) appears only when at least
  *     one plan is dragging.
- *   - It shows the seeded plan's label + amount + "Originally due …".
+ *   - It shows the seeded plan's label + amount + "Due …".
  *   - The header reports the right count and the running total
  *     (`dragging-plans-total`).
  *   - The header's target date matches today+1.
@@ -25,6 +25,10 @@ import {
  *     planned-items register (the register row scrolls into view).
  *   - Marking the plan as missed makes the card disappear (no more
  *     dragging plans).
+ *
+ * (C13 repair) The screen is the shared forecast layout: its h1 reads
+ * "Forecast" (the old "Plan register" heading is gone), and the card's head
+ * is "Past due" with a "1 on <day>" chip.
  */
 
 const provisionedUserIds: string[] = [];
@@ -67,7 +71,7 @@ test.describe("Forecast past-due plans summary card (#686)", () => {
 
     await signInAndOpen(page, email, password, "/forecast");
     await expect(
-      page.getByRole("heading", { name: /plan register/i }),
+      page.getByRole("heading", { level: 1, name: /^forecast$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
     // The Forecast page's first render fans out to /budget/categories,
@@ -129,30 +133,33 @@ test.describe("Forecast past-due plans summary card (#686)", () => {
     // new seeded item.
     await page.goto("/forecast");
     await expect(
-      page.getByRole("heading", { name: /plan register/i }),
+      page.getByRole("heading", { level: 1, name: /^forecast$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
     // --- Card surfaces with the expected row.
     const card = page.getByTestId("card-dragging-plans-summary");
     await expect(card).toBeVisible({ timeout: 15_000 });
 
-    // One past-due plan → singular header copy + the seeded amount as
-    // the running total. We assert the formatted currency since
-    // `formatCurrency` is locale-stable for USD.
-    await expect(card).toContainText("1 past-due plan is weighing on");
+    // One past-due plan → the "Past due" head with its "1 on <day>" chip,
+    // and the seeded amount as the running total. We assert the formatted
+    // currency since `formatCurrency` is locale-stable for USD.
+    // (C13 repair: the head used to read "1 past-due plan is weighing on …".)
+    await expect(card).toContainText("Past due");
+    await expect(card).toContainText(/\b1 on /);
     const total = card.getByTestId("dragging-plans-total");
     await expect(total).toHaveText(/\$73\.45/);
 
     // The dragging row uses `dragging-plan-{itemId}-{originalDate}` and
-    // shows the seeded label + amount + "Originally due …" sublabel.
+    // shows the seeded label + amount + "Due …" sublabel (it read
+    // "Originally due …" before).
     const rowTestId = `dragging-plan-${item.id}-${pastISO}`;
     const row = card.getByTestId(rowTestId);
     await expect(row).toBeVisible();
     await expect(row).toContainText(itemName);
-    await expect(row).toContainText(/Originally due/i);
+    await expect(row).toContainText(/\bDue /);
     await expect(row).toContainText(/\$73\.45/);
 
-    // The target date the header references must be today+1. We compute
+    // The target date the head's chip references must be today+1. We compute
     // the expected formatted label *inside the page* so it mirrors the
     // exact `formatDate(...)` output the component renders (locale + TZ
     // line up by construction, regardless of how the harness's host
@@ -199,7 +206,7 @@ test.describe("Forecast past-due plans summary card (#686)", () => {
 
     await page.goto("/forecast");
     await expect(
-      page.getByRole("heading", { name: /plan register/i }),
+      page.getByRole("heading", { level: 1, name: /^forecast$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
     await expect(
