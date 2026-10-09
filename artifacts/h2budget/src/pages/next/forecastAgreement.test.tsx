@@ -138,6 +138,8 @@ vi.mock("@/hooks/useSpine", () => ({
 
 import ForecastPage from "../forecast";
 import NextForecastPage from "./Forecast";
+import { ForecastBody } from "../forecast/ForecastBody";
+import type { ForecastNextCtx } from "./forecast/types";
 
 function mount(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
@@ -279,6 +281,32 @@ describe("/forecast and /review are the one forecast screen (C13)", () => {
     expect(screen.getByTestId("card-projected-balance-chart")).toBeTruthy();
     // (D8) The register's month picker heads the review view.
     expect(within(panel).getByTestId("review-month-row")).toBeTruthy();
+  });
+
+  it("FC-21: the hero carries 'Inbox cleared' only when the inbox is empty AND was just reconciled, on either view", () => {
+    const ctx = (over: Partial<ForecastNextCtx>) =>
+      ({
+        mode: "overall", horizonDays: 30, horizonControls: null, draggingCard: null, bankGrid: null,
+        registerBlock: null, monthBlock: null, proj: SIGNAL, projReady: true, dailySeries: [], cashBufferNum: 500,
+        lowestPoint: null, bigBillMarkers: [], eventsByDate: new Map(), partialPlanKeys: new Set(),
+        jumpToPlan: () => {}, onMarkMissed: () => {}, onSkipDraggingPlan: () => {}, openSnapshot: () => {},
+        openSettings: () => {}, cashProjectionLoading: false, bankBalance: "1000", bankAccountName: "Checking",
+        bankAccountMask: null, debtLinks: new Map(), inboxCount: 0, fromDate: "2026-06-10", lookbackOpen: false,
+        highlightedPlanKey: null, reconciledNow: true, dateBalance: null, ...over,
+      }) as unknown as ForecastNextCtx;
+    const body = (c: ForecastNextCtx, tab: "register" | "plan") =>
+      mount(<ForecastBody ctx={c} tab={tab} selectedDate={null} setSelectedDate={() => {}} title="Forecast" />);
+    for (const tab of ["register", "plan"] as const) {
+      const v = body(ctx({}), tab);
+      expect(within(screen.getByTestId("card-forecast-hero")).getByTestId("badge-inbox-cleared").textContent).toBe("Inbox cleared");
+      v.unmount();
+    }
+    let v = body(ctx({ inboxCount: 2 }), "register");
+    expect(screen.queryByTestId("badge-inbox-cleared")).toBeNull();
+    v.unmount();
+    v = body(ctx({ reconciledNow: false }), "plan");
+    expect(screen.queryByTestId("badge-inbox-cleared")).toBeNull();
+    v.unmount();
   });
 
   it("/next/forecast: the same screen, its views real tabs over one tabpanel that is always on the page", () => {
