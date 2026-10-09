@@ -1,3 +1,4 @@
+import { groupTxnsByCategory } from "@/lib/splitParts";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearch, useLocation, Link } from "wouter";
 import {
@@ -536,26 +537,15 @@ export default function BudgetPage() {
   const replacedPendingIds = pairingForMonth?.replacedPendingIds;
   const inheritedCategories = pairingForMonth?.inheritedCategories;
   const txnsByCategoryThisMonth = useMemo<Map<string, Transaction[]>>(() => {
-    const map = new Map<string, Transaction[]>();
-    if (!allTxns) return map;
-    const replaced = new Set(replacedPendingIds ?? []);
-    const inherited = new Map(
-      (inheritedCategories ?? []).map((x) => [x.transactionId, x.categoryId] as const),
-    );
-    for (const t of allTxns) {
-      if (t.isTransfer) continue;
-      if (replaced.has(t.id)) continue;
-      const categoryId = inherited.get(t.id) ?? t.categoryId;
-      if (!categoryId) continue;
-      if (t.occurredOn < monthBounds.start || t.occurredOn >= monthBounds.end) continue;
-      const arr = map.get(categoryId) ?? [];
-      arr.push(t);
-      map.set(categoryId, arr);
-    }
-    for (const arr of map.values()) {
-      arr.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
-    }
-    return map;
+    if (!allTxns) return new Map<string, Transaction[]>();
+    // (F4b) A valid category split appears under each part's category with the
+    // part's amount; every other row is filed exactly as before.
+    return groupTxnsByCategory(allTxns, {
+      replaced: new Set(replacedPendingIds ?? []),
+      inherited: new Map((inheritedCategories ?? []).map((x) => [x.transactionId, x.categoryId] as const)),
+      start: monthBounds.start,
+      end: monthBounds.end,
+    });
   }, [allTxns, monthBounds, replacedPendingIds, inheritedCategories]);
 
   // Mapping rules grouped by the categoryId they assign to. Used to decide

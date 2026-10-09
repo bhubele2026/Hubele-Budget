@@ -606,6 +606,17 @@ export const GetDashboardResponse = zod.object({
         .describe(
           "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
         ),
+      splits: zod
+        .array(
+          zod.object({
+            categoryId: zod.string(),
+            amount: zod.string(),
+          }),
+        )
+        .optional()
+        .describe(
+          "(F4b) The parts of a VALID category split, on `GET \/transactions`\nlist rows only: each part's category and amount (same string\nformat and sign as `amount`; the parts add up to `amount` to the\ncent). Omitted for a charge with no split and for one whose split\nis invalid or does not add up; such a charge counts whole under\nits own category, as the server's category totals do.\n",
+        ),
       isExternalCardPayment: zod
         .boolean()
         .describe(
@@ -750,6 +761,17 @@ export const ListTransactionsResponseItem = zod.object({
     .optional()
     .describe(
       "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
+    ),
+  splits: zod
+    .array(
+      zod.object({
+        categoryId: zod.string(),
+        amount: zod.string(),
+      }),
+    )
+    .optional()
+    .describe(
+      "(F4b) The parts of a VALID category split, on `GET \/transactions`\nlist rows only: each part's category and amount (same string\nformat and sign as `amount`; the parts add up to `amount` to the\ncent). Omitted for a charge with no split and for one whose split\nis invalid or does not add up; such a charge counts whole under\nits own category, as the server's category totals do.\n",
     ),
   isExternalCardPayment: zod
     .boolean()
@@ -934,6 +956,17 @@ export const UpdateTransactionResponse = zod
       .optional()
       .describe(
         "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
+      ),
+    splits: zod
+      .array(
+        zod.object({
+          categoryId: zod.string(),
+          amount: zod.string(),
+        }),
+      )
+      .optional()
+      .describe(
+        "(F4b) The parts of a VALID category split, on `GET \/transactions`\nlist rows only: each part's category and amount (same string\nformat and sign as `amount`; the parts add up to `amount` to the\ncent). Omitted for a charge with no split and for one whose split\nis invalid or does not add up; such a charge counts whole under\nits own category, as the server's category totals do.\n",
       ),
     isExternalCardPayment: zod
       .boolean()
@@ -1198,6 +1231,17 @@ export const ClearTransferOverrideResponse = zod.object({
     .optional()
     .describe(
       "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
+    ),
+  splits: zod
+    .array(
+      zod.object({
+        categoryId: zod.string(),
+        amount: zod.string(),
+      }),
+    )
+    .optional()
+    .describe(
+      "(F4b) The parts of a VALID category split, on `GET \/transactions`\nlist rows only: each part's category and amount (same string\nformat and sign as `amount`; the parts add up to `amount` to the\ncent). Omitted for a charge with no split and for one whose split\nis invalid or does not add up; such a charge counts whole under\nits own category, as the server's category totals do.\n",
     ),
   isExternalCardPayment: zod
     .boolean()
@@ -1761,6 +1805,17 @@ export const GetTransactionsLedgerResponse = zod.object({
           .optional()
           .describe(
             "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
+          ),
+        splits: zod
+          .array(
+            zod.object({
+              categoryId: zod.string(),
+              amount: zod.string(),
+            }),
+          )
+          .optional()
+          .describe(
+            "(F4b) The parts of a VALID category split, on `GET \/transactions`\nlist rows only: each part's category and amount (same string\nformat and sign as `amount`; the parts add up to `amount` to the\ncent). Omitted for a charge with no split and for one whose split\nis invalid or does not add up; such a charge counts whole under\nits own category, as the server's category totals do.\n",
           ),
         isExternalCardPayment: zod
           .boolean()
@@ -3758,6 +3813,17 @@ export const GetForecastResponse = zod.object({
         .optional()
         .describe(
           "(PR-0) True when a person chose this row's category by hand:\nPATCH \/transactions\/:id or bulk-update with a categoryId,\nrecategorize-by-pattern, or a create whose body named the\ncategory (never a mapping rule's auto-fill). Clearing the\ncategory (categoryId null, uncategorize-by-ids) clears it. The\nautomatic categorizer never moves a locked row and Plaid sync\nnever writes it. Server-managed and read-only: the input schemas\ndo not accept it.\n",
+        ),
+      splits: zod
+        .array(
+          zod.object({
+            categoryId: zod.string(),
+            amount: zod.string(),
+          }),
+        )
+        .optional()
+        .describe(
+          "(F4b) The parts of a VALID category split, on `GET \/transactions`\nlist rows only: each part's category and amount (same string\nformat and sign as `amount`; the parts add up to `amount` to the\ncent). Omitted for a charge with no split and for one whose split\nis invalid or does not add up; such a charge counts whole under\nits own category, as the server's category totals do.\n",
         ),
       isExternalCardPayment: zod
         .boolean()

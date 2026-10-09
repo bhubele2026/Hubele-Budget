@@ -112,6 +112,45 @@ export async function loadSplitsByTxn(
   return out;
 }
 
+/**
+ * (F4b) The splits of exactly these charges, in ONE query, valid parents only
+ * (`splits_invalid` false). Callers pass the result through `expandSplits`,
+ * which also drops any whose parts do not add up to the charge.
+ */
+export async function loadSplitsForTxns(
+  householdId: string,
+  ids: readonly string[],
+): Promise<Map<string, SplitPart[]>> {
+  const out = new Map<string, SplitPart[]>();
+  if (ids.length === 0) return out;
+  const rows = await db
+    .select({
+      transactionId: transactionSplitsTable.transactionId,
+      categoryId: transactionSplitsTable.categoryId,
+      amount: transactionSplitsTable.amount,
+    })
+    .from(transactionSplitsTable)
+    .innerJoin(transactionsTable, eq(transactionsTable.id, transactionSplitsTable.transactionId))
+    .where(
+      and(
+        eq(transactionSplitsTable.householdId, householdId),
+        eq(transactionsTable.householdId, householdId),
+        eq(transactionsTable.splitsInvalid, false),
+        // ONE bind parameter whatever the page size: a per-id `IN (...)` would
+        // pass Postgres' 65,535-parameter limit on a very large list. The ids
+        // are the list rows' own uuids (hex and dashes only).
+        sql`${transactionSplitsTable.transactionId} = ANY(${`{${ids.join(",")}}`}::uuid[])`,
+      ),
+    )
+    .orderBy(transactionSplitsTable.createdAt, transactionSplitsTable.id);
+  for (const r of rows) {
+    const list = out.get(r.transactionId) ?? [];
+    list.push({ categoryId: r.categoryId, amount: r.amount });
+    out.set(r.transactionId, list);
+  }
+  return out;
+}
+
 export async function getSplits(householdId: string, txnId: string) {
   const [t] = await db
     .select({ id: transactionsTable.id, amount: transactionsTable.amount, splitsInvalid: transactionsTable.splitsInvalid })
