@@ -80,9 +80,12 @@ vi.mock("wouter", () => ({
   useSearch: () => "",
   Link: () => null,
 }));
+// The dashboard case below hands the summary row a spine; the pages read none.
+const spineHolder = vi.hoisted(() => ({ data: undefined as unknown }));
 vi.mock("@/hooks/useSpine", () => ({
-  useSpine: () => ({ data: undefined, isLoading: false }),
+  useSpine: () => ({ data: spineHolder.data, isLoading: false, state: "loaded", refetch: () => {} }),
 }));
+vi.mock("@/components/bank-balance-why", () => ({ BankBalanceWhy: () => null }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/components/debt-plaid-link", () => ({
   DebtPlaidActions: () => null,
@@ -132,11 +135,19 @@ vi.mock("@workspace/api-client-react", () => {
     getGetBillsSummaryQueryKey: () => ["bills-summary"],
     getGetForecastQueryKey: () => ["forecast"],
     getGetBudgetMonthQueryKey: () => ["budget-month"],
+    // The dashboard summary row's other reads (it shares the debts read above).
+    useGetForecastCashSignal: () => ({ data: undefined, isLoading: true }),
+    getGetForecastCashSignalQueryKey: () => ["cash-signal"],
+    useGetMoneyPosition: () => ({ data: undefined, isLoading: true }),
+    getGetMoneyPositionQueryKey: () => ["money-position"],
   };
 });
 
 import DebtsPage from "./debts";
 import AvalanchePage from "./avalanche";
+import SummaryRow from "./next/dashboard/SummaryRow";
+import { remainingDebtTotal, remainingDebtScope } from "@/lib/debtBalance";
+import { totalsForDebts } from "@/lib/reportsAnalytics";
 
 function renderPage(node: React.ReactElement) {
   const qc = new QueryClient({
@@ -244,5 +255,49 @@ describe("Debt balance parity — Debts page vs Avalanche page (owner-authorized
     expect(debtsPayoff).toBeTruthy();
     expect(debtsPayoff).not.toBe("—");
     expect(avalanchePayoff).toBe(debtsPayoff);
+  });
+});
+
+describe("⭐ The amount left — dashboard debt tile vs Avalanche vs Reports (owner's decision, 2026-10-09)", () => {
+  it("the dashboard's \"$X left across …\" equals the Avalanche page's Totals row, to the cent", () => {
+    renderPage(<AvalanchePage />);
+    const totals = screen.getByText("Totals").closest("tr")!;
+    const avalancheTotal = (totals.querySelectorAll("td")[1]?.textContent ?? "").trim();
+    cleanup();
+
+    spineHolder.data = {
+      bank: { balance: "100.00", asOfDate: "2026-10-08T12:00:00Z", source: "plaid", lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null },
+      forecast: { lowPoint: "100.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "not_yet" },
+      position: { safeToSpendNow: null, remainingWeek: null, availableUntilPayday: null, paydayDate: null, horizonKind: "week_end", withinPlan: null, confidence: "firm", degraded: false, weekAdjustment: null },
+      debt: { payoffPct: 40, nextMilestone: null, paidDownMtd: 0, confirmedPaymentsMtd: 0, newChargesMtd: 0 },
+      reviewCount: 0, nextBill: null, spentWeek: 0, spentMonth: 0, billsDueCount: 0, asOf: "2026-10-08T12:00:00Z",
+    };
+    try {
+      renderPage(<SummaryRow />);
+      const left = screen.getByTestId("dash-debt-left").textContent ?? "";
+      // Netted: $8,120.55 + $500.00, never the raw $8,420.55 the creditor reports.
+      expect(avalancheTotal).toBe("$8,620.55");
+      expect(left).toContain(`${avalancheTotal} left across`);
+      // …and the scope is named.
+      expect(left).toContain("Amex Delta");
+      expect(left).toContain("Chase Visa");
+    } finally {
+      spineHolder.data = undefined;
+    }
+  });
+
+  it("one helper, three callers: Avalanche, Reports and the dashboard read the same sum", () => {
+    const mixed = [
+      ...SEEDED_DEBTS,
+      { ...SEEDED_DEBTS[1]!, id: "gone", name: "Archived card", status: "archived", balance: "999.00" } as Debt,
+      { ...SEEDED_DEBTS[1]!, id: "zero", name: "Cleared card", balance: "0.00" } as Debt,
+    ];
+    const total = remainingDebtTotal(mixed);
+    expect(total).toBeCloseTo(8620.55, 2);
+    expect(totalsForDebts(mixed).totalBalance).toBe(total);
+    const scope = remainingDebtScope(mixed);
+    expect(scope.total).toBe(total);
+    // A cleared or archived debt adds nothing, so it is not named in the scope.
+    expect(scope.names).toEqual(["Amex Delta", "Chase Visa"]);
   });
 });

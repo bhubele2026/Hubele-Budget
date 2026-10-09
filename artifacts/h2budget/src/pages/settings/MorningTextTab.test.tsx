@@ -42,7 +42,7 @@ const toastMock = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: toastMock }) }));
 
 import { RecapView, RECAP_PREVIEW_KEY, type RecapData, type Read } from "./MorningTextTab";
-import { RECAP_PREVIEW_KEY as DASHBOARD_PREVIEW_KEY } from "@/pages/next/dashboard/queries";
+import { RECAP_PREVIEW_KEY as DASHBOARD_PREVIEW_KEY } from "@/pages/next/dashboard/RecapPreview";
 
 
 // h2budget has no user-event: plain events, typed as appends like a keyboard.

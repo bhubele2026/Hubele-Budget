@@ -1,13 +1,18 @@
 import {
   useListCategories, getListCategoriesQueryKey,
   useGetDuplicateTransactionCount, getGetDuplicateTransactionCountQueryKey,
+  useGetBudgetMonth, getGetBudgetMonthQueryKey,
+  useListRecurringItems, getListRecurringItemsQueryKey,
+  useListTransactions, getListTransactionsQueryKey,
+  type ListTransactionsParams,
 } from "@workspace/api-client-react";
 import { useCategorizationQueue } from "@/hooks/useCategorizationQueue";
 
 /**
- * (C11b) The queries only the below-the-fold panels read (Recent activity,
- * Needs review). They live here, not in `queries.ts`, so their hooks join the
- * lazy `BelowFold` chunk instead of the landing chunk.
+ * (C11b, dashboard refinement) The queries only the panels after first paint
+ * read (coming up, spending pace, needs attention, recent activity). They live
+ * here, not in `queries.ts`, so their hooks join the lazy `BelowFold` chunk
+ * instead of the landing chunk.
  */
 const MIN = 60_000;
 const GC = 30 * MIN;
@@ -22,4 +27,18 @@ export const useReviewQueueQ = () => useCategorizationQueue();
 export const useDuplicateCountQ = () =>
   useGetDuplicateTransactionCount({
     query: { queryKey: getGetDuplicateTransactionCountQueryKey(), staleTime: 5 * MIN, gcTime: GC },
+  });
+
+export const useBudgetMonthQ = (monthStart: string) =>
+  useGetBudgetMonth(monthStart, {
+    query: { queryKey: getGetBudgetMonthQueryKey(monthStart), staleTime: 5 * MIN, gcTime: GC },
+  });
+
+export const useRecurringQ = () =>
+  useListRecurringItems({ query: { queryKey: getListRecurringItemsQueryKey(), staleTime: 10 * MIN, gcTime: GC } });
+
+/** Bounded: always from/to + a limit of at most 100. */
+export const useTxnsQ = (params: ListTransactionsParams) =>
+  useListTransactions(params, {
+    query: { queryKey: getListTransactionsQueryKey(params), staleTime: MIN, gcTime: GC },
   });

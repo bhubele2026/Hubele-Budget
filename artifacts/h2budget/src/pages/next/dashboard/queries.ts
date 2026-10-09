@@ -1,30 +1,25 @@
-import { useQuery } from "@tanstack/react-query";
-import { OWN_INVALIDATION } from "@/lib/mutationInvalidation";
 import {
   useListPlaidItems, getListPlaidItemsQueryKey,
   useGetForecastCashSignal, getGetForecastCashSignalQueryKey,
   useListDebts, getListDebtsQueryKey,
   useGetAmexWeeklyPayoff, getGetAmexWeeklyPayoffQueryKey,
-  useGetSettings, getGetSettingsQueryKey,
-  useGetBudgetMonth, getGetBudgetMonthQueryKey,
   useGetBillsSummary, getGetBillsSummaryQueryKey,
-  useListRecurringItems, getListRecurringItemsQueryKey,
-  useListTransactions, getListTransactionsQueryKey,
-        type ListTransactionsParams,
-  // (F3b) The first screen's two fold-in reads come from the MAIN module, on
+  // (F3b) The first screen's one fold-in read comes from the MAIN module, on
   // purpose. This file is on the entry path, and importing `/features` here
   // pulled the WHOLE sub-module into the entry chunk (Rollup keeps a module
   // whole in the chunk that statically imports it, and retains every export a
   // lazy chunk uses). The main module is in the entry chunk anyway and carries
-  // the same two operations; featuresImportGraph.test.ts allows exactly these.
+  // the same operation; featuresImportGraph.test.ts allows exactly this one.
+  // (Dashboard refinement) The recap preview left: it loads on demand now.
   useGetMoneyPosition, getGetMoneyPositionQueryKey,
-  previewRecap,
 } from "@workspace/api-client-react";
 
 /**
- * Every query the dashboard reads, each with an explicit key and staleTime so
- * a panel never invents its own copy. Keys match the pages that own the same
- * data, so navigating here from them (or back) refetches nothing new.
+ * Every query the dashboard's FIRST SCREEN reads (header, summary row,
+ * accounts), each with an explicit key and staleTime so a panel never invents
+ * its own copy. Keys match the pages that own the same data, so navigating
+ * here from them (or back) refetches nothing new. The panels that load after
+ * first paint read `queriesLazy.ts` (plus these, shared by key).
  */
 const MIN = 60_000;
 const GC = 30 * MIN;
@@ -48,49 +43,5 @@ export const useAmexQ = () =>
 export const useMoneyPositionQ = () =>
   useGetMoneyPosition({ query: { queryKey: getGetMoneyPositionQueryKey(), staleTime: MIN, gcTime: GC } });
 
-export const useSettingsQ = () =>
-  useGetSettings({ query: { queryKey: getGetSettingsQueryKey(), staleTime: 10 * MIN, gcTime: GC } });
-
-export const useBudgetMonthQ = (monthStart: string) =>
-  useGetBudgetMonth(monthStart, {
-    query: { queryKey: getGetBudgetMonthQueryKey(monthStart), staleTime: 5 * MIN, gcTime: GC },
-  });
-
 export const useBillsSummaryQ = () =>
   useGetBillsSummary(undefined, { query: { queryKey: getGetBillsSummaryQueryKey(), staleTime: 5 * MIN, gcTime: GC } });
-
-export const useRecurringQ = () =>
-  useListRecurringItems({ query: { queryKey: getListRecurringItemsQueryKey(), staleTime: 10 * MIN, gcTime: GC } });
-
-/** Bounded: always from/to + a limit of at most 100. */
-export const useTxnsQ = (params: ListTransactionsParams) =>
-  useListTransactions(params, {
-    query: { queryKey: getListTransactionsQueryKey(params), staleTime: MIN, gcTime: GC },
-  });
-
-/**
- * (D14) The recap preview is a POST that reads the household and may spend one
- * of the six daily model calls, so it is a query, not a mutation: one request
- * per open at most, none while the answer is under ten minutes old, no retry
- * (a retry is a second model call), and `meta: OWN_INVALIDATION` so it can never
- * be mistaken for a write that marks the spine, reports and ledger stale. A
- * mutation here ran the after-write rule on every open.
- */
-export const RECAP_PREVIEW_KEY = ["/api/recap/preview"] as const;
-export function useRecapPreviewQ() {
-  const q = useQuery({
-    queryKey: RECAP_PREVIEW_KEY,
-    queryFn: ({ signal }) => previewRecap({}, { signal }),
-    staleTime: 10 * MIN,
-    gcTime: GC,
-    retry: false,
-    refetchOnWindowFocus: false,
-    meta: OWN_INVALIDATION,
-  });
-  return {
-    data: q.data,
-    isLoading: q.isPending,
-    isError: q.isError,
-    retry: () => void q.refetch(),
-  };
-}

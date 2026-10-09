@@ -69,6 +69,7 @@ export function CssFillMeter({
   ceiling,
   title,
   className,
+  marker,
 }: {
   /** The actual, as a positive magnitude. */
   value: number;
@@ -76,6 +77,9 @@ export function CssFillMeter({
   ceiling: number;
   title?: string;
   className?: string;
+  /** A pace mark, as a fraction of the plan (0–1): where spending "should" be
+   *  by today. Drawn as a thin tick on the track; omitted when null. */
+  marker?: number | null;
 }) {
   const v = Math.max(0, Number(value) || 0);
   const plan = Number(ceiling) || 0;
@@ -105,6 +109,15 @@ export function CssFillMeter({
         <span
           className="absolute inset-y-0 w-px bg-white/75"
           style={{ left: `${planPct}%` }}
+        />
+      )}
+      {marker != null && Number.isFinite(marker) && plan > 0 && (
+        <span
+          data-testid="meter-pace"
+          className="absolute inset-y-0 w-0.5 bg-brand-ink/45"
+          // On the plan's scale; when the track rescales to an overage the
+          // mark rescales with the plan line.
+          style={{ left: `${Math.max(0, Math.min(1, marker)) * (over ? planPct! : 100)}%` }}
         />
       )}
     </div>

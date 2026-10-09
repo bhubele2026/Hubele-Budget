@@ -117,3 +117,24 @@ export function attentionItems(i: {
   if (out.length === 0) out.push({ kind: "nothing", title: "Nothing needs you today" });
   return out.map((a) => ({ ...a, title: clip(a.title, ATTENTION_TITLE_MAX) }));
 }
+
+/**
+ * The dashboard header's ONE action, chosen by the same priority as the list
+ * above: the first item that needs a household decision wins. A failed bank
+ * connection asks for Reconnect; a week over its plan offers "Pick a way
+ * back". Anything else (an old balance, a bill due, charges to match) has its
+ * own row in Needs attention and the account list's per-bank Sync, so the
+ * header keeps the everyday question: "Can we afford something?". Pure.
+ */
+export type HeaderAction =
+  | { kind: "reconnect"; label: string; href: string }
+  | { kind: "wayBack" }
+  | { kind: "afford" };
+
+export function headerActionOf(items: readonly Attention[]): HeaderAction {
+  for (const a of items) {
+    if (a.kind === "reconnect") return { kind: "reconnect", label: a.action?.label ?? "Reconnect", href: a.action?.href ?? "/settings" };
+    if (a.kind === "over" && a.wayBack) return { kind: "wayBack" };
+  }
+  return { kind: "afford" };
+}

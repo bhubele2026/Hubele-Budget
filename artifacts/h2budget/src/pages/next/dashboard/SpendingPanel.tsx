@@ -1,126 +1,125 @@
-import { useMemo } from "react";
 import { Link } from "wouter";
 import { Panel } from "@/components/next";
-import { CssBars, CssFillMeter, type CssBarRow } from "@/lib/cssBars";
-import { bucketSpendInWindow } from "@/lib/bucketSpend";
-import { isSplurge, makeRecurringMatcher, merchantKey, recurringMerchantsFrom } from "@/lib/discretionarySpend";
+import { CssFillMeter } from "@/lib/cssBars";
 import { useSpine } from "@/hooks/useSpine";
-import { householdToday, monthBounds, weekBounds } from "@/lib/householdDay";
-import { formatCurrency } from "@/lib/utils";
-import { useBudgetMonthQ, useMoneyPositionQ, useRecurringQ, useSettingsQ, useTxnsQ } from "./queries";
-import { dayLabel, Empty, Gate, LinkRow, money, rise } from "./shared";
+import { householdToday, monthBounds } from "@/lib/householdDay";
+import { cn, formatCurrency } from "@/lib/utils";
+import { useMoneyPositionQ } from "./queries";
+import { useBudgetMonthQ } from "./queriesLazy";
+import { BELOW_FOLD } from "./belowFoldSizes";
+import { Gate, LABEL, LINK, money, rise, weekdayLabel } from "./shared";
 
-export const SPEND_WINDOW_LIMIT = 100;
-const barMoney = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-function MeterRow({ label, spent, cap, testid }: { label: string; spent: number | null; cap: number | null; testid: string }) {
+function MeterRow({
+  title, scope, spent, cap, status, over, marker, testid,
+}: {
+  title: string;
+  scope: string;
+  spent: number | null;
+  cap: number | null;
+  /** The words under the bar ("$120.00 left", "$40.00 over", "No plan set"). */
+  status: string;
+  over: boolean;
+  /** Where spending would be at an even pace by today, as a fraction of the plan. */
+  marker: number | null;
+  testid: string;
+}) {
   const hasCap = cap != null && cap > 0;
-  const over = hasCap && spent != null && spent > cap!;
   return (
     <div data-testid={testid}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-label font-medium text-brand-ink">{label}</span>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <span className="text-label font-semibold text-brand-ink">{title}</span>
         <span className="font-mono text-label tabular-nums text-neutral-700">
           {spent == null ? "—" : formatCurrency(spent)} <span className="text-neutral-500">of {hasCap ? formatCurrency(cap!) : "—"}</span>
         </span>
       </div>
-      <CssFillMeter value={spent ?? 0} ceiling={hasCap ? cap! : 0} className="mt-1" />
-      <div className="mt-0.5 text-micro text-neutral-500" data-testid={`${testid}-status`}>
-        {!hasCap ? "No limit set" : spent == null ? "—" : over ? `${formatCurrency(spent - cap!)} over` : `${formatCurrency(cap! - spent)} left`}
+      <div className="text-micro text-neutral-500" data-testid={`${testid}-scope`}>{scope}</div>
+      <CssFillMeter value={spent ?? 0} ceiling={hasCap ? cap! : 0} marker={marker} className="mt-1.5" />
+      <div className={cn("mt-1 text-micro", over ? "font-semibold text-bad" : "text-neutral-600")} data-testid={`${testid}-status`}>
+        {status}
       </div>
     </div>
   );
 }
 
+/**
+ * "Can we control spending?" Two bars, each saying its period and scope:
+ * this week's discretionary spending against the weekly plan (the money
+ * position — the same `remainingWeek` the summary quotes), and this month's
+ * budgeted expenses against the budget, each with an even-pace tick. The
+ * allowance breakdown and the biggest one-off charges live on their own pages,
+ * one click away.
+ */
 export default function SpendingPanel() {
   const today = householdToday(new Date());
-  const month = monthBounds(today).start;
-  const week = weekBounds(today).start;
+  const mb = monthBounds(today);
   const spine = useSpine().data;
   const pos = useMoneyPositionQ();
-  const budget = useBudgetMonthQ(month);
-  const settings = useSettingsQ();
-  const recurring = useRecurringQ();
-  const txns = useTxnsQ({ from: week < month ? week : month, to: today, limit: SPEND_WINDOW_LIMIT });
+  const budget = useBudgetMonthQ(mb.start);
 
-  const calc = useMemo(() => {
-    const list = txns.data ?? [];
-    const names = (recurring.data ?? []).map((r) => r.name);
-    const isRecurring = makeRecurringMatcher(names);
-    const merchants = recurringMerchantsFrom(list);
-    const ym = month.slice(0, 7);
-    const bars: CssBarRow[] = list
-      .filter((t) => t.occurredOn?.startsWith(ym) && isSplurge(t, isRecurring) && !merchants.has(merchantKey(t.description ?? "")))
-      .map((t) => ({ id: t.id, label: t.description || "Uncategorized charge", value: Math.abs(Number(t.amount) || 0), hint: dayLabel(t.occurredOn) ?? undefined }))
-      .sort((a, b) => a.id.localeCompare(b.id));
-    const monthEnd = today;
-    return {
-      bars,
-      weekly: bucketSpendInWindow(list, "weekly", week, weekBounds(today).end),
-      monthly: bucketSpendInWindow(list, "monthly", month, monthEnd),
-      unplanned: bucketSpendInWindow(list, "unplanned", month, monthEnd),
-      capped: list.length >= SPEND_WINDOW_LIMIT,
-    };
-  }, [txns.data, recurring.data, month, week, today]);
-
-  const st = settings.data;
-  const weeklyCap = st ? Number(st.preferences?.weeklyAllowanceOverrides?.[week] ?? st.weeklyAllowanceAmount) || 0 : null;
   const p = pos.data;
-  const wk = p ? { spent: Number(p.spentWeekDiscretionary), cap: p.weekCap == null ? null : Number(p.weekCap) } : null;
   const bud = budget.data?.summary.expenses;
+  const monthName = MONTHS[Number(mb.start.slice(5, 7)) - 1] ?? "This month";
+  const dayOfMonth = Number(today.slice(8, 10));
+  const daysInMonth = Number(mb.end.slice(8, 10));
 
   return (
-    <Panel title="Spending" span={4} className={rise(2)} data-testid="dash-spending">
-      <Gate q={pos} what="Spending" rows={6}>
-        {() => (
-          <div className="space-y-4">
-            <MeterRow testid="dash-week-meter" label="This week vs limit" spent={wk && Number.isFinite(wk.spent) ? wk.spent : null} cap={wk?.cap ?? null} />
-            <MeterRow testid="dash-month-meter" label="This month vs budget"
-              spent={bud ? Number(bud.actual) : null} cap={bud ? Number(bud.budget) : null} />
-            {spine ? (
-              <p className="text-micro text-neutral-500" data-testid="dash-household-spent">
-                Household spent{" "}
-                <span className="font-mono tabular-nums text-neutral-700" data-testid="dash-spent-week">{money(spine.spentWeek)}</span> this week
-                {" · "}
-                <span className="font-mono tabular-nums text-neutral-700" data-testid="dash-spent-month">{money(spine.spentMonth)}</span> this month
-              </p>
-            ) : null}
-            <div data-testid="dash-allowances">
-              <h3 className="text-label font-semibold text-brand-navy">Allowances used</h3>
-              {txns.data === undefined ? <p className="text-micro text-neutral-500">Loading allowances…</p> : (
-                <dl className="mt-1 grid grid-cols-3 gap-2">
-                  {([
-                    ["Weekly", calc.weekly, weeklyCap],
-                    ["Monthly", calc.monthly, st ? Number(st.monthlyAllowanceAmount) || 0 : null],
-                    ["Unplanned", calc.unplanned, st ? Number(st.unplannedAllowanceAmount) || 0 : null],
-                  ] as const).map(([name, spent, cap]) => (
-                    <div key={name} data-testid={`dash-allow-${name.toLowerCase()}`}>
-                      <dt className="text-micro uppercase tracking-wide text-neutral-500">{name}</dt>
-                      <dd className="font-mono text-label tabular-nums">{money(spent)}</dd>
-                      <dd className="font-mono text-micro tabular-nums text-neutral-500">of {cap ? formatCurrency(cap) : "—"}</dd>
-                    </div>
-                  ))}
-                </dl>
+    <Panel title="Spending pace" span={6} variant="static"
+      className={cn(rise(BELOW_FOLD.spending.rise), BELOW_FOLD.spending.minH)} data-testid="dash-spending">
+      <Gate q={pos} what="Spending" rows={5}>
+        {() => {
+          const spent = Number(p!.spentWeekDiscretionary);
+          const cap = p!.weekCap == null ? null : Number(p!.weekCap);
+          const rem = p!.remainingWeek == null ? null : Number(p!.remainingWeek);
+          const pace = p!.paceAllowedToday != null && cap ? Number(p!.paceAllowedToday) / cap : null;
+          const bActual = bud ? Number(bud.actual) : null;
+          const bBudget = bud ? Number(bud.budget) : null;
+          const bLeft = bActual != null && bBudget != null && bBudget > 0 ? bBudget - bActual : null;
+          return (
+            <div className="space-y-5">
+              <MeterRow
+                testid="dash-week-meter"
+                title="This week vs plan"
+                scope={`${weekdayLabel(p!.weekStart)} – ${weekdayLabel(p!.weekEnd)} · discretionary spending`}
+                spent={Number.isFinite(spent) ? spent : null}
+                cap={cap}
+                over={rem != null && rem < 0}
+                status={rem == null ? "No weekly plan set" : rem < 0 ? `${money(-rem)} over the plan` : `${money(rem)} left in the plan`}
+                marker={pace}
+              />
+              {budget.data === undefined ? (
+                <div data-testid="dash-month-meter" className="text-micro text-neutral-500">
+                  {budget.isError ? "This month's budget did not load." : <span className="skeleton block h-10 w-full rounded-control" aria-busy="true" />}
+                </div>
+              ) : (
+                <MeterRow
+                  testid="dash-month-meter"
+                  title="This month vs budget"
+                  scope={`${monthName} 1–${daysInMonth} · budgeted expense categories`}
+                  spent={bActual}
+                  cap={bBudget}
+                  over={bLeft != null && bLeft < 0}
+                  status={bLeft == null ? "No budget set" : bLeft < 0 ? `${formatCurrency(-bLeft)} over` : `${formatCurrency(bLeft)} left`}
+                  marker={daysInMonth > 0 ? dayOfMonth / daysInMonth : null}
+                />
               )}
-            </div>
-            <div data-testid="dash-biggest">
-              <h3 className="text-label font-semibold text-brand-navy">Biggest charges this month</h3>
-              {calc.bars.length ? (
-                <CssBars rows={calc.bars} topN={8} ramp format={barMoney} labelWidth={120} valueWidth={70}
-                  ariaLabel="Biggest charges this month, largest first" />
-              ) : <Empty>No one-off charges this month.</Empty>}
-              {calc.capped ? (
-                <p className="mt-1 text-micro text-neutral-500" data-testid="dash-spend-cap">
-                  Showing the most recent {SPEND_WINDOW_LIMIT} transactions.
+              {spine ? (
+                <p className="text-micro text-neutral-500" data-testid="dash-household-spent">
+                  <span className={LABEL}>All household spending</span>{" "}
+                  <span className="font-mono tabular-nums text-neutral-700" data-testid="dash-spent-week">{money(spine.spentWeek)}</span> this week
+                  {" · "}
+                  <span className="font-mono tabular-nums text-neutral-700" data-testid="dash-spent-month">{money(spine.spentMonth)}</span> this month
                 </p>
               ) : null}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-label">
+                <Link href="/allowances" className={LINK} data-testid="dash-link-allowances">Allowances used</Link>
+                <Link href="/banking" className={LINK} data-testid="dash-link-biggest">Biggest charges</Link>
+                <Link href="/budget" className={LINK}>Budget</Link>
+              </div>
             </div>
-            <LinkRow>
-              <Link href="/budget" className="text-brand-navy underline">Budget</Link>
-              <Link href="/allowances" className="text-brand-navy underline">Allowances</Link>
-            </LinkRow>
-          </div>
-        )}
+          );
+        }}
       </Gate>
     </Panel>
   );

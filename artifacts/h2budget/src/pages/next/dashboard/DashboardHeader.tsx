@@ -1,0 +1,138 @@
+import { lazy, Suspense, useMemo, useState } from "react";
+import { Link } from "wouter";
+import { AffordLauncher } from "@/components/afford/AffordLauncher";
+import { WaysBackLauncher } from "@/components/ways-back/WaysBackLauncher";
+import { attentionItems, billsDueSoon, headerActionOf } from "@/lib/attention";
+import { householdToday } from "@/lib/householdDay";
+import { useSpine } from "@/hooks/useSpine";
+import { btn, btnSecondary } from "@/ui";
+import { cn } from "@/lib/utils";
+import { useBillsSummaryQ, usePlaidItemsQ } from "./queries";
+import { bankLines } from "./bankState";
+import { money, rise, weekdayLabel } from "./shared";
+
+/** The quiet second control beside a more urgent action: Afford stays one tap away. */
+const QUIET = "bg-transparent px-1 text-label font-semibold text-brand-navy ring-0 hover:bg-transparent hover:underline";
+
+/** The morning text preview (and the request behind it) load on first open only. */
+const RecapPreview = lazy(() => import("./RecapPreview"));
+
+/**
+ * ⭐ THE HEADER: what day it is, one factual line built from the spine, how
+ * fresh each bank is, and ONE action. Eager (first screen), no panel chrome:
+ * it is the page's own head, not a card.
+ */
+export default function DashboardHeader() {
+  const spine = useSpine();
+  const items = usePlaidItemsQ();
+  const bills = useBillsSummaryQ();
+  const [recapOpen, setRecapOpen] = useState(false);
+  const today = householdToday(new Date());
+  const s = spine.data;
+  const now = Date.now();
+
+  const attention = useMemo(() => {
+    if (!s) return null;
+    const rem = s.position.remainingWeek == null ? null : Number(s.position.remainingWeek);
+    return attentionItems({
+      bank: s.bank,
+      withinPlan: s.position.withinPlan,
+      overBy: rem != null && rem < 0 ? -rem : null,
+      dueSoon: billsDueSoon(bills.data, today),
+      today,
+      reviewCount: s.reviewCount,
+    });
+  }, [s, bills.data, today]);
+  const action = attention ? headerActionOf(attention) : { kind: "afford" as const };
+  const banks = bankLines(items.data, now);
+
+  // One line of facts, each said only when it is known.
+  const facts: Array<{ key: string; text: string }> = [];
+  if (s) {
+    const p = s.position;
+    if (p.safeToSpendNow != null) {
+      const until = p.horizonKind === "payday" && p.paydayDate ? ` until payday ${weekdayLabel(p.paydayDate)}` : " this week";
+      facts.push({ key: "room", text: `${money(p.safeToSpendNow)} room to spend${until}` });
+    }
+    if (s.nextBill) {
+      facts.push({ key: "next", text: `Next: ${s.nextBill.name} ${money(s.nextBill.amount)} on ${weekdayLabel(s.nextBill.dueDate)}` });
+    }
+    if (s.reviewCount > 0) {
+      facts.push({ key: "review", text: s.reviewCount === 1 ? "1 charge to match" : `${s.reviewCount} charges to match` });
+    }
+  }
+
+  return (
+    <header className={cn("span-12", rise(0))} data-testid="dash-header">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-display font-semibold text-brand-navy" data-testid="dash-today">
+            Today <span className="font-normal text-neutral-500">· {weekdayLabel(today)}</span>
+          </h1>
+          {s ? (
+            <p className="mt-1 text-body text-brand-ink" data-testid="dash-facts">
+              {facts.length
+                ? facts.map((f, i) => (
+                    <span key={f.key} data-testid={`dash-fact-${f.key}`}>
+                      {i > 0 ? <span aria-hidden className="text-neutral-400"> · </span> : null}
+                      {f.text}
+                    </span>
+                  ))
+                : "Nothing scheduled and nothing waiting."}
+            </p>
+          ) : spine.state === "failed" ? null : (
+            <div className="skeleton mt-2 h-4 w-72 max-w-full rounded" aria-busy="true" />
+          )}
+          {banks.length ? (
+            <ul className="mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-micro" data-testid="dash-bank-fresh">
+              {banks.map((b) => (
+                <li key={b.itemId} data-state={b.state} className="inline-flex items-center gap-1.5 text-neutral-500">
+                  <span
+                    aria-hidden
+                    className={cn("size-1.5 rounded-full", b.state === "ok" ? "bg-acct-checking" : b.state === "stale" || b.state === "never" ? "bg-neutral-400" : "bg-bad")}
+                  />
+                  <span className="font-semibold text-neutral-600">{b.institution}</span>
+                  <span className={cn(b.state === "reauth" || b.state === "failed" ? "font-semibold text-bad" : undefined)}>· {b.words}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="dash-header-action" data-kind={action.kind}>
+          {action.kind === "reconnect" ? (
+            <>
+              <Link href={action.href} className={btn} data-testid="dash-reconnect">{action.label}</Link>
+              <AffordLauncher className={QUIET} />
+            </>
+          ) : action.kind === "wayBack" ? (
+            <>
+              <WaysBackLauncher />
+              <AffordLauncher className={QUIET} />
+            </>
+          ) : (
+            <AffordLauncher className={btnSecondary} />
+          )}
+        </div>
+      </div>
+      <div className="mt-2">
+        <button
+          type="button"
+          className="text-label font-semibold text-brand-navy underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 rounded-control"
+          aria-expanded={recapOpen}
+          aria-controls="dash-recap"
+          onClick={() => setRecapOpen((o) => !o)}
+          data-testid="dash-recap-toggle"
+        >
+          {recapOpen ? "Hide the morning text" : "Preview tomorrow's morning text"}
+        </button>
+        {recapOpen ? (
+          <div id="dash-recap" className="mt-2">
+            <Suspense fallback={<div className="skeleton h-12 w-full max-w-2xl rounded-control" aria-busy="true" />}>
+              <RecapPreview />
+            </Suspense>
+          </div>
+        ) : null}
+      </div>
+    </header>
+  );
+}

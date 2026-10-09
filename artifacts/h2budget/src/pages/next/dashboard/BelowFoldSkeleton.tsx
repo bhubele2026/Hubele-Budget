@@ -1,13 +1,13 @@
 import { cn } from "@/lib/utils";
-import { BELOW_FOLD, type BelowFoldKey } from "./belowFoldSizes";
+import { BELOW_FOLD, slotKeys, type BelowFoldKey, type BelowFoldSlot } from "./belowFoldSizes";
 
-const ROWS: Record<BelowFoldKey, number> = { forecast: 8, debt: 6, activity: 7, review: 4 };
+const ROWS: Record<BelowFoldKey, number> = { forecast: 9, upcoming: 6, spending: 5, debt: 5, attention: 5, activity: 6 };
 
-/** Zero-number placeholders for the lazy panels, the same size as the panels. */
-export function BelowFoldSkeleton() {
+/** Zero-number placeholders for one lazy slot, each the size of its panel. */
+export function BelowFoldSkeleton({ slot }: { slot: BelowFoldSlot }) {
   return (
     <>
-      {(Object.keys(BELOW_FOLD) as BelowFoldKey[]).map((k) => (
+      {slotKeys(slot).map((k) => (
         <div
           key={k}
           data-testid={`below-fold-skeleton-${k}`}

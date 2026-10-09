@@ -1,19 +1,32 @@
 import ForecastPanel from "./ForecastPanel";
+import UpcomingPanel from "./UpcomingPanel";
+import SpendingPanel from "./SpendingPanel";
 import DebtPanel from "./DebtPanel";
-import ActivityPanel from "./ActivityPanel";
-import ReviewPanel from "./ReviewPanel";
 import AttentionPanel from "./AttentionPanel";
+import ActivityPanel from "./ActivityPanel";
 
-/** (C11b) The panels below the first screen, as one lazy chunk. A fragment, so
- *  they sit in the page's own grid exactly where the eager ones would. */
-export default function BelowFold() {
+/**
+ * (C11b, dashboard refinement) The panels after the first screen, as ONE lazy
+ * chunk with two slots. Fragments, so they sit in the page's own grid exactly
+ * where eager panels would: the forecast row above the account list, the
+ * lower rows below it.
+ */
+export function ForecastRow() {
   return (
     <>
       <ForecastPanel />
+      <UpcomingPanel />
+    </>
+  );
+}
+
+export function LowerRows() {
+  return (
+    <>
+      <SpendingPanel />
       <DebtPanel />
-      <ActivityPanel />
-      <ReviewPanel />
       <AttentionPanel />
+      <ActivityPanel />
     </>
   );
 }

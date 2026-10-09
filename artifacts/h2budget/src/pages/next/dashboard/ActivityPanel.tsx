@@ -5,13 +5,15 @@ import { cn } from "@/lib/utils";
 import { Panel, TxnTable, type TxnRow } from "@/components/next";
 import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
-import { usePlaidItemsQ, useTxnsQ } from "./queries";
-import { useCategoriesQ } from "./queriesLazy";
+import { usePlaidItemsQ } from "./queries";
+import { useCategoriesQ, useTxnsQ } from "./queriesLazy";
 import { BELOW_FOLD } from "./belowFoldSizes";
-import { Gate, rise } from "./shared";
+import { Gate, LINK, rise } from "./shared";
 
-export const ACTIVITY_ROWS = 12;
+export const ACTIVITY_ROWS = 6;
 
+/** The newest rows across every account, each with its account, status and
+ *  category; the whole ledger is one click away. */
 export default function ActivityPanel() {
   const today = householdToday(new Date());
   const txns = useTxnsQ({ from: addDaysISO(today, -30), to: today, limit: ACTIVITY_ROWS });
@@ -46,9 +48,11 @@ export default function ActivityPanel() {
   }, [txns.data, items.data, cats.data]);
 
   return (
-    <Panel title="Recent activity" sub={`Newest ${ACTIVITY_ROWS} across accounts`} span={8} className={cn(rise(BELOW_FOLD.activity.rise), BELOW_FOLD.activity.minH)} data-testid="dash-activity"
-      actions={<Link href="/next/accounts" className="text-label font-semibold text-brand-navy underline">All accounts</Link>}>
-      <Gate q={txns} what="Recent activity" rows={6}>{() => <TxnTable rows={rows} />}</Gate>
+    <Panel title="Recent activity" sub={`Newest ${ACTIVITY_ROWS} across accounts`} span={5}
+      variant={["flush", "static"]}
+      className={cn(rise(BELOW_FOLD.activity.rise), BELOW_FOLD.activity.minH)} data-testid="dash-activity"
+      actions={<Link href="/transactions" className={cn(LINK, "text-label")} data-testid="dash-all-activity">All activity</Link>}>
+      <Gate q={txns} what="Recent activity" rows={6}>{() => <TxnTable rows={rows} layout="list" />}</Gate>
     </Panel>
   );
 }

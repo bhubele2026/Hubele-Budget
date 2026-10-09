@@ -130,6 +130,16 @@
      is the whole point of the app. A second hero on a page means neither is
      the hero, so a screen gets one or none. */
   --text-hero: 3.25rem;     /* 52 — the one number a screen is about */
+  /* 22–30 — a TILE's headline figure on a screen that has several (the
+     dashboard's summary row). Why a seventh step: at --text-title (18) every
+     figure on the dashboard read at the same weight as the card headings, so
+     nothing led; at --text-hero (52) four of them would be four heroes, which
+     the rule above forbids. The KFI dashboard's KPI tiles sit at 28–32 px in
+     mono tabular numerals, and this is that size. It shrinks with the
+     viewport so four cents-bearing figures still fit a 390 px phone two by
+     two (a 30 px mono "$12,345.67" is 180 px; a phone cell is ~150). */
+  --text-kpi: clamp(1.375rem, 1rem + 1.15vw, 1.875rem);
+  --text-kpi--line-height: 1.1;
   --text-display: 1.5rem;   /* 24 — page titles */
   --text-title: 1.125rem;   /* 18 — card headings */
   --text-body: 0.875rem;    /* 14 — everything ordinary */
@@ -159,6 +169,13 @@
   --shadow-rest: 0 1px 2px rgb(25 49 91 / 0.04), 0 1px 3px rgb(25 49 91 / 0.06);
   --shadow-lift: 0 4px 12px rgb(25 49 91 / 0.08), 0 2px 4px rgb(25 49 91 / 0.05);
   --shadow-over: 0 16px 40px rgb(25 49 91 / 0.16), 0 4px 12px rgb(25 49 91 / 0.08);
+  /* The MILLED material (ported from the Financial Dashboard's `.surface`):
+     a 1px lit rim along the top edge plus a two-stop navy shadow (tight
+     contact + wide soft ambient). It is the rest and lift step for `.panel`
+     and `.surface`, so a card is one material everywhere, never a flat white
+     slab. Slight by design: you should feel the depth, not see an effect. */
+  --shadow-milled: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 1.5px rgb(25 49 91 / 0.04), 0 6px 16px -6px rgb(25 49 91 / 0.07);
+  --shadow-milled-lift: inset 0 1px 0 rgb(255 255 255 / 0.95), 0 2px 4px rgb(25 49 91 / 0.05), 0 14px 28px -10px rgb(25 49 91 / 0.13);
 
   /* Inter, self-hosted. Mono numerals use the system stack — zero font bytes,
      and a monospace face downloaded purely to align digits is a round trip
@@ -453,6 +470,12 @@
 
   body {
     @apply bg-background text-foreground;
+    /* Graded light rather than one flat tint, as on the Financial Dashboard:
+       the app sits ON something, and milled cards read against it. `fixed`
+       so a long page never stretches the ramp; the colour behind it stays
+       --background (platinum-2) for anything that paints before it. */
+    background-image: linear-gradient(180deg, var(--color-platinum-2) 0%, var(--color-platinum-4) 100%);
+    background-attachment: fixed;
     max-width: 100%;
     font-family: var(--font-sans);
     font-size: 14px;
@@ -512,9 +535,12 @@
     position: relative;
     overflow: hidden;
     background-color: var(--color-platinum-0);
+    /* Milled, not a flat white slab: a barely perceptible vertical gradient,
+       the lit rim and the two-stop shadow (--shadow-milled). */
+    background-image: linear-gradient(180deg, var(--color-platinum-0) 0%, var(--color-platinum-1) 100%);
     border: 1px solid var(--color-brand-line);
     border-radius: var(--radius-card);
-    box-shadow: var(--shadow-rest);
+    box-shadow: var(--shadow-milled);
   }
   .panel-head {
     display: flex;
@@ -526,7 +552,7 @@
   .panel-link {
     transition: box-shadow calc(96ms * var(--anim-speed)) var(--ease-move);
   }
-  .panel-link:hover { box-shadow: var(--shadow-lift); }
+  .panel-link:hover { box-shadow: var(--shadow-milled-lift); }
   /* ⚠️ STICKY-SAFE. `overflow: hidden` makes a box a scroll container even
      though it never scrolls, so a `position: sticky` row inside it sticks to
      the panel — which does not move — and never to `<main>`. `clip` clips the
@@ -546,19 +572,39 @@
     gap: var(--grid-gap, 1rem);
   }
   .grid-12 > * { min-width: 0; }
-  .span-3, .span-4, .span-6, .span-8, .span-12 { grid-column: 1 / -1; }
+  .span-3, .span-4, .span-5, .span-6, .span-7, .span-8, .span-12 { grid-column: 1 / -1; }
   @media (min-width: 640px) {
     .grid-12 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
     .span-3, .span-4 { grid-column: span 3 / span 3; }
-    .span-6, .span-8, .span-12 { grid-column: 1 / -1; }
+    .span-5, .span-6, .span-7, .span-8, .span-12 { grid-column: 1 / -1; }
   }
   @media (min-width: 1024px) {
     .grid-12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
     .span-3 { grid-column: span 3 / span 3; }
     .span-4 { grid-column: span 4 / span 4; }
+    .span-5 { grid-column: span 5 / span 5; }
     .span-6 { grid-column: span 6 / span 6; }
+    .span-7 { grid-column: span 7 / span 7; }
     .span-8 { grid-column: span 8 / span 8; }
     .span-12 { grid-column: 1 / -1; }
+  }
+
+  /* ── ONE SURFACE, SEVERAL FIGURES ─────────────────────────────────────────
+     The dashboard's summary row: four figures in ONE panel, split by
+     hairlines instead of four bordered cards (fewer borders, one material).
+     Two by two on a phone, four across from 1024 px. */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kpi-grid > * { min-width: 0; padding: 0.875rem 1rem; }
+  .kpi-grid > :nth-child(odd) { border-right: 1px solid var(--color-brand-line); }
+  .kpi-grid > :nth-child(-n + 2) { border-bottom: 1px solid var(--color-brand-line); }
+  @media (min-width: 1024px) {
+    .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .kpi-grid > * { padding: 1rem 1.25rem; }
+    .kpi-grid > :nth-child(-n + 2) { border-bottom: 0; }
+    .kpi-grid > :not(:last-child) { border-right: 1px solid var(--color-brand-line); }
   }
 
   /* ── The platinum surface ───────────────────────────────────────────────
@@ -574,23 +620,14 @@
      audit found it in the built CSS as #101828; at 4–13% alpha the correction
      is imperceptible, and it leaves exactly one shadow colour in the app. */
   .surface {
-    background-image: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      0 1px 1.5px rgba(25, 49, 91, 0.04),
-      0 6px 16px -6px rgba(25, 49, 91, 0.07);
+    background-image: linear-gradient(180deg, var(--color-platinum-0) 0%, var(--color-platinum-1) 100%);
   }
 
   /* Clickable surfaces settle a little deeper under the pointer. Shadow only —
-     the lift itself lives on the button token, which owns the translate. */
+     the lift itself lives on the button token, which owns the translate.
+     (Both box-shadows are in @layer utilities, below: see "THE RING GOES IN".) */
   .surface-lift {
     transition: box-shadow calc(96ms * var(--anim-speed)) var(--ease-move);
-  }
-  .surface-lift:hover {
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.95),
-      0 2px 4px rgba(25, 49, 91, 0.05),
-      0 14px 28px -10px rgba(25, 49, 91, 0.13);
   }
 
   /* ── The head, and its bleed ─────────────────────────────────────────────
@@ -658,6 +695,32 @@
 }
 
 @layer utilities {
+  /* ── ⚠️ THE RING GOES IN THE SURFACE SHADOW, OR THE SURFACE LOSES ITS DEPTH ──
+     Tailwind v4's `ring-1` is a box-shadow utility: it writes the WHOLE
+     `box-shadow` (inset, inset ring, ring offset, ring, shadow), from the
+     utilities layer, which beats the components layer outright. Every
+     `.surface ring-1 ring-brand-line` card (the `card` token, `ui/card.tsx`)
+     therefore drew its hairline and silently lost the milled shadow. The fix
+     is the one the Financial Dashboard shipped (its `.surface`, 2026-09-10):
+     compose the ring variables INTO the surface shadow and declare it after
+     the generated utilities, here, so both paint. `--tw-shadow` stays out on
+     purpose: one elevation language, no shadow-* on top. A `hover:` utility
+     (`hover:shadow-lift` on the landing tile token) still wins on hover,
+     being more specific. `index.css.test.ts` pins the composition and the
+     layer. */
+  .surface {
+    box-shadow:
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      var(--shadow-milled);
+  }
+  .surface-lift:hover {
+    box-shadow:
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      var(--shadow-milled-lift);
+  }
+
   /* ── The shell scroll contract (see the variables on `:root`) ─────────────
      Utilities, not components, on purpose: a parent's `space-y-*` writes
      `margin-block-start` on its children from THIS layer, and a component-layer

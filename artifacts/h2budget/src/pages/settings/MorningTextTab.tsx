@@ -59,7 +59,7 @@ import { RetryNote, SettingSwitch, StatusChip, TabSkeleton, type Tone } from "./
  * (D14) The dashboard's briefing reads the SAME cached preview: one POST per
  * ten minutes at most, wherever it is asked from, because a preview can spend
  * one of the six daily recap model calls. Must equal
- * `pages/next/dashboard/queries.ts` `RECAP_PREVIEW_KEY` (a test pins it); kept
+ * `pages/next/dashboard/RecapPreview.tsx` `RECAP_PREVIEW_KEY` (a test pins it); kept
  * here as a literal so this tab's chunk does not pull in the dashboard's.
  */
 export const RECAP_PREVIEW_KEY = ["/api/recap/preview"] as const;

@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import type { AccountAccentName } from "@/lib/accountIdentity";
 
-export type PanelSpan = 3 | 4 | 6 | 8 | 12;
+export type PanelSpan = 3 | 4 | 5 | 6 | 7 | 8 | 12;
 
 /**
  * - `flush`: no body padding — tables and ledgers draw edge to edge and pad
@@ -16,7 +16,7 @@ export type PanelSpan = 3 | 4 | 6 | 8 | 12;
 export type PanelVariant = "flush" | "sticky-safe" | "static";
 
 const SPAN: Record<PanelSpan, string> = {
-  3: "span-3", 4: "span-4", 6: "span-6", 8: "span-8", 12: "span-12",
+  3: "span-3", 4: "span-4", 5: "span-5", 6: "span-6", 7: "span-7", 8: "span-8", 12: "span-12",
 };
 const ACCENT: Record<AccountAccentName, string> = {
   checking: "panel-accent-checking",

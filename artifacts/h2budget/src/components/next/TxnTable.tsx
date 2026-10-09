@@ -28,10 +28,49 @@ export function shortDate(iso: string): string {
 
 /** Compact ledger: 36 px rows (40 px when not `dense`), an account chip on
  *  every row, pending/posted as a word, category in its own column. Rows with
- *  an `href` are focusable and open on Enter or click. */
-export function TxnTable({ rows, dense = true }: { rows: TxnRow[]; dense?: boolean }) {
+ *  an `href` are focusable and open on Enter or click.
+ *  `layout="list"` draws the SAME rows as two-line list items (description and
+ *  amount, then date, account chip, category and status) for a narrow panel,
+ *  where six columns would scroll sideways. Nothing is dropped. */
+export function TxnTable({ rows, dense = true, layout = "table" }: { rows: TxnRow[]; dense?: boolean; layout?: "table" | "list" }) {
   const [, navigate] = useLocation();
   if (rows.length === 0) return <p className={emptyNote}>No transactions to show.</p>;
+  if (layout === "list") {
+    return (
+      <ul className="list-none divide-y divide-brand-line p-0" data-testid="txn-list">
+        {rows.map((r) => {
+          const go = r.href ? () => navigate(r.href!) : undefined;
+          return (
+            <li
+              key={r.id}
+              data-testid="txn-row"
+              tabIndex={go ? 0 : undefined}
+              onClick={go}
+              onKeyDown={go ? (e) => { if (e.key === "Enter") go(); } : undefined}
+              className={cn(
+                "px-4 py-2",
+                go && "cursor-pointer transition-colors duration-[calc(96ms*var(--anim-speed))] hover:bg-platinum-3 focus-visible:bg-platinum-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-navy/40",
+              )}
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 text-body text-brand-ink [overflow-wrap:anywhere]">{r.description}</span>
+                <span className={cn("shrink-0 font-mono text-label tabular-nums", r.amount < 0 ? "text-brand-ink" : "text-brand-navy")}>
+                  {formatDisplayAmount(r.amount)}
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-neutral-500">
+                <span className="font-mono tabular-nums">{shortDate(r.date)}</span>
+                <AccountChip identity={r.identity} size="sm" wrap />
+                <span>{r.category || "Uncategorized"}</span>
+                <span aria-hidden>·</span>
+                <span>{r.pending ? "Pending" : "Posted"}</span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
   const h = dense ? "h-9" : "h-10";
   return (
     <div className="overflow-x-auto">

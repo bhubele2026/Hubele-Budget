@@ -79,3 +79,41 @@ export function debtToSim(d: Debt): SimDebt {
     status: d.status,
   };
 }
+
+/** Within half a cent counts as cleared, the Debts page's own threshold. */
+const CLEARED_EPSILON = 0.005;
+
+/**
+ * ⭐ THE ONE "WHAT IS LEFT" TOTAL: every ACTIVE debt, netted of its pending
+ * payments ({@link effectiveDebtBalance}). The Avalanche page's "Total debt"
+ * Stat and Totals row, the Reports Debt page's hero (`totalsForDebts`) and the
+ * dashboard's debt tile all call this, so the three cannot disagree. It was an
+ * inline `reduce` on the Avalanche page; the body is that reduce, unchanged.
+ */
+export function remainingDebtTotal(debts: readonly Debt[] | null | undefined): number {
+  let total = 0;
+  for (const d of debts ?? []) {
+    if (d.status !== "active") continue;
+    total += effectiveDebtBalance(d);
+  }
+  return total;
+}
+
+/**
+ * The total above plus the names it covers, so a surface that quotes the
+ * amount can always say what it is the total OF. Names are the active debts
+ * still carrying a balance (a cleared one adds nothing, so naming it would
+ * overstate the scope), in the payload's order.
+ */
+export function remainingDebtScope(debts: readonly Debt[] | null | undefined): {
+  total: number;
+  names: string[];
+} {
+  const names: string[] = [];
+  for (const d of debts ?? []) {
+    if (d.status !== "active") continue;
+    if (Math.abs(effectiveDebtBalance(d)) < CLEARED_EPSILON) continue;
+    names.push(d.name.trim() || "Unnamed debt");
+  }
+  return { total: remainingDebtTotal(debts), names };
+}

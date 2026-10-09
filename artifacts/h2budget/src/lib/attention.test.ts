@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { BillsSummary, Spine } from "@workspace/api-client-react";
-import { attentionItems, billsDueSoon, upcomingBills } from "./attention";
+import { attentionItems, billsDueSoon, headerActionOf, upcomingBills } from "./attention";
 
 const bank = (o: Partial<Spine["bank"]> = {}): Spine["bank"] => ({
   balance: "100", asOfDate: "2026-10-07", source: "plaid", lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null, ...o,
@@ -60,5 +60,26 @@ describe("attention — way back (F7)", () => {
     expect(over.wayBack).toBe(true);
     expect(over.detail).toBe("Pick a way back. No lecture.");
     expect(attentionItems({ ...base, reviewCount: 2 })[0]!.wayBack).toBeUndefined();
+  });
+});
+
+describe("headerActionOf (the dashboard header's ONE action)", () => {
+  const due = [{ name: "Rent", amount: 1200, dueOn: "2026-10-08" }];
+  it("Reconnect when the bank's feed failed, even over plan and with a bill due", () => {
+    const items = attentionItems({ ...base, bank: bank({ stale: true, staleReason: "refresh_failed" }), withinPlan: "over", overBy: 25, dueSoon: due });
+    expect(headerActionOf(items)).toEqual({ kind: "reconnect", label: "Reconnect", href: "/settings" });
+  });
+  it("Pick a way back when the week is over its plan", () => {
+    expect(headerActionOf(attentionItems({ ...base, withinPlan: "over", overBy: 25, dueSoon: due }))).toEqual({ kind: "wayBack" });
+  });
+  it("an old balance does not take the slot from Pick a way back (it has its own row and the per-bank Sync)", () => {
+    const items = attentionItems({ ...base, bank: bank({ stale: true, staleReason: "old" }), withinPlan: "over", overBy: 25 });
+    expect(items[0]!.kind).toBe("stale");
+    expect(headerActionOf(items)).toEqual({ kind: "wayBack" });
+  });
+  it("otherwise the everyday question: Can we afford something?", () => {
+    expect(headerActionOf(attentionItems(base))).toEqual({ kind: "afford" });
+    expect(headerActionOf(attentionItems({ ...base, dueSoon: due, reviewCount: 3 }))).toEqual({ kind: "afford" });
+    expect(headerActionOf(attentionItems({ ...base, bank: bank({ stale: true, staleReason: "old" }) }))).toEqual({ kind: "afford" });
   });
 });

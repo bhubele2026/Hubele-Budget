@@ -3,9 +3,9 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderHook, waitFor, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, MutationCache } from "@tanstack/react-query";
 import { onWriteSuccess } from "@/lib/mutationInvalidation";
-import { useRecapPreviewQ } from "./queries";
+import { useRecapPreviewQ } from "./RecapPreview";
 
-// (D14) Opening the dashboard asks for the recap preview once, never marks the
+// (D14) Opening the morning-text preview asks for the recap once, never marks the
 // spine / reports / ledger stale, and a reopen inside ten minutes asks nothing.
 
 const BODY = { model: null, template: { text: "Template summary." }, facts: {} };

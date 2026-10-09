@@ -243,3 +243,38 @@ describe("index.css — the shell scroll contract (C0)", () => {
     expect(CSS).toMatch(/Inside the signed-in shell that scroller is `<main>`/);
   });
 });
+
+describe("index.css — the milled surface keeps its depth under a ring (dashboard refinement)", () => {
+  const shadowOf = (sel: string) => valuesOf("box-shadow").filter((d) => d.stack[d.stack.length - 1] === sel);
+
+  it(".surface composes the ring variables INTO its shadow, so `ring-1` no longer wipes the depth", () => {
+    const decls = shadowOf(".surface");
+    expect(decls).toHaveLength(1);
+    const v = decls[0]!.value.replace(/\s+/g, " ");
+    expect(v).toMatch(/^var\(--tw-ring-offset-shadow, 0 0 #0000\), var\(--tw-ring-shadow, 0 0 #0000\), var\(--shadow-milled\)$/);
+    // `--tw-shadow` stays out: one elevation language, no shadow-* on top.
+    expect(v).not.toContain("--tw-shadow)");
+  });
+
+  it("…and it lives in @layer utilities, after the generated ring utilities, so it wins the tie", () => {
+    const decl = shadowOf(".surface")[0]!;
+    expect(decl.stack[0]).toBe("@layer utilities");
+    // The hover lift composes the ring the same way, or the hairline vanishes under the pointer.
+    const lift = shadowOf(".surface-lift:hover");
+    expect(lift).toHaveLength(1);
+    expect(lift[0]!.stack[0]).toBe("@layer utilities");
+    expect(lift[0]!.value).toContain("var(--tw-ring-shadow, 0 0 #0000)");
+  });
+
+  it(".panel is milled too: the same rim and two-stop shadow, never a flat slab", () => {
+    expect(shadowOf(".panel")[0]!.value).toBe("var(--shadow-milled)");
+    expect(shadowOf(".panel-link:hover")[0]!.value).toBe("var(--shadow-milled-lift)");
+  });
+
+  it("declares the KPI step with a written reason, and hero stays a separate step", () => {
+    expect(valuesOf("--text-kpi")).toHaveLength(1);
+    expect(CSS).toMatch(/--text-kpi[^;]*;/);
+    expect(CSS).toMatch(/Why a seventh step/);
+    expect(valuesOf("--text-hero")[0]!.value).toBe("3.25rem");
+  });
+});

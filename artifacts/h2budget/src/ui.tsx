@@ -70,11 +70,13 @@ export const errorBanner =
   "mb-4 rounded-card bg-bad-bg px-4 py-2.5 text-body text-bad ring-1 ring-bad/15";
 export const emptyNote = "px-4 py-5 text-center text-body text-neutral-400";
 
+/** A titled page. No padding of its own: the shell's `.shell-pad` already pads
+ *  every page, and a second `px-6 py-8` inside it doubled the gutter. */
 export function Page(props: { title: string; sub?: string; children: ReactNode }) {
   return (
-    <div className="w-full px-6 py-8 xl:px-10">
-      <h1 className="text-display font-semibold text-brand-navy">{props.title}</h1>
-      {props.sub && <p className="mb-6 mt-1 text-label text-neutral-500">{props.sub}</p>}
+    <div className="w-full">
+      <h1 className={props.sub ? "text-display font-semibold text-brand-navy" : "mb-4 text-display font-semibold text-brand-navy"}>{props.title}</h1>
+      {props.sub && <p className="mb-4 mt-1 text-label text-neutral-500">{props.sub}</p>}
       {props.children}
     </div>
   );
