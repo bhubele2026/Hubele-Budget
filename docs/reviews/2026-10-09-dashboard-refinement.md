@@ -38,15 +38,20 @@ Desktop uses 12 columns. On a phone it is one column, in this order:
 - **No bank linked:** the page knows this from the eager accounts read, so the skeletons and the real panels drop their fixed heights together (`foldDensity.ts`). The empty household gets short, honest panels instead of a page of tall empty cards.
 
 ### Header (`DashboardHeader.tsx`)
-- **The facts line** is built from spine fields only: room to spend until payday, the next bill (`spine.nextBill`, now a single payment by A's fix), and charges to match. A fact that is not known is left out, never printed as $0. With no bank linked it says so.
+- **The facts line:** room to spend until payday (spine), the NEXT OBLIGATION, and charges to match (spine). A fact that is not known is left out, never printed as $0. With no bank linked it says so.
+  - **One next obligation, one amount** (polish round). The next obligation is the first money-out event on the cash curve (`dashboard/obligations.ts`: `upcomingRows` → `obligationLine`), the same hook-aware event Coming up lists and Needs attention's "due today / tomorrow" reads. It is what will leave checking, not `spine.nextBill`.
+  - A hook item is worded the same everywhere: "Weekly Spend · card payoff $477.57 (plan $450) · Sat Oct 10".
+  - ⚠️ The morning text and the Bills page still show the single STORED payment ($450). They read the bills summary (`pickNextBill` / `occurrenceAmountOn`, A's fix), and for a hook item the bills summary does not know the card payoff, which only the forecast ledger computes (`forecastLedger.ts`, the period's card charges plus what is left of the allowance). A's proposed server change (`pickNextBill` reading the ledger's payoff for a hook occurrence) would align them, for the owner's OK.
 - **Bank freshness** is one entry per bank, not per account: "Chase · synced 2 h ago", "American Express · needs reconnecting". Two items at the same bank are told apart by their first account's name and mask (`bankState.ts`).
 - **One action:** `headerActionOf()` in `lib/attention.ts` (pure, tested), with first match winning:
-  1. Link a bank (no bank linked)
-  2. Reconnect (the checking feed failed, OR any bank's saved login expired. A card's bank counts now: `attentionItems({ reauthBanks })`)
-  3. Pick a way back (the week is over its plan)
-  4. "Can we afford something?"
+  1. Link a bank (no bank linked) → `/settings`
+  2. Reconnect (the checking feed failed, OR any bank's saved login expired. A card's bank counts now: `attentionItems({ reauthBanks })`) → `/settings`
+  3. **See where it runs short** → `/forecast`, when `lowPointView` says `below` (under the buffer) or the low point is below zero inside the 90 days (polish round)
+  4. Pick a way back (the week is over its plan)
+  5. "Can we afford something?"
 
-  When Reconnect or Pick a way back takes the slot, Afford stays beside it as a quiet text control.
+  When anything but Afford takes the slot, Afford stays beside it as a quiet text control.
+- **Phone title (not changed):** on a phone the shell names the page between the logo and the account button. `/home` belongs to no nav area, so C12's shell-wide fallback (`components/layout.tsx:619-622`, `currentTitle`) prints "H2 Budget" beside the "Budget" wordmark. A one-line special case (`location === "/home" ? "Home"`) would fix it. It is shell behaviour shared by every unowned route, so I left it as a proposal.
 - **The morning text** is behind a disclosure, and the request is sent only when it is opened (`RecapPreview.tsx`, lazy, using `previewRecap` from `/features`). Before, the landing posted `/recap/preview` on every open. The chip reads "Written from your numbers · AI is off" (or "Model draft…" / "Demo draft" when a model wrote it), never "TEMPLATE".
 
 ### Summary row (`SummaryRow.tsx`)
@@ -80,10 +85,11 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 ### Lazy panels
 - **Cash-flow forecast:** the classic `ProjectedBalanceChart` at 320 px (solid line, buffer line, low dot, tooltip), with horizons 30, 90 and 180 ("30d" on a phone).
   - The legend reads "Low point in these N days: $X on <day>".
-  - The new `lowLabel="short"` prop draws "Low $X" on the dot. The full label clipped at the plot edge on a phone, and the legend already names the date.
+  - The new `lowLabel="short"` prop draws "Low $X" BELOW the dot. It is the lowest point, so the curve is above it everywhere and the words never sit on the line (above the dot they crossed the dip's walls). The full label also clipped at the plot edge on a phone, and the legend already names the date.
+  - The new `monthTicks` prop formats the axis as "Oct 9" / "Oct 25" instead of "10-09".
   - Every link goes to `/forecast`.
 - **Coming up:** the next five payments out on the cash curve (cash-signal events). For each: one payment, a frequency word, and "card payment" or "debt payment".
-  - A Weekly or Monthly Spend hook reads "card payoff · plan $450.00", so a $477.57 payoff beside the $450 plan is explained.
+  - A Weekly or Monthly Spend hook reads "weekly · card payoff (plan $450)" under its $477.57, so the payoff beside the $450 plan is explained. The first row is the header's "Next:".
   - Paid-from chip; "Next money in: Paycheck +$2,100.00 on Fri Oct 16"; links All bills and Forecast.
   - The duplicate "Next bill" box is gone; the header quotes it.
 - **Spending pace:**
@@ -163,7 +169,7 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 - **Amex workbook rows:**
   - `displayAmount(raw, identity, source)` flips a `source: "amex"` row for display only, because the workbook stores a charge as positive (`spendingRule.spendAmount`).
   - Used by Recent activity and the Accounts combined view. No stored value changes. Tested in `lib/amountDisplay.test.ts`.
-- **Single-payment next bill:** the header's "Next: Weekly Spend $450.00" and the Coming up row agree. For a hook item the row's plan amount is the next bill's $450, beside the $477.57 payoff. This is tested on screen.
+- **Single-payment next bill:** A's server fix makes `spine.nextBill` one payment ($450). The dashboard now quotes the cash-signal event instead (see Header): for a hook item that is the $477.57 card payoff, with "(plan $450)" beside it. The header, Needs attention and Coming up are tested to show the same words and amount on one screen.
 
 ## Lead's before-shot defects
 | Defect | Outcome |

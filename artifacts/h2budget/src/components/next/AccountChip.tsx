@@ -21,7 +21,7 @@ const TINT: Record<AccountIdentity["accent"], string> = {
 export function AccountChip({ identity, size = "md", wrap = false }: { identity: AccountIdentity; size?: "sm" | "md"; wrap?: boolean }) {
   const text = size === "sm" ? identity.shortLabel : identity.label;
   const mask = identity.mask4 ? (
-    <span className="shrink-0 whitespace-nowrap font-mono tabular-nums text-neutral-500">••{identity.mask4}</span>
+    <span className="shrink-0 whitespace-nowrap font-mono tabular-nums text-neutral-600">••{identity.mask4}</span>
   ) : null;
   if (wrap) {
     // The dot stays beside the FIRST line; name and mask flow as one run of

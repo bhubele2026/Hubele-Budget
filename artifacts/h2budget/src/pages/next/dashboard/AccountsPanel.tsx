@@ -31,6 +31,13 @@ function SyncOne({ itemId }: { itemId: string }) {
   );
 }
 
+const FACTS_BOX = "col-span-2 row-start-2 flex min-w-0 flex-wrap gap-x-6 gap-y-2 pl-3 md:col-span-1 md:col-start-2 md:row-start-1 md:pl-0";
+function FactsBox({ asList, children }: { asList: boolean; children: ReactNode }) {
+  return asList
+    ? <dl className={FACTS_BOX} data-testid="dash-account-facts">{children}</dl>
+    : <div className={FACTS_BOX} data-testid="dash-account-facts">{children}</div>;
+}
+
 /** One fact beside an account's main figure, drawn only when it exists. */
 function Fact({ label, value, testid }: { label: string; value: ReactNode; testid?: string }) {
   return (
@@ -159,7 +166,8 @@ export default function AccountsPanel() {
                         </div>
                       </div>
                     </div>
-                    <dl className="col-span-2 row-start-2 flex min-w-0 flex-wrap gap-x-6 gap-y-2 pl-3 md:col-span-1 md:col-start-2 md:row-start-1 md:pl-0" data-testid="dash-account-facts">
+                    {/* A <dl> only when it holds facts: a sentence in its place is a plain <div> (axe: definition-list). */}
+                    <FactsBox asList={liability ? owed != null || minPay != null || dueDay != null : isCash && !noBank}>
                       {liability ? (
                         owed != null || minPay != null || dueDay != null ? (
                           <>
@@ -190,7 +198,7 @@ export default function AccountsPanel() {
                           {identity.kind === "savings" ? "Savings balance is not tracked yet." : "Balance is not tracked for this account."}
                         </p>
                       )}
-                    </dl>
+                    </FactsBox>
                     <div className="col-start-2 row-start-1 flex items-start justify-end self-start md:col-start-3 md:self-center">
                       {firstOfItem ? <SyncOne itemId={item.id} /> : null}
                     </div>

@@ -95,14 +95,14 @@ export default function DashboardHeader() {
             <div className="skeleton mt-2 h-4 w-72 max-w-full rounded" aria-busy="true" />
           )}
           {banks.length ? (
-            <ul className="mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-micro text-neutral-500" data-testid="dash-bank-fresh">
+            <ul className="mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-micro text-neutral-600" data-testid="dash-bank-fresh">
               {banks.map((b) => (
                 <li key={b.itemId} data-state={b.state}>
                   <span
                     aria-hidden
                     className={cn("mr-1.5 inline-block size-1.5 rounded-full align-middle", b.state === "ok" ? "bg-acct-checking" : b.state === "stale" || b.state === "never" ? "bg-neutral-400" : "bg-bad")}
                   />
-                  <span className="font-semibold text-neutral-600">{b.institution}</span>{" "}
+                  <span className="font-semibold text-neutral-700">{b.institution}</span>{" "}
                   <span className={cn(b.state === "reauth" || b.state === "failed" ? "font-semibold text-bad" : undefined)}>· {b.words}</span>
                 </li>
               ))}
