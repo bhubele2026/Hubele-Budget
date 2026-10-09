@@ -6,7 +6,6 @@ import {
   useGetReportsSpendingFacts,
   useListDebts,
   useListDebtBalanceHistory,
-  useGetForecast,
 } from "@workspace/api-client-react";
 import { Sparkline, StackBar, MiniBars, RingStat, MoneyText } from "@/components/viz";
 import { dataState } from "@/lib/queryState";
@@ -59,7 +58,8 @@ function ReportTile({
 
 export default function ReportsPage() {
   // (#a8 per-page fetch) The hub mounts only what its tiles render: the 30-day
-  // spending facts for the mini-visuals plus debts/history/forecast.
+  // spending facts for the mini-visuals plus debts/history. (WP1) The forecast
+  // bundle is gone: the bank tile's label reads the spine's checking model.
   //
   // ⚠️ THE HUB DOES NOT READ TRANSACTIONS. It used to pull up to 2,000 rows and
   // add them up in the browser, which cost a heavy payload on a page that draws
@@ -87,7 +87,6 @@ export default function ReportsPage() {
   const factsNote = factsFailed ? "Couldn't load" : "Loading…";
   const { data: debts } = useListDebts();
   const { data: debtBalanceHistory } = useListDebtBalanceHistory();
-  const { data: forecast, isError: forecastError } = useGetForecast({ days: 90 });
 
   // Debt momentum — total debt over time, carrying each debt's last-known
   // balance forward so the curve reads as one declining line.
@@ -170,7 +169,7 @@ export default function ReportsPage() {
 
       <PageGrid>
       {/* At-a-glance balance tiles — the household's live vitals */}
-      <ReportsBalanceTiles forecast={forecast} forecastError={forecastError} />
+      <ReportsBalanceTiles />
 
       {/* The five drill destinations */}
         <ReportTile
