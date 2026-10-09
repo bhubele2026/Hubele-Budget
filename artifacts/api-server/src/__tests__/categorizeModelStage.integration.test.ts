@@ -17,6 +17,7 @@ import {
   validSplit,
 } from "../lib/categorizer/modelStage";
 import { loadPriors, tokensOf } from "../lib/categorizer/modelPriors";
+import { spendContextOf } from "../lib/categorizer/context";
 import { loadModelGate } from "../lib/categorizer/modelGate";
 import { pinEnv } from "./_helpers/aiEnv";
 import { createTestHousehold } from "./_helpers/testHousehold";
@@ -256,9 +257,88 @@ describe("code validates every answer", () => {
 
   it("judgeAnswer is pure: a missing candidate is rejected", () => {
     const row = { id: "r", amount: "-5.00", source: "plaid:bank", pfcPrimary: null, plaidAccountId: null } as never;
-    const j = { candidates: new Map(), accounts: new Map(), autoAllowed: true, model: "m", promptVersion: "p" };
+    const j = {
+      candidates: new Map(),
+      accounts: new Map(),
+      spendCtx: spendContextOf([]),
+      uncategorizedIds: new Set<string>(),
+      autoAllowed: true,
+      model: "m",
+      promptVersion: "p",
+    };
     const a = { index: 0, categoryId: "x", confidence: "high", isTransfer: false, recurringGuess: null, splitSuggestion: null, rationale: "r" } as const;
     expect(judgeAnswer(row, a, j)).toBeNull();
+  });
+});
+
+describe("(WP5c) the direction check beside debtCategoryAllowed", () => {
+  const judgeCtx = (accounts = new Map<string, { type: string | null; subtype: string | null; institutionSlug: string | null }>()) => {
+    const cats = [
+      { id: "dining", name: "Dining", groupName: "Food", kind: "expense", debtId: null },
+      { id: "pay", name: "Paycheck", groupName: "Income", kind: "income", debtId: null },
+    ];
+    return {
+      candidates: new Map(cats.map((c) => [c.id, c])),
+      accounts,
+      spendCtx: spendContextOf(cats),
+      uncategorizedIds: new Set<string>(),
+      autoAllowed: false,
+      model: "m",
+      promptVersion: "p",
+    };
+  };
+  const answer = (categoryId: string) =>
+    ({ index: 0, categoryId, confidence: "high", isTransfer: false, recurringGuess: null, splitSuggestion: null, rationale: "r" }) as const;
+  const engineRow = (o: Record<string, unknown>) =>
+    ({
+      id: "r", description: "BIGCO PAYROLL", amount: "2500.00", source: "plaid:bank", plaidAccountId: "acct-chk",
+      pfcPrimary: null, pfcDetailed: null, isTransfer: false, debtId: null, isExternalCardPayment: false, reimbursable: false,
+      categoryId: null, ...o,
+    }) as never;
+
+  it("judgeAnswer drops money in under an expense category and money out under an income one", () => {
+    const j = judgeCtx();
+    expect(judgeAnswer(engineRow({}), answer("dining"), j)).toBeNull();
+    expect(judgeAnswer(engineRow({}), answer("pay"), j)?.result.categoryId).toBe("pay");
+    expect(judgeAnswer(engineRow({ description: "BIGCO CAFE", amount: "-8.50" }), answer("pay"), j)).toBeNull();
+    expect(judgeAnswer(engineRow({ description: "BIGCO CAFE", amount: "-8.50" }), answer("dining"), j)?.result.categoryId).toBe("dining");
+  });
+
+  it("judgeAnswer keeps a card's credit in an expense category, whichever bank issued the card", () => {
+    const j = judgeCtx(new Map([["acct-card", { type: "credit", subtype: "credit card", institutionSlug: "chase" }]]));
+    const credit = engineRow({ description: "BIGCO STORE", amount: "20.00", source: "plaid:chase", plaidAccountId: "acct-card" });
+    expect(judgeAnswer(credit, answer("dining"), j)?.result.categoryId).toBe("dining");
+    // A credit with a REFUND word on checking is a refund too.
+    expect(judgeAnswer(engineRow({ description: "BIGCO REFUND", amount: "5.00" }), answer("dining"), j)?.result.categoryId).toBe("dining");
+  });
+
+  it("through the batch: a payroll deposit answered Dining and a cafeteria charge answered Income write nothing; the right answers do", async () => {
+    const itemId = randomUUID();
+    const CARD = `acct-wp5c-${randomUUID().slice(0, 8)}`;
+    await db.insert(plaidAccountsTable).values({ userId: OWNER, householdId: HH, itemId, accountId: CARD, type: "credit", subtype: "credit card" }).onConflictDoNothing();
+    const payWrong = await addTxn(HH, OWNER, { description: "BIGCO PAYROLL PPD ID 1", amount: "2500.00" });
+    const cafeWrong = await addTxn(HH, OWNER, { description: "BIGCO CAFE 7", amount: "-8.50" });
+    const payRight = await addTxn(HH, OWNER, { description: "ACME PAYROLL PPD ID 2", amount: "2500.00" });
+    const cardCredit = await addTxn(HH, OWNER, { description: "MOSS STORE 9", amount: "20.00", source: "plaid:chase", plaidAccountId: CARD });
+    registerFakeFixture(
+      "categorize",
+      fixtureBy([
+        ["BIGCO PAYROLL", { cat: C.Dining, confidence: "high" }],
+        ["BIGCO CAFE", { cat: C.Income, confidence: "high" }],
+        ["ACME PAYROLL", { cat: C.Income, confidence: "high" }],
+        ["MOSS STORE", { cat: C.Groceries, confidence: "high" }],
+      ]),
+    );
+    const { out } = await run([payWrong, cafeWrong, payRight, cardCredit]);
+    expect(await modelDecisions(payWrong)).toHaveLength(0);
+    expect(await modelDecisions(cafeWrong)).toHaveLength(0);
+    expect((await txnRow(payWrong)).categoryId).toBeNull();
+    expect((await txnRow(cafeWrong)).categoryId).toBeNull();
+    // Rejected answers leave the rows as questions for a person.
+    expect(out.ambiguous).toEqual(expect.arrayContaining([payWrong, cafeWrong]));
+    expect((await modelDecisions(payRight))[0]).toMatchObject({ categoryId: C.Income, band: "provisional" });
+    expect((await modelDecisions(cardCredit))[0]).toMatchObject({ categoryId: C.Groceries, band: "provisional" });
+    await db.delete(plaidAccountsTable).where(eq(plaidAccountsTable.accountId, CARD));
   });
 });
 

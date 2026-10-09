@@ -6,7 +6,7 @@ import { FindingsList } from "@/components/agent/FindingsList";
 import { useOpenFindings } from "@/components/agent/agentHooks";
 import { attentionItems } from "@/lib/attention";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
-import { categoriesByIdOf, isInflowFiledAsExpense } from "@/lib/categoryDirection";
+import { accountTypesOf, categoriesByIdOf, isCardTxn, isInflowFiledAsExpense } from "@/lib/categoryDirection";
 import { useSpine } from "@/hooks/useSpine";
 import { useCashSignalQ, usePlaidItemsQ } from "./queries";
 import { dueSoonOf, upcomingRows } from "./obligations";
@@ -111,13 +111,19 @@ export default function AttentionPanel() {
 
   // (dash-accuracy) "Income filed under an expense category", by the shared
   // pure rule, over the recent window Recent activity reads (one request).
+  // (WP5c) The rule needs to know which rows sit on a card (a card's credits
+  // are refunds and payments, whatever the issuer), so it waits for the bank
+  // items too; they are the panel's own query, already loaded for "Now".
   const misfiled = useMemo(() => {
-    if (recent.data === undefined || cats.data === undefined) return null;
+    if (recent.data === undefined || cats.data === undefined || items.data === undefined) return null;
     const byId = categoriesByIdOf(cats.data);
-    return recent.data.filter((t) => isInflowFiledAsExpense(t, byId)).map((t) => ({
-      id: t.id, description: t.description, category: byId.get(t.categoryId ?? "")?.name ?? null,
-    }));
-  }, [recent.data, cats.data]);
+    const types = accountTypesOf(items.data);
+    return recent.data
+      .filter((t) => isInflowFiledAsExpense(t, byId, { isCardAccount: isCardTxn(t, types) }))
+      .map((t) => ({
+        id: t.id, description: t.description, category: byId.get(t.categoryId ?? "")?.name ?? null,
+      }));
+  }, [recent.data, cats.data, items.data]);
   // The window is the newest RECENT_LIMIT rows: when it is full, older rows of
   // the 30 days were not checked, and the panel says so whatever it found.
   const misfiledCapped = (recent.data?.length ?? 0) >= RECENT_LIMIT;
@@ -181,10 +187,10 @@ export default function AttentionPanel() {
               ) : null}
               {!incomeKnown ? (
                 <PendingRow
-                  failed={!!recent.isError || !!cats.isError}
+                  failed={!!recent.isError || !!cats.isError || !!items.isError}
                   label="Income filed under an expense category"
                   testid="dash-review-income-pending"
-                  onRetry={() => { void recent.refetch(); void cats.refetch(); }}
+                  onRetry={() => { void recent.refetch(); void cats.refetch(); void items.refetch(); }}
                 />
               ) : income > 0 ? (
                 <Row

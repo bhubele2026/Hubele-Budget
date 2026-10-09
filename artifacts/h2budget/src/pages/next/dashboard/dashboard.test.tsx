@@ -694,6 +694,42 @@ describe("needs attention", () => {
     expect(r.textContent).not.toContain("more"); // the reimbursable credit is not flagged
     expect(r.getAttribute("href")).toBe("/transactions?tx=t1&category=Dining%20%26%20Coffee");
   });
+  it("(WP5c) a credit on a NON-Amex card is never 'income': the account's type says it is a card", () => {
+    h.spine.data = spine({ reviewCount: 0 });
+    h.Q.queue = ok({ total: 0 });
+    h.Q.dups = ok({ duplicateCount: 0 });
+    h.Q.cats = ok([{ id: "shop", name: "Shopping", kind: "expense" }]);
+    h.Q.items = ok([
+      item("c", "Chase", "chase", [acct("chk", { name: "Total Checking" }), acct("frd", { name: "Freedom", type: "credit", subtype: "credit card" })]),
+    ]);
+    const credit = (o: Record<string, unknown>) => ({
+      id: "t1", occurredOn: "2026-10-08", description: "AMAZON MKTPLACE PMTS", amount: "20.00", source: "plaid:chase", categoryId: "shop",
+      isTransfer: false, debtId: null, isExternalCardPayment: false, reimbursable: false, pfcDetailed: null, ...o,
+    });
+    // On the Freedom card: a refund, filed with its purchase. Not flagged.
+    h.Q.txns = ok([credit({ plaidAccountId: "p-frd" })]);
+    const a = wrap(<AttentionPanel />);
+    expect(screen.queryByTestId("dash-review-income")).toBeNull();
+    expect(screen.getByText("Nothing needs you today.")).toBeTruthy();
+    a.unmount();
+    // The same credit on checking is money in under an expense category.
+    h.Q.txns = ok([credit({ plaidAccountId: "p-chk" })]);
+    wrap(<AttentionPanel />);
+    expect(screen.getByTestId("dash-review-income").textContent).toContain("AMAZON MKTPLACE PMTS · Shopping");
+  });
+  it("(WP5c) the income check waits for the bank items, and says so when they fail", () => {
+    h.spine.data = spine({ reviewCount: 0 });
+    h.Q.queue = ok({ total: 0 });
+    h.Q.dups = ok({ duplicateCount: 0 });
+    h.Q.items = loading;
+    const a = wrap(<AttentionPanel />);
+    expect(screen.getByTestId("dash-review-income-pending").textContent).toContain("loading");
+    expect(screen.queryByText("Nothing needs you today.")).toBeNull();
+    a.unmount();
+    h.Q.items = failed;
+    wrap(<AttentionPanel />);
+    expect(screen.getByTestId("dash-review-income-pending").textContent).toContain("did not load");
+  });
   it("keeps the monitor's findings (Why / Resolve / Dismiss live in FindingsList)", () => {
     h.Q.queue = ok({ total: 0 });
     h.Q.dups = ok({ duplicateCount: 0 });
@@ -819,6 +855,24 @@ describe("recent activity", () => {
     ]);
     wrap(<ActivityPanel />);
     expect(screen.getByTestId("txn-flag").textContent).toBe("Income in an expense category");
+  });
+  it("(WP5c) never chips a credit on a card, Amex or not; and waits for the bank items before chipping anything", () => {
+    h.Q.cats = ok([{ id: "shop", name: "Shopping", kind: "expense" }, { id: "dining", name: "Dining & Coffee", kind: "expense" }]);
+    h.Q.txns = ok([
+      { id: "t1", occurredOn: "2026-10-08", description: "AMAZON MKTPLACE PMTS", amount: "20.00", plaidAccountId: "p-frd", source: "plaid:chase", categoryId: "shop",
+        isTransfer: false, debtId: null, isExternalCardPayment: false, reimbursable: false, pfcDetailed: null, pending: false },
+      { id: "t2", occurredOn: "2026-10-08", description: "ACME PAYROLL DIRECT DEP", amount: "2100.00", plaidAccountId: "p-c1", source: "plaid:chase", categoryId: "dining",
+        isTransfer: false, debtId: null, isExternalCardPayment: false, reimbursable: false, pfcDetailed: "INCOME_WAGES", pending: false },
+    ]);
+    h.Q.items = loading;
+    const a = wrap(<ActivityPanel />);
+    expect(screen.queryAllByTestId("txn-flag")).toHaveLength(0);
+    a.unmount();
+    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking" }), acct("frd", { name: "Freedom", type: "credit", subtype: "credit card" })])]);
+    wrap(<ActivityPanel />);
+    const flags = screen.getAllByTestId("txn-flag");
+    expect(flags).toHaveLength(1);
+    expect(flags[0]!.closest('[data-testid="txn-row"]')!.textContent).toContain("ACME PAYROLL DIRECT DEP");
   });
 });
 

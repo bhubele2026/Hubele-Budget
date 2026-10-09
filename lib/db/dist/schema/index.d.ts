@@ -5083,13 +5083,13 @@ export declare const insertDebtSchema: import("zod/v4").ZodObject<{
     name: import("zod/v4").ZodString;
     notes: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     plaidAccountId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
-    status: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
-    type: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
-    minPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     balance: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     originalBalance: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     apr: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    minPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     payment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    type: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    status: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     sortOrder: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
     dueDay: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodInt>>;
     statementDay: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodInt>>;
@@ -5105,8 +5105,8 @@ export declare const insertDebtSchema: import("zod/v4").ZodObject<{
 export declare const insertCategorySchema: import("zod/v4").ZodObject<{
     name: import("zod/v4").ZodString;
     debtId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
-    kind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     sortOrder: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
+    kind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     groupName: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     sourceKind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     excludeFromBudget: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
@@ -5137,8 +5137,8 @@ export declare const insertRecurringSchema: import("zod/v4").ZodObject<{
     amount: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     debtId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
-    kind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     active: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    kind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     frequency: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     dayOfMonth: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodInt>>;
     anchorDate: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
@@ -5191,9 +5191,9 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
 }>;
 export declare const insertMappingRuleSchema: import("zod/v4").ZodObject<{
     categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
-    priority: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
     pattern: import("zod/v4").ZodString;
     matchType: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    priority: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
 }, {
     out: {};
     in: {};

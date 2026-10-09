@@ -1,10 +1,12 @@
 // (PR-A) Loads what the stages read, once per batch.
 import { createHash } from "node:crypto";
-import { and, eq, gte, isNotNull, isNull, lte, type SQL } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, type SQL } from "drizzle-orm";
 import {
   db,
   budgetCategoriesTable,
   merchantMemoryTable,
+  plaidAccountsTable,
+  plaidItemsTable,
   recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
@@ -14,7 +16,7 @@ import { refundSignature } from "../merchantNameExtract";
 import { uncategorizedCategoryIds } from "../pendingFiling";
 import { findSupersededPending } from "../supersededPending";
 import { isOutflow, REFUND_WINDOW_DAYS } from "./stages/heuristic";
-import type { EngineContext, EngineRow, MemoryRow, OutflowRef, RecurringRow } from "./types";
+import type { AccountFacts, EngineContext, EngineRow, MemoryRow, OutflowRef, RecurringRow } from "./types";
 
 export const sha256 = (s: string): string => createHash("sha256").update(s).digest("hex");
 
@@ -153,11 +155,39 @@ export function groupOutflows(
   return out;
 }
 
+/**
+ * The Plaid accounts the rows sit on, by external account id (household-scoped).
+ * (WP5c) Moved from modelStage.ts so the context loads it ONCE per batch: the
+ * direction guard and the model stage both read it.
+ */
+export async function loadAccounts(
+  householdId: string,
+  rows: readonly Pick<EngineRow, "plaidAccountId">[],
+): Promise<Map<string, AccountFacts>> {
+  const ids = [...new Set(rows.map((r) => r.plaidAccountId).filter((x): x is string => !!x))];
+  const out = new Map<string, AccountFacts>();
+  if (ids.length === 0) return out;
+  const found = await db
+    .select({
+      accountId: plaidAccountsTable.accountId,
+      type: plaidAccountsTable.type,
+      subtype: plaidAccountsTable.subtype,
+      institutionSlug: plaidItemsTable.institutionSlug,
+    })
+    .from(plaidAccountsTable)
+    .leftJoin(plaidItemsTable, eq(plaidItemsTable.id, plaidAccountsTable.itemId))
+    .where(and(eq(plaidAccountsTable.householdId, householdId), inArray(plaidAccountsTable.accountId, ids)));
+  for (const f of found) {
+    out.set(f.accountId, { type: f.type, subtype: f.subtype, institutionSlug: f.institutionSlug });
+  }
+  return out;
+}
+
 export async function loadEngineContext(
   householdId: string,
   rows: readonly EngineRow[],
 ): Promise<EngineContext> {
-  const [rules, memoryRaw, recurringRaw, cats, supersede] = await Promise.all([
+  const [rules, memoryRaw, recurringRaw, cats, supersede, accounts] = await Promise.all([
     loadUserRules(householdId),
     db
       .select()
@@ -188,6 +218,7 @@ export async function loadEngineContext(
       .from(budgetCategoriesTable)
       .where(eq(budgetCategoriesTable.householdId, householdId)),
     findSupersededPending(householdId),
+    loadAccounts(householdId, rows),
   ]);
   const memory = memoryRaw.map(toMemoryRow);
   const memoryBySignature = new Map<string, MemoryRow[]>();
@@ -238,6 +269,7 @@ export async function loadEngineContext(
     replacedBy: supersede.replacedBy,
     uncategorizedIds: uncategorizedCategoryIds(cats),
     spendCtx: spendContextOf(cats),
+    accounts,
     outflowsBySignature,
     versions: contentVersions(rules, memory, recurring),
   };

@@ -752,3 +752,97 @@ export function classifyRefund(
   if (hasRefundMarker(tx.description)) return { rule: "refund-marker", categorized };
   return null;
 }
+
+// ── (WP5c) DIRECTION ─────────────────────────────────────────────────────────
+//
+// A category has a direction. An EXPENSE category is where money going OUT is
+// filed; an INCOME category is where money coming IN is. A row filed against
+// that direction drops out of BOTH sides of the household's numbers: the
+// spending rule reads only outflows (and rule 6 drops an outflow sitting in an
+// income category), while `isRealIncome` reads only inflows in an income
+// category. A payroll deposit in Dining & Coffee, or a cafeteria charge in the
+// paycheck category, therefore counts nowhere (root cause 6 of the
+// financial-consistency plan, 2026-10-09).
+//
+// `categoryDirectionConflict` is the ONE predicate for that. The categorizer
+// turns a rule, memory or recurring pick that conflicts into a question
+// (`decide.ts`), rejects a model answer that would (`modelStage.judgeAnswer`),
+// and the web flags rows already filed that way (`lib/categoryDirection.ts`).
+//
+// Never a conflict (first match wins):
+//   - no category, the household's system "Uncategorized" category (parking a
+//     row there files it nowhere), or a category that no longer exists;
+//   - a transfer (`isTransfer`), a debt row (`debtId`), the user's card-payment
+//     flag (`isExternalCardPayment`);
+//   - a debt category, an excluded category (Transfer, Ignore, Reimbursement…);
+//   - a reimbursable row (money paid back belongs with what it repays);
+//   - money IN on a card (`isCardAccount`): every credit on a card is a refund
+//     or a payment, and belongs with the purchases it nets — whichever bank
+//     issued the card;
+//   - money IN that is a refund by `classifyRefund` (a REFUND word on checking).
+// A conflict:
+//   - "inflow_into_expense": money in, filed under an expense category;
+//   - "outflow_into_income": money out, filed under an income category.
+// It judges a category for a row; it never writes, and it decides nothing about
+// spending or income totals.
+
+export type DirectionConflict = "inflow_into_expense" | "outflow_into_income";
+
+export interface DirectionOptions {
+  /**
+   * The row is on a card's own ledger (`isCardLedgerRow`: its Plaid account is
+   * a credit account). A card ledger source (`CARD_LEDGER_SOURCES`) counts as a
+   * card whatever this says.
+   */
+  isCardAccount: boolean;
+  /** The household's system "Uncategorized" category ids. */
+  uncategorizedIds: ReadonlySet<string>;
+}
+
+/**
+ * (WP5c) Is the row on a card's own ledger? Its Plaid account is a credit
+ * account (`plaid_accounts.type === "credit"`, any issuer), or its source is a
+ * card ledger source (`CARD_LEDGER_SOURCES`: the Amex workbook and Plaid Amex
+ * rows). The account type comes from the caller: the server reads
+ * `plaid_accounts`, the web its loaded Plaid items.
+ */
+export function isCardLedgerRow(
+  source: string | null | undefined,
+  accountType: string | null | undefined,
+): boolean {
+  return accountType === "credit" || CARD_SOURCES.has((source ?? "").toLowerCase());
+}
+
+/**
+ * ⭐ (WP5c) Would filing `tx` under `categoryId` put money in an expense
+ * category, or money out in an income category? Null when not. The category
+ * is the one being judged, not necessarily the row's current one. See the
+ * section header for every rule. Pure.
+ */
+export function categoryDirectionConflict(
+  tx: SpendTxn,
+  categoryId: string | null | undefined,
+  ctx: SpendContext,
+  opts: DirectionOptions,
+): DirectionConflict | null {
+  if (!categoryId || opts.uncategorizedIds.has(categoryId)) return null;
+  const cat = ctx.categoriesById.get(categoryId);
+  if (!cat) return null;
+  const filed: SpendTxn = { ...tx, categoryId };
+  if (filed.isTransfer === true) return null;
+  if (filed.debtId) return null;
+  if (filed.isExternalCardPayment === true) return null;
+  if (isDebtCategory(filed, ctx)) return null;
+  if (isExcludedCategoryName(cat.name)) return null;
+  if (filed.reimbursable === true) return null;
+  if (cat.kind === "income") {
+    return spendAmount(filed) > 0 ? "outflow_into_income" : null;
+  }
+  if (cat.kind === "expense") {
+    if (creditAmount(filed) <= 0) return null;
+    if (opts.isCardAccount || isCardLedgerRow(filed.source, null)) return null;
+    if (classifyRefund(filed, ctx) !== null) return null;
+    return "inflow_into_expense";
+  }
+  return null;
+}

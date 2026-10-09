@@ -102,6 +102,17 @@ export interface OutflowRef {
   plaidAccountId: string | null;
 }
 
+/**
+ * What the engine knows about a row's Plaid account (keyed by Plaid's EXTERNAL
+ * `account_id`, what `transaction.plaid_account_id` holds). (WP5c) Moved here
+ * from modelStage.ts: the direction guard reads it too.
+ */
+export interface AccountFacts {
+  type: string | null;
+  subtype: string | null;
+  institutionSlug: string | null;
+}
+
 /** Everything the stages read. Loaded once per batch (context.ts) or built by a test. */
 export interface EngineContext {
   /** Deterministic order: priority desc, pattern length desc, created_at asc, id. */
@@ -114,6 +125,12 @@ export interface EngineContext {
   replacedBy: Map<string, ReplacedPending>;
   uncategorizedIds: ReadonlySet<string>;
   spendCtx: SpendContext;
+  /**
+   * (WP5c) The batch rows' Plaid accounts, by external account id: card-ness
+   * for the direction guard (decide.ts) and the model stage's account facts.
+   * A row with no Plaid account, or one not found, is simply absent.
+   */
+  accounts: ReadonlyMap<string, AccountFacts>;
   /** Outflows by refund-link signature (`refundSignature`), for refund linking. */
   outflowsBySignature: Map<string, OutflowRef[]>;
   /** Content versions folded into every input hash. */

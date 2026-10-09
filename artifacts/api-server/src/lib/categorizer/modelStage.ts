@@ -6,6 +6,9 @@
 //
 //   - the category must be one of the household's candidates (also a schema enum);
 //   - a debt category only on a payment against a liability (see debtCategoryAllowed);
+//   - (WP5c) never money in under an expense category, nor money out under an
+//     income one (`categoryDirectionConflict`, the guard decide.ts applies to
+//     rules, memory and recurring items);
 //   - split amounts must add up to the row to the cent, else the suggestion is dropped;
 //   - `isTransfer` is never written: it turns the answer into a queue-only
 //     "looks like a transfer" decision with no category;
@@ -15,8 +18,9 @@
 //
 // The model never sees a raw description beyond `untrusted('merchant', …)` (200
 // characters, markup escaped) and its cleaned form; priors are category names.
-import { and, eq, inArray } from "drizzle-orm";
-import { db, budgetCategoriesTable, plaidAccountsTable, plaidItemsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { db, budgetCategoriesTable } from "@workspace/db";
+import type { SpendContext } from "@workspace/avalanche-core";
 import { isAiEnabled } from "../../ai/client";
 import { runStructured } from "../../ai/structured";
 import { resolvePrompt } from "../../ai/prompts";
@@ -31,9 +35,12 @@ import {
 import { untrusted } from "../../ai/redact";
 import type { AiFailureInfo } from "../../ai/types";
 import { cleanMerchant } from "../merchantNameExtract";
+import { directionConflictOf } from "./direction";
 import { isOutflow } from "./stages/heuristic";
 import { loadPriors, weekdayOf } from "./modelPriors";
-import type { EngineContext, EngineRow, StageResult } from "./types";
+import type { AccountFacts, EngineContext, EngineRow, StageResult } from "./types";
+
+export type { AccountFacts } from "./types";
 
 export interface ModelStage {
   readonly name: string;
@@ -58,12 +65,6 @@ export const MODEL_CONFIDENCE: Readonly<Record<Confidence, number>> = { high: 0.
 export const MODEL_AUTO_CONFIDENCE = 0.92;
 /** A queue-only "looks like a transfer" opinion. */
 export const MODEL_TRANSFER_CONFIDENCE = 0.5;
-
-export interface AccountFacts {
-  type: string | null;
-  subtype: string | null;
-  institutionSlug: string | null;
-}
 
 /**
  * A debt category is only for a payment ON a liability: money coming into a
@@ -105,6 +106,9 @@ export interface ModelDetail {
 export interface JudgeContext {
   candidates: ReadonlyMap<string, CandidateCategory & { debtId: string | null }>;
   accounts: ReadonlyMap<string, AccountFacts>;
+  /** (WP5c) The household's categories as the spending rule reads them, for the direction check. */
+  spendCtx: SpendContext;
+  uncategorizedIds: ReadonlySet<string>;
   autoAllowed: boolean;
   model: string;
   promptVersion: string;
@@ -143,6 +147,8 @@ export function judgeAnswer(
   const cat = j.candidates.get(a.categoryId);
   if (!cat) return null;
   if (cat.debtId && !debtCategoryAllowed(row, j.accounts.get(row.plaidAccountId ?? ""))) return null;
+  // (WP5c) Money in under an expense category, or money out under an income one.
+  if (directionConflictOf(row, a.categoryId, j)) return null;
   const confidence = a.confidence === "high" && j.autoAllowed ? MODEL_AUTO_CONFIDENCE : MODEL_CONFIDENCE[a.confidence];
   const suffix = split ? " May be worth splitting." : "";
   const explanation = (rationale || "Suggested from similar charges.").slice(0, 140 - suffix.length) + suffix;
@@ -179,26 +185,6 @@ async function loadCandidates(householdId: string, ctx: EngineContext) {
     .sort((a, b) => a.groupName.localeCompare(b.groupName) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
-async function loadAccounts(householdId: string, rows: readonly EngineRow[]): Promise<Map<string, AccountFacts>> {
-  const ids = [...new Set(rows.map((r) => r.plaidAccountId).filter((x): x is string => !!x))];
-  const out = new Map<string, AccountFacts>();
-  if (ids.length === 0) return out;
-  const found = await db
-    .select({
-      accountId: plaidAccountsTable.accountId,
-      type: plaidAccountsTable.type,
-      subtype: plaidAccountsTable.subtype,
-      institutionSlug: plaidItemsTable.institutionSlug,
-    })
-    .from(plaidAccountsTable)
-    .leftJoin(plaidItemsTable, eq(plaidItemsTable.id, plaidAccountsTable.itemId))
-    .where(and(eq(plaidAccountsTable.householdId, householdId), inArray(plaidAccountsTable.accountId, ids)));
-  for (const f of found) {
-    out.set(f.accountId, { type: f.type, subtype: f.subtype, institutionSlug: f.institutionSlug });
-  }
-  return out;
-}
-
 /** The real stage. One instance per job run: it carries the run's usage, failure and details. */
 export class AnthropicModelStage implements ModelStage {
   readonly name = "anthropic";
@@ -225,7 +211,9 @@ export class AnthropicModelStage implements ModelStage {
     if (candidateRows.length === 0) return out;
     const candidates = new Map(candidateRows.map((c) => [c.id, c]));
     const schema = categorizeOutputSchema(candidateRows.map((c) => c.id));
-    const [accounts, priors] = await Promise.all([loadAccounts(householdId, rows), loadPriors(householdId, rows)]);
+    // (WP5c) The batch's accounts come with the context (loaded once per batch).
+    const accounts = ctx.accounts;
+    const priors = await loadPriors(householdId, rows);
 
     for (let i = 0; i < rows.length; i += MODEL_BATCH_SIZE) {
       const chunk = rows.slice(i, i + MODEL_BATCH_SIZE);
@@ -283,6 +271,8 @@ export class AnthropicModelStage implements ModelStage {
       const judge: JudgeContext = {
         candidates,
         accounts,
+        spendCtx: ctx.spendCtx,
+        uncategorizedIds: ctx.uncategorizedIds,
         autoAllowed: this.opts.autoAllowed,
         model: res.usage.model,
         promptVersion: prompt.PROMPT_VERSION,

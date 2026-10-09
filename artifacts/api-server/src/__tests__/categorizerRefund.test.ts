@@ -70,6 +70,11 @@ function context(o: { outflows?: Outflow[]; memory?: MemoryRow[]; rules?: RuleRo
       { id: "paycheck", name: "Paycheck", debtId: null, kind: "income" },
       { id: "uncat", name: "Uncategorized", debtId: null, kind: "expense" },
     ]),
+    // (WP5c) The Amex card is a credit account; Chase is checking.
+    accounts: new Map([
+      [AMEX, { type: "credit", subtype: "credit card", institutionSlug: "amex" }],
+      [CHASE, { type: "depository", subtype: "checking", institutionSlug: "chase" }],
+    ]),
     outflowsBySignature: groupOutflows(o.outflows ?? PURCHASES),
     versions: contentVersions(rules, memory, []),
   };
@@ -154,6 +159,24 @@ describe("a refund with no prior charge", () => {
   it("memory or a rule may still file a credit that matched no purchase (as before B6)", () => {
     const ctx = context({ memory: [memoryRow("delta air lines refund", "shopping", 4)] });
     expect(decideRow(row({ description: "DELTA AIR LINES REFUND" }), ctx)?.source).toBe("memory");
+  });
+
+  it("(WP5c) the direction guard leaves those alone: a card credit, a REFUND word on checking; only an unexplained checking credit is queued", () => {
+    // The pinned case above, in full: still filed (auto), on the card.
+    const onCard = context({ memory: [memoryRow("delta air lines refund", "shopping", 4)] });
+    expect(decideRow(row({ description: "DELTA AIR LINES REFUND" }), onCard)).toMatchObject({ source: "memory", categoryId: "shopping", confidence: 0.92 });
+    // On checking, a REFUND word makes it a refund: still filed.
+    const chk = { source: "plaid:chase", plaidAccountId: CHASE, pfcPrimary: null, pfcDetailed: null };
+    expect(decideRow(row({ description: "DELTA AIR LINES REFUND", ...chk }), onCard)).toMatchObject({ source: "memory", confidence: 0.92 });
+    // On checking with no refund word it is money in under an expense category: a question, memory still named.
+    const plain = context({ memory: [memoryRow("delta air lines", "shopping", 4)] });
+    expect(decideRow(row({ description: "DELTA AIR LINES", ...chk }), plain)).toEqual({
+      source: "memory",
+      categoryId: "shopping",
+      confidence: 0.5,
+      explanation: "Money in, but this would file it under an expense category.",
+      memoryId: "m-delta air lines",
+    });
   });
 
   it("off the card, only with a refund word; a paycheck or a payment arriving gets nothing", () => {

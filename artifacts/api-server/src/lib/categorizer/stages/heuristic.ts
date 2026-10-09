@@ -4,9 +4,9 @@ import {
   classifyRefund,
   isRefundCandidate,
   matchesTransferPattern,
-  type SpendTxn,
 } from "@workspace/avalanche-core";
 import { refundSignature } from "../../merchantNameExtract";
+import { spendTxnOf } from "../direction";
 import type { EngineContext, EngineRow, OutflowRef, StageResult } from "../types";
 
 /** (B6: 60 → 90) How far back a refund may point. */
@@ -20,21 +20,6 @@ export const REFUND_CONFIDENCE = 0.55;
 export function isOutflow(row: { amount: string; source: string }): boolean {
   const a = Number(row.amount) || 0;
   return row.source === "amex" ? a > 0 : a < 0;
-}
-
-/** The row as the one spending rule reads it. */
-function spendTxnOf(row: EngineRow): SpendTxn {
-  return {
-    amount: row.amount,
-    source: row.source,
-    isTransfer: row.isTransfer,
-    categoryId: row.categoryId,
-    description: row.description,
-    debtId: row.debtId,
-    isExternalCardPayment: row.isExternalCardPayment,
-    reimbursable: row.reimbursable,
-    pfcDetailed: row.pfcDetailed,
-  };
 }
 
 /**
