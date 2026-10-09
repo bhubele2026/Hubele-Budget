@@ -4554,6 +4554,22 @@ components:
             automatic categorizer never moves a locked row and Plaid sync
             never writes it. Server-managed and read-only: the input schemas
             do not accept it.
+        splits:
+          type: array
+          readOnly: true
+          description: |
+            (F4b) The parts of a VALID category split, on `GET /transactions`
+            list rows only: each part's category and amount (same string
+            format and sign as `amount`; the parts add up to `amount` to the
+            cent). Omitted for a charge with no split and for one whose split
+            is invalid or does not add up; such a charge counts whole under
+            its own category, as the server's category totals do.
+          items:
+            type: object
+            required: [categoryId, amount]
+            properties:
+              categoryId: { type: string }
+              amount: { type: string }
         isExternalCardPayment:
           type: boolean
           description: |

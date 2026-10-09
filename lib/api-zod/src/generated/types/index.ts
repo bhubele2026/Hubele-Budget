@@ -537,6 +537,7 @@ export * from "./transactionPaymentState";
 export * from "./transactionSplit";
 export * from "./transactionSplitInput";
 export * from "./transactionSplits";
+export * from "./transactionSplitsPropertyItem";
 export * from "./transactionWeeklyBucket";
 export * from "./txnRef";
 export * from "./uiPreferences";

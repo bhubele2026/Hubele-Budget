@@ -1,3 +1,4 @@
+import { monthMoneyFlow } from "@/lib/splitParts";
 import { useId, useMemo, useState } from "react";
 import { PageGrid } from "@/components/next";
 import {
@@ -474,21 +475,8 @@ function CashFlowSection({
   }, [series]);
   const flowBars = useMemo(() => {
     if (!flowMonth) return [];
-    const incomeByDesc = new Map<string, number>();
-    const expenseByCat = new Map<string, number>();
-    for (const t of txns) {
-      if (!t.occurredOn.startsWith(flowMonth)) continue;
-      const a = Number(t.amount) || 0;
-      if (a > 0) {
-        const k = t.description?.split(" ")[0] ?? "Income";
-        incomeByDesc.set(k, (incomeByDesc.get(k) ?? 0) + a);
-      } else if (a < 0) {
-        const k = t.categoryId
-          ? catNameById.get(t.categoryId) ?? "Uncategorized"
-          : "Uncategorized";
-        expenseByCat.set(k, (expenseByCat.get(k) ?? 0) + -a);
-      }
-    }
+    // (F4b) A valid category split files each part under its own category.
+    const { incomeByDesc, expenseByCat } = monthMoneyFlow(txns, flowMonth, catNameById);
     const incomeTotal = Array.from(incomeByDesc.values()).reduce((s, v) => s + v, 0);
     const expenseTotal = Array.from(expenseByCat.values()).reduce((s, v) => s + v, 0);
     const savings = Math.max(0, incomeTotal - expenseTotal);

@@ -1497,6 +1497,11 @@ export const TransactionWeeklyBucket = {
   misc: "misc",
 } as const;
 
+export type TransactionSplitsPropertyItem = {
+  categoryId: string;
+  amount: string;
+};
+
 /**
  * (PR-D) A payment logged in the app (POST /debts/{id}/payments) is
 a claim: "claimed" when written, "confirmed" once a bank row pairs
@@ -1561,6 +1566,14 @@ never writes it. Server-managed and read-only: the input schemas
 do not accept it.
  */
   readonly categoryLockedByUser?: boolean;
+  /** (F4b) The parts of a VALID category split, on `GET /transactions`
+list rows only: each part's category and amount (same string
+format and sign as `amount`; the parts add up to `amount` to the
+cent). Omitted for a charge with no split and for one whose split
+is invalid or does not add up; such a charge counts whole under
+its own category, as the server's category totals do.
+ */
+  readonly splits?: readonly TransactionSplitsPropertyItem[];
   /** (#632 follow-up) User-set per-row flag marking a card payment
 as going to a card that is NOT in our debt avalanche (e.g. a
 spouse's external card). Excluded from avalanche actuals so

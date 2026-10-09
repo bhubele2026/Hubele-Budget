@@ -17,6 +17,7 @@ import {
   loadUserRules,
 } from "../lib/autoCategorize";
 import { selectPatternCandidates } from "../lib/patternCandidates";
+import { expandSplits, loadSplitsForTxns } from "../lib/categorizer/splits";
 import { recordHandFiling, recordUserDecisions } from "../lib/categorizer/userDecisions";
 import type { RetroactiveCandidates } from "../lib/categorizer/memory";
 import { forecastTodayISO } from "../lib/forecastInclusion";
@@ -135,6 +136,10 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
     .from(merchantAliasesTable)
     .where(eq(merchantAliasesTable.householdId, req.householdId!));
   const aliasBySignature = new Map(aliasRows.map((a) => [a.signature, a.alias]));
+  // (F4b) The parts of every VALID split on this page, in one query. A charge
+  // whose splits do not add up (or are flagged invalid) gets no `splits` key
+  // and counts whole, exactly as the server's category totals do.
+  const partsByTxn = expandSplits(rows, await loadSplitsForTxns(req.householdId!, rows.map((r) => r.id)));
   const annotated = rows.map((r) => {
     // (#888) displayName precedence: a user/AI alias keyed on the row's
     // stable signature wins; otherwise fall back to cleanMerchant. Never
@@ -148,6 +153,7 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
       // tell the user how many transactions a rename will affect.
       merchantSignature: sig,
       displayName: alias ?? cleanMerchant(r.description),
+      ...(partsByTxn.has(r.id) ? { splits: partsByTxn.get(r.id) } : {}),
     };
   });
   res.json(annotated);
