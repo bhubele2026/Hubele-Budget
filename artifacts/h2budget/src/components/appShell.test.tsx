@@ -34,6 +34,8 @@ import React from "react";
 let reviewCount = 0;
 /** No spine yet (still loading, or the first load failed): the count is unknown. */
 let spineMissing = false;
+/** (F1) The categorization queue's total; null = the queue has not answered. */
+let queueTotal: number | null = null;
 
 vi.mock("@clerk/react", () => ({
   UserButton: () => <div data-testid="user-button" />,
@@ -47,6 +49,12 @@ vi.mock("@workspace/api-client-react", () => ({
     isLoading: spineMissing,
   }),
   getGetSpineQueryKey: () => ["/api/spine"],
+  // (F1) The Review badge adds the categorization queue's total to the spine's count.
+  useListCategorizationReview: () => ({
+    data: queueTotal == null ? undefined : { items: [], total: queueTotal },
+    isLoading: queueTotal == null,
+  }),
+  getListCategorizationReviewQueryKey: () => ["/api/categorization/review"],
   getSpine: vi.fn(),
   getDashboard: vi.fn(),
   getGetDashboardQueryKey: () => ["/api/dashboard"],
@@ -190,6 +198,7 @@ function linksIn(el: Element): string[] {
 
 beforeEach(() => {
   reviewCount = 0;
+  queueTotal = null;
   prefetchRoute.mockClear();
 });
 afterEach(cleanup);
@@ -306,13 +315,13 @@ describe("the area model", () => {
 
   it("shows Review·Chase on /transactions", () => {
     mount("/transactions");
-    expect(tabLabels()).toEqual(["Review", "Chase", "Amex"]);
+    expect(tabLabels()).toEqual(["Review", "Categories", "Chase", "Amex"]);
     expect(activeTabHref()).toBe("/transactions");
   });
 
   it("shows Review's ribbon on /review", () => {
     mount("/review");
-    expect(tabLabels()).toEqual(["Review", "Chase", "Amex"]);
+    expect(tabLabels()).toEqual(["Review", "Categories", "Chase", "Amex"]);
     expect(activeTabHref()).toBe("/review");
   });
 
@@ -374,6 +383,7 @@ describe("the phone drawer reaches every page a ribbon reaches", () => {
     "/reports/spending",
     "/reports",
     "/review",
+    "/review/categories",
     "/avalanche",
     "/debts",
     "/reports/debt",
@@ -432,7 +442,7 @@ describe("the phone drawer reaches every page a ribbon reaches", () => {
         "Wish list /wishlist",
         "Reports /reports",
       ],
-      ["Review /review", "Chase /transactions", "Amex /amex"],
+      ["Review /review", "Categories /review/categories", "Chase /transactions", "Amex /amex"],
       ["Debt /avalanche", "Debts /debts", "Debt report /reports/debt"],
     ]);
   });
@@ -571,6 +581,45 @@ describe("the review count is a finding or it is nothing", () => {
     } finally {
       spineMissing = false;
     }
+  });
+});
+
+describe("(F1) the Review badge adds the categorization queue", () => {
+  it("the pill and the drawer carry forecast review + queue total", () => {
+    reviewCount = 4;
+    queueTotal = 3;
+    mount("/banking");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("7 items to review");
+    const review = openDrawer().querySelector('[data-testid="mobilenav-review"]')!;
+    expect(review.textContent).toContain("7");
+  });
+
+  it("inside Review each tab carries its own queue: Review = forecast, Categories = queue", () => {
+    reviewCount = 4;
+    queueTotal = 3;
+    mount("/review/categories");
+    expect(screen.getByTestId("topnav-review").textContent).toBe("Review4");
+    expect(screen.getByTestId("topnav-review/categories").textContent).toBe("Categories3");
+    expect(activeTabHref()).toBe("/review/categories");
+  });
+
+  it("the pill goes to the forecast inbox when it has charges, else to the categories queue", () => {
+    reviewCount = 4;
+    queueTotal = 3;
+    mount("/banking");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("href")).toBe("/review");
+    cleanup();
+    reviewCount = 0;
+    mount("/banking");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("href")).toBe("/review/categories");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("3 items to review");
+  });
+
+  it("a queue that has not answered adds nothing and is not a zero", () => {
+    reviewCount = 4;
+    queueTotal = null;
+    mount("/banking");
+    expect(screen.getByTestId("topnav-review-badge").getAttribute("aria-label")).toBe("4 items to review");
   });
 });
 

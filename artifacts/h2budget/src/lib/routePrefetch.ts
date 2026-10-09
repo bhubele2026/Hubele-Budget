@@ -30,6 +30,7 @@ export const importReportsBudget = () => import("../pages/reports/BudgetPage");
 export const importReportsBehavior = () => import("../pages/reports/BehaviorPage");
 export const importDebts = () => import("../pages/debts");
 export const importAvalanche = () => import("../pages/avalanche");
+export const importReviewCategories = () => import("../pages/review-categories");
 export const importAmex = () => import("../pages/amex");
 export const importTransactions = () => import("../pages/transactions");
 export const importBills = () => import("../pages/bills");
@@ -57,6 +58,7 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/forecast/overview": importForecastOverview,
   "/forecast": importForecast,
   "/review": importForecast,
+  "/review/categories": importReviewCategories,
   "/review/suggestions": importSuggestions,
   "/avalanche": importAvalanche,
   "/amex": importAmex,

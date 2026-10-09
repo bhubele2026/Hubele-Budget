@@ -34,6 +34,8 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
+import { useCategorizationQueueTotal } from "@/hooks/useCategorizationQueue";
+import { badgeCount } from "@/lib/reviewQueue";
 import { H2Wordmark } from "@/components/h2-wordmark";
 import { TabRibbon, type RibbonTab } from "@/components/tab-ribbon";
 
@@ -141,6 +143,7 @@ const DESTINATIONS: Destination[] = [
     href: "/review",
     tabs: [
       { name: "Review", href: "/review" },
+      { name: "Categories", href: "/review/categories" },
       { name: "Chase", href: "/transactions" },
       { name: "Amex", href: "/amex" },
     ],
@@ -409,7 +412,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const ribbonHrefs = new Set(areaNav.map((a) => a.href));
   const moreNav = ALL_NAV.filter((item) => !ribbonHrefs.has(item.href));
   const [mobileOpen, setMobileOpen] = useState(false);
-  const reviewCount = useReviewInboxCount();
+  // (F1) Two different queues feed the Review badge: the forecast bank-match
+  // inbox (the spine's count) and the categorization queue. `null` = unknown.
+  const forecastReview = useReviewInboxCount();
+  const queueTotal = useCategorizationQueueTotal();
+  const reviewCount = forecastReview == null ? null : badgeCount(queueTotal, forecastReview);
 
   // (#perf-4) Warm a route's primary, stable-key queries on nav hover/focus so
   // the page renders from cache on click. Only routes whose query keys are
@@ -512,7 +519,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   // A null count is unknown (the spine is loading or failed): no badge, never 0.
   const railBadge = (href: string): number | null => {
-    if (href === "/review" && reviewCount != null && reviewCount > 0) return reviewCount;
+    // Inside the Review area the two queues have their own tabs; everywhere
+    // else the Review destination carries the total.
+    if (href === "/review/categories") return queueTotal != null && queueTotal > 0 ? queueTotal : null;
+    if (href === "/review") {
+      const own = area?.name === "Review" ? forecastReview : reviewCount;
+      return own != null && own > 0 ? own : null;
+    }
     return null;
   };
 
@@ -548,6 +561,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // rather than disappearing with the ribbon it was deferring to.
   const hasReviewCount = reviewCount != null && reviewCount > 0;
   const reviewPillPhoneOnly = ribbonHrefs.has("/review");
+  // The pill goes where the work is: the forecast inbox when it has charges,
+  // else the categorization queue.
+  const reviewPillHref = forecastReview != null && forecastReview > 0 ? "/review" : "/review/categories";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -686,9 +702,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </span>
               {hasReviewCount && (
                 <Link
-                  href="/review"
-                  onMouseEnter={() => prefetch("/review")}
-                  onFocus={() => prefetch("/review")}
+                  href={reviewPillHref}
+                  onMouseEnter={() => prefetch(reviewPillHref)}
+                  onFocus={() => prefetch(reviewPillHref)}
                   aria-label={`${reviewCount} items to review`}
                   data-testid="topnav-review-badge"
                   className={cn(
