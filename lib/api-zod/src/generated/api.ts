@@ -707,6 +707,8 @@ export const GetDashboardResponse = zod.object({
   ),
 });
 
+export const listTransactionsQueryPlaidAccountIdMax = 128;
+
 export const ListTransactionsQueryParams = zod.object({
   from: zod.coerce.string().optional(),
   to: zod.coerce.string().optional(),
@@ -719,6 +721,13 @@ export const ListTransactionsQueryParams = zod.object({
   minAmount: zod.coerce.string().optional(),
   maxAmount: zod.coerce.string().optional(),
   categoryId: zod.coerce.string().optional(),
+  plaidAccountId: zod.coerce
+    .string()
+    .max(listTransactionsQueryPlaidAccountIdMax)
+    .optional()
+    .describe(
+      "(WP7) Only the rows on this one Plaid account: the external Plaid\n`account_id`, as `Transaction.plaidAccountId` carries it. Exact\nmatch, inside the caller's household. A row with no Plaid account\n(a manual entry, an imported workbook row) never matches, and an\nempty value matches nothing. A card's own ledger asks with it, so\nit never lists another card's rows.\n",
+    ),
 });
 
 export const ListTransactionsResponseItem = zod.object({
@@ -1701,7 +1710,7 @@ export const GetTransactionsLedgerQueryParams = zod.object({
     .max(getTransactionsLedgerQueryAccountMax)
     .optional()
     .describe(
-      "`plaid_accounts.id` of the ledger account. Optional; defaults to\nthe snapshot's account. (PR14) Any Chase depository account of the\nhousehold is accepted with its mask twins. An account that is not\nthe snapshot's account (or its twin) lists its own rows, totals and\nreview counts with every balance null (`balanceUnavailableReason`\n\"not_snapshot_account\"): no balance is computed for it, and manual\nrows are not on it. Any other account is a 400 `account_not_ledger`.\n",
+      "`plaid_accounts.id` of the ledger account. Optional; defaults to\nthe snapshot's account. (PR14; WP7 widened it from Chase to any\nbank) Any depository account of the household (checking, savings\nor another depository kind) is accepted with its mask twins. An\naccount that is not the snapshot's account (or its twin) lists its\nown rows, totals and review counts with every balance null\n(`balanceUnavailableReason` \"not_snapshot_account\"): no balance is\ncomputed for it, and manual rows are not on it. Any other account\n(a card, a loan, another household's account) is a 400\n`account_not_ledger`.\n",
     ),
   from: zod.coerce
     .string()
