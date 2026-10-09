@@ -9,7 +9,7 @@ import { Page, emptyNote } from "@/ui";
 import { PageGrid, Panel, TxnTable, type TxnRow } from "@/components/next";
 import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
 import { displayAmount } from "@/lib/amountDisplay";
-import { resolveTxnAccount } from "@/lib/accountIdentity";
+import { txnRoute } from "@/lib/accountRoute";
 import { householdToday } from "@/lib/householdDay";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import { AccountSelector, type BalanceByRow } from "./accounts/AccountSelector";
@@ -26,18 +26,25 @@ function daysBack(iso: string, n: number): string {
   return new Date(Date.UTC(y, m - 1, d - n)).toISOString().slice(0, 10);
 }
 
+/** The combined view's window: the last 30 days, newest first, at most 100 rows. */
+export const COMBINED_DAYS = 30;
+export const COMBINED_LIMIT = 100;
+
 function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries> }) {
   const today = useMemo(() => householdToday(new Date()), []);
-  const { data: txns, isLoading } = useListTransactions({ from: daysBack(today, 30), to: today, limit: 100 });
+  const { data: txns, isLoading } = useListTransactions({ from: daysBack(today, COMBINED_DAYS), to: today, limit: COMBINED_LIMIT });
   const { data: cats } = useListCategories();
   const rows = useMemo<TxnRow[]>(() => {
     const byExt = new Map(entries.map((e) => [e.plaidAccountId, e]));
     const catName = new Map((cats ?? []).map((c) => [c.id, c.name]));
     return (txns ?? []).map((t) => {
-      const e = t.plaidAccountId ? byExt.get(t.plaidAccountId) : undefined;
       // A row with no linked account says where it came from (Amex import,
       // manual entry, an unlinked bank account), never "Manual entry" for all.
-      const identity = resolveTxnAccount(t, byExt);
+      // (WP7) And it opens the ledger that lists it, on its month — the Amex
+      // page for a workbook row, the checking ledger for a manual one — or
+      // says why no ledger does (`txnRoute`).
+      const route = txnRoute(t, byExt);
+      const identity = route.identity;
       return {
         id: t.id,
         date: t.occurredOn.slice(0, 10),
@@ -46,13 +53,22 @@ function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries
         identity,
         pending: t.pending,
         category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
-        href: e ? `/next/accounts/${encodeURIComponent(e.plaidAccountId)}` : undefined,
+        href: route.href ?? undefined,
+        note: route.note,
       };
     });
   }, [txns, cats, entries]);
+  // (WP7) A capped pull discloses its cap (CLAUDE.md §2): the server answers
+  // newest first and cuts at the limit, so a full window lost its oldest rows.
+  const capped = (txns?.length ?? 0) >= COMBINED_LIMIT;
   if (isLoading) return <AccountPageSkeleton tiles={2} />;
   return (
     <Panel title="Recent activity" sub="Last 30 days, every account. Pick an account to review and edit." span={12} data-testid="combined-activity">
+      {capped ? (
+        <p className="pb-2 text-label text-neutral-600" data-testid="combined-activity-cap">
+          Showing the newest {COMBINED_LIMIT} rows of the last {COMBINED_DAYS} days.
+        </p>
+      ) : null}
       {rows.length ? <TxnTable rows={rows} /> : <p className={emptyNote}>No activity in the last 30 days.</p>}
     </Panel>
   );

@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { AccountChip, shortDate } from "@/components/next";
+import { accountPageHref } from "@/lib/accountRoute";
 import { STATE_WORD, type AccountEntry } from "./entries";
 
 /** Balance shown on a chip, already resolved by the page ("" = unknown). */
@@ -39,7 +40,7 @@ export function AccountSelector({
         return (
           <Link
             key={e.rowId}
-            href={`/next/accounts/${encodeURIComponent(e.plaidAccountId)}`}
+            href={accountPageHref(e)}
             aria-current={sel ? "page" : undefined}
             data-testid={`account-chip-${e.plaidAccountId}`}
             data-accent={e.identity.accent}

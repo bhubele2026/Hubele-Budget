@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from "react";
+import { accountPageHref } from "@/lib/accountPage";
 import { Link } from "wouter";
 import type { PlaidItemDetail, PlaidAccount } from "@workspace/api-client-react";
 import { Panel } from "@/components/next";
@@ -135,7 +136,7 @@ export default function AccountsPanel() {
                     <div className="col-start-1 row-start-1 flex min-w-0 items-start gap-2">
                       <span aria-hidden className={cn("mt-2 h-6 w-1 shrink-0 rounded-full", DOT[identity.accent])} />
                       <div className="min-w-0 flex-1">
-                        <Link href={`/next/accounts/${acct.id}`}
+                        <Link href={accountPageHref({ plaidAccountId: acct.accountId, rowId: acct.id })}
                           className="group inline-block max-w-full rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
                           data-testid="dash-account-link">
                           <span className="text-body font-semibold text-brand-ink [overflow-wrap:anywhere] group-hover:underline" data-testid="dash-account-name">

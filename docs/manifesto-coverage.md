@@ -51,7 +51,7 @@ relative to the repo root.
 | M9  | Kill Order = next 3 ranked moves | ✅ | yes | `artifacts/h2budget/src/components/dashboard-kill-order.tsx` (`killedOrder.slice(0,3)`) |
 | M10 | lock debt minimums as bills | ✅ | yes | `artifacts/api-server/src/lib/debtMinSchedule.ts`, `artifacts/api-server/src/__tests__/billsDebtMin.integration.test.ts` |
 | M11 | manual extra payment → new payoff date | ✅ | yes | `artifacts/h2budget/src/pages/avalanche.tsx` (slider drives live sim), `artifacts/h2budget/src/pages/debtsPageTargetExtra.test.tsx` |
-| M12 | mirror Chase checking into 90-day forecast | ✅ | yes | `artifacts/h2budget/src/lib/chaseEndingBalance.ts`, `chaseScope.ts`, `artifacts/api-server/src/routes/forecast.ts` |
+| M12 | mirror Chase checking into 90-day forecast | ✅ | yes | `artifacts/api-server/src/lib/forecastLedger.ts` (the bank roll-forward), `artifacts/api-server/src/lib/bankLedger.ts` (the Chase page's server ledger), `artifacts/api-server/src/routes/forecast.ts` |
 | M13 | project future balance from bills+income | ✅ | yes | `artifacts/api-server/src/lib/cashSignal.ts`, `artifacts/api-server/src/__tests__/cashSignal.integration.test.ts` |
 | M14 | forecast bends around payoff + freed-cash banner | ✅ | yes | `artifacts/h2budget/src/lib/forecastDebts.ts`, `artifacts/h2budget/src/pages/forecast/CashFreedBanner.tsx`, `artifacts/h2budget/src/pages/forecastAccuracy.test.tsx` |
 | M15 | per-category monthly budgets | ✅ | yes | `artifacts/h2budget/src/pages/budget.tsx`, `artifacts/api-server/src/routes/budget.ts`, `artifacts/api-server/src/__tests__/budgetCategoryMigration.integration.test.ts` |

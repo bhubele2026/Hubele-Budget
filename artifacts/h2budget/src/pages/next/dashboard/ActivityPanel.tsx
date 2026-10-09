@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { Panel, TxnTable, type TxnRow } from "@/components/next";
-import { resolveTxnAccount } from "@/lib/accountIdentity";
+import { txnRoute } from "@/lib/accountRoute";
 import { buildEntries } from "@/pages/next/accounts/entries";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { usePlaidItemsQ } from "./queries";
@@ -32,7 +32,10 @@ export default function ActivityPanel() {
     const catName = new Map((cats.data ?? []).map((c) => [c.id, c.name]));
     const catsById = categoriesByIdOf(cats.data);
     return (txns.data ?? []).slice(0, ACTIVITY_ROWS).map((t) => {
-      const identity = resolveTxnAccount(t, byExt);
+      // (WP7) The one route rule: a row opens the ledger that lists it, on its
+      // month, or says why none does — never the checking ledger by default.
+      const route = txnRoute(t, byExt);
+      const identity = route.identity;
       return {
         id: t.id,
         date: t.occurredOn.slice(0, 10),
@@ -42,7 +45,8 @@ export default function ActivityPanel() {
         pending: t.pending,
         category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
         flag: isInflowFiledAsExpense(t, catsById) ? "Income in an expense category" : null,
-        href: identity.known && t.plaidAccountId ? `/next/accounts/${encodeURIComponent(t.plaidAccountId)}` : "/transactions",
+        href: route.href ?? undefined,
+        note: route.note,
       };
     });
   }, [txns.data, items.data, cats.data]);
