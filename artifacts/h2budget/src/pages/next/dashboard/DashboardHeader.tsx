@@ -65,7 +65,7 @@ export default function DashboardHeader() {
 
   return (
     <header className={cn("span-12", rise(0))} data-testid="dash-header">
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div className="min-w-0 flex-1">
           <h1 className="text-display font-semibold text-brand-navy" data-testid="dash-today">
             Today <span className="font-normal text-neutral-500">· {weekdayLabel(today)}</span>
@@ -87,14 +87,14 @@ export default function DashboardHeader() {
             <div className="skeleton mt-2 h-4 w-72 max-w-full rounded" aria-busy="true" />
           )}
           {banks.length ? (
-            <ul className="mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-micro" data-testid="dash-bank-fresh">
+            <ul className="mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-micro text-neutral-500" data-testid="dash-bank-fresh">
               {banks.map((b) => (
-                <li key={b.itemId} data-state={b.state} className="inline-flex items-center gap-1.5 text-neutral-500">
+                <li key={b.itemId} data-state={b.state}>
                   <span
                     aria-hidden
-                    className={cn("size-1.5 rounded-full", b.state === "ok" ? "bg-acct-checking" : b.state === "stale" || b.state === "never" ? "bg-neutral-400" : "bg-bad")}
+                    className={cn("mr-1.5 inline-block size-1.5 rounded-full align-middle", b.state === "ok" ? "bg-acct-checking" : b.state === "stale" || b.state === "never" ? "bg-neutral-400" : "bg-bad")}
                   />
-                  <span className="font-semibold text-neutral-600">{b.institution}</span>
+                  <span className="font-semibold text-neutral-600">{b.institution}</span>{" "}
                   <span className={cn(b.state === "reauth" || b.state === "failed" ? "font-semibold text-bad" : undefined)}>· {b.words}</span>
                 </li>
               ))}

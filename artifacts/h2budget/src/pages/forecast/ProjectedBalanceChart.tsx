@@ -107,6 +107,7 @@ export function ProjectedBalanceChart({
   hoverSelects = false,
   horizonKey,
   incomeByDate,
+  lowLabel = "full",
 }: {
   data: DailyPoint[];
   cashBuffer: number;
@@ -139,6 +140,10 @@ export function ProjectedBalanceChart({
   horizonKey?: string | number;
   /** Money-in rows per day, listed in the tooltip. */
   incomeByDate?: Map<string, Array<{ label: string; amount: number }>>;
+  /** "full" (default): "Lowest $X · <date>". "short": "Low $X", for a narrow
+   *  chart whose legend already names the date (the dashboard panel on a
+   *  phone clipped the full label at the plot's edge). */
+  lowLabel?: "full" | "short";
 }) {
   const expanded = variant === "expanded";
   // Content fingerprint — see the draw-restart note above.
@@ -562,7 +567,9 @@ export function ProjectedBalanceChart({
                       fontSize={11}
                       fontWeight={600}
                     >
-                      {`Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
+                      {lowLabel === "short"
+                        ? `Low ${formatCurrency(lowestPoint.y)}`
+                        : `Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
                     </text>
                   );
                 }}

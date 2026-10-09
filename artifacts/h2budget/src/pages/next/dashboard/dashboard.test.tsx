@@ -44,8 +44,8 @@ vi.mock("@/components/agent/FindingsList", () => ({
   FindingsList: ({ findings }: { findings: unknown[] }) => <div data-testid="findings-stub">{findings.length} findings</div>,
 }));
 vi.mock("@/pages/forecast/ProjectedBalanceChart", () => ({
-  ProjectedBalanceChart: (p: { data: unknown[]; cashBuffer: number; variant?: string }) => (
-    <div data-testid="chart-stub">{p.data.length} points, buffer {p.cashBuffer}, {p.variant}</div>
+  ProjectedBalanceChart: (p: { data: unknown[]; cashBuffer: number; lowLabel?: string }) => (
+    <div data-testid="chart-stub">{p.data.length} points, buffer {p.cashBuffer}, {p.lowLabel} label</div>
   ),
 }));
 
@@ -108,8 +108,8 @@ describe("header", () => {
     expect(screen.getByTestId("dash-fact-next").textContent).toContain("Next: Rent $1,200.00 on Sat Oct 10");
     expect(screen.getByTestId("dash-fact-review").textContent).toContain("3 charges to match");
     const banks = screen.getByTestId("dash-bank-fresh").textContent!;
-    expect(banks).toContain("Chase· synced 2 h ago");
-    expect(banks).toContain("American Express· needs reconnecting");
+    expect(banks).toContain("Chase · synced 2 h ago");
+    expect(banks).toContain("American Express · needs reconnecting");
   });
   it("ONE action by priority: Reconnect beats a week over plan, which beats Afford", () => {
     h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "refresh_failed" }, position: { ...spine().position, withinPlan: "over", remainingWeek: "-25.00" } });
@@ -194,7 +194,7 @@ describe("summary row: four figures, status-aware", () => {
     const s = screen.getByTestId("dash-summary");
     expect(s.className).toContain("panel");
     const grid = s.querySelector(".kpi-grid")!;
-    expect(Array.from(grid.children, (c) => c.getAttribute("data-testid"))).toEqual([
+    expect(Array.from(grid.children, (c) => c.getAttribute("data-testid") ?? c.firstElementChild?.getAttribute("data-testid"))).toEqual([
       "dash-kpi-checking", "dash-kpi-room", "dash-kpi-low", "dash-kpi-debt",
     ]);
     expect(s.querySelectorAll(".panel").length).toBe(0); // no card inside the card
@@ -206,7 +206,7 @@ describe("summary row: four figures, status-aware", () => {
     expect(screen.getByTestId("dash-kpi-checking").textContent).toContain("••5526");
     expect(screen.getByTestId("dash-kpi-room-value").textContent).toBe("$210.00");
     expect(screen.getByTestId("dash-room-week").textContent).toBe("This week's plan $210.00 left");
-    expect(screen.getByTestId("dash-room-cover").textContent).toBe("Checking covers $400.00 until Fri Oct 16 after the $500.00 buffer");
+    expect(screen.getByTestId("dash-room-cover").textContent).toBe("Checking covers $400.00 until Fri Oct 16, after the $500 buffer");
     expect(screen.getByTestId("dash-kpi-debt-value").textContent).toBe("42%");
     expect(screen.getByTestId("dash-debt-left").textContent).toBe("$2,000.25 left across Amex Blue Cash Preferred and Amex Platinum");
   });
@@ -295,7 +295,7 @@ describe("summary row: four figures, status-aware", () => {
   });
   it("names the figures with distinct words, and the scope helpers join names plainly", () => {
     const p = spine().position as never;
-    expect(roomLines(p, "500.00", "120.00").cover).toBe("Checking covers $400.00 until Fri Oct 16 after the $500.00 buffer and $120.00 held for goals");
+    expect(roomLines(p, "500.00", "120.00").cover).toBe("Checking covers $400.00 until Fri Oct 16, after the $500 buffer and $120.00 held for goals");
     expect(roomLines({ ...(p as object), horizonKind: "week_end", paydayDate: null } as never, "500.00").cover).toContain("until the week ends");
     expect(roomLines({ ...(p as object), remainingWeek: null } as never, "500.00").week).toBe("No weekly plan set");
     expect(joinNames(["A"])).toBe("A");
@@ -481,7 +481,7 @@ describe("cash-flow forecast", () => {
     wrap(<ForecastPanel />);
     expect(h.horizons[0]).toBe(90);
     expect(screen.getByTestId("dash-forecast-low").textContent).toBe("Low point in these 90 days: $350.00 on Tue Oct 20");
-    await waitFor(() => expect(screen.getByTestId("chart-stub").textContent).toBe("3 points, buffer 500, expanded"));
+    await waitFor(() => expect(screen.getByTestId("chart-stub").textContent).toBe("3 points, buffer 500, short label"));
     expect(screen.getByTestId("dash-forecast-link").getAttribute("href")).toBe("/forecast");
     expect(screen.getByTestId("dash-forecast-chart").className).toContain("h-80");
   });

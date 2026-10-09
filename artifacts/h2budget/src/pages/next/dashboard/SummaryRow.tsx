@@ -12,6 +12,11 @@ import { cn } from "@/lib/utils";
 import { useBankExplainQ, useCashSignalQ, useDebtsQ, useMoneyPositionQ } from "./queries";
 import { dayLabel, Kpi, money, PanelError, rise, weekdayLabel } from "./shared";
 
+/** "$500" for a round amount, "$512.40" otherwise (the buffer is usually round). */
+function wholeMoney(v: string | number | null | undefined): string {
+  return money(v).replace(/\.00$/, "");
+}
+
 /** "A", "A and B", "A, B and C". */
 export function joinNames(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? "";
@@ -37,7 +42,7 @@ export function roomLines(p: Spine["position"], buffer: string, reservesHeld?: s
   if (p.availableUntilPayday == null) return { week, cover: null };
   const until = p.horizonKind === "payday" && p.paydayDate ? `until ${weekdayLabel(p.paydayDate)}` : "until the week ends";
   const held = reservesHeld != null && Number(reservesHeld) > 0 ? ` and ${money(reservesHeld)} held for goals` : "";
-  return { week, cover: `Checking covers ${money(p.availableUntilPayday)} ${until} after the ${money(buffer)} buffer${held}` };
+  return { week, cover: `Checking covers ${money(p.availableUntilPayday)} ${until}, after the ${wholeMoney(buffer)} buffer${held}` };
 }
 
 function CheckingCell({ s }: { s: Spine }) {
@@ -57,6 +62,8 @@ function CheckingCell({ s }: { s: Spine }) {
   const explain = useBankExplainQ(rolled);
   const since = rolled ? explain.data?.ledger.sinceAnchor ?? null : null;
   return (
+    // `relative`: "Why this number?" pins itself to the corner of its box.
+    <div className="relative">
     <Kpi
       testid="dash-kpi-checking"
       label="Checking cash"
@@ -76,6 +83,7 @@ function CheckingCell({ s }: { s: Spine }) {
         </span>,
       ]}
     />
+    </div>
   );
 }
 

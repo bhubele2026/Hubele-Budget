@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import { Panel, shortDate } from "@/components/next";
 import { ACCOUNT_ACCENT } from "@/lib/chartTokens";
 import { buildEventsByDate } from "@/lib/forecastPastDue";
-import { householdToday } from "@/lib/householdDay";
 import { cn } from "@/lib/utils";
 import { useCashSignalQ } from "./queries";
 import { BELOW_FOLD } from "./belowFoldSizes";
@@ -28,7 +27,6 @@ export default function ForecastPanel() {
   const [, navigate] = useLocation();
   const q = useCashSignalQ(days);
   const proj = q.data;
-  const today = householdToday(new Date());
 
   const view = useMemo(() => {
     if (!proj) return null;
@@ -108,10 +106,7 @@ export default function ForecastPanel() {
                       eventsByDate={view!.byDate}
                       onJumpToPlan={() => navigate("/forecast")}
                       onMarkMissed={noop}
-                      variant="expanded"
-                      todayISO={today}
-                      riskShading
-                      horizonKey={days}
+                      lowLabel="short"
                     />
                   </Suspense>
                 </div>
