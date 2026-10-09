@@ -45,6 +45,8 @@ const ADDED_COLUMNS: Record<string, string[]> = {
     "plaid_removed_at",
     "splits_invalid",
   ],
+  // WP5b (0170): the last direct edit of a rule.
+  mapping_rules: ["updated_at"],
 };
 
 type ColumnShape = {

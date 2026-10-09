@@ -2,7 +2,9 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { MappingRule, Category } from "@workspace/api-client-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { shortDateOfInstant } from "@/lib/dates";
 import { btnLink, btnLinkDanger, fieldLabel } from "@/ui";
+import { RuleHistoryPopover } from "./RuleHistoryPopover";
 import {
   Trash2,
   Pencil,
@@ -44,6 +46,8 @@ export type RuleRowProps = {
   onMove: (id: string, direction: -1 | 1) => void;
   onStartEdit: (rule: MappingRule) => void;
   onDelete: (id: string) => void;
+  /** (WP5b) Names a category for the History popover (null = no category). */
+  categoryName: (id: string | null) => string;
 };
 
 export function SortableRuleRow({
@@ -63,6 +67,7 @@ export function SortableRuleRow({
   onMove,
   onStartEdit,
   onDelete,
+  categoryName,
 }: RuleRowProps) {
   const {
     attributes,
@@ -206,11 +211,24 @@ export function SortableRuleRow({
           </span>
         </span>
       </span>
+      {/* (WP5b) The last direct edit (pattern, match, category or priority);
+          a reorder is in the history but is not an edit. Absent = not edited
+          since rule history began. */}
+      {rule.updatedAt ? (
+        <span
+          className="shrink-0 whitespace-nowrap text-micro text-neutral-500"
+          title="The last time this rule's pattern, match, category or priority was changed"
+          data-testid={`rule-edited-${rule.id}`}
+        >
+          edited {shortDateOfInstant(rule.updatedAt)}
+        </span>
+      ) : null}
       {isWinner ? (
         <span className="chip ok">Winner</span>
       ) : isMatched ? (
         <span className="chip gray">Match</span>
       ) : null}
+      <RuleHistoryPopover ruleId={rule.id} pattern={rule.pattern} categoryName={categoryName} />
       <button
         type="button"
         className={btnLink}
