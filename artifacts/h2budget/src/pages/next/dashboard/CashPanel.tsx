@@ -3,6 +3,7 @@ import { BankBalanceWhy } from "@/components/bank-balance-why";
 import { FreshnessLine } from "@/components/data-state";
 import { useSpine } from "@/hooks/useSpine";
 import { formatCurrency } from "@/lib/utils";
+import { lowPointView } from "@/lib/lowPoint";
 import { dayLabel, Gate, LinkRow, money, rise } from "./shared";
 import { Link } from "wouter";
 
@@ -16,8 +17,10 @@ export default function CashPanel() {
         {() => {
           const f = s!.forecast;
           const p = s!.position;
-          const noForecast = f.status === "no_data" || f.status === "not_yet";
-          const low = noForecast ? null : Number(f.lowPoint);
+          // Only `no_data` blanks the low point; under the buffer (`not_yet`) is shown.
+          const lp = lowPointView(f, { buffer: f.cashBuffer, stale: s!.bank.stale });
+          const noForecast = lp.kind === "none";
+          const low = lp.value;
           const buf = Number(f.cashBuffer);
           const under = low != null && Number.isFinite(buf) && low < buf ? buf - low : null;
           const caption =
@@ -42,12 +45,13 @@ export default function CashPanel() {
               />
               <StatBlock
                 label="Low point"
-                value={noForecast ? "—" : money(f.lowPoint)}
-                tone={low != null && low < 0 ? "bad" : "neutral"}
+                value={noForecast ? "—" : money(lp.value)}
+                tone={lp.tone}
                 hint={
                   <>
-                    {!noForecast && f.lowPointDate ? <span>{dayLabel(f.lowPointDate)}</span> : null}
-                    {under != null ? <span data-testid="dash-under-buffer"> · under the buffer by {formatCurrency(under)}</span> : null}
+                    {!noForecast && lp.date ? <span>{dayLabel(lp.date)}</span> : null}
+                    <span data-testid="dash-low-words">{!noForecast && lp.date ? " · " : null}{lp.words}</span>
+                    {under != null ? <span data-testid="dash-under-buffer"> · short by {formatCurrency(under)}</span> : null}
                     {!noForecast ? (
                       <span data-testid="dash-runway">
                         {" · "}

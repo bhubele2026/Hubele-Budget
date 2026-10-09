@@ -105,3 +105,105 @@ export function identityOf(
     isCard: kind === "amex" || kind === "card",
   };
 }
+
+// ── Which account a TRANSACTION belongs to ──────────────────────────────────
+//
+// ⚠️ TWO IDS, ONE NAME. `transactions.plaidAccountId` holds Plaid's EXTERNAL
+// `account_id` (plaidSync writes `t.account_id`). The items response gives each
+// account both: `accountId` (that external id) and `id` (the internal
+// `plaid_accounts` row id, which debts and settings key on). A lookup built on
+// `id` and asked with a transaction's `plaidAccountId` never matches, so every
+// row fell through to a nameless "Account" (the dashboard's Recent activity,
+// 2026-10-09). Resolve a transaction through entries keyed by the EXTERNAL id
+// (`buildEntries` in pages/next/accounts/entries.ts), and when there is no
+// match say honestly where the row came from instead of guessing.
+
+/** What `resolveTxnAccount` reads from a transaction (a generated `Transaction` fits). */
+export interface TxnAccountRef {
+  plaidAccountId?: string | null;
+  source?: string | null;
+  /** Free text on manual/imported rows. Never trusted as an identity. */
+  account?: string | null;
+}
+
+/** One linked account, keyed by Plaid's external `account_id` (an `AccountEntry` fits). */
+export interface TxnAccountEntry {
+  plaidAccountId: string;
+  identity: AccountIdentity;
+  institutionName?: string | null;
+  institutionSlug?: string | null;
+}
+
+/** The account a transaction belongs to; `known` is false for every fallback. */
+export type ResolvedTxnAccount = AccountIdentity & { known: boolean };
+
+const KNOWN_INSTITUTIONS: Readonly<Record<string, string>> = {
+  chase: "Chase",
+  amex: "American Express",
+  american_express: "American Express",
+};
+
+function institutionFromSlug(slug: string, entries: readonly TxnAccountEntry[]): string {
+  const s = slug.trim().toLowerCase();
+  for (const e of entries) {
+    if (norm(e.institutionSlug) === s && (e.institutionName ?? "").trim()) return e.institutionName!.trim();
+  }
+  if (KNOWN_INSTITUTIONS[s]) return KNOWN_INSTITUTIONS[s]!;
+  const words = s.split(/[-_\s]+/).filter(Boolean);
+  return words.length ? words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : "Bank";
+}
+
+/**
+ * ⭐ The identity of the account a transaction belongs to. Pure.
+ *
+ * 1. Its `plaidAccountId` matches a linked account → that account's identity
+ *    (`known: true`).
+ * 2. Otherwise, by `source` (`known: false`):
+ *    - `amex` (the Amex workbook import) → "Amex (imported)", Amex accent;
+ *    - `manual` → "Manual entry";
+ *    - `plaid:<slug>` → "<institution> (no longer linked)": a bank row whose
+ *      account is not in the items list any more (unlinked or re-linked);
+ *    - anything else → "Unknown account".
+ */
+export function resolveTxnAccount(
+  txn: TxnAccountRef,
+  entries: readonly TxnAccountEntry[] | ReadonlyMap<string, TxnAccountEntry>,
+): ResolvedTxnAccount {
+  const all = (): readonly TxnAccountEntry[] =>
+    Array.isArray(entries)
+      ? (entries as readonly TxnAccountEntry[])
+      : Array.from((entries as ReadonlyMap<string, TxnAccountEntry>).values());
+  const ext = (txn.plaidAccountId ?? "").trim();
+  if (ext) {
+    const hit = Array.isArray(entries)
+      ? all().find((e) => e.plaidAccountId === ext)
+      : (entries as ReadonlyMap<string, TxnAccountEntry>).get(ext);
+    if (hit) return { ...hit.identity, known: true };
+  }
+  const source = norm(txn.source);
+  const tail = ext ? `:${ext}` : "";
+  if (source === "amex") {
+    return {
+      ...identityOf({ id: `source:amex${tail}`, name: "Amex (imported)", type: "credit", institutionSlug: "amex" }),
+      known: false,
+    };
+  }
+  if (source === "manual") {
+    return { ...identityOf({ id: `source:manual${tail}`, name: "Manual entry" }), known: false };
+  }
+  if (source.startsWith("plaid:")) {
+    const slug = source.slice("plaid:".length);
+    const inst = institutionFromSlug(slug, all());
+    const amex = slug.includes("amex") || slug.includes("american");
+    return {
+      ...identityOf({
+        id: `source:${source}${tail}`,
+        name: `${inst} (no longer linked)`,
+        type: amex ? "credit" : null,
+        institutionSlug: amex ? "amex" : null,
+      }),
+      known: false,
+    };
+  }
+  return { ...identityOf({ id: `source:unknown${tail}`, name: "Unknown account" }), known: false };
+}

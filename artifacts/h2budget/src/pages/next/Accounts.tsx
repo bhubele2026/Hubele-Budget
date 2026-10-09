@@ -9,7 +9,7 @@ import { Page, emptyNote } from "@/ui";
 import { PageGrid, Panel, TxnTable, type TxnRow } from "@/components/next";
 import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
 import { displayAmount } from "@/lib/amountDisplay";
-import { identityOf } from "@/lib/accountIdentity";
+import { resolveTxnAccount } from "@/lib/accountIdentity";
 import { householdToday } from "@/lib/householdDay";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import { AccountSelector, type BalanceByRow } from "./accounts/AccountSelector";
@@ -33,15 +33,17 @@ function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries
   const rows = useMemo<TxnRow[]>(() => {
     const byExt = new Map(entries.map((e) => [e.plaidAccountId, e]));
     const catName = new Map((cats ?? []).map((c) => [c.id, c.name]));
-    const manual = identityOf({ id: "manual", name: "Manual", institutionName: "Manual entry" });
     return (txns ?? []).map((t) => {
       const e = t.plaidAccountId ? byExt.get(t.plaidAccountId) : undefined;
+      // A row with no linked account says where it came from (Amex import,
+      // manual entry, an unlinked bank account), never "Manual entry" for all.
+      const identity = resolveTxnAccount(t, byExt);
       return {
         id: t.id,
         date: t.occurredOn.slice(0, 10),
         description: t.displayName ?? t.description,
-        amount: displayAmount(t.amount, e?.identity ?? manual),
-        identity: e?.identity ?? manual,
+        amount: displayAmount(t.amount, identity),
+        identity,
         pending: t.pending,
         category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
         href: e ? `/next/accounts/${encodeURIComponent(e.plaidAccountId)}` : undefined,

@@ -3,7 +3,8 @@ import { useMemo } from "react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { Panel, TxnTable, type TxnRow } from "@/components/next";
-import { cardOrderOf, identityOf } from "@/lib/accountIdentity";
+import { resolveTxnAccount } from "@/lib/accountIdentity";
+import { buildEntries } from "@/pages/next/accounts/entries";
 import { addDaysISO, householdToday } from "@/lib/householdDay";
 import { usePlaidItemsQ, useTxnsQ } from "./queries";
 import { useCategoriesQ } from "./queriesLazy";
@@ -19,19 +20,12 @@ export default function ActivityPanel() {
   const cats = useCategoriesQ();
 
   const rows = useMemo<TxnRow[]>(() => {
-    const accounts = (items.data ?? []).flatMap((it) =>
-      it.accounts.map((a) => ({
-        id: a.id, name: a.name, mask: a.mask, type: a.type, subtype: a.subtype,
-        institutionName: it.institutionName, institutionSlug: it.institutionSlug,
-      })),
-    );
-    const order = cardOrderOf(accounts);
-    const byId = new Map(accounts.map((a) => [a.id, identityOf(a, { cardOrder: order })]));
+    // Keyed by Plaid's EXTERNAL account_id — what `transaction.plaidAccountId`
+    // holds. (Keying by the internal row id matched nothing: every row read "Account".)
+    const byExt = new Map(buildEntries(items.data).map((e) => [e.plaidAccountId, e]));
     const catName = new Map((cats.data ?? []).map((c) => [c.id, c.name]));
     return (txns.data ?? []).slice(0, ACTIVITY_ROWS).map((t) => {
-      const identity =
-        (t.plaidAccountId ? byId.get(t.plaidAccountId) : undefined) ??
-        identityOf({ id: t.plaidAccountId ?? `manual-${t.id}`, name: t.account });
+      const identity = resolveTxnAccount(t, byExt);
       return {
         id: t.id,
         date: t.occurredOn.slice(0, 10),
@@ -40,7 +34,7 @@ export default function ActivityPanel() {
         identity,
         pending: t.pending,
         category: t.categoryId ? catName.get(t.categoryId) ?? null : null,
-        href: t.plaidAccountId ? `/next/accounts/${t.plaidAccountId}` : "/transactions",
+        href: identity.known && t.plaidAccountId ? `/next/accounts/${encodeURIComponent(t.plaidAccountId)}` : "/transactions",
       };
     });
   }, [txns.data, items.data, cats.data]);

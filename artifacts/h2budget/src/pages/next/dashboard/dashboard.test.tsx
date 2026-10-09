@@ -57,7 +57,8 @@ const spine = (o: Record<string, unknown> = {}) => ({
   spentMonth: 900, spentWeek: 120,
   nextBill: { name: "Rent", amount: "1200.00", dueDate: "2026-10-10" },
   billsDueCount: 2,
-  forecast: { lowPoint: "350.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "tight" },
+  // 350 under a 500 buffer is what the server calls `not_yet` (cashSignal.ts: lowest < buffer).
+  forecast: { lowPoint: "350.00", lowPointDate: "2026-10-20", runwayDays: null, cashBuffer: "500.00", status: "not_yet" },
   debt: { payoffPct: 41.6, nextMilestone: { label: "Visa paid off", estimatedMonth: "2027-03" }, paidDownMtd: 300, confirmedPaymentsMtd: 320, newChargesMtd: 80 },
   reviewCount: 3,
   position: { safeToSpendNow: "210.00", remainingWeek: "210.00", availableUntilPayday: "400.00", paydayDate: "2026-10-15", horizonKind: "payday", withinPlan: "yes", confidence: "firm", degraded: false, weekAdjustment: null },
@@ -140,14 +141,15 @@ describe("accounts row", () => {
 });
 
 describe("cash position", () => {
-  it("renders the spine figures exactly, with the under-buffer gap", () => {
+  it("(dash-accuracy) under the buffer (`not_yet`) shows the low point, its date and the words — never a blank", () => {
     wrap(<CashPanel />);
     expect(screen.getByTestId("dash-bank").textContent).toContain("$4,200.50");
     expect(screen.getByTestId("dash-room").textContent).toContain("$210.00");
     expect(screen.getByTestId("dash-room").textContent).toContain("Until payday · Oct 15");
     expect(screen.getByTestId("dash-low").textContent).toContain("$350.00");
     expect(screen.getByTestId("dash-low").textContent).toContain("Oct 20");
-    expect(screen.getByTestId("dash-under-buffer").textContent).toContain("under the buffer by $150.00");
+    expect(screen.getByTestId("dash-low-words").textContent).toContain("below your $500 buffer");
+    expect(screen.getByTestId("dash-under-buffer").textContent).toContain("short by $150.00");
     expect(screen.getByTestId("dash-buffer").textContent).toContain("$500.00");
     expect(screen.getByText("why")).toBeTruthy();
   });
@@ -160,7 +162,26 @@ describe("cash position", () => {
     expect(screen.getByTestId("dash-room").textContent).toContain("—");
     expect(screen.getByTestId("dash-room").textContent).toContain("This week's limit");
     expect(screen.getByTestId("dash-low").textContent).toContain("—");
+    expect(screen.getByTestId("dash-low-words").textContent).toContain("No bank balance yet");
     expect(screen.queryByTestId("dash-under-buffer")).toBeNull();
+  });
+  it("(dash-accuracy) tight and ready say where the low point sits against the buffer", () => {
+    h.spine.data = spine({ forecast: { lowPoint: "620.00", lowPointDate: "2026-10-21", runwayDays: null, cashBuffer: "500.00", status: "tight" } });
+    const a = wrap(<CashPanel />);
+    expect(screen.getByTestId("dash-low").textContent).toContain("$620.00");
+    expect(screen.getByTestId("dash-low-words").textContent).toContain("just above your $500 buffer");
+    expect(screen.queryByTestId("dash-under-buffer")).toBeNull();
+    a.unmount();
+    h.spine.data = spine({ forecast: { lowPoint: "1500.00", lowPointDate: "2026-10-22", runwayDays: null, cashBuffer: "500.00", status: "ready" } });
+    wrap(<CashPanel />);
+    expect(screen.getByTestId("dash-low-words").textContent).toBe(" · above your $500 buffer");
+  });
+  it("(dash-accuracy) a stale bank keeps the low point and says it is from an old balance", () => {
+    h.spine.data = spine({ bank: { ...spine().bank, stale: true, staleReason: "old" } });
+    wrap(<CashPanel />);
+    expect(screen.getByTestId("dash-low").textContent).toContain("$350.00");
+    expect(screen.getByTestId("dash-low-words").textContent).toContain("from an out-of-date bank balance");
+    expect(screen.getByTestId("dash-low").textContent).not.toContain("$0.00");
   });
 });
 
@@ -293,24 +314,46 @@ describe("debt", () => {
 });
 
 describe("recent activity", () => {
+  // ⚠️ A transaction carries Plaid's EXTERNAL account_id (`acct()` gives each
+  // account `accountId: "p-<id>"`). This fixture used to put the INTERNAL row id
+  // ("c1") on the transaction, which is the one value real data never has, so
+  // the wrong-key lookup passed here and printed "Account" on every live row.
   it("renders rows with identity, status and category, linking to the account page", () => {
     h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "4821" })])]);
     h.Q.cats = ok([{ id: "cat1", name: "Groceries" }]);
     h.Q.txns = ok([
-      { id: "t1", occurredOn: "2026-10-07", description: "Aldi", amount: "-32.10", plaidAccountId: "c1", pending: false, categoryId: "cat1" },
-      { id: "t2", occurredOn: "2026-10-07", description: "Cash deposit", amount: "50.00", plaidAccountId: null, account: "Manual", pending: true, categoryId: null },
+      { id: "t1", occurredOn: "2026-10-07", description: "Aldi", amount: "-32.10", plaidAccountId: "p-c1", source: "plaid:chase", pending: false, categoryId: "cat1" },
+      { id: "t2", occurredOn: "2026-10-07", description: "Cash deposit", amount: "50.00", plaidAccountId: null, source: "manual", account: "Manual", pending: true, categoryId: null },
     ]);
     wrap(<ActivityPanel />);
     const rows = screen.getAllByTestId("txn-row");
     expect(rows).toHaveLength(2);
     expect(rows[0]!.textContent).toContain("Aldi");
     expect(rows[0]!.textContent).toContain("Groceries");
+    expect(rows[0]!.querySelector('[title="Chase Total Checking"]')).toBeTruthy();
     expect(rows[0]!.textContent).toContain("••4821");
     expect(rows[0]!.textContent).toContain("Posted");
     expect(rows[0]!.textContent).toContain("-$32.10");
+    expect(rows[1]!.querySelector('[title="Manual entry"]')).toBeTruthy();
     expect(rows[1]!.textContent).toContain("Pending");
     expect(rows[1]!.textContent).toContain("Uncategorized");
     expect(screen.getByText("All accounts").getAttribute("href")).toBe("/next/accounts");
+  });
+  it("(dash-accuracy) never prints a bare 'Account': every source is named honestly", () => {
+    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "4821" })])]);
+    h.Q.cats = ok([]);
+    h.Q.txns = ok([
+      { id: "t1", occurredOn: "2026-10-07", description: "Workbook row", amount: "18.00", plaidAccountId: null, source: "amex", pending: false, categoryId: null },
+      { id: "t2", occurredOn: "2026-10-07", description: "Old card", amount: "-9.00", plaidAccountId: "p-gone", source: "plaid:chase", pending: false, categoryId: null },
+      { id: "t3", occurredOn: "2026-10-06", description: "Mystery", amount: "-1.00", plaidAccountId: null, source: "xlsx", pending: false, categoryId: null },
+      // The internal row id is not a transaction's account id: it must not resolve.
+      { id: "t4", occurredOn: "2026-10-06", description: "Wrong key", amount: "-2.00", plaidAccountId: "c1", source: "plaid:chase", pending: false, categoryId: null },
+    ]);
+    wrap(<ActivityPanel />);
+    const rows = screen.getAllByTestId("txn-row");
+    const titles = rows.map((r) => r.querySelector("[title]")?.getAttribute("title"));
+    expect(titles).toEqual(["Amex (imported)", "Chase (no longer linked)", "Unknown account", "Chase (no longer linked)"]);
+    for (const r of rows) expect(r.querySelector('[title="Account"]')).toBeNull();
   });
 });
 
@@ -407,7 +450,7 @@ describe("briefing", () => {
 
 describe("C11 gap closure: what the command center showed and the dashboard lacked", () => {
   it("the cash panel says the runway: negative in N days, or stays positive", () => {
-    h.spine = { data: spine({ forecast: { lowPoint: "-50.00", lowPointDate: "2026-10-20", runwayDays: 12, cashBuffer: "500.00", status: "tight" } }), state: "loaded", refetch: () => {} };
+    h.spine = { data: spine({ forecast: { lowPoint: "-50.00", lowPointDate: "2026-10-20", runwayDays: 12, cashBuffer: "500.00", status: "not_yet" } }), state: "loaded", refetch: () => {} };
     const a = wrap(<CashPanel />);
     expect(screen.getByTestId("dash-runway").textContent).toContain("negative in 12 days");
     a.unmount();

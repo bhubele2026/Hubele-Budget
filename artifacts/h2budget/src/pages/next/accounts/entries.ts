@@ -14,6 +14,9 @@ export interface AccountEntry {
   lastSyncedAt: string | null;
   /** Date the newest bank transaction is from, when the API says. */
   dataThrough: string | null;
+  /** The item's institution, so a row from an unlinked account of the same bank can be named. */
+  institutionName?: string | null;
+  institutionSlug?: string | null;
 }
 
 /** One entry per linked account, in the API's order. Pure. */
@@ -50,6 +53,8 @@ export function buildEntries(items: readonly PlaidItemDetail[] | undefined): Acc
       state,
       lastSyncedAt: it.lastSyncedAt ?? null,
       dataThrough: it.lastBankTxOn ?? null,
+      institutionName: it.institutionName ?? null,
+      institutionSlug: it.institutionSlug ?? null,
     };
   });
 }
