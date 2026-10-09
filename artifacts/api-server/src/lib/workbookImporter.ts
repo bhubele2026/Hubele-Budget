@@ -257,7 +257,7 @@ export async function importWorkbook(
       tx,
       wipedRules.map(
         (r): RuleChange => ({
-          householdId,
+          householdId: r.householdId ?? householdId,
           ruleId: r.id,
           action: "deleted",
           actor: userId,
