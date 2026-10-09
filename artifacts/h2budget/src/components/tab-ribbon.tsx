@@ -29,6 +29,20 @@ export interface RibbonTab {
   count?: number | null;
 }
 
+/**
+ * The lit tab's mark: a brand-orange underline with its glow, sweeping in from
+ * the left (`.tab-underline`). One element for the ribbon AND the More
+ * trigger, so the two can never draw "you are here" differently.
+ */
+export function TabUnderline() {
+  return (
+    <span
+      aria-hidden
+      className="tab-underline pointer-events-none absolute inset-x-2.5 bottom-0 h-[3px] rounded-t-full bg-brand-orange shadow-tab-glow"
+    />
+  );
+}
+
 export function TabRibbon({
   tabs,
   activeHref,
@@ -132,7 +146,7 @@ export function TabRibbon({
                 onMouseEnter={() => onPrefetch?.(t.href)}
                 onFocus={() => onPrefetch?.(t.href)}
                 className={`press relative flex flex-none items-center whitespace-nowrap px-3.5 text-label font-semibold ${
-                  on ? "text-white" : "text-white/60 hover:text-white/90"
+                  on ? "text-chrome-ink" : "text-chrome-ink-3 hover:text-chrome-ink-hover"
                 }`}
               >
                 {t.label}
@@ -145,12 +159,7 @@ export function TabRibbon({
                     {t.count}
                   </span>
                 )}
-                {on && (
-                  <span
-                    aria-hidden
-                    className="tab-underline pointer-events-none absolute inset-x-2.5 bottom-0 h-[3px] rounded-t-full bg-brand-orange shadow-[0_0_10px_rgba(246,141,46,0.55)]"
-                  />
-                )}
+                {on && <TabUnderline />}
               </Link>
             );
           })}
@@ -165,7 +174,7 @@ export function TabRibbon({
             onClick={() => scrollBy(-1)}
             aria-label="Scroll sections left"
             data-testid="ribbon-scroll-left"
-            className="absolute inset-y-0 left-0 grid w-7 place-items-center bg-gradient-to-r from-brand-navy via-brand-navy/90 to-transparent text-body text-white/50 hover:text-white"
+            className="absolute inset-y-0 left-0 grid w-7 place-items-center bg-gradient-to-r from-brand-navy via-brand-navy/90 to-transparent text-body text-chrome-ink-4 hover:text-chrome-ink"
           >
             ‹
           </button>
@@ -176,7 +185,7 @@ export function TabRibbon({
             onClick={() => scrollBy(1)}
             aria-label="Scroll sections right"
             data-testid="ribbon-scroll-right"
-            className="absolute inset-y-0 right-0 grid w-7 place-items-center bg-gradient-to-l from-brand-navy via-brand-navy/90 to-transparent text-body text-white/50 hover:text-white"
+            className="absolute inset-y-0 right-0 grid w-7 place-items-center bg-gradient-to-l from-brand-navy via-brand-navy/90 to-transparent text-body text-chrome-ink-4 hover:text-chrome-ink"
           >
             ›
           </button>
