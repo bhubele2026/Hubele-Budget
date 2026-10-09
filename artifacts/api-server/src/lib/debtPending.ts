@@ -1,4 +1,5 @@
 import { and, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db, debtsTable, plaidAccountsTable, transactionsTable } from "@workspace/db";
 import { classifyLiabilityRow } from "@workspace/avalanche-core";
 import { householdDayOf } from "./householdClock";
@@ -169,6 +170,9 @@ export async function loadPendingPayments(
   if (debts.length === 0) return new Map();
   const ids = debts.map((d) => d.id);
   const t = transactionsTable;
+  // The claim a row confirmed, if any: one claim per confirming row (a unique
+  // index on `confirmed_by_txn_id`), so the join never repeats a row.
+  const claim = alias(transactionsTable, "confirmed_claim");
   const [rows, asOf] = await Promise.all([
     db
       .select({
@@ -181,11 +185,10 @@ export async function loadPendingPayments(
         pfcPrimary: t.pfcPrimary,
         pfcDetailed: t.pfcDetailed,
         isExternalCardPayment: t.isExternalCardPayment,
-        // The bank row a payment claim was confirmed by (one claim per row, a
-        // unique index): `c` is a second scan of the same table.
-        confirmsClaim: sql<boolean>`exists (select 1 from ${t} as c where c.confirmed_by_txn_id = ${t.id})`,
+        confirmsClaim: sql<boolean>`${claim.id} is not null`,
       })
       .from(t)
+      .leftJoin(claim, eq(claim.confirmedByTxnId, t.id))
       .where(
         and(
           eq(t.householdId, householdId),
