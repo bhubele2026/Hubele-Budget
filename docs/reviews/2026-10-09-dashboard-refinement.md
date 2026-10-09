@@ -263,8 +263,8 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
   - `agent.test.tsx`: findings inside the merged list.
 - **Gates (final, on the branch head):**
   - root `pnpm run typecheck`: clean;
-  - web `vitest`: UTC 1,858 passed / 3 skipped, America/Chicago 1,859 passed / 2 skipped;
-  - API suite on `h2budget_test_dashref`: 2,572 passed / 1 skipped / 2 todo (run after the avalanche-core change; nothing under `artifacts/api-server` or `lib/` changed since);
+  - web `vitest`: UTC 1,861 passed / 3 skipped, America/Chicago 1,862 passed / 2 skipped;
+  - API suite on `h2budget_test_dashref`: 2,575 passed / 1 skipped / 2 todo (re-run after the recap template and prompt change);
   - `pnpm run build` + entry graph: OK at **621.5 KB** of 622 KB;
   - `pnpm audit --prod`: 1 high, already ignored.
 - **Screens:** fixture AFTER shots for all six scenarios at both sizes are in `dash-shots/after/`, with zero console errors and zero failed `/api` calls.
