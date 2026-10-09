@@ -6452,6 +6452,17 @@ export type ListTransactionsParams = {
   minAmount?: string;
   maxAmount?: string;
   categoryId?: string;
+  /**
+ * (WP7) Only the rows on this one Plaid account: the external Plaid
+`account_id`, as `Transaction.plaidAccountId` carries it. Exact
+match, inside the caller's household. A row with no Plaid account
+(a manual entry, an imported workbook row) never matches, and an
+empty value matches nothing. A card's own ledger asks with it, so
+it never lists another card's rows.
+
+ * @maxLength 128
+ */
+  plaidAccountId?: string;
 };
 
 export type DeleteMerchantAliasParams = {
