@@ -5413,6 +5413,21 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
       subtype: zod.string().nullish(),
       importCutoffDate: zod.string().nullish(),
       firstSyncCompletedAt: zod.string().nullish(),
+      snapshot: zod
+        .union([
+          zod.object({
+            balance: zod
+              .string()
+              .describe("The balance as read, as a money string."),
+            at: zod.string().describe("ISO timestamp of the reading."),
+            source: zod.enum(["manual", "plaid"]),
+          }),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "(WP3) The account's last balance READING — a snapshot, never\nrolled forward through the ledger. The account the household's\nbank snapshot points at reads the `bank_snapshot_\*` columns;\nany other account its `forecast_settings.account_snapshots`\nentry. null = no reading yet (a screen says \"not tracked yet\",\nnever $0). GET \/plaid\/items always sends it; the single-item\nmutation responses leave it out.\n",
+        ),
     }),
   ),
 });
@@ -5463,6 +5478,21 @@ export const ListPlaidItemsResponseItem = zod.object({
       subtype: zod.string().nullish(),
       importCutoffDate: zod.string().nullish(),
       firstSyncCompletedAt: zod.string().nullish(),
+      snapshot: zod
+        .union([
+          zod.object({
+            balance: zod
+              .string()
+              .describe("The balance as read, as a money string."),
+            at: zod.string().describe("ISO timestamp of the reading."),
+            source: zod.enum(["manual", "plaid"]),
+          }),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "(WP3) The account's last balance READING — a snapshot, never\nrolled forward through the ledger. The account the household's\nbank snapshot points at reads the `bank_snapshot_\*` columns;\nany other account its `forecast_settings.account_snapshots`\nentry. null = no reading yet (a screen says \"not tracked yet\",\nnever $0). GET \/plaid\/items always sends it; the single-item\nmutation responses leave it out.\n",
+        ),
     }),
   ),
 });
@@ -5528,6 +5558,21 @@ export const ClearPlaidItemRefreshDisabledResponse = zod.object({
       subtype: zod.string().nullish(),
       importCutoffDate: zod.string().nullish(),
       firstSyncCompletedAt: zod.string().nullish(),
+      snapshot: zod
+        .union([
+          zod.object({
+            balance: zod
+              .string()
+              .describe("The balance as read, as a money string."),
+            at: zod.string().describe("ISO timestamp of the reading."),
+            source: zod.enum(["manual", "plaid"]),
+          }),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "(WP3) The account's last balance READING — a snapshot, never\nrolled forward through the ledger. The account the household's\nbank snapshot points at reads the `bank_snapshot_\*` columns;\nany other account its `forecast_settings.account_snapshots`\nentry. null = no reading yet (a screen says \"not tracked yet\",\nnever $0). GET \/plaid\/items always sends it; the single-item\nmutation responses leave it out.\n",
+        ),
     }),
   ),
 });
@@ -5684,6 +5729,21 @@ export const DismissPlaidExpirationWarningResponse = zod.object({
       subtype: zod.string().nullish(),
       importCutoffDate: zod.string().nullish(),
       firstSyncCompletedAt: zod.string().nullish(),
+      snapshot: zod
+        .union([
+          zod.object({
+            balance: zod
+              .string()
+              .describe("The balance as read, as a money string."),
+            at: zod.string().describe("ISO timestamp of the reading."),
+            source: zod.enum(["manual", "plaid"]),
+          }),
+          zod.null(),
+        ])
+        .optional()
+        .describe(
+          "(WP3) The account's last balance READING — a snapshot, never\nrolled forward through the ledger. The account the household's\nbank snapshot points at reads the `bank_snapshot_\*` columns;\nany other account its `forecast_settings.account_snapshots`\nentry. null = no reading yet (a screen says \"not tracked yet\",\nnever $0). GET \/plaid\/items always sends it; the single-item\nmutation responses leave it out.\n",
+        ),
     }),
   ),
 });
@@ -7453,7 +7513,13 @@ export const GetCategorizationSettingsResponse = zod.object({
           .date()
           .nullable()
           .describe(
-            "The household's date of the last successful sync; null before the first.",
+            "(WP3) The date of the newest bank transaction H2 holds for this bank — the same rule as GET \/plaid\/items `lastBankTxOn`. A data date, not a sync date; null when no transaction has arrived.",
+          ),
+        lastSyncedAt: zod
+          .string()
+          .nullable()
+          .describe(
+            "(WP3) ISO timestamp of the last successful sync; null before the first.",
           ),
         autoUpdates: zod.object({
           on: zod.boolean(),
@@ -7642,7 +7708,13 @@ export const UpdateCategorizationSettingsResponse = zod.object({
           .date()
           .nullable()
           .describe(
-            "The household's date of the last successful sync; null before the first.",
+            "(WP3) The date of the newest bank transaction H2 holds for this bank — the same rule as GET \/plaid\/items `lastBankTxOn`. A data date, not a sync date; null when no transaction has arrived.",
+          ),
+        lastSyncedAt: zod
+          .string()
+          .nullable()
+          .describe(
+            "(WP3) ISO timestamp of the last successful sync; null before the first.",
           ),
         autoUpdates: zod.object({
           on: zod.boolean(),

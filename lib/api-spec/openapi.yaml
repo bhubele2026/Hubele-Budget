@@ -7723,6 +7723,25 @@ components:
         # once this timestamp is non-null because the override is no
         # longer accepted.
         firstSyncCompletedAt: { type: ["string", "null"] }
+        snapshot:
+          description: |
+            (WP3) The account's last balance READING — a snapshot, never
+            rolled forward through the ledger. The account the household's
+            bank snapshot points at reads the `bank_snapshot_*` columns;
+            any other account its `forecast_settings.account_snapshots`
+            entry. null = no reading yet (a screen says "not tracked yet",
+            never $0). GET /plaid/items always sends it; the single-item
+            mutation responses leave it out.
+          oneOf:
+            - $ref: "#/components/schemas/PlaidAccountSnapshot"
+            - type: "null"
+    PlaidAccountSnapshot:
+      type: object
+      required: [balance, at, source]
+      properties:
+        balance: { type: string, description: "The balance as read, as a money string." }
+        at: { type: string, description: ISO timestamp of the reading. }
+        source: { type: string, enum: [manual, plaid] }
     PlaidItemDetail:
       type: object
       required: [id, itemId, institutionSlug, accounts]
@@ -8490,14 +8509,20 @@ components:
 
     CategorizationBank:
       type: object
-      required: [itemId, name, lastDataOn, autoUpdates]
+      required: [itemId, name, lastDataOn, lastSyncedAt, autoUpdates]
       properties:
         itemId: { type: string, description: The same `itemId` GET /plaid/items lists. }
         name: { type: ["string", "null"] }
         lastDataOn:
           type: ["string", "null"]
           format: date
-          description: The household's date of the last successful sync; null before the first.
+          description: >-
+            (WP3) The date of the newest bank transaction H2 holds for this bank
+            — the same rule as GET /plaid/items `lastBankTxOn`. A data date, not
+            a sync date; null when no transaction has arrived.
+        lastSyncedAt:
+          type: ["string", "null"]
+          description: (WP3) ISO timestamp of the last successful sync; null before the first.
         autoUpdates:
           type: object
           required: ["on", reason]

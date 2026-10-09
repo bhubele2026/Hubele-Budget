@@ -73,7 +73,9 @@ import {
   refreshPlaidAccountsForItem,
 } from "../lib/upsertPlaidAccount";
 import { cleanupMalformedTokenSiblings } from "../lib/plaidMalformedSiblingCleanup";
-import { debtsTable } from "@workspace/db";
+import { debtsTable, forecastSettingsTable } from "@workspace/db";
+import { lastBankTxOnByItem } from "../lib/bankCoverage";
+import { accountSnapshotOf, type AccountSnapshot } from "../lib/accountSnapshot";
 
 const router: IRouter = Router();
 
@@ -964,6 +966,9 @@ function serializePlaidItemDetail(
   it: PlaidItemRow,
   accounts: PlaidAccountRow[],
   lastBankTxOn: string | null = null,
+  // (WP3) GET /plaid/items passes each account's last balance reading; the
+  // single-item mutation responses leave `snapshot` out (spec: optional).
+  snapshotOf?: (accountRowId: string) => AccountSnapshot | null,
 ) {
   return {
     id: it.id,
@@ -1058,6 +1063,7 @@ function serializePlaidItemDetail(
       firstSyncCompletedAt: a.firstSyncCompletedAt
         ? a.firstSyncCompletedAt.toISOString()
         : null,
+      ...(snapshotOf ? { snapshot: snapshotOf(a.id) } : {}),
     })),
   };
 }
@@ -1148,42 +1154,31 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
     arr.push(a);
     byItem.set(a.itemId, arr);
   }
-  // (#408) Compute newest occurredOn across every Plaid-attached
-  // (account-mapped) row per item so the post-link panel can render
-  // "No new transactions since <date>" after a relink heal that
-  // backfilled zero rows. One grouped query is cheap; we fan it out
-  // by external account_id and roll back up by item.
-  const externalIds = accts.map((a) => a.accountId);
-  const lastByItem = new Map<string, string>();
-  if (externalIds.length > 0) {
-    const rows = await db
-      .select({
-        plaidAccountId: transactionsTable.plaidAccountId,
-        maxDate: sql<string>`max(${transactionsTable.occurredOn})::text`,
-      })
-      .from(transactionsTable)
-      .where(
-        and(
-          eq(transactionsTable.householdId, req.householdId!),
-          inArray(transactionsTable.plaidAccountId, externalIds),
-        ),
-      )
-      .groupBy(transactionsTable.plaidAccountId);
-    const itemByExternal = new Map(accts.map((a) => [a.accountId, a.itemId]));
-    for (const r of rows) {
-      if (!r.plaidAccountId || !r.maxDate) continue;
-      const itemRowId = itemByExternal.get(r.plaidAccountId);
-      if (!itemRowId) continue;
-      const prev = lastByItem.get(itemRowId);
-      if (!prev || r.maxDate > prev) lastByItem.set(itemRowId, r.maxDate);
-    }
-  }
+  // (#408) Newest occurredOn across every Plaid-attached row per item, so
+  // the post-link panel can render "No new transactions since <date>" after
+  // a relink heal that backfilled zero rows. (WP3) The one "data through"
+  // rule, shared with Settings › Automation: `lib/bankCoverage.ts`.
+  const lastByItem = await lastBankTxOnByItem(req.householdId!, accts);
+  // (WP3) Each account's last balance reading (a snapshot, never rolled
+  // forward), from the owner's forecast settings — read-only, no Plaid call.
+  const [settings] = await db
+    .select({
+      bankSnapshotBalance: forecastSettingsTable.bankSnapshotBalance,
+      bankSnapshotAt: forecastSettingsTable.bankSnapshotAt,
+      bankSnapshotSource: forecastSettingsTable.bankSnapshotSource,
+      bankSnapshotAccountId: forecastSettingsTable.bankSnapshotAccountId,
+      accountSnapshots: forecastSettingsTable.accountSnapshots,
+    })
+    .from(forecastSettingsTable)
+    .where(eq(forecastSettingsTable.userId, req.householdOwnerId!));
+  const snapshotOf = (accountRowId: string) => accountSnapshotOf(settings, accountRowId);
   res.json(
     items.map((it) =>
       serializePlaidItemDetail(
         it,
         byItem.get(it.id) ?? [],
         lastByItem.get(it.id) ?? null,
+        snapshotOf,
       ),
     ),
   );

@@ -383,6 +383,8 @@ export * from "./pinBudgetLineInput";
 export * from "./pinBudgetMonthInput";
 export * from "./pinResult";
 export * from "./plaidAccount";
+export * from "./plaidAccountSnapshot";
+export * from "./plaidAccountSnapshotSource";
 export * from "./plaidCheckingAccount";
 export * from "./plaidConsentRefreshItem";
 export * from "./plaidConsentRefreshResult";

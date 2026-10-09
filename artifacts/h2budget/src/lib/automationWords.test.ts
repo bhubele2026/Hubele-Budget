@@ -45,8 +45,13 @@ describe("Automation words", () => {
     expect(runResultLine({ filed: 0, suggested: 1, queued: 2, unreviewed: 3 })).toBe(
       "Filed 0 · Suggested 1 (provisional) · 2 need a look · 3 left unchanged",
     );
-    expect(bankLine({ name: null, lastDataOn: null, autoUpdates: { on: false, reason: "no_url" } })).toBe(
-      "Bank · data through not yet · Automatic updates Off",
+    expect(bankLine({ name: null, lastDataOn: null, lastSyncedAt: null, autoUpdates: { on: false, reason: "no_url" } })).toBe(
+      "Bank · data through not yet · last synced not yet · Automatic updates Off",
+    );
+    // (WP3) Two dates, each named: the newest bank row, and the last sync on the
+    // household's calendar (03:00 UTC on Oct 8 is still Oct 7 in Chicago).
+    expect(bankLine({ name: "Chase", lastDataOn: "2026-10-05", lastSyncedAt: "2026-10-08T03:00:00Z", autoUpdates: { on: true, reason: "ok" } })).toBe(
+      "Chase · data through Oct 5, 2026 · last synced Oct 7, 2026 · Automatic updates On",
     );
     expect(engineLine({ rules: 0, learned: 1, recurring: 2 })).toBe(
       "Rules you wrote: 0 · Learned from your corrections: 1 · Recurring bills: 2",

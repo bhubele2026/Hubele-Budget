@@ -1,5 +1,10 @@
 import type { PlaidItemDetail } from "@workspace/api-client-react";
 import { isPlaidReauthCode, isSyntheticPlaidItem } from "@/components/plaid-reconnect-button";
+import { agoShort } from "@/lib/accountFreshness";
+
+// (WP3) `agoShort` moved to `lib/accountFreshness.ts` with the account
+// freshness stamps; re-exported so existing callers keep their import.
+export { agoShort };
 
 /** A bank's feed is "out of date" after 36 hours without a successful sync. */
 export const STALE_MS = 36 * 60 * 60 * 1000;
@@ -17,19 +22,6 @@ export function connectionState(item: PlaidItemDetail, now: number): AccountStat
 export const STATE_WORD: Record<AccountState, string> = {
   ok: "Up to date", stale: "Out of date", reauth: "Needs reconnecting", failed: "Last sync failed", never: "Not synced yet",
 };
-
-/** "2 h ago", "3 d ago": short enough for a one-line freshness strip. */
-export function agoShort(iso: string | null | undefined, now: number): string | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return null;
-  const min = Math.floor(Math.max(0, now - t) / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min} min ago`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h} h ago`;
-  return `${Math.floor(h / 24)} d ago`;
-}
 
 export interface BankLine {
   itemId: string;
