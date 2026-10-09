@@ -135,7 +135,7 @@ async function setManualExtraAndReload(
   });
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: /debt avalanche/i }),
+    page.getByRole("heading", { name: /^debts$/i }),
   ).toBeVisible({ timeout: 15_000 });
 }
 
@@ -210,7 +210,7 @@ test.describe("Debts page row stability under target toggle (#639)", () => {
 
     await signInAndOpen(page, email, password, "/debts");
     await expect(
-      page.getByRole("heading", { name: /debt avalanche/i }),
+      page.getByRole("heading", { name: /^debts$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
     // All three payoff cells must be present before we measure.

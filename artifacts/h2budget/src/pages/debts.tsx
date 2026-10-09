@@ -9,17 +9,14 @@ import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react"
 import { PageSkeleton } from "@/components/page-skeleton";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
 import {
-  Page,
-  Stat,
   Help,
   Foot,
-  card,
-  cardHead,
   th,
   td,
   tdNum,
   emptyNote,
 } from "@/ui";
+import { PageGrid, StatTile } from "@/components/next";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
   simulateWithSolvableFallback,
@@ -211,22 +208,23 @@ export default function DebtsPage() {
   };
 
   return (
-    <Page title="Debts">
+    <div className="space-y-4">
+      <h1 className="text-display font-semibold text-brand-navy">Debts</h1>
       <DebtReauthBanner debts={debts} />
 
-      <div className="mb-5 flex flex-wrap gap-3">
-        <Stat index={0} label="Active" value={activeCount} hint="carrying a balance" />
-        <Stat index={1} label="Cleared" value={paidOffCount} hint="paid in full" />
-        <Stat
+      <PageGrid>
+        <StatTile span={4} index={0} label="Active" value={String(activeCount)} hint="carrying a balance" />
+        <StatTile span={4} index={1} label="Cleared" value={String(paidOffCount)} hint="paid in full" />
+        <StatTile
+          span={4}
           index={2}
           label="Extra / month"
           value={formatCurrency(resolvedExtraAmount)}
           hint="on top of minimums"
         />
-      </div>
 
-      <div className={card}>
-        <div className={cardHead}>
+      <div className="panel tile-in span-12">
+        <div className="panel-head">
           <span className="text-title font-semibold text-brand-navy">Creditors</span>
           <span className="text-micro uppercase tracking-wide text-neutral-400">
             Highest APR first
@@ -411,6 +409,7 @@ export default function DebtsPage() {
           </Foot>
         )}
       </div>
-    </Page>
+      </PageGrid>
+    </div>
   );
 }

@@ -117,7 +117,7 @@ test.describe("Debts cards page — projected payoff dates (Task #424)", () => {
     await signInAndOpen(page, email, password, "/debts");
 
     await expect(
-      page.getByRole("heading", { name: /debt avalanche/i }),
+      page.getByRole("heading", { name: /^debts$/i }),
     ).toBeVisible({ timeout: 15_000 });
 
     // All three cards (and their payoff cells) must render.
