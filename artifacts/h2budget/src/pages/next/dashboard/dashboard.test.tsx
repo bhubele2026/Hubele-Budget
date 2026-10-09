@@ -878,6 +878,39 @@ describe("recent activity", () => {
     expect(within(gone).getByTestId("txn-note").textContent).toBe("No ledger: Chase (no longer linked)");
     expect(screen.getAllByTestId("txn-note")).toHaveLength(1);
   });
+  it("(WP7 review) while the linked accounts load, no row reads 'no longer linked': Plaid rows wait unlinked, others still open", () => {
+    h.Q.items = loading;
+    h.Q.cats = ok([]);
+    const t = (id: string, o: Record<string, unknown>) => ({ id, occurredOn: "2026-10-07", description: id, amount: "-1.00", pending: false, categoryId: null, ...o });
+    h.Q.txns = ok([
+      t("CHECKING", { plaidAccountId: "p-c1", source: "plaid:chase" }),
+      t("WORKBOOK", { plaidAccountId: null, source: "amex" }),
+      t("MANUAL", { plaidAccountId: null, source: "manual" }),
+    ]);
+    wrap(<ActivityPanel />);
+    expect(screen.getByTestId("dash-activity").textContent).not.toContain("no longer linked");
+    expect(screen.queryAllByTestId("txn-note")).toHaveLength(0);
+    expect(screen.queryByRole("link", { name: "CHECKING" })).toBeNull();
+    expect(screen.getByRole("link", { name: "WORKBOOK" }).getAttribute("href")).toBe("/amex?tx=WORKBOOK&month=2026-10-01");
+    expect(screen.getByRole("link", { name: "MANUAL" }).getAttribute("href")).toBe("/transactions?tx=MANUAL&month=2026-10-01");
+    expect(screen.queryByTestId("dash-activity-accounts-failed")).toBeNull();
+  });
+  it("(WP7 review) when the linked accounts fail, it says so with Try again, and still never 'no longer linked'", () => {
+    const refetch = vi.fn();
+    h.Q.items = { ...failed, refetch };
+    h.Q.cats = ok([]);
+    h.Q.txns = ok([
+      { id: "t1", occurredOn: "2026-10-07", description: "Aldi", amount: "-32.10", plaidAccountId: "p-c1", source: "plaid:chase", pending: false, categoryId: null },
+    ]);
+    wrap(<ActivityPanel />);
+    const alert = screen.getByTestId("dash-activity-accounts-failed");
+    expect(alert.textContent).toContain("did not load");
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+    expect(refetch).toHaveBeenCalled();
+    expect(screen.getByTestId("dash-activity").textContent).not.toContain("no longer linked");
+    expect(screen.queryAllByTestId("txn-note")).toHaveLength(0);
+    expect(screen.queryByRole("link", { name: "Aldi" })).toBeNull();
+  });
   it("chips a recent credit filed under an expense category", () => {
     h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "4821" })])]);
     h.Q.cats = ok([{ id: "dining", name: "Dining & Coffee", kind: "expense" }]);

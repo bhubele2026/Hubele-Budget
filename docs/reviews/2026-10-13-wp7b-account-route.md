@@ -26,12 +26,19 @@ Built on `resolveTxnAccount` (the row's identity, by the EXTERNAL account id), `
 ### Producers
 | Surface | Before | After |
 |---|---|---|
-| Dashboard · Recent activity (`ActivityPanel.tsx`) | linked → `/next/accounts/<ext>`; everything else → `/transactions` | `txnRoute`; a row with no ledger shows its note and no link |
+| Dashboard · Recent activity (`ActivityPanel.tsx`) | linked → `/next/accounts/<ext>`; everything else → `/transactions` | `txnRoute`; a row with no ledger shows its note and no link. (Review fix) While the linked accounts load, or after they failed, a Plaid row has no link and no note and its chip names only the institution (`kind: "unknown"`); a failure adds "Your linked accounts did not load … Try again". Workbook and manual rows still open |
 | Dashboard · Needs attention, income row (`AttentionPanel.tsx`) | `/transactions?tx=&category=` whatever the account | `txnRoute` with `category`; no ledger → a plain row whose detail ends with the note; the check waits for the linked accounts (without them every row would read "no longer linked"), and their failure shows "did not load · Try again" |
 | Dashboard · Accounts (`AccountsPanel.tsx`) | `/next/accounts/<row id>` | `accountPageHref` (external id). Only the href line and one import line changed (lane 2 owns this file) |
 | Accounts · account chips (`AccountSelector.tsx`) | `/next/accounts/<ext>` (inline) | `accountPageHref(e)` — same href |
-| Accounts · combined view (`Accounts.tsx` `CombinedActivity`) | linked → account page; everything else not a link | `txnRoute` + notes; "Showing the newest 100 rows of the last 30 days." when the 100-row window is full |
+| Accounts · combined view (`Accounts.tsx` `CombinedActivity`) | linked → account page; everything else not a link | `txnRoute` + notes; "Showing the newest 100 rows of the last 30 days." when the 100-row window is full. (Review fix) Unknown accounts as on the dashboard; a failed accounts read says "Your linked accounts did not load. Try again" (was "No linked accounts yet.") and an account's page no longer says "That account is not linked here" while the list is unknown |
 | `TxnTable` | — | `note?: string` on a row, drawn only when the row has no `href` (table: a second line under the description; list: in the facts line) |
+
+### Review fixes (independent review of 58ff920b)
+- **Major — unknown read as "no longer linked".** `ActivityPanel` built its account map from `items.data`, which is undefined while `/plaid/items` loads or after it fails, so every linked Plaid row took rule 4: "No ledger: Chase (no longer linked)" and no link. `txnRoute` gains `entriesKnown`; with `false` a row with a Plaid account is `kind: "unknown"` (no href, no note, chip = the institution without "(no longer linked)"). Recent activity and the combined view pass it; a failure shows "did not load · Try again". (The income row already waited for the accounts.)
+- **Accounts page on an items error:** "No linked accounts yet." and false notes → the failure line with Try again, rows unknown.
+- **Minor:** `lib/accountBalance.ts computeBalanceAtEndOfDate` was dead (its only caller was the deleted `chaseEndingBalance.ts`) and untested: deleted. The stale comment that named it (`api-server/src/__tests__/cashSignal.integration.test.ts:1808`) now points at the server ledger.
+- Tests: `accountRoute.test.ts` (+1, unknown), `dashboard.test.tsx` (+2: items loading, items failed), `Accounts.test.tsx` (+3: failed, failed on an account page, loading).
+- Gates on ac476c51: typecheck clean; web UTC 1,885 passed / 3 skipped, America/Chicago 1,886 / 2 (204 files); build + entry graph OK at 618.4 KB; audit exit 0 (1 ignored high).
 
 ### Dead code removed
 - `lib/chaseScope.ts`, `lib/chaseEndingBalance.ts` and both tests (no product caller since the Chase page reads the server ledger; `docs/reviews/2026-10-08-parity-verified.md:680-681`). `accountBalance.ts` keeps its own test.

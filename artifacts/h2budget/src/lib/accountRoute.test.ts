@@ -131,6 +131,27 @@ describe("txnRoute — where a transaction opens", () => {
     expect(r.href).toBe("/next/accounts/ext-chk?tx=t1&month=2026-09-01&category=Dining%20%26%20Coffee");
   });
 
+  it("(review) while the linked accounts are unknown, a Plaid row opens nowhere, says nothing and never 'no longer linked'", () => {
+    for (const t of [
+      txn({ plaidAccountId: "ext-chk", source: "plaid:chase" }),
+      txn({ plaidAccountId: "ext-gone", source: "plaid:chase" }),
+      txn({ plaidAccountId: null, source: "plaid:chase" }),
+      txn({ plaidAccountId: "ext-old-amex", source: "plaid:amex" }),
+    ]) {
+      const r = txnRoute(t, [], { entriesKnown: false });
+      expect(r).toMatchObject({ kind: "unknown", href: null, note: null });
+      expect(r.identity.label).not.toContain("no longer linked");
+      expect(r.identity.shortLabel).not.toContain("no longer linked");
+      expect(r.label).not.toContain("no longer linked");
+    }
+    expect(txnRoute(txn({ plaidAccountId: "ext-gone", source: "plaid:chase" }), [], { entriesKnown: false }).identity.label).toBe("Chase");
+    // Rows that need no account still open where they always do.
+    expect(txnRoute(txn({ source: "amex" }), [], { entriesKnown: false }).href).toBe("/amex?tx=t1&month=2026-09-01");
+    expect(txnRoute(txn({ source: "manual" }), [], { entriesKnown: false }).href).toBe("/transactions?tx=t1&month=2026-09-01");
+    // Known (the default), the same rows route as before.
+    expect(txnRoute(txn({ plaidAccountId: "ext-chk", source: "plaid:chase" }), ENTRIES).kind).toBe("account");
+  });
+
   it("the identity it returns is the row's chip: the same answer resolveTxnAccount gives", () => {
     expect(txnRoute(txn({ source: "amex" }), ENTRIES).identity.label).toBe("Amex (imported)");
     expect(txnRoute(txn({ source: "manual" }), ENTRIES).identity.label).toBe("Manual entry");

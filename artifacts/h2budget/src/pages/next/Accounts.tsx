@@ -30,7 +30,7 @@ function daysBack(iso: string, n: number): string {
 export const COMBINED_DAYS = 30;
 export const COMBINED_LIMIT = 100;
 
-function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries> }) {
+function CombinedActivity({ entries, entriesKnown }: { entries: ReturnType<typeof buildEntries>; entriesKnown: boolean }) {
   const today = useMemo(() => householdToday(new Date()), []);
   const { data: txns, isLoading } = useListTransactions({ from: daysBack(today, COMBINED_DAYS), to: today, limit: COMBINED_LIMIT });
   const { data: cats } = useListCategories();
@@ -43,7 +43,9 @@ function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries
       // (WP7) And it opens the ledger that lists it, on its month — the Amex
       // page for a workbook row, the checking ledger for a manual one — or
       // says why no ledger does (`txnRoute`).
-      const route = txnRoute(t, byExt);
+      // (WP7 review) Until the linked accounts are known (loading, or failed), a
+      // Plaid row opens nowhere and says nothing: never "no longer linked".
+      const route = txnRoute(t, byExt, { entriesKnown });
       const identity = route.identity;
       return {
         id: t.id,
@@ -57,7 +59,7 @@ function CombinedActivity({ entries }: { entries: ReturnType<typeof buildEntries
         note: route.note,
       };
     });
-  }, [txns, cats, entries]);
+  }, [txns, cats, entries, entriesKnown]);
   // (WP7) A capped pull discloses its cap (CLAUDE.md §2): the server answers
   // newest first and cuts at the limit, so a full window lost its oldest rows.
   const capped = (txns?.length ?? 0) >= COMBINED_LIMIT;
@@ -95,7 +97,9 @@ export function payoffCardFor(
 export default function NextAccountsPage() {
   const [, params] = useRoute("/next/accounts/:plaidAccountId");
   const selectedId = params?.plaidAccountId ? decodeURIComponent(params.plaidAccountId) : null;
-  const { data: items, isLoading } = useListPlaidItems();
+  const { data: items, isLoading, isError: itemsFailed, refetch: refetchItems } = useListPlaidItems();
+  // (WP7 review) A failed read of the linked accounts is unknown, never "none".
+  const itemsKnown = items !== undefined;
   const { data: debts } = useListDebts();
   const { data: payoff } = useGetAmexWeeklyPayoff();
   const { data: forecast } = useGetForecast({ days: 90 });
@@ -126,12 +130,19 @@ export default function NextAccountsPage() {
           <div className="span-12 min-w-0">
             {isLoading ? (
               <AccountPageSkeleton tiles={2} />
+            ) : !itemsKnown && itemsFailed ? (
+              <p role="alert" className="text-body text-neutral-600" data-testid="accounts-failed">
+                Your linked accounts did not load.{" "}
+                <button type="button" onClick={() => void refetchItems()} className="text-label font-semibold text-brand-navy underline">
+                  Try again
+                </button>
+              </p>
             ) : entries.length ? (
               <AccountSelector entries={entries} selectedId={selected?.plaidAccountId ?? null} balances={balances} />
             ) : (
               <p className={emptyNote}>No linked accounts yet.</p>
             )}
-            {selectedId && !selected && !isLoading ? (
+            {selectedId && !selected && itemsKnown ? (
               <p role="status" className="mt-2 text-label text-neutral-600">That account is not linked here. Showing all accounts.</p>
             ) : null}
           </div>
@@ -198,7 +209,7 @@ export default function NextAccountsPage() {
               </Panel>
             </>
           ) : (
-            <CombinedActivity entries={entries} />
+            <CombinedActivity entries={entries} entriesKnown={itemsKnown} />
           )}
         </PageGrid>
       </Page>

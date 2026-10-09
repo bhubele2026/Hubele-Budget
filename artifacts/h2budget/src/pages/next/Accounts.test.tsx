@@ -8,11 +8,19 @@ const h = vi.hoisted(() => ({
   items: [] as unknown[], debts: [] as unknown[], payoff: null as unknown, forecast: null as unknown,
   amexProps: vi.fn(), chaseProps: vi.fn(),
   extraTxns: [] as unknown[],
+  /** (WP7 review) The linked accounts' read: "ok", "loading" or "failed". */
+  itemsState: "ok" as "ok" | "loading" | "failed",
+  refetchItems: vi.fn(),
 }));
 
 vi.mock("@workspace/api-client-react", async (orig) => ({
   ...(await orig<object>()),
-  useListPlaidItems: () => ({ data: h.items, isLoading: false }),
+  useListPlaidItems: () =>
+    h.itemsState === "failed"
+      ? { data: undefined, isLoading: false, isError: true, refetch: h.refetchItems }
+      : h.itemsState === "loading"
+        ? { data: undefined, isLoading: true, isError: false, refetch: h.refetchItems }
+        : { data: h.items, isLoading: false, isError: false, refetch: h.refetchItems },
   useListDebts: () => ({ data: h.debts }),
   useGetAmexWeeklyPayoff: () => ({ data: h.payoff }),
   useGetForecast: () => ({ data: h.forecast }),
@@ -34,7 +42,7 @@ import { AccountSummary } from "./accounts/AccountSummary";
 import { ForecastLegend } from "./accounts/ForecastLegend";
 import { identityOf } from "@/lib/accountIdentity";
 
-afterEach(() => { cleanup(); h.amexProps.mockClear(); h.chaseProps.mockClear(); h.extraTxns = []; });
+afterEach(() => { cleanup(); h.amexProps.mockClear(); h.chaseProps.mockClear(); h.extraTxns = []; h.itemsState = "ok"; h.refetchItems.mockClear(); });
 
 const item = (id: string, inst: string, slug: string, accounts: object[], extra: object = {}) =>
   ({ id, itemId: id, institutionName: inst, institutionSlug: slug, accounts, lastSyncedAt: "2026-10-08T10:00:00Z", lastBankTxOn: "2026-10-07", ...extra });
@@ -192,6 +200,37 @@ describe("(WP7c) each kind of account opens its own view", () => {
       "ext-chk": "bank", "ext-amex": "card", "ext-sav": "bank", "ext-freedom": "card",
       "ext-cu": "bank", "ext-pp": "bank", "ext-loan": "loan", "ext-inv": "other",
     });
+  });
+});
+
+describe("(WP7 review) a failed or loading read of the linked accounts is unknown, never 'none'", () => {
+  it("failed: says the accounts did not load with Try again, never 'No linked accounts yet.', and no row reads 'no longer linked'", () => {
+    seed();
+    h.itemsState = "failed";
+    renderAt("/next/accounts");
+    const alert = screen.getByTestId("accounts-failed");
+    expect(alert.textContent).toContain("did not load");
+    expect(screen.queryByText("No linked accounts yet.")).toBeNull();
+    within(alert).getByRole("button", { name: "Try again" }).click();
+    expect(h.refetchItems).toHaveBeenCalled();
+    const panel = screen.getByTestId("combined-activity");
+    expect(panel.textContent).not.toContain("no longer linked");
+    expect(within(panel).queryAllByTestId("txn-note")).toHaveLength(0);
+    expect(within(panel).queryByRole("link", { name: "COFFEE" })).toBeNull();
+  });
+  it("failed on an account's own page: not 'That account is not linked here'", () => {
+    seed();
+    h.itemsState = "failed";
+    renderAt("/next/accounts/ext-amex");
+    expect(screen.queryByText(/not linked here/)).toBeNull();
+  });
+  it("loading: the combined view's Plaid rows wait unlinked and unlabelled", () => {
+    seed();
+    h.itemsState = "loading";
+    renderAt("/next/accounts");
+    const panel = screen.getByTestId("combined-activity");
+    expect(panel.textContent).not.toContain("no longer linked");
+    expect(within(panel).queryAllByTestId("txn-note")).toHaveLength(0);
   });
 });
 
