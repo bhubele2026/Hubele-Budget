@@ -30,6 +30,12 @@ export function useTxDeepLink({
     return new URLSearchParams(window.location.search).get("tx");
   });
   const handled = useRef(false);
+  // The pulse timer outlives re-runs of the effect below (a page that passes
+  // `deps` re-runs it as rows arrive); only unmount cancels it.
+  const pulse = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (pulse.current) clearTimeout(pulse.current);
+  }, []);
 
   useEffect(() => {
     if (!focusId || handled.current || !ready) return;
@@ -56,8 +62,7 @@ export function useTxDeepLink({
     params.delete("tx");
     const qs = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`);
-    const t = setTimeout(() => setFocusId(null), 2000);
-    return () => clearTimeout(t);
+    pulse.current = setTimeout(() => setFocusId(null), 2000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId, ready, ...deps]);
 

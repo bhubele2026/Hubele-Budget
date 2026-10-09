@@ -8,7 +8,12 @@ import { useTxDeepLink } from "./useTxDeepLink";
 
 function Ledger({ ready, ids }: { ready: boolean; ids: string[] }) {
   const scrolled = useRef(false);
-  const focus = useTxDeepLink({ ready, rowTestIds: (id) => [`row-amex-${id}`, `row-amex-mobile-${id}`], scrolledRef: scrolled });
+  const focus = useTxDeepLink({
+    ready,
+    rowTestIds: (id) => [`row-amex-${id}`, `row-amex-mobile-${id}`],
+    scrolledRef: scrolled,
+    deps: [ids.length],
+  });
   return (
     <div data-focus={focus ?? ""} data-scrolled={String(scrolled.current)}>
       {ids.map((id) => (
@@ -78,6 +83,25 @@ describe("useTxDeepLink", () => {
       expect(container.firstElementChild!.getAttribute("data-focus")).toBe("t-9");
       act(() => {
         vi.advanceTimersByTime(2100);
+      });
+      expect(container.firstElementChild!.getAttribute("data-focus")).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the focus still clears when more rows arrive during the pulse", () => {
+    vi.useFakeTimers();
+    try {
+      window.history.replaceState(null, "", "/amex?tx=t-9");
+      const { container, rerender } = render(<Ledger ready ids={["row-amex-t-9"]} />);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      rerender(<Ledger ready ids={["row-amex-t-9", "row-amex-t-10"]} />);
+      expect(scrolls).toEqual(["row-amex-t-9"]);
+      act(() => {
+        vi.advanceTimersByTime(1600);
       });
       expect(container.firstElementChild!.getAttribute("data-focus")).toBe("");
     } finally {
