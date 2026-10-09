@@ -24,10 +24,12 @@ vi.mock("./queries", () => ({
   useBillsSummaryQ: () => get("bills"),
   useRecurringQ: () => get("recurring"),
   useTxnsQ: () => get("txns"),
+  useRecapPreviewQ: () => get("recap"),
+}));
+vi.mock("./queriesLazy", () => ({
   useCategoriesQ: () => get("cats"),
   useReviewQueueQ: () => get("queue"),
   useDuplicateCountQ: () => get("dups"),
-  useRecapPreviewQ: () => get("recap"),
 }));
 vi.mock("@/hooks/useSpine", () => ({ useSpine: () => h.spine }));
 vi.mock("@/hooks/use-plaid-sync", () => ({ usePlaidSync: () => ({ runSync: vi.fn(), isPending: false }) }));

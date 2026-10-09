@@ -26,7 +26,7 @@
  *
  * Usage (both run in CI after the build):
  *   node scripts/check-entry-graph.mjs
- *       the classic app at artifacts/h2budget/dist/public, 640,000 bytes
+ *       the classic app at artifacts/h2budget/dist/public, 633,000 bytes
  *   node scripts/check-entry-graph.mjs --dist artifacts/h2/dist/public --max 400000
  *       H2 (S0, 2026-10-07): the new app's open path is capped at 400 KB
  * `--dist` resolves from the repo root (an absolute path is used as is).
@@ -45,6 +45,14 @@ import { gzipSync } from "node:zlib";
 // was trimmed to fit: charts are still lazy (no recharts on open), and the
 // dashboard's own chunk is the only addition.
 //
+// 2026-10-09 (C11b): 640,000 -> 633,000. The four panels below the first screen
+// (cash-flow forecast, debt, recent activity, needs review) and the three hooks
+// only they read moved into one lazy chunk, started on idle after first paint
+// behind same-size skeletons. Measured open path: 635.1 KB before, 627.2 KB
+// (627,242 bytes) after; the cap is that figure plus 5 KB. The first screen
+// (briefing, accounts, cash, spending, upcoming) stays eager, and no panel was
+// trimmed.
+//
 // History: 1,059.4 KB → 608.4 KB (2026-08-23, vendor-charts evicted from the
 // landing graph) → 571.1 KB (2026-08-25, the Budget overhaul dropped dnd-kit
 // from that route). Cap ratcheted 620 → 580 KB to lock the win in; the real
@@ -60,7 +68,7 @@ import { gzipSync } from "node:zlib";
 // regression risk on pages that were just rebuilt, traded against roughly a
 // tenth of a second on a warm open. Not worth it. If someone revisits this,
 // revisit it as a deliberate piece of work — not as a leftover chore.
-const DEFAULT_MAX_TOTAL_BYTES = 640_000;
+const DEFAULT_MAX_TOTAL_BYTES = 633_000;
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

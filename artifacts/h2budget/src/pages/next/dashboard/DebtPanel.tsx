@@ -2,8 +2,9 @@ import { Link } from "wouter";
 import { Panel, StatBlock } from "@/components/next";
 import { CssFillMeter } from "@/lib/cssBars";
 import { useSpine } from "@/hooks/useSpine";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { useDebtsQ } from "./queries";
+import { BELOW_FOLD } from "./belowFoldSizes";
 import { Gate, LinkRow, money, rise } from "./shared";
 
 function monthName(ym: string): string {
@@ -20,7 +21,7 @@ export default function DebtPanel() {
   const active = (debts.data ?? []).filter((x) => x.status !== "archived");
   const total = active.reduce((n, x) => n + (Number(x.balance) || 0), 0);
   return (
-    <Panel title="Debt" span={4} className={rise(5)} data-testid="dash-debt">
+    <Panel title="Debt" span={4} className={cn(rise(BELOW_FOLD.debt.rise), BELOW_FOLD.debt.minH)} data-testid="dash-debt">
       <Gate q={debts} what="Debt" rows={5}>
         {() => (
           <div className="space-y-4">
