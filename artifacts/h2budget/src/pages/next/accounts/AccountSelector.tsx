@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { AccountChip } from "@/components/next";
 import { freshnessStamps } from "@/lib/accountFreshness";
+import { accountPageHref } from "@/lib/accountRoute";
 import { STATE_WORD, type AccountEntry } from "./entries";
 
 /**
@@ -65,7 +66,7 @@ export function AccountSelector({
         return (
           <Link
             key={e.rowId}
-            href={`/next/accounts/${encodeURIComponent(e.plaidAccountId)}`}
+            href={accountPageHref(e)}
             aria-current={sel ? "page" : undefined}
             data-testid={`account-chip-${e.plaidAccountId}`}
             data-accent={e.identity.accent}

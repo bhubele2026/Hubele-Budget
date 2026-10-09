@@ -32,9 +32,9 @@ export const TRANSFER_CATEGORY_NAME = "Transfer";
 // a transaction's category picker to drop the row from every budget /
 // reports roll-up while still letting it count toward the account's
 // running balance and ending-balance math (because those calcs sum by
-// amount/account scope only — see `accountBalance.ts`,
-// `chaseEndingBalance.ts`, `amexEndingBalance.ts` — and never filter by
-// category). Mirrors the Uncategorized/Transfer pattern: stored with
+// amount/account scope only — see the server's bank ledger
+// (`lib/bankLedger.ts`), and the web's `accountBalance.ts` and
+// `amexEndingBalance.ts` — and never filter by category). Mirrors the Uncategorized/Transfer pattern: stored with
 // `excludeFromBudget=true` so the Budget page filters it out of every
 // roll-up, and mapping rules cannot target it. Unlike Transfer, picking
 // Ignore does NOT flip `isTransfer=true` — Reports + Budget exclusion
@@ -360,9 +360,10 @@ export const SEED_CATEGORIES: SeedCategory[] = [
   // actuals + month-summary totals + Reports category breakdown +
   // Reports daily cash-flow — while still letting it count toward the
   // account's running balance and ending-balance math. The balance
-  // helpers (accountBalance.ts, chaseEndingBalance.ts,
-  // amexEndingBalance.ts) sum by amount/account scope only and never
-  // filter by category, so Ignore rows naturally still hit balances.
+  // math (the server's bank ledger, lib/bankLedger.ts; the web's
+  // accountBalance.ts and amexEndingBalance.ts) sums by amount/account
+  // scope only and never filters by category, so Ignore rows naturally
+  // still hit balances.
   // Same `excludeFromBudget` treatment as Uncategorized/Transfer:
   // never appears as its own line, group, or row on the Budget or
   // Reports page; mapping rules cannot target it; auto-categorize

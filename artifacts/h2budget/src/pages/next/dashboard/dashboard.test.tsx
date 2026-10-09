@@ -520,7 +520,9 @@ describe("accounts list", () => {
   it("links each account to its view, and Sync once per BANK", () => {
     wrap(<AccountsPanel />);
     const links = screen.getAllByTestId("dash-account-link").map((a) => a.getAttribute("href"));
-    expect(links).toEqual(["/next/accounts/c1", "/next/accounts/s1", "/next/accounts/x1", "/next/accounts/k1", "/next/accounts/w1"]);
+    // (WP7) By the EXTERNAL Plaid account_id (`acct()` gives "p-<id>"), the id
+    // the account chips, the route and every transaction use (`accountPageHref`).
+    expect(links).toEqual(["/next/accounts/p-c1", "/next/accounts/p-s1", "/next/accounts/p-x1", "/next/accounts/p-k1", "/next/accounts/p-w1"]);
     for (const b of ["a", "b", "c", "d"]) expect(screen.getAllByTestId(`dash-sync-${b}`)).toHaveLength(1);
     expect(screen.getByTestId("dash-all-accounts").getAttribute("href")).toBe("/next/accounts");
   });
@@ -782,22 +784,58 @@ describe("needs attention", () => {
     expect(screen.getByTestId("dash-review-forecast").textContent).not.toContain("7");
     expect(screen.getByTestId("dash-review-cats").textContent).not.toContain("3");
   });
-  it("(dash-accuracy) flags income filed under an expense category, by the shared rule, linking to the row", () => {
+  const incomeRow = (o: Record<string, unknown>) => ({
+    id: "t1", occurredOn: "2026-10-08", description: "ACME PAYROLL DIRECT DEP", amount: "2100.00", source: "plaid:chase", plaidAccountId: "p-c1", categoryId: "dining",
+    isTransfer: false, debtId: null, isExternalCardPayment: false, reimbursable: false, pfcDetailed: "INCOME_WAGES", ...o,
+  });
+  const incomeSetup = () => {
     h.spine.data = spine({ reviewCount: 0 });
     h.Q.queue = ok({ total: 0 });
     h.Q.dups = ok({ duplicateCount: 0 });
     h.Q.cats = ok([{ id: "dining", name: "Dining & Coffee", kind: "expense" }]);
-    const row = (o: Record<string, unknown>) => ({
-      id: "t1", occurredOn: "2026-10-08", description: "ACME PAYROLL DIRECT DEP", amount: "2100.00", source: "plaid:chase", categoryId: "dining",
-      isTransfer: false, debtId: null, isExternalCardPayment: false, reimbursable: false, pfcDetailed: "INCOME_WAGES", ...o,
-    });
-    h.Q.txns = ok([row({}), row({ id: "t2", reimbursable: true, description: "VENMO FROM J" }), row({ id: "t3", amount: "-8.00" })]);
+    h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "5526" })])]);
+  };
+  it("(dash-accuracy) flags income filed under an expense category, by the shared rule, linking to the row", () => {
+    incomeSetup();
+    h.Q.txns = ok([incomeRow({}), incomeRow({ id: "t2", reimbursable: true, description: "VENMO FROM J" }), incomeRow({ id: "t3", amount: "-8.00" })]);
     wrap(<AttentionPanel />);
     const r = screen.getByTestId("dash-review-income");
     expect(r.textContent).toContain("Income filed under an expense category");
     expect(r.textContent).toContain("ACME PAYROLL DIRECT DEP · Dining & Coffee");
     expect(r.textContent).not.toContain("more"); // the reimbursable credit is not flagged
-    expect(r.getAttribute("href")).toBe("/transactions?tx=t1&category=Dining%20%26%20Coffee");
+    // (WP7) It opens the ledger that lists the row — its checking account's page — on its month, filtered to its category.
+    expect(r.getAttribute("href")).toBe("/next/accounts/p-c1?tx=t1&month=2026-10-01&category=Dining%20%26%20Coffee");
+  });
+  it("(WP7) the income row opens where its row is listed, per kind; a row no ledger lists says so, never a dead link", () => {
+    incomeSetup();
+    // A manual entry: the checking ledger.
+    h.Q.txns = ok([incomeRow({ plaidAccountId: null, source: "manual" })]);
+    const a = wrap(<AttentionPanel />);
+    expect(screen.getByTestId("dash-review-income").getAttribute("href")).toBe("/transactions?tx=t1&month=2026-10-01&category=Dining%20%26%20Coffee");
+    a.unmount();
+    // A card that is no longer linked: no link, the reason in words, the count kept.
+    h.Q.txns = ok([incomeRow({ plaidAccountId: "p-gone", source: "plaid:chase" })]);
+    wrap(<AttentionPanel />);
+    const r = screen.getByTestId("dash-review-income");
+    expect(r.tagName).toBe("LI");
+    expect(r.querySelector("a")).toBeNull();
+    expect(r.textContent).toContain("Income filed under an expense category");
+    expect(r.textContent).toContain("ACME PAYROLL DIRECT DEP · Dining & Coffee");
+    expect(r.textContent).toContain("No ledger: Chase (no longer linked)");
+    expect(r.textContent).toContain("1");
+  });
+  it("(WP7) the income check waits for the linked accounts: without them every row would read 'no longer linked'", () => {
+    incomeSetup();
+    h.Q.txns = ok([incomeRow({})]);
+    h.Q.items = loading;
+    const a = wrap(<AttentionPanel />);
+    expect(screen.queryByTestId("dash-review-income")).toBeNull();
+    expect(screen.getByTestId("dash-review-income-pending").textContent).toContain("loading");
+    expect(screen.queryByText("Nothing needs you today.")).toBeNull();
+    a.unmount();
+    h.Q.items = failed;
+    wrap(<AttentionPanel />);
+    expect(screen.getByTestId("dash-review-income-pending").textContent).toContain("did not load");
   });
   it("keeps the monitor's findings (Why / Resolve / Dismiss live in FindingsList)", () => {
     h.Q.queue = ok({ total: 0 });
@@ -914,6 +952,69 @@ describe("recent activity", () => {
     for (const r of rows) expect(r.querySelector('[title="Account"]')).toBeNull();
     // An Amex WORKBOOK row is stored charge-positive: it still reads as money out.
     expect(rows[0]!.textContent).toContain("-$18.00");
+  });
+  it("(WP7) each row opens the ledger that lists it, on its month, per kind; a row no ledger lists says why", () => {
+    h.Q.items = ok([
+      item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "4821" })]),
+      item("b", "American Express", "amex", [acct("x1", { name: "Blue Cash", mask: "1001", type: "credit", subtype: "credit card" })]),
+      item("c", "Capital One", "capone", [acct("k1", { name: "Quicksilver", mask: "7788", type: "credit", subtype: "credit card" })]),
+    ]);
+    h.Q.cats = ok([]);
+    const t = (id: string, o: Record<string, unknown>) => ({ id, occurredOn: "2026-10-07", description: id, amount: "-1.00", pending: false, categoryId: null, ...o });
+    h.Q.txns = ok([
+      t("CHECKING", { plaidAccountId: "p-c1", source: "plaid:chase" }),
+      t("AMEX", { plaidAccountId: "p-x1", source: "plaid:amex", occurredOn: "2026-09-30" }),
+      t("CAPONE", { plaidAccountId: "p-k1", source: "plaid:capone" }),
+      t("WORKBOOK", { plaidAccountId: null, source: "amex" }),
+      t("MANUAL", { plaidAccountId: null, source: "manual" }),
+      t("GONE", { plaidAccountId: "p-gone", source: "plaid:chase" }),
+    ]);
+    wrap(<ActivityPanel />);
+    const hrefOf = (name: string) => screen.queryByRole("link", { name })?.getAttribute("href") ?? null;
+    expect(hrefOf("CHECKING")).toBe("/next/accounts/p-c1?tx=CHECKING&month=2026-10-01");
+    expect(hrefOf("AMEX")).toBe("/next/accounts/p-x1?tx=AMEX&month=2026-09-01");
+    expect(hrefOf("CAPONE")).toBe("/next/accounts/p-k1?tx=CAPONE&month=2026-10-01");
+    expect(hrefOf("WORKBOOK")).toBe("/amex?tx=WORKBOOK&month=2026-10-01");
+    expect(hrefOf("MANUAL")).toBe("/transactions?tx=MANUAL&month=2026-10-01");
+    // Never a dead end at /transactions for a row that ledger does not list.
+    expect(hrefOf("GONE")).toBeNull();
+    const rows = screen.getAllByTestId("txn-row");
+    const gone = rows.find((r) => r.textContent!.includes("GONE"))!;
+    expect(within(gone).getByTestId("txn-note").textContent).toBe("No ledger: Chase (no longer linked)");
+    expect(screen.getAllByTestId("txn-note")).toHaveLength(1);
+  });
+  it("(WP7 review) while the linked accounts load, no row reads 'no longer linked': Plaid rows wait unlinked, others still open", () => {
+    h.Q.items = loading;
+    h.Q.cats = ok([]);
+    const t = (id: string, o: Record<string, unknown>) => ({ id, occurredOn: "2026-10-07", description: id, amount: "-1.00", pending: false, categoryId: null, ...o });
+    h.Q.txns = ok([
+      t("CHECKING", { plaidAccountId: "p-c1", source: "plaid:chase" }),
+      t("WORKBOOK", { plaidAccountId: null, source: "amex" }),
+      t("MANUAL", { plaidAccountId: null, source: "manual" }),
+    ]);
+    wrap(<ActivityPanel />);
+    expect(screen.getByTestId("dash-activity").textContent).not.toContain("no longer linked");
+    expect(screen.queryAllByTestId("txn-note")).toHaveLength(0);
+    expect(screen.queryByRole("link", { name: "CHECKING" })).toBeNull();
+    expect(screen.getByRole("link", { name: "WORKBOOK" }).getAttribute("href")).toBe("/amex?tx=WORKBOOK&month=2026-10-01");
+    expect(screen.getByRole("link", { name: "MANUAL" }).getAttribute("href")).toBe("/transactions?tx=MANUAL&month=2026-10-01");
+    expect(screen.queryByTestId("dash-activity-accounts-failed")).toBeNull();
+  });
+  it("(WP7 review) when the linked accounts fail, it says so with Try again, and still never 'no longer linked'", () => {
+    const refetch = vi.fn();
+    h.Q.items = { ...failed, refetch };
+    h.Q.cats = ok([]);
+    h.Q.txns = ok([
+      { id: "t1", occurredOn: "2026-10-07", description: "Aldi", amount: "-32.10", plaidAccountId: "p-c1", source: "plaid:chase", pending: false, categoryId: null },
+    ]);
+    wrap(<ActivityPanel />);
+    const alert = screen.getByTestId("dash-activity-accounts-failed");
+    expect(alert.textContent).toContain("did not load");
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+    expect(refetch).toHaveBeenCalled();
+    expect(screen.getByTestId("dash-activity").textContent).not.toContain("no longer linked");
+    expect(screen.queryAllByTestId("txn-note")).toHaveLength(0);
+    expect(screen.queryByRole("link", { name: "Aldi" })).toBeNull();
   });
   it("chips a recent credit filed under an expense category", () => {
     h.Q.items = ok([item("a", "Chase", "chase", [acct("c1", { name: "Total Checking", mask: "4821" })])]);

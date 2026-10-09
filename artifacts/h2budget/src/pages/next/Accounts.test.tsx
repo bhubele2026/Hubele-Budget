@@ -10,11 +10,19 @@ const h = vi.hoisted(() => ({
   bank: null as unknown,
   amexProps: vi.fn(), chaseProps: vi.fn(),
   extraTxns: [] as unknown[],
+  /** (WP7 review) The linked accounts' read: "ok", "loading" or "failed". */
+  itemsState: "ok" as "ok" | "loading" | "failed",
+  refetchItems: vi.fn(),
 }));
 
 vi.mock("@workspace/api-client-react", async (orig) => ({
   ...(await orig<object>()),
-  useListPlaidItems: () => ({ data: h.items, isLoading: false }),
+  useListPlaidItems: () =>
+    h.itemsState === "failed"
+      ? { data: undefined, isLoading: false, isError: true, refetch: h.refetchItems }
+      : h.itemsState === "loading"
+        ? { data: undefined, isLoading: true, isError: false, refetch: h.refetchItems }
+        : { data: h.items, isLoading: false, isError: false, refetch: h.refetchItems },
   useListDebts: () => ({ data: h.debts }),
   useGetAmexWeeklyPayoff: () => ({ data: h.payoff }),
   // (WP3) A card with no debt row reads Plaid's stored liability figures; the
@@ -43,7 +51,10 @@ import { AccountSummary, money } from "./accounts/AccountSummary";
 import { ForecastLegend } from "./accounts/ForecastLegend";
 import { identityOf } from "@/lib/accountIdentity";
 
-afterEach(() => { cleanup(); h.amexProps.mockClear(); h.chaseProps.mockClear(); h.extraTxns = []; h.liabs = []; h.liabEnabled = []; });
+afterEach(() => {
+  cleanup(); h.amexProps.mockClear(); h.chaseProps.mockClear(); h.extraTxns = [];
+  h.liabs = []; h.liabEnabled = []; h.itemsState = "ok"; h.refetchItems.mockClear();
+});
 
 const item = (id: string, inst: string, slug: string, accounts: object[], extra: object = {}) =>
   ({ id, itemId: id, institutionName: inst, institutionSlug: slug, accounts, lastSyncedAt: "2026-10-08T10:00:00Z", lastBankTxOn: "2026-10-07", ...extra });
@@ -148,6 +159,78 @@ describe("combined view", () => {
     expect(panel.querySelector('[title="Amex (imported)"]')).toBeTruthy();
     expect(panel.querySelector('[title="Manual entry"]')).toBeTruthy();
     expect(panel.querySelector('[title="Chase (no longer linked)"]')).toBeTruthy();
+  });
+});
+
+describe("(WP7) combined view: where each row opens", () => {
+  it("a linked row opens its account's page on its month; a workbook row All cards; a manual row the checking ledger; a gone account says why", () => {
+    seed();
+    h.extraTxns = [
+      { id: "t3", occurredOn: "2026-09-05", description: "WORKBOOK", amount: "12.00", plaidAccountId: null, source: "amex", pending: false, categoryId: null },
+      { id: "t4", occurredOn: "2026-10-05", description: "CASH", amount: "-5.00", plaidAccountId: null, source: "manual", pending: false, categoryId: null },
+      { id: "t5", occurredOn: "2026-10-04", description: "OLD CARD", amount: "-9.00", plaidAccountId: "ext-gone", source: "plaid:chase", pending: false, categoryId: null },
+    ];
+    renderAt("/next/accounts");
+    const panel = screen.getByTestId("combined-activity");
+    const hrefOf = (name: string) => within(panel).queryByRole("link", { name })?.getAttribute("href") ?? null;
+    expect(hrefOf("COFFEE")).toBe("/next/accounts/ext-amex?tx=t1&month=2026-10-01");
+    expect(hrefOf("PAYROLL")).toBe("/next/accounts/ext-chk?tx=t2&month=2026-10-01");
+    expect(hrefOf("WORKBOOK")).toBe("/amex?tx=t3&month=2026-09-01");
+    expect(hrefOf("CASH")).toBe("/transactions?tx=t4&month=2026-10-01");
+    expect(hrefOf("OLD CARD")).toBeNull();
+    const notes = within(panel).getAllByTestId("txn-note");
+    expect(notes.map((n) => n.textContent)).toEqual(["No ledger: Chase (no longer linked)"]);
+  });
+  it("a full window says it shows the newest 100 rows of the last 30 days; a short one says nothing", () => {
+    seed();
+    h.extraTxns = Array.from({ length: 98 }, (_, i) => ({
+      id: `f${i}`, occurredOn: "2026-09-20", description: `ROW ${i}`, amount: "-1.00", plaidAccountId: "ext-chk", source: "plaid:chase", pending: false, categoryId: null,
+    }));
+    const full = renderAt("/next/accounts");
+    expect(screen.getByTestId("combined-activity-cap").textContent).toBe("Showing the newest 100 rows of the last 30 days.");
+    full.unmount();
+    h.extraTxns = Array.from({ length: 97 }, (_, i) => ({
+      id: `f${i}`, occurredOn: "2026-09-20", description: `ROW ${i}`, amount: "-1.00", plaidAccountId: "ext-chk", source: "plaid:chase", pending: false, categoryId: null,
+    }));
+    renderAt("/next/accounts");
+    expect(screen.queryByTestId("combined-activity-cap")).toBeNull();
+  });
+  it("the account chips link by the external account id", () => {
+    seed(); renderAt("/next/accounts");
+    expect(screen.getByTestId("account-chip-ext-chk").getAttribute("href")).toBe("/next/accounts/ext-chk");
+    expect(screen.getByTestId("account-chip-ext-amex").getAttribute("href")).toBe("/next/accounts/ext-amex");
+    expect(screen.getByTestId("account-chip-all").getAttribute("href")).toBe("/next/accounts");
+  });
+});
+
+describe("(WP7 review) a failed or loading read of the linked accounts is unknown, never 'none'", () => {
+  it("failed: says the accounts did not load with Try again, never 'No linked accounts yet.', and no row reads 'no longer linked'", () => {
+    seed();
+    h.itemsState = "failed";
+    renderAt("/next/accounts");
+    const alert = screen.getByTestId("accounts-failed");
+    expect(alert.textContent).toContain("did not load");
+    expect(screen.queryByText("No linked accounts yet.")).toBeNull();
+    within(alert).getByRole("button", { name: "Try again" }).click();
+    expect(h.refetchItems).toHaveBeenCalled();
+    const panel = screen.getByTestId("combined-activity");
+    expect(panel.textContent).not.toContain("no longer linked");
+    expect(within(panel).queryAllByTestId("txn-note")).toHaveLength(0);
+    expect(within(panel).queryByRole("link", { name: "COFFEE" })).toBeNull();
+  });
+  it("failed on an account's own page: not 'That account is not linked here'", () => {
+    seed();
+    h.itemsState = "failed";
+    renderAt("/next/accounts/ext-amex");
+    expect(screen.queryByText(/not linked here/)).toBeNull();
+  });
+  it("loading: the combined view's Plaid rows wait unlinked and unlabelled", () => {
+    seed();
+    h.itemsState = "loading";
+    renderAt("/next/accounts");
+    const panel = screen.getByTestId("combined-activity");
+    expect(panel.textContent).not.toContain("no longer linked");
+    expect(within(panel).queryAllByTestId("txn-note")).toHaveLength(0);
   });
 });
 

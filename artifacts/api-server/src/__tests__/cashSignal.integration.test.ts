@@ -1805,7 +1805,7 @@ describe("computeCashSignal — bankToday rolls the snapshot forward (Chase-tab 
 
     // Anchor-day txn — excluded: it reached the ledger (00:00 on 05-01) before
     // the balance was read (12:00Z), so the balance already nets it (PR4b rule;
-    // the Chase page's computeBalanceAtEndOfDate still excludes the whole day).
+    // the Chase page reads the same rule from the server's ledger, PR13).
     await addLedgerTxn({
       occurredOn: "2026-05-01",
       amount: "-100",
