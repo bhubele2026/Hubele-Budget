@@ -31,7 +31,14 @@ export interface MerchantRenamePopoverTx {
   merchantSignature?: string | null;
 }
 
-export function MerchantRenamePopover({ tx }: { tx: MerchantRenamePopoverTx }) {
+export function MerchantRenamePopover({
+  tx,
+  onSplit,
+}: {
+  tx: MerchantRenamePopoverTx;
+  /** (F4) When given, the popover also offers "Split by category…" for the row. */
+  onSplit?: () => void;
+}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -177,6 +184,22 @@ export function MerchantRenamePopover({ tx }: { tx: MerchantRenamePopoverTx }) {
           >
             Reset to bank default
           </button>
+          {onSplit && (
+            <div className="border-t border-border pt-2">
+              <button
+                type="button"
+                className="text-[11px] font-medium text-brand-navy underline-offset-2 hover:underline"
+                onClick={() => {
+                  setOpen(false);
+                  onSplit();
+                }}
+                title="Divide this charge between budget categories (not the allowance-bucket split)"
+                data-testid={`split-category-${tx.id}`}
+              >
+                Split by category…
+              </button>
+            </div>
+          )}
         </div>
       </PopoverContent>
     </Popover>

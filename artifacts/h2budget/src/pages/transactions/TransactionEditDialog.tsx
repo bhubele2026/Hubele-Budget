@@ -59,6 +59,7 @@ export function TransactionEditDialog({
   clearTransferOverride,
   createTx,
   updateTx,
+  onSplit,
 }: {
   isDialogOpen: boolean;
   setIsDialogOpen: (open: boolean) => void;
@@ -74,6 +75,8 @@ export function TransactionEditDialog({
   clearTransferOverride: ReturnType<typeof useClearTransferOverride>;
   createTx: ReturnType<typeof useCreateTransaction>;
   updateTx: ReturnType<typeof useUpdateTransaction>;
+  /** (F4) Opens "Split by category" for the charge being edited. */
+  onSplit?: (tx: Transaction) => void;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -224,7 +227,24 @@ export function TransactionEditDialog({
                   </Button>
                 </div>
               )}
-              <div className="flex justify-end pt-4">
+              <div className="flex items-center justify-between gap-3 pt-4">
+                {editingTx && onSplit ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    title="Divide this charge between budget categories (not the allowance-bucket split)"
+                    data-testid="button-split-by-category"
+                    onClick={() => {
+                      setIsDialogOpen(false);
+                      onSplit(editingTx);
+                    }}
+                  >
+                    Split by category…
+                  </Button>
+                ) : (
+                  <span />
+                )}
                 <Button type="submit" disabled={createTx.isPending || updateTx.isPending}>Save</Button>
               </div>
             </form>
