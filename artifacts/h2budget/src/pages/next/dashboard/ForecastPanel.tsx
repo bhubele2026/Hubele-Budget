@@ -3,8 +3,9 @@ import { Link, useLocation } from "wouter";
 import { Panel, shortDate } from "@/components/next";
 import { ACCOUNT_ACCENT } from "@/lib/chartTokens";
 import { buildEventsByDate } from "@/lib/forecastPastDue";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { useCashSignalQ } from "./queries";
+import { BELOW_FOLD } from "./belowFoldSizes";
 import { dayLabel, Gate, rise } from "./shared";
 
 /** The chart (and recharts with it) loads only when this panel mounts. */
@@ -43,7 +44,7 @@ export default function ForecastPanel() {
       title="Cash-flow forecast"
       sub="Projected cash (checking)"
       span={8}
-      className={rise(4)}
+      className={cn(rise(BELOW_FOLD.forecast.rise), BELOW_FOLD.forecast.minH)}
       data-testid="dash-forecast"
       actions={
         <div className="flex gap-1" role="group" aria-label="Forecast horizon">

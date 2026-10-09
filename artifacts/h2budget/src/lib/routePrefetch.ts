@@ -14,10 +14,11 @@
 // bundler emits one shared chunk per page.
 
 // ── Per-page importers (reused by App.tsx's lazy() calls) ────────────────────
-// ⚠️ NO `importLanding` HERE, DELIBERATELY. The landing is statically imported
-// by App.tsx: it is the default destination of every open, so code-splitting it
-// only bought a guaranteed extra round trip on the one route that must feel
-// instant. Nothing to prefetch when the chunk is already the entry.
+// ⚠️ NO IMPORTER FOR THE LANDING HERE, DELIBERATELY. The landing (/home) is the
+// dashboard page, statically imported by App.tsx: it is the default destination
+// of every open, so code-splitting it only bought a guaranteed extra round trip
+// on the one route that must feel instant. Nothing to prefetch when the chunk
+// is already the entry.
 export const importCommandCenter = () => import("../pages/command-center");
 export const importForecast = () => import("../pages/forecast");
 export const importForecastOverview = () => import("../pages/forecast-overview");
@@ -42,7 +43,6 @@ export const importSettings = () => import("../pages/settings");
 export const importAsk = () => import("../pages/ask/Ask");
 export const importSuggestions = () => import("../pages/ask/Suggestions");
 // The /next preview pages (lazy; outside the ribbon until the owner approves).
-export const importNextDashboard = () => import("../pages/next/Dashboard");
 export const importNextForecast = () => import("../pages/next/Forecast");
 export const importNextAccounts = () => import("../pages/next/Accounts");
 
@@ -74,7 +74,6 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   "/settings": importSettings,
   "/ask": importAsk,
   "/mapping-rules": importMappingRules,
-  "/next/dashboard": importNextDashboard,
   "/next/forecast": importNextForecast,
   "/next/accounts": importNextAccounts,
 };

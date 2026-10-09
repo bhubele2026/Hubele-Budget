@@ -424,7 +424,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     // on click (stale-while-revalidate; staleTime defaults still gate the
     // actual network call). Params mirror exactly what each page requests so
     // the warmed key is the key the page reads.
-    if (href === "/home" || href === "/banking") {
+    if (href === "/banking") {
       qc.prefetchQuery({ queryKey: getGetDashboardQueryKey(), queryFn: () => getDashboard() });
       qc.prefetchQuery({
         queryKey: getGetForecastQueryKey({ days: 90 }),
@@ -561,8 +561,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         className="shrink-0 border-b border-brand-line bg-platinum-3 px-3 py-1.5 text-center text-micro text-brand-ink"
       >
         Modernization preview:{" "}
-        <Link href="/next/dashboard" className="font-semibold underline underline-offset-2 hover:text-brand-navy">Dashboard</Link>
-        {" · "}
         <Link href="/next/forecast" className="font-semibold underline underline-offset-2 hover:text-brand-navy">Forecast</Link>
         {" · "}
         <Link href="/next/accounts" className="font-semibold underline underline-offset-2 hover:text-brand-navy">Accounts</Link>
@@ -570,10 +568,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <a href="/" className="underline underline-offset-2 hover:text-brand-navy">Current app →</a>
       </div>
       {/* ── The navy rail: wordmark home control · area ribbon · account.
-          Hidden on the landing (/home) — there the tiles ARE the navigation
-          and the hero carries its own mark. ────────────────────────────── */}
-      {location !== "/home" && (
-        <header
+          (C11) Shown on every page, the landing included: /home is the
+          dashboard now, not a door with its own hero. ───────────────────── */}
+      <header
           data-testid="app-header"
           className="sticky top-0 z-30 shrink-0 bg-brand-navy text-white shadow-[inset_0_-1px_0_rgb(255_255_255/0.12)]"
         >
@@ -723,8 +720,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <UserButton />
             </div>
           </div>
-        </header>
-      )}
+      </header>
 
       {/* ── Body: single full-width content column. ─────────────────────── */}
       <div className="flex min-h-0 flex-1">
@@ -741,18 +737,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               never again. `.page-in` puts the timing on the kit's dials
               (`--dur-page` × `--ease-out`), so the whole app's page swap moves
               when the dial moves, and the reduced-motion block zeroes it. */}
-          {location === "/home" ? (
-            // Landing renders full-bleed — it centers its own cards.
-            <div key={location} className="page-in">
-              {children}
-            </div>
-          ) : (
-            // `.shell-pad` is p-3 md:p-5, read from --shell-pad-x/-y so the
-            // pages' sticky heads bleed by the same numbers.
-            <div key={location} className="page-in shell-pad mx-auto max-w-[1600px]">
-              {children}
-            </div>
-          )}
+          {/* `.shell-pad` is p-3 md:p-5, read from --shell-pad-x/-y so the
+              pages' sticky heads bleed by the same numbers. */}
+          <div key={location} className="page-in shell-pad mx-auto max-w-[1600px]">
+            {children}
+          </div>
         </main>
       </div>
     </div>

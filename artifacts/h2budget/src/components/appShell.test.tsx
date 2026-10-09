@@ -216,9 +216,10 @@ describe("app shell chrome", () => {
     expect(screen.getByTestId("header-ask").getAttribute("aria-current")).toBe("page");
   });
 
-  it("hides the whole header on the landing — the tiles ARE the navigation", () => {
+  it("(C11) keeps the header on the landing: /home is the dashboard, not a door", () => {
     mount("/home");
-    expect(screen.queryByTestId("app-header")).toBeNull();
+    expect(screen.getByTestId("app-header")).toBeTruthy();
+    expect(screen.getByTestId("brand-home").getAttribute("href")).toBe("/home");
     expect(screen.getByTestId("page-body")).toBeTruthy();
   });
 

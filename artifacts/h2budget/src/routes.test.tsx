@@ -93,15 +93,17 @@ vi.mock("./lib/routePrefetch", () => {
     importSettings: page("settings"),
     importAsk: page("ask"),
     importSuggestions: page("review-suggestions"),
-    importNextDashboard: page("next-dashboard"),
     importNextForecast: page("next-forecast"),
     importNextAccounts: page("next-accounts"),
     prefetchRoute: () => {},
   };
 });
-vi.mock("./pages/landing", () => ({
-  default: () => <div data-testid="page-landing" />,
-  LandingSkeleton: () => null,
+// (C11) The landing IS the dashboard page, statically imported by App.tsx.
+vi.mock("./pages/next/Dashboard", () => ({
+  default: () => <div data-testid="page-next-dashboard" />,
+}));
+vi.mock("./pages/next/dashboard/DashboardSkeleton", () => ({
+  DashboardSkeleton: () => null,
 }));
 vi.mock("./pages/auth", () => ({
   SignInPage: () => <div data-testid="page-sign-in" />,
@@ -150,8 +152,8 @@ type Row = {
 };
 
 const OLD_ROUTES: Row[] = [
-  { from: "/", lands: "/home", page: "landing", area: "no header" },
-  { from: "/home", lands: "/home", page: "landing", area: "no header" },
+  { from: "/", lands: "/home", page: "next-dashboard", area: "no area" },
+  { from: "/home", lands: "/home", page: "next-dashboard", area: "no area" },
   { from: "/sign-in", lands: "/sign-in", page: "sign-in", area: "no header" },
   { from: "/sign-up", lands: "/sign-up", page: "sign-up", area: "no header" },
   { from: "/banking", lands: "/banking", page: "command-center", area: "Home" },
@@ -182,7 +184,8 @@ const OLD_ROUTES: Row[] = [
   { from: "/review/suggestions", lands: "/review/suggestions", page: "review-suggestions", area: "Review" },
   // The /next preview pages: reachable by URL, outside every area (the ribbon
   // is the five destinations) until the owner approves them.
-  { from: "/next/dashboard", lands: "/next/dashboard", page: "next-dashboard", area: "no area" },
+  // /next/dashboard became the landing: it redirects to /home.
+  { from: "/next/dashboard", lands: "/home", page: "next-dashboard", area: "no area" },
   { from: "/next/forecast", lands: "/next/forecast", page: "next-forecast", area: "no area" },
   { from: "/next/accounts", lands: "/next/accounts", page: "next-accounts", area: "no area" },
   { from: "/next/accounts/:plaidAccountId", lands: "/next/accounts/:plaidAccountId", page: "next-accounts", area: "no area" },

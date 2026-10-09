@@ -1,8 +1,6 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  getDashboard,
-  getGetDashboardQueryKey,
   getForecast,
   getGetForecastQueryKey,
   getForecastCashSignal,
@@ -15,9 +13,8 @@ import { prefetchRoute } from "@/lib/routePrefetch";
 /**
  * ⭐ THE LANDING BUYS THE NEXT CLICK, AFTER IT HAS PAID FOR ITS OWN.
  *
- * The landing itself needs exactly one request. That leaves the browser idle
- * while the owner reads six tiles and decides where to go — so we spend that
- * idle time warming the area pages' chunks AND their data, staggered so the
+ * The landing paid for its own panels. That leaves the browser idle while the
+ * owner reads them and decides where to go — so we spend that idle time warming the area pages' chunks AND their data, staggered so the
  * warm-up can never contend with the open it is supposed to make feel fast.
  *
  * ⚠️ THE KEYS HERE MUST BE THE PAGES' OWN KEY BUILDERS, NOT HAND-WRITTEN
@@ -33,20 +30,16 @@ import { prefetchRoute } from "@/lib/routePrefetch";
 
 type WarmStage = { href: string; warm: (qc: ReturnType<typeof useQueryClient>) => void };
 
-// ⭐ R0 — one stage per landing tile that isn't Settings, in tile order. Bills
-// and Budget lost their dedicated warm-up here because they are no longer
-// landing tiles (they moved a click deeper, into the Forecast and Spending
-// ribbons) — their JS chunks still warm on nav hover once the owner is inside
-// that area.
+// ⭐ C11 — the landing IS the dashboard now, and it reads its own data (spine,
+// money position, accounts, bills, debts, cash signal). Idle time warms the
+// NEXT click: the area pages' chunks, and the forecast bundle the Forecast and
+// Review pages read. The old first stage warmed `getDashboard`, which neither
+// the old landing nor `/banking` read, and is gone.
 const STAGES: WarmStage[] = [
   {
     href: "/banking",
-    warm: (qc) => {
-      void qc.prefetchQuery({
-        queryKey: getGetDashboardQueryKey(),
-        queryFn: () => getDashboard(),
-      });
-    },
+    // The command center reads the spine, which the dashboard already holds.
+    warm: () => {},
   },
   {
     href: "/forecast/overview",

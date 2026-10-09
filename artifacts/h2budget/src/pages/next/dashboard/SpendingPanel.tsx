@@ -4,6 +4,7 @@ import { Panel } from "@/components/next";
 import { CssBars, CssFillMeter, type CssBarRow } from "@/lib/cssBars";
 import { bucketSpendInWindow } from "@/lib/bucketSpend";
 import { isSplurge, makeRecurringMatcher, merchantKey, recurringMerchantsFrom } from "@/lib/discretionarySpend";
+import { useSpine } from "@/hooks/useSpine";
 import { householdToday, monthBounds, weekBounds } from "@/lib/householdDay";
 import { formatCurrency } from "@/lib/utils";
 import { useBudgetMonthQ, useMoneyPositionQ, useRecurringQ, useSettingsQ, useTxnsQ } from "./queries";
@@ -35,6 +36,7 @@ export default function SpendingPanel() {
   const today = householdToday(new Date());
   const month = monthBounds(today).start;
   const week = weekBounds(today).start;
+  const spine = useSpine().data;
   const pos = useMoneyPositionQ();
   const budget = useBudgetMonthQ(month);
   const settings = useSettingsQ();
@@ -75,6 +77,14 @@ export default function SpendingPanel() {
             <MeterRow testid="dash-week-meter" label="This week vs limit" spent={wk && Number.isFinite(wk.spent) ? wk.spent : null} cap={wk?.cap ?? null} />
             <MeterRow testid="dash-month-meter" label="This month vs budget"
               spent={bud ? Number(bud.actual) : null} cap={bud ? Number(bud.budget) : null} />
+            {spine ? (
+              <p className="text-micro text-neutral-500" data-testid="dash-household-spent">
+                Household spent{" "}
+                <span className="font-mono tabular-nums text-neutral-700" data-testid="dash-spent-week">{money(spine.spentWeek)}</span> this week
+                {" · "}
+                <span className="font-mono tabular-nums text-neutral-700" data-testid="dash-spent-month">{money(spine.spentMonth)}</span> this month
+              </p>
+            ) : null}
             <div data-testid="dash-allowances">
               <h3 className="text-label font-semibold text-brand-navy">Allowances used</h3>
               {txns.data === undefined ? <p className="text-micro text-neutral-500">Loading allowances…</p> : (
@@ -96,7 +106,7 @@ export default function SpendingPanel() {
             <div data-testid="dash-biggest">
               <h3 className="text-label font-semibold text-brand-navy">Biggest charges this month</h3>
               {calc.bars.length ? (
-                <CssBars rows={calc.bars} topN={5} ramp format={barMoney} labelWidth={120} valueWidth={70}
+                <CssBars rows={calc.bars} topN={8} ramp format={barMoney} labelWidth={120} valueWidth={70}
                   ariaLabel="Biggest charges this month, largest first" />
               ) : <Empty>No one-off charges this month.</Empty>}
               {calc.capped ? (
