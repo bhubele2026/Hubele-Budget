@@ -3805,6 +3805,23 @@ export declare const mappingRulesTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        updatedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "updated_at";
+            tableName: "mapping_rules";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
     };
     dialect: "pg";
 }>;
@@ -5191,6 +5208,7 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
 }>;
 export declare const insertMappingRuleSchema: import("zod/v4").ZodObject<{
     categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
+    updatedAt: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodDate>>;
     priority: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
     pattern: import("zod/v4").ZodString;
     matchType: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;

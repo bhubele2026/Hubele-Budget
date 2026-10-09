@@ -3266,25 +3266,49 @@ export const ListMappingRulesResponseItem = zod.object({
   matchType: zod.string(),
   categoryId: zod.string().nullish(),
   priority: zod.number(),
+  updatedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "(WP5b) When this rule was last edited directly: its pattern, match\ntype, category or priority (PATCH \/mapping-rules\/{id}, or the rule\nre-point that rides on POST \/transactions\/recategorize-by-pattern).\nNull when it has not been edited since rule history began. A\nreorder is recorded in the rule's history but is not an edit, so it\nleaves this alone. Every change is in GET \/mapping-rules\/{id}\/history.\n",
+    ),
 });
 export const ListMappingRulesResponse = zod.array(ListMappingRulesResponseItem);
+
+export const createMappingRuleBodyNoteMax = 500;
 
 export const CreateMappingRuleBody = zod.object({
   pattern: zod.string(),
   matchType: zod.string().optional(),
   categoryId: zod.string().nullish(),
   priority: zod.number().optional(),
+  note: zod
+    .string()
+    .max(createMappingRuleBodyNoteMax)
+    .nullish()
+    .describe(
+      "(WP5b) Optional: why the rule is being created or changed. Kept\nwith that change in the rule's history (GET\n\/mapping-rules\/{id}\/history), never on the rule itself. A PATCH\nthat changes nothing records nothing, note included.\n",
+    ),
 });
 
 export const UpdateMappingRuleParams = zod.object({
   id: zod.coerce.string(),
 });
 
+export const updateMappingRuleBodyNoteMax = 500;
+
 export const UpdateMappingRuleBody = zod.object({
   pattern: zod.string(),
   matchType: zod.string().optional(),
   categoryId: zod.string().nullish(),
   priority: zod.number().optional(),
+  note: zod
+    .string()
+    .max(updateMappingRuleBodyNoteMax)
+    .nullish()
+    .describe(
+      "(WP5b) Optional: why the rule is being created or changed. Kept\nwith that change in the rule's history (GET\n\/mapping-rules\/{id}\/history), never on the rule itself. A PATCH\nthat changes nothing records nothing, note included.\n",
+    ),
 });
 
 export const UpdateMappingRuleResponse = zod.object({
@@ -3293,10 +3317,87 @@ export const UpdateMappingRuleResponse = zod.object({
   matchType: zod.string(),
   categoryId: zod.string().nullish(),
   priority: zod.number(),
+  updatedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "(WP5b) When this rule was last edited directly: its pattern, match\ntype, category or priority (PATCH \/mapping-rules\/{id}, or the rule\nre-point that rides on POST \/transactions\/recategorize-by-pattern).\nNull when it has not been edited since rule history began. A\nreorder is recorded in the rule's history but is not an edit, so it\nleaves this alone. Every change is in GET \/mapping-rules\/{id}\/history.\n",
+    ),
 });
 
 export const DeleteMappingRuleParams = zod.object({
   id: zod.coerce.string(),
+});
+
+/**
+ * (WP5b) Every recorded change to one mapping rule, newest first:
+created, seeded, edited, reordered, deleted, with the rule before and
+after, who changed it and the note given. A deleted rule keeps its
+history, so this answers for an id that no longer exists; an id from
+another household has no entries here. Read-only.
+
+ */
+export const GetMappingRuleHistoryParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const GetMappingRuleHistoryResponse = zod.object({
+  ruleId: zod.string(),
+  entries: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        ruleId: zod.string(),
+        action: zod
+          .enum(["created", "updated", "deleted", "reordered", "seeded"])
+          .describe(
+            "created \/ seeded (H2's starter rules): `previous` is null.\ndeleted: `next` is null. updated (a direct edit) and reordered\n(moved in the list; only the priority differs): both are present.\n",
+          ),
+        actor: zod
+          .string()
+          .describe(
+            "Who made the change: a user id, 'seed', 'script:<name>' or 'system'.\n",
+          ),
+        actorKind: zod.enum(["person", "seed", "script", "system"]),
+        byYou: zod
+          .boolean()
+          .describe("True when the person asking made this change."),
+        previous: zod.union([
+          zod
+            .object({
+              pattern: zod.string(),
+              matchType: zod.string(),
+              categoryId: zod.string().nullable(),
+              priority: zod.number(),
+            })
+            .describe(
+              "(WP5b) A mapping rule's state as its history records it: the four\nfields that decide which charges it files, and where.\n",
+            ),
+          zod.null(),
+        ]),
+        next: zod.union([
+          zod
+            .object({
+              pattern: zod.string(),
+              matchType: zod.string(),
+              categoryId: zod.string().nullable(),
+              priority: zod.number(),
+            })
+            .describe(
+              "(WP5b) A mapping rule's state as its history records it: the four\nfields that decide which charges it files, and where.\n",
+            ),
+          zod.null(),
+        ]),
+        note: zod.string().nullable(),
+        createdAt: zod.coerce.date(),
+      }),
+    )
+    .describe("Newest first, at most 100."),
+  truncated: zod
+    .boolean()
+    .describe(
+      "True when the rule has more than 100 recorded changes and only the newest 100 are listed.",
+    ),
 });
 
 /**
@@ -3322,6 +3423,12 @@ export const ReorderMappingRulesResponseItem = zod.object({
   matchType: zod.string(),
   categoryId: zod.string().nullish(),
   priority: zod.number(),
+  updatedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "(WP5b) When this rule was last edited directly: its pattern, match\ntype, category or priority (PATCH \/mapping-rules\/{id}, or the rule\nre-point that rides on POST \/transactions\/recategorize-by-pattern).\nNull when it has not been edited since rule history began. A\nreorder is recorded in the rule's history but is not an edit, so it\nleaves this alone. Every change is in GET \/mapping-rules\/{id}\/history.\n",
+    ),
 });
 export const ReorderMappingRulesResponse = zod.array(
   ReorderMappingRulesResponseItem,
@@ -3351,6 +3458,12 @@ export const TestMappingRulesResponse = zod.object({
           matchType: zod.string(),
           categoryId: zod.string().nullish(),
           priority: zod.number(),
+          updatedAt: zod.coerce
+            .date()
+            .nullish()
+            .describe(
+              "(WP5b) When this rule was last edited directly: its pattern, match\ntype, category or priority (PATCH \/mapping-rules\/{id}, or the rule\nre-point that rides on POST \/transactions\/recategorize-by-pattern).\nNull when it has not been edited since rule history began. A\nreorder is recorded in the rule's history but is not an edit, so it\nleaves this alone. Every change is in GET \/mapping-rules\/{id}\/history.\n",
+            ),
         }),
         winner: zod
           .boolean()

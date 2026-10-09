@@ -65,7 +65,7 @@ of the reinvention owns a range so parallel branches never collide:
 | 0050s | AI-2 | 0140s | AI-5 |
 | 0060s | PR-D | 0150s | PR-H |
 | 0070s | AI-3 | 0160s | AI-6 |
-| 0080s | PR-C | | |
+| 0080s | PR-C | 0170s | FIN-5 (rule audit) |
 
 Packages may merge out of numeric order. The runner applies any file it has not
 recorded, whatever its number, so a lower-numbered file that lands later still

@@ -1358,6 +1358,28 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /mapping-rules/{id}/history:
+    get:
+      operationId: getMappingRuleHistory
+      tags: [mapping, features]
+      description: |
+        (WP5b) Every recorded change to one mapping rule, newest first:
+        created, seeded, edited, reordered, deleted, with the rule before and
+        after, who changed it and the note given. A deleted rule keeps its
+        history, so this answers for an id that no longer exists; an id from
+        another household has no entries here. Read-only.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MappingRuleHistory" }
+
   /mapping-rules/reorder:
     put:
       operationId: reorderMappingRules
@@ -6144,6 +6166,16 @@ components:
         matchType: { type: string }
         categoryId: { type: ["string", "null"] }
         priority: { type: integer }
+        updatedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: |
+            (WP5b) When this rule was last edited directly: its pattern, match
+            type, category or priority (PATCH /mapping-rules/{id}, or the rule
+            re-point that rides on POST /transactions/recategorize-by-pattern).
+            Null when it has not been edited since rule history began. A
+            reorder is recorded in the rule's history but is not an edit, so it
+            leaves this alone. Every change is in GET /mapping-rules/{id}/history.
     CreateMappingRuleResponse:
       allOf:
         - $ref: "#/components/schemas/MappingRule"
@@ -6173,6 +6205,73 @@ components:
         matchType: { type: string }
         categoryId: { type: ["string", "null"] }
         priority: { type: integer }
+        note:
+          type: ["string", "null"]
+          maxLength: 500
+          description: |
+            (WP5b) Optional: why the rule is being created or changed. Kept
+            with that change in the rule's history (GET
+            /mapping-rules/{id}/history), never on the rule itself. A PATCH
+            that changes nothing records nothing, note included.
+
+    MappingRuleSnapshot:
+      type: object
+      description: |
+        (WP5b) A mapping rule's state as its history records it: the four
+        fields that decide which charges it files, and where.
+      required: [pattern, matchType, categoryId, priority]
+      properties:
+        pattern: { type: string }
+        matchType: { type: string }
+        categoryId: { type: ["string", "null"] }
+        priority: { type: integer }
+
+    MappingRuleHistoryEntry:
+      type: object
+      required: [id, ruleId, action, actor, actorKind, byYou, previous, next, note, createdAt]
+      properties:
+        id: { type: string }
+        ruleId: { type: string }
+        action:
+          type: string
+          enum: [created, updated, deleted, reordered, seeded]
+          description: |
+            created / seeded (H2's starter rules): `previous` is null.
+            deleted: `next` is null. updated (a direct edit) and reordered
+            (moved in the list; only the priority differs): both are present.
+        actor:
+          type: string
+          description: |
+            Who made the change: a user id, 'seed', 'script:<name>' or 'system'.
+        actorKind:
+          type: string
+          enum: [person, seed, script, system]
+        byYou:
+          type: boolean
+          description: True when the person asking made this change.
+        previous:
+          anyOf:
+            - { $ref: "#/components/schemas/MappingRuleSnapshot" }
+            - { type: "null" }
+        next:
+          anyOf:
+            - { $ref: "#/components/schemas/MappingRuleSnapshot" }
+            - { type: "null" }
+        note: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    MappingRuleHistory:
+      type: object
+      required: [ruleId, entries, truncated]
+      properties:
+        ruleId: { type: string }
+        entries:
+          type: array
+          description: Newest first, at most 100.
+          items: { $ref: "#/components/schemas/MappingRuleHistoryEntry" }
+        truncated:
+          type: boolean
+          description: True when the rule has more than 100 recorded changes and only the newest 100 are listed.
 
     ReorderMappingRulesInput:
       type: object

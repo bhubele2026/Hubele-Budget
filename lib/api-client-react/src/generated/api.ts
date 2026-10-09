@@ -137,6 +137,7 @@ import type {
   ListTransactionsParams,
   ListWeeklySettlementsParams,
   MappingRule,
+  MappingRuleHistory,
   MappingRuleInput,
   MappingRulePatternRecategorizePreview,
   MappingRulePatternRecategorizePreviewInput,
@@ -5489,6 +5490,95 @@ export const useDeleteMappingRule = <
 > => {
   return useMutation(getDeleteMappingRuleMutationOptions(options));
 };
+
+/**
+ * (WP5b) Every recorded change to one mapping rule, newest first:
+created, seeded, edited, reordered, deleted, with the rule before and
+after, who changed it and the note given. A deleted rule keeps its
+history, so this answers for an id that no longer exists; an id from
+another household has no entries here. Read-only.
+
+ */
+export const getGetMappingRuleHistoryUrl = (id: string) => {
+  return `/api/mapping-rules/${id}/history`;
+};
+
+export const getMappingRuleHistory = async (
+  id: string,
+  options?: RequestInit,
+): Promise<MappingRuleHistory> => {
+  return customFetch<MappingRuleHistory>(getGetMappingRuleHistoryUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMappingRuleHistoryQueryKey = (id: string) => {
+  return [`/api/mapping-rules/${id}/history`] as const;
+};
+
+export const getGetMappingRuleHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMappingRuleHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMappingRuleHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMappingRuleHistoryQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMappingRuleHistory>>
+  > = ({ signal }) => getMappingRuleHistory(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMappingRuleHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMappingRuleHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMappingRuleHistory>>
+>;
+export type GetMappingRuleHistoryQueryError = ErrorType<unknown>;
+
+export function useGetMappingRuleHistory<
+  TData = Awaited<ReturnType<typeof getMappingRuleHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMappingRuleHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMappingRuleHistoryQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * Replace the priority of every rule whose id appears in `orderedIds`.
