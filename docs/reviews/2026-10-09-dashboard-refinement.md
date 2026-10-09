@@ -214,7 +214,7 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
 | Version label | Unchanged |
 
 ## Bundle
-- **Open path:** **619.7 KB of 622 KB** (`node scripts/check-entry-graph.mjs`, no recharts on open). Main measured 620.4 KB and A's branch 622.0 KB. The cap is unchanged.
+- **Open path:** **619.8 KB of 622 KB** (`node scripts/check-entry-graph.mjs`, no recharts on open). Main measured 620.4 KB and A's branch 622.0 KB. The cap is unchanged.
 - **Eager:** header, summary row, accounts.
 - **Lazy, one chunk:** forecast, coming up, spending pace, debt progress, needs attention, recent activity, the morning text and their queries (`queriesLazy.ts`).
 - **The `features` allowance** on the entry path is now only `useGetMoneyPosition` and its key. `previewRecap` left it, and `featuresImportGraph.test.ts` is updated.
@@ -242,11 +242,11 @@ One `.panel` with a `.kpi-grid` inside: four across at 1024 px and up, two by tw
   - `index.css.test.ts`: surface ring composition and layer, milled panel, the KPI step.
   - `utilsCn.test.ts`: the tailwind-merge tokens.
   - `agent.test.tsx`: findings inside the merged list.
-- **Gates (before the last two small UI commits; re-run at the end, see the report):**
+- **Gates (final, on the branch head):**
   - root `pnpm run typecheck`: clean;
   - web `vitest`: UTC 1,854 passed / 3 skipped, America/Chicago 1,855 passed / 2 skipped;
   - API suite on `h2budget_test_dashref`: 2,572 passed / 1 skipped / 2 todo (avalanche-core changed);
-  - `pnpm run build` + entry graph: OK at 619.7 KB;
+  - `pnpm run build` + entry graph: OK at 619.8 KB;
   - `pnpm audit --prod`: 1 high, already ignored.
 - **Screens:** fixture AFTER shots for all six scenarios at both sizes are in `dash-shots/after/`, with zero console errors and zero failed `/api` calls.
 
