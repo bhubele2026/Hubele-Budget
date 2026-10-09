@@ -25,6 +25,7 @@ vi.mock("../middlewares/requireAuth", () => ({
   },
 }));
 
+import { loadSplitsForTxns } from "../lib/categorizer/splits";
 import { db, budgetCategoriesTable, transactionSplitsTable, transactionsTable } from "@workspace/db";
 import categorizationRouter from "../routes/categorization";
 import transactionsRouter from "../routes/transactions";
@@ -126,5 +127,16 @@ describe("GET /transactions — splits on list rows", () => {
       if (i % 2 === 0) await split(id);
     }
     expect(await countQueries()).toBe(one);
+  });
+
+  it("loadSplitsForTxns takes the ids as one parameter: 70,000 ids (almost none real) still work", async () => {
+    const real = await txn();
+    await split(real);
+    const ids: string[] = Array.from({ length: 70_000 }, () => randomUUID());
+    ids.push(real);
+    const out = await loadSplitsForTxns(HH, ids);
+    expect(out.size).toBe(1);
+    expect(out.get(real)).toHaveLength(2);
+    expect((await loadSplitsForTxns(HH, [])).size).toBe(0);
   });
 });

@@ -136,7 +136,10 @@ export async function loadSplitsForTxns(
         eq(transactionSplitsTable.householdId, householdId),
         eq(transactionsTable.householdId, householdId),
         eq(transactionsTable.splitsInvalid, false),
-        inArray(transactionSplitsTable.transactionId, [...ids]),
+        // ONE bind parameter whatever the page size: a per-id `IN (...)` would
+        // pass Postgres' 65,535-parameter limit on a very large list. The ids
+        // are the list rows' own uuids (hex and dashes only).
+        sql`${transactionSplitsTable.transactionId} = ANY(${`{${ids.join(",")}}`}::uuid[])`,
       ),
     )
     .orderBy(transactionSplitsTable.createdAt, transactionSplitsTable.id);
