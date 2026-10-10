@@ -7,6 +7,13 @@
  */
 
 export type BankBalanceExplainDisplayed = {
-  /** computeCashSignal().bankToday — what every screen shows */
-  bankToday: string;
+  /**
+   * computeCashSignal().bankToday — what every screen shows. (WP10)
+Null with no bank snapshot: there is no bank balance to show, so
+never "0.00" (the forecast curve still runs off the starting
+balance).
+
+   * @nullable
+   */
+  bankToday: string | null;
 };

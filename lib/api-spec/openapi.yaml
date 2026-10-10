@@ -4025,7 +4025,13 @@ components:
           type: object
           required: [bankToday]
           properties:
-            bankToday: { type: string, description: computeCashSignal().bankToday — what every screen shows }
+            bankToday:
+              type: ["string", "null"]
+              description: |
+                computeCashSignal().bankToday — what every screen shows. (WP10)
+                Null with no bank snapshot: there is no bank balance to show, so
+                never "0.00" (the forecast curve still runs off the starting
+                balance).
         freshness: { $ref: "#/components/schemas/BankFreshness" }
         snapshot:
           type: object
@@ -4120,7 +4126,12 @@ components:
           type: object
           required: [balance, asOfDate, source, lastContactAt, lastFailureAt, stale, staleReason, snapshot, sinceSnapshot, account]
           properties:
-            balance: { type: string, description: computeCashSignal().bankToday — snapshot rolled forward through the ledger }
+            balance:
+              type: ["string", "null"]
+              description: |
+                computeCashSignal().bankToday — snapshot rolled forward through
+                the ledger. (WP10) Null with no bank snapshot, never "0.00": a
+                screen says there is no bank balance yet in words.
             asOfDate: { type: ["string", "null"], description: computeCashSignal().snapshotAt — when the bank snapshot was taken }
             source: { type: ["string", "null"], enum: [plaid, manual, null], description: computeBankFreshness().source — see BankFreshness }
             lastContactAt: { type: ["string", "null"], description: computeBankFreshness().lastContactAt }
@@ -6896,7 +6907,13 @@ components:
       type: object
       required: [bankToday, lowestProjected, lowestDate, cashBuffer, status, maxSafeExtra, account]
       properties:
-        bankToday: { type: string }
+        bankToday:
+          type: ["string", "null"]
+          description: |
+            The bank snapshot rolled forward through the ledger to today. (WP10)
+            Null with no bank snapshot — never "0.00". The curve (`daily`,
+            `lowestProjected`) still runs off the household's starting balance
+            then, and `status` is `no_data`.
         lowestProjected: { type: string }
         lowestDate: { type: ["string", "null"] }
         cashBuffer: { type: string }

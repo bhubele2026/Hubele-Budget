@@ -380,7 +380,7 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > a snapshot ti
       "subtype": null,
       "via": "unresolved",
     },
-    "bankToday": "690.00",
+    "bankToday": null,
     "cashBuffer": "100.00",
     "daily": [
       {
@@ -2157,7 +2157,7 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot, 
     "subtype": null,
     "via": "unresolved",
   },
-  "bankToday": "1800.00",
+  "bankToday": null,
   "cashBuffer": "200.00",
   "daily": [
     {
@@ -2299,7 +2299,7 @@ exports[`PR4a golden — computeCashSignal output, byte for byte > no snapshot: 
     "subtype": null,
     "via": "unresolved",
   },
-  "bankToday": "2500.00",
+  "bankToday": null,
   "cashBuffer": "300.00",
   "daily": [
     {

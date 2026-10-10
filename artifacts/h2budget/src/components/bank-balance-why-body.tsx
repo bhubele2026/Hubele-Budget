@@ -57,8 +57,10 @@ function Explanation({ explain }: { explain: BankBalanceExplain }) {
   const cents = (v: string | number) => Math.round(Number(v) * 100);
   // With no rows figure (the snapshot has no read time), the snapshot
   // alone is compared with the balance: they can still differ.
+  // (WP10) No snapshot means no bank balance (`displayed.bankToday` is null,
+  // never "0.00"): nothing to compare.
   const addsUp =
-    snapshot.balance == null
+    snapshot.balance == null || displayed.bankToday == null
       ? null
       : cents(snapshot.balance) + (since ? cents(since.net) : 0) === cents(displayed.bankToday);
   const where = [

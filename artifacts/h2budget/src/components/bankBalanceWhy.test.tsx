@@ -255,6 +255,8 @@ describe("Why this number? — the server's lines", () => {
   it("with no snapshot, says the forecast runs off the starting balance, and nothing about the next Sync", async () => {
     state.result = {
       data: explain({
+        // (WP10) No snapshot, no bank balance: the server sends null, never "0.00".
+        displayed: { bankToday: null },
         snapshot: {
           balance: null,
           at: null,
@@ -275,6 +277,9 @@ describe("Why this number? — the server's lines", () => {
     expect(screen.getByTestId("bank-why-no-snapshot").textContent).toContain(
       "runs off the starting balance",
     );
+    // (WP10) The figure is an em dash, never $0.00.
+    expect(screen.getByTestId("bank-why-displayed").textContent).toBe("—");
+    expect(popoverText()).not.toContain("$0.00");
     expect(screen.queryByTestId("bank-why-snapshot")).toBeNull();
     expect(screen.queryByTestId("bank-why-mismatch")).toBeNull();
     expect(screen.queryByTestId("bank-why-next-sync")).toBeNull();

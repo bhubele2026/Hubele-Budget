@@ -4334,7 +4334,12 @@ export const GetForecastResponse = zod.object({
   cashSignal: zod
     .union([
       zod.object({
-        bankToday: zod.string(),
+        bankToday: zod
+          .string()
+          .nullable()
+          .describe(
+            'The bank snapshot rolled forward through the ledger to today. (WP10)\nNull with no bank snapshot — never \"0.00\". The curve (`daily`,\n`lowestProjected`) still runs off the household\'s starting balance\nthen, and `status` is `no_data`.\n',
+          ),
         lowestProjected: zod.string(),
         lowestDate: zod.string().nullable(),
         cashBuffer: zod.string(),
@@ -4722,7 +4727,12 @@ export const GetForecastCashSignalQueryParams = zod.object({
 });
 
 export const GetForecastCashSignalResponse = zod.object({
-  bankToday: zod.string(),
+  bankToday: zod
+    .string()
+    .nullable()
+    .describe(
+      'The bank snapshot rolled forward through the ledger to today. (WP10)\nNull with no bank snapshot — never \"0.00\". The curve (`daily`,\n`lowestProjected`) still runs off the household\'s starting balance\nthen, and `status` is `no_data`.\n',
+    ),
   lowestProjected: zod.string(),
   lowestDate: zod.string().nullable(),
   cashBuffer: zod.string(),
@@ -4970,7 +4980,10 @@ export const GetForecastBankBalanceExplainResponse = zod
     displayed: zod.object({
       bankToday: zod
         .string()
-        .describe("computeCashSignal().bankToday — what every screen shows"),
+        .nullable()
+        .describe(
+          'computeCashSignal().bankToday — what every screen shows. (WP10)\nNull with no bank snapshot: there is no bank balance to show, so\nnever \"0.00\" (the forecast curve still runs off the starting\nbalance).\n',
+        ),
     }),
     freshness: zod
       .object({
@@ -6934,8 +6947,9 @@ export const GetSpineResponse = zod.object({
   bank: zod.object({
     balance: zod
       .string()
+      .nullable()
       .describe(
-        "computeCashSignal().bankToday — snapshot rolled forward through the ledger",
+        'computeCashSignal().bankToday — snapshot rolled forward through\nthe ledger. (WP10) Null with no bank snapshot, never \"0.00\": a\nscreen says there is no bank balance yet in words.\n',
       ),
     asOfDate: zod
       .string()

@@ -145,13 +145,14 @@ function readySignal(over: Record<string, unknown> = {}) {
 }
 
 /**
- * What the server really sends without a bank snapshot: `no_data`, and still a
- * FULL 91-point curve rolled forward from an implicit $0. An empty `daily`
- * would never exercise the gate that keeps this curve off the card.
+ * What the server really sends without a bank snapshot: `no_data`, no bank
+ * balance (`bankToday: null`, WP10 — never "0.00"), and still a FULL 91-point
+ * curve rolled forward from an implicit $0. An empty `daily` would never
+ * exercise the gate that keeps this curve off the card.
  */
 function noDataSignal(over: Record<string, unknown> = {}) {
   return readySignal({
-    bankToday: "0.00",
+    bankToday: null,
     lowestProjected: "0.00",
     status: "no_data",
     maxSafeExtra: "0.00",

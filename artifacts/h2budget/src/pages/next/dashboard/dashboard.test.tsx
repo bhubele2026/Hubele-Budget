@@ -275,7 +275,8 @@ describe("summary row: four figures, status-aware", () => {
   });
   it("missing: no bank balance means words and an em dash, never $0", () => {
     h.spine.data = spine({
-      bank: { balance: "0.00", asOfDate: null, source: null, lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null },
+      // (WP10) What the server sends with no snapshot: a null balance, never "0.00".
+      bank: { balance: null, asOfDate: null, source: null, lastContactAt: null, lastFailureAt: null, stale: false, staleReason: null },
       forecast: { lowPoint: "0.00", lowPointDate: null, runwayDays: null, cashBuffer: "500.00", status: "no_data" },
       position: { ...spine().position, safeToSpendNow: null, availableUntilPayday: null },
       debt: { ...spine().debt, payoffPct: null },

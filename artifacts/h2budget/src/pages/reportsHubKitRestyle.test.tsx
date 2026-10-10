@@ -259,7 +259,8 @@ describe("Reports hub — one basis, no local money maths", () => {
   it("(WP1) no bank balance at all: an em dash, as on the dashboard — never the starting balance or $0.00", () => {
     hub.spine = {
       ...SPINE,
-      bank: { ...SPINE.bank, balance: "0.00", asOfDate: null, source: null, snapshot: null, sinceSnapshot: null },
+      // (WP10) The server sends null with no snapshot, never "0.00".
+      bank: { ...SPINE.bank, balance: null, asOfDate: null, source: null, snapshot: null, sinceSnapshot: null },
     };
     renderPage();
     const tile = screen.getByTestId("reports-tile-bank").textContent ?? "";
