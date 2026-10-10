@@ -161,6 +161,42 @@ describe("(WP2) the sync tags a debt-linked card's PAYMENTS only", () => {
     expect(pending.get(debt.id)).toEqual({ total: 2715.71, count: 2 });
   });
 
+  it("⭐ (WP2 review) a payment the household typed, merged with the feed's own row, is still pending — once", async () => {
+    const { itemRowId, cardExt, debt, next } = await seed();
+    // The account's first sync, with a cutoff: the first-sync merge adopts a
+    // typed row of the same day and amount instead of inserting a twin.
+    await db
+      .update(plaidAccountsTable)
+      .set({ importCutoffDate: addDaysISO(next, 3), firstSyncCompletedAt: null })
+      .where(eq(plaidAccountsTable.accountId, cardExt));
+    // The household's shorthand: no payment words, no Plaid category.
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, occurredOn: next, description: "Blue card",
+      amount: "500.00", source: "manual", debtId: debt.id,
+    });
+    expect((await loadPendingPayments(TEST_HOUSEHOLD_ID, [debt])).get(debt.id)).toEqual({ total: 500, count: 1 });
+
+    nextSyncResponse.added = [
+      {
+        transaction_id: "pt-merged", account_id: cardExt, date: next, amount: -500, name: "ONLINE PAYMENT - THANK YOU",
+        personal_finance_category: { primary: "LOAN_PAYMENTS", detailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" },
+      },
+    ];
+    await syncPlaidItem(TEST_USER, itemRowId);
+
+    // Merged, not doubled: the typed row adopted the feed's id, words and category, and kept its tag.
+    const all = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, TEST_USER));
+    expect(all).toHaveLength(1);
+    expect(all[0]).toMatchObject({
+      plaidTransactionId: "pt-merged",
+      description: "ONLINE PAYMENT - THANK YOU",
+      pfcPrimary: "LOAN_PAYMENTS",
+      debtId: debt.id,
+    });
+    // Before the fix it kept "Blue card" with no category, read as a credit, and left pending.
+    expect((await loadPendingPayments(TEST_HOUSEHOLD_ID, [debt])).get(debt.id)).toEqual({ total: 500, count: 1 });
+  });
+
   it("a refund the OLD sync tagged keeps its stored tag (no rewrite) and is still not counted as a payment", async () => {
     const { itemRowId, cardExt, debt, next } = await seed();
     // Tagged before WP2, as every positive card row was.

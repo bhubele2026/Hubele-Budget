@@ -419,9 +419,12 @@ export async function fetchLiabilitiesForItem(
   for (const r of out) {
     // Balance was already cached in Step 1 from /accounts/get; here we only
     // enrich kind/APR/min payment so a missing field doesn't clobber state.
+    // (WP2) No fetch time here: `liability_last_fetched_at` says when the
+    // cached BALANCE was read (the pending rule cuts at it), so only Step 1,
+    // which writes the balance, stamps it. An account whose current balance
+    // Plaid did not send keeps its previous stamp.
     const patch: Record<string, unknown> = {
       liabilityKind: r.kind,
-      liabilityLastFetchedAt: now,
     };
     if (r.apr != null) patch.liabilityApr = r.apr.toFixed(4);
     if (r.minPayment != null)
