@@ -40,8 +40,9 @@ import { householdDayOf } from "./householdClock";
  *     balance as if it were a payment. A feed row now counts only when it reads
  *     as a payment (the card-payment flag, Plaid's LOAN_PAYMENTS / TRANSFER_IN,
  *     the card-payment patterns, "payment" / "thank you" / "autopay"). Rows the
- *     household typed in keep counting: tagging one is their own statement that
- *     it paid the debt. Mis-tagged history is left as stored and excluded here.
+ *     household typed in keep counting — also after a sync merge adopted them
+ *     (`adopted_from_household`): tagging one is their own statement that it
+ *     paid the debt. Mis-tagged history is left as stored and excluded here.
  *   - THE CLAIM. A payment logged in the app that a bank row confirmed is one
  *     payment: the bank row that confirmed it never counts again.
  */
@@ -90,10 +91,18 @@ export type PendingRowInput = {
   isExternalCardPayment: boolean | null;
   /** This row is the bank row that confirmed a payment claim (`confirmed_by_txn_id`). */
   confirmsClaim: boolean;
+  /** A row the household typed that a sync merge later adopted (`adopted_from_household`). */
+  adoptedFromHousehold?: boolean;
 };
 
-/** A row the household typed in. Everything else came from a feed (Plaid, a workbook, a bank file). */
-function isManualRow(r: Pick<PendingRowInput, "source" | "plaidTransactionId">): boolean {
+/**
+ * A row the household typed in — still one after a sync merge adopted it (the
+ * merge gives it a Plaid id, and the first-sync merge even rewrites `source`,
+ * so the merge stamps `adopted_from_household`). Everything else came from a
+ * feed (Plaid, a workbook, a bank file).
+ */
+function isManualRow(r: Pick<PendingRowInput, "source" | "plaidTransactionId" | "adoptedFromHousehold">): boolean {
+  if (r.adoptedFromHousehold === true) return true;
   return !r.plaidTransactionId && (r.source ?? "manual").toLowerCase() === "manual";
 }
 
@@ -185,6 +194,7 @@ export async function loadPendingPayments(
         pfcPrimary: t.pfcPrimary,
         pfcDetailed: t.pfcDetailed,
         isExternalCardPayment: t.isExternalCardPayment,
+        adoptedFromHousehold: t.adoptedFromHousehold,
         confirmsClaim: sql<boolean>`${claim.id} is not null`,
       })
       .from(t)

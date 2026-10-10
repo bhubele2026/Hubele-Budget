@@ -184,16 +184,20 @@ describe("(WP2) the sync tags a debt-linked card's PAYMENTS only", () => {
     ];
     await syncPlaidItem(TEST_USER, itemRowId);
 
-    // Merged, not doubled: the typed row adopted the feed's id, words and category, and kept its tag.
+    // Merged, not doubled: the typed row adopted the feed's id and kept its own
+    // words (#452) and its tag — and the merge stamped it as the household's.
     const all = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, TEST_USER));
     expect(all).toHaveLength(1);
     expect(all[0]).toMatchObject({
       plaidTransactionId: "pt-merged",
-      description: "ONLINE PAYMENT - THANK YOU",
-      pfcPrimary: "LOAN_PAYMENTS",
+      source: "plaid:amex",
+      description: "Blue card",
+      pfcPrimary: null,
       debtId: debt.id,
+      adoptedFromHousehold: true,
     });
-    // Before the fix it kept "Blue card" with no category, read as a credit, and left pending.
+    // Before the fix its Plaid id made it a "feed" row; "Blue card" read as a
+    // credit and the payment silently left pending.
     expect((await loadPendingPayments(TEST_HOUSEHOLD_ID, [debt])).get(debt.id)).toEqual({ total: 500, count: 1 });
   });
 

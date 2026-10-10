@@ -1577,6 +1577,10 @@ export async function syncPlaidItem(
               plaidTransactionId: t.transaction_id,
               plaidAccountId: t.account_id,
               source,
+              // (FIN-2) A row the household typed stays theirs to the pending
+              // rule. SET reads the row BEFORE this update, so `source` here is
+              // the typed row's own, not the `plaid:<slug>` just written.
+              adoptedFromHousehold: sql`${transactionsTable.source} = 'manual'`,
             })
             .where(eq(transactionsTable.id, mergedTo));
           firstSyncMerged++;
@@ -3715,6 +3719,8 @@ export async function runGapBackfillForItem(
               .set({
                 plaidTransactionId: t.transaction_id,
                 plaidAccountId: t.account_id,
+                // (FIN-2) A row the household typed stays theirs to the pending rule.
+                adoptedFromHousehold: sql`${transactionsTable.source} = 'manual'`,
               })
               .where(eq(transactionsTable.id, match.id));
             continue;

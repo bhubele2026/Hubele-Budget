@@ -4,7 +4,7 @@ Branch `fin/wp2-pending-anchor`, from `origin/fin/integration` (e94016de) with W
 
 ## The rule
 A row tagged to a debt counts as "paid, not posted" when all three hold:
-- **Direction:** it pays the debt down. The amount is positive. A row from a bank or card feed must also be one `classifyLiabilityRow` calls a payment.
+- **Direction:** it pays the debt down. The amount is positive. A row from a bank or card feed must also be one `classifyLiabilityRow` calls a payment. A row the household typed counts as theirs whatever its words, including after a sync merge adopted it (`adopted_from_household`).
 - **Not a confirmed claim:** it is not the bank row that confirmed a payment claim.
 - **Date:** it is dated after the household day of the debt's balance as-of. The as-of is the later of the card's liability fetch and `plaidLastSyncedAt` for a Plaid-sourced linked debt, and `lastBalanceUpdate` otherwise.
 
@@ -61,8 +61,22 @@ A row tagged to a debt counts as "paid, not posted" when all three hold:
 
 **Gates:** typecheck clean · API 243 files, 2,630 passed · web 1,893 / 1,894 passed (UTC / Chicago) · build and entry graph 621.9 KB · audit: 1 high, ignored.
 
+## Review round (2 confirmed defects, fixed)
+1. **MAJOR: a typed payment the sync merged stopped counting.**
+   - The cause: the first-sync and gap-backfill merges give a typed row Plaid's id, and the first-sync merge also rewrites `source`. The rule then judged the row by its typed words ("Blue card" → a credit).
+   - The fix: new column `transactions.adopted_from_household` (migration `0180`, range 0180s). Both merges set it when the row they adopt was `manual`. The backfill marks gap-merged rows, which keep `source = 'manual'`.
+   - Rows adopted by a first-sync merge before this fix can't be identified, so they stay unflagged.
+   - Merged rows keep their typed description, as #452 pins.
+   - Test: `plaidSyncDebtTagShape`. A typed payment merged with "ONLINE PAYMENT - THANK YOU" is still pending, once. It fails without the flag.
+2. **MINOR: the as-of outran the balance.**
+   - `POST /plaid/sync` now applies the liabilities it fetched to linked debts whose balance Plaid owns. `applyLiabilityToDebt` moved to `lib/debtLiabilityApply.ts` and is shared with `GET /debts`.
+   - `liability_last_fetched_at` is now stamped only by the step that caches a balance.
+   - Test: `plaidSyncAppliesLiabilities`. Both cases fail on the old code.
+- **Figures:** no fixture figure moves in this round. No fixture row is a merged typed row, and the fixture never syncs.
+- **Gates:** typecheck clean · API 245 files, 2,657 passed.
+
 ## Flags for the lead
-1. **`later()` edge:** `POST /plaid/sync` fetches liabilities without re-applying them to the debts. Until `GET /debts` re-applies (it does within an hour while the dashboard is open), the as-of can sit past a stale `debts.balance`, and pending can read low. This is the plan's rule as written.
+1. **`later()` edge, remaining:** `GET /plaid/liability-accounts?refresh=true` still fetches without applying (the Sync path is fixed). If a household's debt accounts never report a current balance, the "never fetched" check now re-fetches on each read of that endpoint.
 2. **Manual same-day:** a payment tagged on the day of a manual balance edit is now taken to be in that balance.
 3. **Confirmed-claim skip is defensive:** claims pair only with money-out rows, which the direction rule already drops. A test pins it, and that test caught a join bug.
 4. **Historical mis-tags stay stored.** A read-only count would decide whether a backfill is worth it.

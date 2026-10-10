@@ -2097,6 +2097,23 @@ export declare const transactionsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        adoptedFromHousehold: import("drizzle-orm/pg-core").PgColumn<{
+            name: "adopted_from_household";
+            tableName: "transactions";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         importBatchId: import("drizzle-orm/pg-core").PgColumn<{
             name: "import_batch_id";
             tableName: "transactions";
@@ -5098,19 +5115,19 @@ export declare const dashboardBudgetsTable: import("drizzle-orm/pg-core").PgTabl
 }>;
 export declare const insertDebtSchema: import("zod/v4").ZodObject<{
     name: import("zod/v4").ZodString;
-    notes: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
-    plaidAccountId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
-    status: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
-    type: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
-    minPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     balance: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     originalBalance: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     apr: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    minPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     payment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    type: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    status: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     sortOrder: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
     dueDay: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodInt>>;
     statementDay: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodInt>>;
+    notes: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     lastBalanceUpdate: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodDate>>;
+    plaidAccountId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     plaidLastSyncedAt: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodDate>>;
     balanceSource: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     aprSource: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
@@ -5121,9 +5138,9 @@ export declare const insertDebtSchema: import("zod/v4").ZodObject<{
 }>;
 export declare const insertCategorySchema: import("zod/v4").ZodObject<{
     name: import("zod/v4").ZodString;
+    sortOrder: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
     debtId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     kind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
-    sortOrder: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
     groupName: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     sourceKind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     excludeFromBudget: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
@@ -5132,18 +5149,18 @@ export declare const insertCategorySchema: import("zod/v4").ZodObject<{
     in: {};
 }>;
 export declare const insertBudgetMonthSchema: import("zod/v4").ZodObject<{
-    note: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     monthStart: import("zod/v4").ZodString;
+    note: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pinned: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
 }, {
     out: {};
     in: {};
 }>;
 export declare const insertBudgetLineSchema: import("zod/v4").ZodObject<{
-    categoryId: import("zod/v4").ZodUUID;
-    note: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     monthStart: import("zod/v4").ZodString;
+    note: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pinned: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
+    categoryId: import("zod/v4").ZodUUID;
     plannedAmount: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
 }, {
     out: {};
@@ -5151,11 +5168,11 @@ export declare const insertBudgetLineSchema: import("zod/v4").ZodObject<{
 }>;
 export declare const insertRecurringSchema: import("zod/v4").ZodObject<{
     name: import("zod/v4").ZodString;
-    amount: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
-    categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
+    active: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     debtId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     kind: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
-    active: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
+    amount: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     frequency: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     dayOfMonth: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodInt>>;
     anchorDate: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
@@ -5165,12 +5182,16 @@ export declare const insertRecurringSchema: import("zod/v4").ZodObject<{
     in: {};
 }>;
 export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
+    member: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    notes: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    plaidAccountId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    debtId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
+    categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
+    amount: import("zod/v4").ZodString;
     occurredOn: import("zod/v4").ZodString;
     occurredAt: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     description: import("zod/v4").ZodString;
-    amount: import("zod/v4").ZodString;
     account: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
-    categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     forecastFlag: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     weeklyAllowance: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     weeklyBucket: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
@@ -5188,18 +5209,15 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     plaidRemovedAt: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodDate>>;
     splitsInvalid: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     isExternalCardPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
+    adoptedFromHousehold: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     importBatchId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
-    notes: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     source: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
-    member: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     owedBy: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     plaidTransactionId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
-    plaidAccountId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pfcPrimary: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pfcDetailed: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pending: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     sentToReviewAt: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
-    debtId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     paymentState: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     confirmedByTxnId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
 }, {
@@ -5207,11 +5225,11 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     in: {};
 }>;
 export declare const insertMappingRuleSchema: import("zod/v4").ZodObject<{
-    categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     updatedAt: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodDate>>;
-    priority: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
+    categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     pattern: import("zod/v4").ZodString;
     matchType: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    priority: import("zod/v4").ZodOptional<import("zod/v4").ZodInt>;
 }, {
     out: {};
     in: {};

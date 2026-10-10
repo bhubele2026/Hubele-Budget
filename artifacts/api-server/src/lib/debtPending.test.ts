@@ -68,6 +68,13 @@ describe("pendingFromRows — the shape rule", () => {
     expect(pendingOf([row({ ...manual, description: "Chase payment to Visa" })])?.count).toBe(1);
     expect(pendingOf([row({ ...manual, description: "returned item" })])?.count).toBe(1);
   });
+  it("(WP2 review) a typed row a sync merge ADOPTED is still the household's: it counts whatever its words", () => {
+    // The first-sync merge gave it Plaid's id and source but kept the typed words.
+    const adopted = { source: "plaid:amex", plaidTransactionId: "ptx-merged", description: "Blue card" };
+    expect(pendingOf([row({ ...adopted, adoptedFromHousehold: true })])?.count).toBe(1);
+    // Without the stamp the same row would read as a feed credit.
+    expect(pendingOf([row({ ...adopted, adoptedFromHousehold: false })])).toBeNull();
+  });
   it("a workbook (amex) positive row is a CHARGE in that ledger, never a payment", () => {
     expect(pendingOf([row({ source: "amex", plaidTransactionId: null, description: "DELTA AIR LINES" })])).toBeNull();
   });
